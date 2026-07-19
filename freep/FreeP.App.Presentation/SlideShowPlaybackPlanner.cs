@@ -6,6 +6,7 @@ public enum SlideShowTransitionPlaybackActionKind
 {
     ShowInstant,
     Fade,
+    Flash,
     Dissolve,
     Box,
     Reveal,
@@ -161,6 +162,7 @@ public static class SlideShowPlaybackPlanner
         var actionKind = transitionPlan.PlaybackKind switch
         {
             SlideShowTransitionPlaybackKind.Cut => SlideShowTransitionPlaybackActionKind.ShowInstant,
+            SlideShowTransitionPlaybackKind.Flash => SlideShowTransitionPlaybackActionKind.Flash,
             SlideShowTransitionPlaybackKind.Dissolve => SlideShowTransitionPlaybackActionKind.Dissolve,
             SlideShowTransitionPlaybackKind.Box => SlideShowTransitionPlaybackActionKind.Box,
             SlideShowTransitionPlaybackKind.Reveal => SlideShowTransitionPlaybackActionKind.Reveal,

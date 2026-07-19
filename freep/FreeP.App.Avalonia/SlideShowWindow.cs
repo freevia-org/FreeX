@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -44,7 +45,7 @@ namespace FreeP.App.Avalonia;
 /// displayed in the back layer. The front layer (new slide) is animated in according to
 /// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover
 /// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
-/// and Push (bidirectional displacement). Others fall back to Fade.
+/// and Push (bidirectional displacement), and Flash (white-flash). Others fall back to Fade.
 ///
 /// Media
 /// ─────
@@ -84,6 +85,7 @@ public sealed class SlideShowWindow : Window
     private readonly Canvas _animOverlay;
     // Presenter ink overlay: shared-plan-backed strokes and laser pointer above slide content.
     private readonly Canvas _inkOverlay;
+    private readonly Rectangle _transitionFlashOverlay;
 
     // Per-shape animation state for the current slide.
     // Maps shapeId → the Image element in _animOverlay that represents that shape.
@@ -200,6 +202,18 @@ public sealed class SlideShowWindow : Window
         stage.Children.Add(_slideCanvas);
         stage.Children.Add(_animOverlay);
         stage.Children.Add(_inkOverlay);
+
+        _transitionFlashOverlay = new Rectangle
+        {
+            Fill = Brushes.White,
+            Opacity = 0,
+            IsVisible = false,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            ZIndex = 3,
+        };
+        stage.Children.Add(_transitionFlashOverlay);
 
         _root = new Panel { Background = Brushes.Black };
         _root.Children.Add(stage);
@@ -710,7 +724,11 @@ public sealed class SlideShowWindow : Window
         _transitionBackImage.IsVisible = false;
         _transitionBackImage.Clip = null;
         _transitionBackImage.RenderTransform = null;
+        _transitionBackImage.Opacity = 1;
         _transitionBackImage.ZIndex = 0;
+        _transitionFlashOverlay.IsVisible = false;
+        _transitionFlashOverlay.Opacity = 0;
+        _slideCanvas.ZIndex = 0;
         _slideCanvas.Slide   = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.Clip = null;
@@ -752,7 +770,11 @@ public sealed class SlideShowWindow : Window
         _transitionBackImage.IsVisible = false;
         _transitionBackImage.Clip = null;
         _transitionBackImage.RenderTransform = null;
+        _transitionBackImage.Opacity = 1;
         _transitionBackImage.ZIndex = 0;
+        _transitionFlashOverlay.IsVisible = false;
+        _transitionFlashOverlay.Opacity = 0;
+        _slideCanvas.ZIndex = 0;
         switch (plan.ActionKind)
         {
             case SlideShowTransitionPlaybackActionKind.ShowInstant:
@@ -761,6 +783,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Fade:
                 PlayFadeTransition(slide, plan.DurationMs);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Flash:
+                PlayFlashTransition(slide, plan.DurationMs);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Split:
@@ -838,6 +864,48 @@ public sealed class SlideShowWindow : Window
             _transitionBackImage.IsVisible = false;
             _slideCanvas.Opacity = 1;
         });
+    }
+
+    private void PlayFlashTransition(Slide slide, int durationMs)
+    {
+        var snapshot = CaptureCurrentSlide();
+
+        // Keep the incoming slide below the outgoing snapshot and peak a white
+        // surface once between them. This makes Flash distinct from Fade while
+        // remaining deterministic for both hosts.
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Refresh();
+        _slideCanvas.ZIndex = 1;
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+            _transitionBackImage.Opacity = 1;
+            _transitionBackImage.ZIndex = 2;
+        }
+
+        _transitionFlashOverlay.IsVisible = true;
+        _transitionFlashOverlay.Opacity = 0;
+        _transitionFlashOverlay.ZIndex = 3;
+
+        int halfDuration = Math.Max(1, durationMs / 2);
+        if (snapshot is not null)
+            AnimateOpacity(_transitionBackImage, 1, 0, halfDuration);
+
+        AnimateOpacity(_transitionFlashOverlay, 0, 1, halfDuration, onComplete: () =>
+            AnimateOpacity(_transitionFlashOverlay, 1, 0, halfDuration, onComplete: () =>
+            {
+                _transitionBackImage.IsVisible = false;
+                _transitionBackImage.Opacity = 1;
+                _transitionBackImage.ZIndex = 0;
+                _transitionFlashOverlay.IsVisible = false;
+                _transitionFlashOverlay.Opacity = 0;
+                _transitionFlashOverlay.ZIndex = 3;
+                _slideCanvas.ZIndex = 0;
+            }));
     }
 
     private void PlayCoverTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
@@ -1119,11 +1187,12 @@ public sealed class SlideShowWindow : Window
         double width,
         double height,
         int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        bool reverse = false)
     {
         if (durationMs <= 0)
         {
-            target.Clip = BuildDissolveTransitionGeometry(width, height, 1);
+            target.Clip = BuildDissolveTransitionGeometry(width, height, reverse ? 0 : 1);
             onComplete?.Invoke();
             return;
         }
@@ -1139,12 +1208,16 @@ public sealed class SlideShowWindow : Window
         {
             frame++;
             var t = Math.Min(1.0, (double)frame / steps);
-            target.Clip = BuildDissolveTransitionGeometry(width, height, EaseInOut(t));
+            var progress = EaseInOut(t);
+            target.Clip = BuildDissolveTransitionGeometry(
+                width,
+                height,
+                reverse ? 1 - progress : progress);
             if (frame >= steps)
             {
                 timer.Stop();
                 _activeTimers.Remove(timer);
-                target.Clip = BuildDissolveTransitionGeometry(width, height, 1);
+                target.Clip = BuildDissolveTransitionGeometry(width, height, reverse ? 0 : 1);
                 onComplete?.Invoke();
             }
         };
@@ -1873,11 +1946,11 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Dissolve:
-                FadeEffect(element, plan, onReveal);
+                DissolveEffect(element, plan, onReveal);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Flash:
-                FadeEffect(element, plan, onReveal);
+                FlashEffect(element, plan, onReveal);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spiral:
@@ -1891,11 +1964,11 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Bounce:
-                FlyInEffect(element, plan, onReveal);
+                BounceEffect(element, plan, onReveal);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Float:
-                FlyInEffect(element, plan, onReveal);
+                FloatEffect(element, plan, onReveal);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Swoop:
@@ -2004,6 +2077,55 @@ public sealed class SlideShowWindow : Window
                 onComplete: CompleteReveal(plan, onReveal)));
     }
 
+    private void FlashEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan,
+        Action? onReveal = null)
+    {
+        InvokeRevealAtStart(plan, onReveal);
+
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var firstOpacity = isExit ? plan.FromOpacity : 0;
+        var firstDuration = Math.Max(1, (int)(plan.DurationMs * 0.2));
+        var secondDuration = Math.Max(1, (int)(plan.DurationMs * 0.35));
+        var finalDuration = Math.Max(1, plan.DurationMs - firstDuration - secondDuration);
+
+        DelayedAction(plan.DelayMs, () =>
+            AnimateOpacity(el, firstOpacity, 0.7, firstDuration, onComplete: () =>
+                AnimateOpacity(el, 0.7, 0.35, secondDuration, onComplete: () =>
+                    AnimateOpacity(
+                        el,
+                        0.35,
+                        plan.ToOpacity,
+                        finalDuration,
+                        onComplete: CompleteReveal(plan, onReveal)))));
+    }
+
+    private void DissolveEffect(Control element,
+        SlideShowShapeAnimationPlaybackPlan plan,
+        Action? onReveal = null)
+    {
+        InvokeRevealAtStart(plan, onReveal);
+
+        double width = element.Bounds.Width > 0 ? element.Bounds.Width : 960;
+        double height = element.Bounds.Height > 0 ? element.Bounds.Height : 540;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        element.Opacity = isExit ? plan.FromOpacity : 1;
+        element.Clip = BuildDissolveTransitionGeometry(width, height, isExit ? 1 : 0);
+
+        DelayedAction(plan.DelayMs, () =>
+            AnimateDissolveTransitionClip(
+                element,
+                width,
+                height,
+                plan.DurationMs,
+                onComplete: () =>
+                {
+                    element.Clip = null;
+                    element.Opacity = plan.ToOpacity;
+                    CompleteReveal(plan, onReveal)?.Invoke();
+                },
+                reverse: isExit));
+    }
+
     private void FlyInEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {
         double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
@@ -2028,6 +2150,246 @@ public sealed class SlideShowWindow : Window
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal));
         });
+    }
+
+    private void FloatEffect(Control element,
+        SlideShowShapeAnimationPlaybackPlan plan,
+        Action? onReveal = null)
+    {
+        double width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        double height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        double directionX = plan.OffsetXFactor * width;
+        double directionY = plan.OffsetYFactor * height;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        double startX = isExit ? 0 : directionX;
+        double startY = isExit ? 0 : directionY;
+        double endX = isExit ? directionX : 0;
+        double endY = isExit ? directionY : 0;
+        double arcX = Math.Abs(plan.OffsetYFactor) > 0.01
+            ? -Math.Sign(plan.OffsetYFactor) * width * 0.06
+            : 0;
+        double arcY = Math.Abs(plan.OffsetXFactor) > 0.01
+            ? Math.Sign(plan.OffsetXFactor) * height * 0.06
+            : 0;
+        double midX = (startX + endX) / 2 + arcX;
+        double midY = (startY + endY) / 2 + arcY;
+
+        var translate = new TranslateTransform(startX, startY);
+        element.RenderTransform = translate;
+        DelayedAction(plan.DelayMs, () =>
+        {
+            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
+            AnimateFloatTranslate(
+                translate,
+                startX,
+                startY,
+                midX,
+                midY,
+                endX,
+                endY,
+                plan.DurationMs,
+                CompleteReveal(plan, onReveal));
+        });
+    }
+
+    private void AnimateFloatTranslate(
+        TranslateTransform translate,
+        double startX,
+        double startY,
+        double middleX,
+        double middleY,
+        double endX,
+        double endY,
+        int durationMs,
+        Action? onComplete)
+    {
+        if (durationMs <= 0)
+        {
+            translate.X = endX;
+            translate.Y = endY;
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var (x, y) = InterpolateFloatPoint(
+                t,
+                startX,
+                startY,
+                middleX,
+                middleY,
+                endX,
+                endY);
+            translate.X = x;
+            translate.Y = y;
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                translate.X = endX;
+                translate.Y = endY;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
+    private static (double X, double Y) InterpolateFloatPoint(
+        double t,
+        double startX,
+        double startY,
+        double middleX,
+        double middleY,
+        double endX,
+        double endY)
+    {
+        t = Math.Clamp(t, 0, 1);
+        if (t <= 0.72)
+        {
+            var eased = EaseInOut(t / 0.72);
+            return (
+                startX + (middleX - startX) * eased,
+                startY + (middleY - startY) * eased);
+        }
+
+        var finalEased = EaseInOut((t - 0.72) / 0.28);
+        return (
+            middleX + (endX - middleX) * finalEased,
+            middleY + (endY - middleY) * finalEased);
+    }
+
+    private void BounceEffect(Control element,
+        SlideShowShapeAnimationPlaybackPlan plan,
+        Action? onReveal = null)
+    {
+        InvokeRevealAtStart(plan, onReveal);
+
+        double width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        double height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        double directionX = plan.OffsetXFactor * width;
+        double directionY = plan.OffsetYFactor * height;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        double startX = isExit ? 0 : directionX;
+        double startY = isExit ? 0 : directionY;
+        double endX = isExit ? directionX : 0;
+        double endY = isExit ? directionY : 0;
+        double overshootX = isExit ? endX + directionX * 0.08 : -directionX * 0.08;
+        double overshootY = isExit ? endY + directionY * 0.08 : -directionY * 0.08;
+        double reboundX = isExit ? endX - directionX * 0.04 : directionX * 0.04;
+        double reboundY = isExit ? endY - directionY * 0.04 : directionY * 0.04;
+
+        var translate = new TranslateTransform(startX, startY);
+        element.RenderTransform = translate;
+        DelayedAction(plan.DelayMs, () =>
+        {
+            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
+            AnimateBounceTranslate(
+                translate,
+                startX,
+                startY,
+                endX,
+                endY,
+                overshootX,
+                overshootY,
+                reboundX,
+                reboundY,
+                plan.DurationMs,
+                CompleteReveal(plan, onReveal));
+        });
+    }
+
+    private void AnimateBounceTranslate(
+        TranslateTransform translate,
+        double startX,
+        double startY,
+        double endX,
+        double endY,
+        double overshootX,
+        double overshootY,
+        double reboundX,
+        double reboundY,
+        int durationMs,
+        Action? onComplete)
+    {
+        if (durationMs <= 0)
+        {
+            translate.X = endX;
+            translate.Y = endY;
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var (x, y) = InterpolateBouncePoint(
+                t,
+                startX,
+                startY,
+                endX,
+                endY,
+                overshootX,
+                overshootY,
+                reboundX,
+                reboundY);
+            translate.X = x;
+            translate.Y = y;
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                translate.X = endX;
+                translate.Y = endY;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
+    private static (double X, double Y) InterpolateBouncePoint(
+        double t,
+        double startX,
+        double startY,
+        double endX,
+        double endY,
+        double overshootX,
+        double overshootY,
+        double reboundX,
+        double reboundY)
+    {
+        var local = t switch
+        {
+            <= 0.55 => t / 0.55,
+            <= 0.72 => (t - 0.55) / 0.17,
+            <= 0.86 => (t - 0.72) / 0.14,
+            _ => (t - 0.86) / 0.14
+        };
+        var eased = EaseInOut(Math.Clamp(local, 0, 1));
+        return t <= 0.55
+            ? (startX + (endX - startX) * eased, startY + (endY - startY) * eased)
+            : t <= 0.72
+                ? (endX + (overshootX - endX) * eased, endY + (overshootY - endY) * eased)
+                : t <= 0.86
+                    ? (overshootX + (reboundX - overshootX) * eased, overshootY + (reboundY - overshootY) * eased)
+                    : (reboundX + (endX - reboundX) * eased, reboundY + (endY - reboundY) * eased);
     }
 
     private void PeekEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)

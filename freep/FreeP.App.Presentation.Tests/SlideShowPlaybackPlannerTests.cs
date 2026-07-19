@@ -63,6 +63,37 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.DurationMs.Should().Be(420);
     }
 
+    [Fact]
+    public void PlanTransition_FlashUsesDedicatedAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Flash,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Flash);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Flash);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
+    public void PlanTransition_FlyUsesSerializedPushPlayback()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Fly,
+            Direction = TransitionDirection.Right,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Push);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Push);
+        plan.IncomingOffsetX.Should().Be(-1);
+        plan.IncomingOffsetY.Should().Be(0);
+        plan.DurationMs.Should().Be(420);
+    }
+
     [Theory]
     [InlineData(TransitionDirection.In, true)]
     [InlineData(TransitionDirection.Out, false)]

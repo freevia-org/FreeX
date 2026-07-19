@@ -6,6 +6,7 @@ public enum SlideShowTransitionPlaybackKind
 {
     Cut,
     Fade,
+    Flash,
     Dissolve,
     Box,
     Reveal,
@@ -64,8 +65,12 @@ public static class SlideShowTransitionPlanner
             TransitionKind.None or
             TransitionKind.Cut => SlideShowTransitionPlaybackKind.Cut,
 
-            TransitionKind.Fade or
-            TransitionKind.Flash => SlideShowTransitionPlaybackKind.Fade,
+            TransitionKind.Fade => SlideShowTransitionPlaybackKind.Fade,
+
+            // PresentationML p14:flash is a distinct transition. Keep it
+            // renderer-neutral so both slideshow hosts can produce a brief
+            // white flash instead of silently reducing it to a cross-fade.
+            TransitionKind.Flash => SlideShowTransitionPlaybackKind.Flash,
 
             TransitionKind.Dissolve => SlideShowTransitionPlaybackKind.Dissolve,
 
@@ -80,6 +85,11 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Cover => SlideShowTransitionPlaybackKind.Cover,
 
             TransitionKind.Push => SlideShowTransitionPlaybackKind.Push,
+
+            // There is no standard PresentationML p:fly element. The package
+            // writer emits Fly as push, so playback must follow that same
+            // interoperable representation instead of falling back to fade.
+            TransitionKind.Fly => SlideShowTransitionPlaybackKind.Push,
 
             TransitionKind.Doors => SlideShowTransitionPlaybackKind.Split,
 

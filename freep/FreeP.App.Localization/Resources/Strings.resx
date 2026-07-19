@@ -712,6 +712,93 @@
   <data name="Ribbon_Command_TransitionWheel_KeyTip" xml:space="preserve">
     <value>H</value>
   </data>
+  <data name="Ribbon_Group_TransitionMore_Label" xml:space="preserve">
+    <value>More Transitions</value>
+  </data>
+  <data name="Ribbon_Command_TransitionMore_Label" xml:space="preserve">
+    <value>More</value>
+  </data>
+  <data name="Ribbon_Command_TransitionFly_Label" xml:space="preserve">
+    <value>Fly</value>
+  </data>
+  <data name="Ribbon_Command_TransitionRandom_Label" xml:space="preserve">
+    <value>Random</value>
+  </data>
+  <data name="Ribbon_Command_TransitionCube_Label" xml:space="preserve">
+    <value>Cube</value>
+  </data>
+  <data name="Ribbon_Command_TransitionRotate_Label" xml:space="preserve">
+    <value>Rotate</value>
+  </data>
+  <data name="Ribbon_Command_TransitionFlip_Label" xml:space="preserve">
+    <value>Flip</value>
+  </data>
+  <data name="Ribbon_Command_TransitionFerris_Label" xml:space="preserve">
+    <value>Ferris</value>
+  </data>
+  <data name="Ribbon_Command_TransitionFlythrough_Label" xml:space="preserve">
+    <value>Fly Through</value>
+  </data>
+  <data name="Ribbon_Command_TransitionSwitch_Label" xml:space="preserve">
+    <value>Switch</value>
+  </data>
+  <data name="Ribbon_Command_TransitionOrbit_Label" xml:space="preserve">
+    <value>Orbit</value>
+  </data>
+  <data name="Ribbon_Command_TransitionHoneycomb_Label" xml:space="preserve">
+    <value>Honeycomb</value>
+  </data>
+  <data name="Ribbon_Command_TransitionGlitter_Label" xml:space="preserve">
+    <value>Glitter</value>
+  </data>
+  <data name="Ribbon_Command_TransitionVortex_Label" xml:space="preserve">
+    <value>Vortex</value>
+  </data>
+  <data name="Ribbon_Command_TransitionShred_Label" xml:space="preserve">
+    <value>Shred</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWind_Label" xml:space="preserve">
+    <value>Wind</value>
+  </data>
+  <data name="Ribbon_Command_TransitionRipple_Label" xml:space="preserve">
+    <value>Ripple</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWarp_Label" xml:space="preserve">
+    <value>Warp</value>
+  </data>
+  <data name="Ribbon_Command_TransitionFracture_Label" xml:space="preserve">
+    <value>Fracture</value>
+  </data>
+  <data name="Ribbon_Command_TransitionCrush_Label" xml:space="preserve">
+    <value>Crush</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPeelOff_Label" xml:space="preserve">
+    <value>Peel Off</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPageCurlDouble_Label" xml:space="preserve">
+    <value>Page Curl Double</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPageCurlSingle_Label" xml:space="preserve">
+    <value>Page Curl Single</value>
+  </data>
+  <data name="Ribbon_Command_TransitionAirplane_Label" xml:space="preserve">
+    <value>Airplane</value>
+  </data>
+  <data name="Ribbon_Command_TransitionOrigami_Label" xml:space="preserve">
+    <value>Origami</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPrism_Label" xml:space="preserve">
+    <value>Prism</value>
+  </data>
+  <data name="Ribbon_Command_TransitionCurtains_Label" xml:space="preserve">
+    <value>Curtains</value>
+  </data>
+  <data name="Ribbon_Command_TransitionDrape_Label" xml:space="preserve">
+    <value>Drape</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPrestige_Label" xml:space="preserve">
+    <value>Prestige</value>
+  </data>
   <data name="Ribbon_Group_TransitionTiming_Label" xml:space="preserve">
     <value>Timing</value>
   </data>

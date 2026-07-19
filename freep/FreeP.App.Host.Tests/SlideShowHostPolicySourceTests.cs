@@ -57,6 +57,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayWheelTransition(");
         source.Should().Contain("PlayZoomTransition(");
         source.Should().Contain("PlayDissolveTransition(");
+        source.Should().Contain("PlayFlashTransition(");
         source.Should().Contain("PlayBoxTransition(");
         source.Should().Contain("PlayRevealTransition(");
         source.Should().Contain("PlayUncoverTransition(");
@@ -159,11 +160,15 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wedge:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wheel:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Dissolve:");
+        source.Should().Contain("DissolveEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Flash:");
+        source.Should().Contain("FlashEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spiral:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Swivel:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Bounce:");
+        source.Should().Contain("BounceEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Float:");
+        source.Should().Contain("FloatEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Swoop:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Boomerang:");
         source.Should().Contain("case SlideShowGeometricMaskKind.Circle:");

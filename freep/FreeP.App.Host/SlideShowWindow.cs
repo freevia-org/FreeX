@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
@@ -44,7 +45,7 @@ namespace FreeP.App.Host;
 /// displayed in the back layer. The front layer (new slide) is animated in according to
 /// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover
 /// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
-/// and Push (bidirectional displacement). Others fall back to Fade.
+/// and Push (bidirectional displacement), and Flash (white-flash). Others fall back to Fade.
 /// </summary>
 public sealed class SlideShowWindow : Window
 {
@@ -76,6 +77,7 @@ public sealed class SlideShowWindow : Window
 
     // Presenter ink overlay: shared-plan-backed strokes and laser pointer above slide content.
     private readonly Canvas _inkOverlay;
+    private readonly Rectangle _transitionFlashOverlay;
 
     // Manages MediaElement lifecycle for the current slide's media shapes.
     private readonly SlideShowMediaController _mediaController;
@@ -203,6 +205,17 @@ public sealed class SlideShowWindow : Window
             VerticalAlignment   = VerticalAlignment.Center,
         };
         stage.Children.Add(_inkOverlay);
+
+        _transitionFlashOverlay = new Rectangle
+        {
+            Fill = Brushes.White,
+            Opacity = 0,
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
+        stage.Children.Add(_transitionFlashOverlay);
 
         // Media controller: created now; EnterSlide is called per-slide in DisplayCurrentSlide.
         _mediaController = new SlideShowMediaController(_mediaOverlay);
@@ -743,7 +756,13 @@ public sealed class SlideShowWindow : Window
         _transitionBackImage.Visibility = Visibility.Collapsed;
         _transitionBackImage.Clip = null;
         _transitionBackImage.RenderTransform = Transform.Identity;
+        _transitionBackImage.BeginAnimation(UIElement.OpacityProperty, null);
         Grid.SetZIndex(_transitionBackImage, 0);
+        _transitionFlashOverlay.Visibility = Visibility.Collapsed;
+        _transitionFlashOverlay.BeginAnimation(UIElement.OpacityProperty, null);
+        _transitionFlashOverlay.Opacity = 0;
+        Grid.SetZIndex(_transitionFlashOverlay, 0);
+        Grid.SetZIndex(_slideCanvas, 0);
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.Clip = null;
@@ -784,7 +803,13 @@ public sealed class SlideShowWindow : Window
         _transitionBackImage.Visibility = Visibility.Collapsed;
         _transitionBackImage.Clip = null;
         _transitionBackImage.RenderTransform = Transform.Identity;
+        _transitionBackImage.BeginAnimation(UIElement.OpacityProperty, null);
         Grid.SetZIndex(_transitionBackImage, 0);
+        _transitionFlashOverlay.Visibility = Visibility.Collapsed;
+        _transitionFlashOverlay.BeginAnimation(UIElement.OpacityProperty, null);
+        _transitionFlashOverlay.Opacity = 0;
+        Grid.SetZIndex(_transitionFlashOverlay, 0);
+        Grid.SetZIndex(_slideCanvas, 0);
         switch (plan.ActionKind)
         {
             case SlideShowTransitionPlaybackActionKind.ShowInstant:
@@ -793,6 +818,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Fade:
                 PlayFadeTransition(slide, plan.DurationMs);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Flash:
+                PlayFlashTransition(slide, plan.DurationMs);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Dissolve:
@@ -928,6 +957,59 @@ public sealed class SlideShowWindow : Window
             _slideCanvas.Opacity = 1;
         };
         _slideCanvas.BeginAnimation(OpacityProperty, anim);
+    }
+
+    private void PlayFlashTransition(Slide slide, int durationMs)
+    {
+        var snapshot = CaptureCurrentSlide();
+
+        // Keep the incoming slide below the outgoing snapshot and peak a white
+        // surface once between them. This makes Flash distinct from Fade while
+        // remaining deterministic for both slideshow hosts.
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Refresh();
+        Grid.SetZIndex(_slideCanvas, 1);
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+            _transitionBackImage.Opacity = 1;
+            Grid.SetZIndex(_transitionBackImage, 2);
+        }
+
+        _transitionFlashOverlay.Visibility = Visibility.Visible;
+        _transitionFlashOverlay.Opacity = 0;
+        Grid.SetZIndex(_transitionFlashOverlay, 3);
+
+        var duration = new Duration(TimeSpan.FromMilliseconds(durationMs));
+        var outgoing = new DoubleAnimation(1, 0, duration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+        };
+        var flash = new DoubleAnimationUsingKeyFrames();
+        flash.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
+        flash.KeyFrames.Add(new SplineDoubleKeyFrame(
+            1, KeyTime.FromPercent(0.45), new KeySpline(0.2, 0, 0.8, 1)));
+        flash.KeyFrames.Add(new SplineDoubleKeyFrame(
+            0, KeyTime.FromPercent(1), new KeySpline(0.2, 0, 0.8, 1)));
+        flash.Duration = duration;
+        flash.Completed += (_, _) =>
+        {
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+            _transitionBackImage.Opacity = 1;
+            Grid.SetZIndex(_transitionBackImage, 0);
+            _transitionFlashOverlay.Visibility = Visibility.Collapsed;
+            _transitionFlashOverlay.Opacity = 0;
+            Grid.SetZIndex(_transitionFlashOverlay, 0);
+            Grid.SetZIndex(_slideCanvas, 0);
+        };
+
+        if (snapshot is not null)
+            _transitionBackImage.BeginAnimation(UIElement.OpacityProperty, outgoing);
+        _transitionFlashOverlay.BeginAnimation(UIElement.OpacityProperty, flash);
     }
 
     private void PlayCoverTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
@@ -1826,11 +1908,11 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Dissolve:
-                FadeEffect(sb, element, plan);
+                DissolveEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Flash:
-                FadeEffect(sb, element, plan);
+                FlashEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spiral:
@@ -1842,11 +1924,11 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Bounce:
-                FlyInEffect(sb, element, plan);
+                BounceEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Float:
-                FlyInEffect(sb, element, plan);
+                FloatEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Swoop:
@@ -1984,6 +2066,172 @@ public sealed class SlideShowWindow : Window
         sb.Children.Add(animX);
         sb.Children.Add(animY);
         sb.Children.Add(animOp);
+    }
+
+    private void FloatEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double width = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        double height = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        double directionX = plan.OffsetXFactor * width;
+        double directionY = plan.OffsetYFactor * height;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        double startX = isExit ? 0 : directionX;
+        double startY = isExit ? 0 : directionY;
+        double endX = isExit ? directionX : 0;
+        double endY = isExit ? directionY : 0;
+        double arcX = Math.Abs(plan.OffsetYFactor) > 0.01
+            ? -Math.Sign(plan.OffsetYFactor) * width * 0.06
+            : 0;
+        double arcY = Math.Abs(plan.OffsetXFactor) > 0.01
+            ? Math.Sign(plan.OffsetXFactor) * height * 0.06
+            : 0;
+        double midX = (startX + endX) / 2 + arcX;
+        double midY = (startY + endY) / 2 + arcY;
+
+        var translate = new TranslateTransform(startX, startY);
+        el.RenderTransform = translate;
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        AddFloatAxisAnimation(
+            sb,
+            el,
+            startX,
+            midX,
+            endX,
+            duration,
+            plan.DelayMs,
+            "(UIElement.RenderTransform).(TranslateTransform.X)");
+        AddFloatAxisAnimation(
+            sb,
+            el,
+            startY,
+            midY,
+            endY,
+            duration,
+            plan.DelayMs,
+            "(UIElement.RenderTransform).(TranslateTransform.Y)");
+        var opacity = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, duration)
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        Storyboard.SetTarget(opacity, el);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        sb.Children.Add(opacity);
+    }
+
+    private static void AddFloatAxisAnimation(
+        Storyboard sb,
+        FrameworkElement el,
+        double start,
+        double middle,
+        double end,
+        Duration duration,
+        int delayMs,
+        string propertyPath)
+    {
+        var animation = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            Duration = duration
+        };
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(start, KeyTime.FromPercent(0)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            middle,
+            KeyTime.FromPercent(0.72),
+            new KeySpline(0.2, 0, 0.4, 1)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            end,
+            KeyTime.FromPercent(1),
+            new KeySpline(0.2, 0, 0.2, 1)));
+        Storyboard.SetTarget(animation, el);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(propertyPath));
+        sb.Children.Add(animation);
+    }
+
+    private void BounceEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double width = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        double height = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        double directionX = plan.OffsetXFactor * width;
+        double directionY = plan.OffsetYFactor * height;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        double startX = isExit ? 0 : directionX;
+        double startY = isExit ? 0 : directionY;
+        double endX = isExit ? directionX : 0;
+        double endY = isExit ? directionY : 0;
+        double overshootX = isExit ? endX + directionX * 0.08 : -directionX * 0.08;
+        double overshootY = isExit ? endY + directionY * 0.08 : -directionY * 0.08;
+        double reboundX = isExit ? endX - directionX * 0.04 : directionX * 0.04;
+        double reboundY = isExit ? endY - directionY * 0.04 : directionY * 0.04;
+
+        var translate = new TranslateTransform(startX, startY);
+        el.RenderTransform = translate;
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        AddBounceAxisAnimation(
+            sb,
+            el,
+            startX,
+            endX,
+            overshootX,
+            reboundX,
+            duration,
+            plan.DelayMs,
+            "(UIElement.RenderTransform).(TranslateTransform.X)");
+        AddBounceAxisAnimation(
+            sb,
+            el,
+            startY,
+            endY,
+            overshootY,
+            reboundY,
+            duration,
+            plan.DelayMs,
+            "(UIElement.RenderTransform).(TranslateTransform.Y)");
+
+        var opacity = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, duration)
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        Storyboard.SetTarget(opacity, el);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        sb.Children.Add(opacity);
+    }
+
+    private static void AddBounceAxisAnimation(
+        Storyboard sb,
+        FrameworkElement el,
+        double start,
+        double end,
+        double overshoot,
+        double rebound,
+        Duration duration,
+        int delayMs,
+        string propertyPath)
+    {
+        var animation = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            Duration = duration
+        };
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(start, KeyTime.FromPercent(0)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            end,
+            KeyTime.FromPercent(0.55),
+            new KeySpline(0.2, 0, 0.4, 1)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            overshoot,
+            KeyTime.FromPercent(0.72),
+            new KeySpline(0.2, 0, 0.4, 1)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            rebound,
+            KeyTime.FromPercent(0.86),
+            new KeySpline(0.2, 0, 0.4, 1)));
+        animation.KeyFrames.Add(new LinearDoubleKeyFrame(end, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(animation, el);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(propertyPath));
+        sb.Children.Add(animation);
     }
 
     private void PeekEffect(Storyboard sb, FrameworkElement el,
@@ -2913,6 +3161,90 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTargetProperty(anim,
             new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
         sb.Children.Add(anim);
+    }
+
+    private static void FlashEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var animation = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+
+        // Flash briefly reveals and dims the object before settling at its
+        // authored opacity. Exit effects use the same pulse in reverse.
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(
+            isExit ? plan.FromOpacity : 0,
+            KeyTime.FromPercent(0)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            0.7,
+            KeyTime.FromPercent(0.2),
+            new KeySpline(0.2, 0, 0.4, 1)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            0.35,
+            KeyTime.FromPercent(0.55),
+            new KeySpline(0.2, 0, 0.4, 1)));
+        animation.KeyFrames.Add(new LinearDoubleKeyFrame(
+            plan.ToOpacity,
+            KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(animation, el);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(OpacityProperty));
+        sb.Children.Add(animation);
+    }
+
+    private static void DissolveEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double width = el.Width > 0 ? el.Width : 960;
+        double height = el.Height > 0 ? el.Height : 540;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+
+        el.Opacity = isExit ? plan.FromOpacity : 1;
+        el.Clip = BuildDissolveAnimationGeometry(width, height, isExit ? 1 : 0);
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            var maskProgress = isExit ? 1 - progress : progress;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildDissolveAnimationGeometry(width, height, maskProgress),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            el.Clip = null;
+            el.Opacity = plan.ToOpacity;
+        };
+        Storyboard.SetTarget(animation, el);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        sb.Children.Add(animation);
+    }
+
+    private static Geometry BuildDissolveAnimationGeometry(
+        double width,
+        double height,
+        double progress)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(
+                     width,
+                     height,
+                     SlideShowPlaybackPlanner.DissolveRowCount,
+                     SlideShowPlaybackPlanner.DissolveColumnCount,
+                     progress))
+        {
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        }
+
+        return geometry;
     }
 
     private static void DisappearEffect(Storyboard sb, FrameworkElement el, int delayMs)

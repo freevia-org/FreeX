@@ -143,7 +143,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Reveal, SlideShowTransitionPlaybackKind.Reveal)]
     [InlineData(TransitionKind.Wipe, SlideShowTransitionPlaybackKind.Reveal)]
     [InlineData(TransitionKind.Uncover, SlideShowTransitionPlaybackKind.Uncover)]
-    [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Fade)]
+    [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Flash)]
     [InlineData(TransitionKind.Split, SlideShowTransitionPlaybackKind.Split)]
     [InlineData(TransitionKind.Blinds, SlideShowTransitionPlaybackKind.Blinds)]
     [InlineData(TransitionKind.Comb, SlideShowTransitionPlaybackKind.Blinds)]
@@ -152,6 +152,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.WheelReverse, SlideShowTransitionPlaybackKind.Wheel)]
     [InlineData(TransitionKind.Zoom, SlideShowTransitionPlaybackKind.Zoom)]
     [InlineData(TransitionKind.Push, SlideShowTransitionPlaybackKind.Push)]
+    [InlineData(TransitionKind.Fly, SlideShowTransitionPlaybackKind.Push)]
     [InlineData(TransitionKind.Cover, SlideShowTransitionPlaybackKind.Cover)]
     [InlineData(TransitionKind.Gallery, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Conveyor, SlideShowTransitionPlaybackKind.PushLike)]
@@ -160,7 +161,6 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Window, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Morph, SlideShowTransitionPlaybackKind.FadeFallback)]
     [InlineData(TransitionKind.Cube, SlideShowTransitionPlaybackKind.FadeFallback)]
-    [InlineData(TransitionKind.Fly, SlideShowTransitionPlaybackKind.FadeFallback)]
     [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]
     public void PlanTransition_GroupsKindsIntoRendererNeutralPlayback(
         TransitionKind kind,
