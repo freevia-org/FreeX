@@ -145,4 +145,58 @@ public sealed class SlideShowMaskGeometryPlannerTests
         reverse.Arcs.Should().HaveCount(8).And.NotContain(arc => arc.IsClockwise);
         reverse.Arcs[0].SweepDegrees.Should().Be(normal.Arcs[0].SweepDegrees);
     }
+
+    [Fact]
+    public void BuildDissolveTransitionRects_RevealsDeterministicTilesToCompletion()
+    {
+        var empty = SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(960, 540, 3, 4, 0);
+        var midpoint = SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(960, 540, 3, 4, 0.5);
+        var full = SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(960, 540, 3, 4, 1);
+
+        empty.Should().BeEmpty();
+        midpoint.Should().HaveCount(6);
+        full.Should().HaveCount(12);
+        full.Should().Equal(
+            SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(960, 540, 3, 4, 1));
+    }
+
+    [Fact]
+    public void BuildBoxTransitionRect_ExpandsAndContractsAroundCenter()
+    {
+        var expandedStart = SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(960, 540, 0, true);
+        var expandedHalf = SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(960, 540, 0.5, true);
+        var expandedEnd = SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(960, 540, 1, true);
+        var contractedHalf = SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(960, 540, 0.5, false);
+
+        expandedStart.Should().Be(new SlideShowMaskRect(480, 270, 0, 0));
+        expandedHalf.Should().Be(new SlideShowMaskRect(240, 135, 480, 270));
+        expandedEnd.Should().Be(new SlideShowMaskRect(0, 0, 960, 540));
+        contractedHalf.Should().Be(expandedHalf);
+    }
+
+    [Fact]
+    public void BuildRevealTransitionRect_UsesIncomingEdgeAndFillsAtCompletion()
+    {
+        SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(960, 540, 0.5, -1, 0)
+            .Should().Be(new SlideShowMaskRect(480, 0, 480, 540));
+        SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(960, 540, 0.5, 1, 0)
+            .Should().Be(new SlideShowMaskRect(0, 0, 480, 540));
+        SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(960, 540, 0.5, 0, -1)
+            .Should().Be(new SlideShowMaskRect(0, 270, 960, 270));
+        SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(960, 540, 1, 0, 1)
+            .Should().Be(new SlideShowMaskRect(0, 0, 960, 540));
+    }
+
+    [Fact]
+    public void BuildUncoverTransitionRect_ShrinksOutgoingSlideTowardTravelEdge()
+    {
+        SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(960, 540, 0.5, -1, 0)
+            .Should().Be(new SlideShowMaskRect(0, 0, 480, 540));
+        SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(960, 540, 0.5, 1, 0)
+            .Should().Be(new SlideShowMaskRect(480, 0, 480, 540));
+        SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(960, 540, 0.5, 0, -1)
+            .Should().Be(new SlideShowMaskRect(0, 0, 960, 270));
+        SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(960, 540, 1, 0, 1)
+            .Should().Be(new SlideShowMaskRect(0, 540, 960, 0));
+    }
 }

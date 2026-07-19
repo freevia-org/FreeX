@@ -258,13 +258,35 @@ public static class FreePRibbon
             group.Medium("freep.transition.push", FreePRibbonText.TransitionPushCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.TransitionPushCommand.KeyTip);
             group.Medium("freep.transition.wipe", FreePRibbonText.TransitionWipeCommand.Label, RibbonCommandIconKind.ArrowLeft, FreePRibbonText.TransitionWipeCommand.KeyTip);
             group.Medium("freep.transition.split", FreePRibbonText.TransitionSplitCommand.Label, RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.TransitionSplitCommand.KeyTip);
+            group.Medium("freep.transition.box", FreePRibbonText.TransitionBoxCommand.Label, RibbonCommandIconKind.Rectangle, FreePRibbonText.TransitionBoxCommand.KeyTip);
+            group.Medium("freep.transition.doors", FreePRibbonText.TransitionDoorsCommand.Label, RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.TransitionDoorsCommand.KeyTip);
+            group.Medium("freep.transition.reveal", FreePRibbonText.TransitionRevealCommand.Label, RibbonCommandIconKind.Expand, FreePRibbonText.TransitionRevealCommand.KeyTip);
+            group.Medium("freep.transition.flash", FreePRibbonText.TransitionFlashCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.TransitionFlashCommand.KeyTip);
+            group.Medium("freep.transition.morph", FreePRibbonText.TransitionMorphCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.TransitionMorphCommand.KeyTip);
             group.Medium("freep.transition.cut", FreePRibbonText.TransitionCutCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.TransitionCutCommand.KeyTip);
             group.Medium("freep.transition.cover", FreePRibbonText.TransitionCoverCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.TransitionCoverCommand.KeyTip);
             group.Medium("freep.transition.uncover", FreePRibbonText.TransitionUncoverCommand.Label, RibbonCommandIconKind.Expand, FreePRibbonText.TransitionUncoverCommand.KeyTip);
             group.Medium("freep.transition.blinds", FreePRibbonText.TransitionBlindsCommand.Label, RibbonCommandIconKind.View, FreePRibbonText.TransitionBlindsCommand.KeyTip);
+            group.Medium("freep.transition.comb", FreePRibbonText.TransitionCombCommand.Label, RibbonCommandIconKind.Grid, FreePRibbonText.TransitionCombCommand.KeyTip);
+            group.Medium("freep.transition.random-bars", FreePRibbonText.TransitionRandomBarsCommand.Label, RibbonCommandIconKind.Grid, FreePRibbonText.TransitionRandomBarsCommand.KeyTip);
+            group.Medium("freep.transition.strips", FreePRibbonText.TransitionStripsCommand.Label, RibbonCommandIconKind.TextColumns, FreePRibbonText.TransitionStripsCommand.KeyTip);
+            group.Medium("freep.transition.wheel-reverse", FreePRibbonText.TransitionWheelReverseCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.TransitionWheelReverseCommand.KeyTip);
+            group.Medium("freep.transition.gallery", FreePRibbonText.TransitionGalleryCommand.Label, RibbonCommandIconKind.Grid, FreePRibbonText.TransitionGalleryCommand.KeyTip);
+            group.Medium("freep.transition.conveyor", FreePRibbonText.TransitionConveyorCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.TransitionConveyorCommand.KeyTip);
+            group.Medium("freep.transition.pan", FreePRibbonText.TransitionPanCommand.Label, RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.TransitionPanCommand.KeyTip);
+            group.Medium("freep.transition.window", FreePRibbonText.TransitionWindowCommand.Label, RibbonCommandIconKind.Window, FreePRibbonText.TransitionWindowCommand.KeyTip);
             group.Medium("freep.transition.dissolve", FreePRibbonText.TransitionDissolveCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.TransitionDissolveCommand.KeyTip);
             group.Medium("freep.transition.zoom", FreePRibbonText.TransitionZoomCommand.Label, RibbonCommandIconKind.Zoom, FreePRibbonText.TransitionZoomCommand.KeyTip);
             group.Medium("freep.transition.wheel", FreePRibbonText.TransitionWheelCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.TransitionWheelCommand.KeyTip);
+        });
+        tab.Group("transition-more", FreePRibbonText.TransitionMoreGroup.Label, null, 95, group =>
+        {
+            group.Medium(
+                "freep.transition.more",
+                FreePRibbonText.TransitionMoreCommand.Label,
+                RibbonCommandIconKind.Effects,
+                dropdown: true,
+                menu: BuildExtendedTransitionMenu);
         });
         tab.Group("transition-timing", FreePRibbonText.TransitionTimingGroup.Label, FreePRibbonText.TransitionTimingGroup.KeyTip, 90, group =>
         {
@@ -425,5 +447,36 @@ public static class FreePRibbon
         menu.Item("freep.anim.exit.wedge", FreePRibbonText.AnimationExitWedgeCommand.Label, FreePRibbonText.AnimationExitWedgeCommand.KeyTip);
         menu.Item("freep.anim.exit.wheel", FreePRibbonText.AnimationExitWheelCommand.Label, FreePRibbonText.AnimationExitWheelCommand.KeyTip);
         menu.Item("freep.anim.exit.random-bars", FreePRibbonText.AnimationExitRandomBarsCommand.Label, FreePRibbonText.AnimationExitRandomBarsCommand.KeyTip);
+    }
+
+    private static void BuildExtendedTransitionMenu(RibbonMenuBuilder menu)
+    {
+        menu.Item("freep.transition.fly", FreePRibbonText.TransitionFlyCommand.Label);
+        menu.Item("freep.transition.random", FreePRibbonText.TransitionRandomCommand.Label);
+        menu.Item("freep.transition.cube", FreePRibbonText.TransitionCubeCommand.Label);
+        menu.Item("freep.transition.rotate", FreePRibbonText.TransitionRotateCommand.Label);
+        menu.Item("freep.transition.flip", FreePRibbonText.TransitionFlipCommand.Label);
+        menu.Item("freep.transition.ferris", FreePRibbonText.TransitionFerrisCommand.Label);
+        menu.Item("freep.transition.flythrough", FreePRibbonText.TransitionFlythroughCommand.Label);
+        menu.Item("freep.transition.switch", FreePRibbonText.TransitionSwitchCommand.Label);
+        menu.Item("freep.transition.orbit", FreePRibbonText.TransitionOrbitCommand.Label);
+        menu.Item("freep.transition.honeycomb", FreePRibbonText.TransitionHoneycombCommand.Label);
+        menu.Item("freep.transition.glitter", FreePRibbonText.TransitionGlitterCommand.Label);
+        menu.Item("freep.transition.vortex", FreePRibbonText.TransitionVortexCommand.Label);
+        menu.Item("freep.transition.shred", FreePRibbonText.TransitionShredCommand.Label);
+        menu.Item("freep.transition.wind", FreePRibbonText.TransitionWindCommand.Label);
+        menu.Item("freep.transition.ripple", FreePRibbonText.TransitionRippleCommand.Label);
+        menu.Item("freep.transition.warp", FreePRibbonText.TransitionWarpCommand.Label);
+        menu.Item("freep.transition.fracture", FreePRibbonText.TransitionFractureCommand.Label);
+        menu.Item("freep.transition.crush", FreePRibbonText.TransitionCrushCommand.Label);
+        menu.Item("freep.transition.peel-off", FreePRibbonText.TransitionPeelOffCommand.Label);
+        menu.Item("freep.transition.page-curl-double", FreePRibbonText.TransitionPageCurlDoubleCommand.Label);
+        menu.Item("freep.transition.page-curl-single", FreePRibbonText.TransitionPageCurlSingleCommand.Label);
+        menu.Item("freep.transition.airplane", FreePRibbonText.TransitionAirplaneCommand.Label);
+        menu.Item("freep.transition.origami", FreePRibbonText.TransitionOrigamiCommand.Label);
+        menu.Item("freep.transition.prism", FreePRibbonText.TransitionPrismCommand.Label);
+        menu.Item("freep.transition.curtains", FreePRibbonText.TransitionCurtainsCommand.Label);
+        menu.Item("freep.transition.drape", FreePRibbonText.TransitionDrapeCommand.Label);
+        menu.Item("freep.transition.prestige", FreePRibbonText.TransitionPrestigeCommand.Label);
     }
 }

@@ -180,6 +180,62 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
+    public void Cmd_ExtendedTransitions_ExposeEveryWriterSupportedKind()
+    {
+        var expected = new (string CommandId, TransitionKind Kind)[]
+        {
+            ("freep.transition.fly", TransitionKind.Fly),
+            ("freep.transition.random", TransitionKind.Random),
+            ("freep.transition.cube", TransitionKind.Cube),
+            ("freep.transition.rotate", TransitionKind.Rotate),
+            ("freep.transition.flip", TransitionKind.Flip),
+            ("freep.transition.ferris", TransitionKind.Ferris),
+            ("freep.transition.flythrough", TransitionKind.Flythrough),
+            ("freep.transition.switch", TransitionKind.Switch),
+            ("freep.transition.orbit", TransitionKind.Orbit),
+            ("freep.transition.honeycomb", TransitionKind.Honeycomb),
+            ("freep.transition.glitter", TransitionKind.Glitter),
+            ("freep.transition.vortex", TransitionKind.Vortex),
+            ("freep.transition.shred", TransitionKind.Shred),
+            ("freep.transition.wind", TransitionKind.Wind),
+            ("freep.transition.ripple", TransitionKind.Ripple),
+            ("freep.transition.warp", TransitionKind.Warp),
+            ("freep.transition.fracture", TransitionKind.Fracture),
+            ("freep.transition.crush", TransitionKind.Crush),
+            ("freep.transition.peel-off", TransitionKind.PeelOff),
+            ("freep.transition.page-curl-double", TransitionKind.PageCurlDouble),
+            ("freep.transition.page-curl-single", TransitionKind.PageCurlSingle),
+            ("freep.transition.airplane", TransitionKind.Airplane),
+            ("freep.transition.origami", TransitionKind.Origami),
+            ("freep.transition.prism", TransitionKind.Prism),
+            ("freep.transition.curtains", TransitionKind.Curtains),
+            ("freep.transition.drape", TransitionKind.Drape),
+            ("freep.transition.prestige", TransitionKind.Prestige)
+        };
+
+        var (ed, _) = MakeSession();
+        var reg = MakeRegistry(ed);
+        foreach (var (commandId, kind) in expected)
+        {
+            Exec(reg, commandId);
+            Assert.Equal(kind, ed.CurrentSlideTransition?.Kind);
+        }
+    }
+
+    [Fact]
+    public void TransitionMoreMenu_ContainsEveryExtendedKind()
+    {
+        var tab = FreePRibbon.Build().Tabs.Single(t => t.Id == "transitions");
+        var group = tab.Groups.Single(g => g.Id == "transition-more");
+        var dropdown = Assert.IsType<RibbonDropdown>(
+            group.Controls.Single(control => control.CommandId.Value == "freep.transition.more"));
+
+        Assert.Equal(27, dropdown.Menu.Items.Count);
+        Assert.Contains(dropdown.Menu.Items, item => item.CommandId?.Value == "freep.transition.page-curl-double");
+        Assert.Contains(dropdown.Menu.Items, item => item.CommandId?.Value == "freep.transition.prestige");
+    }
+
+    [Fact]
     public void Cmd_TransitionDuration_UsesRibbonContextSelectedValue()
     {
         var (ed, _) = MakeSession();
@@ -473,10 +529,23 @@ public class RibbonTransitionsAnimationsTests
     [InlineData("freep.transition.push")]
     [InlineData("freep.transition.wipe")]
     [InlineData("freep.transition.split")]
+    [InlineData("freep.transition.box")]
+    [InlineData("freep.transition.doors")]
+    [InlineData("freep.transition.reveal")]
+    [InlineData("freep.transition.flash")]
+    [InlineData("freep.transition.morph")]
     [InlineData("freep.transition.cut")]
     [InlineData("freep.transition.cover")]
     [InlineData("freep.transition.uncover")]
     [InlineData("freep.transition.blinds")]
+    [InlineData("freep.transition.comb")]
+    [InlineData("freep.transition.random-bars")]
+    [InlineData("freep.transition.strips")]
+    [InlineData("freep.transition.wheel-reverse")]
+    [InlineData("freep.transition.gallery")]
+    [InlineData("freep.transition.conveyor")]
+    [InlineData("freep.transition.pan")]
+    [InlineData("freep.transition.window")]
     [InlineData("freep.transition.dissolve")]
     [InlineData("freep.transition.zoom")]
     [InlineData("freep.transition.wheel")]

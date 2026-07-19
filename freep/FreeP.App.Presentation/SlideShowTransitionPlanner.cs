@@ -6,6 +6,13 @@ public enum SlideShowTransitionPlaybackKind
 {
     Cut,
     Fade,
+    Flash,
+    Dissolve,
+    Box,
+    Reveal,
+    Uncover,
+    Cover,
+    Push,
     Split,
     Blinds,
     RandomBars,
@@ -27,7 +34,8 @@ public sealed record SlideShowTransitionPlan(
     bool StripsSlopeDown,
     int WheelSpokeCount,
     bool WheelReverse,
-    bool ZoomIn);
+    bool ZoomIn,
+    bool BoxExpandsFromCenter);
 
 public static class SlideShowTransitionPlanner
 {
@@ -47,7 +55,8 @@ public static class SlideShowTransitionPlanner
             ResolveStripsSlopeDown(transition),
             ResolveWheelSpokeCount(transition),
             transition.Kind == TransitionKind.WheelReverse,
-            transition.Direction != TransitionDirection.Out);
+            transition.Direction != TransitionDirection.Out,
+            ResolveBoxExpandsFromCenter(transition));
     }
 
     public static SlideShowTransitionPlaybackKind PlanPlaybackKind(TransitionKind kind) =>
@@ -56,13 +65,41 @@ public static class SlideShowTransitionPlanner
             TransitionKind.None or
             TransitionKind.Cut => SlideShowTransitionPlaybackKind.Cut,
 
-            TransitionKind.Fade or
-            TransitionKind.Dissolve or
-            TransitionKind.Flash => SlideShowTransitionPlaybackKind.Fade,
+            TransitionKind.Fade => SlideShowTransitionPlaybackKind.Fade,
+
+            // PresentationML p14:flash is a distinct transition. Keep it
+            // renderer-neutral so both slideshow hosts can produce a brief
+            // white flash instead of silently reducing it to a cross-fade.
+            TransitionKind.Flash => SlideShowTransitionPlaybackKind.Flash,
+
+            TransitionKind.Dissolve => SlideShowTransitionPlaybackKind.Dissolve,
+
+            TransitionKind.Box => SlideShowTransitionPlaybackKind.Box,
+
+            TransitionKind.Reveal => SlideShowTransitionPlaybackKind.Reveal,
+
+            TransitionKind.Wipe => SlideShowTransitionPlaybackKind.Reveal,
+
+            TransitionKind.Uncover => SlideShowTransitionPlaybackKind.Uncover,
+
+            TransitionKind.Cover => SlideShowTransitionPlaybackKind.Cover,
+
+            TransitionKind.Push => SlideShowTransitionPlaybackKind.Push,
+
+            // There is no standard PresentationML p:fly element. The package
+            // writer emits Fly as push, so playback must follow that same
+            // interoperable representation instead of falling back to fade.
+            TransitionKind.Fly => SlideShowTransitionPlaybackKind.Push,
+
+            TransitionKind.Doors => SlideShowTransitionPlaybackKind.Split,
 
             TransitionKind.Split => SlideShowTransitionPlaybackKind.Split,
 
             TransitionKind.Blinds => SlideShowTransitionPlaybackKind.Blinds,
+
+            // OOXML comb is a directional bar wipe; reuse the renderer-neutral
+            // blinds geometry so both slideshow hosts preserve horz/vert axes.
+            TransitionKind.Comb => SlideShowTransitionPlaybackKind.Blinds,
 
             TransitionKind.RandomBar => SlideShowTransitionPlaybackKind.RandomBars,
 
@@ -73,28 +110,23 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Zoom => SlideShowTransitionPlaybackKind.Zoom,
 
-            TransitionKind.Push or
-            TransitionKind.Cover or
-            TransitionKind.Wipe or
-            TransitionKind.Uncover or
             TransitionKind.Gallery or
             TransitionKind.Conveyor or
             TransitionKind.Pan or
-            TransitionKind.Reveal or
-            TransitionKind.Comb or
-            TransitionKind.Doors or
             TransitionKind.Window => SlideShowTransitionPlaybackKind.PushLike,
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback
         };
 
     private static bool ResolveSplitHorizontal(SlideTransition transition) =>
-        transition.SplitOrientation == TransitionDirection.Horizontal
+        transition.Kind == TransitionKind.Doors
+        || transition.SplitOrientation == TransitionDirection.Horizontal
         || (transition.SplitOrientation is null
             && transition.Direction != TransitionDirection.Vertical);
 
     private static bool ResolveSplitOut(SlideTransition transition) =>
-        transition.Direction != TransitionDirection.In;
+        transition.Kind == TransitionKind.Doors
+        || transition.Direction != TransitionDirection.In;
 
     private static bool ResolveBlindsHorizontal(SlideTransition transition) =>
         transition.Direction != TransitionDirection.Vertical;
@@ -107,6 +139,14 @@ public static class SlideShowTransitionPlanner
 
     private static int ResolveWheelSpokeCount(SlideTransition transition) =>
         Math.Clamp(transition.WheelSpokeCount is > 0 ? transition.WheelSpokeCount.Value : 4, 1, 32);
+
+    private static bool ResolveBoxExpandsFromCenter(SlideTransition transition) =>
+        transition.Direction switch
+        {
+            TransitionDirection.In => true,
+            TransitionDirection.Out => false,
+            _ => true
+        };
 
     public static (double X, double Y) ResolveIncomingOffset(TransitionDirection? direction) =>
         direction switch

@@ -138,28 +138,29 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.None, SlideShowTransitionPlaybackKind.Cut)]
     [InlineData(TransitionKind.Cut, SlideShowTransitionPlaybackKind.Cut)]
     [InlineData(TransitionKind.Fade, SlideShowTransitionPlaybackKind.Fade)]
-    [InlineData(TransitionKind.Dissolve, SlideShowTransitionPlaybackKind.Fade)]
-    [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Fade)]
+    [InlineData(TransitionKind.Dissolve, SlideShowTransitionPlaybackKind.Dissolve)]
+    [InlineData(TransitionKind.Box, SlideShowTransitionPlaybackKind.Box)]
+    [InlineData(TransitionKind.Reveal, SlideShowTransitionPlaybackKind.Reveal)]
+    [InlineData(TransitionKind.Wipe, SlideShowTransitionPlaybackKind.Reveal)]
+    [InlineData(TransitionKind.Uncover, SlideShowTransitionPlaybackKind.Uncover)]
+    [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Flash)]
     [InlineData(TransitionKind.Split, SlideShowTransitionPlaybackKind.Split)]
     [InlineData(TransitionKind.Blinds, SlideShowTransitionPlaybackKind.Blinds)]
+    [InlineData(TransitionKind.Comb, SlideShowTransitionPlaybackKind.Blinds)]
     [InlineData(TransitionKind.RandomBar, SlideShowTransitionPlaybackKind.RandomBars)]
     [InlineData(TransitionKind.Wheel, SlideShowTransitionPlaybackKind.Wheel)]
     [InlineData(TransitionKind.WheelReverse, SlideShowTransitionPlaybackKind.Wheel)]
     [InlineData(TransitionKind.Zoom, SlideShowTransitionPlaybackKind.Zoom)]
-    [InlineData(TransitionKind.Push, SlideShowTransitionPlaybackKind.PushLike)]
-    [InlineData(TransitionKind.Cover, SlideShowTransitionPlaybackKind.PushLike)]
-    [InlineData(TransitionKind.Wipe, SlideShowTransitionPlaybackKind.PushLike)]
-    [InlineData(TransitionKind.Uncover, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Push, SlideShowTransitionPlaybackKind.Push)]
+    [InlineData(TransitionKind.Fly, SlideShowTransitionPlaybackKind.Push)]
+    [InlineData(TransitionKind.Cover, SlideShowTransitionPlaybackKind.Cover)]
     [InlineData(TransitionKind.Gallery, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Conveyor, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Pan, SlideShowTransitionPlaybackKind.PushLike)]
-    [InlineData(TransitionKind.Reveal, SlideShowTransitionPlaybackKind.PushLike)]
-    [InlineData(TransitionKind.Comb, SlideShowTransitionPlaybackKind.PushLike)]
-    [InlineData(TransitionKind.Doors, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Doors, SlideShowTransitionPlaybackKind.Split)]
     [InlineData(TransitionKind.Window, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Morph, SlideShowTransitionPlaybackKind.FadeFallback)]
     [InlineData(TransitionKind.Cube, SlideShowTransitionPlaybackKind.FadeFallback)]
-    [InlineData(TransitionKind.Fly, SlideShowTransitionPlaybackKind.FadeFallback)]
     [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]
     public void PlanTransition_GroupsKindsIntoRendererNeutralPlayback(
         TransitionKind kind,
@@ -222,6 +223,23 @@ public sealed class SlideShowHostPlannerTests
         var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
         {
             Kind = TransitionKind.Blinds,
+            Direction = direction
+        });
+
+        plan.PlaybackKind.Should().Be(SlideShowTransitionPlaybackKind.Blinds);
+        plan.BlindsHorizontal.Should().Be(expectedHorizontal);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Horizontal, true)]
+    [InlineData(TransitionDirection.Vertical, false)]
+    public void PlanTransition_ResolvesCombAsDirectionalBarWipe(
+        TransitionDirection direction,
+        bool expectedHorizontal)
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Comb,
             Direction = direction
         });
 

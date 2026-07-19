@@ -24,9 +24,20 @@ public sealed class SlideShowPlaybackPlannerTests
         });
 
         push.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Push);
+        push.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Push);
         push.DurationMs.Should().Be(325);
         push.IncomingOffsetX.Should().Be(-1);
         push.IncomingOffsetY.Should().Be(0);
+
+        var cover = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Cover,
+            Direction = TransitionDirection.Right,
+            DurationMs = 325
+        });
+
+        cover.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Cover);
+        cover.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Cover);
 
         var fallback = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
@@ -36,6 +47,142 @@ public sealed class SlideShowPlaybackPlannerTests
 
         fallback.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Fade);
         fallback.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.FadeFallback);
+    }
+
+    [Fact]
+    public void PlanTransition_DissolveUsesDedicatedAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Dissolve,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Dissolve);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Dissolve);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
+    public void PlanTransition_FlashUsesDedicatedAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Flash,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Flash);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Flash);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
+    public void PlanTransition_FlyUsesSerializedPushPlayback()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Fly,
+            Direction = TransitionDirection.Right,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Push);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Push);
+        plan.IncomingOffsetX.Should().Be(-1);
+        plan.IncomingOffsetY.Should().Be(0);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.In, true)]
+    [InlineData(TransitionDirection.Out, false)]
+    [InlineData(null, true)]
+    public void PlanTransition_BoxUsesDedicatedActionAndDirection(
+        TransitionDirection? direction,
+        bool expandsFromCenter)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Box,
+            Direction = direction,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Box);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Box);
+        plan.BoxExpandsFromCenter.Should().Be(expandsFromCenter);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Right, -1, 0)]
+    [InlineData(TransitionDirection.Left, 1, 0)]
+    [InlineData(TransitionDirection.Down, 0, -1)]
+    [InlineData(TransitionDirection.Up, 0, 1)]
+    public void PlanTransition_RevealUsesDirectionalClipAction(
+        TransitionDirection direction,
+        double expectedOffsetX,
+        double expectedOffsetY)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Reveal,
+            Direction = direction
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Reveal);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Reveal);
+        plan.IncomingOffsetX.Should().Be(expectedOffsetX);
+        plan.IncomingOffsetY.Should().Be(expectedOffsetY);
+    }
+
+    [Fact]
+    public void PlanTransition_WipeUsesDirectionalRevealClipAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Wipe,
+            Direction = TransitionDirection.Left,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Reveal);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Reveal);
+        plan.IncomingOffsetX.Should().Be(1);
+        plan.IncomingOffsetY.Should().Be(0);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
+    public void PlanTransition_UncoverUsesOutgoingClipAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Uncover,
+            Direction = TransitionDirection.Right,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Uncover);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Uncover);
+        plan.IncomingOffsetX.Should().Be(-1);
+        plan.IncomingOffsetY.Should().Be(0);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
+    public void PlanTransition_DoorsUsesVerticalCenterOpening()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Doors,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Split);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Split);
+        plan.SplitHorizontal.Should().BeTrue();
+        plan.SplitOut.Should().BeTrue();
     }
 
     [Fact]
@@ -66,6 +213,26 @@ public sealed class SlideShowPlaybackPlannerTests
 
         plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Blinds);
         plan.BlindsHorizontal.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Horizontal, true)]
+    [InlineData(TransitionDirection.Vertical, false)]
+    public void PlanTransition_CombUsesSharedBlindsActionAndAxis(
+        TransitionDirection direction,
+        bool expectedHorizontal)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Comb,
+            Direction = direction,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Blinds);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Blinds);
+        plan.BlindsHorizontal.Should().Be(expectedHorizontal);
+        plan.DurationMs.Should().Be(420);
     }
 
     [Fact]
@@ -853,6 +1020,22 @@ public sealed class SlideShowPlaybackPlannerTests
         var teeterFrame = SlideShowPlaybackFramePlanner.PlanFrame(teeterPlan, 150, 960, 540);
         teeterFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Rotate);
         teeterFrame.RotationDegrees.Should().BeApproximately(-10, 0.0001);
+
+        var swivelPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 74,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Swivel,
+                DurationMs = 400
+            },
+            startDelayMs: 0);
+        var swivelEdgeFrame = SlideShowPlaybackFramePlanner.PlanFrame(swivelPlan, 100, 960, 540);
+        swivelEdgeFrame.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Swivel);
+        swivelEdgeFrame.RotationDegrees.Should().BeApproximately(90, 0.0001);
+        swivelEdgeFrame.HorizontalScale.Should().BeApproximately(0.04, 0.0001);
+        var swivelFaceFrame = SlideShowPlaybackFramePlanner.PlanFrame(swivelPlan, 200, 960, 540);
+        swivelFaceFrame.HorizontalScale.Should().BeApproximately(1, 0.0001);
 
         var colorPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
