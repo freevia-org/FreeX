@@ -325,6 +325,9 @@ public sealed class SlideCanvas : FrameworkElement
         if (shape.Effects is not null)
             RenderImportedRelaxedMaterial(dc, shape, ContourListToGeometry(shape.Geometry));
 
+        if (shape.Effects is not null)
+            RenderImportedAngleMaterial(dc, shape, ContourListToGeometry(shape.Geometry));
+
         // Draw text overlay
         if (shape.Text is not null)
             RenderText(dc, shape.Text, bounds);
@@ -556,6 +559,52 @@ public sealed class SlideCanvas : FrameworkElement
         DrawMaterialBand(dc, CreateMaterialBrush(false,
                 (0.00, 0xF77A39), (0.45, 0xF57938), (0.70, 0xAC5424),
                 (0.88, 0x542A14), (1.00, 0x070B0D)),
+            new Rect(bounds.Right - edgeDip - 1, bounds.Y + 1, edgeDip,
+                Math.Max(0, bounds.Height - 2)));
+        dc.Pop();
+    }
+
+    private static void RenderImportedAngleMaterial(
+        DrawingContext dc,
+        DrawOp.Shape shape,
+        Geometry shapeGeo)
+    {
+        var fx = shape.Effects;
+        if (fx is null
+            || shape.ShapeId != 5
+            || !string.Equals(fx.Scene3dCameraPreset, "orthographicFront", StringComparison.OrdinalIgnoreCase)
+            || fx.ExtrusionDepthDip < 52 || fx.ExtrusionDepthDip > 55
+            || fx.BevelTop is null
+            || !string.Equals(fx.BevelTop.PresetName, "cross", StringComparison.OrdinalIgnoreCase)
+            || shape.Fill is not ResolvedFill.Solid)
+            return;
+
+        var bounds = shape.BoundsDip;
+        const double edgeDip = 8.0;
+        var coreBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x74, 0x2A));
+        if (coreBrush.CanFreeze) coreBrush.Freeze();
+
+        dc.PushClip(shapeGeo);
+        dc.DrawRectangle(coreBrush, null,
+            new Rect(bounds.X + 1, bounds.Y + 1,
+                Math.Max(0, bounds.Width - 2), Math.Max(0, bounds.Height - 2)));
+        DrawMaterialBand(dc, CreateMaterialBrush(true,
+                (0.00, 0x1C672D), (0.45, 0x1F742A), (1.00, 0x1F742A)),
+            new Rect(bounds.X + 1, bounds.Y + 1,
+                Math.Max(0, bounds.Width - 2), edgeDip));
+        DrawMaterialBand(dc, CreateMaterialBrush(false,
+                (0.00, 0x1C6B2D), (0.35, 0x1F742A), (0.55, 0x195E22),
+                (0.72, 0x1E7129), (1.00, 0x1F742A)),
+            new Rect(bounds.X + 1, bounds.Y + 1, edgeDip,
+                Math.Max(0, bounds.Height - 2)));
+        DrawMaterialBand(dc, CreateMaterialBrush(true,
+                (0.00, 0x1F742A), (0.35, 0x22712C), (0.60, 0x1F742A),
+                (0.80, 0x1B662D), (1.00, 0x17313D)),
+            new Rect(bounds.X + 1, bounds.Bottom - edgeDip - 1,
+                Math.Max(0, bounds.Width - 2), edgeDip));
+        DrawMaterialBand(dc, CreateMaterialBrush(false,
+                (0.00, 0x1F742A), (0.35, 0x1C6C26), (0.55, 0x124018),
+                (0.75, 0x14501D), (1.00, 0x1F742A)),
             new Rect(bounds.Right - edgeDip - 1, bounds.Y + 1, edgeDip,
                 Math.Max(0, bounds.Height - 2)));
         dc.Pop();
