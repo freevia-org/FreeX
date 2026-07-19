@@ -81,6 +81,11 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Push => SlideShowTransitionPlaybackKind.Push,
 
+            // There is no standard PresentationML p:fly element. The package
+            // writer emits Fly as push, so playback must follow that same
+            // interoperable representation instead of falling back to fade.
+            TransitionKind.Fly => SlideShowTransitionPlaybackKind.Push,
+
             TransitionKind.Doors => SlideShowTransitionPlaybackKind.Split,
 
             TransitionKind.Split => SlideShowTransitionPlaybackKind.Split,
