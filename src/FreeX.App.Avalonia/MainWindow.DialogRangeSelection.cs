@@ -460,6 +460,7 @@ public sealed partial class MainWindow
 
         if (_isDialogRangeInteractionProbe)
         {
+            session.Dialog.Activate();
             session.Target.Focus();
             session.Target.SelectAll();
             return;
