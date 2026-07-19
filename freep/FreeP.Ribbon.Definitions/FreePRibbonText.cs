@@ -201,6 +201,9 @@ internal static class FreePRibbonText
     public static RibbonText AnimationExitDisappearCommand { get; } = new("Ribbon_Command_AnimationExitDisappear_Label", "Ribbon_Command_AnimationExitDisappear_KeyTip");
     public static RibbonText AnimationExitFadeOutCommand { get; } = new("Ribbon_Command_AnimationExitFadeOut_Label", "Ribbon_Command_AnimationExitFadeOut_KeyTip");
     public static RibbonText AnimationExitFlyOutCommand { get; } = new("Ribbon_Command_AnimationExitFlyOut_Label", "Ribbon_Command_AnimationExitFlyOut_KeyTip");
+    public static RibbonText AnimationExitWipeCommand { get; } = new("Ribbon_Command_AnimationExitWipe_Label", "Ribbon_Command_AnimationExitWipe_KeyTip");
+    public static RibbonText AnimationExitSplitCommand { get; } = new("Ribbon_Command_AnimationExitSplit_Label", "Ribbon_Command_AnimationExitSplit_KeyTip");
+    public static RibbonText AnimationExitZoomOutCommand { get; } = new("Ribbon_Command_AnimationExitZoomOut_Label", "Ribbon_Command_AnimationExitZoomOut_KeyTip");
     public static RibbonText AnimationNoneCommand { get; } = new("Ribbon_Command_AnimationNone_Label", "Ribbon_Command_AnimationNone_KeyTip");
     public static RibbonText AnimationTimingGroup { get; } = new("Ribbon_Group_AnimationTiming_Label", "Ribbon_Group_AnimationTiming_KeyTip");
     public static RibbonText AnimationTriggerCommand { get; } = new("Ribbon_Command_AnimationTrigger_Label");

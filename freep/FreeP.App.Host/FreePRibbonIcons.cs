@@ -112,6 +112,9 @@ internal static class FreePRibbonIcons
             ["freep.anim.exit.disappear"] = RibbonCommandIconKind.Delete,
             ["freep.anim.exit.fade-out"]  = RibbonCommandIconKind.Effects,
             ["freep.anim.exit.fly-out"]   = RibbonCommandIconKind.ArrowDown,
+            ["freep.anim.exit.wipe"]       = RibbonCommandIconKind.ArrowRight,
+            ["freep.anim.exit.split"]      = RibbonCommandIconKind.ArrowLeftRight,
+            ["freep.anim.exit.zoom-out"]   = RibbonCommandIconKind.Zoom,
 
             // Wave 4C: Animation none / timing / pane
             ["freep.anim.none"]         = RibbonCommandIconKind.Clear,
