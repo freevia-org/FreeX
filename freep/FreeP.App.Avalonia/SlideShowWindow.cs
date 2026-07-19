@@ -920,7 +920,21 @@ public sealed class SlideShowWindow : Window
             .Distinct()
             .ToList();
 
-        if (_entranceShapeIds.Count == 0) return;
+        var animatedShapeIds = slide.Animations
+            .Where(a => a.Kind == AnimationKind.Emphasis
+                        || (a.Kind == AnimationKind.Exit
+                            && (a.Preset == AnimationPreset.Appear
+                                || a.Preset == AnimationPreset.Fade
+                                || a.Preset == AnimationPreset.FlyIn
+                                || a.Preset == AnimationPreset.Wipe
+                                || a.Preset == AnimationPreset.Split))
+                        || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
+                            && a.TriggerShapeId == null))
+            .Select(a => a.ShapeId)
+            .Distinct()
+            .ToList();
+
+        if (animatedShapeIds.Count == 0) return;
 
         double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
         double h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
@@ -928,7 +942,7 @@ public sealed class SlideShowWindow : Window
         _animOverlay.Width  = w;
         _animOverlay.Height = h;
 
-        foreach (var shapeId in _entranceShapeIds)
+        foreach (var shapeId in animatedShapeIds)
         {
             var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
             if (shape is null) continue;
@@ -942,7 +956,7 @@ public sealed class SlideShowWindow : Window
                 Width            = w,
                 Height           = h,
                 Stretch          = Stretch.None,
-                Opacity          = 0,
+                Opacity          = _entranceShapeIds.Contains(shapeId) ? 0 : 1,
                 IsHitTestVisible = false,
             };
 
@@ -1024,7 +1038,7 @@ public sealed class SlideShowWindow : Window
             }
 
             var shapeId = anim.ShapeId;
-            PlayShapeAnimation(element, plan, onReveal: () =>
+            PlayShapeAnimation(element, plan, onReveal: anim.Kind == AnimationKind.Exit ? null : () =>
             {
                 // DA1: once the entrance animation finishes (or fires), hand off painting to
                 // the base canvas.  The overlay element stays in the tree at full opacity but
@@ -1060,7 +1074,10 @@ public sealed class SlideShowWindow : Window
         switch (plan.EffectKind)
         {
             case SlideShowShapeAnimationEffectKind.Appear:
-                AppearEffect(element, plan.DelayMs, CompleteReveal(plan, onReveal));
+                if (plan.Animation.Kind == AnimationKind.Exit)
+                    DisappearEffect(element, plan.DelayMs);
+                else
+                    AppearEffect(element, plan.DelayMs, CompleteReveal(plan, onReveal));
                 break;
 
             case SlideShowShapeAnimationEffectKind.Fade:
@@ -1180,6 +1197,31 @@ public sealed class SlideShowWindow : Window
                 SpinEffect(element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Teeter:
+                InvokeRevealAtStart(plan, onReveal);
+                TeeterEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Blink:
+                InvokeRevealAtStart(plan, onReveal);
+                BlinkEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Wave:
+                InvokeRevealAtStart(plan, onReveal);
+                WaveEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ColorPulse:
+            case SlideShowShapeAnimationEffectKind.ChangeColor:
+            case SlideShowShapeAnimationEffectKind.GrowWithColor:
+            case SlideShowShapeAnimationEffectKind.Shimmer:
+            case SlideShowShapeAnimationEffectKind.Bold:
+            case SlideShowShapeAnimationEffectKind.Underline:
+                InvokeRevealAtStart(plan, onReveal);
+                EmphasisPulseEffect(element, plan);
+                break;
+
             default:
                 AppearEffect(element, plan.DelayMs, CompleteReveal(plan, onReveal));
                 break;
@@ -1234,12 +1276,14 @@ public sealed class SlideShowWindow : Window
         double dx = plan.OffsetXFactor * w;
         double dy = plan.OffsetYFactor * h;
 
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
         el.Opacity = plan.FromOpacity;
-        el.RenderTransform = new TranslateTransform(dx, dy);
+        el.RenderTransform = new TranslateTransform(isExit ? 0 : dx, isExit ? 0 : dy);
 
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateTranslate(el, dx, dy, 0, 0, plan.DurationMs);
+            AnimateTranslate(el, isExit ? 0 : dx, isExit ? 0 : dy,
+                isExit ? dx : 0, isExit ? dy : 0, plan.DurationMs);
             // Reveal in base canvas when the fade-in completes.
             AnimateOpacity(
                 el,
@@ -1284,30 +1328,35 @@ public sealed class SlideShowWindow : Window
         el.Opacity = 1;
         InvokeRevealAtStart(plan, onReveal);
 
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
         if (plan.WipeHorizontal)
         {
             // Clip from 0 width → full width.
-            var clipRect = new RectangleGeometry(new Rect(0, 0, 0, h));
+            var from = isExit ? new Rect(0, 0, w, h) : new Rect(0, 0, 0, h);
+            var to = isExit ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, h);
+            var clipRect = new RectangleGeometry(from);
             el.Clip = clipRect;
             DelayedAction(plan.DelayMs, () =>
                 AnimateRectClip(
                     el,
                     clipRect,
-                    new Rect(0, 0, 0, h),
-                    new Rect(0, 0, w, h),
+                    from,
+                    to,
                     plan.DurationMs,
                     onComplete: CompleteReveal(plan, onReveal)));
         }
         else
         {
-            var clipRect = new RectangleGeometry(new Rect(0, 0, w, 0));
+            var from = isExit ? new Rect(0, 0, w, h) : new Rect(0, 0, w, 0);
+            var to = isExit ? new Rect(0, 0, w, 0) : new Rect(0, 0, w, h);
+            var clipRect = new RectangleGeometry(from);
             el.Clip = clipRect;
             DelayedAction(plan.DelayMs, () =>
                 AnimateRectClip(
                     el,
                     clipRect,
-                    new Rect(0, 0, w, 0),
-                    new Rect(0, 0, w, h),
+                    from,
+                    to,
                     plan.DurationMs,
                     onComplete: CompleteReveal(plan, onReveal)));
         }
@@ -1322,15 +1371,16 @@ public sealed class SlideShowWindow : Window
 
         Rect from;
         Rect to;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
         if (plan.WipeHorizontal)
         {
-            from = new Rect(w / 2, 0, 0, h);
-            to = new Rect(0, 0, w, h);
+            from = isExit ? new Rect(0, 0, w, h) : new Rect(w / 2, 0, 0, h);
+            to = isExit ? new Rect(w / 2, 0, 0, h) : new Rect(0, 0, w, h);
         }
         else
         {
-            from = new Rect(0, h / 2, w, 0);
-            to = new Rect(0, 0, w, h);
+            from = isExit ? new Rect(0, 0, w, h) : new Rect(0, h / 2, w, 0);
+            to = isExit ? new Rect(0, h / 2, w, 0) : new Rect(0, 0, w, h);
         }
 
         var clipRect = new RectangleGeometry(from);
@@ -1350,11 +1400,14 @@ public sealed class SlideShowWindow : Window
         double w = el.Width  > 0 ? el.Width  : 960;
         double h = el.Height > 0 ? el.Height : 540;
 
-        var from = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
-        var to = new Rect(0, 0, w, h);
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
+        var full = new Rect(0, 0, w, h);
+        var from = isExit ? full : closed;
+        var to = isExit ? closed : full;
         var clipRect = new RectangleGeometry(from);
         el.Clip = clipRect;
-        el.Opacity = 0;
+        el.Opacity = isExit ? plan.FromOpacity : 0;
 
         DelayedAction(plan.DelayMs, () =>
         {
@@ -1365,9 +1418,9 @@ public sealed class SlideShowWindow : Window
                 to,
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal));
-            el.Opacity = 0.15;
-            DelayedAction(plan.DurationMs / 5, () => el.Opacity = 0.45);
-            DelayedAction(plan.DurationMs / 2, () => el.Opacity = 0.75);
+            el.Opacity = isExit ? 0.7 : 0.15;
+            DelayedAction(plan.DurationMs / 5, () => el.Opacity = isExit ? 0.35 : 0.45);
+            DelayedAction(plan.DurationMs / 2, () => el.Opacity = isExit ? 0.15 : 0.75);
             DelayedAction(plan.DurationMs, () => el.Opacity = plan.ToOpacity);
         });
     }
@@ -1970,6 +2023,125 @@ public sealed class SlideShowWindow : Window
 
         DelayedAction(plan.DelayMs, () =>
             AnimateRotate(rotate, 0, plan.RotationDegrees, plan.DurationMs));
+    }
+
+    private void TeeterEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        el.RenderTransformOrigin = RelativePoint.Center;
+        var rotate = new RotateTransform(0);
+        el.RenderTransform = rotate;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (-10.0, 0.2), (10.0, 0.4), (-10.0, 0.6), (0.0, 1.0) },
+            value => rotate.Angle = value));
+    }
+
+    private void BlinkEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (1.0, 0.0), (0.15, 0.25), (1.0, 0.5), (0.15, 0.75), (1.0, 1.0) },
+            value => el.Opacity = value));
+    }
+
+    private void WaveEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        el.RenderTransformOrigin = RelativePoint.Center;
+        var translate = new TranslateTransform();
+        el.RenderTransform = translate;
+        var amplitude = (_slideDipW > 0 ? _slideDipW : 960) * 0.00625;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (-amplitude, 0.2), (amplitude, 0.4), (-amplitude, 0.6), (0.0, 1.0) },
+            value => translate.X = value));
+    }
+
+    private void EmphasisPulseEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (1.0, 0.0), (0.65, 0.5), (1.0, 1.0) },
+            value => el.Opacity = value));
+
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.GrowWithColor)
+        {
+            el.RenderTransformOrigin = RelativePoint.Center;
+            var scale = new ScaleTransform(1, 1);
+            el.RenderTransform = scale;
+            DelayedAction(plan.DelayMs, () =>
+            {
+                AnimateScale(el, scale, 1, plan.PeakScale, plan.DurationMs / 2);
+                DelayedAction(plan.DurationMs / 2, () =>
+                    AnimateScale(el, scale, plan.PeakScale, 1, plan.DurationMs / 2));
+            });
+        }
+    }
+
+    private void AnimateKeyframes(
+        int durationMs,
+        IReadOnlyList<(double Value, double Progress)> keyframes,
+        Action<double> apply)
+    {
+        if (keyframes.Count == 0)
+        {
+            return;
+        }
+
+        if (durationMs <= 0)
+        {
+            apply(keyframes[^1].Value);
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = Math.Min(1.0, (double)frame / steps);
+            var value = keyframes[0].Value;
+            for (var i = 1; i < keyframes.Count; i++)
+            {
+                if (progress > keyframes[i].Progress)
+                {
+                    continue;
+                }
+
+                var previous = keyframes[i - 1];
+                var current = keyframes[i];
+                var local = (progress - previous.Progress) / Math.Max(0.0001, current.Progress - previous.Progress);
+                value = previous.Value + (current.Value - previous.Value) * EaseInOut(local);
+                break;
+            }
+
+            if (progress >= keyframes[^1].Progress)
+            {
+                value = keyframes[^1].Value;
+            }
+
+            apply(value);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                apply(keyframes[^1].Value);
+            }
+        };
+        timer.Start();
+    }
+
+    private void DisappearEffect(Control el, int delayMs)
+    {
+        DelayedAction(delayMs, () => el.Opacity = 0);
     }
 
     private void AnimateRotate(RotateTransform rotate, double from, double to, int durationMs)

@@ -47,6 +47,15 @@ public enum SlideShowShapeAnimationEffectKind
     Pulse,
     GrowShrink,
     Spin,
+    Teeter,
+    Blink,
+    ColorPulse,
+    ChangeColor,
+    GrowWithColor,
+    Wave,
+    Shimmer,
+    Bold,
+    Underline,
     MotionPath
 }
 
@@ -241,6 +250,15 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Pulse => SlideShowShapeAnimationEffectKind.Pulse,
             AnimationPreset.Grow or AnimationPreset.Shrink => SlideShowShapeAnimationEffectKind.GrowShrink,
             AnimationPreset.Spin => SlideShowShapeAnimationEffectKind.Spin,
+            AnimationPreset.Teeter => SlideShowShapeAnimationEffectKind.Teeter,
+            AnimationPreset.Blink => SlideShowShapeAnimationEffectKind.Blink,
+            AnimationPreset.ColorPulse => SlideShowShapeAnimationEffectKind.ColorPulse,
+            AnimationPreset.ChangeColor => SlideShowShapeAnimationEffectKind.ChangeColor,
+            AnimationPreset.GrowWithColor => SlideShowShapeAnimationEffectKind.GrowWithColor,
+            AnimationPreset.Wave => SlideShowShapeAnimationEffectKind.Wave,
+            AnimationPreset.Shimmer => SlideShowShapeAnimationEffectKind.Shimmer,
+            AnimationPreset.Bold => SlideShowShapeAnimationEffectKind.Bold,
+            AnimationPreset.Underline => SlideShowShapeAnimationEffectKind.Underline,
             _ => SlideShowShapeAnimationEffectKind.Appear
         };
     }

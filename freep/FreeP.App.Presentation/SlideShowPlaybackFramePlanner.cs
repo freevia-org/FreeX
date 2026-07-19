@@ -10,6 +10,7 @@ public enum SlideShowAnimationVisualTrackKind
     Translate,
     Scale,
     Rotate,
+    Emphasis,
     Clip,
     MotionPath
 }
@@ -250,6 +251,29 @@ public static class SlideShowPlaybackFramePlanner
 
     private static double ResolveOpacity(SlideShowShapeAnimationPlaybackPlan plan, double progress, bool isBeforeStart)
     {
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.Blink)
+        {
+            if (isBeforeStart)
+            {
+                return 1;
+            }
+
+            var phase = progress * 4;
+            return ((int)Math.Floor(phase) % 2) == 0 ? 1 : 0.15;
+        }
+
+        if (plan.EffectKind is SlideShowShapeAnimationEffectKind.ColorPulse
+            or SlideShowShapeAnimationEffectKind.ChangeColor
+            or SlideShowShapeAnimationEffectKind.GrowWithColor
+            or SlideShowShapeAnimationEffectKind.Shimmer
+            or SlideShowShapeAnimationEffectKind.Bold
+            or SlideShowShapeAnimationEffectKind.Underline)
+        {
+            return progress <= 0.5
+                ? Lerp(1, 0.65, progress * 2)
+                : Lerp(0.65, 1, (progress - 0.5) * 2);
+        }
+
         if (plan.Animation.Kind == AnimationKind.Emphasis)
         {
             return 1;
@@ -272,11 +296,17 @@ public static class SlideShowPlaybackFramePlanner
                     : Lerp(plan.PeakScale, plan.ToScale, (progress - 0.5) * 2),
             SlideShowShapeAnimationEffectKind.Zoom =>
                 Lerp(plan.FromScale, plan.ToScale, progress),
+            SlideShowShapeAnimationEffectKind.GrowWithColor =>
+                progress <= 0.5
+                    ? Lerp(1, plan.PeakScale, progress * 2)
+                    : Lerp(plan.PeakScale, 1, (progress - 0.5) * 2),
             _ => 1
         };
 
     private static double ResolveRotation(SlideShowShapeAnimationPlaybackPlan plan, double progress) =>
-        plan.EffectKind is SlideShowShapeAnimationEffectKind.Spin
+        plan.EffectKind == SlideShowShapeAnimationEffectKind.Teeter
+            ? Math.Sin(progress * Math.PI * 4) * 10
+            : plan.EffectKind is SlideShowShapeAnimationEffectKind.Spin
             or SlideShowShapeAnimationEffectKind.Spiral
             or SlideShowShapeAnimationEffectKind.Swivel
             ? plan.RotationDegrees * progress
@@ -289,6 +319,11 @@ public static class SlideShowPlaybackFramePlanner
         if (plan.EffectKind == SlideShowShapeAnimationEffectKind.MotionPath)
         {
             return InterpolateMotionPath(plan.MotionKeyFrames, progress);
+        }
+
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.Wave)
+        {
+            return (Math.Sin(progress * Math.PI * 4) * 0.00625, 0);
         }
 
         if (plan.EffectKind is not (SlideShowShapeAnimationEffectKind.FlyIn
@@ -408,12 +443,21 @@ public static class SlideShowPlaybackFramePlanner
                 or SlideShowShapeAnimationEffectKind.Boomerang
                 or SlideShowShapeAnimationEffectKind.Peek
                 or SlideShowShapeAnimationEffectKind.Crawl => SlideShowAnimationVisualTrackKind.Translate,
+            SlideShowShapeAnimationEffectKind.Wave => SlideShowAnimationVisualTrackKind.Translate,
             SlideShowShapeAnimationEffectKind.Zoom
                 or SlideShowShapeAnimationEffectKind.Pulse
                 or SlideShowShapeAnimationEffectKind.GrowShrink => SlideShowAnimationVisualTrackKind.Scale,
             SlideShowShapeAnimationEffectKind.Spin
                 or SlideShowShapeAnimationEffectKind.Spiral
-                or SlideShowShapeAnimationEffectKind.Swivel => SlideShowAnimationVisualTrackKind.Rotate,
+                or SlideShowShapeAnimationEffectKind.Swivel
+                or SlideShowShapeAnimationEffectKind.Teeter => SlideShowAnimationVisualTrackKind.Rotate,
+            SlideShowShapeAnimationEffectKind.Blink => SlideShowAnimationVisualTrackKind.Opacity,
+            SlideShowShapeAnimationEffectKind.ColorPulse
+                or SlideShowShapeAnimationEffectKind.ChangeColor
+                or SlideShowShapeAnimationEffectKind.GrowWithColor
+                or SlideShowShapeAnimationEffectKind.Shimmer
+                or SlideShowShapeAnimationEffectKind.Bold
+                or SlideShowShapeAnimationEffectKind.Underline => SlideShowAnimationVisualTrackKind.Emphasis,
             SlideShowShapeAnimationEffectKind.MotionPath => SlideShowAnimationVisualTrackKind.MotionPath,
             _ => SlideShowAnimationVisualTrackKind.Instant
         };

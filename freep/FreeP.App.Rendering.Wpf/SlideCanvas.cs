@@ -77,6 +77,12 @@ public sealed class SlideCanvas : FrameworkElement
         set => SetValue(SlideProperty, value);
     }
 
+    /// <summary>
+    /// Shape ids temporarily omitted from the base canvas while the slideshow host
+    /// renders an animation overlay for the same shape.
+    /// </summary>
+    public HashSet<uint> SuppressedShapeIds { get; } = new();
+
     private static void OnModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((SlideCanvas)d).Refresh();
 
@@ -244,15 +250,19 @@ public sealed class SlideCanvas : FrameworkElement
                 RenderBackground(dc, bg);
                 break;
             case DrawOp.Shape shape:
+                if (shape.ShapeId != 0 && SuppressedShapeIds.Contains(shape.ShapeId)) break;
                 RenderShape(dc, shape);
                 break;
             case DrawOp.Picture pic:
+                if (pic.ShapeId != 0 && SuppressedShapeIds.Contains(pic.ShapeId)) break;
                 RenderPicture(dc, pic);
                 break;
             case DrawOp.Table table:
+                if (table.ShapeId != 0 && SuppressedShapeIds.Contains(table.ShapeId)) break;
                 RenderTable(dc, table);
                 break;
             case DrawOp.Chart chartOp:
+                if (chartOp.ShapeId != 0 && SuppressedShapeIds.Contains(chartOp.ShapeId)) break;
                 RenderChart(dc, chartOp);
                 break;
         }

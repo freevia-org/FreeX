@@ -116,7 +116,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowPlaybackFramePlanner.BuildAnimationStepPlaybackReadinessPlan(");
         source.Should().Contain("foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))");
         source.Should().Contain("_lastAnimationFramePlan = SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, _slideDipW, _slideDipH);");
-        source.Should().Contain("PlayShapeAnimation(element, plan, onReveal: () =>");
+        source.Should().Contain("PlayShapeAnimation(element, plan, onReveal: anim.Kind == AnimationKind.Exit ? null : () =>");
         source.Should().Contain("PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));");
 
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Appear:");
@@ -182,6 +182,34 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("GrowShrinkEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spin:");
         source.Should().Contain("SpinEffect(element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Teeter:");
+        source.Should().Contain("TeeterEffect(element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Blink:");
+        source.Should().Contain("BlinkEffect(element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wave:");
+        source.Should().Contain("WaveEffect(element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.ColorPulse:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.ChangeColor:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.GrowWithColor:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Shimmer:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Bold:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Underline:");
+        source.Should().Contain("EmphasisPulseEffect(element, plan);");
+        source.Should().Contain("AnimationKind.Emphasis");
+        source.Should().Contain("a.Kind == AnimationKind.Exit");
+        source.Should().Contain("a.Preset == AnimationPreset.Appear");
+        source.Should().Contain("a.Preset == AnimationPreset.Fade");
+        source.Should().Contain("a.Preset == AnimationPreset.FlyIn");
+        source.Should().Contain("a.Preset == AnimationPreset.Wipe");
+        source.Should().Contain("a.Preset == AnimationPreset.Split");
+        source.Should().Contain("onReveal: anim.Kind == AnimationKind.Exit ? null : () =>");
+        source.Should().Contain("DisappearEffect(element, plan.DelayMs);");
+        source.Should().Contain("var isExit = plan.Animation.Kind == AnimationKind.Exit;");
+        source.Should().Contain("var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);");
+        source.Should().Contain("var from = isExit ? full : closed;");
+        source.Should().Contain("el.Opacity = isExit ? plan.FromOpacity : 0;");
+        source.Should().Contain("AnimateTranslate(el, isExit ? 0 : dx, isExit ? 0 : dy,");
+        source.Should().Contain("_entranceShapeIds.Contains(shapeId) ? 0 : 1");
         source.Should().Contain("MotionPathEffect(element, plan, onReveal);");
         source.Should().Contain("AnimateOpacity(_slideCanvas, plan.FromOpacity, plan.FlashOpacity, plan.DurationMs / 2");
     }
