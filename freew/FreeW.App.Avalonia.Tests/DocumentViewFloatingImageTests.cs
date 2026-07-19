@@ -64,7 +64,8 @@ public sealed class DocumentViewFloatingImageTests
         VerticalAnchor   vAnchor = VerticalAnchor.Paragraph,
         int zOrder = 0,
         double imgWidthPt  = 144,  // 2 in
-        double imgHeightPt = 108)  // 1.5 in
+        double imgHeightPt = 108,  // 1.5 in
+        int reflectionPreset = 0)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -81,6 +82,7 @@ public sealed class DocumentViewFloatingImageTests
             HorizontalAnchor   = hAnchor,
             VerticalAnchor     = vAnchor,
             ZOrderIndex        = zOrder,
+            ReflectionPreset   = reflectionPreset,
         };
         var floatRun = new Run(string.Empty, RunFormatting.Default) { Image = floatImage };
         bodyPara.Runs.Add(floatRun);
@@ -474,6 +476,78 @@ public sealed class DocumentViewFloatingImageTests
         pngBytes[3].Should().Be((byte)'G');
 
         Console.WriteLine($"[FloatingImageCapture] Visual inspection: {outPath}");
+    }
+
+    [Fact]
+    public async Task Floating_image_reflection_changes_only_the_reflection_region()
+    {
+        var control = await CaptureFloatingImageFrameAsync(reflectionPreset: 0);
+        var reflected = await CaptureFloatingImageFrameAsync(reflectionPreset: 1);
+
+        if (!control.Ran || !reflected.Ran || control.Png is null || reflected.Png is null)
+            return;
+
+        control.FloatRect.Should().Be(reflected.FloatRect,
+            "reflection must not affect the floating image layout rect");
+
+        using var controlBitmap = SKBitmap.Decode(control.Png);
+        using var reflectedBitmap = SKBitmap.Decode(reflected.Png);
+        controlBitmap.Should().NotBeNull();
+        reflectedBitmap.Should().NotBeNull();
+
+        var x0 = Math.Clamp((int)Math.Floor(control.FloatRect.X), 0, controlBitmap!.Width);
+        var x1 = Math.Clamp((int)Math.Ceiling(control.FloatRect.Right), 0, controlBitmap.Width);
+        var y0 = Math.Clamp((int)Math.Floor(control.FloatRect.Bottom), 0, controlBitmap.Height);
+        var y1 = Math.Clamp((int)Math.Ceiling(control.FloatRect.Bottom + control.FloatRect.Height), 0, controlBitmap.Height);
+        var changedPixels = 0;
+        for (var y = y0; y < y1; y++)
+        for (var x = x0; x < x1; x++)
+        {
+            if (controlBitmap.GetPixel(x, y) != reflectedBitmap!.GetPixel(x, y))
+                changedPixels++;
+        }
+
+        changedPixels.Should().BeGreaterThan(100,
+            "the reflected floating image should paint a mirrored, fading copy below its source image");
+    }
+
+    private static async Task<(bool Ran, byte[]? Png, Rect FloatRect)> CaptureFloatingImageFrameAsync(int reflectionPreset)
+    {
+        byte[]? png = null;
+        Rect floatRect = default;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var doc = DocWithFloatingImage(
+                    ImageWrapping.InFront,
+                    hOffsetPt: 72,
+                    vOffsetPt: 72,
+                    imgWidthPt: 144,
+                    imgHeightPt: 108,
+                    reflectionPreset: reflectionPreset);
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+
+                var window = new Window { Width = 816, Height = 1200, Content = view };
+                window.Show();
+                window.Measure(new Size(816, 1200));
+                window.Arrange(new Rect(0, 0, 816, 1200));
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                if (window.CaptureRenderedFrame() is { } frame)
+                    png = WriteableBitmapToPng(frame);
+                if (view.FloatingImageRects.Count > 0)
+                    floatRect = view.FloatingImageRects[0].Rect;
+                window.Close();
+            }, CancellationToken.None);
+            return (true, png, floatRect);
+        }
+        catch
+        {
+            return (false, null, default);
+        }
     }
 
     // ── SS1: paragraph-anchor float page-break tests ─────────────────────────────────────────────────

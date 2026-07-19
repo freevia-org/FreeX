@@ -189,6 +189,7 @@ public static class TableLayoutOperations
         {
             Formatting = source.Formatting,
             TableStyleId = source.TableStyleId,
+            Borders = source.Borders,
             PreferredWidthPt = source.PreferredWidthPt,
             Alignment = source.Alignment,
             IndentFromLeftPt = source.IndentFromLeftPt,

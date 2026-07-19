@@ -4,6 +4,7 @@ using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Media.Imaging;
 using WpfFloater = System.Windows.Documents.Floater;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 
@@ -91,7 +92,9 @@ public sealed class FloatingImageRenderTests
         return doc;
     }
 
-    private static TextDocument DocWithPageAnchoredImageAboveLaterAnchor(out InlineImage image)
+    private static TextDocument DocWithPageAnchoredImageAboveLaterAnchor(
+        out InlineImage image,
+        double horizontalOffsetPt = 0)
     {
         var doc = new TextDocument();
         doc.Blocks.Clear();
@@ -104,7 +107,7 @@ public sealed class FloatingImageRenderTests
             Wrapping = ImageWrapping.Square,
             HorizontalAnchor = HorizontalAnchor.Margin,
             VerticalAnchor = VerticalAnchor.Page,
-            HorizontalOffsetPt = 0,
+            HorizontalOffsetPt = horizontalOffsetPt,
             VerticalOffsetPt = 0,
         };
         var anchorParagraph = new Paragraph();
@@ -163,6 +166,22 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void FloatingImage_ArtisticEffectRunsPixelPipelineWithoutOtherAdjustments()
+    {
+        var doc = DocWithFloating();
+        var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+        image.ArtisticEffect = ImageArtisticEffect.GlowDiffused;
+
+        var canvas = new Canvas();
+        var view = new DocumentView();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(doc);
+
+        var rendered = canvas.Children.OfType<Image>().Single();
+        rendered.Source.Should().BeOfType<WriteableBitmap>();
+    }
+
+    [StaFact]
     public void FloatingImage_WrapModesProduceReservationAndSurviveCommitInOrder()
     {
         foreach (var wrapping in new[] { ImageWrapping.Square, ImageWrapping.Tight, ImageWrapping.TopAndBottom })
@@ -211,15 +230,31 @@ public sealed class FloatingImageRenderTests
             .Which;
         visualOnlyFigure.Tag.Should().BeNull("the copied wrap band must be visual-only");
         visualOnlyFigure.Width.Value.Should().BeApproximately(96, 0.01);
-        visualOnlyFigure.Height.Value.Should().BeApproximately(72, 0.01);
+        visualOnlyFigure.Height.Value.Should().BeApproximately(55, 0.01);
         visualOnlyFigure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.PageLeft);
         visualOnlyFigure.VerticalAnchor.Should().Be(FigureVerticalAnchor.PageTop);
         visualOnlyFigure.WrapDirection.Should().Be(WrapDirection.Both);
+        visualOnlyFigure.Margin.Should().Be(new Thickness(0));
         paragraphs[1].Inlines.OfType<WpfFloater>().Should().BeEmpty(
             "the source anchor must not reserve the same image a second time");
 
         view.CommitToModel();
         view.Model.Blocks.Should().HaveCount(2);
+        ((Paragraph)view.Model.Blocks[1]).Runs.Should().ContainSingle(run => ReferenceEquals(run.Image, image));
+    }
+
+    [StaFact]
+    public void PageAnchoredRightImageAboveLaterAnchor_UsesItsMeasuredReservationWidth()
+    {
+        var original = DocWithPageAnchoredImageAboveLaterAnchor(out var image, horizontalOffsetPt: 300);
+        var view = new DocumentView();
+        view.LoadModel(original);
+
+        var figure = view.Document.Blocks.OfType<WpfParagraph>().First().Inlines.OfType<Figure>()
+            .Should().ContainSingle().Which;
+        figure.Width.Value.Should().BeApproximately(96, 0.01);
+
+        view.CommitToModel();
         ((Paragraph)view.Model.Blocks[1]).Runs.Should().ContainSingle(run => ReferenceEquals(run.Image, image));
     }
 

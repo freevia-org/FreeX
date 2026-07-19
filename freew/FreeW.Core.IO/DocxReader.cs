@@ -58,6 +58,7 @@ public static class DocxReader
             document.Blocks.Add(new Paragraph());
 
         ReadHeaderFooter(documentXml, archive, document, hyperlinkRelationships);
+        ReadNativeVmlWatermark(archive, document);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, hyperlinkRelationships);
@@ -2669,6 +2670,7 @@ public static class DocxReader
         var catalogStyle = tblStyleId is not null ? DocumentTableStyle.FindById(tblStyleId) : null;
         if (catalogStyle is not null)
             table.TableStyleId = catalogStyle.WordStyleId;
+        table.Borders = ReadTableBorders(borders);
 
         // A catalog-styled table inherits borders from the catalog definition unless explicit tblBorders
         // override them. Merge into styleBorders so the Borders flag is set correctly.
@@ -2930,6 +2932,27 @@ public static class DocxReader
         // Borders are "on" unless every edge is explicitly "none"/"nil".
         var edges = tblBorders.Elements();
         return edges.Any(e => (e.Attribute(W + "val")?.Value ?? "single") is not ("none" or "nil"));
+    }
+
+    private static TableBorders? ReadTableBorders(XElement? tblBorders)
+    {
+        if (tblBorders is null) return null;
+        TableBorderEdge? ReadEdge(string name)
+        {
+            var el = tblBorders.Element(W + name);
+            if (el is null || el.Attribute(W + "val")?.Value is "none" or "nil") return null;
+            var widthPt = int.TryParse(el.Attribute(W + "sz")?.Value, out var sz) ? sz / 8.0 : 0.5;
+            return new TableBorderEdge(
+                BorderLineStyles.FromToken(el.Attribute(W + "val")?.Value),
+                el.Attribute(W + "color")?.Value ?? "auto",
+                widthPt);
+        }
+        var result = new TableBorders
+        {
+            Top = ReadEdge("top"), Left = ReadEdge("left"), Bottom = ReadEdge("bottom"), Right = ReadEdge("right"),
+            InsideHorizontal = ReadEdge("insideH"), InsideVertical = ReadEdge("insideV")
+        };
+        return result.IsEmpty ? null : result;
     }
 
     /// <summary>
@@ -4202,9 +4225,8 @@ public static class DocxReader
 
     /// <summary>
     /// Recovers the FreeW gallery preset ids (LayoutId / ColorSchemeId / StyleId) from the three diagram
-    /// parts (layout / colors / quickStyle). When a FreeW extension attribute (<c>freewLayoutId</c> /
-    /// <c>freewColorId</c> / <c>freewStyleId</c>) is present it is used directly for lossless round-trip;
-    /// otherwise the uniqueId suffix is used as a best-effort fallback.
+    /// parts (layout / colors / quickStyle). FreeW stores color and style IDs in a schema-valid extension list;
+    /// legacy root attributes remain readable. Otherwise the uniqueId suffix is used as a best-effort fallback.
     /// </summary>
     private static void ReadSmartArtGalleryIds(
         XElement? relIds,
@@ -4240,7 +4262,8 @@ public static class DocxReader
             var qsRoot = LoadPart(archive, qsPath)?.Root;
             if (qsRoot is not null)
             {
-                var freewId = qsRoot.Attribute("freewStyleId")?.Value;
+                var freewId = ReadFreeWSmartArtGalleryId(qsRoot, "style")
+                    ?? qsRoot.Attribute("freewStyleId")?.Value;
                 if (freewId is not null)
                     target.StyleId = freewId;
                 else
@@ -4260,7 +4283,8 @@ public static class DocxReader
             var csRoot = LoadPart(archive, csPath)?.Root;
             if (csRoot is not null)
             {
-                var freewId = csRoot.Attribute("freewColorId")?.Value;
+                var freewId = ReadFreeWSmartArtGalleryId(csRoot, "colorScheme")
+                    ?? csRoot.Attribute("freewColorId")?.Value;
                 if (freewId is not null)
                     target.ColorSchemeId = freewId;
                 else
@@ -4300,6 +4324,16 @@ public static class DocxReader
         return lastSlash >= 0 && lastSlash < uniqueId.Length - 1
             ? uniqueId[(lastSlash + 1)..]
             : null;
+    }
+
+    private static string? ReadFreeWSmartArtGalleryId(XElement root, string elementName)
+    {
+        XNamespace freew = "http://schemas.freew.dev/smartart-gallery/2026";
+        return root.Element(Dgm + "extLst")?
+            .Elements(A + "ext")
+            .Elements(freew + elementName)
+            .Select(element => element.Attribute("id")?.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
     }
 
     /// <summary>
@@ -4471,11 +4505,12 @@ public static class DocxReader
 
         // w:pageBreakBefore is a toggle: present (and not val="false"/"0") means a page break is forced.
         var pageBreakBefore = ReadToggle(pPr, "pageBreakBefore");
-        // Flow control toggles read the same way as pageBreakBefore. widowControl is read literally:
-        // absent means false (FreeW does not apply Word's implicit default-on), keeping round-trips stable.
+        // Flow control toggles read the same way as pageBreakBefore. Preserve presence for widowControl:
+        // Word treats an absent token as enabled, while an explicit val="0" remains disabled.
         var keepWithNext = ReadToggle(pPr, "keepNext");
         var keepLinesTogether = ReadToggle(pPr, "keepLines");
         var widowControl = ReadToggle(pPr, "widowControl");
+        var widowControlIsSet = pPr.Element(W + "widowControl") is not null;
         // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens), read as a toggle.
         var suppressAutoHyphens = ReadToggle(pPr, "suppressAutoHyphens");
         // Right-to-left paragraph direction (w:bidi), read as a toggle like the flow-control flags.
@@ -4529,6 +4564,7 @@ public static class DocxReader
             KeepWithNext = keepWithNext,
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            WidowControlIsSet = widowControlIsSet,
             SuppressAutoHyphens = suppressAutoHyphens,
             Rtl = rtl,
             LineRule = lineRule,
@@ -5055,6 +5091,170 @@ public static class DocxReader
 
         if (customProperties.GetBoolean(MarkAsFinalPropertyName) == true)
             document.MarkedAsFinal = true;
+    }
+
+    /// <summary>
+    /// Recovers Word's native VML watermark when a document was not produced by FreeW and therefore
+    /// has no FreeW watermark custom properties. Word serializes canonical text and picture watermarks
+    /// in a header as <c>PowerPlusWaterMarkObject</c> and <c>PowerPlusPictureWaterMarkObject</c>.
+    /// The visible VML payload is the authority for this fallback; FreeW metadata, when present,
+    /// remains authoritative.
+    /// </summary>
+    private static void ReadNativeVmlWatermark(ZipArchive archive, TextDocument document)
+    {
+        if (document.Page.WatermarkOptions is { IsPicture: true } existingPictureWatermark)
+        {
+            ApplyNativeVmlPictureGeometry(archive, document, existingPictureWatermark);
+            return;
+        }
+
+        if (document.Page.EffectiveWatermark is not null)
+            return;
+
+        foreach (var entry in archive.Entries
+                     .Where(entry => entry.FullName.StartsWith("word/header", StringComparison.OrdinalIgnoreCase)
+                         && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var root = LoadPart(archive, entry.FullName)?.Root;
+            var textShape = root?.Descendants(V + "shape")
+                .FirstOrDefault(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject"
+                    && shape.Element(V + "textpath") is not null);
+            var textPath = textShape?.Element(V + "textpath");
+            var text = textPath?.Attribute("string")?.Value;
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                var fill = textShape!.Element(V + "fill");
+                var color = NormalizeVmlColor(fill?.Attribute("color")?.Value ?? textShape.Attribute("fillcolor")?.Value);
+                var rotation = ParseVmlStyleNumber(textShape.Attribute("style")?.Value, "rotation");
+                document.Page.WatermarkOptions = new WatermarkOptions(text)
+                {
+                    FontFamily = ParseVmlStyleValue(textPath!.Attribute("style")?.Value, "font-family") ?? "Calibri",
+                    FontColorHex = color ?? "#808080",
+                    Layout = rotation is { } value && Math.Abs(value) < 0.01
+                        ? WatermarkLayout.Horizontal
+                        : WatermarkLayout.Diagonal,
+                    Opacity = ParseVmlOpacity(fill?.Attribute("opacity")?.Value)
+                };
+                return;
+            }
+
+            var pictureShape = root?.Descendants(V + "shape")
+                .FirstOrDefault(shape => shape.Attribute("id")?.Value == "PowerPlusPictureWaterMarkObject");
+            if (pictureShape is null)
+                continue;
+
+            var pictureFill = pictureShape.Element(V + "fill");
+            var relationshipId = pictureFill?.Attribute(R + "id")?.Value
+                ?? pictureShape.Descendants(V + "imagedata")
+                    .Select(imageData => imageData.Attribute(R + "id")?.Value)
+                    .FirstOrDefault(id => !string.IsNullOrWhiteSpace(id));
+            if (string.IsNullOrWhiteSpace(relationshipId))
+                continue;
+
+            var imageRelationships = ReadPartImageRelationships(archive, entry.FullName);
+            if (!imageRelationships.TryGetValue(relationshipId, out var imagePath)
+                || LoadMedia(archive, imagePath) is not { } imageBytes)
+            {
+                continue;
+            }
+
+            var pictureRotation = ParseVmlStyleNumber(pictureShape.Attribute("style")?.Value, "rotation");
+            var (pictureWidthPt, pictureHeightPt) = ParseVmlShapeSize(pictureShape.Attribute("style")?.Value);
+            document.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+            {
+                ImageBytes = imageBytes,
+                NativeVmlPictureWidthPt = pictureWidthPt > 0 ? pictureWidthPt : null,
+                NativeVmlPictureHeightPt = pictureHeightPt > 0 ? pictureHeightPt : null,
+                Layout = pictureRotation is { } pictureRotationValue && Math.Abs(pictureRotationValue) < 0.01
+                    ? WatermarkLayout.Horizontal
+                    : WatermarkLayout.Diagonal,
+                Opacity = ParseVmlOpacity(pictureFill?.Attribute("opacity")?.Value)
+            };
+            return;
+        }
+    }
+
+    // FreeW metadata remains authoritative for picture content and editing semantics. VML adds
+    // supplemental source geometry that is not represented by the legacy custom properties.
+    private static void ApplyNativeVmlPictureGeometry(
+        ZipArchive archive,
+        TextDocument document,
+        WatermarkOptions existingPictureWatermark)
+    {
+        foreach (var entry in archive.Entries
+                     .Where(entry => entry.FullName.StartsWith("word/header", StringComparison.OrdinalIgnoreCase)
+                         && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var pictureShape = LoadPart(archive, entry.FullName)?.Root?
+                .Descendants(V + "shape")
+                .FirstOrDefault(shape => shape.Attribute("id")?.Value == "PowerPlusPictureWaterMarkObject");
+            if (pictureShape is null)
+                continue;
+
+            var (widthPt, heightPt) = ParseVmlShapeSize(pictureShape.Attribute("style")?.Value);
+            if (widthPt <= 0 || heightPt <= 0)
+                continue;
+
+            document.Page.WatermarkOptions = existingPictureWatermark with
+            {
+                NativeVmlPictureWidthPt = widthPt,
+                NativeVmlPictureHeightPt = heightPt
+            };
+            return;
+        }
+    }
+
+    private static string? ParseVmlStyleValue(string? style, string name)
+    {
+        if (string.IsNullOrWhiteSpace(style))
+            return null;
+
+        foreach (var part in style.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = part.IndexOf(':');
+            if (separator <= 0 || !part[..separator].Trim().Equals(name, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var value = part[(separator + 1)..].Trim().Trim('"', '\'');
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+
+        return null;
+    }
+
+    private static double? ParseVmlStyleNumber(string? style, string name) =>
+        double.TryParse(
+            ParseVmlStyleValue(style, name),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var value)
+                ? value
+                : null;
+
+    private static double ParseVmlOpacity(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return 1;
+
+        var normalized = value.Trim();
+        var isPercent = normalized.EndsWith('%');
+        if (isPercent)
+            normalized = normalized[..^1];
+        return double.TryParse(
+            normalized,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var opacity)
+                ? Math.Clamp(isPercent ? opacity / 100 : opacity, 0, 1)
+                : 1;
+    }
+
+    private static string? NormalizeVmlColor(string? value)
+    {
+        var hex = value?.Trim().TrimStart('#');
+        return hex is { Length: 6 } && hex.All(Uri.IsHexDigit)
+            ? "#" + hex.ToUpperInvariant()
+            : null;
     }
 
     private static void ReadStyles(ZipArchive archive, TextDocument document)

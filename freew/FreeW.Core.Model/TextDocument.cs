@@ -1976,6 +1976,30 @@ public sealed record CellBorderEdge(
     double WidthPt = 0.5);
 
 /// <summary>
+/// Table-level border definition (<c>w:tblBorders</c>). Unlike cell borders, tables also carry
+/// independent inside-horizontal and inside-vertical edges. A non-null instance represents an explicit
+/// <c>w:tblBorders</c> element; null edges retain the distinction between an absent edge and a generated
+/// default. Color tokens preserve Word's <c>auto</c> value as well as explicit RGB values.
+/// </summary>
+public sealed record TableBorders
+{
+    public TableBorderEdge? Top { get; init; }
+    public TableBorderEdge? Left { get; init; }
+    public TableBorderEdge? Bottom { get; init; }
+    public TableBorderEdge? Right { get; init; }
+    public TableBorderEdge? InsideHorizontal { get; init; }
+    public TableBorderEdge? InsideVertical { get; init; }
+
+    public bool IsEmpty => Top is null && Left is null && Bottom is null && Right is null
+        && InsideHorizontal is null && InsideVertical is null;
+}
+
+public sealed record TableBorderEdge(
+    BorderLineStyle Style = BorderLineStyle.Single,
+    string ColorToken = "auto",
+    double WidthPt = 0.5);
+
+/// <summary>
 /// Text direction of a table cell's content (<c>tc/tcPr/w:textDirection/@w:val</c>).
 /// Mirrors <see cref="ShapeTextDirection"/> so the same rendering pattern (LayoutTransform) is reused.
 /// <see cref="Horizontal"/> is the docx default (no element emitted); existing cells are unaffected.
@@ -2121,6 +2145,9 @@ public sealed class Table : Block
     /// uses its explicit <see cref="Formatting"/> flags directly, which is the historical behaviour).
     /// </summary>
     public string? TableStyleId { get; set; }
+
+    /// <summary>Explicit table-level border payload from <c>w:tblBorders</c>, or null to inherit a style.</summary>
+    public TableBorders? Borders { get; set; }
 
     /// <summary>
     /// Per-column widths in points, one entry per column, matching the docx table grid
@@ -2333,6 +2360,19 @@ public sealed record WatermarkOptions(string Text)
     /// field. Only meaningful when <see cref="ImageBytes"/> is non-null.
     /// </summary>
     public int ScalePct { get; init; }
+
+    /// <summary>
+    /// Optional width recovered from Word's native VML picture-watermark shape. Together with
+    /// <see cref="NativeVmlPictureHeightPt"/>, this preserves the authored VML footprint instead
+    /// of falling back to FreeW's automatic picture sizing.
+    /// </summary>
+    public double? NativeVmlPictureWidthPt { get; init; }
+
+    /// <summary>
+    /// Optional height recovered from Word's native VML picture-watermark shape. Meaningful only
+    /// when <see cref="NativeVmlPictureWidthPt"/> is also present.
+    /// </summary>
+    public double? NativeVmlPictureHeightPt { get; init; }
 
     /// <summary>Whether this watermark is a picture watermark (<see cref="ImageBytes"/> is non-null).</summary>
     public bool IsPicture => ImageBytes is { Length: > 0 };

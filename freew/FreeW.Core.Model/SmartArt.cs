@@ -104,13 +104,15 @@ public sealed class SmartArt
 
     /// <summary>
     /// Color-scheme preset id (e.g. "colorful1", "accent1", "mono1"). Null means the stock accent-1
-    /// palette. Maps to the colors part's <c>uniqueId</c> suffix via a FreeW extension attribute.
+    /// palette. Round-trips through a schema-valid extension in the colors part while its native
+    /// <c>uniqueId</c> remains the Word gallery identifier.
     /// </summary>
     public string? ColorSchemeId { get; set; }
 
     /// <summary>
     /// Style preset id (e.g. "flat1", "subtle1", "intense1"). Null means the flat default.
-    /// Maps to the quickStyle part's <c>uniqueId</c> suffix via a FreeW extension attribute.
+    /// Round-trips through a schema-valid extension in the quickStyle part while its native
+    /// <c>uniqueId</c> remains the Word gallery identifier.
     /// </summary>
     public string? StyleId { get; set; }
 

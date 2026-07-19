@@ -14,7 +14,13 @@ public abstract record TextRunEffectPass
         byte Alpha,
         double BlurDip,
         double SpreadDip,
-        bool IsBlurPass) : TextRunEffectPass;
+        bool IsBlurPass) : TextRunEffectPass
+    {
+        // Blur rings are authored around this core offset. WPF may apply a
+        // renderer-local effective spread without changing shared geometry.
+        public double BaseOffsetX { get; init; }
+        public double BaseOffsetY { get; init; }
+    }
 
     public sealed record Reflection(
         double OffsetX,
@@ -38,6 +44,9 @@ public abstract record TextRunEffectPass
         byte Alpha,
         double RadiusDip,
         bool IsBlurPass) : TextRunEffectPass;
+
+    /// <summary>Metallic face sheen derived from the body-level 3-D material.</summary>
+    public sealed record MaterialHighlight(ResolvedFill FillBrush) : TextRunEffectPass;
 
     public sealed record Fill(ResolvedFill FillBrush) : TextRunEffectPass;
 
@@ -94,11 +103,24 @@ public static class TextRunEffectRenderPlanner
 
         passes.Add(new TextRunEffectPass.Fill(fillBrush));
 
+        if (string.Equals(textLayout.Text3dEffects?.PrstMaterial, "metal", StringComparison.OrdinalIgnoreCase))
+            passes.Add(new TextRunEffectPass.MaterialHighlight(CreateMetalHighlightFill()));
+
         if (run.TextOutline is not null)
             passes.Add(new TextRunEffectPass.Outline(run.TextOutline));
 
         return new TextRunEffectRenderPlan(glyphBounds, warpYOffset, warpTransform, passes);
     }
+
+    private static ResolvedFill CreateMetalHighlightFill() => new ResolvedFill.Gradient(
+        new[]
+        {
+            new ResolvedFill.ResolvedGradientStop(0.0, new SrgbColor(0x8B, 0xB2, 0xD1), 72),
+            new ResolvedFill.ResolvedGradientStop(0.52, new SrgbColor(0x8B, 0xB2, 0xD1), 32),
+            new ResolvedFill.ResolvedGradientStop(1.0, new SrgbColor(0x8B, 0xB2, 0xD1), 0),
+        },
+        GradientKind.Linear,
+        90);
 
     public static double? ComputeWarpYOffset(
         ResolvedTextLayout textLayout,
@@ -148,7 +170,11 @@ public static class TextRunEffectRenderPlanner
                         passAlpha,
                         shadow.BlurDip,
                         spread,
-                        IsBlurPass: true));
+                        IsBlurPass: true)
+                    {
+                        BaseOffsetX = dx,
+                        BaseOffsetY = dy
+                    });
                 }
             }
         }

@@ -152,6 +152,36 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void PictureColorEffectPlanner_ComposesBrightnessAndContrastInPowerPointOrder()
+    {
+        byte[] pixels =
+        [
+            0, 0, 0, 255,
+            64, 64, 64, 255,
+            128, 128, 128, 255,
+            192, 192, 192, 255,
+            255, 255, 255, 255
+        ];
+
+        PictureColorEffectPlanner.ApplyToBgra32(
+            pixels,
+            new PictureColorEffectPlan(
+                Grayscale: false,
+                BiLevelThreshold: null,
+                Brightness: 0.3,
+                Contrast: 0.2));
+
+        pixels.Should().Equal(
+        [
+            52, 52, 52, 255,
+            132, 132, 132, 255,
+            212, 212, 212, 255,
+            255, 255, 255, 255,
+            255, 255, 255, 255
+        ]);
+    }
+
+    [Fact]
     public void PictureColorEffectPlanner_PixelPlanIgnoresAlphaOnlyOpacity()
     {
         var alphaOnly = PictureColorEffectPlanner.Plan(new DrawOp.Picture { AlphaModPct = 0.5 });

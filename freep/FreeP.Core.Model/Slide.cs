@@ -360,6 +360,13 @@ public sealed class SlideShape
     /// <summary>Shape height in EMU.</summary>
     public long ExtentCyEmu { get; set; }
 
+    /// <summary>
+    /// True when the source shape explicitly carried an <c>a:xfrm</c> with zero width and
+    /// height. On a slide placeholder, PowerPoint treats that as hidden rather than inheriting
+    /// the layout placeholder's visible geometry.
+    /// </summary>
+    public bool HasExplicitZeroExtentTransform { get; set; }
+
     /// <summary>Rotation in degrees, clockwise (from spPr/xfrm rot="..."; OOXML stores 1/60000 degree).</summary>
     public double RotationDeg { get; set; }
 
@@ -549,6 +556,12 @@ public sealed class SlideShape
 /// </summary>
 public sealed class Slide
 {
+    /// <summary>
+    /// Whether the slide is hidden from slideshow presentation. The default is visible,
+    /// matching PresentationML omission semantics for <c>p:sld/@show</c>.
+    /// </summary>
+    public bool IsHidden { get; set; }
+
     /// <summary>
     /// Stable identifier for the slide (integer from the slide list; stored as string for
     /// round-trip stability with the legacy .fxp format).

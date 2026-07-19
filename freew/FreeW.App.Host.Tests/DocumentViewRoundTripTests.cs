@@ -31,6 +31,24 @@ public sealed class DocumentViewRoundTripTests
     private static Run FirstRun(TextDocument document, int blockIndex = 0) =>
         ((Paragraph)document.Blocks[blockIndex]).Runs[0];
 
+    [StaFact]
+    public void Table_ExplicitBorderPayload_SurvivesViewRoundTrip()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = Table.Create(1, 1);
+        table.Borders = new TableBorders
+        {
+            Top = new TableBorderEdge(BorderLineStyle.Double, "1F4E79", 1.5),
+            InsideVertical = new TableBorderEdge(BorderLineStyle.Dotted, "auto", 0.5)
+        };
+        document.Blocks.Add(table);
+
+        var recovered = RoundTrip(document).Blocks.OfType<Table>().Single();
+
+        recovered.Borders.Should().Be(table.Borders);
+    }
+
     private static List<T> LogicalDescendants<T>(DependencyObject root) where T : DependencyObject
     {
         var result = new List<T>();
@@ -169,6 +187,48 @@ public sealed class DocumentViewRoundTripTests
 
         listParas.Select(p => p.PlainText).Should().Equal("Alpha", "Beta", "Gamma");
         listParas.Should().OnlyContain(p => p.Formatting.ListKind == ListKind.Bullet);
+    }
+
+    [StaFact]
+    public void SingleHeadingMultiLevelItem_RendersWithoutAListContainerAndRoundTrips()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Outline heading")
+        {
+            StyleId = "Heading1",
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel }
+        });
+        document.Blocks.Add(new Paragraph("Following body paragraph."));
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        view.Document.Blocks.OfType<System.Windows.Documents.List>().Should().BeEmpty();
+        RoundTrip(document).Blocks.OfType<Paragraph>().First().Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+    }
+
+    [StaFact]
+    public void OmittedWidowControl_UsesWordDefaultWhileExplicitOffDoesNot()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Default widow behavior."));
+        document.Blocks.Add(new Paragraph("Explicit widow off.")
+        {
+            Formatting = ParagraphFormatting.Default with { WidowControl = false, WidowControlIsSet = true }
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var paragraphs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+        paragraphs[0].KeepTogether.Should().BeTrue();
+        paragraphs[1].KeepTogether.Should().BeFalse();
+
+        var roundTripped = RoundTrip(document).Blocks.OfType<Paragraph>().ToList();
+        roundTripped[0].Formatting.KeepLinesTogether.Should().BeFalse();
+        roundTripped[0].Formatting.WidowControlIsSet.Should().BeFalse();
     }
 
     [StaFact]
@@ -914,6 +974,31 @@ public sealed class DocumentViewRoundTripTests
             "spacer MinHeight must equal HeightPt × PxPerPoint");
     }
 
+    [StaFact]
+    public void TableRow_ExactHeight_ReservesCellChromeOutsideTheContentHost()
+    {
+        const double heightPt = 60.0;
+        const double pxPerPt = 96.0 / 72.0;
+
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 1);
+        table.Rows[0].HeightPt = heightPt;
+        table.Rows[0].HeightRule = TableRowHeightRule.Exact;
+        table.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("Content");
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpfCell = view.Document.Blocks.OfType<System.Windows.Documents.Table>().Single()
+            .RowGroups.Single().Rows.Single().Cells.Single();
+        var host = wpfCell.Blocks.OfType<BlockUIContainer>().Single();
+        var grid = host.Child.Should().BeOfType<System.Windows.Controls.Grid>().Subject;
+        grid.MinHeight.Should().BeApproximately(heightPt * pxPerPt - 2, 0.01,
+            "exact row heights include the surrounding FlowDocument cell chrome");
+    }
+
     /// <summary>
     /// Cell vertical alignment fix: <see cref="TableCellVerticalAlignment"/> survives the
     /// Build→Commit round-trip (stashed in <c>TableCellTag</c> and recovered by <c>ReadTable</c>).
@@ -984,6 +1069,8 @@ public sealed class DocumentViewRoundTripTests
         tableSections[1].BreakPageBefore.Should().BeTrue();
         wpfTables[0].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
         wpfTables[1].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
+        wpfTables[1].RowGroups[0].Rows[1].Cells[0].Padding.Top.Should().Be(2,
+            "the no-cell-spacing pagination control must retain its original vertical padding");
 
         var renderedRows = wpfTables.SelectMany(table => table.RowGroups.SelectMany(group => group.Rows)).ToList();
         renderedRows.Should().HaveCount(modelTable.Rows.Count + repeatedPage.RepeatedHeaderRowIndexes.Count);
@@ -1073,6 +1160,11 @@ public sealed class DocumentViewRoundTripTests
             .Select(table => table.RowGroups.SelectMany(group => group.Rows).ToList())
             .ToList();
         pageRows.Select(rows => rows.Count).Should().Equal(3, 5, 3);
+        var expectedVerticalPadding = 2 + sourceTable.CellSpacingPt!.Value * (96.0 / 72.0);
+        tables[1].RowGroups[0].Rows[1].Cells[0].Padding.Top.Should()
+            .BeApproximately(expectedVerticalPadding, 0.01);
+        tables[0].RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
+            .BeApproximately(expectedVerticalPadding, 0.01);
         RenderedRowText(pageRows[0][0]).Should().Contain("Page area");
         RenderedRowText(pageRows[0][1]).Should().Contain("Segment 1");
         RenderedRowText(pageRows[0][2]).Should().Contain("Segment 2");

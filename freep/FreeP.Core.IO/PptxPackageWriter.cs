@@ -1209,6 +1209,7 @@ public static class PptxPackageWriter
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(P + "sld",
                 NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
+                slide.IsHidden ? new XAttribute("show", "0") : null,
                 new XElement(P + "cSld",
                     slide.Background is not null
                         ? new XElement(P + "bg",

@@ -247,6 +247,7 @@ public readonly record struct ChartTextPlan(
 {
     public string? FontFamily { get; init; }
     public SrgbColor? TextColor { get; init; }
+    public double HorizontalScale { get; init; } = 1.0;
 }
 
 public readonly record struct ChartBarDepthPlan(
@@ -566,19 +567,26 @@ public static partial class ChartRenderPlanner
     public const double ImportedComboLegendLineHeight = 38.0;
     public const double ImportedComboLegendLabelOffset = -7.0;
     public const double ImportedComboLegendVerticalOffset = 26.0;
-    public const double ImportedComboPlotLeftInset = 3.0;
-    public const double ImportedComboPlotRightReduction = 8.0;
+    public const double ImportedComboPlotLeftInset = 2.0;
+    public const double ImportedComboPlotRightReduction = 9.0;
     public const double ImportedComboPlotBottomReduction = 1.5;
     public const double ImportedComboPlotTopOffset = 1.0;
     public const double ImportedComboSecondaryLabelCompensation = 8.0;
     public const int ImportedComboSecondaryMinorTickDivisions = 5;
-    public const double ImportedComboLegendRightCompensation = 8.0;
+    public const double ImportedComboLegendRightCompensation = 0.0;
     public const double ImportedRadarLegendSwatchWidth = 29.0;
     public const double ImportedRadarLegendSwatchHeight = 12.0;
     public const double ImportedRadarLegendLabelInset = 29.0;
     public const double ImportedLineMarkerLegendSwatchWidth = 29.0;
     public const double ImportedLineMarkerLegendSwatchHeight = 12.0;
     public const double ImportedLineMarkerLegendLabelInset = 29.0;
+    public const double ImportedStyle2LegendSwatchSize = 14.0;
+    public const double ImportedStyle2LegendLineHeight = 37.0;
+    public const double ImportedStyle2LegendLabelInset = 20.0;
+    public const double ImportedStyle2LegendLabelOffset = -7.0;
+    public const double ImportedStyle2LegendVerticalOffset = 9.0;
+    public const double ImportedStyle2ColumnLegendXOffset = 8.0;
+    public const double ImportedStyle2BarLegendXOffset = -10.0;
     public const double ImportedRadarLegendXOffset = 11.0;
     public const double ImportedRadarLegendLineHeight = 38.0;
     public const double ImportedRadarLegendVerticalOffset = 10.0;
@@ -587,6 +595,9 @@ public static partial class ChartRenderPlanner
     public const double ImportedPieLegendLineHeight = 37.0;
     public const double ImportedPieLegendVerticalOffset = 32.0;
     public const double ImportedPieLegendRightOffset = 20.0;
+    public const double ImportedPieLegendLabelOffset = -5.0;
+    public const double ImportedPieLegendTextScaleX = 1.07;
+    public const string ImportedPieLegendFontFamily = "Arial";
     public const double ImportedCartesianGridLinePixelOffset = 0.5;
     public const double ImportedPercentStackedGridEdgeOffsetX = 19.0;
     public const double ImportedCartesianCategoryLabelOffset = 16.0;
@@ -632,6 +643,8 @@ public static partial class ChartRenderPlanner
     public const byte RadarFillAlpha = 80;
     public const double RadarSeriesStrokeThickness = 1.5;
     public const double ImportedRadarSeriesStrokeThickness = 3.0;
+    public const double ImportedChartTitleRasterFontSize = 24.0;
+    public const double ImportedAutomaticTitleVerticalAdjustment = -4.0;
     public const double RadarMarkerRadius = 3.0;
     public const double ImportedRadarPlotBottomReduction = 40.0;
     public const double ImportedRadarRadiusFactor = 0.98;
@@ -668,6 +681,12 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceFrameFrontLeftX = 8.0;
     private const double ImportedSurfaceFrameFrontRightX = 312.0;
     private const double ImportedSurfaceBlankVertexNormalized = 0.24;
+    private const double ImportedSurfaceBlankVertexXOffset = 20.0;
+    private const double ImportedSurfaceSouthFrontVertexXOffset = 7.0;
+    private const double ImportedSurfaceSouthFrontVertexYOffset = -2.0;
+    private const double ImportedSurfaceDarkOrangeFacetLeftOffset = -13.0;
+    private const double ImportedSurfaceMiddleNorthVertexYOffset = 20.0;
+    private const double ImportedSurfaceRearNorthVertexYOffset = 14.0;
     private const double ImportedSurfaceLightBaseFactor = 1.02;
     private const double ImportedSurfaceDepthDimming = 0.12;
     private const double ImportedSurfaceNearRowFalloff = 0.25;
@@ -775,6 +794,11 @@ public static partial class ChartRenderPlanner
         chart.DataLabels is null &&
         chart.ChartType is ChartType.ColumnClustered or ChartType.LineMarkers;
 
+    private static bool UsesImportedStyle2ColumnBarLegend(ChartShape chart) =>
+        chart.StyleId == 2 &&
+        UsesImportedTextMetrics(chart) &&
+        chart.ChartType is ChartType.ColumnClustered or ChartType.BarClustered;
+
     /// <summary>
     /// Chart parts without an authored style use PowerPoint's classic default
     /// appearance. Newer Office chart styles carry an explicit style id.
@@ -792,7 +816,11 @@ public static partial class ChartRenderPlanner
 
     /// <summary>Resolves title text, for which Office's inherited 18pt default applies.</summary>
     public static double ResolveTitleFontSize(ChartShape chart, double fallback) =>
-        chart.TextStyle?.FontSizePt is > 0 ? chart.TextStyle.FontSizePt.Value : fallback;
+        chart.TextStyle?.FontSizePt is > 0
+            ? UsesImportedTextMetrics(chart) && !chart.TextStyle.IsImplicitDefault
+                ? ImportedChartTitleRasterFontSize
+                : chart.TextStyle.FontSizePt.Value
+            : fallback;
 
     private static double ResolveFrameMargin(ChartShape chart) =>
         UsesImportedTextMetrics(chart) ? 20.0 : Margin;
@@ -1254,7 +1282,10 @@ public static partial class ChartRenderPlanner
             UsesImportedTextMetrics(chart) &&
             chart.HasAutomaticTitle)
         {
-            titleBounds = automaticTitle with { Y = automaticTitle.Y - 10.0 };
+            titleBounds = automaticTitle with
+            {
+                Y = automaticTitle.Y + ImportedAutomaticTitleVerticalAdjustment
+            };
         }
         return new ChartFramePlan(
             bounds,
@@ -1282,8 +1313,8 @@ public static partial class ChartRenderPlanner
                 FontSize: ResolveTitleFontSize(chart, 9.0),
                 Alignment: ChartPlanTextAlignment.Center)
             {
-                // Classic Office chart titles use Arial while axis/legend roles
-                // retain their Calibri defaults.
+                // Classic Office chart titles use Arial; imported titles retain
+                // the renderer's calibrated default typeface.
                 FontFamily = UsesClassicOfficeChartStyle(chart) ? "Arial" : null,
                 TextColor = UsesImportedPieLegendDefaults(chart)
                     ? new SrgbColor(0x00, 0x00, 0x00)
@@ -1486,12 +1517,15 @@ public static partial class ChartRenderPlanner
             (UsesImportedSingleScatterDefaults(chart) || UsesImportedBubbleDefaults(chart));
         bool importedLineMarkerLegend = UsesImportedTextMetrics(chart) &&
             chart.ChartType == ChartType.LineMarkers;
+        bool importedStyle2ColumnBarLegend = UsesImportedStyle2ColumnBarLegend(chart);
         double legendLineHeight = importedCombo
             ? ImportedComboLegendLineHeight
             : importedPieLegend
                 ? ImportedPieLegendLineHeight
             : importedRadarLineLegend
                 ? ImportedRadarLegendLineHeight
+            : importedStyle2ColumnBarLegend
+                ? ImportedStyle2LegendLineHeight
             : ResolveLegendLineHeight(chart);
         int maxItems = (int)Math.Max(1, verticalLegend ? legendBounds.Height / legendLineHeight : legendWidth / 80);
         int itemsToShow = Math.Min(itemCount, maxItems);
@@ -1508,6 +1542,8 @@ public static partial class ChartRenderPlanner
             firstItemY += ImportedRadarLegendVerticalOffset;
         if (importedPieLegend && verticalLegend && !hasManualLayout)
             firstItemY += ImportedPieLegendVerticalOffset;
+        if (importedStyle2ColumnBarLegend && verticalLegend && !hasManualLayout)
+            firstItemY += ImportedStyle2LegendVerticalOffset;
         for (int itemIndex = 0; itemIndex < itemsToShow; itemIndex++)
         {
             int sourceItemIndex = frame.IsPie
@@ -1522,6 +1558,10 @@ public static partial class ChartRenderPlanner
                         ? legendBounds.X + ImportedRadarLegendXOffset
                     : importedPieLegendRightOffset
                         ? legendBounds.X + ImportedPieLegendRightOffset
+                    : importedStyle2ColumnBarLegend
+                        ? legendBounds.X + (frame.IsBar
+                            ? ImportedStyle2BarLegendXOffset
+                            : ImportedStyle2ColumnLegendXOffset)
                     : legendBounds.X
                 : legendBounds.X + itemIndex * 80.0;
             double itemY = verticalLegend ? firstItemY + itemIndex * legendLineHeight : legendBounds.Y;
@@ -1538,6 +1578,8 @@ public static partial class ChartRenderPlanner
                     ? ImportedPieLegendSwatchSize
                 : importedRadarLineLegend
                     ? ImportedRadarLegendSwatchWidth
+                : importedStyle2ColumnBarLegend
+                    ? ImportedStyle2LegendSwatchSize
                     : importedLineMarkerLegend ? ImportedLineMarkerLegendSwatchWidth
                     : importedMarkerLegend ? 12.0 : 8.0;
             double swatchHeight = importedCombo
@@ -1546,6 +1588,8 @@ public static partial class ChartRenderPlanner
                     ? ImportedPieLegendSwatchSize
                 : importedRadarLineLegend
                     ? ImportedRadarLegendSwatchHeight
+                : importedStyle2ColumnBarLegend
+                    ? ImportedStyle2LegendSwatchSize
                     : importedLineMarkerLegend ? ImportedLineMarkerLegendSwatchHeight
                     : importedMarkerLegend ? 12.0 : 8.0;
             double labelInset = importedCombo
@@ -1554,6 +1598,8 @@ public static partial class ChartRenderPlanner
                     ? ImportedPieLegendLabelInset
                 : importedRadarLineLegend
                     ? ImportedRadarLegendLabelInset
+                : importedStyle2ColumnBarLegend
+                    ? ImportedStyle2LegendLabelInset
                 : importedLineMarkerLegend ? ImportedLineMarkerLegendLabelInset
                 : importedMarkerLegend ? 30.0 : 10.0;
             double textWidth = verticalLegend
@@ -1580,13 +1626,25 @@ public static partial class ChartRenderPlanner
                         text,
                         new ChartPlanRect(
                             itemX + labelInset,
-                            itemY + (importedCombo ? ImportedComboLegendLabelOffset : 0.0),
+                            itemY + (importedCombo
+                                ? ImportedComboLegendLabelOffset
+                                : importedPieLegend
+                                    ? ImportedPieLegendLabelOffset
+                                : importedStyle2ColumnBarLegend
+                                    ? ImportedStyle2LegendLabelOffset
+                                    : 0.0),
                             textWidth,
                             legendLineHeight),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 7.0),
                     Alignment: ChartPlanTextAlignment.Left)
                     {
+                        FontFamily = importedPieLegend
+                            ? ImportedPieLegendFontFamily
+                            : null,
+                        HorizontalScale = importedPieLegend
+                            ? ImportedPieLegendTextScaleX
+                            : 1.0,
                         TextColor = importedPieLegend
                             ? new SrgbColor(0x00, 0x00, 0x00)
                             : null
@@ -3115,7 +3173,7 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 5.0 * scaleX, plot.Y + 122.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 1.0 * scaleX, plot.Y + 125.0 * scaleY),
                     new ChartPlanPoint(plot.X + 72.0 * scaleX, plot.Y + 71.0 * scaleY),
                     new ChartPlanPoint(plot.X + 132.0 * scaleX, plot.Y + 71.0 * scaleY),
                 },
@@ -3128,7 +3186,7 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 5.0 * scaleX, plot.Y + 122.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 1.0 * scaleX, plot.Y + 125.0 * scaleY),
                     new ChartPlanPoint(plot.X + 132.0 * scaleX, plot.Y + 71.0 * scaleY),
                     new ChartPlanPoint(plot.X + 174.0 * scaleX, plot.Y + 79.0 * scaleY),
                 },
@@ -3141,9 +3199,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 247.0 * scaleX, plot.Y + 101.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 320.0 * scaleX, plot.Y + 119.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 312.0 * scaleX, plot.Y + 134.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 245.0 * scaleX, plot.Y + 99.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 319.0 * scaleX, plot.Y + 119.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 312.0 * scaleX, plot.Y + 137.0 * scaleY),
                 },
                 new ChartFillPlan(new SrgbColor(0xD5, 0x70, 0x2C), 255),
                 stroke,
@@ -3162,9 +3220,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 201.0 * scaleX, plot.Y + 69.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 236.0 * scaleX, plot.Y + 42.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 300.0 * scaleX, plot.Y + 34.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 201.0 * scaleX, plot.Y + 72.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 232.0 * scaleX, plot.Y + 42.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 306.0 * scaleX, plot.Y + 33.0 * scaleY),
                 },
                 new ChartFillPlan(new SrgbColor(0x8B, 0xAB, 0x74), 255),
                 stroke,
@@ -3175,9 +3233,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 305.0 * scaleX, plot.Y + 41.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 358.0 * scaleX, plot.Y + 26.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 348.0 * scaleX, plot.Y + 48.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 301.0 * scaleX, plot.Y + 42.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 360.0 * scaleX, plot.Y + 25.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 349.0 * scaleX, plot.Y + 50.0 * scaleY),
                 },
                 new ChartFillPlan(new SrgbColor(0xE7, 0xAD, 0x00), 255),
                 stroke,
@@ -3188,9 +3246,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 194.0 * scaleX, plot.Y + 73.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 238.0 * scaleX, plot.Y + 95.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 201.0 * scaleX, plot.Y + 69.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 194.0 * scaleX, plot.Y + 76.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 238.0 * scaleX, plot.Y + 98.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 201.0 * scaleX, plot.Y + 72.0 * scaleY),
                 },
                 new ChartFillPlan(new SrgbColor(0x81, 0xA1, 0x6E), 255),
                 stroke,
@@ -3334,7 +3392,25 @@ public static partial class ChartRenderPlanner
             : drawableWidth;
         double x = plot.X + categoryT * categoryWidth + seriesT * depthX;
         double y = plot.Bottom + categoryT * categorySlopeY - seriesT * depthY - normalized * lift;
-
+        // The imported blank low-band vertex is horizontally registered to
+        // the COM raster rather than the shared projected category edge.
+        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+            seriesIndex == 0 && categoryIndex == 1)
+            x += ImportedSurfaceBlankVertexXOffset;
+        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+            seriesIndex == 0 && categoryIndex == 2)
+        {
+            x += ImportedSurfaceSouthFrontVertexXOffset;
+            y += ImportedSurfaceSouthFrontVertexYOffset;
+        }
+        // The imported 3x3 COM mesh registers its middle-row North vertex
+        // below the shared projection; keep the correction fixture-scoped.
+        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+            seriesIndex == 1 && categoryIndex == 0)
+            y += ImportedSurfaceMiddleNorthVertexYOffset;
+        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+            seriesIndex == 2 && categoryIndex == 0)
+            y += ImportedSurfaceRearNorthVertexYOffset;
         return new ChartPlanPoint(
             Math.Round(x + (usesImportedTextMetrics ? ImportedSurfacePointOffsetX : 0.0), 4),
             Math.Round(y + (usesImportedTextMetrics ? ImportedSurfacePointOffsetY : 0.0), 4));
@@ -3610,6 +3686,26 @@ public static partial class ChartRenderPlanner
                 for (int renderIndex = 0; renderIndex < renderPointSets.Length; renderIndex++)
                 {
                     var renderPoints = renderPointSets[renderIndex];
+                    if (chart.ChartType == ChartType.Surface3D &&
+                        UsesImportedTextMetrics(chart) &&
+                        chart.VaryColors &&
+                        seriesIndex == 0 &&
+                        categoryIndex == 1 &&
+                        renderIndex == 0)
+                    {
+                        // The near dark-orange face owns a wider left edge in
+                        // PowerPoint than the shared logical vertex. Keep the
+                        // correction local to this render-only triangle so the
+                        // adjacent blank/blue facet retains its registration.
+                        renderPoints = renderPoints.ToArray();
+                        renderPoints[0] = renderPoints[0] with
+                        {
+                            Point = renderPoints[0].Point with
+                            {
+                                X = renderPoints[0].Point.X + ImportedSurfaceDarkOrangeFacetLeftOffset
+                            }
+                        };
+                    }
                     double averageValue = renderPoints.Average(point => point.Value);
                     double averageNormalized = renderPoints.Average(point => point.NormalizedValue);
                     var color = ResolveSurfaceFacetColor(

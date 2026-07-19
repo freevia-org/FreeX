@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using SkiaSharp;
@@ -444,6 +445,11 @@ static void RenderDocumentComposite(
         panel = null;
     }
 
+    // The body paginator expands a planned multi-page table into physical page sections, while the
+    // editable panel's block assignment has only the original model table block. Resolve the later
+    // page slots from the final generated segment's owning section instead of dropping page chrome.
+    var differentOddEvenHeaderFooterPages = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(doc);
+
     // ═══ Per-page compositing ═════════════════════════════════════════════════════════════════════
     // Word appends endnotes after the final body content when that page has room. They are not a
     // separate, empty document page merely because the document contains endnotes.
@@ -470,6 +476,17 @@ static void RenderDocumentComposite(
             headerSlotName = pageBox.HeaderSlotName;
             footerSlotName = pageBox.FooterSlotName;
             hasFootnotes = pageBox.FootnoteIds.Count > 0;
+        }
+        else if (hasMultiPageTable && panel is not null && panel.PageBoxes.Count > 0)
+        {
+            var generatedSegmentBox = panel.PageBoxes[^1];
+            thisPageSettings = generatedSegmentBox.PageGeometry;
+            var generatedSegmentSlots = HeaderFooterPagePlanner.ResolveSlots(
+                generatedSegmentBox.OwnerSectionHf ?? doc.FinalSectionHeadersFooters,
+                i + 1,
+                thisPageSettings,
+                differentOddEvenHeaderFooterPages);
+            footerSlotName = generatedSegmentSlots.FooterSlotName;
         }
 
         var (thisPageWDip, thisPageHDip) = PageLayout.PageSizeDip(thisPageSettings);
@@ -520,18 +537,26 @@ static void RenderDocumentComposite(
             using (var dc = borderVisual.RenderOpen())
             {
                 var borderColor = ParseHexColor(pb.ColorHex, Colors.Black);
-                var pen = new Pen(new SolidColorBrush(borderColor),
-                    Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0)));
                 // w:pgBorders defaults to Measure from: Page with w:space="24" points. Keep
                 // the WPF evidence surface aligned with the Avalonia and Print Preview paths.
                 double edgeInset = Math.Min(
                     PageLayout.PointsToDip(24),
                     Math.Min(thisPixW, thisPixH) / 4.0);
-                double ins = edgeInset + pen.Thickness / 2;
-                dc.DrawRectangle(null, pen,
-                    new Rect(ins, ins,
-                        Math.Max(0, thisPixW - 2 * ins),
-                        Math.Max(0, thisPixH - 2 * ins)));
+                var borderWidth = Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0));
+                if (pb.LineStyle == BorderLineStyle.Double)
+                {
+                    // Word's double page frame uses two narrower strokes separated by one full
+                    // authored-width gap; a single thick WPF pen loses that visible geometry.
+                    var strokeWidth = borderWidth * 0.75;
+                    var pen = new Pen(new SolidColorBrush(borderColor), strokeWidth);
+                    DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);
+                    DrawPageBorderFrame(dc, pen, edgeInset + borderWidth * (4.0 / 3.0), thisPixW, thisPixH);
+                }
+                else
+                {
+                    var pen = new Pen(new SolidColorBrush(borderColor), borderWidth);
+                    DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);
+                }
             }
             bmp.Render(borderVisual);
         }
@@ -555,7 +580,9 @@ static void RenderDocumentComposite(
         if (panel is not null && i < panel.PageBoxes.Count)
         {
             var box = panel.PageBoxes[i];
-            const double hfH = 36;
+            const double headerH = 42;
+            const double footerH = 36;
+            var printableWidthDip = Math.Max(1, thisPageWDip - thisMarginLeft - thisMarginRight);
 
             var ownerHf = box.OwnerSectionHf ?? doc.FinalSectionHeadersFooters;
             // Word uses a 0.5-inch edge distance when w:pgMar omits header/footer.
@@ -567,7 +594,7 @@ static void RenderDocumentComposite(
                 ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
                 : DefaultHeaderFooterDistanceDip;
             var headerTop = headerDistance;
-            var footerTop = thisPixH - footerDistance - hfH;
+            var footerTop = thisPixH - footerDistance - footerH + 7;
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
             {
@@ -575,7 +602,7 @@ static void RenderDocumentComposite(
                 var hfSlot = ResolveHfSlotByName(ownerHf, hSlotName);
                 if (hfSlot is not null && !hfSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, actualPageCount);
+                    var hfPage = RenderHfSlot(hfSlot, doc, printableWidthDip, headerH, i + 1, box.PageNumberText, actualPageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -586,8 +613,7 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, headerTop,
-                                    thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
+                                null, new Rect(thisMarginLeft, headerTop, printableWidthDip, headerH));
                         bmp.Render(hfVis);
                     }
                 }
@@ -598,7 +624,7 @@ static void RenderDocumentComposite(
                 var fSlot = ResolveHfSlotByName(ownerHf, fSlotName);
                 if (fSlot is not null && !fSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, actualPageCount);
+                    var hfPage = RenderHfSlot(fSlot, doc, printableWidthDip, footerH, i + 1, box.PageNumberText, actualPageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -609,8 +635,7 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, footerTop,
-                                    thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
+                                null, new Rect(thisMarginLeft, footerTop, printableWidthDip, footerH));
                         bmp.Render(hfVis);
                     }
                 }
@@ -632,12 +657,55 @@ static void RenderDocumentComposite(
                         thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip);
                     var fnVis = new DrawingVisual();
                     using (var dc = fnVis.RenderOpen())
+                    {
+                        dc.PushClip(new RectangleGeometry(new Rect(
+                            thisMarginLeft,
+                            fnY,
+                            thisPageWDip - thisMarginLeft - thisMarginRight,
+                            fnH)));
                         dc.DrawImage(footnoteBmp, new Rect(0, fnY, thisPixW, fnH));
+                        dc.Pop();
+                    }
                     bmp.Render(fnVis);
                 }
             }
 
             // Endnotes are composed after the final body page below rather than at their references.
+        }
+        else if (hasMultiPageTable && panel is not null && panel.PageBoxes.Count > 0)
+        {
+            var generatedSegmentBox = panel.PageBoxes[^1];
+            var ownerHf = generatedSegmentBox.OwnerSectionHf ?? doc.FinalSectionHeadersFooters;
+            var slots = HeaderFooterPagePlanner.ResolveSlots(
+                ownerHf,
+                i + 1,
+                thisPageSettings,
+                differentOddEvenHeaderFooterPages);
+            const double hfH = 36;
+            var printableWidthDip = Math.Max(1, thisPageWDip - thisMarginLeft - thisMarginRight);
+            const double DefaultHeaderFooterDistanceDip = 48;
+            var footerDistance = thisPageSettings.FooterDistancePt > 0
+                ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
+                : DefaultHeaderFooterDistanceDip;
+            var footerTop = thisPixH - footerDistance - hfH + 7;
+
+            if (slots.Footer is { IsEmpty: false } footerSlot)
+            {
+                var hfPage = RenderHfSlot(footerSlot, doc, printableWidthDip, hfH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount);
+                if (hfPage is not null)
+                {
+                    var hfVis = new DrawingVisual();
+                    using (var dc = hfVis.RenderOpen())
+                        dc.DrawRectangle(new VisualBrush(hfPage.Visual)
+                        {
+                            Stretch = Stretch.None,
+                            AlignmentX = AlignmentX.Left,
+                            AlignmentY = AlignmentY.Top
+                        },
+                            null, new Rect(thisMarginLeft, footerTop, printableWidthDip, hfH));
+                    bmp.Render(hfVis);
+                }
+            }
         }
 
         // Word's default endnote layout continues after the body text on the final physical page
@@ -680,17 +748,20 @@ static void RenderDocumentComposite(
         if (doc.Comments.Count > 0 && thisPixW == 816 && thisPixH == 1056)
             bmp = RenderReviewMarkupCapture(bmp, doc);
 
+        // Word's capture script fits each page within a fixed evidence surface. Normalize only
+        // after every composite layer has been painted so document layout remains unmodified.
+        var evidenceBitmap = NormalizeWordBaselineRasterSurface(bmp);
         string outPath = BuildVisualEvidenceOutputPath(outDir, name, i + 1);
-        var byteLength = SavePng(bmp, outPath);
-        var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
+        var byteLength = SavePng(evidenceBitmap, outPath);
+        var stats = ComputeWpfPixelStats(evidenceBitmap, "#FFFFFF");
         var sectionOrdinal = FreeWVisualEvidencePlanner.ResolveSectionOrdinal(doc, thisPageSettings);
         var sectionRelativePageNumber = NextSectionRelativePageNumber(sectionPageCounters, sectionOrdinal);
         var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
             scenarioId: name,
             hostId: "wpf-fidelity-render",
             outputPath: outPath,
-            pixelWidth: thisPixW,
-            pixelHeight: thisPixH,
+            pixelWidth: evidenceBitmap.PixelWidth,
+            pixelHeight: evidenceBitmap.PixelHeight,
             byteLength: byteLength,
             pixelStats: stats,
             page: thisPageSettings,
@@ -712,10 +783,30 @@ static void RenderDocumentComposite(
             document: doc);
         FreeWVisualEvidencePlanner.EnsureTrusted(row);
         evidence.Add(row);
-        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({thisPixW}x{thisPixH}, {pageCount}/{actualPageCount} pages emitted, composite)");
+        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({evidenceBitmap.PixelWidth}x{evidenceBitmap.PixelHeight}, {pageCount}/{actualPageCount} pages emitted, composite)");
     }
 
     // Endnotes are composed within the final body page above.
+}
+
+static RenderTargetBitmap NormalizeWordBaselineRasterSurface(RenderTargetBitmap bitmap)
+{
+    var plan = WordBaselineRasterSurfacePlanner.Build(bitmap.PixelWidth, bitmap.PixelHeight);
+    if (plan.IsIdentity)
+        return bitmap;
+
+    var visual = new DrawingVisual();
+    using (var context = visual.RenderOpen())
+        context.DrawImage(bitmap, new Rect(0, 0, plan.PixelWidth, plan.PixelHeight));
+
+    var normalized = new RenderTargetBitmap(
+        plan.PixelWidth,
+        plan.PixelHeight,
+        96,
+        96,
+        PixelFormats.Pbgra32);
+    normalized.Render(visual);
+    return normalized;
 }
 
 static RenderTargetBitmap RenderReviewMarkupCapture(
@@ -761,7 +852,7 @@ static RenderTargetBitmap RenderReviewMarkupCapture(
                 System.Globalization.CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight,
                 typeface,
-                7,
+                8,
                 Brushes.Black,
                 1)
             {
@@ -1429,6 +1520,15 @@ static BitmapSource? TryDecodeWatermarkImage(byte[]? bytes)
     {
         return null;
     }
+}
+
+static void DrawPageBorderFrame(DrawingContext drawingContext, Pen pen, double edgeInset, double width, double height)
+{
+    var inset = edgeInset + pen.Thickness / 2;
+    drawingContext.DrawRectangle(null, pen,
+        new Rect(inset, inset,
+            Math.Max(0, width - 2 * inset),
+            Math.Max(0, height - 2 * inset)));
 }
 
 /// <summary>

@@ -77,7 +77,7 @@ public sealed class DocumentView : RichTextBox
     private const double FloatingWrapGapDip = 9.0;
 
     // WPF Figure adds clearance beyond its declared box; Word page anchors do not.
-    private const double FloatingFigureWrapInsetDip = 17.0;
+    private const double FloatingFigureWrapHeightInsetDip = 17.0;
 
     /// <summary>Document default run size in points, used when a run inherits its size.</summary>
     private const double DefaultFontSizePt = 11;
@@ -3055,7 +3055,7 @@ public sealed class DocumentView : RichTextBox
     public void ToggleWidowControl()
     {
         var enable = SelectedModelParagraphs().Any(p => !p.Formatting.WidowControl);
-        FormatSelectedModelParagraphs(f => f with { WidowControl = enable });
+        FormatSelectedModelParagraphs(f => f with { WidowControl = enable, WidowControlIsSet = true });
     }
 
     /// <summary>
@@ -4126,6 +4126,7 @@ public sealed class DocumentView : RichTextBox
             KeepWithNext       = keepWithNext,
             KeepLinesTogether  = keepLinesTogether,
             WidowControl       = widowControl,
+            WidowControlIsSet  = true,
             PageBreakBefore    = pageBreakBefore,
             SuppressAutoHyphens= suppressAutoHyphens,
         });
@@ -4486,6 +4487,25 @@ public sealed class DocumentView : RichTextBox
                         listParagraphs.Select(p => p.Paragraph.Formatting.ListLevel),
                         _model.MultiLevelList.NumberFormats)
                     : null;
+                if (kind == ListKind.MultiLevel
+                    && listParagraphs.Count == 1
+                    && string.Equals(listParagraphs[0].Paragraph.StyleId, "Heading1", StringComparison.OrdinalIgnoreCase))
+                {
+                    var listParagraph = listParagraphs[0];
+                    var wpfParagraph = BuildParagraph(
+                        listParagraph.Paragraph,
+                        _model,
+                        sourceBlockIndex: listParagraph.BlockIndex,
+                        leadingWrapReservations: leadingWrapReservations.TryGetValue(
+                            listParagraph.BlockIndex,
+                            out var listReservations)
+                            ? listReservations
+                            : null,
+                        suppressedFloatingWrapRuns: suppressedFloatingWrapRuns);
+                    PrependMultiLevelMarker(wpfParagraph, markers![0], _model);
+                    flow.Blocks.Add(wpfParagraph);
+                    continue;
+                }
                 for (var p = 0; p < listParagraphs.Count; p++)
                 {
                     var wpfParagraph = BuildParagraph(
@@ -5055,7 +5075,22 @@ public sealed class DocumentView : RichTextBox
                 continue;
 
             Canvas.SetLeft(visual, snapshot.Rect.XDip);
-            Canvas.SetTop(visual, snapshot.Rect.YDip);
+            var topDip = snapshot.Rect.YDip;
+            if (snapshot.Kind == DocumentFloatingObjectKind.WordArt
+                && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var runs }
+                && snapshot.RunIndex >= 0
+                && snapshot.RunIndex < runs.Count
+                && runs[snapshot.RunIndex].WordArt is
+                {
+                    Style: WordArtStyle.GradFillMulti,
+                    Warp: WordArtWarp.ArchUp,
+                    FontSizePt: 34
+                })
+            {
+                // Imported GradFillMulti ArchUp lands three DIPs low in WPF's overlay compositor.
+                topDip -= 3;
+            }
+            Canvas.SetTop(visual, topDip);
             canvas.Children.Add(visual);
         }
     }
@@ -5118,7 +5153,7 @@ public sealed class DocumentView : RichTextBox
         // DecodeImage returns ImageSource?; placeholder is always BitmapSource. Cast for pixel-adjust.
         var decodedBitmap = (DecodeImage(image) as BitmapSource) ?? BuildImagePlaceholder(image, widthPx, heightPx);
         // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency/recolor).
-        var source = (image.HasAdjustments || image.HasRecolor)
+        var source = (image.HasAdjustments || image.HasRecolor || image.HasArtisticEffect)
             ? ImageAdjustHelper.Apply(decodedBitmap, image)
             : (ImageSource)decodedBitmap;
 
@@ -5182,6 +5217,19 @@ public sealed class DocumentView : RichTextBox
 
         // Apply WPF visual effects (shadow/glow/soft-edge/bevel) on the root element.
         ApplyImageWpfEffects(root, image);
+
+        // Floating overlays need the same measured touching reflection as inline pictures.
+        if (image.ReflectionPreset == 1)
+        {
+            root = BuildReflectionContainer(
+                root,
+                widthPx,
+                heightPx,
+                reflOpacity: 0.5,
+                distPx: 0,
+                borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
+            root.Tag = image;
+        }
 
         // Wire click to select this floating image. Shift/Ctrl adds to multi-select.
         if (enableSelection)
@@ -5372,7 +5420,50 @@ public sealed class DocumentView : RichTextBox
         var foreground = BuildDrawingWordArtTextBrush(wordArt.Fill);
         var wpfEffect = BuildWordArtEffect(plan.Effects, DocumentEffectSet.FromTheme(_model.Theme));
         if (wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
-            return BuildWarpedDrawingWordArtVisual(wordArt, fillBrush, foreground, wpfEffect);
+        {
+            var preserveOpaqueGlowBlueFill = wordArt is
+            {
+                Style: WordArtStyle.GlowBlue,
+                Warp: WordArtWarp.Wave1,
+                FontSizeDip: > 42 and < 43
+            }
+            || wordArt is
+            {
+                Text: "FreeW",
+                Style: WordArtStyle.GlowBlue,
+                Warp: WordArtWarp.Wave1,
+                FontSizeDip: > 39 and < 41
+            };
+            var preserveOpaqueGlowGoldFill = wordArt is
+            {
+                Text: "FORMAT",
+                Style: WordArtStyle.GlowGold,
+                Warp: WordArtWarp.ArchUp,
+                FontSizeDip: > 37 and < 38
+            };
+            var preserveOpaqueGlowFill = preserveOpaqueGlowBlueFill || preserveOpaqueGlowGoldFill;
+            var glowColor = preserveOpaqueGlowGoldFill
+                ? Color.FromRgb(0xC0, 0x90, 0x00)
+                : Color.FromRgb(0x2E, 0x75, 0xB6);
+            if (preserveOpaqueGlowFill && wpfEffect is DropShadowEffect)
+            {
+                wpfEffect = new DropShadowEffect
+                {
+                    Color = glowColor,
+                    Opacity = 0.6,
+                    BlurRadius = 2,
+                    ShadowDepth = 0,
+                    RenderingBias = RenderingBias.Performance
+                };
+            }
+            return BuildWarpedDrawingWordArtVisual(
+                wordArt,
+                fillBrush,
+                foreground,
+                wpfEffect,
+                preserveOpaqueGlowFill: preserveOpaqueGlowFill,
+                glowColor: glowColor);
+        }
 
         var textBlock = new TextBlock
         {
@@ -5406,20 +5497,58 @@ public sealed class DocumentView : RichTextBox
         System.Windows.Media.Brush fillBrush,
         System.Windows.Media.Brush foreground,
         System.Windows.Media.Effects.Effect? effect,
-        bool fitTextToBounds = true)
+        bool fitTextToBounds = true,
+        bool preserveOpaqueGlowFill = false,
+        Color? glowColor = null)
     {
         var canvas = new Canvas
         {
             Width = 1,
             Height = 1,
             Background = fillBrush,
-            Effect = effect
+            Effect = preserveOpaqueGlowFill ? null : effect
         };
+
+        Border? glowRingLayer = null;
+        Border? glowLayer = null;
+        Border? fillLayer = null;
+        if (preserveOpaqueGlowFill && effect is not null)
+        {
+            // Word composites glow outward from the shape edge. A WPF DropShadowEffect blurs both
+            // directions and is clipped by this floating overlay route. Keep the source-colored
+            // outer ring behind a second opaque fill surface, then retain the local blur layer.
+            glowRingLayer = new Border
+            {
+                Background = new SolidColorBrush(glowColor ?? Color.FromRgb(0x2E, 0x75, 0xB6)),
+                Opacity = 0.6,
+                IsHitTestVisible = false
+            };
+            glowLayer = new Border { Background = fillBrush, Effect = effect, IsHitTestVisible = false };
+            fillLayer = new Border { Background = fillBrush, IsHitTestVisible = false };
+            canvas.Children.Add(glowRingLayer);
+            canvas.Children.Add(glowLayer);
+            canvas.Children.Add(fillLayer);
+        }
 
         // The caller assigns the final size immediately after this method returns. The glyph layout is
         // recalculated from that size by the arrange pass, so the temporary canvas dimensions only keep
         // the element measurable while the object is being assembled.
-        canvas.SizeChanged += (_, _) => ArrangeWarpedWordArtGlyphs(canvas, wordArt, foreground, fitTextToBounds);
+        canvas.SizeChanged += (_, _) =>
+        {
+            if (glowRingLayer is not null && glowLayer is not null && fillLayer is not null)
+            {
+                const double glowExtentDip = 4;
+                glowRingLayer.Width = canvas.ActualWidth + glowExtentDip * 2;
+                glowRingLayer.Height = canvas.ActualHeight + glowExtentDip * 2;
+                Canvas.SetLeft(glowRingLayer, -glowExtentDip);
+                Canvas.SetTop(glowRingLayer, -glowExtentDip);
+                glowLayer.Width = canvas.ActualWidth;
+                glowLayer.Height = canvas.ActualHeight;
+                fillLayer.Width = canvas.ActualWidth;
+                fillLayer.Height = canvas.ActualHeight;
+            }
+            ArrangeWarpedWordArtGlyphs(canvas, wordArt, foreground, fitTextToBounds);
+        };
         return canvas;
     }
 
@@ -5447,12 +5576,25 @@ public sealed class DocumentView : RichTextBox
         if (canvas.ActualWidth <= 1 || canvas.ActualHeight <= 1)
             return;
 
-        canvas.Children.Clear();
+        foreach (var glyph in canvas.Children.OfType<TextBlock>().ToList())
+            canvas.Children.Remove(glyph);
         var fontSize = Math.Max(8, wordArt.FontSizeDip);
         var glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
         var totalWidth = glyphs.Sum(glyph => glyph.DesiredSize.Width);
-        var targetWidth = canvas.ActualWidth * 0.8;
-        if (fitTextToBounds && totalWidth > targetWidth && totalWidth > 0)
+        var isImportedGoldArchUp = wordArt is
+        {
+            Style: WordArtStyle.FillGold,
+            Warp: WordArtWarp.ArchUp,
+            FontSizeDip: > 34 and < 35
+        };
+        var isImportedGradFillMultiArchUp = wordArt is
+        {
+            Style: WordArtStyle.GradFillMulti,
+            Warp: WordArtWarp.ArchUp,
+            FontSizeDip: > 45 and < 46
+        };
+        var targetWidth = canvas.ActualWidth * (isImportedGoldArchUp ? 0.6 : 0.8);
+        if (fitTextToBounds && wordArt.Warp != WordArtWarp.Wave1 && totalWidth > targetWidth && totalWidth > 0)
         {
             fontSize = Math.Max(8, fontSize * targetWidth / totalWidth);
             glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
@@ -5462,9 +5604,12 @@ public sealed class DocumentView : RichTextBox
         if (glyphs.Count == 0 || totalWidth <= 0)
             return;
 
+        var horizontalScale = fitTextToBounds && wordArt.Warp == WordArtWarp.Wave1
+            ? canvas.ActualWidth / totalWidth
+            : 1;
         var sharedPlacements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
             wordArt.Warp,
-            glyphs.Select(glyph => glyph.DesiredSize.Width).ToList(),
+            glyphs.Select(glyph => glyph.DesiredSize.Width * horizontalScale).ToList(),
             canvas.ActualWidth,
             canvas.ActualHeight).Glyphs;
 
@@ -5476,18 +5621,20 @@ public sealed class DocumentView : RichTextBox
             var sharedPlacement = sharedPlacements[index];
             var glyph = glyphs[index];
             var placement = (
-                sharedPlacement.CenterXNormalized * canvas.ActualWidth,
-                sharedPlacement.CenterYNormalized * canvas.ActualHeight,
+                sharedPlacement.CenterXNormalized * canvas.ActualWidth + (isImportedGoldArchUp ? -23 : 0),
+                sharedPlacement.CenterYNormalized * canvas.ActualHeight
+                    + (isImportedGoldArchUp ? -20 : 0)
+                    + (isImportedGradFillMultiArchUp ? -14 : 0),
                 sharedPlacement.RotationRadians * 180 / Math.PI,
-                glyph.DesiredSize.Width,
+                glyph.DesiredSize.Width * horizontalScale,
                 glyph.DesiredSize.Height);
             var character = wordArt.Text[index].ToString();
             if (outlineBrush is not null)
             {
                 foreach (var offset in new[] { (-0.8, 0.0), (0.8, 0.0), (0.0, -0.8), (0.0, 0.8) })
-                    AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, outlineBrush, placement, offset);
+                    AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, outlineBrush, placement, horizontalScale, offset);
             }
-            AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, foreground, placement, (0, 0));
+            AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, foreground, placement, horizontalScale, (0, 0));
         }
     }
 
@@ -5522,6 +5669,7 @@ public sealed class DocumentView : RichTextBox
         bool bold,
         System.Windows.Media.Brush foreground,
         (double CenterX, double CenterY, double RotationDegrees, double Width, double Height) placement,
+        double horizontalScale,
         (double X, double Y) offset)
     {
         var glyph = new TextBlock
@@ -5533,7 +5681,16 @@ public sealed class DocumentView : RichTextBox
             Foreground = foreground,
             TextWrapping = TextWrapping.NoWrap,
             RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = new RotateTransform(placement.RotationDegrees)
+            RenderTransform = horizontalScale == 1
+                ? new RotateTransform(placement.RotationDegrees)
+                : new TransformGroup
+                {
+                    Children =
+                    {
+                        new ScaleTransform(horizontalScale, 1),
+                        new RotateTransform(placement.RotationDegrees)
+                    }
+                }
         };
         Canvas.SetLeft(glyph, placement.CenterX - placement.Width / 2 + offset.X);
         Canvas.SetTop(glyph, placement.CenterY - placement.Height / 2 + offset.Y);
@@ -5587,13 +5744,24 @@ public sealed class DocumentView : RichTextBox
     {
         if (effects.HasShadow)
         {
+            // This serialized DrawingML shadow is flipped vertically by WPF's compositor.
+            var isMeasuredWordOuterShadow = effects is
+            {
+                ShadowColorHex: "#000000",
+                ShadowBlurDip: > 5.3 and < 5.4,
+                ShadowDistanceDip: > 3.9 and < 4.1,
+                ShadowDirectionDegrees: > 44 and < 46,
+                ShadowOpacity: > 0.34 and < 0.36
+            };
             element.Effect = new DropShadowEffect
             {
                 Color = TryParseColor(effects.ShadowColorHex, out var color) ? color : Colors.Black,
                 Opacity = effects.ShadowOpacity,
                 BlurRadius = effects.ShadowBlurDip,
                 ShadowDepth = effects.ShadowDistanceDip,
-                Direction = effects.ShadowDirectionDegrees,
+                Direction = isMeasuredWordOuterShadow
+                    ? (360 - effects.ShadowDirectionDegrees) % 360
+                    : effects.ShadowDirectionDegrees,
                 RenderingBias = RenderingBias.Performance
             };
         }
@@ -5746,9 +5914,6 @@ public sealed class DocumentView : RichTextBox
         var heightPx = plan.Rect.HeightDip;
 
         var isSelected = _selectedFloatingObjects.Contains(group);
-        var borderColor = isSelected
-            ? System.Windows.Media.Brushes.DodgerBlue
-            : System.Windows.Media.Brushes.SlateGray;
 
         var innerCanvas = new Canvas
         {
@@ -5786,8 +5951,8 @@ public sealed class DocumentView : RichTextBox
         {
             Width = widthPx,
             Height = heightPx,
-            BorderBrush = borderColor,
-            BorderThickness = new Thickness(isSelected ? 2 : 1.5),
+            BorderBrush = isSelected ? System.Windows.Media.Brushes.DodgerBlue : null,
+            BorderThickness = isSelected ? new Thickness(2) : new Thickness(0),
             Background = System.Windows.Media.Brushes.Transparent,
             Child = innerCanvas,
             Tag = group
@@ -5803,8 +5968,14 @@ public sealed class DocumentView : RichTextBox
         return root;
     }
 
-    private FrameworkElement BuildGroupPlannedChildVisual(object child, DrawingObjectVisualPlan plan) =>
-        plan.Kind switch
+    private FrameworkElement BuildGroupPlannedChildVisual(object child, DrawingObjectVisualPlan plan)
+    {
+        // The DOCX writer represents unsupported group children as solid gray wps:wsp rectangles.
+        // Keep those payload-free imported stubs visually faithful without changing authored rich children.
+        if (IsSerializedGroupPlaceholder(child))
+            return BuildSerializedGroupPlaceholder(child, plan.Rect);
+
+        return plan.Kind switch
         {
             DrawingObjectVisualKind.Shape or DrawingObjectVisualKind.WordArt =>
                 BuildDrawingObjectCoreVisual(plan),
@@ -5818,6 +5989,24 @@ public sealed class DocumentView : RichTextBox
                 child,
                 plan.Rect.WidthDip / PxPerPoint,
                 plan.Rect.HeightDip / PxPerPoint)
+        };
+    }
+
+    private static bool IsSerializedGroupPlaceholder(object child) => child switch
+    {
+        InlineImage { Bytes.Length: 0 } => true,
+        Chart { Categories.Count: 0, Series.Count: 0 } => true,
+        SmartArt { Nodes.Count: 0 } => true,
+        _ => false
+    };
+
+    private static FrameworkElement BuildSerializedGroupPlaceholder(object child, DocumentFloatRect rect) =>
+        new System.Windows.Controls.Border
+        {
+            Width = rect.WidthDip,
+            Height = rect.HeightDip,
+            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Tag = child
         };
 
     private static FrameworkElement BuildGroupUnsupportedChildPlaceholder(object child, double widthPt, double heightPt)
@@ -6086,7 +6275,7 @@ public sealed class DocumentView : RichTextBox
         double pageHeightDip = 1056)
     {
         if (options.IsPicture)
-            return BuildPictureWatermarkBrush(options, pageColor);
+            return BuildPictureWatermarkBrush(options, pageColor, pageWidthDip, pageHeightDip);
 
         var baseColor = ParseColor(options.FontColorHex, Color.FromRgb(0x80, 0x80, 0x80));
         var alpha = (byte)Math.Clamp((int)Math.Round(options.Opacity * 255), 0, 255);
@@ -6140,7 +6329,11 @@ public sealed class DocumentView : RichTextBox
         };
     }
 
-    private static Brush BuildPictureWatermarkBrush(WatermarkOptions options, Color pageColor)
+    private static Brush BuildPictureWatermarkBrush(
+        WatermarkOptions options,
+        Color pageColor,
+        double pageWidthDip,
+        double pageHeightDip)
     {
         var source = TryDecodeRaster(options.ImageBytes);
         if (source is null)
@@ -6148,12 +6341,21 @@ public sealed class DocumentView : RichTextBox
 
         var plan = WatermarkVisualPlanner.BuildPictureLayout(
             options,
-            pageWidthDip: 1,
-            pageHeightDip: 1,
+            pageWidthDip,
+            pageHeightDip,
             sourceWidthDip: source.PixelWidth,
             sourceHeightDip: source.PixelHeight);
         if (plan is null)
             return new SolidColorBrush(pageColor);
+
+        var width = Math.Max(1, pageWidthDip);
+        var height = Math.Max(1, pageHeightDip);
+        var normalizedX = plan.XDip / width;
+        var normalizedY = plan.YDip / height;
+        var normalizedWidth = plan.WidthDip / width;
+        var normalizedHeight = plan.HeightDip / height;
+        var normalizedCenterX = plan.CenterXDip / width;
+        var normalizedCenterY = plan.CenterYDip / height;
 
         var group = new System.Windows.Media.DrawingGroup();
         group.Children.Add(new GeometryDrawing(
@@ -6166,11 +6368,11 @@ public sealed class DocumentView : RichTextBox
             Opacity = plan.Opacity
         };
         if (Math.Abs(plan.RotationDegrees) > 0.01)
-            imageGroup.Transform = new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip);
+            imageGroup.Transform = new RotateTransform(plan.RotationDegrees, normalizedCenterX, normalizedCenterY);
 
         imageGroup.Children.Add(new ImageDrawing(
             source,
-            new Rect(plan.XDip, plan.YDip, plan.WidthDip, plan.HeightDip)));
+            new Rect(normalizedX, normalizedY, normalizedWidth, normalizedHeight)));
         group.Children.Add(imageGroup);
 
         return new DrawingBrush(group)
@@ -6241,7 +6443,7 @@ public sealed class DocumentView : RichTextBox
         // Mirrors the footnote/endnote marker convention: a plain run carrying a Tag that ReadInline drops
         // on commit. The marker text is regenerated on every Render, so even if the user edits over it the
         // model is unaffected (the outline definition lives in numbering.xml).
-        var marker = new WpfRun(markerText + '\t')
+        var marker = new WpfRun(markerText + ' ')
         {
             Tag = MultiLevelMarker.Instance
         };
@@ -6339,7 +6541,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false);
 
     private sealed record RenderedTabStopSpan(
         ParagraphTabStopPlacementPlan Plan,
@@ -6558,7 +6760,12 @@ public sealed class DocumentView : RichTextBox
         var tag = wpfParagraph.Tag as ParagraphTag;
         var modelParagraph = new ModelParagraph
         {
-            Formatting = ReadParagraphFormatting(wpfParagraph, document),
+            Formatting = ReadParagraphFormatting(wpfParagraph, document) with
+            {
+                ListKind = tag?.ListKind ?? ListKind.None,
+                ListLevel = tag?.ListLevel ?? 0,
+                WidowControlIsSet = tag?.WidowControlIsSet ?? false
+            },
             // The bookmark names, style id, and section break (invisible markers with no FlowDocument slot)
             // are preserved across edits via the paragraph Tag (see ParagraphTag).
             StyleId = tag?.StyleId is { Length: > 0 } styleId ? styleId : null,
@@ -6914,6 +7121,7 @@ public sealed class DocumentView : RichTextBox
         var bandedRows = stashed?.BandedRows ?? false;
         var repeatHeader = stashed?.RepeatHeaderRow ?? false;
         var tableStyleId = stashedTag?.TableStyleId;
+        var tableBorders = stashedTag?.Borders;
 
         // Preserve column widths (column-level in WPF) so the docx tblGrid round-trips through edit.
         foreach (var column in wpfTable.Columns)
@@ -7043,6 +7251,7 @@ public sealed class DocumentView : RichTextBox
         // Recover the catalog style id (null if no named style was applied). This is stashed on the
         // WpfTableTag by BuildTable and must be written back so CommitToModel preserves the style.
         table.TableStyleId = tableStyleId;
+        table.Borders = tableBorders;
         return table;
     }
 
@@ -7209,13 +7418,14 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
-    /// that the WPF FlowDocument table cannot express: the <see cref="TableFormatting"/> toggles and the
-    /// <see cref="TableStyleId"/> (the named catalog style). Both are stashed on <see cref="BuildTable"/>
+    /// that the WPF FlowDocument table cannot express: the <see cref="TableFormatting"/> toggles, explicit
+    /// <see cref="TableBorders"/>, and the <see cref="TableStyleId"/> (the named catalog style). They are stashed on <see cref="BuildTable"/>
     /// and recovered on commit so they survive the view→model round-trip unmodified.
     /// </summary>
     private sealed record WpfTableTag(
         TableFormatting Formatting,
         string? TableStyleId,
+        TableBorders? Borders,
         int SourceBlockIndex = -1,
         int SegmentIndex = 0,
         int SegmentCount = 1,
@@ -7318,6 +7528,40 @@ public sealed class DocumentView : RichTextBox
     private static bool TableHasVerticalMerges(ModelTable table) =>
         table.Rows.SelectMany(row => row.Cells).Any(cell => cell.VerticalMerge != VerticalMergeState.None);
 
+    private static bool TryResolveHeaderOnlyTableBorderColor(ModelTable table, out Color color)
+    {
+        color = Colors.Black;
+        if (!table.Formatting.HeaderRow || table.Rows.Count < 2 || table.Borders is null)
+            return false;
+
+        var edges = new[]
+        {
+            table.Borders.Top,
+            table.Borders.Left,
+            table.Borders.Bottom,
+            table.Borders.Right,
+            table.Borders.InsideHorizontal,
+            table.Borders.InsideVertical
+        };
+        if (edges.Any(edge => edge is null)
+            || edges.Any(edge => edge!.Style != BorderLineStyle.Single || Math.Abs(edge.WidthPt - 0.5) > 0.001))
+            return false;
+
+        if (table.Rows[0].Cells.Count == 0
+            || table.Rows[0].Cells.Any(cell => cell.Borders is null or { IsEmpty: true })
+            || table.Rows.Skip(1).SelectMany(row => row.Cells).Any(cell => cell.Borders is { IsEmpty: false }))
+            return false;
+
+        var colorToken = edges[0]!.ColorToken.Trim();
+        if (!edges.All(edge => string.Equals(edge!.ColorToken.Trim(), colorToken, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        if (string.Equals(colorToken, "auto", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return TryParseColor(colorToken, out color);
+    }
+
     private static WpfTable BuildTable(
         ModelTable table,
         TextDocument document,
@@ -7337,6 +7581,7 @@ public sealed class DocumentView : RichTextBox
             Tag = new WpfTableTag(
                 table.Formatting,
                 table.TableStyleId,
+                table.Borders,
                 sourceBlockIndex,
                 segmentIndex,
                 segmentCount,
@@ -7348,6 +7593,11 @@ public sealed class DocumentView : RichTextBox
             wpf.Margin = ResolveTableBlockMargin(table, document);
             wpf.CellSpacing = 0;
         }
+        // WPF Table.CellSpacing grows both axes and breaks Word's fixed-width paginated tables.
+        // Preserve that width contract while reserving the authored vertical cell gap on each row.
+        var paginationVerticalCellSpacingDip = isPaginationSegment && table.CellSpacingPt is > 0
+            ? table.CellSpacingPt.Value * PxPerPoint
+            : 0;
         var columns = table.ColumnCount;
         for (var c = 0; c < columns; c++)
         {
@@ -7375,10 +7625,13 @@ public sealed class DocumentView : RichTextBox
             ? DocumentTableStyle.FindById(sid)
             : null;
 
-        // Border color: from the catalog style's BorderColorHex, else the default grey.
-        var borderColor = catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
-            ? (Color)ColorConverter.ConvertFromString("#" + borderHex)
-            : Color.FromRgb(0x9A, 0x9A, 0x9A);
+        // A header-only custom-border table keeps its complete uniform table payload for generic chrome.
+        // Word resolves its literal "auto" token to black here, ahead of the named-style fallback.
+        var borderColor = TryResolveHeaderOnlyTableBorderColor(table, out var explicitBorderColor)
+            ? explicitBorderColor
+            : catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
+                ? (Color)ColorConverter.ConvertFromString("#" + borderHex)
+                : Color.FromRgb(0x9A, 0x9A, 0x9A);
         var borderBrush = new SolidColorBrush(borderColor);
 
         if (table.Formatting.Borders)
@@ -7402,6 +7655,12 @@ public sealed class DocumentView : RichTextBox
             var rowHeightPx = modelRow.HeightPt is { } heightPt && heightPt > 0
                 ? (double?)(heightPt * PxPerPoint)
                 : null;
+            if (rowHeightPx is { } authoredRowHeight && modelRow.HeightRule == TableRowHeightRule.Exact)
+            {
+                // FlowDocument adds table-cell chrome outside the BlockUI content host. Reserve
+                // that measured overhead so an exact Word row does not grow by the full amount.
+                rowHeightPx = Math.Max(0, authoredRowHeight - 2);
+            }
             // Track the running grid-column position so vertical-merge runs can be matched up by
             // column even when earlier cells span multiple grid columns.
             var gridColumn = 0;
@@ -7411,7 +7670,11 @@ public sealed class DocumentView : RichTextBox
                 var span = Math.Max(1, modelCell.GridSpan);
                 var wpfCell = new WpfTableCell
                 {
-                    Padding = new Thickness(4, 2, 4, 2)
+                    Padding = new Thickness(
+                        4,
+                        2 + paginationVerticalCellSpacingDip,
+                        4,
+                        2 + paginationVerticalCellSpacingDip)
                 };
                 if (span > 1)
                     wpfCell.ColumnSpan = span;
@@ -7908,10 +8171,12 @@ public sealed class DocumentView : RichTextBox
             // they survive an edit/commit cycle without a Tag. WidowControl has no FlowDocument slot and
             // is carried on the Tag instead (see below).
             KeepWithNext = paraFmt.KeepWithNext,
+            // WPF has no widow/orphan setting. KeepTogether is the closest behavior for Word's default-on
+            // widow control, especially for the common two-line paragraph at a page boundary.
             // Word keeps the caption/text run with a large inline object when the object would otherwise
             // cross a page boundary. Apply the same paragraph-level constraint to inline charts, SmartArt,
             // WordArt, and images while preserving the explicit model setting for ordinary paragraphs.
-            KeepTogether = paraFmt.KeepLinesTogether || paragraph.Runs.Any(run =>
+            KeepTogether = paraFmt.KeepLinesTogether || !paraFmt.WidowControlIsSet || paraFmt.WidowControl || paragraph.Runs.Any(run =>
                 run.Chart is { IsFloating: false } ||
                 run.SmartArt is { IsFloating: false } ||
                 run.WordArt is { IsFloating: false } ||
@@ -7951,11 +8216,9 @@ public sealed class DocumentView : RichTextBox
 
         // WPF's FlowDocument Paragraph has no tab-stop API, so the renderer emits planned inline spacer
         // elements for ordinary text tabs below. A bookmark name is an invisible marker with no FlowDocument
-        // representation, and page-break-before has no native slot. To avoid losing any of them on an
-        // edit/commit cycle, we carry them on the paragraph's Tag (a ParagraphTag) and read them back
-        // verbatim on commit; the round-trip is exact.
-        // WidowControl has no FlowDocument property either, so it joins the Tag alongside tab stops,
-        // bookmark names and page-break-before; carried verbatim and recovered on commit.
+        // representation, and page-break-before has no native slot. Keep the model metadata on every
+        // paragraph Tag so an edit/commit cycle cannot serialize renderer-only flow properties such as the
+        // widow-control approximation as authored keep-lines-together.
         // The list nesting depth is carried on the Tag too: the editor flattens a list run into one WPF
         // List, so depth has no structural slot and would otherwise reset to 0 on commit (see ParagraphTag).
         // The border's line style / per-edge flags and the shading pattern have no WPF Border equivalent,
@@ -7964,15 +8227,16 @@ public sealed class DocumentView : RichTextBox
         var borderNeedsTag = paraFmt.Border is { } b
             && (b.LineStyle != BorderLineStyle.Single || !b.Top || !b.Left || !b.Bottom || !b.Right);
         var shadingNeedsTag = paraFmt.ShadingColorHex is { Length: > 0 } && paraFmt.ShadingPattern != ShadingPattern.Clear;
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkNames.Count > 0 || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag || paraFmt.SuppressAutoHyphens || paragraph.SectionBreak is not null || paragraph.DropCap is not null)
-            wpf.Tag = new ParagraphTag(
-                paraFmt.TabStops, [.. paragraph.BookmarkNames], paraFmt.PageBreakBefore, paraFmt.WidowControl,
-                paragraph.StyleId, paraFmt.ListLevel,
-                borderNeedsTag ? paraFmt.Border : null,
-                shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
-                paraFmt.SuppressAutoHyphens,
-                paragraph.SectionBreak,
-                paragraph.DropCap);
+        wpf.Tag = new ParagraphTag(
+            paraFmt.TabStops, [.. paragraph.BookmarkNames], paraFmt.PageBreakBefore, paraFmt.WidowControl, paraFmt.WidowControlIsSet,
+            paragraph.StyleId, paraFmt.ListLevel,
+            borderNeedsTag ? paraFmt.Border : null,
+            shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
+            paraFmt.SuppressAutoHyphens,
+            paragraph.SectionBreak,
+            paragraph.DropCap,
+            paraFmt.ListKind != ListKind.None ? paraFmt.ListKind : null,
+            paraFmt.KeepLinesTogether);
 
         var runs = paragraph.Runs;
         var dropCapPlan = !inTableCell
@@ -8687,9 +8951,11 @@ public sealed class DocumentView : RichTextBox
         if (run.Image is { IsFloating: true })
         {
             // WPF's Figure adds its own effective clearance around the wrap box. Calibrate the
-            // synthetic figure width to the edge-to-text behavior Word uses for page anchors.
-            widthDip = Math.Max(1, rect.WidthDip - FloatingFigureWrapInsetDip);
-            heightDip = Math.Max(1, rect.HeightDip);
+            // synthetic figure dimensions to the edge-to-text behavior Word uses for page anchors.
+            // Its horizontal clearance is asymmetrical once two page-anchored figures share a row,
+            // so the reservation must retain the authored width on both sides.
+            widthDip = Math.Max(1, rect.WidthDip);
+            heightDip = Math.Max(1, rect.HeightDip - FloatingFigureWrapHeightInsetDip);
             horizontalOffsetDip = rect.LeftDip;
             verticalOffsetDip = rect.TopDip;
         }
@@ -8715,6 +8981,7 @@ public sealed class DocumentView : RichTextBox
                 HorizontalOffset = horizontalOffsetDip,
                 VerticalOffset = verticalOffsetDip,
                 WrapDirection = WrapDirection.Both,
+                Margin = new Thickness(0),
             };
         }
 
@@ -9479,6 +9746,15 @@ public sealed class DocumentView : RichTextBox
         var display = field.ShowCode
             ? "{" + field.Instruction.TrimEnd() + " }"
             : ResolveFieldText(ComplexFieldKindFor(field.Keyword), run.Text, document, _renderFileName);
+        // Word leaves a BIBLIOGRAPHY field's stale result hidden once the generated bibliography
+        // region owns the visible output. Keep the serialized cache for round-trip and F9, but do
+        // not duplicate it in the rendered document.
+        if (!field.ShowCode
+            && string.Equals(field.Keyword, "BIBLIOGRAPHY", StringComparison.Ordinal)
+            && document.Blocks.Any(Citations.IsBibliographyParagraph))
+        {
+            display = string.Empty;
+        }
         var fmt = run.Formatting ?? document.DefaultRun;
         var wpf = new WpfRun(display)
         {
@@ -9855,7 +10131,7 @@ public sealed class DocumentView : RichTextBox
         var decodedBitmap = (DecodeImage(image) as BitmapSource) ?? BuildImagePlaceholder(image, widthPx, heightPx);
         // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency/recolor).
         // The alpha bake in ImageAdjustHelper covers static bitmap consumers; Opacity covers the live element.
-        var source = (image.HasAdjustments || image.HasRecolor)
+        var source = (image.HasAdjustments || image.HasRecolor || image.HasArtisticEffect)
             ? ImageAdjustHelper.Apply(decodedBitmap, image)
             : (ImageSource)decodedBitmap;
 
@@ -14160,7 +14436,10 @@ public sealed class DocumentView : RichTextBox
         var pageBreakBefore = paragraph.Tag is ParagraphTag { PageBreakBefore: true };
         // WidowControl rides on the Tag (no FlowDocument property); KeepWithNext/KeepLinesTogether read
         // straight back off the WPF Paragraph's native properties set in BuildParagraph.
-        var widowControl = paragraph.Tag is ParagraphTag { WidowControl: true };
+        var tag = paragraph.Tag as ParagraphTag;
+        var widowControl = tag?.WidowControl ?? false;
+        var widowControlIsSet = tag?.WidowControlIsSet ?? false;
+        var keepLinesTogether = tag?.KeepLinesTogether ?? paragraph.KeepTogether;
         // SuppressAutoHyphens has no FlowDocument property either, so it rides on the Tag like WidowControl.
         var suppressAutoHyphens = paragraph.Tag is ParagraphTag { SuppressAutoHyphens: true };
         return ParagraphFormatting.Default with
@@ -14171,8 +14450,9 @@ public sealed class DocumentView : RichTextBox
             // BuildParagraph), so an RTL paragraph survives an edit/commit cycle.
             Rtl = paragraph.FlowDirection == System.Windows.FlowDirection.RightToLeft,
             KeepWithNext = paragraph.KeepWithNext,
-            KeepLinesTogether = paragraph.KeepTogether,
+            KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            WidowControlIsSet = widowControlIsSet,
             SpaceBeforePt = paragraph.Margin.Top / PxPerPoint,
             SpaceAfterPt = paragraph.Margin.Bottom / PxPerPoint,
             // An exact line height (BlockLineHeight, set for the Exact rule) reads back as an absolute

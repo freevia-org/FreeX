@@ -134,6 +134,54 @@ public sealed class PptxPackageRetentionTests
             .Equal(ExpectedCorpusDeckNames.Order(StringComparer.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void HiddenSlides_RoundTripShowAttributeWithoutSynthesizingVisibleState()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Add(new Slide());
+        presentation.Slides.Add(new Slide());
+        presentation.Slides.Add(new Slide());
+
+        using var sourceStream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, sourceStream);
+        var packageBytes = sourceStream.ToArray();
+        using var editableStream = new MemoryStream();
+        editableStream.Write(packageBytes);
+        editableStream.Position = 0;
+        using (var archive = new ZipArchive(editableStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var firstSlide = LoadXml(archive, "ppt/slides/slide1.xml");
+            firstSlide.Root!.SetAttributeValue("show", "0");
+            WriteXml(archive, "ppt/slides/slide1.xml", firstSlide);
+
+            var secondSlide = LoadXml(archive, "ppt/slides/slide2.xml");
+            secondSlide.Root!.SetAttributeValue("show", "false");
+            WriteXml(archive, "ppt/slides/slide2.xml", secondSlide);
+
+            var thirdSlide = LoadXml(archive, "ppt/slides/slide3.xml");
+            thirdSlide.Root!.SetAttributeValue("show", "1");
+            WriteXml(archive, "ppt/slides/slide3.xml", thirdSlide);
+        }
+        packageBytes = editableStream.ToArray();
+
+        var loaded = PptxPackageReader.Read(new MemoryStream(packageBytes));
+        loaded.Slides.Select(slide => slide.IsHidden)
+            .Should().Equal(true, true, false, false);
+
+        using var savedStream = new MemoryStream();
+        PptxPackageWriter.Write(loaded, savedStream);
+        var savedBytes = savedStream.ToArray();
+        using var savedArchive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read);
+        LoadXml(savedArchive, "ppt/slides/slide1.xml").Root!.Attribute("show")!.Value.Should().Be("0");
+        LoadXml(savedArchive, "ppt/slides/slide2.xml").Root!.Attribute("show")!.Value.Should().Be("0");
+        LoadXml(savedArchive, "ppt/slides/slide3.xml").Root!.Attribute("show").Should().BeNull();
+        LoadXml(savedArchive, "ppt/slides/slide4.xml").Root!.Attribute("show").Should().BeNull();
+
+        var reopened = PptxPackageReader.Read(new MemoryStream(savedBytes));
+        reopened.Slides.Select(slide => slide.IsHidden)
+            .Should().Equal(true, true, false, false);
+    }
+
     [Theory]
     [MemberData(nameof(CorpusDecks))]
     public void RenderCompareCorpusDeck_OpenSaveReopen_RetainsSharedPackageContract(string deckName)
@@ -237,6 +285,18 @@ public sealed class PptxPackageRetentionTests
         AssertPreservedContentTypes(sourceArchive, savedArchive, deckName);
         AssertPreservedRelationships(sourceArchive, savedArchive, deckName);
         AssertCommentsNotesPackageParts(savedArchive);
+    }
+
+    [Fact]
+    public void RenderCompareCommentsNotesCorpus_ExplicitZeroTitleTransform_IsRetainedAsHiddenPlaceholderSignal()
+    {
+        var loaded = PptxPackageReader.Read(Path.Combine(FindCorpusDirectory(), "21-comments-notes.pptx"));
+        var title = loaded.Slides[1].Shapes.Single(shape => shape.Name == "Title 1");
+
+        title.Placeholder!.Type.Should().Be(PlaceholderType.Title);
+        title.ExtentCxEmu.Should().Be(0);
+        title.ExtentCyEmu.Should().Be(0);
+        title.HasExplicitZeroExtentTransform.Should().BeTrue();
     }
 
     [Fact]

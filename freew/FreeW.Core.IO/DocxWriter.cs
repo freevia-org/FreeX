@@ -1285,7 +1285,10 @@ public static class DocxWriter
         var shapeId = watermarkImage is null ? "PowerPlusWaterMarkObject" : "PowerPlusPictureWaterMarkObject";
         var shapeSize = watermarkImage is null
             ? "width:468pt;height:117pt"
-            : "width:468pt;height:281pt";
+            : options.NativeVmlPictureWidthPt is > 0 and var pictureWidthPt
+                && options.NativeVmlPictureHeightPt is > 0 and var pictureHeightPt
+                ? $"width:{FormatPt(pictureWidthPt)}pt;height:{FormatPt(pictureHeightPt)}pt"
+                : "width:468pt;height:281pt";
 
         var shapeType = new XElement(V + "shapetype",
             new XAttribute("id", "_x0000_t136"),
@@ -1318,7 +1321,7 @@ public static class DocxWriter
                     new XAttribute("position", "#10800,bottomRight"),
                     new XAttribute("xrange", "6629,14971"))),
             new XElement(O + "lock",
-                new XAttribute("ext", "edit"),
+                new XAttribute(V + "ext", "edit"),
                 new XAttribute("text", "t"),
                 new XAttribute("shapetype", "t")));
 
@@ -1823,14 +1826,29 @@ public static class DocxWriter
 
         if (table.Formatting.Borders)
         {
-            XElement Border(string name) => new(W + name,
-                new XAttribute(W + "val", "single"),
-                new XAttribute(W + "sz", 4),
+            XElement Border(string name, TableBorderEdge? edge) => new(W + name,
+                new XAttribute(W + "val", BorderLineStyles.ToToken(edge?.Style ?? BorderLineStyle.Single)),
+                new XAttribute(W + "sz", (int)Math.Round((edge?.WidthPt ?? 0.5) * 8)),
                 new XAttribute(W + "space", 0),
-                new XAttribute(W + "color", "auto"));
-            tblPr.Add(new XElement(W + "tblBorders",
-                Border("top"), Border("left"), Border("bottom"), Border("right"),
-                Border("insideH"), Border("insideV")));
+                new XAttribute(W + "color", edge?.ColorToken ?? "auto"));
+            var borders = table.Borders;
+            var tableBorders = new XElement(W + "tblBorders");
+            if (borders is null)
+            {
+                tableBorders.Add(
+                    Border("top", null), Border("left", null), Border("bottom", null), Border("right", null),
+                    Border("insideH", null), Border("insideV", null));
+            }
+            else
+            {
+                if (borders.Top is { } top) tableBorders.Add(Border("top", top));
+                if (borders.Left is { } left) tableBorders.Add(Border("left", left));
+                if (borders.Bottom is { } bottom) tableBorders.Add(Border("bottom", bottom));
+                if (borders.Right is { } right) tableBorders.Add(Border("right", right));
+                if (borders.InsideHorizontal is { } insideHorizontal) tableBorders.Add(Border("insideH", insideHorizontal));
+                if (borders.InsideVertical is { } insideVertical) tableBorders.Add(Border("insideV", insideVertical));
+            }
+            tblPr.Add(tableBorders);
         }
         else
         {
@@ -2348,9 +2366,11 @@ public static class DocxWriter
         // and before widowControl in CT_PPr order. Size still lives on the leading run's rPr.
         if (paragraph.DropCap is { } dropCap)
             pPr.Add(BuildDropCapFrameProperties(dropCap));
-        // Widow/orphan control (w:widowControl); only emitted when enabled (FreeW defaults it off).
+        // Widow/orphan control: preserve explicit off independently from Word's omitted/default-on form.
         if (f.WidowControl)
             pPr.Add(new XElement(W + "widowControl"));
+        else if (f.WidowControlIsSet)
+            pPr.Add(new XElement(W + "widowControl", new XAttribute(W + "val", "0")));
         // numPr — list numbering (CT_PPrBase order: after widowControl, before suppressLineNumbers).
         if (f.ListKind != ListKind.None)
         {
@@ -5446,8 +5466,8 @@ public static class DocxWriter
 
     /// <summary>
     /// Builds a SmartArt QUICKSTYLE part (word/diagrams/quickStyleN.xml — dgm:styleDef).
-    /// Persists the FreeW <see cref="SmartArt.StyleId"/> as a <c>freewStyleId</c> extension attribute so
-    /// the reader can recover the exact catalog entry on round-trip.
+    /// Persists the FreeW <see cref="SmartArt.StyleId"/> in a schema-valid extension list so the reader can
+    /// recover the exact catalog entry on round-trip.
     /// </summary>
     private static readonly string[] SmartArtGalleryStyleLabels =
     [
@@ -5468,6 +5488,7 @@ public static class DocxWriter
 
     private static XDocument BuildDiagramQuickStyle(SmartArt smartArt)
     {
+        XNamespace freew = "http://schemas.freew.dev/smartart-gallery/2026";
         var labels = SmartArtGalleryStyleLabels;
         var usesFlatGallery = false;
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/quickstyle/";
@@ -5516,7 +5537,6 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute("uniqueId", uniqueId),
-            smartArt.StyleId is null ? null : new XAttribute("freewStyleId", smartArt.StyleId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
             usesFlatGallery
@@ -5526,17 +5546,24 @@ public static class DocxWriter
             new XElement(Dgm + "scene3d",
                 new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
                 new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
-            styleLabels);
+            styleLabels,
+            smartArt.StyleId is null
+                ? null
+                : new XElement(Dgm + "extLst",
+                    new XElement(A + "ext",
+                        new XAttribute("uri", "{FW-SmartArtGallery-2026}"),
+                        new XElement(freew + "style", new XAttribute("id", smartArt.StyleId)))));
         return new XDocument(elem);
     }
 
     /// <summary>
     /// Builds a SmartArt COLORS part (word/diagrams/colorsN.xml — dgm:colorsDef).
-    /// Persists the FreeW <see cref="SmartArt.ColorSchemeId"/> as a <c>freewColorId</c> extension attribute
-    /// so the reader can recover the exact catalog entry on round-trip.
+    /// Persists the FreeW <see cref="SmartArt.ColorSchemeId"/> in a schema-valid extension list so the reader
+    /// can recover the exact catalog entry on round-trip.
     /// </summary>
     private static XDocument BuildDiagramColors(SmartArt smartArt)
     {
+        XNamespace freew = "http://schemas.freew.dev/smartart-gallery/2026";
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/colors/";
         var colorId = smartArt.ColorSchemeId ?? "accent1_2";
         var uniqueId = BaseUrn + SmartArtColorGallerySuffix(smartArt);
@@ -5698,14 +5725,19 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute("uniqueId", uniqueId),
-            smartArt.ColorSchemeId is null ? null : new XAttribute("freewColorId", smartArt.ColorSchemeId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
             usesFlatGallery
                 ? new XElement(Dgm + "catLst")
                 : new XElement(Dgm + "catLst",
                     new XElement(Dgm + "cat", new XAttribute("type", category), new XAttribute("pri", 11200))),
-            styleLabels);
+            styleLabels,
+            smartArt.ColorSchemeId is null
+                ? null
+                : new XElement(Dgm + "extLst",
+                    new XElement(A + "ext",
+                        new XAttribute("uri", "{FW-SmartArtGallery-2026}"),
+                        new XElement(freew + "colorScheme", new XAttribute("id", smartArt.ColorSchemeId)))));
         return new XDocument(elem);
     }
 

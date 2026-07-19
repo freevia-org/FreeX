@@ -189,6 +189,11 @@ public static class SlideCompositor
         int slideIndex = 0,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
+        // An explicit zero-sized slide placeholder is hidden in PowerPoint. Do not let normal
+        // placeholder inheritance turn its authored zero transform into visible layout geometry.
+        if (shape.HasExplicitZeroExtentTransform && shape.Placeholder is not null)
+            return;
+
         // Resolve anchor (placeholder inheritance).
         var anchor = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
         var boundsDip = AnchorToBounds(anchor);
@@ -294,7 +299,8 @@ public static class SlideCompositor
 
         bool hasBevel = fx.BevelTop is not null || fx.BevelBottom is not null;
         if (!fx.HasOuterShadow && !fx.HasGlow && !fx.HasSoftEdge
-            && !hasBevel && fx.ExtrusionHeightEmu == 0 && fx.ContourWidthEmu == 0 && fx.Scene3d is null)
+            && !hasBevel && fx.ExtrusionHeightEmu == 0 && fx.ContourWidthEmu == 0
+            && string.IsNullOrEmpty(fx.PrstMaterial) && fx.Scene3d is null)
             return null;
 
         return new ResolvedShapeEffects
@@ -329,6 +335,7 @@ public static class SlideCompositor
             } : null,
             ExtrusionDepthDip = fx.ExtrusionHeightEmu / EmuPerDip,
             ExtrusionColor    = fx.ExtrusionColor,
+            PrstMaterial      = fx.PrstMaterial,
             ContourWidthDip   = fx.ContourWidthEmu    / EmuPerDip,
             ContourColor      = fx.ContourColor,
             LightDirDeg       = ResolveLightDir(fx.Scene3d),
@@ -960,7 +967,7 @@ public static class SlideCompositor
             {
                 var translated = SlideCloner.CloneShape(fallback);
                 TranslateCachedSmartArtShape(translated, shape.OffsetXEmu, shape.OffsetYEmu);
-                ApplyCachedSmartArtStyle(translated, smart.Data, theme);
+                ApplyCachedSmartArtStyle(translated, smart, theme);
                 ComposeShape(translated, slide, presentation, theme, ops, effectiveClrMap: effectiveClrMap);
             }
         }
@@ -994,9 +1001,28 @@ public static class SlideCompositor
 
     private static void ApplyCachedSmartArtStyle(
         SlideShape shape,
-        SmartArtData? data,
+        SmartArtShape smart,
         PresentationTheme theme)
     {
+        var data = smart.Data;
+
+        // PowerPoint's simple1/accent1_2 hierarchy cache uses a distinct
+        // connector color from the generic accent1 shade. Keep this correction
+        // on the cached-drawing path because hierarchy3 is intentionally not a
+        // live-layout admission yet.
+        if (IsSimpleAccentHierarchy(smart)
+            && shape.AutoShapeKind == DrawingShapeKind.Rectangle
+            && shape.Outline is ShapeOutline.Visible line)
+        {
+            var connectorColor = new ThemeAwareColor(SrgbColor.FromRgb(0x0E4B66));
+            shape.Outline = new ShapeOutline.Visible(
+                connectorColor,
+                line.WidthPt,
+                line.Dash,
+                line.BeginLineEnd,
+                line.EndLineEnd);
+        }
+
         // IncreasingCircleProcess is outside the bounded live-layout set. Its
         // cached background ellipses use the accent1 tint from the XML cache,
         // while PowerPoint renders the bgShp role as the neutral Office gray.
@@ -1022,8 +1048,13 @@ public static class SlideCompositor
         }
 
         foreach (var child in shape.Children)
-            ApplyCachedSmartArtStyle(child, data, theme);
+            ApplyCachedSmartArtStyle(child, smart, theme);
     }
+
+    private static bool IsSimpleAccentHierarchy(SmartArtShape smart) =>
+        smart.Data?.LayoutUniqueId.EndsWith("/hierarchy3", StringComparison.OrdinalIgnoreCase) == true
+        && smart.QuickStyle?.UniqueId.EndsWith("/quickstyle/simple1", StringComparison.OrdinalIgnoreCase) == true
+        && smart.Colors?.UniqueId.EndsWith("/colors/accent1_2", StringComparison.OrdinalIgnoreCase) == true;
 
     private static SrgbColor ResolveSmartArtNeutralBackground(PresentationTheme theme)
     {

@@ -127,6 +127,33 @@ public class TableStyleRoundTripTests
     }
 
     [Fact]
+    public void RoundTrip_ExplicitTableBorders_PreservesEdgePayloadAndAbsentEdges()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(2, 2);
+        table.Borders = new TableBorders
+        {
+            Top = new TableBorderEdge(BorderLineStyle.Double, "1F4E79", 1.5),
+            Left = new TableBorderEdge(BorderLineStyle.Thick, "auto", 2.0),
+            InsideHorizontal = new TableBorderEdge(BorderLineStyle.Dotted, "A5A5A5", 0.5)
+        };
+        doc.Blocks.Add(table);
+
+        var xml = DocumentXml(doc);
+        var borders = xml.Descendants(W + "tblBorders").Single();
+        borders.Elements().Select(edge => edge.Name.LocalName).Should().Equal("top", "left", "insideH");
+        borders.Element(W + "top")!.Attribute(W + "val")!.Value.Should().Be("double");
+        borders.Element(W + "top")!.Attribute(W + "sz")!.Value.Should().Be("12");
+        borders.Element(W + "top")!.Attribute(W + "color")!.Value.Should().Be("1F4E79");
+        borders.Element(W + "left")!.Attribute(W + "color")!.Value.Should().Be("auto");
+
+        var recovered = RoundTrip(doc).Blocks.OfType<Table>().Single();
+        recovered.Borders.Should().Be(table.Borders);
+        recovered.Formatting.Borders.Should().BeTrue();
+    }
+
+    [Fact]
     public void Write_TableWithBorderedStyle_EmitsTblBordersInStyleDefinition()
     {
         var doc = MakeDocWithStyledTable("TableGrid");

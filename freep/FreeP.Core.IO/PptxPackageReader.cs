@@ -917,6 +917,9 @@ public static class PptxPackageReader
         var xml = OpcXml.TryLoadXml(archive, slidePath);
         if (xml?.Root is null) return slide;
 
+        slide.IsHidden = xml.Root.Attribute("show")?.Value is { } show &&
+            (show == "0" || string.Equals(show, "false", StringComparison.OrdinalIgnoreCase));
+
         // Layout via rels
         var slideRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(slidePath));
         var layoutTarget = OpcRelationships.FirstTargetByType(slideRels, SlideLayoutRelType);
@@ -3380,8 +3383,11 @@ public static class PptxPackageReader
         {
             shape.OffsetXEmu = ParseLong(xfrm.Element(A + "off")?.Attribute("x")?.Value);
             shape.OffsetYEmu = ParseLong(xfrm.Element(A + "off")?.Attribute("y")?.Value);
-            shape.ExtentCxEmu = ParseLong(xfrm.Element(A + "ext")?.Attribute("cx")?.Value);
-            shape.ExtentCyEmu = ParseLong(xfrm.Element(A + "ext")?.Attribute("cy")?.Value);
+            var ext = xfrm.Element(A + "ext");
+            shape.ExtentCxEmu = ParseLong(ext?.Attribute("cx")?.Value);
+            shape.ExtentCyEmu = ParseLong(ext?.Attribute("cy")?.Value);
+            shape.HasExplicitZeroExtentTransform = ext is not null &&
+                shape.ExtentCxEmu == 0 && shape.ExtentCyEmu == 0;
 
             if (long.TryParse(xfrm.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotRaw))
                 shape.RotationDeg = rotRaw / 60000.0;

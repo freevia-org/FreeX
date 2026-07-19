@@ -1716,7 +1716,8 @@ public static class MailMerge
         var clone = new Table
         {
             BlockContentControl = source.BlockContentControl,
-            Formatting = source.Formatting
+            Formatting = source.Formatting,
+            Borders = source.Borders
         };
         clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
         foreach (var sourceRow in source.Rows)
@@ -1791,7 +1792,8 @@ public static class MailMerge
         var clone = new Table
         {
             BlockContentControl = source.BlockContentControl,
-            Formatting = source.Formatting
+            Formatting = source.Formatting,
+            Borders = source.Borders
         };
         clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
         foreach (var sourceRow in source.Rows)

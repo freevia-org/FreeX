@@ -561,6 +561,39 @@ public sealed class SlideCompositorTests
         shapeOp.BoundsDip.Width.Should().BeApproximately(8229600 / 9525.0, 0.1);
     }
 
+    [Fact]
+    public void Compose_ExplicitZeroExtentPlaceholder_IsHiddenInsteadOfInheritingLayoutGeometry()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 8229600,
+            ExtentCyEmu = 1143000
+        });
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            HasExplicitZeroExtentTransform = true,
+            Text = "Hidden title"
+        });
+        p.Slides.Add(slide);
+
+        SlideCompositor.Compose(p, slide).OfType<DrawOp.Shape>().Should().BeEmpty();
+    }
+
     // â”€â”€â”€ Theme color resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]

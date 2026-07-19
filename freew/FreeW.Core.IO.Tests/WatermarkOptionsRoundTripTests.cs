@@ -51,6 +51,69 @@ public class WatermarkOptionsRoundTripTests
         return reader.ReadToEnd();
     }
 
+    private static TextDocument ReadWithoutWatermarkCustomProperties(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+            zip.GetEntry("docProps/custom.xml")!.Delete();
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
+    private static TextDocument ReadWithMutatedVmlText(TextDocument document, string replacementText)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            xml.Descendants(vml + "textpath").Last().SetAttributeValue("string", replacementText);
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
+    private static TextDocument ReadWithVmlPictureImageData(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            zip.GetEntry("docProps/custom.xml")!.Delete();
+
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            var rel = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+            var shape = xml.Descendants(vml + "shape")
+                .Single(shape => shape.Attribute("id")?.Value == "PowerPlusPictureWaterMarkObject");
+            shape.Element(vml + "fill")!.SetAttributeValue(rel + "id", null);
+            shape.Add(new XElement(vml + "imagedata", new XAttribute(rel + "id", "rIdWatermarkImage")));
+
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     // ── WatermarkOptions full round-trip ──────────────────────────────────
 
     [Fact]
@@ -178,6 +241,87 @@ public class WatermarkOptionsRoundTripTests
     }
 
     [Fact]
+    public void NativeVmlTextWatermark_ImportsWhenFreeWCustomPropertiesAreAbsent()
+    {
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions("NATIVE WORD")
+        {
+            FontFamily = "Arial",
+            FontColorHex = "#123456",
+            Layout = WatermarkLayout.Horizontal,
+            Opacity = 0.5
+        };
+
+        var loaded = ReadWithoutWatermarkCustomProperties(doc);
+
+        var watermark = loaded.Page.WatermarkOptions;
+        watermark.Should().NotBeNull();
+        watermark!.Text.Should().Be("NATIVE WORD");
+        watermark.FontFamily.Should().Be("Arial");
+        watermark.FontColorHex.Should().Be("#123456");
+        watermark.Layout.Should().Be(WatermarkLayout.Horizontal);
+        watermark.Opacity.Should().BeApproximately(0.5, 0.001);
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_DoesNotOverrideFreeWCustomProperties()
+    {
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions("AUTHORITATIVE");
+
+        var loaded = ReadWithMutatedVmlText(doc, "STALE VML");
+
+        loaded.Page.WatermarkOptions!.Text.Should().Be("AUTHORITATIVE");
+    }
+
+    [Fact]
+    public void NativeVmlPictureWatermark_ImportsHeaderLocalImageWhenFreeWCustomPropertiesAreAbsent()
+    {
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = image,
+            Layout = WatermarkLayout.Horizontal,
+            Opacity = 0.65
+        };
+
+        var loaded = ReadWithoutWatermarkCustomProperties(doc);
+
+        var watermark = loaded.Page.WatermarkOptions;
+        watermark.Should().NotBeNull();
+        watermark!.IsPicture.Should().BeTrue();
+        watermark.ImageBytes.Should().Equal(image);
+        watermark.NativeVmlPictureWidthPt.Should().BeApproximately(468, 0.001);
+        watermark.NativeVmlPictureHeightPt.Should().BeApproximately(281, 0.001);
+        watermark.Layout.Should().Be(WatermarkLayout.Horizontal);
+        watermark.Opacity.Should().BeApproximately(0.65, 0.001);
+    }
+
+    [Fact]
+    public void NativeVmlPictureWatermark_ImportsImageDataRelationshipWhenFillDoesNotOwnIt()
+    {
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = image,
+            Layout = WatermarkLayout.Diagonal,
+            Opacity = 0.4
+        };
+
+        var loaded = ReadWithVmlPictureImageData(doc);
+
+        var watermark = loaded.Page.WatermarkOptions;
+        watermark.Should().NotBeNull();
+        watermark!.ImageBytes.Should().Equal(image);
+        watermark.Layout.Should().Be(WatermarkLayout.Diagonal);
+        watermark.Opacity.Should().BeApproximately(0.4, 0.001);
+    }
+
+    [Fact]
     public void WatermarkOptions_DoesNotConsumeHeaderParagraph()
     {
         var doc = new TextDocument
@@ -224,6 +368,33 @@ public class WatermarkOptionsRoundTripTests
         stream.Position = 0;
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
         zip.GetEntry("word/media/header1_watermark1.png").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void PictureWatermark_NativeVmlSize_RoundTripsThroughTheHeaderPayload()
+    {
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = image,
+            NativeVmlPictureWidthPt = 512.5,
+            NativeVmlPictureHeightPt = 240.25
+        };
+
+        var xml = ReadHeaderXml(doc);
+        var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+        var shape = xml.Descendants(vml + "shape")
+            .Single(shape => shape.Attribute("id")?.Value == "PowerPlusPictureWaterMarkObject");
+
+        shape.Attribute("style")!.Value.Should().Contain("width:512.5pt;height:240.25pt");
+
+        var loaded = RoundTrip(doc).Page.WatermarkOptions;
+        loaded.Should().NotBeNull();
+        loaded!.ImageBytes.Should().Equal(image);
+        loaded.NativeVmlPictureWidthPt.Should().BeApproximately(512.5, 0.001);
+        loaded.NativeVmlPictureHeightPt.Should().BeApproximately(240.25, 0.001);
     }
 
     [Fact]

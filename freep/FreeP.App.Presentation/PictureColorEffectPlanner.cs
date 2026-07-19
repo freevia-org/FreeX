@@ -36,6 +36,10 @@ public static class PictureColorEffectPlanner
         bool doLuminance = plan.Brightness.HasValue || plan.Contrast.HasValue;
         double brightness = plan.Brightness ?? 0;
         double contrast = plan.Contrast ?? 0;
+        // DrawingML's combined lum transform keeps brightness additive, but the
+        // contrast pass slightly scales that offset.  Applying the adjustment
+        // after the centered contrast transform matches PowerPoint's raster path.
+        double combinedBrightness = brightness * (1 + contrast / 2);
 
         for (int i = 0; i + 3 < pixels.Length; i += 4)
         {
@@ -51,23 +55,23 @@ public static class PictureColorEffectPlanner
 
             if (doLuminance)
             {
-                r = Math.Clamp(r + brightness, 0, 1);
-                g = Math.Clamp(g + brightness, 0, 1);
-                b = Math.Clamp(b + brightness, 0, 1);
-
                 if (contrast > 0)
                 {
                     double denominator = Math.Max(1.0 - contrast, 0.001);
-                    r = Math.Clamp((r - 0.5) / denominator + 0.5, 0, 1);
-                    g = Math.Clamp((g - 0.5) / denominator + 0.5, 0, 1);
-                    b = Math.Clamp((b - 0.5) / denominator + 0.5, 0, 1);
+                    r = (r - 0.5) / denominator + 0.5;
+                    g = (g - 0.5) / denominator + 0.5;
+                    b = (b - 0.5) / denominator + 0.5;
                 }
                 else if (contrast < 0)
                 {
-                    r = Math.Clamp((r - 0.5) * (1 + contrast) + 0.5, 0, 1);
-                    g = Math.Clamp((g - 0.5) * (1 + contrast) + 0.5, 0, 1);
-                    b = Math.Clamp((b - 0.5) * (1 + contrast) + 0.5, 0, 1);
+                    r = (r - 0.5) * (1 + contrast) + 0.5;
+                    g = (g - 0.5) * (1 + contrast) + 0.5;
+                    b = (b - 0.5) * (1 + contrast) + 0.5;
                 }
+
+                r = Math.Clamp(r + combinedBrightness, 0, 1);
+                g = Math.Clamp(g + combinedBrightness, 0, 1);
+                b = Math.Clamp(b + combinedBrightness, 0, 1);
             }
 
             if (doBiLevel)

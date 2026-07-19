@@ -155,13 +155,19 @@ public sealed class FidelityRenderCompositeTests
             using (var dc = bv.RenderOpen())
             {
                 var bc  = ParseHexColor(pb.ColorHex, Colors.Black);
-                var pen = new Pen(new SolidColorBrush(bc), Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0)));
                 var edgeInset = Math.Min(PageLayout.PointsToDip(24), Math.Min(pixW, pixH) / 4.0);
-                double ins = edgeInset + pen.Thickness / 2;
-                dc.DrawRectangle(null, pen,
-                    new Rect(ins, ins,
-                        Math.Max(0, pixW - 2 * ins),
-                        Math.Max(0, pixH - 2 * ins)));
+                var borderWidth = Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0));
+                if (pb.LineStyle == BorderLineStyle.Double)
+                {
+                    var pen = new Pen(new SolidColorBrush(bc), borderWidth * 0.75);
+                    DrawPageBorderFrame(dc, pen, edgeInset, pixW, pixH);
+                    DrawPageBorderFrame(dc, pen, edgeInset + borderWidth * (4.0 / 3.0), pixW, pixH);
+                }
+                else
+                {
+                    var pen = new Pen(new SolidColorBrush(bc), borderWidth);
+                    DrawPageBorderFrame(dc, pen, edgeInset, pixW, pixH);
+                }
             }
             bmp.Render(bv);
         }
@@ -312,6 +318,15 @@ public sealed class FidelityRenderCompositeTests
         catch { return fallback; }
     }
 
+    private static void DrawPageBorderFrame(DrawingContext drawingContext, Pen pen, double edgeInset, double width, double height)
+    {
+        var inset = edgeInset + pen.Thickness / 2;
+        drawingContext.DrawRectangle(null, pen,
+            new Rect(inset, inset,
+                Math.Max(0, width - 2 * inset),
+                Math.Max(0, height - 2 * inset)));
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════════════════════
     // Layer 4: Floating object
     // ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -408,6 +423,27 @@ public sealed class FidelityRenderCompositeTests
         HasNonWhitePixelsInRegion(pixels, stride,
                 new Rect(10, edgeInset - 3, bmp.PixelWidth - 20, 8))
             .Should().BeTrue("page border must draw at Word's 24pt page-edge inset");
+    }
+
+    [StaFact]
+    public void CompositeRender_DoublePageBorder_RendersSeparatedStrokes()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.PageBorder = new PageBorder("#000000", 2.25) { LineStyle = BorderLineStyle.Double };
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Double border test"));
+
+        var bmp = RenderComposite(doc);
+        var pixels = GetPixels(bmp);
+        int stride = bmp.PixelWidth * 4;
+        double edgeInset = PageLayout.PointsToDip(24);
+
+        HasNonWhitePixelsInRegion(pixels, stride, new Rect(100, edgeInset - 1, 80, 3))
+            .Should().BeTrue();
+        HasNonWhitePixelsInRegion(pixels, stride, new Rect(100, edgeInset + 3, 80, 1))
+            .Should().BeFalse("double borders preserve a clear gap between their two strokes");
+        HasNonWhitePixelsInRegion(pixels, stride, new Rect(100, edgeInset + 6, 80, 3))
+            .Should().BeTrue();
     }
 
     // ════════════════════════════════════════════════════════════════════════════════════════════════

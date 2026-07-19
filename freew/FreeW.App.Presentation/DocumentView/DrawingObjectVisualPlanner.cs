@@ -391,7 +391,7 @@ public static class DrawingObjectVisualPlanner
         var normalizedTotalWidth = Math.Max(1, totalWidth);
         var currentX = boundsWidthDip / 2 - halfSpan;
         var archDepth = Math.Min(boundsHeightDip * 0.28, Math.Max(3, totalWidth * 0.12));
-        var waveAmplitude = Math.Min(boundsHeightDip * 0.16, Math.Max(2, totalWidth * 0.055));
+        var waveAmplitude = Math.Min(boundsHeightDip * 0.08, Math.Max(2, totalWidth * 0.0275));
         var placements = new List<DrawingObjectWordArtGlyphPlacementPlan>(glyphWidths.Count);
 
         foreach (var width in glyphWidths)

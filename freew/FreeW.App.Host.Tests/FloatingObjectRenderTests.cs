@@ -178,8 +178,11 @@ public sealed class FloatingObjectRenderTests
             Effects = new ShapeEffectLst
             {
                 HasShadow = true,
-                ShadowColorHex = "112233",
-                ShadowAlpha = 50000
+                ShadowColorHex = "000000",
+                ShadowAlpha = 35000,
+                ShadowBlurRad = 50800,
+                ShadowDist = 38100,
+                ShadowDir = 2700000
             },
             Placement = new FloatingPlacement
             {
@@ -206,8 +209,9 @@ public sealed class FloatingObjectRenderTests
         ellipse.Stroke.Should().BeOfType<SolidColorBrush>()
             .Which.Color.Should().Be(Color.FromRgb(0x00, 0xAA, 0x11));
         ellipse.StrokeThickness.Should().BeApproximately(2 * 96.0 / 72.0, 0.01);
-        ellipse.Effect.Should().BeOfType<DropShadowEffect>()
-            .Which.Color.Should().Be(Color.FromRgb(0x11, 0x22, 0x33));
+        var effect = ellipse.Effect.Should().BeOfType<DropShadowEffect>().Subject;
+        effect.Color.Should().Be(Colors.Black);
+        effect.Direction.Should().Be(315);
     }
 
     [StaFact]
@@ -305,7 +309,7 @@ public sealed class FloatingObjectRenderTests
     [StaFact]
     public void FloatingOverlay_RendersWarpedWordArtWithContrastingTextAndFill()
     {
-        var wordArt = new WordArt("Warped FX", WordArtStyle.GlowBlue, 28)
+        var wordArt = new WordArt("FreeW CONFIDENTIAL", WordArtStyle.GlowBlue, 28)
         {
             Warp = WordArtWarp.Wave1,
             Placement = new FloatingPlacement
@@ -338,8 +342,90 @@ public sealed class FloatingObjectRenderTests
         glyphs.Should().HaveCount(wordArt.Text.Length);
         glyphs.All(glyph => glyph.Foreground is SolidColorBrush brush && brush.Color == Colors.White)
             .Should().BeTrue();
-        glyphs.Any(glyph => glyph.RenderTransform is RotateTransform rotation && Math.Abs(rotation.Angle) > 0.1)
+        glyphs.All(glyph => glyph.RenderTransform is TransformGroup).Should().BeTrue();
+        var transforms = glyphs.Select(glyph => (TransformGroup)glyph.RenderTransform).ToList();
+        transforms.All(transform => transform.Children.OfType<ScaleTransform>().Single().ScaleX > 1).Should().BeTrue();
+        transforms.Any(transform => transform.Children.OfType<RotateTransform>()
+                .Any(rotation => Math.Abs(rotation.Angle) > 0.1))
             .Should().BeTrue();
+    }
+
+    [StaFact]
+    public void FloatingOverlay_UsesOuterOnlyGlowLayerForImportedWave1Signature()
+    {
+        var wordArt = new WordArt("FreeW CONFIDENTIAL", WordArtStyle.GlowBlue, 32)
+        {
+            Warp = WordArtWarp.Wave1,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 4
+            }
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Canvas>().Single();
+        root.Measure(new Size(476, 68));
+        root.Arrange(new Rect(0, 0, 476, 68));
+        root.UpdateLayout();
+
+        root.Effect.Should().BeNull();
+        root.Children.OfType<Border>().Should().HaveCount(3);
+        var glowRing = root.Children.OfType<Border>()
+            .Single(border => border.Effect is null && border.Opacity == 0.6);
+        ((SolidColorBrush)glowRing.Background).Color.Should().Be(Color.FromRgb(0x2E, 0x75, 0xB6));
+        glowRing.Width.Should().BeApproximately(484.16, 0.01);
+        glowRing.Height.Should().BeApproximately(76.2667, 0.01);
+        root.Children.OfType<Border>().Single(border => border.Effect is not null)
+            .Effect.Should().BeOfType<DropShadowEffect>();
+        root.Children.OfType<TextBlock>().Should().HaveCount(wordArt.Text.Length);
+    }
+
+    [StaFact]
+    public void FloatingOverlay_UsesOuterOnlyGlowLayerForImportedFreeW30PointWave1Signature()
+    {
+        var wordArt = new WordArt("FreeW", WordArtStyle.GlowBlue, 30)
+        {
+            Warp = WordArtWarp.Wave1,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 300,
+                VerticalOffsetPt = 30,
+                ZOrderIndex = 8
+            }
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Canvas>().Single();
+        root.Measure(new Size(124, 64));
+        root.Arrange(new Rect(0, 0, 124, 64));
+        root.UpdateLayout();
+
+        root.Effect.Should().BeNull();
+        root.Children.OfType<Border>().Should().HaveCount(3);
+        root.Children.OfType<Border>().Single(border => border.Effect is null && border.Opacity == 0.6)
+            .Background.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromRgb(0x2E, 0x75, 0xB6));
+        root.Children.OfType<TextBlock>().Should().HaveCount(wordArt.Text.Length);
     }
 
     [StaFact]
@@ -437,6 +523,8 @@ public sealed class FloatingObjectRenderTests
         view.SetFloatingCanvas(canvas);
 
         var groupRoot = canvas.Children.OfType<Border>().Single(border => ReferenceEquals(border.Tag, group));
+        groupRoot.BorderBrush.Should().BeNull("unselected groups have no authored outline");
+        groupRoot.BorderThickness.Should().Be(new Thickness(0), "the group frame is selection-only chrome");
         LogicalDescendants<System.Windows.Controls.Image>(groupRoot)
             .Should()
             .ContainSingle(imageElement => ReferenceEquals(imageElement.Tag, image));
@@ -454,6 +542,46 @@ public sealed class FloatingObjectRenderTests
             .ToList();
         texts.Should().Contain(["Grouped sales", "Q1", "Plan", "Build"]);
         texts.Should().NotContain(["Image", "Column Chart", "SmartArt"]);
+
+        view.SelectFloatingObject(group);
+        var selectedGroupRoot = canvas.Children.OfType<Border>().Single(border => ReferenceEquals(border.Tag, group));
+        selectedGroupRoot.BorderBrush.Should().BeSameAs(System.Windows.Media.Brushes.DodgerBlue);
+        selectedGroupRoot.BorderThickness.Should().Be(new Thickness(2));
+    }
+
+    [StaFact]
+    public void FloatingOverlay_RendersPayloadFreeGroupedChildrenAsSerializedPlaceholders()
+    {
+        var image = new InlineImage([], widthPt: 32, heightPt: 24);
+        var chart = new Chart { WidthPt = 104, HeightPt = 72 };
+        var smartArt = new SmartArt { WidthPt = 128, HeightPt = 46 };
+        var group = new FreeW.Core.Model.DrawingGroup { WidthPt = 190, HeightPt = 116 };
+        group.Children.Add(image);
+        group.ChildOffsets.Add((0, 0));
+        group.Children.Add(chart);
+        group.ChildOffsets.Add((44, 0));
+        group.Children.Add(smartArt);
+        group.ChildOffsets.Add((0, 66));
+
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromDrawingGroup(group));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var groupRoot = canvas.Children.OfType<Border>().Single(border => ReferenceEquals(border.Tag, group));
+        foreach (var child in new object[] { image, chart, smartArt })
+        {
+            var placeholder = LogicalDescendants<Border>(groupRoot)
+                .Single(border => ReferenceEquals(border.Tag, child));
+            placeholder.Background.Should().BeOfType<SolidColorBrush>().Which.Color.Should().Be(Color.FromRgb(0xC0, 0xC0, 0xC0));
+            placeholder.BorderBrush.Should().BeNull();
+            placeholder.Child.Should().BeNull();
+        }
     }
 
     [StaFact]

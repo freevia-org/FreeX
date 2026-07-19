@@ -160,6 +160,11 @@ public sealed class ChartBaselineCorpusTests
             .Should().Be(ChartRenderPlanner.ImportedPieLegendLineHeight);
         scene.LegendItems[0].Label.TextColor
             .Should().Be(new SrgbColor(0x00, 0x00, 0x00));
+        scene.LegendItems.Should().OnlyContain(item =>
+            item.Label.FontFamily == ChartRenderPlanner.ImportedPieLegendFontFamily &&
+            item.Label.HorizontalScale == ChartRenderPlanner.ImportedPieLegendTextScaleX &&
+            item.Label.Bounds.Y == item.SwatchBounds.Y +
+                ChartRenderPlanner.ImportedPieLegendLabelOffset - 3.0);
         scene.DataLabels.Should().OnlyContain(label =>
             label.TextColor == new SrgbColor(0x00, 0x00, 0x00));
     }
@@ -307,6 +312,41 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartsCorpus_Style2ColumnAndBarLegendsUsePowerPointKeyGeometry()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "06-charts.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var charts = new[] { 0, 3 }
+            .Select(slideIndex => presentation.Slides[slideIndex].Shapes
+                .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!)
+            .ToArray();
+
+        var column = ChartRenderPlanner.BuildScenePlan(charts[0], new ChartPlanRect(0, 0, 1280, 720));
+        var bar = ChartRenderPlanner.BuildScenePlan(charts[1], new ChartPlanRect(0, 0, 1280, 720));
+
+        column.LegendItems.Should().HaveCount(2);
+        bar.LegendItems.Should().HaveCount(2);
+        column.LegendItems.Should().OnlyContain(item =>
+            item.SwatchBounds.Width == ChartRenderPlanner.ImportedStyle2LegendSwatchSize &&
+            item.SwatchBounds.Height == ChartRenderPlanner.ImportedStyle2LegendSwatchSize);
+        bar.LegendItems.Should().OnlyContain(item =>
+            item.SwatchBounds.Width == ChartRenderPlanner.ImportedStyle2LegendSwatchSize &&
+            item.SwatchBounds.Height == ChartRenderPlanner.ImportedStyle2LegendSwatchSize);
+        (column.LegendItems[1].SwatchBounds.Y - column.LegendItems[0].SwatchBounds.Y)
+            .Should().Be(ChartRenderPlanner.ImportedStyle2LegendLineHeight);
+        (bar.LegendItems[1].SwatchBounds.Y - bar.LegendItems[0].SwatchBounds.Y)
+            .Should().Be(ChartRenderPlanner.ImportedStyle2LegendLineHeight);
+        column.LegendItems[0].SwatchBounds.X
+            .Should().BeApproximately(
+                column.LegendItems[0].Label.Bounds.X - ChartRenderPlanner.ImportedStyle2LegendLabelInset,
+                0.0001);
+        bar.LegendItems[0].SwatchBounds.X
+            .Should().BeApproximately(
+                bar.LegendItems[0].Label.Bounds.X - ChartRenderPlanner.ImportedStyle2LegendLabelInset,
+                0.0001);
+    }
+
+    [Fact]
     public void ChartBaselineDepthCorpusDeck_ExercisesSharedPlannerDecisions()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
@@ -404,6 +444,12 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 0).Point.Y
             .Should().BeApproximately(137.5, 0.0001,
                 "Surface3D height follows the PowerPoint value axis instead of normalizing to the smallest data value");
+        surfaceGeometry.Points.Single(point => point.SeriesIndex == 1 && point.CategoryIndex == 0).Point.Y
+            .Should().BeApproximately(98.93, 0.0001,
+                "the imported COM mesh registers the middle-row North vertex below the shared projection");
+        surfaceGeometry.Points.Single(point => point.SeriesIndex == 2 && point.CategoryIndex == 0).Point.Y
+            .Should().BeApproximately(25.86, 0.0001,
+                "the imported COM mesh registers the rear-row North vertex below the shared projection");
         surfaceGeometry.Facets.Should().HaveCount(4);
         surfaceGeometry.WireframeSegments.Should().HaveCountGreaterThan(surfaceGeometry.Facets.Count);
         surfaceGeometry.ContourSegments.Should().BeEmpty(
@@ -418,11 +464,16 @@ public sealed class ChartBaselineCorpusTests
             .ToArray();
         firstSurfaceCellFacets.Should().HaveCount(2);
         firstSurfaceCellFacets[0].Points.Select(point => point.X)
-            .Should().Equal(new[] { 3.5, 154.25, 65.5 },
+            .Should().Equal(new[] { 3.5, 174.25, 65.5 },
                 "PowerPoint splits the imported blank low-band cell along the first 0-3 triangle");
         firstSurfaceCellFacets[1].Points.Select(point => point.X)
-            .Should().Equal(new[] { 154.25, 199.875, 65.5 },
+            .Should().Equal(new[] { 174.25, 199.875, 65.5 },
                 "the paired imported blank-cell triangle closes the 1-3 split");
+        var darkOrangeFacet = surfaceGeometry.RenderFacets
+            .Single(facet => facet.SeriesIndex == 0 && facet.CategoryIndex == 1 &&
+                facet.Fill.Color == new SrgbColor(0xB7, 0x60, 0x26));
+        darkOrangeFacet.Points[0].X.Should().BeApproximately(161.25, 0.0001,
+            "the imported dark-orange face owns its widened left edge without moving the shared blank vertex");
         firstSurfaceCellFacets[0].Points[1].Y
             .Should()
             .BeApproximately(158.1, 0.0001,
@@ -466,23 +517,41 @@ public sealed class ChartBaselineCorpusTests
             .Should().Equal(new[] { 167.0, 121.0, 153.0 },
                 "the imported blue boundary face retains the measured top-edge registration");
         surfaceGeometry.RenderFacets[8].Points.Select(point => point.X)
-            .Should().Equal(new[] { 5.0, 72.0, 132.0 },
+            .Should().Equal(new[] { 1.0, 72.0, 132.0 },
                 "PowerPoint exposes a separate near-left dark-orange boundary triangle");
         surfaceGeometry.RenderFacets[8].Points.Select(point => point.Y)
-            .Should().Equal(new[] { 122.0, 71.0, 71.0 },
+            .Should().Equal(new[] { 125.0, 71.0, 71.0 },
                 "the imported near-left boundary triangle uses the measured projected wall");
         surfaceGeometry.RenderFacets[9].Points.Select(point => point.X)
-            .Should().Equal(new[] { 5.0, 132.0, 174.0 },
+            .Should().Equal(new[] { 1.0, 132.0, 174.0 },
                 "the paired near-left triangle closes the measured projected polygon");
         surfaceGeometry.RenderFacets[9].Points.Select(point => point.Y)
-            .Should().Equal(new[] { 122.0, 71.0, 79.0 },
+            .Should().Equal(new[] { 125.0, 71.0, 79.0 },
                 "the paired near-left triangle retains the measured projected wall");
         surfaceGeometry.RenderFacets[10].Points.Select(point => point.X)
-            .Should().Equal(new[] { 247.0, 320.0, 312.0 },
+            .Should().Equal(new[] { 245.0, 319.0, 312.0 },
                 "PowerPoint exposes a separate right-side dark-orange boundary triangle");
         surfaceGeometry.RenderFacets[10].Points.Select(point => point.Y)
-            .Should().Equal(new[] { 101.0, 119.0, 134.0 },
+            .Should().Equal(new[] { 99.0, 119.0, 137.0 },
                 "the imported right-side boundary triangle uses the measured projected wall");
+        surfaceGeometry.RenderFacets[12].Points.Select(point => point.X)
+            .Should().Equal(new[] { 201.0, 232.0, 306.0 },
+                "the imported rear green boundary face uses the measured right registration");
+        surfaceGeometry.RenderFacets[12].Points.Select(point => point.Y)
+            .Should().Equal(new[] { 72.0, 42.0, 33.0 },
+                "the imported rear green boundary face uses the measured vertical registration");
+        surfaceGeometry.RenderFacets[13].Points.Select(point => point.X)
+            .Should().Equal(new[] { 301.0, 360.0, 349.0 },
+                "the imported yellow boundary face uses the measured horizontal registration");
+        surfaceGeometry.RenderFacets[13].Points.Select(point => point.Y)
+            .Should().Equal(new[] { 42.0, 25.0, 50.0 },
+                "the imported yellow boundary face uses the measured vertical registration");
+        surfaceGeometry.RenderFacets[14].Points.Select(point => point.X)
+            .Should().Equal(new[] { 194.0, 238.0, 201.0 },
+                "the imported rear-green fold keeps the measured horizontal registration");
+        surfaceGeometry.RenderFacets[14].Points.Select(point => point.Y)
+            .Should().Equal(new[] { 76.0, 98.0, 72.0 },
+                "the imported rear-green fold uses the measured lower-edge registration");
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
         surfaceGeometry.FrameSegments.Should().HaveCount(45,

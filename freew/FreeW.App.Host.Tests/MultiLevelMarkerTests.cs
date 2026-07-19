@@ -130,6 +130,18 @@ public sealed class MultiLevelMarkerTests
     }
 
     [StaFact]
+    public void AccumulatedMarkersUseACompactSeparator()
+    {
+        var view = new DocumentView();
+        view.LoadModel(BuildMultiLevelDoc());
+
+        var list = view.Document.Blocks.OfType<List>().Should().ContainSingle().Which;
+        list.ListItems.Cast<ListItem>().First().Blocks.OfType<System.Windows.Documents.Paragraph>().Single()
+            .Inlines.OfType<System.Windows.Documents.Run>().First()
+            .Text.Should().Be("1. ");
+    }
+
+    [StaFact]
     public void StyledMarkersAppearInTheRenderedSurface()
     {
         var view = new DocumentView();
