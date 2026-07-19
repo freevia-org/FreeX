@@ -36,12 +36,12 @@ public sealed partial class MainWindow
             (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Shift))
             return;
 
-        var tabStops = GetDialogTabStops(dialog, root);
+        var tabStops = GetDialogTabStops(root);
         if (tabStops.Length == 0)
             return;
 
         var focused = dialog.FocusManager?.GetFocusedElement() as Control;
-        var currentIndex = focused is null ? -1 : tabStops.IndexOf(focused);
+        var currentIndex = FindDialogTabStopIndex(tabStops, focused);
         var nextIndex = args.KeyModifiers == KeyModifiers.Shift
             ? currentIndex <= 0 ? tabStops.Length - 1 : currentIndex - 1
             : currentIndex < 0 || currentIndex == tabStops.Length - 1 ? 0 : currentIndex + 1;
@@ -80,40 +80,57 @@ public sealed partial class MainWindow
         return firstFocusable?.Focus() == true;
     }
 
-    private static Control[] GetDialogTabStops(Window dialog, Control root)
+    private static Control[] GetDialogTabStops(Control root)
     {
-        var controls = dialog.GetVisualDescendants()
+        var controls = root.GetLogicalDescendants()
             .OfType<Control>()
             .Prepend(root)
+            .Select(GetAuthoredDialogTabStop)
+            .Distinct()
             .Where(control =>
                 control != root &&
-                control.Focusable &&
+                IsFocusableAuthoredDialogStop(control) &&
                 KeyboardNavigation.GetIsTabStop(control) &&
                 IsEffectivelyVisibleWithin(control, root) &&
                 control.IsEffectivelyEnabled &&
                 control is not TabControl &&
-                control is not TabItem &&
-                IsSelectedListBoxItem(control))
-            .Select(control =>
-            {
-                var origin = control.TranslatePoint(default, root) ?? default;
-                return (Control: control, Origin: origin);
-            })
-            .OrderBy(item => item.Origin.Y)
-            .ThenBy(item => item.Origin.X)
-            .Select(item => item.Control)
+                control is not TabItem)
             .ToArray();
 
         return controls;
     }
 
-    private static bool IsSelectedListBoxItem(Control control)
-    {
-        if (control is not ListBoxItem listBoxItem)
-            return true;
+    private static bool IsFocusableAuthoredDialogStop(Control control) =>
+        control.Focusable ||
+        control is ListBox && control.GetVisualDescendants().OfType<ListBoxItem>().Any(item =>
+            item.Focusable && item.IsVisible && item.IsEffectivelyEnabled);
 
-        var listBox = listBoxItem.GetLogicalAncestors().OfType<ListBox>().FirstOrDefault();
-        return listBox is null || Equals(listBox.SelectedItem, listBoxItem.Content);
+    private static Control GetAuthoredDialogTabStop(Control control)
+    {
+        // Item containers and their focusable content are implementation details of one
+        // authored list stop. Linux commonly reports the selected ListBoxItem as focused,
+        // so keep the ListBox in the graph and map focus back to it when moving onward.
+        return control.GetLogicalAncestors().OfType<ListBox>().FirstOrDefault() ?? control;
+    }
+
+    private static int FindDialogTabStopIndex(Control[] tabStops, Control? focused)
+    {
+        if (focused is null)
+            return -1;
+
+        var exactIndex = tabStops.IndexOf(focused);
+        if (exactIndex >= 0)
+            return exactIndex;
+
+        var visualAncestors = focused.GetVisualAncestors().OfType<Control>().ToHashSet();
+        var logicalAncestors = focused.GetLogicalAncestors().OfType<Control>().ToHashSet();
+        for (var index = 0; index < tabStops.Length; index++)
+        {
+            if (visualAncestors.Contains(tabStops[index]) || logicalAncestors.Contains(tabStops[index]))
+                return index;
+        }
+
+        return -1;
     }
 
     private static bool IsEffectivelyVisibleWithin(Control control, Control root)
