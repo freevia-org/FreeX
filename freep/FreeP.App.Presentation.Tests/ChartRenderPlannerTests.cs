@@ -729,6 +729,24 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceCellPrimitives_DisplayBlanksAsZero_MaterializesZeroValueCell()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.DisplayBlanksAs = ChartDisplayBlanksAs.Zero;
+        chart.Series[0].Values[1] = null;
+
+        var cells = ChartRenderPlanner.BuildSurfaceCellPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        cells.Should().HaveCount(6);
+        cells.Single(cell => cell.SeriesIndex == 0 && cell.CategoryIndex == 1)
+            .Value.Should().Be(0);
+        cells.Single(cell => cell.SeriesIndex == 0 && cell.CategoryIndex == 1)
+            .Bounds.Should().Be(new ChartPlanRect(100, 0, 100, 60));
+    }
+
+    [Fact]
     public void BuildSurfaceGeometryPlan_Surface3DPlansProjectedFacetsAndWireframe()
     {
         var chart = MakeSurfaceChart(ChartType.Surface3D);
