@@ -23259,7 +23259,7 @@ public sealed partial class MainWindow : Window
                 return true;
             case WorkbookShortcutRoute.PrintWorkbook:
                 e.Handled = true;
-                await ShowPrintDialogAsync();
+                await ShowPrintPreviewDialogAsync();
                 return true;
             case WorkbookShortcutRoute.Copy:
                 e.Handled = true;

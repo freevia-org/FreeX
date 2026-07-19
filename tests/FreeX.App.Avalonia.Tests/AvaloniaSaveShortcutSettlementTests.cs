@@ -82,7 +82,7 @@ public sealed class AvaloniaSaveShortcutSettlementTests
     [InlineData(Key.F24, KeyModifiers.Shift, PhysicalKey.F12)]
     [InlineData(Key.F12, KeyModifiers.None, PhysicalKey.F12)]
     [InlineData(Key.F24, KeyModifiers.None, PhysicalKey.F12)]
-    public async Task SaveShortcut_AwaitsCanceledSaveAsAndPreservesDirtyWorkbook(
+    public async Task SaveShortcut_AwaitsCanceledSaveAsAndRemainsAvailableForAnotherPicker(
         Key key,
         KeyModifiers modifiers,
         PhysicalKey physicalKey)
@@ -103,6 +103,14 @@ public sealed class AvaloniaSaveShortcutSettlementTests
                 await PressHandled(window, key, modifiers, physicalKey);
 
                 pickerCalls.Should().Be(1);
+                window.Session.IsDirty.Should().BeTrue();
+                window.Session.CurrentFilePath.Should().BeNull();
+
+                // A native chooser cancellation must release the in-flight file operation. This
+                // is what lets the next file shortcut open its own picker instead of inheriting a
+                // stale Save As operation.
+                await PressHandled(window, key, modifiers, physicalKey);
+                pickerCalls.Should().Be(2);
                 window.Session.IsDirty.Should().BeTrue();
                 window.Session.CurrentFilePath.Should().BeNull();
             }
@@ -177,7 +185,55 @@ public sealed class AvaloniaSaveShortcutSettlementTests
     }
 
     [Fact]
-    public async Task TransformedControlShiftF12_OpensAndSettlesPrintDialog()
+    public async Task TransformedControlF12_OpensTheDirtyWorkbookGateBeforeNativeOpenPicker()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                Edit(window, window.Session.ActiveCell, "unsaved-before-open");
+                var args = new KeyEventArgs
+                {
+                    Key = Key.F24,
+                    PhysicalKey = PhysicalKey.F12,
+                    KeyModifiers = KeyModifiers.Control,
+                };
+
+                var dispatch = window.RaiseKeyDownForTest(args);
+                global::Avalonia.Controls.Window? dialog = null;
+                for (var attempt = 0; dialog is null && !dispatch.IsCompleted && attempt < 300; attempt++)
+                {
+                    dialog = window.OwnedWindows.FirstOrDefault(
+                        candidate => candidate.Title == "Open Workbook");
+                    if (dialog is null)
+                        await Task.Delay(10);
+                }
+
+                if (dialog is null && dispatch.IsCompleted)
+                    await dispatch;
+
+                dialog.Should().NotBeNull("Ctrl+physical-F12 must reach the Open Workbook workflow before the native picker opens");
+                dialog!.Close();
+                await dispatch;
+                args.Handled.Should().BeTrue();
+                window.Session.IsDirty.Should().BeTrue();
+            }
+            finally
+            {
+                foreach (var owned in window.OwnedWindows.ToArray())
+                    owned.Close();
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task TransformedControlShiftF12_OpensAndSettlesPrintPreview()
     {
         await Session.Dispatch(async () =>
         {
@@ -196,7 +252,7 @@ public sealed class AvaloniaSaveShortcutSettlementTests
                 for (var attempt = 0; dialog is null && !dispatch.IsCompleted && attempt < 300; attempt++)
                 {
                     dialog = window.OwnedWindows.FirstOrDefault(
-                        candidate => AutomationProperties.GetAutomationId(candidate) == "PrintDialog");
+                        candidate => AutomationProperties.GetAutomationId(candidate) == "PrintPreviewWindow");
                     if (dialog is null)
                         await Task.Delay(10);
                 }

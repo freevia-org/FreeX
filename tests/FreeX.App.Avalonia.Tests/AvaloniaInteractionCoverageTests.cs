@@ -123,6 +123,11 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("Physical X11 manifest does not satisfy schema v2", runner, StringComparison.Ordinal);
         Assert.Contains("geometry calibration did not pass", runner, StringComparison.Ordinal);
         Assert.Contains("xdotool getactivewindow", probe, StringComparison.Ordinal);
+        Assert.Contains(
+            "xdotool key --clearmodifiers --delay \"$input_delay_ms\" Escape",
+            probe,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("--window \"$dialog_id\" Escape", probe, StringComparison.Ordinal);
         Assert.Contains("Physical X11 manifest", readme, StringComparison.Ordinal);
         Assert.Contains("unique `x11-input` rows", readme, StringComparison.Ordinal);
     }

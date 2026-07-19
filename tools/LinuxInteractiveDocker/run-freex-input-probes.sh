@@ -362,7 +362,11 @@ probe_cancelable_window() {
     if $opened; then
         dialog_id="$(xdotool getactivewindow 2>/dev/null || true)"
         if [[ -n "$dialog_id" && "$dialog_id" != "$window_id" ]]; then
-            xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$dialog_id" Escape 2>/dev/null || true
+            # Gtk-backed native pickers are already active, but do not process the synthetic
+            # KeyPress client message xdotool emits with --window. Send Escape through the
+            # active X11 focus path, which is also how the interactive user and dialog probe
+            # deliver it. dialog_id still proves this is not the workbook window.
+            xdotool key --clearmodifiers --delay "$input_delay_ms" Escape 2>/dev/null || true
             for _ in $(seq 1 8); do
                 after="$(visible_window_count)"
                 if (( after <= before )); then
