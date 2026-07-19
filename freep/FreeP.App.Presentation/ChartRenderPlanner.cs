@@ -3032,7 +3032,9 @@ public static partial class ChartRenderPlanner
         {
             for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
             {
-                double? value = TryGetSeriesValue(chart, seriesIndex, categoryIndex);
+                double? value = ResolveBlankSensitiveValue(
+                    chart,
+                    TryGetSeriesValue(chart, seriesIndex, categoryIndex));
                 if (value is null)
                     continue;
 
