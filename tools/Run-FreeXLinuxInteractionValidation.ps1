@@ -90,6 +90,7 @@ try {
             throw "-SkipX11 requires -ExistingX11Manifest with a completed physical-probe manifest."
         }
         $x11Manifest = Get-Content -LiteralPath $ExistingX11Manifest -Raw | ConvertFrom-Json
+        $x11ManifestPath = (Resolve-Path -LiteralPath $ExistingX11Manifest).Path
         $x11ProbeExit = if (@($x11Manifest.results | Where-Object status -eq "failed").Count -gt 0) { 1 } else { 0 }
 
         # Bounded validation batches always reuse the published payload. A resumed run that skips
@@ -120,6 +121,17 @@ try {
         $x11Manifest = Get-Content -LiteralPath $x11ManifestPath -Raw | ConvertFrom-Json
 
         & $harness -Action Stop -App FreeX -Port $Port
+    }
+
+    if ([string]$x11Manifest.calibration.status -ne "passed") {
+        $reason = [string]$x11Manifest.calibration.reason
+        throw "Physical X11 evidence is not authoritative because geometry calibration did not pass: $reason"
+    }
+    $x11EvidenceDirectory = Split-Path -Parent $x11ManifestPath
+    $x11ReportDirectory = Join-Path $reportDirectory "x11-validation"
+    New-Item -ItemType Directory -Path $x11ReportDirectory -Force | Out-Null
+    foreach ($evidenceFile in Get-ChildItem -LiteralPath $x11EvidenceDirectory -File) {
+        Copy-Item -LiteralPath $evidenceFile.FullName -Destination (Join-Path $x11ReportDirectory $evidenceFile.Name) -Force
     }
 
     # Phase two uses a fresh X11 process for each bounded dialog slice. Avalonia retains native modal/input
@@ -370,7 +382,21 @@ try {
         }
     }
 
-    $manifest.results = @($combinedResults) + @($x11Manifest.results)
+    $physicalResults = @($x11Manifest.results)
+    $physicalSummary = [ordered]@{}
+    foreach ($group in @($physicalResults | Group-Object -Property status)) {
+        $physicalSummary[[string]$group.Name] = [int]$group.Count
+    }
+    if (-not $physicalSummary.Contains("passed")) { $physicalSummary.passed = 0 }
+    if (-not $physicalSummary.Contains("failed")) { $physicalSummary.failed = 0 }
+    $physicalSummary.total = $physicalResults.Count
+    $manifest | Add-Member -NotePropertyName physicalX11 -NotePropertyValue ([pscustomobject][ordered]@{
+        summary = [pscustomobject]$physicalSummary
+        calibration = $x11Manifest.calibration
+        manifest = "x11-validation/x11-input-results.json"
+        evidenceDirectory = "x11-validation"
+    }) -Force
+    $manifest.results = @($combinedResults) + $physicalResults
     $summary = [ordered]@{}
     foreach ($group in @($manifest.results | Group-Object -Property status)) {
         $summary[[string]$group.Name] = [int]$group.Count
@@ -396,6 +422,11 @@ try {
     $summaryText = ($manifest.summary.PSObject.Properties | ForEach-Object {
         "<strong>$([System.Net.WebUtility]::HtmlEncode($_.Name))</strong>: $($_.Value)"
     }) -join " &nbsp; "
+    $physicalSummaryText = ($manifest.physicalX11.summary.PSObject.Properties | ForEach-Object {
+        "<strong>$([System.Net.WebUtility]::HtmlEncode($_.Name))</strong>: $($_.Value)"
+    }) -join " &nbsp; "
+    $grid = $manifest.physicalX11.calibration.grid
+    $calibrationText = "A1=($($grid.a1.x),$($grid.a1.y)); cell=$($grid.cellWidth)x$($grid.cellHeight); selection=$($manifest.physicalX11.calibration.selectionColor)"
     $categoryOptions = @($manifest.results | Select-Object -ExpandProperty category -Unique | Sort-Object) | ForEach-Object {
         $encoded = [System.Net.WebUtility]::HtmlEncode([string]$_)
         "<option value='$encoded'>$encoded</option>"
@@ -408,6 +439,9 @@ body{font:13px Segoe UI,Arial,sans-serif;margin:24px;color:#202124}h1{font-size:
 th,td{border:1px solid #d0d5da;padding:6px 8px;text-align:left;vertical-align:top}th{background:#eef1f4;position:sticky;top:0}
 tr.failed{background:#fde7e9}tr.skipped{background:#fff4ce}tr.passed td:first-child{color:#107c10;font-weight:600}
 </style></head><body><h1>FreeX Linux interaction validation</h1><p>$summaryText</p>
+<h2>Physical X11 input</h2><p>$physicalSummaryText</p>
+<p>Geometry calibration: <strong>$([System.Net.WebUtility]::HtmlEncode([string]$manifest.physicalX11.calibration.status))</strong>;
+$([System.Net.WebUtility]::HtmlEncode($calibrationText)). <a href="x11-validation/x11-input-results.json">Manifest and evidence</a></p>
 <p><input id="query" type="search" placeholder="Filter interactions" style="width:320px;padding:6px">
 <select id="status" style="padding:6px"><option value="">All statuses</option><option>passed</option><option>failed</option><option>skipped</option></select>
 <select id="category" style="padding:6px"><option value="">All categories</option>$($categoryOptions -join '')</select>

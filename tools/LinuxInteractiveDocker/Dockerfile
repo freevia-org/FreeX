@@ -28,6 +28,7 @@ RUN apt-get update -qq \
         shared-mime-info \
         websockify \
         wmctrl \
+        xclip \
         x11vnc \
         x11-xserver-utils \
         xdg-utils \
