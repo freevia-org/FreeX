@@ -82,9 +82,7 @@ public sealed partial class MainWindow
     /// Picture: Format Picture, Crop, Reset Crop, Edit Alt Text, Selection Pane. Shape/Text box: Format
     /// (the Format Picture dialog also handles shapes), Size and Properties, Rotate, Shape Fill/Outline,
     /// Bring Forward / Send Backward, Edit Alt Text, Selection Pane. Chart: Format Chart Area, Select
-    /// Data, Change Chart Type, Chart Styles, Chart Titles, Move Chart, Selection Pane. The entries Excel
-    /// offers that have no shell handler yet (chart Size and Properties) report an honest status rather
-    /// than silently no-opping.
+    /// Data, Change Chart Type, Chart Styles, Chart Titles, Size and Properties, Move Chart, Selection Pane.
     /// </summary>
     private void DispatchDrawingObjectContextMenuCommand(RibbonCommandId commandId)
     {
@@ -155,10 +153,34 @@ public sealed partial class MainWindow
                 RunGuarded(ShowMoveChartDialog);
                 break;
             case WorksheetContextMenuAction.ChartSizeAndProperties:
-                // No chart size/properties dialog exists in the shell yet; report honestly.
-                ReportContextualNotYetAvailable(UiText.Get("DrawingInteract_ChartSizeAndProperties"));
+                RunGuarded(ResizeSelectedChartObjectAsync);
                 break;
         }
+    }
+
+    private async Task ResizeSelectedChartObjectAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        var commandLabel = UiText.Get("DrawingInteract_ChartSizeAndProperties");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
+            return;
+
+        var size = await ShowSizeDialogAsync(chart.Width, chart.Height);
+        if (size is not { } chosen || !TryGetSelectedChart(commandLabel, out chart))
+            return;
+
+        RunDrawingObjectCommand(
+            new SetChartBoundsCommand(
+                _session.ActiveSheet.Id,
+                chart.Id,
+                chart.Left,
+                chart.Top,
+                chosen.Width,
+                chosen.Height),
+            UiText.Get("DrawingInteract_Resized"),
+            commandLabel);
     }
 
     /// <summary>

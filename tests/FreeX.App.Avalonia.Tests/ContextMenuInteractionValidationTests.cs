@@ -118,7 +118,7 @@ public sealed class ContextMenuInteractionValidationTests
     }
 
     [Fact]
-    public async Task ProductionDispatch_ObservesQuickAnalysisAndNonPivotFailureFixtures()
+    public async Task ProductionDispatch_ObservesQuickAnalysisAndDrawingFixtures()
     {
         await Session.Dispatch(async () =>
         {
@@ -149,13 +149,13 @@ public sealed class ContextMenuInteractionValidationTests
                     string.Join(Environment.NewLine, results.Select(result =>
                         $"{result.Id}: {result.EvidenceLevel} | {result.Note}")));
 
-                var unsupportedChartSize = inventory.Single(row =>
+                var chartSize = inventory.Single(row =>
                     row.VariantId == "context-menu.worksheet.target.chart" &&
                     row.ActionKey == nameof(WorksheetContextMenuAction.ChartSizeAndProperties));
-                var unsupportedResult = await window.RunContextMenuInteractionValidationForTestAsync(
-                    unsupportedChartSize.Id);
-                unsupportedResult.Status.Should().Be("failed");
-                unsupportedResult.Note.Should().Contain("no dialog appeared");
+                var chartSizeResult = await window.RunContextMenuInteractionValidationForTestAsync(chartSize.Id);
+                chartSizeResult.Status.Should().Be("passed");
+                chartSizeResult.EvidenceLevel.Should().Be("production-dialog-opened-cancelled");
+                chartSizeResult.Evidence.Should().Contain("DispatchDrawingObjectContextMenuCommand");
             }
             finally
             {
