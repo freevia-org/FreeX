@@ -57,27 +57,11 @@ public sealed partial class MainWindow
         set => _workbookSaveAsPickerOverride = value;
     }
 
-    private bool CanShowWorkbookSaveAsPicker =>
-        _workbookSaveAsPickerOverride is not null || StorageProvider.CanSave;
+    private static bool ResolveWorkbookSaveAsPickerAvailability(
+        bool nativePickerAvailable,
+        bool deterministicPickerAvailable) =>
+        nativePickerAvailable || deterministicPickerAvailable;
 
     internal WorkbookSaveAsPickerSelection CreateTransientWorkbookSaveAsSelection(string path) =>
         WorkbookSaveAsPickerSelection.FromLocalPath(path, () => _recentFiles.Remove(path));
-
-    private async Task<WorkbookSaveAsPickerSelection?> PickWorkbookSaveAsFileAsync(
-        WorkbookSaveAsCommandPickerPlan savePlan)
-    {
-        if (_workbookSaveAsPickerOverride is { } pickerOverride)
-            return await pickerOverride(savePlan);
-
-        var pickedFile = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan(
-                "Save Workbook",
-                savePlan.Picker,
-                showOverwritePrompt: true,
-                suggestFirstFileType: true));
-        return pickedFile is null
-            ? null
-            : WorkbookSaveAsPickerSelection.FromPickedStorageFile(pickedFile);
-    }
 }

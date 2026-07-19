@@ -23145,10 +23145,21 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> TryHandleWorkbookShortcutRouteAsync(KeyEventArgs e)
     {
-        if (!TryGetWorkbookShortcutRoute(
-                GetEffectiveWorkbookShortcutKey(e),
-                e.KeyModifiers,
-                out var route))
+        var effectiveKey = GetEffectiveWorkbookShortcutKey(e);
+        if (effectiveKey != e.Key)
+        {
+            var normalizedArgs = new KeyEventArgs
+            {
+                Key = effectiveKey,
+                PhysicalKey = e.PhysicalKey,
+                KeyModifiers = e.KeyModifiers,
+            };
+            var handled = await TryHandleWorkbookShortcutRouteAsync(normalizedArgs);
+            e.Handled = normalizedArgs.Handled;
+            return handled;
+        }
+
+        if (!TryGetWorkbookShortcutRoute(e.Key, e.KeyModifiers, out var route))
             return false;
 
         switch (route)
@@ -24230,8 +24241,11 @@ public sealed partial class MainWindow : Window
             if (!TryCommitPendingFormulaEdit())
                 return false;
 
+            var canShowPicker = ResolveWorkbookSaveAsPickerAvailability(
+                StorageProvider.CanSave,
+                _workbookSaveAsPickerOverride is not null);
             var savePlan = WorkbookFileCommandPlanner.PlanSaveAsPicker(
-                CanShowWorkbookSaveAsPicker,
+                canShowPicker,
                 _session.SaveFormats,
                 _session.Workbook.Name,
                 _session.DisplayName,
@@ -24242,7 +24256,24 @@ public sealed partial class MainWindow : Window
                 return false;
             }
 
-            var pickedStorageFile = await PickWorkbookSaveAsFileAsync(savePlan);
+            WorkbookSaveAsPickerSelection? pickedStorageFile;
+            if (_workbookSaveAsPickerOverride is { } pickerOverride)
+            {
+                pickedStorageFile = await pickerOverride(savePlan);
+            }
+            else
+            {
+                var pickedFile = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+                    StorageProvider,
+                    AvaloniaFilePickerSaveRequest.FromSavePlan(
+                        "Save Workbook",
+                        savePlan.Picker,
+                        showOverwritePrompt: true,
+                        suggestFirstFileType: true));
+                pickedStorageFile = pickedFile is null
+                    ? null
+                    : WorkbookSaveAsPickerSelection.FromPickedStorageFile(pickedFile);
+            }
 
             if (pickedStorageFile is null)
                 return false;
