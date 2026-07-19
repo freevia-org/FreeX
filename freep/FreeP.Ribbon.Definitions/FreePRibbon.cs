@@ -279,6 +279,15 @@ public static class FreePRibbon
             group.Medium("freep.transition.zoom", FreePRibbonText.TransitionZoomCommand.Label, RibbonCommandIconKind.Zoom, FreePRibbonText.TransitionZoomCommand.KeyTip);
             group.Medium("freep.transition.wheel", FreePRibbonText.TransitionWheelCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.TransitionWheelCommand.KeyTip);
         });
+        tab.Group("transition-more", FreePRibbonText.TransitionMoreGroup.Label, null, 95, group =>
+        {
+            group.Medium(
+                "freep.transition.more",
+                FreePRibbonText.TransitionMoreCommand.Label,
+                RibbonCommandIconKind.Effects,
+                dropdown: true,
+                menu: BuildExtendedTransitionMenu);
+        });
         tab.Group("transition-timing", FreePRibbonText.TransitionTimingGroup.Label, FreePRibbonText.TransitionTimingGroup.KeyTip, 90, group =>
         {
             group.ComboBox("freep.transition.duration", FreePRibbonText.TransitionDurationCommand.Label, control => control with
@@ -438,5 +447,36 @@ public static class FreePRibbon
         menu.Item("freep.anim.exit.wedge", FreePRibbonText.AnimationExitWedgeCommand.Label, FreePRibbonText.AnimationExitWedgeCommand.KeyTip);
         menu.Item("freep.anim.exit.wheel", FreePRibbonText.AnimationExitWheelCommand.Label, FreePRibbonText.AnimationExitWheelCommand.KeyTip);
         menu.Item("freep.anim.exit.random-bars", FreePRibbonText.AnimationExitRandomBarsCommand.Label, FreePRibbonText.AnimationExitRandomBarsCommand.KeyTip);
+    }
+
+    private static void BuildExtendedTransitionMenu(RibbonMenuBuilder menu)
+    {
+        menu.Item("freep.transition.fly", FreePRibbonText.TransitionFlyCommand.Label);
+        menu.Item("freep.transition.random", FreePRibbonText.TransitionRandomCommand.Label);
+        menu.Item("freep.transition.cube", FreePRibbonText.TransitionCubeCommand.Label);
+        menu.Item("freep.transition.rotate", FreePRibbonText.TransitionRotateCommand.Label);
+        menu.Item("freep.transition.flip", FreePRibbonText.TransitionFlipCommand.Label);
+        menu.Item("freep.transition.ferris", FreePRibbonText.TransitionFerrisCommand.Label);
+        menu.Item("freep.transition.flythrough", FreePRibbonText.TransitionFlythroughCommand.Label);
+        menu.Item("freep.transition.switch", FreePRibbonText.TransitionSwitchCommand.Label);
+        menu.Item("freep.transition.orbit", FreePRibbonText.TransitionOrbitCommand.Label);
+        menu.Item("freep.transition.honeycomb", FreePRibbonText.TransitionHoneycombCommand.Label);
+        menu.Item("freep.transition.glitter", FreePRibbonText.TransitionGlitterCommand.Label);
+        menu.Item("freep.transition.vortex", FreePRibbonText.TransitionVortexCommand.Label);
+        menu.Item("freep.transition.shred", FreePRibbonText.TransitionShredCommand.Label);
+        menu.Item("freep.transition.wind", FreePRibbonText.TransitionWindCommand.Label);
+        menu.Item("freep.transition.ripple", FreePRibbonText.TransitionRippleCommand.Label);
+        menu.Item("freep.transition.warp", FreePRibbonText.TransitionWarpCommand.Label);
+        menu.Item("freep.transition.fracture", FreePRibbonText.TransitionFractureCommand.Label);
+        menu.Item("freep.transition.crush", FreePRibbonText.TransitionCrushCommand.Label);
+        menu.Item("freep.transition.peel-off", FreePRibbonText.TransitionPeelOffCommand.Label);
+        menu.Item("freep.transition.page-curl-double", FreePRibbonText.TransitionPageCurlDoubleCommand.Label);
+        menu.Item("freep.transition.page-curl-single", FreePRibbonText.TransitionPageCurlSingleCommand.Label);
+        menu.Item("freep.transition.airplane", FreePRibbonText.TransitionAirplaneCommand.Label);
+        menu.Item("freep.transition.origami", FreePRibbonText.TransitionOrigamiCommand.Label);
+        menu.Item("freep.transition.prism", FreePRibbonText.TransitionPrismCommand.Label);
+        menu.Item("freep.transition.curtains", FreePRibbonText.TransitionCurtainsCommand.Label);
+        menu.Item("freep.transition.drape", FreePRibbonText.TransitionDrapeCommand.Label);
+        menu.Item("freep.transition.prestige", FreePRibbonText.TransitionPrestigeCommand.Label);
     }
 }

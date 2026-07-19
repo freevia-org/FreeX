@@ -5,6 +5,7 @@ namespace FreeP.App.Compositor;
 
 public enum PresentationTransitionCommandIntentKind
 {
+    NoOp,
     SetKind,
     SetDuration,
     ToggleAdvanceOnClick,
@@ -125,6 +126,117 @@ public static class PresentationTransitionCommandPlanner
                 PresentationTransitionCommandIntentKind.SetKind,
                 TransitionKind.Wheel),
             new PresentationTransitionCommandPlan(
+                "freep.transition.more",
+                PresentationTransitionCommandIntentKind.NoOp),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.fly",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Fly),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.random",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Random),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.cube",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Cube),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.rotate",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Rotate),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.flip",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Flip),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.ferris",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Ferris),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.flythrough",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Flythrough),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.switch",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Switch),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.orbit",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Orbit),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.honeycomb",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Honeycomb),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.glitter",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Glitter),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.vortex",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Vortex),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.shred",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Shred),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.wind",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Wind),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.ripple",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Ripple),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.warp",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Warp),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.fracture",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Fracture),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.crush",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Crush),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.peel-off",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.PeelOff),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.page-curl-double",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.PageCurlDouble),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.page-curl-single",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.PageCurlSingle),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.airplane",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Airplane),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.origami",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Origami),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.prism",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Prism),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.curtains",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Curtains),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.drape",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Drape),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.prestige",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Prestige),
+            new PresentationTransitionCommandPlan(
                 "freep.transition.duration",
                 PresentationTransitionCommandIntentKind.SetDuration),
             new PresentationTransitionCommandPlan(
@@ -163,6 +275,9 @@ public static class PresentationTransitionCommandPlanner
 
         switch (plan.Intent)
         {
+            case PresentationTransitionCommandIntentKind.NoOp:
+                return true;
+
             case PresentationTransitionCommandIntentKind.SetKind:
                 if (plan.Kind is not { } kind)
                 {
