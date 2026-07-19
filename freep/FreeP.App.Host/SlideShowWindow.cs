@@ -1435,12 +1435,15 @@ public sealed class SlideShowWindow : Window
 
         var clip = new RectangleGeometry();
         el.Clip = clip;
-        el.Opacity = 0;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        el.Opacity = isExit ? plan.FromOpacity : 0;
 
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
-        var from = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
-        var to = new Rect(0, 0, w, h);
+        var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
+        var full = new Rect(0, 0, w, h);
+        var from = isExit ? full : closed;
+        var to = isExit ? closed : full;
 
         clip.Rect = from;
         var clipAnim = new RectAnimation(from, to, dur)
@@ -1456,9 +1459,18 @@ public sealed class SlideShowWindow : Window
         {
             BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
         };
-        opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-        opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.35, KeyTime.FromPercent(0.2)));
-        opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.7, KeyTime.FromPercent(0.55)));
+        if (isExit)
+        {
+            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(plan.FromOpacity, KeyTime.FromPercent(0)));
+            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.7, KeyTime.FromPercent(0.2)));
+            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.35, KeyTime.FromPercent(0.55)));
+        }
+        else
+        {
+            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromPercent(0)));
+            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.35, KeyTime.FromPercent(0.2)));
+            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.7, KeyTime.FromPercent(0.55)));
+        }
         opacityAnim.KeyFrames.Add(new LinearDoubleKeyFrame(plan.ToOpacity, KeyTime.FromPercent(1)));
         Storyboard.SetTarget(opacityAnim, el);
         Storyboard.SetTargetProperty(opacityAnim, new PropertyPath(OpacityProperty));
