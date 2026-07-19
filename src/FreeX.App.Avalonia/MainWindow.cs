@@ -456,6 +456,8 @@ public sealed partial class MainWindow : Window
     private TextBox? _inlineCellEditor;
     private CellAddress? _inlineCellEditAddress;
     private string? _inlineCellEditText;
+    private int? _inlineCellEditSelectionStart;
+    private int? _inlineCellEditSelectionEnd;
     private int? _pendingInlineCellCaretIndex;
     private CellAddress? _lastCellPointerPressAddress;
     private long _lastCellPointerPressTimestamp;
@@ -8019,20 +8021,34 @@ public sealed partial class MainWindow : Window
         editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
 
         _inlineCellEditor = editor;
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (!Equals(_inlineCellEditAddress, address) || !ReferenceEquals(_inlineCellEditor, editor))
-                return;
-
-            editor.Focus();
-            var caret = Math.Clamp(_pendingInlineCellCaretIndex ?? editor.Text?.Length ?? 0, 0, editor.Text?.Length ?? 0);
-            editor.CaretIndex = caret;
-            editor.SelectionStart = caret;
-            editor.SelectionEnd = caret;
-            _pendingInlineCellCaretIndex = null;
-        }, DispatcherPriority.Input);
+        Dispatcher.UIThread.Post(
+            () => FocusInlineCellEditor(address, editor),
+            DispatcherPriority.Input);
 
         return editor;
+    }
+
+    private void FocusInlineCellEditor(CellAddress address, TextBox editor)
+    {
+        if (!Equals(_inlineCellEditAddress, address) || !ReferenceEquals(_inlineCellEditor, editor))
+            return;
+
+        var textLength = editor.Text?.Length ?? 0;
+        var selectionStart = Math.Clamp(
+            _pendingInlineCellCaretIndex ?? _inlineCellEditSelectionStart ?? textLength,
+            0,
+            textLength);
+        var selectionEnd = Math.Clamp(
+            _pendingInlineCellCaretIndex ?? _inlineCellEditSelectionEnd ?? selectionStart,
+            0,
+            textLength);
+        editor.Focus();
+        editor.CaretIndex = selectionEnd;
+        editor.SelectionStart = selectionStart;
+        editor.SelectionEnd = selectionEnd;
+        _inlineCellEditSelectionStart = selectionStart;
+        _inlineCellEditSelectionEnd = selectionEnd;
+        _pendingInlineCellCaretIndex = null;
     }
 
     private void InlineCellEditor_KeyDown(CellAddress address, TextBox editor, KeyEventArgs args)
@@ -8095,7 +8111,7 @@ public sealed partial class MainWindow : Window
         }
         else if (args.Key == Key.Escape)
         {
-            CancelInlineCellEdit();
+            CancelCellEditAndRestoreCommittedText();
             args.Handled = true;
         }
     }
@@ -8105,13 +8121,18 @@ public sealed partial class MainWindow : Window
         ClearSelectedDrawingObject();
         _inlineCellEditAddress = address;
         _inlineCellEditText = editText;
-        _pendingInlineCellCaretIndex = Math.Clamp(caretIndex, 0, editText.Length);
+        var safeCaretIndex = Math.Clamp(caretIndex, 0, editText.Length);
+        _inlineCellEditSelectionStart = safeCaretIndex;
+        _inlineCellEditSelectionEnd = safeCaretIndex;
+        _pendingInlineCellCaretIndex = safeCaretIndex;
         _formulaBox.Text = editText;
         _formulaBoxEditOriginalText = editText;
         ClearFormulaRangeEntryState();
         _formulaRangeEntryMode = FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(editText);
         _session.BeginFormulaEdit(address);
         RefreshShell("Ready");
+        if (_inlineCellEditor is { } editor)
+            FocusInlineCellEditor(address, editor);
     }
 
     private void CommitInlineCellEdit(int rowDelta, int colDelta)
@@ -8128,7 +8149,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void CancelInlineCellEdit()
+    private void CancelCellEditAndRestoreCommittedText()
     {
         _session.CancelFormulaEdit();
         _formulaBoxEditOriginalText = null;
@@ -8143,6 +8164,8 @@ public sealed partial class MainWindow : Window
         _inlineCellEditor = null;
         _inlineCellEditAddress = null;
         _inlineCellEditText = null;
+        _inlineCellEditSelectionStart = null;
+        _inlineCellEditSelectionEnd = null;
         _pendingInlineCellCaretIndex = null;
     }
 
@@ -15484,11 +15507,7 @@ public sealed partial class MainWindow : Window
 
         if (e.Key == Key.Escape)
         {
-            _session.CancelFormulaEdit();
-            _formulaBoxEditOriginalText = null;
-            ClearFormulaRangeEntryState();
-            RefreshShell("Ready");
-            FocusShellRegion(ShellFocusTarget.Worksheet);
+            CancelCellEditAndRestoreCommittedText();
             e.Handled = true;
             return;
         }
@@ -23725,6 +23744,7 @@ public sealed partial class MainWindow : Window
     {
         if (_formulaBox.IsFocused ||
             _inlineCellEditor?.IsFocused == true ||
+            e.Source is TextBox or TextPresenter ||
             string.IsNullOrEmpty(e.Text))
             return;
 
@@ -23732,6 +23752,38 @@ public sealed partial class MainWindow : Window
         {
             if (char.IsControl(character))
                 return;
+        }
+
+        // X11 can source the first post-F2 TextInput from the worksheet while Avalonia is handing
+        // focus to the attached editor. Apply that packet to the existing edit instead of starting
+        // a second formula-bar edit; text sourced by a TextBox remains owned by that TextBox above.
+        if (_inlineCellEditAddress is not null && _inlineCellEditor is { } inlineEditor)
+        {
+            var text = inlineEditor.Text ?? "";
+            var selectionStart = Math.Clamp(
+                Math.Min(
+                    _inlineCellEditSelectionStart ?? inlineEditor.SelectionStart,
+                    _inlineCellEditSelectionEnd ?? inlineEditor.SelectionEnd),
+                0,
+                text.Length);
+            var selectionLength = Math.Clamp(
+                Math.Abs(
+                    (_inlineCellEditSelectionEnd ?? inlineEditor.SelectionEnd) -
+                    (_inlineCellEditSelectionStart ?? inlineEditor.SelectionStart)),
+                0,
+                text.Length - selectionStart);
+            inlineEditor.Focus();
+            var nextCaretIndex = selectionStart + e.Text.Length;
+            ApplyTextBoxEdit(
+                inlineEditor,
+                new ExcelTextEdit(
+                    text.Remove(selectionStart, selectionLength).Insert(selectionStart, e.Text),
+                    nextCaretIndex,
+                    0));
+            _inlineCellEditSelectionStart = nextCaretIndex;
+            _inlineCellEditSelectionEnd = nextCaretIndex;
+            e.Handled = true;
+            return;
         }
 
         BeginFormulaEdit(_session.ActiveCell, e.Text);
