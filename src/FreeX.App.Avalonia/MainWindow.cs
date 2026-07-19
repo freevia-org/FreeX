@@ -401,12 +401,12 @@ public sealed partial class MainWindow : Window
     private static readonly IBrush DrawingObjectBoundsForeground = Brush(5, 67, 69);
     private static readonly IReadOnlyList<IBrush> FormulaReferenceBrushes =
     [
-        Brush(0, 102, 204),
-        Brush(192, 0, 0),
+        Brush(32, 112, 214),
+        Brush(192, 80, 77),
         Brush(112, 48, 160),
-        Brush(0, 128, 0),
-        Brush(204, 102, 0),
-        Brush(0, 128, 128),
+        Brush(0, 128, 64),
+        Brush(237, 125, 49),
+        Brush(0, 153, 153),
     ];
 
     private readonly WorkbookSessionFactory _sessionFactory = new();
@@ -4497,6 +4497,11 @@ public sealed partial class MainWindow : Window
             headerOffset,
             zoomFactor);
 
+        var formulaReferenceOverlay = BuildFormulaReferenceGridOverlay(viewport, showHeadings, zoomFactor);
+        AvaloniaGrid.SetRowSpan(formulaReferenceOverlay, grid.RowDefinitions.Count);
+        AvaloniaGrid.SetColumnSpan(formulaReferenceOverlay, grid.ColumnDefinitions.Count);
+        grid.Children.Add(formulaReferenceOverlay);
+
         var overlay = BuildDrawingObjectOverlay(viewport);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
 
@@ -4859,6 +4864,24 @@ public sealed partial class MainWindow : Window
         return new DisplayCell(address.Row, address.Col, cell.Value, displayText, cell.FormulaText, cell.StyleId, Error: null, Style: style);
     }
 
+    private Canvas BuildFormulaReferenceGridOverlay(
+        ViewportModel viewport,
+        bool showHeadings,
+        double zoomFactor)
+    {
+        var overlay = new Canvas
+        {
+            Width = CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor),
+            Height = CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor),
+            ClipToBounds = true,
+            IsHitTestVisible = false,
+        };
+        AutomationProperties.SetAutomationId(overlay, "WorksheetFormulaReferenceOverlay");
+        _formulaReferenceGridOverlay = overlay;
+        AddFormulaReferenceHighlightOverlay(overlay, viewport, showHeadings, zoomFactor);
+        return overlay;
+    }
+
     private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)
     {
         var showHeadings = _session.ActiveSheet.ShowHeadings;
@@ -4870,11 +4893,9 @@ public sealed partial class MainWindow : Window
             ClipToBounds = true,
             IsHitTestVisible = true,
         };
-        _formulaReferenceGridOverlay = overlay;
 
         // Charts live on the sheet (not projected into viewport.DrawingObjects), so paint them first —
         // before the drawing-object early-out — so a chart renders even when no other objects exist.
-        AddFormulaReferenceHighlightOverlay(overlay, viewport, showHeadings, zoomFactor);
         AddChartOverlays(overlay, viewport);
 
         // Slicers and timelines are positioned drawing objects connected at the workbook level
@@ -8261,6 +8282,8 @@ public sealed partial class MainWindow : Window
         _formulaRangeSelectionCursor = null;
         _formulaRangeEntryMode = false;
         ClearFormulaReferenceEntrySpan();
+        ClearFormulaReferenceTextOverlay();
+        ClearFormulaReferenceGridHighlights();
     }
 
     private void UpdateFormulaRangeEntryStateAfterTextChanged(string? text)
@@ -8838,6 +8861,7 @@ public sealed partial class MainWindow : Window
         if (_session.FormulaEditAddress is null)
         {
             ClearFormulaReferenceTextOverlay();
+            ClearFormulaReferenceGridHighlights();
             return;
         }
 
@@ -8887,6 +8911,7 @@ public sealed partial class MainWindow : Window
         if (!IsFormulaReferenceHighlightActive())
         {
             ClearFormulaReferenceTextOverlay();
+            ClearFormulaReferenceGridHighlights();
             return;
         }
 
@@ -8920,6 +8945,7 @@ public sealed partial class MainWindow : Window
                 Background = CreateFormulaReferenceFill(brush),
                 IsHitTestVisible = false,
             };
+            AutomationProperties.SetAutomationId(border, "WorksheetFormulaReferenceHighlight");
             Canvas.SetLeft(border, left);
             Canvas.SetTop(border, top);
             overlay.Children.Add(border);
@@ -8932,15 +8958,26 @@ public sealed partial class MainWindow : Window
         if (_formulaReferenceGridOverlay is not { } overlay)
             return;
 
-        foreach (var visual in _formulaReferenceGridHighlightVisuals)
-            overlay.Children.Remove(visual);
-
-        _formulaReferenceGridHighlightVisuals.Clear();
+        ClearFormulaReferenceGridHighlights();
         AddFormulaReferenceHighlightOverlay(
             overlay,
             _session.Viewport,
             _session.ActiveSheet.ShowHeadings,
             GetActiveZoomFactor());
+    }
+
+    private void ClearFormulaReferenceGridHighlights()
+    {
+        if (_formulaReferenceGridOverlay is not { } overlay)
+        {
+            _formulaReferenceGridHighlightVisuals.Clear();
+            return;
+        }
+
+        foreach (var visual in _formulaReferenceGridHighlightVisuals)
+            overlay.Children.Remove(visual);
+
+        _formulaReferenceGridHighlightVisuals.Clear();
     }
 
     private void ApplyFormulaReferenceTextOverlay(

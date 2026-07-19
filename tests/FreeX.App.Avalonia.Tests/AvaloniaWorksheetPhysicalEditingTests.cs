@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FreeX.Core.Model;
@@ -156,6 +157,9 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 await DrainInputAsync();
 
                 var editor = FindByAutomationId<TextBox>(window, "WorksheetInlineCellEditor");
+                var referenceOverlay = FindByAutomationId<Canvas>(window, "WorksheetFormulaReferenceOverlay");
+                referenceOverlay.IsAttachedToVisualTree().Should().BeTrue();
+                FormulaReferenceHighlights(window).Should().BeEmpty();
                 RaiseRawTextInput(editor, "=");
                 await DrainInputAsync();
                 editor.Text.Should().Be("=");
@@ -167,6 +171,11 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
 
                 FindByAutomationId<TextBox>(window, "WorksheetInlineCellEditor").Should().BeSameAs(editor);
                 editor.IsFocused.Should().BeTrue();
+                FindByAutomationId<Canvas>(window, "WorksheetFormulaReferenceOverlay").Should().BeSameAs(referenceOverlay);
+                var referenceHighlight = FormulaReferenceHighlights(window).Should().ContainSingle().Which;
+                referenceHighlight.IsAttachedToVisualTree().Should().BeTrue();
+                referenceHighlight.BorderBrush.Should().BeOfType<SolidColorBrush>()
+                    .Which.Color.Should().Be(Color.FromRgb(32, 112, 214));
                 window.InlineCellEditorTextForTest.Should().Be("=B2");
                 window.Session.FormulaEditAddress.Should().Be(formulaAddress);
 
@@ -174,6 +183,9 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 await DrainInputAsync();
 
                 sheet.GetCell(formulaAddress)!.FormulaText.Should().Be("B2");
+                FindByAutomationId<Canvas>(window, "WorksheetFormulaReferenceOverlay")
+                    .IsAttachedToVisualTree().Should().BeTrue();
+                FormulaReferenceHighlights(window).Should().BeEmpty();
             }
             finally
             {
@@ -215,6 +227,46 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 await DrainInputAsync();
 
                 sheet.GetCell(formulaAddress)!.FormulaText.Should().Be("B2");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task FormulaReferenceAdornment_RemainsAttachedAndClearsOnCancel()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateShownWindow(out var sheet);
+            try
+            {
+                var formulaAddress = window.Session.ActiveCell;
+                var formulaBox = FindByAutomationId<TextBox>(window, "FormulaBox");
+                var referenceOverlay = FindByAutomationId<Canvas>(window, "WorksheetFormulaReferenceOverlay");
+                referenceOverlay.IsAttachedToVisualTree().Should().BeTrue();
+
+                formulaBox.Focus().Should().BeTrue();
+                await DrainInputAsync();
+                formulaBox.SelectAll();
+                window.KeyTextInput("=");
+                await DrainInputAsync();
+                ClickCell(window, "Cell_B2");
+                await DrainInputAsync();
+
+                FindByAutomationId<Canvas>(window, "WorksheetFormulaReferenceOverlay").Should().BeSameAs(referenceOverlay);
+                FormulaReferenceHighlights(window).Should().ContainSingle()
+                    .Which.IsAttachedToVisualTree().Should().BeTrue();
+
+                Press(window, Key.Escape, PhysicalKey.Escape);
+                await DrainInputAsync();
+
+                FindByAutomationId<Canvas>(window, "WorksheetFormulaReferenceOverlay")
+                    .IsAttachedToVisualTree().Should().BeTrue();
+                FormulaReferenceHighlights(window).Should().BeEmpty();
+                sheet.GetCell(formulaAddress)?.FormulaText.Should().BeNull();
             }
             finally
             {
@@ -272,6 +324,12 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
         window.GetVisualDescendants()
             .OfType<T>()
             .Single(control => AutomationProperties.GetAutomationId(control) == automationId);
+
+    private static IReadOnlyList<Border> FormulaReferenceHighlights(MainWindow window) =>
+        window.GetVisualDescendants()
+            .OfType<Border>()
+            .Where(control => AutomationProperties.GetAutomationId(control) == "WorksheetFormulaReferenceHighlight")
+            .ToList();
 
     private static async Task DrainInputAsync()
     {
