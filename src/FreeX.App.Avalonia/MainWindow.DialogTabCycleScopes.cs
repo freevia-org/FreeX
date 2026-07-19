@@ -47,6 +47,9 @@ public sealed partial class MainWindow
             : currentIndex < 0 || currentIndex == tabStops.Length - 1 ? 0 : currentIndex + 1;
 
         args.Handled = true;
+        if (FocusDialogControl(tabStops[nextIndex]))
+            return;
+
         Dispatcher.UIThread.Post(
             () =>
             {

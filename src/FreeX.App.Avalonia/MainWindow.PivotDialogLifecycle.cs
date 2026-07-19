@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 
 namespace FreeX.App.Avalonia;
@@ -20,10 +22,12 @@ public sealed partial class MainWindow
         ConfigureDialogTabCycle(dialog, root);
 
         EventHandler? layoutUpdated = null;
+        var focusEstablished = false;
 
         void FocusInitialControl()
         {
-            if (!dialog.IsVisible ||
+            if (focusEstablished ||
+                !dialog.IsVisible ||
                 !initialFocus.IsVisible ||
                 !initialFocus.IsEffectivelyEnabled)
             {
@@ -39,9 +43,29 @@ public sealed partial class MainWindow
             if (selectAllText && initialFocus is TextBox textBox && textBox.IsFocused)
                 textBox.SelectAll();
 
+            focusEstablished = true;
             if (layoutUpdated is not null)
                 dialog.LayoutUpdated -= layoutUpdated;
         }
+
+        dialog.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, args) =>
+            {
+                if (args.Key != Key.Tab ||
+                    (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Shift))
+                {
+                    return;
+                }
+
+                // A user Tab is authoritative navigation. Do not let a queued activation/layout retry
+                // reassert the opener's initial control after the user has already moved focus.
+                focusEstablished = true;
+                if (layoutUpdated is not null)
+                    dialog.LayoutUpdated -= layoutUpdated;
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
 
         layoutUpdated = (_, _) => FocusInitialControl();
         dialog.Opened += (_, _) =>
@@ -50,7 +74,10 @@ public sealed partial class MainWindow
             Dispatcher.UIThread.Post(FocusInitialControl, DispatcherPriority.Input);
             Dispatcher.UIThread.Post(FocusInitialControl, DispatcherPriority.Background);
         };
-        dialog.Activated += (_, _) => Dispatcher.UIThread.Post(FocusInitialControl, DispatcherPriority.Input);
+        dialog.Activated += (_, _) =>
+        {
+            Dispatcher.UIThread.Post(FocusInitialControl, DispatcherPriority.Input);
+        };
         dialog.LayoutUpdated += layoutUpdated;
         dialog.Closed += (_, _) =>
         {
