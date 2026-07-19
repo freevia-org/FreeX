@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Threading;
 
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -138,6 +139,61 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task RangeProbeBoundary_WaitsForPostedDialogFocusRestoration()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var owner = new MainWindow([]);
+            Window? dialog = null;
+            try
+            {
+                owner.Show();
+                var target = new TextBox();
+                dialog = new Window
+                {
+                    Content = target,
+                    Width = 240,
+                    Height = 120,
+                };
+                dialog.Show(owner);
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
+                target.Focus().Should().BeTrue();
+                IsFocusInside(dialog, dialog.FocusManager?.GetFocusedElement()).Should().BeTrue();
+
+                var restorationPosted = false;
+                Dispatcher.UIThread.Post(
+                    () =>
+                    {
+                        target.Focusable = true;
+                        target.Focus();
+                        restorationPosted = true;
+                    },
+                    DispatcherPriority.Background);
+
+                var settleMethod = typeof(MainWindow).GetMethod(
+                    "SettleDialogRangeInteractionBoundaryAsync",
+                    BindingFlags.Static | BindingFlags.NonPublic)!;
+                var settleTask = (Task)settleMethod.Invoke(null, [dialog])!;
+                await settleTask;
+
+                restorationPosted.Should().BeTrue();
+                IsFocusInside(dialog, dialog.FocusManager?.GetFocusedElement()).Should().BeTrue();
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(target);
+            }
+            finally
+            {
+                if (dialog?.IsVisible == true)
+                    dialog.Close();
+                if (owner.IsVisible)
+                    owner.Close();
+            }
+
+            return 0;
+        }, CancellationToken.None);
+    }
+
     private static async Task AssertProductionEscapeAsync(
         string openerName,
         object?[] arguments,
@@ -202,6 +258,9 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
             PhysicalKey = PhysicalKey.Escape,
             KeyDeviceType = KeyDeviceType.Keyboard,
         };
+
+    private static bool IsFocusInside(Window dialog, IInputElement? element) =>
+        element is Visual visual && ReferenceEquals(TopLevel.GetTopLevel(visual), dialog);
 
     private static object?[] CreatePageSetupArguments(string openerName)
     {

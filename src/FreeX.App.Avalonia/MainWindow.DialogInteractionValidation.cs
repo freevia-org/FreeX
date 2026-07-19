@@ -236,6 +236,7 @@ public sealed partial class MainWindow
         var forward = await ExerciseTabCycleAsync(dialog, reverse: false, tabStops);
         var backward = await ExerciseTabCycleAsync(dialog, reverse: true, tabStops);
         await RecordDialogRangeInteractionContractsAsync(dialog);
+        await SettleDialogRangeInteractionBoundaryAsync(dialog);
 
         var defaultButton = FindDefaultButton(dialog);
         var defaultEnter = defaultButton is null
@@ -473,6 +474,17 @@ public sealed partial class MainWindow
     }
 
     private static Task SettleDialogInteractionAsync() => Task.Delay(75);
+
+    private static async Task SettleDialogRangeInteractionBoundaryAsync(Window dialog)
+    {
+        const int maximumAttempts = 4;
+        for (var attempt = 0; attempt < maximumAttempts; attempt++)
+        {
+            await SettleDialogInteractionAsync();
+            if (!dialog.IsVisible || IsFocusInside(dialog, dialog.FocusManager?.GetFocusedElement()))
+                return;
+        }
+    }
 
     internal static bool SendDialogKeyForTest(
         Window dialog,
