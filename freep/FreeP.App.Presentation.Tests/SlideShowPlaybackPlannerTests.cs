@@ -52,6 +52,26 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.DurationMs.Should().Be(420);
     }
 
+    [Theory]
+    [InlineData(TransitionDirection.In, true)]
+    [InlineData(TransitionDirection.Out, false)]
+    [InlineData(null, true)]
+    public void PlanTransition_BoxUsesDedicatedActionAndDirection(
+        TransitionDirection? direction,
+        bool expandsFromCenter)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Box,
+            Direction = direction,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Box);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Box);
+        plan.BoxExpandsFromCenter.Should().Be(expandsFromCenter);
+    }
+
     [Fact]
     public void PlanTransition_SplitUsesDedicatedActionAndPreservesGeometry()
     {

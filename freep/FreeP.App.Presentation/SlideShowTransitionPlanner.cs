@@ -7,6 +7,7 @@ public enum SlideShowTransitionPlaybackKind
     Cut,
     Fade,
     Dissolve,
+    Box,
     Split,
     Blinds,
     RandomBars,
@@ -28,7 +29,8 @@ public sealed record SlideShowTransitionPlan(
     bool StripsSlopeDown,
     int WheelSpokeCount,
     bool WheelReverse,
-    bool ZoomIn);
+    bool ZoomIn,
+    bool BoxExpandsFromCenter);
 
 public static class SlideShowTransitionPlanner
 {
@@ -48,7 +50,8 @@ public static class SlideShowTransitionPlanner
             ResolveStripsSlopeDown(transition),
             ResolveWheelSpokeCount(transition),
             transition.Kind == TransitionKind.WheelReverse,
-            transition.Direction != TransitionDirection.Out);
+            transition.Direction != TransitionDirection.Out,
+            ResolveBoxExpandsFromCenter(transition));
     }
 
     public static SlideShowTransitionPlaybackKind PlanPlaybackKind(TransitionKind kind) =>
@@ -61,6 +64,8 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Flash => SlideShowTransitionPlaybackKind.Fade,
 
             TransitionKind.Dissolve => SlideShowTransitionPlaybackKind.Dissolve,
+
+            TransitionKind.Box => SlideShowTransitionPlaybackKind.Box,
 
             TransitionKind.Split => SlideShowTransitionPlaybackKind.Split,
 
@@ -109,6 +114,14 @@ public static class SlideShowTransitionPlanner
 
     private static int ResolveWheelSpokeCount(SlideTransition transition) =>
         Math.Clamp(transition.WheelSpokeCount is > 0 ? transition.WheelSpokeCount.Value : 4, 1, 32);
+
+    private static bool ResolveBoxExpandsFromCenter(SlideTransition transition) =>
+        transition.Direction switch
+        {
+            TransitionDirection.In => true,
+            TransitionDirection.Out => false,
+            _ => true
+        };
 
     public static (double X, double Y) ResolveIncomingOffset(TransitionDirection? direction) =>
         direction switch
