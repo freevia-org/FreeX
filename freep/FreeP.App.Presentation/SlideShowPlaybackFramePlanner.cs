@@ -306,8 +306,11 @@ public static class SlideShowPlaybackFramePlanner
     private static double ResolveRotation(SlideShowShapeAnimationPlaybackPlan plan, double progress) =>
         plan.EffectKind == SlideShowShapeAnimationEffectKind.Teeter
             ? Math.Sin(progress * Math.PI * 4) * 10
+            : plan.EffectKind == SlideShowShapeAnimationEffectKind.Spiral
+            ? progress <= 0.7
+                ? Lerp(0, plan.RotationDegrees * 0.82, progress / 0.7)
+                : Lerp(plan.RotationDegrees * 0.82, plan.RotationDegrees, (progress - 0.7) / 0.3)
             : plan.EffectKind is SlideShowShapeAnimationEffectKind.Spin
-            or SlideShowShapeAnimationEffectKind.Spiral
             or SlideShowShapeAnimationEffectKind.Swivel
             ? plan.RotationDegrees * progress
             : 0;
