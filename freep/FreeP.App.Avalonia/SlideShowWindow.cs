@@ -1187,11 +1187,12 @@ public sealed class SlideShowWindow : Window
         double width,
         double height,
         int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        bool reverse = false)
     {
         if (durationMs <= 0)
         {
-            target.Clip = BuildDissolveTransitionGeometry(width, height, 1);
+            target.Clip = BuildDissolveTransitionGeometry(width, height, reverse ? 0 : 1);
             onComplete?.Invoke();
             return;
         }
@@ -1207,12 +1208,16 @@ public sealed class SlideShowWindow : Window
         {
             frame++;
             var t = Math.Min(1.0, (double)frame / steps);
-            target.Clip = BuildDissolveTransitionGeometry(width, height, EaseInOut(t));
+            var progress = EaseInOut(t);
+            target.Clip = BuildDissolveTransitionGeometry(
+                width,
+                height,
+                reverse ? 1 - progress : progress);
             if (frame >= steps)
             {
                 timer.Stop();
                 _activeTimers.Remove(timer);
-                target.Clip = BuildDissolveTransitionGeometry(width, height, 1);
+                target.Clip = BuildDissolveTransitionGeometry(width, height, reverse ? 0 : 1);
                 onComplete?.Invoke();
             }
         };
@@ -1941,7 +1946,7 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Dissolve:
-                FadeEffect(element, plan, onReveal);
+                DissolveEffect(element, plan, onReveal);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Flash:
@@ -2092,6 +2097,33 @@ public sealed class SlideShowWindow : Window
                         plan.ToOpacity,
                         finalDuration,
                         onComplete: CompleteReveal(plan, onReveal)))));
+    }
+
+    private void DissolveEffect(Control element,
+        SlideShowShapeAnimationPlaybackPlan plan,
+        Action? onReveal = null)
+    {
+        InvokeRevealAtStart(plan, onReveal);
+
+        double width = element.Bounds.Width > 0 ? element.Bounds.Width : 960;
+        double height = element.Bounds.Height > 0 ? element.Bounds.Height : 540;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        element.Opacity = isExit ? plan.FromOpacity : 1;
+        element.Clip = BuildDissolveTransitionGeometry(width, height, isExit ? 1 : 0);
+
+        DelayedAction(plan.DelayMs, () =>
+            AnimateDissolveTransitionClip(
+                element,
+                width,
+                height,
+                plan.DurationMs,
+                onComplete: () =>
+                {
+                    element.Clip = null;
+                    element.Opacity = plan.ToOpacity;
+                    CompleteReveal(plan, onReveal)?.Invoke();
+                },
+                reverse: isExit));
     }
 
     private void FlyInEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)

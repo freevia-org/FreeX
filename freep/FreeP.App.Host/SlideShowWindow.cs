@@ -1908,7 +1908,7 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Dissolve:
-                FadeEffect(sb, element, plan);
+                DissolveEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Flash:
@@ -3025,6 +3025,60 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTarget(animation, el);
         Storyboard.SetTargetProperty(animation, new PropertyPath(OpacityProperty));
         sb.Children.Add(animation);
+    }
+
+    private static void DissolveEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double width = el.Width > 0 ? el.Width : 960;
+        double height = el.Height > 0 ? el.Height : 540;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+
+        el.Opacity = isExit ? plan.FromOpacity : 1;
+        el.Clip = BuildDissolveAnimationGeometry(width, height, isExit ? 1 : 0);
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            var maskProgress = isExit ? 1 - progress : progress;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildDissolveAnimationGeometry(width, height, maskProgress),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            el.Clip = null;
+            el.Opacity = plan.ToOpacity;
+        };
+        Storyboard.SetTarget(animation, el);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        sb.Children.Add(animation);
+    }
+
+    private static Geometry BuildDissolveAnimationGeometry(
+        double width,
+        double height,
+        double progress)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(
+                     width,
+                     height,
+                     SlideShowPlaybackPlanner.DissolveRowCount,
+                     SlideShowPlaybackPlanner.DissolveColumnCount,
+                     progress))
+        {
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        }
+
+        return geometry;
     }
 
     private static void DisappearEffect(Storyboard sb, FrameworkElement el, int delayMs)
