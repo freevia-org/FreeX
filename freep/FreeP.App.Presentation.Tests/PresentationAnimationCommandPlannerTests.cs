@@ -27,6 +27,9 @@ public sealed class PresentationAnimationCommandPlannerTests
     [InlineData("freep.anim.exit.disappear", AnimationKind.Exit, AnimationPreset.Appear)]
     [InlineData("freep.anim.exit.fade-out", AnimationKind.Exit, AnimationPreset.Fade)]
     [InlineData("freep.anim.exit.fly-out", AnimationKind.Exit, AnimationPreset.FlyIn)]
+    [InlineData("freep.anim.exit.wipe", AnimationKind.Exit, AnimationPreset.Wipe)]
+    [InlineData("freep.anim.exit.split", AnimationKind.Exit, AnimationPreset.Split)]
+    [InlineData("freep.anim.exit.zoom-out", AnimationKind.Exit, AnimationPreset.Zoom)]
     public void TryPlan_MapsEffectCommandIdsToTypedEffectIntents(
         string commandId,
         AnimationKind expectedKind,

@@ -566,6 +566,9 @@ public sealed class DocumentViewRoundTripTests
         grid.Children.OfType<TextBlock>()
             .Select(TextBlockText)
             .Should().Equal("1", "0", "0", "1");
+        grid.Children.OfType<TextBlock>()
+            .Select(text => text.Margin)
+            .Should().OnlyContain(margin => margin.Left == 2 && margin.Right == 2);
 
         var visualText = LogicalDescendants<TextBlock>(matrixPanel)
             .Select(TextBlockText)

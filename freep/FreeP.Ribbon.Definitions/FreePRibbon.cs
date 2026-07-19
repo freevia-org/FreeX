@@ -310,6 +310,9 @@ public static class FreePRibbon
             group.Medium("freep.anim.exit.disappear", FreePRibbonText.AnimationExitDisappearCommand.Label, RibbonCommandIconKind.Delete, FreePRibbonText.AnimationExitDisappearCommand.KeyTip);
             group.Medium("freep.anim.exit.fade-out", FreePRibbonText.AnimationExitFadeOutCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationExitFadeOutCommand.KeyTip);
             group.Medium("freep.anim.exit.fly-out", FreePRibbonText.AnimationExitFlyOutCommand.Label, RibbonCommandIconKind.ArrowDown, FreePRibbonText.AnimationExitFlyOutCommand.KeyTip);
+            group.Medium("freep.anim.exit.wipe", FreePRibbonText.AnimationExitWipeCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.AnimationExitWipeCommand.KeyTip);
+            group.Medium("freep.anim.exit.split", FreePRibbonText.AnimationExitSplitCommand.Label, RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.AnimationExitSplitCommand.KeyTip);
+            group.Medium("freep.anim.exit.zoom-out", FreePRibbonText.AnimationExitZoomOutCommand.Label, RibbonCommandIconKind.Zoom, FreePRibbonText.AnimationExitZoomOutCommand.KeyTip);
             if (profile.IncludeAnimationSeparators) group.Separator();
             group.Medium("freep.anim.none", FreePRibbonText.AnimationNoneCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.AnimationNoneCommand.KeyTip);
         });

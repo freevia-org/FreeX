@@ -11239,7 +11239,7 @@ public sealed class DocumentView : RichTextBox
                 var text = BuildEquationStructureTextBlock(
                     MatrixCellSegment(cell.Text),
                     WpfTextAlignment.Center,
-                    new Thickness(4, 0, 4, 0));
+                    new Thickness(2, 0, 2, 0));
                 Grid.SetRow(text, cell.RowIndex);
                 Grid.SetColumn(text, cell.ColumnIndex);
                 grid.Children.Add(text);

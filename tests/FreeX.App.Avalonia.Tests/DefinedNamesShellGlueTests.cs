@@ -58,6 +58,47 @@ public sealed class DefinedNamesShellGlueTests
     }
 
     [Fact]
+    public void BuildRows_ProjectsScopedNamedRanges_WithScopeAndRefersTo()
+    {
+        // A genuine sheet-scoped named RANGE (Excel "localSheetId"), defined via the 4-arg scoped
+        // DefineNamedRange overload — not a workbook-global name with a metadata label. This lives in
+        // workbook.ScopedNamedRanges, not workbook.NamedRanges, and must still show up in the Name Manager.
+        var (workbook, sheet) = CreateWorkbook();
+        workbook.DefineNamedRange(
+            "LocalRange",
+            Range(sheet, 1, 1, 5, 1),
+            new NamedRangeMetadata("Sheet1", "local only"),
+            sheet.Id);
+
+        var rows = DefinedNamesShellGlue.BuildRows(workbook);
+
+        var localRange = rows.Should().ContainSingle().Which;
+        localRange.Name.Should().Be("LocalRange");
+        localRange.ScopeLabel.Should().Be("Sheet1");
+        localRange.RefersTo.Should().Be("Sheet1!A1:A5");
+        localRange.Comment.Should().Be("local only");
+        localRange.IsWorkbookScoped.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildRows_ProjectsScopedNamedRangesAlongsideWorkbookRangesAndScopedFormulas()
+    {
+        // Sibling no-regression check: a scoped named range must not crowd out (or be crowded out by) the
+        // workbook-global named ranges or the sheet-scoped named formulas already handled by BuildRows.
+        var (workbook, sheet) = CreateWorkbook();
+        workbook.DefineNamedRange("Global", Range(sheet, 1, 1, 1, 1));
+        workbook.DefineNamedRange("LocalRange", Range(sheet, 2, 1, 2, 1), NamedRangeMetadata.WorkbookScope, sheet.Id);
+        workbook.DefineNamedFormula("LocalCalc", "A1*2", sheet.Id);
+
+        var rows = DefinedNamesShellGlue.BuildRows(workbook);
+
+        rows.Should().HaveCount(3);
+        rows.Select(r => r.Name).Should().BeEquivalentTo("Global", "LocalRange", "LocalCalc");
+        rows.Single(r => r.Name == "LocalRange").ScopeLabel.Should().Be("Sheet1");
+        rows.Single(r => r.Name == "LocalCalc").ScopeLabel.Should().Be("Sheet1");
+    }
+
+    [Fact]
     public void ProjectRows_FiltersToWorksheetScopedNames()
     {
         var (workbook, sheet) = CreateWorkbook();

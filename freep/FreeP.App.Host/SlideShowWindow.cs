@@ -948,19 +948,14 @@ public sealed class SlideShowWindow : Window
 
         var animatedShapeIds = slide.Animations
             .Where(a => a.Kind == AnimationKind.Emphasis
-                        || (a.Kind == AnimationKind.Exit
-                            && (a.Preset == AnimationPreset.Appear
-                                || a.Preset == AnimationPreset.Fade
-                                || a.Preset == AnimationPreset.FlyIn
-                                || a.Preset == AnimationPreset.Wipe
-                                || a.Preset == AnimationPreset.Split))
-                        || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
-                            && a.TriggerShapeId == null))
+                        || a.Kind == AnimationKind.Exit
+                        || (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion))
             .Select(a => a.ShapeId)
             .Distinct()
             .ToList();
 
-        // Emphasis overlays stay visible over the base canvas; entrance/motion overlays start hidden.
+        // Emphasis overlays stay visible over the base canvas; non-trigger entrance/motion
+        // overlays start hidden, while trigger-bound ones remain visible until clicked.
         if (animatedShapeIds.Count == 0) return;
 
         // Render the whole slide to get per-shape bitmaps via a temporary canvas.
@@ -998,7 +993,16 @@ public sealed class SlideShowWindow : Window
 
             _animOverlay.Children.Add(img);
             _animElements[shapeId] = img;
+
+            if (slide.Animations.Any(a => a.ShapeId == shapeId
+                                          && (a.Kind == AnimationKind.Entrance
+                                              || a.Kind == AnimationKind.Motion)))
+            {
+                _slideCanvas.SuppressedShapeIds.Add(shapeId);
+            }
         }
+
+        _slideCanvas.Refresh();
     }
 
     private readonly List<Storyboard> _pendingStoryboards = new();
@@ -1036,6 +1040,12 @@ public sealed class SlideShowWindow : Window
         }
     }
 
+    private void RevealShape(uint shapeId)
+    {
+        if (_slideCanvas.SuppressedShapeIds.Remove(shapeId))
+            _slideCanvas.Refresh();
+    }
+
     // ── Animation step playback ───────────────────────────────────────────────────
 
     private void PlayAnimationStep(AnimationStep step)
@@ -1054,13 +1064,13 @@ public sealed class SlideShowWindow : Window
             var anim = plan.Animation;
             if (!_animElements.TryGetValue(anim.ShapeId, out var element))
             {
-                // Unsupported exit presets and shapes without a renderable overlay retain
-                // the coarse fallback rather than guessing a direction or clip geometry.
+                // Shapes without a renderable overlay retain the coarse fallback rather than
+                // guessing a direction or clip geometry.
                 PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));
                 continue;
             }
 
-            if (anim.Kind == AnimationKind.Exit)
+            if (anim.Kind is AnimationKind.Entrance or AnimationKind.Motion or AnimationKind.Exit)
             {
                 element.Opacity = 1;
                 _slideCanvas.SuppressedShapeIds.Add(anim.ShapeId);
@@ -1081,6 +1091,7 @@ public sealed class SlideShowWindow : Window
         if (plan.EffectKind == SlideShowShapeAnimationEffectKind.MotionPath)
         {
             MotionPathEffect(sb, element, plan);
+            AttachEntranceCompletion(sb, plan);
             _pendingStoryboards.Add(sb);
             sb.Begin(element, isControllable: true);
             return;
@@ -1234,8 +1245,17 @@ public sealed class SlideShowWindow : Window
                 break;
         }
 
+        AttachEntranceCompletion(sb, plan);
         _pendingStoryboards.Add(sb);
         sb.Begin(element, isControllable: true);
+    }
+
+    private void AttachEntranceCompletion(
+        Storyboard storyboard,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        if (plan.Animation.Kind is AnimationKind.Entrance or AnimationKind.Motion)
+            storyboard.Completed += (_, _) => RevealShape(plan.Animation.ShapeId);
     }
 
     private static void AppearEffect(Storyboard sb, FrameworkElement el, int delayMs)
@@ -1316,12 +1336,19 @@ public sealed class SlideShowWindow : Window
 
         double dx = plan.OffsetXFactor * w;
         double dy = plan.OffsetYFactor * h;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var fromX = isExit ? 0 : dx;
+        var fromY = isExit ? 0 : dy;
+        var toX = isExit ? dx : 0;
+        var toY = isExit ? dy : 0;
+        translate.X = fromX;
+        translate.Y = fromY;
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
-        var animX = new DoubleAnimation(dx, 0, dur)
+        var animX = new DoubleAnimation(fromX, toX, dur)
             { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
-        var animY = new DoubleAnimation(dy, 0, dur)
+        var animY = new DoubleAnimation(fromY, toY, dur)
             { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
 
         Storyboard.SetTarget(animX, el);

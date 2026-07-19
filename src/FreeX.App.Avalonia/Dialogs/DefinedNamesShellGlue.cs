@@ -41,8 +41,9 @@ internal static class DefinedNamesShellGlue
     /// value preview. The derived <see cref="DefinedNameKind"/> drives the kind/error filtering. Both
     /// range-valued names (<see cref="Workbook.NamedRanges"/>) and formula/constant-valued names
     /// (<see cref="Workbook.NamedFormulas"/>) — plus their sheet-scoped counterparts
-    /// (<see cref="Workbook.ScopedNamedFormulas"/>) — must be listed here, or a formula-defined name is
-    /// invisible and unmanageable through the Name Manager even though the formula engine evaluates it.
+    /// (<see cref="Workbook.ScopedNamedRanges"/> and <see cref="Workbook.ScopedNamedFormulas"/>) — must be
+    /// listed here, or a scoped/formula-defined name is invisible and unmanageable through the Name Manager
+    /// even though it loads, resolves, and saves correctly.
     /// </summary>
     public static IReadOnlyList<DefinedNameRow> BuildRows(Workbook workbook)
     {
@@ -66,6 +67,18 @@ internal static class DefinedNamesShellGlue
         {
             var refersTo = "=" + formulaText;
             rows.Add(DefinedNameListProjector.CreateRow(name, DefinedNameScope.WorkbookLabel, refersTo, refersTo));
+        }
+
+        // Sheet-scoped named ranges (Excel "localSheetId") are stored separately from the workbook-global
+        // NamedRanges dictionary and must also be listed, or they're invisible and unreachable through the
+        // Name Manager's Edit/Delete actions, even though they load, resolve, and save correctly.
+        foreach (var ((name, sheetId), range) in workbook.ScopedNamedRanges)
+        {
+            workbook.TryGetScopedNamedRangeMetadata(name, sheetId, out var metadata);
+            var scopeLabel = workbook.GetSheet(sheetId)?.Name ?? metadata.Scope;
+            var comment = metadata.Comment ?? "";
+            var refersTo = FormatRefersTo(range, workbook);
+            rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo, comment));
         }
 
         // Sheet-scoped named formulas (Excel "localSheetId") are stored separately from the workbook-global

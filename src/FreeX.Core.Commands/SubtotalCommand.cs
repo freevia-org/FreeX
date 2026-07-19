@@ -13,6 +13,8 @@ public sealed class SubtotalCommand : IWorkbookCommand
     private readonly bool _summaryBelowData;
     private readonly List<IWorkbookCommand> _appliedCommands = [];
     private List<uint>? _previousRowPageBreaks;
+    private bool? _previousOutlineSummaryBelow;
+    private bool _outlineSummaryBelowChanged;
 
     public string Label => "Subtotal";
 
@@ -82,6 +84,18 @@ public sealed class SubtotalCommand : IWorkbookCommand
 
         _appliedCommands.Clear();
         _previousRowPageBreaks = sheet.RowPageBreaks.ToList();
+
+        // Data > Subtotal's "Summary below data" checkbox must drive Sheet.OutlineSummaryBelow,
+        // the same setting Data > Outline > Settings writes and Group/Ungroup/Collapse read (see
+        // GroupRowsCommand's summaryBelow lookups and the saved outlinePr/summaryBelow attribute).
+        // Otherwise the physical row layout this command just built (subtotal rows above or below
+        // their detail blocks, per _summaryBelowData) disagrees with the sheet-wide direction flag:
+        // Collapse Group would anchor to the wrong row, and the saved file's outlinePr direction
+        // would contradict the actual layout when reopened in Excel.
+        _previousOutlineSummaryBelow = sheet.OutlineSummaryBelow;
+        _outlineSummaryBelowChanged = true;
+        sheet.OutlineSummaryBelow = _summaryBelowData;
+
         var plan = SubtotalPlanBuilder.Build(
             sheet,
             _range,
@@ -105,6 +119,11 @@ public sealed class SubtotalCommand : IWorkbookCommand
             foreach (var rowBreak in _previousRowPageBreaks)
                 sheet.RowPageBreaks.Add(rowBreak);
             _previousRowPageBreaks = null;
+        }
+        if (_outlineSummaryBelowChanged)
+        {
+            ctx.GetSheet(_sheetId).OutlineSummaryBelow = _previousOutlineSummaryBelow;
+            _outlineSummaryBelowChanged = false;
         }
     }
 

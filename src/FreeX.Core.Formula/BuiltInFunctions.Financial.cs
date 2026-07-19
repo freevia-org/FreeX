@@ -380,12 +380,15 @@ public static partial class BuiltInFunctions
 
     private static double CouponPeriodDays(DateTime periodStart, int frequency, int basis)
     {
-        // Basis 3 (Actual/365) fixes the coupon-period length E at 365/frequency, the same
-        // convention already used by COUPDAYS (BuiltInFunctions.Financial.Coupons.cs) and
-        // PRICE/YIELD/DURATION's CouponPeriodDayCount (BuiltInFunctions.Financial.Bonds.cs) --
-        // unlike FinancialDays' basis-3 branch below, which measures *elapsed* actual days
-        // between two given dates (used for the accrued/remaining-period numerators).
+        // Bases 0, 2 and 4 all fix the coupon-period length E at 360/frequency (a 360-day
+        // year), and basis 3 fixes it at 365/frequency -- the same conventions already used
+        // by COUPDAYS (BuiltInFunctions.Financial.Coupons.cs) and PRICE/YIELD/DURATION's
+        // CouponPeriodDayCount (BuiltInFunctions.Financial.Bonds.cs) -- unlike FinancialDays'
+        // basis 1/2/3 branches below, which measure *elapsed* actual days between two given
+        // dates (used for the accrued/remaining-period numerators). Only basis 1 (Actual/Actual)
+        // leaves E as the actual elapsed days of the nominal period.
         if (basis == 3) return 365.0 / frequency;
+        if (basis is 0 or 2 or 4) return 360.0 / frequency;
         return FinancialDays(periodStart, periodStart.AddMonths(12 / frequency), basis);
     }
 

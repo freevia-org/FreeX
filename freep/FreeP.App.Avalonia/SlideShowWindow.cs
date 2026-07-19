@@ -922,14 +922,8 @@ public sealed class SlideShowWindow : Window
 
         var animatedShapeIds = slide.Animations
             .Where(a => a.Kind == AnimationKind.Emphasis
-                        || (a.Kind == AnimationKind.Exit
-                            && (a.Preset == AnimationPreset.Appear
-                                || a.Preset == AnimationPreset.Fade
-                                || a.Preset == AnimationPreset.FlyIn
-                                || a.Preset == AnimationPreset.Wipe
-                                || a.Preset == AnimationPreset.Split))
-                        || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
-                            && a.TriggerShapeId == null))
+                        || a.Kind == AnimationKind.Exit
+                        || (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion))
             .Select(a => a.ShapeId)
             .Distinct()
             .ToList();
@@ -1302,17 +1296,22 @@ public sealed class SlideShowWindow : Window
         double dx = plan.OffsetXFactor * w;
         double dy = plan.OffsetYFactor * h;
 
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var fromX = isExit ? 0 : dx;
+        var fromY = isExit ? 0 : dy;
+        var toX = isExit ? dx : 0;
+        var toY = isExit ? dy : 0;
         el.Opacity = 1;
         el.Clip = new RectangleGeometry(new Rect(0, 0, w, h));
-        el.RenderTransform = new TranslateTransform(dx, dy);
+        el.RenderTransform = new TranslateTransform(fromX, fromY);
 
         DelayedAction(plan.DelayMs, () =>
             AnimateTranslate(
                 el,
-                dx,
-                dy,
-                0,
-                0,
+                fromX,
+                fromY,
+                toX,
+                toY,
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal)));
     }

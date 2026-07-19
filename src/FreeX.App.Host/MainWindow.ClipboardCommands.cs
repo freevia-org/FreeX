@@ -13,12 +13,17 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    // SourceAreas records every area of a Ctrl+click multi-area selection that was actually copied
+    // (R49-render-multiarea-selection-3-1); null means "just SourceRange", so existing call sites
+    // that never touch this field (e.g. MainWindow.ScreenshotTour.cs's seeded clipboard) keep their
+    // original single-area behavior unchanged.
     private record InternalClipboard(
         GridRange SourceRange,
         List<(CellAddress Source, Cell Cell)> Cells,
         List<(CellAddress Source, PictureCellSnapshot Snapshot)> PictureCells,
         string Text,
-        bool IsCut = false);
+        bool IsCut = false,
+        IReadOnlyList<GridRange>? SourceAreas = null);
     private InternalClipboard? _internalClipboard;
 
     private void CancelCopyAndTransientModes()
@@ -72,6 +77,16 @@ public partial class MainWindow
         var viewport = SheetGrid.Viewport;
         if (viewport == null) return;
 
+        // A Ctrl+click multi-area selection must be copied as a WHOLE, not just its active area
+        // (R49-render-multiarea-selection-3-1). GetCurrentSelectionRanges already resolves
+        // SheetGrid.SelectedRanges (which includes the active area as its own last entry) with a
+        // single-range fallback, matching the pattern the Clear/Format commands already use for
+        // the identical multi-area scenario. `range` (a single rectangle) below now only serves as
+        // the bounding box of every selected area — for the common single-area case that bounding
+        // box IS `range` itself, so behavior is unchanged.
+        var areas = GetCurrentSelectionRanges(range);
+        var boundingRange = GetSelectionBoundingRange(areas, range);
+
         // P41: SheetGrid.Viewport only materializes the on-screen scroll position (see
         // ViewportService.Metrics BuildFrozenAwareRowMetrics, which stops once it has covered the
         // visible height/width). Serializing/HTML-rendering directly off that viewport truncates
@@ -81,9 +96,9 @@ public partial class MainWindow
         // clip.Cells fallback captured further below. Build a viewport request sized to the actual
         // copied range instead, so external copy/paste (and CF_HTML) always reflects the full
         // selection regardless of what is currently scrolled into view.
-        var fullRangeViewport = BuildFullRangeViewportForClipboard(range) ?? viewport;
+        var fullRangeViewport = BuildFullRangeViewportForClipboard(boundingRange) ?? viewport;
 
-        var text = ClipboardSerializer.Serialize(fullRangeViewport, range);
+        var text = ClipboardSerializer.Serialize(fullRangeViewport, boundingRange);
         var sheetForHtml = _workbook.GetSheet(_currentSheetId);
         try
         {
@@ -93,7 +108,7 @@ public partial class MainWindow
             // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
             var data = new DataObject();
             data.SetText(text);
-            var html = BuildHtmlClipboardFragment(fullRangeViewport, sheetForHtml, range, _workbook.Theme);
+            var html = BuildHtmlClipboardFragment(fullRangeViewport, sheetForHtml, boundingRange, _workbook.Theme);
             if (!string.IsNullOrEmpty(html))
                 data.SetData(System.Windows.DataFormats.Html, html);
             System.Windows.Clipboard.SetDataObject(data, copy: true);
@@ -105,24 +120,70 @@ public partial class MainWindow
             catch { /* clipboard may be locked */ }
         }
 
-        // Show marching ants around the copied range
-        SheetGrid.ClipboardRange = range;
+        // Show marching ants around the copied range. GridView.ClipboardRange only supports one
+        // rectangle (no multi-area marching-ants rendering), so a disjoint selection's visual
+        // indicator is the bounding box -- a pre-existing GridView (App.UI) limitation outside this
+        // file's scope; it does not affect what actually gets copied/pasted below.
+        SheetGrid.ClipboardRange = boundingRange;
         SheetGrid.ClipboardIsCut = isCut;
 
-        // Capture raw cells (including formulas) for paste formula adjustment
+        // Capture raw cells (including formulas) for paste formula adjustment -- from EVERY
+        // selected area, not just the active one, de-duplicating in case areas ever overlap.
         var sheet = _workbook.GetSheet(_currentSheetId);
         var clipCells = new List<(CellAddress, Cell)>();
-        var pictureCells = CapturePictureCells(fullRangeViewport, sheet, range);
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
+        var seenAddresses = new HashSet<CellAddress>();
+        foreach (var area in areas)
         {
-            for (uint c = range.Start.Col; c <= range.End.Col; c++)
+            for (uint r = area.Start.Row; r <= area.End.Row; r++)
             {
-                var addr = new CellAddress(_currentSheetId, r, c);
-                var cell = sheet?.GetCell(r, c);
-                clipCells.Add((addr, cell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
+                for (uint c = area.Start.Col; c <= area.End.Col; c++)
+                {
+                    var addr = new CellAddress(_currentSheetId, r, c);
+                    if (!seenAddresses.Add(addr))
+                        continue;
+                    var cell = sheet?.GetCell(r, c);
+                    clipCells.Add((addr, cell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
+                }
             }
         }
-        _internalClipboard = new InternalClipboard(range, clipCells, pictureCells, text, isCut);
+        var pictureCells = CapturePictureCells(fullRangeViewport, sheet, boundingRange);
+        _internalClipboard = new InternalClipboard(
+            boundingRange,
+            clipCells,
+            pictureCells,
+            text,
+            isCut,
+            areas.Count > 1 ? areas : null);
+    }
+
+    // Smallest GridRange enclosing every area in `areas` (all assumed to be on the same sheet).
+    // For a single-area selection this is exactly that area; PasteCommandFactory's internal-paste
+    // path shifts each captured cell by its own offset from this bounding box's start, so cells
+    // that fall inside the box but outside every actual area (the "gaps" between disjoint areas)
+    // are simply absent from clip.Cells and are never written to on paste -- matching Excel's own
+    // preserved-relative-layout behavior for a non-contiguous copy.
+    private static GridRange GetSelectionBoundingRange(IReadOnlyList<GridRange> areas, GridRange fallback)
+    {
+        if (areas.Count == 0)
+            return fallback;
+
+        var sheetId = areas[0].Start.Sheet;
+        var minRow = areas[0].Start.Row;
+        var minCol = areas[0].Start.Col;
+        var maxRow = areas[0].End.Row;
+        var maxCol = areas[0].End.Col;
+        for (var i = 1; i < areas.Count; i++)
+        {
+            var area = areas[i];
+            if (area.Start.Row < minRow) minRow = area.Start.Row;
+            if (area.Start.Col < minCol) minCol = area.Start.Col;
+            if (area.End.Row > maxRow) maxRow = area.End.Row;
+            if (area.End.Col > maxCol) maxCol = area.End.Col;
+        }
+
+        return new GridRange(
+            new CellAddress(sheetId, minRow, minCol),
+            new CellAddress(sheetId, maxRow, maxCol));
     }
 
     /// <summary>
@@ -317,12 +378,19 @@ public partial class MainWindow
                             options,
                             keepColumnWidths))
                     {
+                        // A multi-area Cut's SourceRange is only the bounding box of every copied
+                        // area (R49-render-multiarea-selection-3-1) -- clearing that whole box would
+                        // wipe the "gap" cells between areas that were never part of the cut
+                        // selection. Clear each actual source area individually instead; for the
+                        // ordinary single-area case SourceAreas is null and this is exactly the
+                        // previous single ClearContentsCommand(clip.SourceRange) behavior.
+                        var sourceAreas = clip.SourceAreas ?? [clip.SourceRange];
+                        var clearCommands = sourceAreas
+                            .Select(area => (IWorkbookCommand)new ClearContentsCommand(area.Start.Sheet, area))
+                            .ToList();
                         command = new CompositeWorkbookCommand(
                             "Cut and Paste",
-                            [
-                                command,
-                                new ClearContentsCommand(clip.SourceRange.Start.Sheet, clip.SourceRange)
-                            ]);
+                            [command, .. clearCommands]);
                     }
 
                     return command;
@@ -747,6 +815,14 @@ public partial class MainWindow
     {
         command = null!;
         if (!clip.IsCut || keepColumnWidths)
+            return false;
+
+        // MoveRangeCommand moves every cell in one contiguous rectangle. A multi-area Cut's
+        // SourceRange is only the bounding box of the actually-copied areas (R49-render-multiarea-
+        // selection-3-1); routing it through a single MoveRangeCommand would incorrectly move (and
+        // clear) the "gap" cells between areas that were never selected. Fall back to the generic
+        // copy-then-per-area-clear path below for that case.
+        if (clip.SourceAreas is { Count: > 1 })
             return false;
 
         // Only the plain "Paste" gesture (no Paste Special mode/options) is a straight move in

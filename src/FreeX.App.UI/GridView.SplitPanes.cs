@@ -203,7 +203,14 @@ public partial class GridView
     public static CellAddress? HitTestViewportCell(ViewportModel viewport, SheetId sheetId, Point pos)
     {
         var rowHeaderWidth = CalculateRowHeaderWidth(viewport);
-        if (pos.X < rowHeaderWidth || pos.Y < ColHeaderHeight)
+        // Use the EFFECTIVE column-header height (bare ColHeaderHeight plus the column-outline
+        // gutter, when a column outline group is active) rather than the bare constant — the
+        // render path (GridView.Rendering.Headers.cs / GridView.cs's EffectiveColHeaderHeight)
+        // draws the header row, and therefore row 1's real top, at this same effective height, so
+        // hit-testing must match it or every click misaligns by the gutter's height once columns
+        // are grouped (r49 outline-gutter fix).
+        var colHeaderHeight = CalculateColumnHeaderHeight(viewport);
+        if (pos.X < rowHeaderWidth || pos.Y < colHeaderHeight)
             return null;
 
         if (viewport.SplitPanes is { } splitPanes)
@@ -231,7 +238,7 @@ public partial class GridView
             };
             var rowOrigin = region is SplitPaneRegion.BottomLeft or SplitPaneRegion.BottomRight && horizontalY.HasValue
                 ? horizontalY.Value
-                : ColHeaderHeight;
+                : colHeaderHeight;
             var colOrigin = region is SplitPaneRegion.TopRight or SplitPaneRegion.BottomRight && verticalX.HasValue
                 ? verticalX.Value
                 : rowHeaderWidth;
@@ -239,7 +246,7 @@ public partial class GridView
             return HitTestMetrics(sheetId, pos, rows, cols, rowOrigin, colOrigin);
         }
 
-        return HitTestMetrics(sheetId, pos, viewport.RowMetrics, viewport.ColMetrics, ColHeaderHeight, rowHeaderWidth);
+        return HitTestMetrics(sheetId, pos, viewport.RowMetrics, viewport.ColMetrics, colHeaderHeight, rowHeaderWidth);
     }
 
     public static SplitPaneRegion HitTestSplitPaneRegion(ViewportModel viewport, Point pos)

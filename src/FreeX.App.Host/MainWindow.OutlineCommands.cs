@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Windows;
 using FreeX.App.UI;
 using FreeX.Core.Commands;
@@ -116,13 +117,18 @@ public partial class MainWindow
         return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel, preserveExistingHierarchy: true);
     }
 
-    // Excel's Ungroup decrements the deepest outline level found across the selected row/column
-    // range by exactly one -- never straight to level 0 -- so a selection that is only the
-    // innermost part of a wider, still-nested group drops out of just its own nesting level and
-    // remains part of the outer group (R37-commands-outline-subtotal-2-3). Previously this always
-    // passed a literal 0, which unconditionally removed every row/column in the selection from
-    // RowOutlineLevels/ColOutlineLevels regardless of its current level, wiping all nesting depth
-    // in one click.
+    // Excel's Ungroup decrements EACH row/column's OWN outline level by exactly one (clamped at 0)
+    // -- it never force-sets the whole selection to one uniform level. A selection that straddles
+    // several distinct nesting depths (e.g. some rows only ever grouped at level 1, others nested
+    // to level 2 or 3) must have each row's own level dropped by one; shallower rows must never be
+    // bumped UP to match the deepest row found in the selection (R49-commands-outline-group-3-2).
+    // We split the selection into contiguous runs that currently share the same existing level and
+    // call the shared OutlineGroupingPlanner.GetUngroupedOutlineLevel once PER RUN (every row in a
+    // run has the identical source level, so that call's own "max existing level in this sub-range,
+    // minus one" computation is exactly that run's decremented target -- this keeps FreeX.App.Host
+    // and FreeX.App.Avalonia sharing the same GetUngroupedOutlineLevel arithmetic instead of each
+    // reimplementing it, matching FreeXBehaviorDedupSourceBoundaryTests.
+    // OutlineAndDiagnosticsPolicies_AreSharedAcrossShells), combined into one undo step.
     private IWorkbookCommand CreateUngroupCommand(GridRange range)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -131,13 +137,66 @@ public partial class MainWindow
 
         if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
         {
-            int newLevel = OutlineGroupingPlanner.GetUngroupedOutlineLevel(
-                range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
-            return new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, newLevel);
+            var colRuns = GetContiguousSameLevelRuns(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
+            var colCommands = colRuns
+                .Select(run => (IWorkbookCommand)new GroupColumnsCommand(
+                    _currentSheetId,
+                    run.Start,
+                    run.End,
+                    OutlineGroupingPlanner.GetUngroupedOutlineLevel(run.Start, run.End, sheet.ColOutlineLevels)))
+                .ToList();
+            return new CompositeWorkbookCommand("Ungroup", colCommands);
         }
 
-        int rowLevel = OutlineGroupingPlanner.GetUngroupedOutlineLevel(
-            range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
-        return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel);
+        var rowRuns = GetContiguousSameLevelRuns(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
+        var rowCommands = rowRuns
+            .Select(run => (IWorkbookCommand)new GroupRowsCommand(
+                _currentSheetId,
+                run.Start,
+                run.End,
+                OutlineGroupingPlanner.GetUngroupedOutlineLevel(run.Start, run.End, sheet.RowOutlineLevels)))
+            .ToList();
+        return new CompositeWorkbookCommand("Ungroup", rowCommands);
+    }
+
+    // Splits [start, end] into contiguous runs of indices that currently share the same outline
+    // level. Indices with no level / level 0 are excluded entirely (they have nothing to decrement
+    // and must stay untouched).
+    private static List<(uint Start, uint End)> GetContiguousSameLevelRuns(
+        uint start, uint end, IReadOnlyDictionary<uint, int> outlineLevels)
+    {
+        var runs = new List<(uint Start, uint End)>();
+        uint? runStart = null;
+        int runLevel = 0;
+        for (var index = start; index <= end; index++)
+        {
+            outlineLevels.TryGetValue(index, out var level);
+            if (level <= 0)
+            {
+                if (runStart is { } pendingStart)
+                {
+                    runs.Add((pendingStart, index - 1));
+                    runStart = null;
+                }
+                continue;
+            }
+
+            if (runStart is null)
+            {
+                runStart = index;
+                runLevel = level;
+            }
+            else if (level != runLevel)
+            {
+                runs.Add((runStart.Value, index - 1));
+                runStart = index;
+                runLevel = level;
+            }
+        }
+
+        if (runStart is { } finalStart)
+            runs.Add((finalStart, end));
+
+        return runs;
     }
 }

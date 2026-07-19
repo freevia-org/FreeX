@@ -453,11 +453,25 @@ internal static partial class XlsxWorksheetMetadataPreserver
         var changed = false;
         IReadOnlyDictionary<string, XElement>? targetCellsByAddress = null;
         IReadOnlyList<string>? targetSharedStrings = null;
+
+        // R49-io-cell-metadata-richdata-3-2: a row/column insert or delete performed since the
+        // source snapshot was captured shifts affected cells to a new address in the freshly
+        // regenerated target sheet -- unlike model-tracked per-cell state (e.g. Sheet.Comments),
+        // which RowColumnShiftHelpers relocates in-place when the edit itself is applied, this
+        // native-only metadata lives purely in the pristine source XML snapshot, which is never
+        // remapped for structural edits. Cells whose address no longer exists in the target sheet
+        // at all are queued for a shift-aware fallback pass below instead of being dropped, so
+        // native-only metadata (vm/cm rich-value bindings, extLst, etc.) survives the shift.
+        List<(XElement SourceCell, SourceCellNativeMetadata NativeMetadata, string OldAddress)>? unmatchedSourceCells = null;
+        HashSet<string>? sourceAddresses = null;
+
         foreach (var sourceCell in sourceSheetData.Descendants(workbookNs + "c"))
         {
             var address = sourceCell.Attribute("r")?.Value;
             if (string.IsNullOrWhiteSpace(address))
                 continue;
+
+            (sourceAddresses ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(address);
 
             var nativeMetadata = GetSourceCellNativeMetadata(sourceCell, workbookNs);
             if (!nativeMetadata.HasAny)
@@ -468,94 +482,210 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 return changed;
 
             if (!targetCellsByAddress.TryGetValue(address, out var targetCell))
+            {
+                (unmatchedSourceCells ??= []).Add((sourceCell, nativeMetadata, address));
+                continue;
+            }
+
+            if (MergeCellNativeMetadataPair(sourceCell, targetCell, nativeMetadata, targetArchive, workbookNs, ref targetSharedStrings))
+                changed = true;
+        }
+
+        if (unmatchedSourceCells is { Count: > 0 } && targetCellsByAddress is { Count: > 0 })
+        {
+            if (MergeShiftedCellNativeMetadata(
+                    unmatchedSourceCells,
+                    sourceAddresses!,
+                    targetCellsByAddress,
+                    targetArchive,
+                    workbookNs,
+                    ref targetSharedStrings))
+            {
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    // Shift-aware fallback: pairs each still-unmatched source cell to an unclaimed target cell at
+    // an address that never existed in the source snapshot (a strong signal it is the recipient
+    // of a shift), matching by (type, formula, value) signature -- the same equality check already
+    // used to guard reattaching vm/cm at a directly-matched address. When multiple source cells and
+    // multiple candidates share an identical signature, disambiguate by relative order (old address
+    // for the source side, new address for the candidate side) so each cell's own identity survives
+    // the shift instead of depending on dictionary/enumeration order.
+    private static bool MergeShiftedCellNativeMetadata(
+        List<(XElement SourceCell, SourceCellNativeMetadata NativeMetadata, string OldAddress)> unmatchedSourceCells,
+        HashSet<string> sourceAddresses,
+        IReadOnlyDictionary<string, XElement> targetCellsByAddress,
+        ZipArchive targetArchive,
+        XNamespace workbookNs,
+        ref IReadOnlyList<string>? targetSharedStrings)
+    {
+        var dummySheet = SheetId.New();
+        var candidatesBySignature = new Dictionary<CellSignature, List<(CellAddress Address, XElement Cell)>>();
+        foreach (var (targetAddress, targetCell) in targetCellsByAddress)
+        {
+            if (sourceAddresses.Contains(targetAddress) ||
+                !CellAddress.TryParse(targetAddress, dummySheet, out var parsedAddress))
+            {
+                continue;
+            }
+
+            var signature = GetCellSignature(targetCell, workbookNs);
+            if (!candidatesBySignature.TryGetValue(signature, out var list))
+                candidatesBySignature[signature] = list = [];
+
+            list.Add((parsedAddress, targetCell));
+        }
+
+        if (candidatesBySignature.Count == 0)
+            return false;
+
+        var changed = false;
+        var sourceEntries = unmatchedSourceCells
+            .Select(entry => (
+                entry.SourceCell,
+                entry.NativeMetadata,
+                Signature: GetCellSignature(entry.SourceCell, workbookNs),
+                OldAddress: CellAddress.TryParse(entry.OldAddress, dummySheet, out var parsed) ? parsed : (CellAddress?)null))
+            .Where(entry => entry.OldAddress is not null)
+            .ToList();
+
+        foreach (var group in sourceEntries.GroupBy(entry => entry.Signature))
+        {
+            if (!candidatesBySignature.TryGetValue(group.Key, out var candidates) || candidates.Count == 0)
                 continue;
 
-            if (nativeMetadata.HasCellMetadata)
+            var sortedSources = group.OrderBy(entry => entry.OldAddress!.Value).ToList();
+            var sortedCandidates = candidates.OrderBy(candidate => candidate.Address).ToList();
+
+            var pairCount = Math.Min(sortedSources.Count, sortedCandidates.Count);
+            for (var i = 0; i < pairCount; i++)
             {
-                foreach (var attribute in sourceCell.Attributes())
+                if (MergeCellNativeMetadataPair(
+                        sortedSources[i].SourceCell,
+                        sortedCandidates[i].Cell,
+                        sortedSources[i].NativeMetadata,
+                        targetArchive,
+                        workbookNs,
+                        ref targetSharedStrings))
                 {
-                    if (IsOfficeRevisionAttribute(attribute) ||
-                        targetCell.Attribute(attribute.Name) is not null)
-                    {
-                        continue;
-                    }
-
-                    // Rich-value cell metadata (vm/cm index into <valueMetadata>/<cellMetadata> in the
-                    // rich-value metadata part) is only valid for the exact t/formula/<v> it was captured
-                    // against. A full-rewrite save regenerates the target cell from the current model, so
-                    // if the cell's type, formula, or value changed since the source snapshot was taken,
-                    // reattaching the stale vm/cm would point the edited cell at metadata describing its
-                    // old value. Drop vm/cm on any mismatch; every other native attribute is unaffected.
-                    if (IsRichValueMetadataAttribute(attribute) &&
-                        !CellValueMatchesCapturedNativeMetadata(sourceCell, targetCell, workbookNs))
-                    {
-                        continue;
-                    }
-
-                    targetCell.SetAttributeValue(attribute.Name, attribute.Value);
-                    changed = true;
-                }
-
-                if (XlsxNativeXmlMerger.MergeExtensionList(sourceCell.Element(workbookNs + "extLst"), targetCell, workbookNs))
-                    changed = true;
-
-                if (MergeMissingNativeChildren(
-                        sourceCell,
-                        targetCell,
-                        child =>
-                            child.Name != workbookNs + "f" &&
-                            child.Name != workbookNs + "v" &&
-                            child.Name != workbookNs + "is" &&
-                            child.Name != workbookNs + "extLst"))
-                {
-                    changed = true;
-                }
-            }
-
-            if (nativeMetadata.InlineString is not null && targetCell.Element(workbookNs + "f") is null)
-            {
-                targetSharedStrings ??= LoadSharedStringPlainText(targetArchive, workbookNs);
-                var sourcePlainText = ReadInlineStringPlainText(nativeMetadata.InlineString, workbookNs);
-                if (!string.IsNullOrEmpty(sourcePlainText) &&
-                    string.Equals(sourcePlainText, ReadCellPlainText(targetCell, targetSharedStrings, workbookNs), StringComparison.Ordinal))
-                {
-                    targetCell.SetAttributeValue("t", "inlineStr");
-                    targetCell.Elements(workbookNs + "v").Remove();
-                    targetCell.Elements(workbookNs + "is").Remove();
-                    var replacement = new XElement(nativeMetadata.InlineString);
-                    SanitizeRichInlineStringFontNames(replacement, workbookNs);
-                    targetCell.Add(replacement);
-                    changed = true;
-                }
-            }
-
-            if (nativeMetadata.Formula is not null)
-            {
-                var targetFormula = targetCell.Element(workbookNs + "f");
-                if (targetFormula is null ||
-                    !string.Equals(
-                        NormalizeFormulaXmlText(nativeMetadata.Formula.Value),
-                        NormalizeFormulaXmlText(targetFormula.Value),
-                        StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                foreach (var attribute in nativeMetadata.Formula.Attributes())
-                {
-                    if (attribute.IsNamespaceDeclaration)
-                        continue;
-
-                    if (string.Equals(targetFormula.Attribute(attribute.Name)?.Value, attribute.Value, StringComparison.Ordinal))
-                        continue;
-
-                    targetFormula.SetAttributeValue(attribute.Name, attribute.Value);
                     changed = true;
                 }
             }
         }
 
         return changed;
+    }
+
+    private static bool MergeCellNativeMetadataPair(
+        XElement sourceCell,
+        XElement targetCell,
+        SourceCellNativeMetadata nativeMetadata,
+        ZipArchive targetArchive,
+        XNamespace workbookNs,
+        ref IReadOnlyList<string>? targetSharedStrings)
+    {
+        var changed = false;
+
+        if (nativeMetadata.HasCellMetadata)
+        {
+            foreach (var attribute in sourceCell.Attributes())
+            {
+                if (IsOfficeRevisionAttribute(attribute) ||
+                    targetCell.Attribute(attribute.Name) is not null)
+                {
+                    continue;
+                }
+
+                // Rich-value cell metadata (vm/cm index into <valueMetadata>/<cellMetadata> in the
+                // rich-value metadata part) is only valid for the exact t/formula/<v> it was captured
+                // against. A full-rewrite save regenerates the target cell from the current model, so
+                // if the cell's type, formula, or value changed since the source snapshot was taken,
+                // reattaching the stale vm/cm would point the edited cell at metadata describing its
+                // old value. Drop vm/cm on any mismatch; every other native attribute is unaffected.
+                if (IsRichValueMetadataAttribute(attribute) &&
+                    !CellValueMatchesCapturedNativeMetadata(sourceCell, targetCell, workbookNs))
+                {
+                    continue;
+                }
+
+                targetCell.SetAttributeValue(attribute.Name, attribute.Value);
+                changed = true;
+            }
+
+            if (XlsxNativeXmlMerger.MergeExtensionList(sourceCell.Element(workbookNs + "extLst"), targetCell, workbookNs))
+                changed = true;
+
+            if (MergeMissingNativeChildren(
+                    sourceCell,
+                    targetCell,
+                    child =>
+                        child.Name != workbookNs + "f" &&
+                        child.Name != workbookNs + "v" &&
+                        child.Name != workbookNs + "is" &&
+                        child.Name != workbookNs + "extLst"))
+            {
+                changed = true;
+            }
+        }
+
+        if (nativeMetadata.InlineString is not null && targetCell.Element(workbookNs + "f") is null)
+        {
+            targetSharedStrings ??= LoadSharedStringPlainText(targetArchive, workbookNs);
+            var sourcePlainText = ReadInlineStringPlainText(nativeMetadata.InlineString, workbookNs);
+            if (!string.IsNullOrEmpty(sourcePlainText) &&
+                string.Equals(sourcePlainText, ReadCellPlainText(targetCell, targetSharedStrings, workbookNs), StringComparison.Ordinal))
+            {
+                targetCell.SetAttributeValue("t", "inlineStr");
+                targetCell.Elements(workbookNs + "v").Remove();
+                targetCell.Elements(workbookNs + "is").Remove();
+                var replacement = new XElement(nativeMetadata.InlineString);
+                SanitizeRichInlineStringFontNames(replacement, workbookNs);
+                targetCell.Add(replacement);
+                changed = true;
+            }
+        }
+
+        if (nativeMetadata.Formula is not null)
+        {
+            var targetFormula = targetCell.Element(workbookNs + "f");
+            if (targetFormula is null ||
+                !string.Equals(
+                    NormalizeFormulaXmlText(nativeMetadata.Formula.Value),
+                    NormalizeFormulaXmlText(targetFormula.Value),
+                    StringComparison.Ordinal))
+            {
+                return changed;
+            }
+
+            foreach (var attribute in nativeMetadata.Formula.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration)
+                    continue;
+
+                if (string.Equals(targetFormula.Attribute(attribute.Name)?.Value, attribute.Value, StringComparison.Ordinal))
+                    continue;
+
+                targetFormula.SetAttributeValue(attribute.Name, attribute.Value);
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private readonly record struct CellSignature(string? Type, string? Formula, string? Value);
+
+    private static CellSignature GetCellSignature(XElement cell, XNamespace workbookNs)
+    {
+        var formula = cell.Element(workbookNs + "f")?.Value;
+        return new CellSignature(
+            cell.Attribute("t")?.Value,
+            formula is null ? null : NormalizeFormulaXmlText(formula),
+            cell.Element(workbookNs + "v")?.Value);
     }
 
     private static bool IsRichValueMetadataAttribute(XAttribute attribute) =>

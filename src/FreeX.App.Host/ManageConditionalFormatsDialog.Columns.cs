@@ -109,6 +109,7 @@ public sealed partial class ManageConditionalFormatsDialog
             Mode = BindingMode.TwoWay,
             UpdateSourceTrigger = UpdateSourceTrigger.LostFocus
         });
+        appliesToFactory.AddHandler(UIElement.GotFocusEvent, new RoutedEventHandler(AppliesToTextBox_GotFocus));
         appliesToFactory.AddHandler(UIElement.LostFocusEvent, new RoutedEventHandler(AppliesToTextBox_LostFocus));
 
         appliesToPanelFactory.AppendChild(rangePickerFactory);
@@ -123,13 +124,30 @@ public sealed partial class ManageConditionalFormatsDialog
         };
     }
 
+    // Stashes the text shown when the box gains focus, so LostFocus (below) can tell "the user
+    // actually retyped this reference" apart from "focus merely passed through the cell"
+    // (R49-commands-cf-manage-3-2).
+    private static void AppliesToTextBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox textBox)
+            textBox.Tag = textBox.Text;
+    }
+
     // The binding's ConvertBack already commits the newly-typed range into rule.AppliesTo
     // (which runs first, since this handler is attached after the binding). Typing a fresh
     // range must also drop any stale AdditionalRanges left over from a prior multi-area
     // selection, matching the range-picker path (see ManageConditionalFormatsPlanner.ApplyRuleRange).
+    // But with UpdateSourceTrigger=LostFocus, WPF fires this handler on EVERY focus loss -- even
+    // when the user only clicked into the cell (e.g. to inspect it, or via keyboard row
+    // navigation) and back out without changing a single character. Only clear AdditionalRanges
+    // when the displayed text actually changed from what it was when focus was gained; otherwise
+    // a multi-area rule's non-active areas were being silently discarded on a no-op focus visit.
     private void AppliesToTextBox_LostFocus(object sender, RoutedEventArgs e)
     {
         if (sender is not TextBox { DataContext: ConditionalFormat rule } textBox)
+            return;
+
+        if (textBox.Tag as string == textBox.Text)
             return;
 
         if (TryParseAppliesToText(textBox.Text, _sheet.Id, out _))

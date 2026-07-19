@@ -159,9 +159,59 @@ internal static class XlsxLegacyCommentVisibilityNormalizer
                 visibleElement.Remove();
                 modified = true;
             }
+
+            if (ApplyVisibilityStyle(shape, isPinned))
+                modified = true;
         }
 
         if (modified)
             XlsxPackageXmlEditor.ReplaceXml(archive, vmlPath, vml);
+    }
+
+    /// <summary>
+    /// Rewrites (or appends) the <c>visibility:</c> CSS property inside the VML shape's
+    /// <c>style</c> attribute so it matches <paramref name="isPinned"/> — <c>visible</c> when
+    /// pinned, <c>hidden</c> otherwise — without disturbing any other CSS properties already
+    /// present (position, margins, size, z-index, etc). Real Excel treats this CSS property as
+    /// the shape's actual paint state, so the ClientData <c>&lt;x:Visible/&gt;</c> flag alone is
+    /// not sufficient (see the sibling fix in <see cref="XlsxLegacyCommentPreserver"/>).
+    /// </summary>
+    /// <returns><see langword="true"/> if the style attribute was changed.</returns>
+    private static bool ApplyVisibilityStyle(XElement shape, bool isPinned)
+    {
+        var newValue = isPinned ? "visible" : "hidden";
+        var styleAttribute = shape.Attribute("style");
+        var styleValue = styleAttribute?.Value ?? "";
+
+        var properties = styleValue.Length == 0
+            ? []
+            : styleValue.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var found = false;
+        var rebuilt = new List<string>(properties.Length + 1);
+        foreach (var property in properties)
+        {
+            var colonIndex = property.IndexOf(':');
+            if (colonIndex >= 0 &&
+                string.Equals(property[..colonIndex].Trim(), "visibility", StringComparison.OrdinalIgnoreCase))
+            {
+                rebuilt.Add($"visibility:{newValue}");
+                found = true;
+            }
+            else
+            {
+                rebuilt.Add(property);
+            }
+        }
+
+        if (!found)
+            rebuilt.Add($"visibility:{newValue}");
+
+        var newStyleValue = string.Join(";", rebuilt);
+        if (string.Equals(styleValue, newStyleValue, StringComparison.Ordinal))
+            return false;
+
+        shape.SetAttributeValue("style", newStyleValue);
+        return true;
     }
 }

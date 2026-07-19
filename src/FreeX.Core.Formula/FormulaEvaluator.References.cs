@@ -34,9 +34,18 @@ public sealed partial class FormulaEvaluator
         if (IsLinkedDataTypeFieldAccessShape(node.Name))
             return ErrorValue.Field;
 
-        // Local LET/LAMBDA bindings shadow workbook named ranges.
+        // Local LET/LAMBDA bindings shadow workbook named ranges (and any explicit sheet
+        // qualifier below, which can never apply to a purely local binding).
         var binding = context.TryResolveLambdaBinding(node.Name);
         if (binding is not null) return binding;
+
+        // An explicit sheet qualifier (the "Sheet2" in "Sheet2!MyName") forces resolution
+        // against THAT sheet's own scope — never the formula's own current sheet — falling
+        // back to workbook-global scope exactly as Excel does. Returns false (leaving the
+        // rest of this method's current-sheet-then-workbook resolution untouched) when the
+        // name was written unqualified. See TryResolveSheetQualifiedName.
+        if (TryResolveSheetQualifiedName(node, context, out var qualifiedResult))
+            return qualifiedResult;
 
         // Excel scope precedence: a name scoped to the current sheet always wins over a
         // same-named workbook-global name, regardless of whether either name is a plain
@@ -109,41 +118,115 @@ public sealed partial class FormulaEvaluator
     /// </summary>
     private static bool TryEvaluateNamedFormula(string name, IEvalContext context, out ScalarValue result)
     {
-        result = ErrorValue.Name;
         var formulaText = context.TryGetNamedFormulaText(name);
         if (formulaText is null)
+        {
+            result = ErrorValue.Name;
             return false;
+        }
 
+        result = EvaluateNamedFormulaText(name, formulaText, context);
+        return true;
+    }
+
+    /// <summary>
+    /// Shared cycle-detection + evaluation body for a named formula's raw RefersTo text, factored
+    /// out of <see cref="TryEvaluateNamedFormula"/> so <see cref="TryResolveSheetQualifiedName"/>
+    /// can evaluate a formula-kind name it resolved directly from the QUALIFIED sheet's scope
+    /// (bypassing <c>context.TryGetNamedFormulaText</c>, which is always anchored to the eval
+    /// context's own current sheet — see that method's summary) using the exact same
+    /// cycle-guard/error-handling semantics as the ordinary unqualified path.
+    /// </summary>
+    private static ScalarValue EvaluateNamedFormulaText(string name, string formulaText, IEvalContext context)
+    {
         // Cycle detection: if we're already evaluating this name (directly or transitively),
         // return #REF! to match Excel's circular-reference behaviour.
         var visiting = _namedFormulaVisiting ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (!visiting.Add(name))
-        {
-            result = ErrorValue.Ref;
-            return true;
-        }
+            return ErrorValue.Ref;
 
         try
         {
             var ast = GetOrParseFormula(formulaText);
             ast = ApplyRelativeNameAnchor(ast, context);
-            result = EvaluateNamedFormulaAst(ast, context);
-            return true;
+            return EvaluateNamedFormulaAst(ast, context);
         }
         catch (FormulaEvalException ex)
         {
-            result = ErrorFromCode(ex.ErrorCode);
-            return true;
+            return ErrorFromCode(ex.ErrorCode);
         }
         catch (FormulaParseException)
         {
-            result = ErrorValue.Value;
-            return true;
+            return ErrorValue.Value;
         }
         finally
         {
             visiting.Remove(name);
         }
+    }
+
+    /// <summary>
+    /// Resolves a <see cref="NamedRangeNode"/> that carries an explicit
+    /// <see cref="NamedRangeNode.SheetQualifier"/> (e.g. the "Sheet2" in "Sheet2!MyName") against
+    /// THAT sheet's own defined-name scope, falling back to workbook-global scope when the
+    /// qualified sheet has no local name of that text — exactly Excel's rule for a sheet-qualified
+    /// name reference, and independent of the formula's own current sheet (which
+    /// <see cref="IsSheetScopedName"/>/<see cref="EvaluateNamedRange"/> use for an UNqualified
+    /// name). Mirrors the same scoped-formula &gt; scoped-range &gt; global-range &gt; global-formula
+    /// precedence as the unqualified path, just anchored to the qualified sheet's id instead of
+    /// <c>context.CurrentSheet.Id</c>.
+    /// Returns <see langword="false"/> (result left at #NAME?, not meaningful) when
+    /// <paramref name="node"/> has no <see cref="NamedRangeNode.SheetQualifier"/> at all — callers
+    /// should fall through to ordinary current-sheet-then-workbook resolution in that case.
+    /// Returns <see langword="true"/> with <paramref name="result"/> set to <c>#REF!</c> when the
+    /// qualifying sheet name itself doesn't resolve to a real sheet (e.g. deleted after the
+    /// formula was authored), matching Excel's #REF! for a reference to a nonexistent sheet.
+    /// </summary>
+    private static bool TryResolveSheetQualifiedName(NamedRangeNode node, IEvalContext context, out ScalarValue result)
+    {
+        result = ErrorValue.Name;
+        if (node.SheetQualifier is not { } sheetQualifier)
+            return false;
+
+        var workbook = context.CurrentWorkbook;
+        var qualifiedSheet = workbook?.GetSheet(sheetQualifier);
+        if (workbook is null || qualifiedSheet is null)
+        {
+            result = ErrorValue.Ref;
+            return true;
+        }
+
+        // Scoped-formula tier: a formula named-definition scoped to the qualified sheet always
+        // outranks a same-named workbook-global range, matching the unqualified precedence rule.
+        if (workbook.ScopedNamedFormulas.TryGetValue((node.Name, qualifiedSheet.Id), out var scopedFormulaText))
+        {
+            result = EvaluateNamedFormulaText(node.Name, scopedFormulaText, context);
+            return true;
+        }
+
+        // Scoped-range tier, falling back to the workbook-global range: Workbook.TryGetNamedRange
+        // already checks the (name, sheetId) scoped dictionary first and falls back to the global
+        // NamedRanges dictionary, so this single call covers both "range scoped to the qualified
+        // sheet" and "workbook-global range" (bare named range reference outside a function:
+        // return top-left cell value — for 2D named ranges this is intentionally lossy; full
+        // implicit-intersection semantics are a Phase 5 enhancement).
+        if (workbook.TryGetNamedRange(node.Name, qualifiedSheet.Id, out var range))
+        {
+            result = BuildRangeValueOrError(range, context);
+            return true;
+        }
+
+        // Global-formula tier: Workbook.TryGetNamedFormulaText falls back to the workbook-global
+        // formula text the same way, so by this point (no scoped formula, no scoped/global range)
+        // this can only find a workbook-global formula, if any.
+        if (workbook.TryGetNamedFormulaText(node.Name, qualifiedSheet.Id) is { } formulaText)
+        {
+            result = EvaluateNamedFormulaText(node.Name, formulaText, context);
+            return true;
+        }
+
+        result = ErrorValue.Name;
+        return true;
     }
 
     /// <summary>
@@ -339,6 +422,12 @@ public sealed partial class FormulaEvaluator
             var binding = context.TryResolveLambdaBinding(named.Name);
             if (binding is not null)
                 return binding;
+
+            // An explicit sheet qualifier forces resolution against that sheet's own scope
+            // (falling back to workbook-global) instead of the current-sheet-then-workbook
+            // resolution below — see TryResolveSheetQualifiedName / EvaluateNamedRange.
+            if (TryResolveSheetQualifiedName(named, context, out var qualifiedResult))
+                return qualifiedResult;
 
             // Sheet-scoped names (either kind) win over a same-named workbook-global name —
             // see IsSheetScopedName / EvaluateNamedRange for the full Excel-scope-precedence rationale.
@@ -579,6 +668,12 @@ public sealed partial class FormulaEvaluator
     {
         if (IsLinkedDataTypeFieldAccessShape(node.Name))
             return ErrorValue.Field;
+
+        // An explicit sheet qualifier forces resolution against that sheet's own scope (falling
+        // back to workbook-global) instead of the current-sheet-then-workbook resolution below —
+        // see TryResolveSheetQualifiedName / EvaluateNamedRange.
+        if (TryResolveSheetQualifiedName(node, context, out var qualifiedResult))
+            return qualifiedResult is RangeValue or ErrorValue ? qualifiedResult : ErrorValue.Value;
 
         if (IsSheetScopedName(node.Name, context, out var sheetScopedIsFormula) && sheetScopedIsFormula)
         {
