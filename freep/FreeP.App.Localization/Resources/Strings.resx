@@ -622,6 +622,30 @@
   <data name="Ribbon_Command_TransitionComb_KeyTip" xml:space="preserve">
     <value>O</value>
   </data>
+  <data name="Ribbon_Command_TransitionGallery_Label" xml:space="preserve">
+    <value>Gallery</value>
+  </data>
+  <data name="Ribbon_Command_TransitionGallery_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Ribbon_Command_TransitionConveyor_Label" xml:space="preserve">
+    <value>Conveyor</value>
+  </data>
+  <data name="Ribbon_Command_TransitionConveyor_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPan_Label" xml:space="preserve">
+    <value>Pan</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPan_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWindow_Label" xml:space="preserve">
+    <value>Window</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWindow_KeyTip" xml:space="preserve">
+    <value>E</value>
+  </data>
   <data name="Ribbon_Command_TransitionDissolve_Label" xml:space="preserve">
     <value>Dissolve</value>
   </data>

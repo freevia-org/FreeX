@@ -65,6 +65,22 @@ public static class PresentationTransitionCommandPlanner
                 PresentationTransitionCommandIntentKind.SetKind,
                 TransitionKind.Comb),
             new PresentationTransitionCommandPlan(
+                "freep.transition.gallery",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Gallery),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.conveyor",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Conveyor),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.pan",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Pan),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.window",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Window),
+            new PresentationTransitionCommandPlan(
                 "freep.transition.dissolve",
                 PresentationTransitionCommandIntentKind.SetKind,
                 TransitionKind.Dissolve),

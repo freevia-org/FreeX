@@ -178,6 +178,10 @@ internal static class FreePRibbonText
     public static RibbonText TransitionUncoverCommand { get; } = new("Ribbon_Command_TransitionUncover_Label", "Ribbon_Command_TransitionUncover_KeyTip");
     public static RibbonText TransitionBlindsCommand { get; } = new("Ribbon_Command_TransitionBlinds_Label", "Ribbon_Command_TransitionBlinds_KeyTip");
     public static RibbonText TransitionCombCommand { get; } = new("Ribbon_Command_TransitionComb_Label", "Ribbon_Command_TransitionComb_KeyTip");
+    public static RibbonText TransitionGalleryCommand { get; } = new("Ribbon_Command_TransitionGallery_Label", "Ribbon_Command_TransitionGallery_KeyTip");
+    public static RibbonText TransitionConveyorCommand { get; } = new("Ribbon_Command_TransitionConveyor_Label", "Ribbon_Command_TransitionConveyor_KeyTip");
+    public static RibbonText TransitionPanCommand { get; } = new("Ribbon_Command_TransitionPan_Label", "Ribbon_Command_TransitionPan_KeyTip");
+    public static RibbonText TransitionWindowCommand { get; } = new("Ribbon_Command_TransitionWindow_Label", "Ribbon_Command_TransitionWindow_KeyTip");
     public static RibbonText TransitionDissolveCommand { get; } = new("Ribbon_Command_TransitionDissolve_Label", "Ribbon_Command_TransitionDissolve_KeyTip");
     public static RibbonText TransitionZoomCommand { get; } = new("Ribbon_Command_TransitionZoom_Label", "Ribbon_Command_TransitionZoom_KeyTip");
     public static RibbonText TransitionWheelCommand { get; } = new("Ribbon_Command_TransitionWheel_Label", "Ribbon_Command_TransitionWheel_KeyTip");
