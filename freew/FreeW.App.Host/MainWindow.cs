@@ -538,36 +538,7 @@ public sealed class MainWindow : Window
         CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()));
 
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Print, (_, _) => Print()));
-
-        var findReplace = new RoutedUICommand("Find & Replace", "FindReplace", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(findReplace, (_, _) => OpenFindReplace()));
-        InputBindings.Add(new KeyBinding(findReplace, new KeyGesture(Key.F, ModifierKeys.Control)));
-        InputBindings.Add(new KeyBinding(findReplace, new KeyGesture(Key.H, ModifierKeys.Control)));
-
-        // Ctrl+Shift+V: Paste Text Only (paste-special), the Word-standard shortcut.
-        var pastePlain = new RoutedUICommand("Paste Text Only", "PastePlain", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(pastePlain, (_, _) => _editor.PastePlainText()));
-        InputBindings.Add(new KeyBinding(pastePlain, new KeyGesture(Key.V, ModifierKeys.Control | ModifierKeys.Shift)));
-
-        // Shift+F1: toggle the Reveal Formatting pane (Word's keyboard shortcut for the Shift+F1 pane).
-        var revealFormatting = new RoutedUICommand("Reveal Formatting", "RevealFormatting", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(revealFormatting, (_, _) => ToggleRevealFormatting()));
-        InputBindings.Add(new KeyBinding(revealFormatting, new KeyGesture(Key.F1, ModifierKeys.Shift)));
-
-        // Shift+F7: open/close the Thesaurus pane (Word's standard Thesaurus shortcut).
-        var thesaurus = new RoutedUICommand("Thesaurus", "Thesaurus", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(thesaurus, (_, _) => ToggleThesaurusPane()));
-        InputBindings.Add(new KeyBinding(thesaurus, new KeyGesture(Key.F7, ModifierKeys.Shift)));
-
-        // Alt+F9: toggle field codes vs results across the document (Word's field-code toggle).
-        var toggleFieldCodes = new RoutedUICommand("Toggle Field Codes", "ToggleFieldCodes", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(toggleFieldCodes, (_, _) => _editor.ToggleFieldCodes()));
-        InputBindings.Add(new KeyBinding(toggleFieldCodes, new KeyGesture(Key.F9, ModifierKeys.Alt)));
-
-        // F9: update (recompute) every field's result (Word's Update Field shortcut).
-        var updateFields = new RoutedUICommand("Update Fields", "UpdateFields", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(updateFields, (_, _) => _editor.UpdateFields()));
-        InputBindings.Add(new KeyBinding(updateFields, new KeyGesture(Key.F9)));
+        InstallSharedKeyboardShortcuts();
 
         UpdateTitle();
         UpdateCounts();
@@ -619,6 +590,93 @@ public sealed class MainWindow : Window
         // active tab's controls, so the ribbon is fully keyboard-navigable. The overlay walks the rendered
         // ribbon and draws its badges on the outer grid (which spans the whole client area).
         KeyTipsOverlay.Install(this, _ribbonTabs, frame.Root);
+    }
+
+    private void InstallSharedKeyboardShortcuts()
+    {
+        var commands = Enum.GetValues<FreeWKeyboardCommand>()
+            .ToDictionary(
+                command => command,
+                command => new RoutedUICommand(command.ToString(), $"FreeW{command}", typeof(MainWindow)));
+
+        foreach (var (command, routedCommand) in commands)
+        {
+            CommandBindings.Add(new CommandBinding(
+                routedCommand,
+                (_, _) => ExecuteKeyboardCommand(command)));
+        }
+
+        foreach (var shortcut in FreeWKeyboardShortcutCatalog.All)
+        {
+            InputBindings.Add(new KeyBinding(
+                commands[shortcut.Command],
+                new KeyGesture(ToWpfKey(shortcut.Key), ToWpfModifiers(shortcut.Modifiers))));
+        }
+    }
+
+    private void ExecuteKeyboardCommand(FreeWKeyboardCommand command)
+    {
+        switch (command)
+        {
+            case FreeWKeyboardCommand.NewDocument: _file.New(); break;
+            case FreeWKeyboardCommand.OpenDocument: _file.Open(); break;
+            case FreeWKeyboardCommand.SaveDocument: _file.Save(); break;
+            case FreeWKeyboardCommand.SaveDocumentAs: _file.SaveAs(); break;
+            case FreeWKeyboardCommand.PrintDocument: Print(); break;
+            case FreeWKeyboardCommand.Find:
+            case FreeWKeyboardCommand.Replace: OpenFindReplace(); break;
+            case FreeWKeyboardCommand.Cut: ExecuteEditingCommand(ApplicationCommands.Cut); break;
+            case FreeWKeyboardCommand.Copy: ExecuteEditingCommand(ApplicationCommands.Copy); break;
+            case FreeWKeyboardCommand.Paste: ExecuteEditingCommand(ApplicationCommands.Paste); break;
+            case FreeWKeyboardCommand.PasteTextOnly: _editor.PastePlainText(); break;
+            case FreeWKeyboardCommand.SelectAll: ExecuteEditingCommand(ApplicationCommands.SelectAll); break;
+            case FreeWKeyboardCommand.Undo: Undo(); break;
+            case FreeWKeyboardCommand.Redo: Redo(); break;
+            case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
+            case FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane(); break;
+            case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
+            case FreeWKeyboardCommand.UpdateFields: _editor.UpdateFields(); break;
+            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
+        }
+    }
+
+    private void ExecuteEditingCommand(RoutedCommand command)
+    {
+        var target = Keyboard.FocusedElement ?? _editor;
+        if (command.CanExecute(null, target))
+            command.Execute(null, target);
+    }
+
+    private static Key ToWpfKey(FreeWKeyboardKey key) => key switch
+    {
+        FreeWKeyboardKey.A => Key.A,
+        FreeWKeyboardKey.C => Key.C,
+        FreeWKeyboardKey.F => Key.F,
+        FreeWKeyboardKey.H => Key.H,
+        FreeWKeyboardKey.N => Key.N,
+        FreeWKeyboardKey.O => Key.O,
+        FreeWKeyboardKey.P => Key.P,
+        FreeWKeyboardKey.S => Key.S,
+        FreeWKeyboardKey.V => Key.V,
+        FreeWKeyboardKey.X => Key.X,
+        FreeWKeyboardKey.Y => Key.Y,
+        FreeWKeyboardKey.Z => Key.Z,
+        FreeWKeyboardKey.F1 => Key.F1,
+        FreeWKeyboardKey.F7 => Key.F7,
+        FreeWKeyboardKey.F9 => Key.F9,
+        _ => throw new ArgumentOutOfRangeException(nameof(key), key, null),
+    };
+
+    private static ModifierKeys ToWpfModifiers(FreeWKeyboardModifiers modifiers)
+    {
+        var result = ModifierKeys.None;
+        if ((modifiers & FreeWKeyboardModifiers.Control) != 0)
+            result |= ModifierKeys.Control;
+        if ((modifiers & FreeWKeyboardModifiers.Shift) != 0)
+            result |= ModifierKeys.Shift;
+        if ((modifiers & FreeWKeyboardModifiers.Alt) != 0)
+            result |= ModifierKeys.Alt;
+        return result;
     }
 
     // Show the Word-style Backstage (File screen) over the document.

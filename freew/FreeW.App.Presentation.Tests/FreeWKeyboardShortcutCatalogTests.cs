@@ -1,0 +1,50 @@
+using FreeW.App.Presentation.Shell;
+
+namespace FreeW.App.Presentation.Tests;
+
+public sealed class FreeWKeyboardShortcutCatalogTests
+{
+    [Fact]
+    public void CatalogDefinesEverySharedCommandExactlyOnce()
+    {
+        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(18);
+        FreeWKeyboardShortcutCatalog.All
+            .Select(shortcut => shortcut.Command)
+            .Should().BeEquivalentTo(Enum.GetValues<FreeWKeyboardCommand>());
+        FreeWKeyboardShortcutCatalog.All
+            .Select(shortcut => (shortcut.Key, shortcut.Modifiers))
+            .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void EveryCatalogGestureDispatchesItsDeclaredCommand()
+    {
+        foreach (var shortcut in FreeWKeyboardShortcutCatalog.All)
+        {
+            FreeWKeyboardCommand? dispatched = null;
+
+            var handled = FreeWKeyboardShortcutCatalog.TryDispatch(
+                shortcut.Key,
+                shortcut.Modifiers,
+                command => dispatched = command);
+
+            handled.Should().BeTrue();
+            dispatched.Should().Be(shortcut.Command);
+        }
+    }
+
+    [Theory]
+    [InlineData(FreeWKeyboardKey.F, FreeWKeyboardModifiers.None)]
+    [InlineData(FreeWKeyboardKey.F1, FreeWKeyboardModifiers.Control)]
+    [InlineData(FreeWKeyboardKey.Z, FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift)]
+    public void UnmappedGesturesAreNotConsumed(
+        FreeWKeyboardKey key,
+        FreeWKeyboardModifiers modifiers)
+    {
+        var dispatched = false;
+
+        FreeWKeyboardShortcutCatalog.TryDispatch(key, modifiers, _ => dispatched = true)
+            .Should().BeFalse();
+        dispatched.Should().BeFalse();
+    }
+}
