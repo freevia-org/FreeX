@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -44,7 +45,7 @@ namespace FreeP.App.Avalonia;
 /// displayed in the back layer. The front layer (new slide) is animated in according to
 /// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover
 /// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
-/// and Push (bidirectional displacement). Others fall back to Fade.
+/// and Push (bidirectional displacement), and Flash (white-flash). Others fall back to Fade.
 ///
 /// Media
 /// ─────
@@ -84,6 +85,7 @@ public sealed class SlideShowWindow : Window
     private readonly Canvas _animOverlay;
     // Presenter ink overlay: shared-plan-backed strokes and laser pointer above slide content.
     private readonly Canvas _inkOverlay;
+    private readonly Rectangle _transitionFlashOverlay;
 
     // Per-shape animation state for the current slide.
     // Maps shapeId → the Image element in _animOverlay that represents that shape.
@@ -200,6 +202,18 @@ public sealed class SlideShowWindow : Window
         stage.Children.Add(_slideCanvas);
         stage.Children.Add(_animOverlay);
         stage.Children.Add(_inkOverlay);
+
+        _transitionFlashOverlay = new Rectangle
+        {
+            Fill = Brushes.White,
+            Opacity = 0,
+            IsVisible = false,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            ZIndex = 3,
+        };
+        stage.Children.Add(_transitionFlashOverlay);
 
         _root = new Panel { Background = Brushes.Black };
         _root.Children.Add(stage);
@@ -710,7 +724,11 @@ public sealed class SlideShowWindow : Window
         _transitionBackImage.IsVisible = false;
         _transitionBackImage.Clip = null;
         _transitionBackImage.RenderTransform = null;
+        _transitionBackImage.Opacity = 1;
         _transitionBackImage.ZIndex = 0;
+        _transitionFlashOverlay.IsVisible = false;
+        _transitionFlashOverlay.Opacity = 0;
+        _slideCanvas.ZIndex = 0;
         _slideCanvas.Slide   = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.Clip = null;
@@ -752,7 +770,11 @@ public sealed class SlideShowWindow : Window
         _transitionBackImage.IsVisible = false;
         _transitionBackImage.Clip = null;
         _transitionBackImage.RenderTransform = null;
+        _transitionBackImage.Opacity = 1;
         _transitionBackImage.ZIndex = 0;
+        _transitionFlashOverlay.IsVisible = false;
+        _transitionFlashOverlay.Opacity = 0;
+        _slideCanvas.ZIndex = 0;
         switch (plan.ActionKind)
         {
             case SlideShowTransitionPlaybackActionKind.ShowInstant:
@@ -761,6 +783,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Fade:
                 PlayFadeTransition(slide, plan.DurationMs);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Flash:
+                PlayFlashTransition(slide, plan.DurationMs);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Split:
@@ -838,6 +864,48 @@ public sealed class SlideShowWindow : Window
             _transitionBackImage.IsVisible = false;
             _slideCanvas.Opacity = 1;
         });
+    }
+
+    private void PlayFlashTransition(Slide slide, int durationMs)
+    {
+        var snapshot = CaptureCurrentSlide();
+
+        // Keep the incoming slide below the outgoing snapshot and peak a white
+        // surface once between them. This makes Flash distinct from Fade while
+        // remaining deterministic for both hosts.
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Refresh();
+        _slideCanvas.ZIndex = 1;
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+            _transitionBackImage.Opacity = 1;
+            _transitionBackImage.ZIndex = 2;
+        }
+
+        _transitionFlashOverlay.IsVisible = true;
+        _transitionFlashOverlay.Opacity = 0;
+        _transitionFlashOverlay.ZIndex = 3;
+
+        int halfDuration = Math.Max(1, durationMs / 2);
+        if (snapshot is not null)
+            AnimateOpacity(_transitionBackImage, 1, 0, halfDuration);
+
+        AnimateOpacity(_transitionFlashOverlay, 0, 1, halfDuration, onComplete: () =>
+            AnimateOpacity(_transitionFlashOverlay, 1, 0, halfDuration, onComplete: () =>
+            {
+                _transitionBackImage.IsVisible = false;
+                _transitionBackImage.Opacity = 1;
+                _transitionBackImage.ZIndex = 0;
+                _transitionFlashOverlay.IsVisible = false;
+                _transitionFlashOverlay.Opacity = 0;
+                _transitionFlashOverlay.ZIndex = 3;
+                _slideCanvas.ZIndex = 0;
+            }));
     }
 
     private void PlayCoverTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)

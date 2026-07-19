@@ -64,6 +64,20 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanTransition_FlashUsesDedicatedAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Flash,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Flash);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Flash);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
     public void PlanTransition_FlyUsesSerializedPushPlayback()
     {
         var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
