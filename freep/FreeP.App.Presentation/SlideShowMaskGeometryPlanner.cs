@@ -162,6 +162,49 @@ public static class SlideShowMaskGeometryPlanner
     }
 
     /// <summary>
+    /// Returns the deterministic tile reveal used by a slide-level Dissolve.
+    /// The shared order keeps WPF and Avalonia on the same visible tile at each
+    /// playback checkpoint while retaining a genuinely discrete dissolve mask.
+    /// </summary>
+    public static IReadOnlyList<SlideShowMaskRect> BuildDissolveTransitionRects(
+        double width,
+        double height,
+        int rowCount,
+        int columnCount,
+        double progress)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        var rows = Math.Max(1, rowCount);
+        var columns = Math.Max(1, columnCount);
+        var tileCount = rows * columns;
+        var revealCount = progress <= 0
+            ? 0
+            : progress >= 0.999
+                ? tileCount
+                : Math.Clamp((int)Math.Ceiling(progress * tileCount), 0, tileCount);
+        if (revealCount == 0)
+            return Array.Empty<SlideShowMaskRect>();
+
+        var tileWidth = width / columns;
+        var tileHeight = height / rows;
+        var order = BuildRandomBarsOrder(tileCount);
+        var rects = new SlideShowMaskRect[revealCount];
+        for (var position = 0; position < revealCount; position++)
+        {
+            var tile = order[position];
+            var row = tile / columns;
+            var column = tile % columns;
+            rects[position] = new SlideShowMaskRect(
+                column * tileWidth,
+                row * tileHeight,
+                column == columns - 1 ? width - column * tileWidth : tileWidth,
+                row == rows - 1 ? height - row * tileHeight : tileHeight);
+        }
+
+        return rects;
+    }
+
+    /// <summary>
     /// Returns the two panels used by a slide split transition. For an
     /// outgoing split the panels open from the center; for an incoming split
     /// they open inward from the two outside edges.

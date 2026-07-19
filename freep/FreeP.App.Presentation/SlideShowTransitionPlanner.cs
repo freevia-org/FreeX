@@ -6,6 +6,7 @@ public enum SlideShowTransitionPlaybackKind
 {
     Cut,
     Fade,
+    Dissolve,
     Split,
     Blinds,
     RandomBars,
@@ -57,8 +58,9 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Cut => SlideShowTransitionPlaybackKind.Cut,
 
             TransitionKind.Fade or
-            TransitionKind.Dissolve or
             TransitionKind.Flash => SlideShowTransitionPlaybackKind.Fade,
+
+            TransitionKind.Dissolve => SlideShowTransitionPlaybackKind.Dissolve,
 
             TransitionKind.Split => SlideShowTransitionPlaybackKind.Split,
 

@@ -787,6 +787,10 @@ public sealed class SlideShowWindow : Window
                 PlayFadeTransition(slide, plan.DurationMs);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Dissolve:
+                PlayDissolveTransition(slide, plan.DurationMs);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Split:
                 PlaySplitTransition(slide, plan);
                 return;
@@ -940,6 +944,69 @@ public sealed class SlideShowWindow : Window
 
         incomingTranslate.BeginAnimation(TranslateTransform.XProperty, animX);
         incomingTranslate.BeginAnimation(TranslateTransform.YProperty, animY);
+    }
+
+    private void PlayDissolveTransition(Slide slide, int durationMs)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildDissolveTransitionGeometry(w, h, 0);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(durationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildDissolveTransitionGeometry(w, h, progress),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(durationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildDissolveTransitionGeometry(
+        double width,
+        double height,
+        double progress)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(
+                     width,
+                     height,
+                     SlideShowPlaybackPlanner.DissolveRowCount,
+                     SlideShowPlaybackPlanner.DissolveColumnCount,
+                     progress))
+        {
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        }
+
+        return geometry;
     }
 
     // ── Shape animation overlay ───────────────────────────────────────────────────

@@ -145,4 +145,18 @@ public sealed class SlideShowMaskGeometryPlannerTests
         reverse.Arcs.Should().HaveCount(8).And.NotContain(arc => arc.IsClockwise);
         reverse.Arcs[0].SweepDegrees.Should().Be(normal.Arcs[0].SweepDegrees);
     }
+
+    [Fact]
+    public void BuildDissolveTransitionRects_RevealsDeterministicTilesToCompletion()
+    {
+        var empty = SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(960, 540, 3, 4, 0);
+        var midpoint = SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(960, 540, 3, 4, 0.5);
+        var full = SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(960, 540, 3, 4, 1);
+
+        empty.Should().BeEmpty();
+        midpoint.Should().HaveCount(6);
+        full.Should().HaveCount(12);
+        full.Should().Equal(
+            SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(960, 540, 3, 4, 1));
+    }
 }

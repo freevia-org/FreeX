@@ -6,6 +6,7 @@ public enum SlideShowTransitionPlaybackActionKind
 {
     ShowInstant,
     Fade,
+    Dissolve,
     Split,
     Blinds,
     RandomBars,
@@ -142,6 +143,8 @@ public static class SlideShowPlaybackPlanner
     public const int CheckerboardColumnCount = 6;
     public const int WheelSpokeCount = 4;
     public const int StripsBandCount = 6;
+    public const int DissolveRowCount = 12;
+    public const int DissolveColumnCount = 16;
     public const double ZoomInStartScale = 0.65;
     public const double ZoomOutStartScale = 1.35;
 
@@ -153,6 +156,7 @@ public static class SlideShowPlaybackPlanner
         var actionKind = transitionPlan.PlaybackKind switch
         {
             SlideShowTransitionPlaybackKind.Cut => SlideShowTransitionPlaybackActionKind.ShowInstant,
+            SlideShowTransitionPlaybackKind.Dissolve => SlideShowTransitionPlaybackActionKind.Dissolve,
             SlideShowTransitionPlaybackKind.Split => SlideShowTransitionPlaybackActionKind.Split,
             SlideShowTransitionPlaybackKind.Blinds => SlideShowTransitionPlaybackActionKind.Blinds,
             SlideShowTransitionPlaybackKind.RandomBars => SlideShowTransitionPlaybackActionKind.RandomBars,

@@ -138,7 +138,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.None, SlideShowTransitionPlaybackKind.Cut)]
     [InlineData(TransitionKind.Cut, SlideShowTransitionPlaybackKind.Cut)]
     [InlineData(TransitionKind.Fade, SlideShowTransitionPlaybackKind.Fade)]
-    [InlineData(TransitionKind.Dissolve, SlideShowTransitionPlaybackKind.Fade)]
+    [InlineData(TransitionKind.Dissolve, SlideShowTransitionPlaybackKind.Dissolve)]
     [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Fade)]
     [InlineData(TransitionKind.Split, SlideShowTransitionPlaybackKind.Split)]
     [InlineData(TransitionKind.Blinds, SlideShowTransitionPlaybackKind.Blinds)]
