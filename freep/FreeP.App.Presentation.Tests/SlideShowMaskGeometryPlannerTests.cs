@@ -5,6 +5,36 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class SlideShowMaskGeometryPlannerTests
 {
     [Fact]
+    public void BuildSplitRects_OpensHorizontalPanelsFromCenter()
+    {
+        var rects = SlideShowMaskGeometryPlanner.BuildSplitRects(
+            width: 100,
+            height: 40,
+            progress: 0.5,
+            horizontal: true,
+            fromCenter: true);
+
+        rects.Should().HaveCount(2);
+        rects[0].Should().Be(new SlideShowMaskRect(25, 0, 25, 40));
+        rects[1].Should().Be(new SlideShowMaskRect(50, 0, 25, 40));
+    }
+
+    [Fact]
+    public void BuildSplitRects_OpensVerticalPanelsFromOutsideEdges()
+    {
+        var rects = SlideShowMaskGeometryPlanner.BuildSplitRects(
+            width: 100,
+            height: 40,
+            progress: 0.5,
+            horizontal: false,
+            fromCenter: false);
+
+        rects.Should().HaveCount(2);
+        rects[0].Should().Be(new SlideShowMaskRect(0, 0, 100, 10));
+        rects[1].Should().Be(new SlideShowMaskRect(0, 30, 100, 10));
+    }
+
+    [Fact]
     public void BuildRandomBars_UsesStableNonSequentialOrderAndCompleteBands()
     {
         var first = SlideShowMaskGeometryPlanner.BuildRandomBars(960, 540, 8, horizontal: true);

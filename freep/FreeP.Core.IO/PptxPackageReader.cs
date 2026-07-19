@@ -4385,9 +4385,21 @@ public static class PptxPackageReader
         {
             t.Kind = PptxAnimationMap.ElementNameToTransitionKind(effectEl.Name.LocalName);
 
-            // Direction: try "dir" first, then "orient"
-            var dirAttr = effectEl.Attribute("dir")?.Value ?? effectEl.Attribute("orient")?.Value;
-            t.Direction = PptxAnimationMap.AttrToTransitionDirection(dirAttr);
+            // Split carries two independent modifiers: orient=horz|vert and
+            // dir=in|out. Preserve both; other transitions use dir (or the
+            // legacy orient fallback) as their single direction.
+            var dirValue = effectEl.Attribute("dir")?.Value;
+            var orientValue = effectEl.Attribute("orient")?.Value;
+            if (t.Kind == TransitionKind.Split)
+            {
+                t.SplitOrientation = PptxAnimationMap.AttrToTransitionDirection(orientValue);
+                t.Direction = PptxAnimationMap.AttrToTransitionDirection(dirValue)
+                    ?? PptxAnimationMap.AttrToTransitionDirection(orientValue);
+            }
+            else
+            {
+                t.Direction = PptxAnimationMap.AttrToTransitionDirection(dirValue ?? orientValue);
+            }
 
             // Morph option (p159:morph carries option="byWord"/"byChar"/"byObject")
             if (t.Kind == TransitionKind.Morph)

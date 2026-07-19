@@ -709,6 +709,7 @@ public sealed class SlideShowWindow : Window
         _transitionBackImage.IsVisible = false;
         _slideCanvas.Slide   = slide;
         _slideCanvas.Opacity = 1;
+        _slideCanvas.Clip = null;
         _slideCanvas.RenderTransform = null;
         _slideCanvas.Refresh();
     }
@@ -752,6 +753,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Fade:
                 PlayFadeTransition(slide, plan.DurationMs);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Split:
+                PlaySplitTransition(slide, plan);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Push:
@@ -823,6 +828,81 @@ public sealed class SlideShowWindow : Window
     /// over <paramref name="durationMs"/> milliseconds, then calls <paramref name="onComplete"/>.
     /// Uses a DispatcherTimer stepping approach for cross-platform compatibility.
     /// </summary>
+    private void PlaySplitTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = BuildSplitGeometry(w, h, 0, plan.SplitHorizontal, plan.SplitOut);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateSplitClip(_slideCanvas, w, h, plan.SplitHorizontal, plan.SplitOut,
+            plan.DurationMs, onComplete: () =>
+            {
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private static Geometry BuildSplitGeometry(
+        double width, double height, double progress, bool horizontal, bool fromCenter)
+    {
+        var geometry = new GeometryGroup();
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildSplitRects(
+                     width, height, progress, horizontal, fromCenter))
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        return geometry;
+    }
+
+    private void AnimateSplitClip(
+        Control target,
+        double width,
+        double height,
+        bool horizontal,
+        bool fromCenter,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            target.Clip = BuildSplitGeometry(width, height, 1, horizontal, fromCenter);
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            target.Clip = BuildSplitGeometry(width, height, EaseInOut(t), horizontal, fromCenter);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                target.Clip = BuildSplitGeometry(width, height, 1, horizontal, fromCenter);
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
     private void AnimateOpacity(Control target, double from, double to, int durationMs,
         Action? onComplete = null)
     {

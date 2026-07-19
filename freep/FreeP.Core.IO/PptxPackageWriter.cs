@@ -1762,7 +1762,25 @@ public static class PptxPackageWriter
         {
             if (effectName is null || isMorph || isP14Kind) return null;
             var attrs = new List<object?>();
-            if (dirAttr is not null) attrs.Add(new XAttribute("dir", dirAttr));
+            if (transition.Kind == TransitionKind.Split)
+            {
+                var orientation = transition.SplitOrientation
+                    ?? (transition.Direction is TransitionDirection.Horizontal or TransitionDirection.Vertical
+                        ? transition.Direction
+                        : null);
+                var orientationAttr = PptxAnimationMap.TransitionDirectionToAttr(orientation);
+                if (orientationAttr is not null)
+                    attrs.Add(new XAttribute("orient", orientationAttr));
+                var splitDirection = transition.Direction is TransitionDirection.In or TransitionDirection.Out
+                    ? dirAttr
+                    : null;
+                if (splitDirection is not null)
+                    attrs.Add(new XAttribute("dir", splitDirection));
+            }
+            else if (dirAttr is not null)
+            {
+                attrs.Add(new XAttribute("dir", dirAttr));
+            }
             return new XElement(P + effectName,
                 attrs.Where(x => x is not null).Cast<object>().ToArray());
         }

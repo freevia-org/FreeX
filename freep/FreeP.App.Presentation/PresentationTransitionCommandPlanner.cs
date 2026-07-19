@@ -298,6 +298,7 @@ public static class PresentationTransitionCommandPlanner
         {
             Kind = transition.Kind,
             Direction = transition.Direction,
+            SplitOrientation = transition.SplitOrientation,
             DurationMs = transition.DurationMs,
             AdvanceOnClick = transition.AdvanceOnClick,
             AdvanceAfterMs = transition.AdvanceAfterMs,
