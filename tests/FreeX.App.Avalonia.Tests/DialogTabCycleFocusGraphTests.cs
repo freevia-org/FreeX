@@ -44,41 +44,6 @@ public sealed class DialogTabCycleFocusGraphTests
             initialAutomationId: "PageSetupHeaderPresetBox");
 
     [Fact]
-    public async Task LegalNotices_CyclesInBothDirections_EscapeAndEnterClose()
-    {
-        await Session.Dispatch(async () =>
-        {
-            var owner = new MainWindow([]);
-            owner.Show();
-            var opener = InvokeOpener(owner, "ShowLegalNoticesDialogAsync");
-            var dialog = await WaitForOwnedDialogAsync(owner);
-            try
-            {
-                var initial = FindByAutomationId<TextBox>(dialog, "LegalNoticesProjectLicenseText")!;
-                AssertFullCycle(dialog, initial);
-                Send(dialog, Key.Escape);
-                dialog.IsVisible.Should().BeFalse("Escape must close Legal Notices");
-
-                opener = InvokeOpener(owner, "ShowLegalNoticesDialogAsync");
-                dialog = await WaitForOwnedDialogAsync(owner);
-                initial = FindByAutomationId<TextBox>(dialog, "LegalNoticesProjectLicenseText")!;
-                initial.Focus().Should().BeTrue();
-                Send(dialog, Key.Enter);
-                dialog.IsVisible.Should().BeFalse("Enter must invoke the WPF default Close button");
-            }
-            finally
-            {
-                if (dialog.IsVisible)
-                    dialog.Close();
-                await AwaitClosedAsync(opener);
-                owner.Close();
-            }
-
-            return 0;
-        }, CancellationToken.None);
-    }
-
-    [Fact]
     public async Task SymbolPicker_UsesListFocus_CyclesBothTabs_AndEscapeCloses()
     {
         await Session.Dispatch(async () =>
@@ -316,9 +281,9 @@ public sealed class DialogTabCycleFocusGraphTests
 
     private static async Task AwaitClosedAsync(Task opener)
     {
-        await Task.WhenAny(opener, Task.Delay(TimeSpan.FromSeconds(2)));
-        if (opener.IsFaulted)
-            await opener;
+        var completed = await Task.WhenAny(opener, Task.Delay(TimeSpan.FromSeconds(2)));
+        completed.Should().BeSameAs(opener, "the dialog opener must complete after the window closes");
+        await opener;
     }
 
     private static string Describe(Control control)

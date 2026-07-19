@@ -25532,7 +25532,7 @@ public sealed partial class MainWindow : Window
         {
             Margin = new Thickness(16),
         };
-        ConfigureDialogTabCycle(dialog, root);
+        ConfigureLegalNoticesDialogKeyboard(dialog, tabControl, closeButton);
         DockPanel.SetDock(intro, Dock.Top);
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(intro);
