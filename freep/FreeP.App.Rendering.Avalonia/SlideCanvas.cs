@@ -232,6 +232,10 @@ public sealed class SlideCanvas : Control
         if (shape.Effects is not null)
             RenderShapeEffects(dc, shape);
 
+        var materialPlan = ShapeMaterialRenderPlanner.Plan(shape);
+        if (materialPlan.Kind == ImportedShapeMaterialKind.IsometricCrossDepth)
+            RenderImportedShapeDepth(dc, shape, materialPlan);
+
         // Wave 26: draw explicit elbow polyline route when available (overrides bbox geometry)
         if (shape.ElbowRouteDip is { Count: >= 2 })
         {
@@ -261,11 +265,21 @@ public sealed class SlideCanvas : Control
                 var fillBrush = MakeBrush(shape.Fill, bounds);
                 var pen       = shape.Effects?.HasSoftEdge == true ? null : MakePen(shape.Outline);
                 dc.DrawGeometry(fillBrush, pen, geometry);
+
+                if (materialPlan.Kind == ImportedShapeMaterialKind.Circle)
+                    RenderImportedShapeMaterial(dc, materialPlan, geometry);
             }
         }
 
         if (shape.Effects is not null)
             RenderShapeBevel(dc, shape);
+
+        if (materialPlan.Kind is ImportedShapeMaterialKind.RelaxedInset or ImportedShapeMaterialKind.Angle)
+        {
+            var geometry = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
+            if (geometry is not null)
+                RenderImportedShapeMaterial(dc, materialPlan, geometry);
+        }
 
         if (shape.Text is not null)
             RenderText(dc, shape.Text, bounds);
@@ -319,6 +333,64 @@ public sealed class SlideCanvas : Control
                 }
             }
         }
+    }
+
+    private static void RenderImportedShapeDepth(
+        DrawingContext dc,
+        DrawOp.Shape shape,
+        ShapeMaterialRenderPlan plan)
+    {
+        var color = plan.ExtrusionColor!.Value;
+        var brush = new SolidColorBrush(Color.FromArgb(
+            plan.FaceAlpha, color.R, color.G, color.B));
+        var geometry = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
+        if (geometry is null) return;
+
+        using var transformScope = dc.PushTransform(
+            Matrix.CreateTranslation(plan.DepthOffsetDip, plan.DepthOffsetDip));
+        dc.DrawGeometry(brush, null, geometry);
+    }
+
+    private static void RenderImportedShapeMaterial(
+        DrawingContext dc,
+        ShapeMaterialRenderPlan plan,
+        Geometry shapeGeo)
+    {
+        var bounds = plan.Bounds;
+        var coreBrush = new SolidColorBrush(Color.FromRgb(
+            plan.FaceColor.R, plan.FaceColor.G, plan.FaceColor.B));
+
+        using var clipScope = dc.PushGeometryClip(shapeGeo);
+        dc.FillRectangle(coreBrush, new Rect(
+            bounds.X + 1,
+            bounds.Y + 1,
+            Math.Max(0, bounds.Width - 2),
+            Math.Max(0, bounds.Height - 2)));
+
+        foreach (var band in plan.Bands)
+            dc.FillRectangle(CreateMaterialBrush(band), new Rect(
+                band.Bounds.X,
+                band.Bounds.Y,
+                band.Bounds.Width,
+                band.Bounds.Height));
+    }
+
+    private static LinearGradientBrush CreateMaterialBrush(ShapeMaterialBandPlan band)
+    {
+        var stops = new GradientStops();
+        foreach (var stop in band.Stops)
+            stops.Add(new AvGradientStop(
+                Color.FromRgb(stop.Color.R, stop.Color.G, stop.Color.B),
+                stop.Position));
+
+        return new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = band.IsVertical
+                ? new RelativePoint(0, 1, RelativeUnit.Relative)
+                : new RelativePoint(1, 0, RelativeUnit.Relative),
+            GradientStops = stops,
+        };
     }
 
     private static void RenderShapeBevel(DrawingContext dc, DrawOp.Shape shape)

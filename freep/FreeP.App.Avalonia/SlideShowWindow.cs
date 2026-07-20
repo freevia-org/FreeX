@@ -64,6 +64,7 @@ public sealed class SlideShowWindow : Window
     private readonly SlideShowPlaybackRoute _playbackRoute;
     private readonly SlideShowController _controller;
     private readonly SlideShowSessionController _session;
+    private readonly AvaloniaSlideShowMediaController _mediaController = new();
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
     private IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> _lastAnimationStepFrameEvidence = Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
@@ -296,6 +297,8 @@ public sealed class SlideShowWindow : Window
         _session.RecordingReviewPlan;
 
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
+    internal IReadOnlyList<SlideShowMediaShapePlan> ActiveMediaPlansForTest => _mediaController.Active;
+    internal SlideShowMediaClickPlan LastMediaClickForTest => _mediaController.LastClick;
     internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
     internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest => _lastAnimationStepFrameEvidence;
     internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest => _lastAnimationStepPlaybackReadinessPlan;
@@ -383,6 +386,19 @@ public sealed class SlideShowWindow : Window
         var pt = e.GetPosition(_slideCanvas);
         var inkResult = BeginPresenterInkStroke(pt.X, pt.Y);
         if (inkResult.IsHandled)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (slide is not null && _mediaController.TryHandleClick(
+            slide,
+            _slideDipW,
+            _slideDipH,
+            _slideCanvas.Bounds.Width,
+            _slideCanvas.Bounds.Height,
+            pt.X,
+            pt.Y))
         {
             e.Handled = true;
             return;
@@ -705,6 +721,13 @@ public sealed class SlideShowWindow : Window
         CancelActiveTimers();
 
         PrepareAnimationOverlay(slide);
+
+        _mediaController.EnterSlide(
+            slide,
+            _slideDipW,
+            _slideDipH,
+            _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW,
+            _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH);
 
         if (plan.Transition is { } t)
             PlayTransition(slide, t);
@@ -5471,6 +5494,7 @@ public sealed class SlideShowWindow : Window
 
     private void Teardown(DateTimeOffset? nowUtc = null)
     {
+        _mediaController.Teardown();
         if (_session.IsClosed)
         {
             return;
