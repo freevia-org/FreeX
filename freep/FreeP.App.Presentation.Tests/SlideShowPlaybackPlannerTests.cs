@@ -151,6 +151,24 @@ public sealed class SlideShowPlaybackPlannerTests
         SlideShowPlaybackPlanner.ConveyorTiltDegrees.Should().BeApproximately(3.0, 0.0001);
     }
 
+    [Fact]
+    public void PlanTransition_WindowUsesCenteredApertureAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Window,
+            Direction = TransitionDirection.Up,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Window);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Window);
+        plan.IncomingOffsetX.Should().Be(0);
+        plan.IncomingOffsetY.Should().Be(1);
+        SlideShowPlaybackPlanner.WindowStartScale.Should().BeApproximately(0.92, 0.0001);
+        SlideShowPlaybackPlanner.WindowInitialOpenFactor.Should().BeApproximately(0.18, 0.0001);
+    }
+
     [Theory]
     [InlineData(TransitionDirection.In, true)]
     [InlineData(TransitionDirection.Out, false)]
