@@ -22,6 +22,7 @@ public sealed class ShellConstructionTests
         {
             window.Should().NotBeNull();
             window.Title.Should().Contain("FreeP");
+            window.Icon.Should().NotBeNull("the WPF host must load the canonical owned FreeP icon");
             window.Content.Should().NotBeNull();
         }
         finally

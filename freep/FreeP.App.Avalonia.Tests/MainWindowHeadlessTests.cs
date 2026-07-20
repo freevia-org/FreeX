@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -111,7 +112,13 @@ public sealed class MainWindowHeadlessTests
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
-            var overlayRoot = window.Content.Should().BeOfType<Grid>().Subject;
+            var outerRoot = window.Content.Should().BeOfType<Grid>().Subject;
+            outerRoot.Children.Should().HaveCount(2, "the shared title bar wraps the app client layer");
+            outerRoot.Children[0].Should().BeSameAs(window.TitleBarForTests);
+            Grid.GetRow(window.TitleBarForTests).Should().Be(0);
+
+            var overlayRoot = outerRoot.Children[1].Should().BeOfType<Grid>().Subject;
+            Grid.GetRow(overlayRoot).Should().Be(1);
             overlayRoot.Children.Should().HaveCount(2, "the shared client frame and Backstage overlay share one layer root");
             var root = overlayRoot.Children[0].Should().BeOfType<DockPanel>().Subject;
             childCount = root.Children.Count;
@@ -125,6 +132,42 @@ public sealed class MainWindowHeadlessTests
         topDockedCount.Should().Be(1, "the shared frame keeps the ribbon docked at the top");
         bottomDockedCount.Should().Be(1, "the shared frame keeps the status bar docked at the bottom");
         lastChildFill.Should().BeTrue("the workarea should fill the remaining client frame");
+    }
+
+    [Fact]
+    public async Task MainWindow_shared_outer_shell_has_icon_qat_title_and_wpf_status_content()
+    {
+        IReadOnlyList<string?> automationIds = [];
+        IReadOnlyList<string?> automationNames = [];
+        string statusText = string.Empty;
+        string title = string.Empty;
+        var hasIcon = false;
+        var titleBarHeight = 0d;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            automationIds = window.QuickAccessButtonsForTests
+                .Select(AutomationProperties.GetAutomationId)
+                .ToArray();
+            automationNames = window.QuickAccessButtonsForTests
+                .Select(AutomationProperties.GetName)
+                .ToArray();
+            statusText = window.StatusTextForTests;
+            title = window.Title ?? string.Empty;
+            hasIcon = window.HasWindowIconForTests;
+            titleBarHeight = window.TitleBarForTests.Height;
+        });
+
+        if (!ran) return;
+        automationIds.Should().Equal("Save", "Undo", "Redo");
+        automationNames.Should().Equal(
+            "Save (Ctrl+S)", "Undo (Ctrl+Z)", "Redo (Ctrl+Y)");
+        titleBarHeight.Should().Be(34);
+        title.Should().EndWith("FreeP");
+        hasIcon.Should().BeTrue("Avalonia and WPF must load the same owned FreeP icon asset");
+        statusText.Should().StartWith("Slide 1 / 1");
+        statusText.Should().EndWith("options.json");
     }
 
     [Fact]
@@ -218,17 +261,38 @@ public sealed class MainWindowHeadlessTests
         mainWindow.Should().Contain("using Free.Shared.Shell.Avalonia;");
         mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
-        mainWindow.Should().Contain("SisterAppStatusBarChrome.CreateInfoText(foreground: Brushes.White, margin: new Thickness(8, 0))");
+        mainWindow.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
+        mainWindow.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
+        mainWindow.Should().Contain("ResolveDataFolderLabel());");
         mainWindow.Should().Contain("chrome: ribbon,");
         mainWindow.Should().Contain("workArea: BuildBody(),");
         mainWindow.Should().Contain("statusBar: statusBar");
-        mainWindow.Should().Contain("root.Children.Add(frame.Root);");
-        mainWindow.Should().Contain("root.Children.Add(_backstage);");
-        mainWindow.Should().Contain("Content = root;");
+        mainWindow.Should().Contain("clientRoot.Children.Add(frame.Root);");
+        mainWindow.Should().Contain("clientRoot.Children.Add(_backstage);");
+        mainWindow.Should().Contain("Content = windowFrame.Root;");
         mainWindow.Should().Contain("onFileTabSelected: ShowBackstage");
         AssertBefore(mainWindow, "SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(", "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
-        AssertBefore(mainWindow, "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "Content = root;");
+        AssertBefore(mainWindow, "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
+        AssertBefore(mainWindow, "SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(", "Content = windowFrame.Root;");
         mainWindow.Should().NotContain("_statusText = new TextBlock");
+    }
+
+    [Fact]
+    public void FreeP_hosts_link_the_same_canonical_owned_icon_family()
+    {
+        var ico = FindRepoFile("shared", "Free.Shared.Shell", "Resources", "FreeP.ico");
+        var svg = FindRepoFile("shared", "Free.Shared.Shell", "Resources", "FreeP.svg");
+        new FileInfo(ico).Length.Should().BeGreaterThan(1_024);
+        File.ReadAllText(svg).Should().Contain("#b7472a").And.Contain(">P</text>");
+
+        var avaloniaProject = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"));
+        var wpfProject = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "FreeP.App.Host.csproj"));
+        var wpfWindow = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "MainWindow.cs"));
+
+        avaloniaProject.Should().Contain(@"shared\Free.Shared.Shell\Resources\FreeP.ico")
+            .And.Contain(@"shared\Free.Shared.Shell\Resources\FreeP.svg");
+        wpfProject.Should().Contain(@"<ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeP.ico</ApplicationIcon>");
+        wpfWindow.Should().Contain("IconUri = \"pack://application:,,,/FreeP.App.Host;component/Resources/FreeP.ico\"");
     }
 
     [Fact]
