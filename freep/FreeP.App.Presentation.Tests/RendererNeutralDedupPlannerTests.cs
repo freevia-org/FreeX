@@ -125,7 +125,7 @@ public sealed class RendererNeutralDedupPlannerTests
         click.IsHandled.Should().BeTrue();
         click.ShouldTogglePlayback.Should().BeTrue();
         click.Media!.ShapeId.Should().Be(20);
-        click.Media.DeferredReason.Should().Contain("host media backend");
+        click.Media.PlaybackCapabilityNote.Should().Contain("LibVLC");
 
         SlideShowMediaInteractionPlanner.PlanClick(
             slide, 10, 10, 20, 10, 1, 1).IsHandled.Should().BeFalse();
@@ -400,7 +400,7 @@ public sealed class RendererNeutralDedupPlannerTests
         avalonia.Should().Contain("SlideShowMediaInteractionPlanner.BuildSlidePlan");
         avalonia.Should().Contain("SlideShowMediaInteractionPlanner.PlanClick");
         avalonia.Should().NotContain("MediaElement");
-        avalonia.Should().NotContain("LibVLC");
+        avalonia.Should().Contain("LibVlcMediaPlaybackBackendFactory");
     }
 
     [Fact]

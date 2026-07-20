@@ -9,7 +9,7 @@ public sealed record SlideShowMediaShapePlan(
     LayoutRect Bounds,
     bool HasSource,
     string SourceKind,
-    string DeferredReason);
+    string PlaybackCapabilityNote);
 
 public sealed record SlideShowMediaClickPlan(
     bool IsHandled,
@@ -26,8 +26,8 @@ public sealed record SlideShowMediaClickPlan(
 /// </summary>
 public static class SlideShowMediaInteractionPlanner
 {
-    public const string PlaybackBackendDeferredReason =
-        "Audio/video playback requires a host media backend; poster rendering and media click routing remain available.";
+    public const string PlaybackBackendCapabilityNote =
+        "LibVLC cross-platform audio/video playback is available when the native runtime is present; poster rendering and media click routing remain available as fallback.";
 
     public static IReadOnlyList<SlideShowMediaShapePlan> BuildSlidePlan(
         Slide slide,
@@ -108,6 +108,6 @@ public static class SlideShowMediaInteractionPlanner
             ComputeMediaBounds(shape, slideDipW, slideDipH, canvasW, canvasH),
             hasEmbeddedSource || hasLinkedSource,
             hasEmbeddedSource ? "embedded" : hasLinkedSource ? "http-link" : "missing",
-            PlaybackBackendDeferredReason);
+            PlaybackBackendCapabilityNote);
     }
 }

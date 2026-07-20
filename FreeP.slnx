@@ -18,6 +18,7 @@
     <Project Path="freep/FreeP.App.Localization.Tests/FreeP.App.Localization.Tests.csproj" />
     <Project Path="freep/FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
     <Project Path="freep/FreeP.App.Recording/FreeP.App.Recording.csproj" />
+    <Project Path="freep/FreeP.App.Media/FreeP.App.Media.csproj" />
     <Project Path="freep/FreeP.Ribbon.Definitions/FreeP.Ribbon.Definitions.csproj" />
     <Project Path="freep/FreeP.Ribbon.Definitions.Tests/FreeP.Ribbon.Definitions.Tests.csproj" />
     <Project Path="freep/FreeP.App.Rendering.Wpf/FreeP.App.Rendering.Wpf.csproj" />
