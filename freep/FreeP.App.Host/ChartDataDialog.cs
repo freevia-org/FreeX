@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -46,6 +47,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly Button   _removeSeriesBtn;
     private readonly Button   _addCatBtn;
     private readonly Button   _removeCatBtn;
+    private readonly TextBlock _validationText = new();
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -100,6 +102,9 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
             Margin                    = new Thickness(4, 2, 4, 4),
         };
+        _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+        _validationText.Margin = new Thickness(8, 2, 8, 2);
+        _validationText.TextWrapping = TextWrapping.Wrap;
 
         // ── OK / Cancel ───────────────────────────────────────────────────────────
         var btnRow = DialogButtonRowFactory.Create(
@@ -111,17 +116,42 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // toolbar
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // grid
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // validation
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // buttons
         Grid.SetRow(toolbar,  0);
         Grid.SetRow(_grid,    1);
-        Grid.SetRow(btnRow,   2);
+        Grid.SetRow(_validationText, 2);
+        Grid.SetRow(btnRow,   3);
         root.Children.Add(toolbar);
         root.Children.Add(_grid);
+        root.Children.Add(_validationText);
         root.Children.Add(btnRow);
 
         Content = root;
 
         RebuildGrid();
+    }
+
+    internal string ValidationText => _validationText.Text;
+
+    internal bool PrepareValidationForVisualEvidence()
+    {
+        if (_grid.Items.Count == 0 || _grid.Columns.Count < 2)
+            return false;
+        _grid.CurrentCell = new DataGridCellInfo(_grid.Items[0], _grid.Columns[1]);
+        _grid.ScrollIntoView(_grid.Items[0], _grid.Columns[1]);
+        _grid.Focus();
+        if (!_grid.BeginEdit())
+            return false;
+        UpdateLayout();
+        var editor = FindVisualDescendants<TextBox>(_grid).FirstOrDefault(box => box.IsKeyboardFocusWithin)
+            ?? FindVisualDescendants<TextBox>(_grid).FirstOrDefault();
+        if (editor is null)
+            return false;
+        editor.Text = "not-a-number";
+        editor.Focus();
+        var committed = TryCommitPendingEdit();
+        return !committed && !string.IsNullOrWhiteSpace(_validationText.Text);
     }
 
     // ── Grid rebuild ──────────────────────────────────────────────────────────────
@@ -219,7 +249,9 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void OnOk()
     {
         // Flush any cell being edited.
-        _grid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
+        if (!TryCommitPendingEdit())
+            return;
+        _validationText.Text = string.Empty;
 
         // Flush row-bound category labels that have not yet lost focus.
         var commit = _planner.BuildCommitPlan(ReadCategoryEditsFromGrid());
@@ -232,6 +264,41 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         DialogResult = true;
         Close();
+    }
+
+    private void ShowValidation() => _validationText.Text = ChartDataDialogPlanner.InvalidNumericValueMessage;
+
+    private bool TryCommitPendingEdit()
+    {
+        var editor = FindVisualDescendants<TextBox>(_grid).FirstOrDefault(box => box.IsKeyboardFocusWithin);
+        var isValueColumn = _grid.CurrentColumn?.DisplayIndex > 0;
+        if (isValueColumn && editor is not null &&
+            !string.IsNullOrWhiteSpace(editor.Text) &&
+            !double.TryParse(editor.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out _))
+        {
+            ShowValidation();
+            editor.Focus();
+            return false;
+        }
+
+        if (!_grid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true))
+        {
+            ShowValidation();
+            return false;
+        }
+        return true;
+    }
+
+    private static IEnumerable<T> FindVisualDescendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is T match)
+                yield return match;
+            foreach (var descendant in FindVisualDescendants<T>(child))
+                yield return descendant;
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -16,8 +16,11 @@ public static class Program
     internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeP;
 
     [STAThread]
-    public static void Main()
+    public static int Main(string[] args)
     {
+        if (WpfDialogPaneVisualEvidenceCapture.TryRun(args, out var captureExitCode))
+            return captureExitCode;
+
         // TODO(velopack): if/when a shared Velopack bootstrap helper lands, call it here before the WPF
         // Application is created. The scaffold ships without self-update.
 
@@ -41,5 +44,6 @@ public static class Program
                 ApplyUiLanguage: AppLocalization.Bootstrap.ApplyAppLanguage,
                 ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf)
         });
+        return 0;
     }
 }

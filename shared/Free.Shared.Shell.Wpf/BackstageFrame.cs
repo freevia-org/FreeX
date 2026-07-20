@@ -143,6 +143,8 @@ public sealed class BackstageFrame : UserControl
     private readonly StackPanel _bottomNav;     // bottom-docked entries (Options / Close)
     private readonly Border _rail;
     private readonly ContentControl _content;
+
+    public UIElement? CurrentPaneContent => _content.Content as UIElement;
     private readonly Button _back;              // top-of-rail back arrow (closes the overlay)
     private readonly List<(BackstageEntry Entry, Button Button)> _navButtons = new();
 
