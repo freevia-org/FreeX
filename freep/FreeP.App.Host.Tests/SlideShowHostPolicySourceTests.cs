@@ -84,6 +84,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayCurtainsTransition(");
         source.Should().Contain("SlideShowCurtainsTransitionPlanner.Plan(");
         source.Should().Contain("BuildCurtainsTransitionGeometry(");
+        source.Should().Contain("PlayShredTransition(");
+        source.Should().Contain("SlideShowShredTransitionPlanner.Plan(");
+        source.Should().Contain("BuildShredTransitionGeometry(");
         source.Should().Contain("PlaySwitchTransition(");
         source.Should().Contain("PlayOrbitTransition(");
         source.Should().Contain("PlayFerrisTransition(");
