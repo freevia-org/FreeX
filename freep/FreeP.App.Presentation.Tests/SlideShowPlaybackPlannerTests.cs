@@ -110,6 +110,15 @@ public sealed class SlideShowPlaybackPlannerTests
 
         pageCurl.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.PageCurl);
         pageCurl.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.PageCurl);
+
+        var doubleCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.PageCurlDouble,
+            Direction = TransitionDirection.Down
+        });
+
+        doubleCurl.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.PageCurl);
+        doubleCurl.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.PageCurl);
     }
 
     [Theory]
@@ -186,6 +195,18 @@ public sealed class SlideShowPlaybackPlannerTests
         partial.Should().HaveCount(1);
         partial[0].Points.Should().HaveCount(5);
         open.Should().BeEmpty();
+
+        var doublePlan = SlideShowPageCurlTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.PageCurlDouble,
+            Direction = TransitionDirection.Down
+        });
+        var doublePartial = SlideShowPageCurlTransitionPlanner.BuildPolygons(
+            960, 540, 0.5, doublePlan);
+
+        doublePlan.DoubleFold.Should().BeTrue();
+        doublePartial.Should().HaveCount(2);
+        doublePartial.Should().OnlyContain(polygon => polygon.Points.Count == 5);
     }
 
     [Fact]
