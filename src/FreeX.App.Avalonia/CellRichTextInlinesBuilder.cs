@@ -75,9 +75,9 @@ internal static class CellRichTextInlinesBuilder
 
         var list = new TextDecorationCollection();
         if (run.Underline)
-            list.Add(TextDecorations.Underline[0]);
+            list.Add(new TextDecoration { Location = TextDecorationLocation.Underline });
         if (run.Strikethrough)
-            list.Add(TextDecorations.Strikethrough[0]);
+            list.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });
         return list;
     }
 
