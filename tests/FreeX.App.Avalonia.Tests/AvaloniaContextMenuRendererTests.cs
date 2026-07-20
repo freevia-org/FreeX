@@ -82,6 +82,23 @@ public sealed class AvaloniaContextMenuRendererTests
     });
 
     [Fact]
+    public Task BuildContextMenu_HonorsCheckedState() => RunOnUiThread(() =>
+    {
+        var plan = new RibbonMenu(
+        [
+            new RibbonMenuItem("Selected", new RibbonCommandId("selected")) { IsChecked = true },
+            new RibbonMenuItem("Other", new RibbonCommandId("other")) { IsChecked = false },
+        ]);
+
+        var menu = AvaloniaContextMenuRenderer.BuildContextMenu(plan, _ => { });
+        var items = menu.Items.Cast<MenuItem>().ToArray();
+
+        Assert.All(items, item => Assert.Equal(MenuItemToggleType.CheckBox, item.ToggleType));
+        Assert.True(items[0].IsChecked);
+        Assert.False(items[1].IsChecked);
+    });
+
+    [Fact]
     public Task BuildContextMenu_LeafClickDispatchesCommandId() => RunOnUiThread(() =>
     {
         var dispatched = new List<string>();

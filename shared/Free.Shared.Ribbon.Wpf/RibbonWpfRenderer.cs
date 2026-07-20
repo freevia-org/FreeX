@@ -622,7 +622,10 @@ public static class RibbonWpfRenderer
             var menuItem = new MenuItem
             {
                 Header = item.Header,
-                InputGestureText = item.InputGesture ?? string.Empty
+                InputGestureText = item.InputGesture ?? string.Empty,
+                IsEnabled = item.IsEnabled,
+                IsCheckable = item.IsChecked.HasValue,
+                IsChecked = item.IsChecked ?? false,
             };
             // Keytip navigation only enters a menu whose items carry keytips, so propagate them.
             if (!string.IsNullOrEmpty(item.KeyTip))
@@ -634,7 +637,7 @@ public static class RibbonWpfRenderer
             }
             else if (item.CommandId is { } commandId)
             {
-                menuItem.IsEnabled = registry.TryGet(commandId, out _);
+                menuItem.IsEnabled = item.IsEnabled && registry.TryGet(commandId, out _);
                 // Some menu-item handlers read state off their sender. Carry the values the original
                 // authored menu set as Tag so those handlers resolve against the rendered menu item.
                 menuItem.Tag = item.Header;

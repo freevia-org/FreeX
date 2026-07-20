@@ -495,6 +495,39 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void CrushPlanner_BuildsDeterministicCenteredAperture()
+    {
+        var rightPlan = SlideShowCrushTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Crush,
+            Direction = TransitionDirection.Right
+        });
+        var leftPlan = SlideShowCrushTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Crush,
+            Direction = TransitionDirection.Left
+        });
+
+        rightPlan.HorizontalAxis.Should().BeTrue();
+        rightPlan.Reverse.Should().BeFalse();
+        leftPlan.Reverse.Should().BeTrue();
+
+        var closed = SlideShowCrushTransitionPlanner.BuildPolygons(960, 540, 0, rightPlan);
+        var partial = SlideShowCrushTransitionPlanner.BuildPolygons(960, 540, 0.5, rightPlan);
+        var open = SlideShowCrushTransitionPlanner.BuildPolygons(960, 540, 1, rightPlan);
+        var repeat = SlideShowCrushTransitionPlanner.BuildPolygons(960, 540, 0.5, rightPlan);
+        var reversed = SlideShowCrushTransitionPlanner.BuildPolygons(960, 540, 0.5, leftPlan);
+
+        closed.Should().BeEmpty();
+        partial.Should().ContainSingle();
+        partial[0].Points.Should().HaveCount(4);
+        open.Should().ContainSingle();
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+        reversed.Should().NotBeEquivalentTo(partial);
+    }
+
+    [Fact]
     public void PageCurlPlanner_FoldsOutgoingPageToEmptyClip()
     {
         var plan = SlideShowPageCurlTransitionPlanner.Plan(new SlideTransition

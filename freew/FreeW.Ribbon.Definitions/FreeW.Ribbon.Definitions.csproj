@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
+    <ProjectReference Include="..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />
   </ItemGroup>
 

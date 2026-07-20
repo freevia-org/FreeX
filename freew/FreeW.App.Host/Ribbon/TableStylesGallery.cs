@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -83,12 +84,18 @@ internal static class TableStylesGallery
     private static ContextMenu BuildMenu(DocumentView editor, FrameworkElement anchor)
     {
         var menu = new ContextMenu();
-        foreach (var style in DocumentTableStyle.Catalog)
+        foreach (var planned in FreeWContextMenuPlanner.BuildTableStyles().Items)
         {
+            if (planned.CommandId is not { } commandId
+                || !FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.TableStylesPrefix, out var index)
+                || index >= DocumentTableStyle.Catalog.Count)
+                continue;
+            var style = DocumentTableStyle.Catalog[index];
             var item = new MenuItem
             {
                 Header = BuildStyleMenuItem(style),
-                Tag = style
+                Tag = style,
+                IsEnabled = planned.IsEnabled,
             };
             AutomationProperties.SetName(item, style.Name + " table style");
             item.MouseEnter += (_, _) => editor.PreviewTableStyle(style);

@@ -6,7 +6,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Avalonia;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Links;
 using FreeW.App.Presentation.Proofing;
@@ -113,6 +116,7 @@ public sealed class DocumentView : Control
 
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PlacedChar> _placed = new();
+    private readonly HashSet<int> _collapsedHeadings = [];
     private readonly List<(double X, double Y, string Text, RunFormatting Fmt)> _markers = new();
     // AV-TAB: leader spans emitted during body tab layout; drawn in Render before glyph text.
     // Each entry: (X1=tab start, X2=segment start, Y=page-space top, LineHeight, Leader kind, RunFmt for color/size).
@@ -323,6 +327,8 @@ public sealed class DocumentView : Control
     /// </summary>
     public event Action<string>? HyperlinkActivated;
 
+    public event Action<RibbonCommandId>? ContextMenuCommandRequested;
+
     /// <summary>
     /// Gets or sets the view mode. Switching modes triggers a full re-layout and visual invalidation.
     /// <list type="bullet">
@@ -449,6 +455,7 @@ public sealed class DocumentView : Control
         _selectionAnchor = null;
         _cellCaret = null; // AV-TBL: clear cell state on document load
         _cellAnchor = null;
+        _collapsedHeadings.Clear();
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
         _selectedFloatingObjects.Clear();
@@ -615,6 +622,76 @@ public sealed class DocumentView : Control
         }
 
         return -1;
+    }
+
+    public void PromoteHeading(int blockIndex) => ShiftHeadingStyle(blockIndex, OutlineTools.Promote);
+
+    public void DemoteHeading(int blockIndex) => ShiftHeadingStyle(blockIndex, OutlineTools.Demote);
+
+    private void ShiftHeadingStyle(int blockIndex, Func<string?, string?> shift)
+    {
+        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count || _doc.Blocks[blockIndex] is not Paragraph paragraph)
+            return;
+        var nextStyle = shift(paragraph.StyleId);
+        if (!string.Equals(nextStyle, paragraph.StyleId, StringComparison.Ordinal))
+            _bus.Execute(new SetParagraphStyleCommand(blockIndex, nextStyle));
+    }
+
+    public int MoveHeading(int blockIndex, bool moveUp)
+    {
+        var reordered = OutlineTools.MoveSubtree(_doc.Blocks, blockIndex, moveUp);
+        if (ReferenceEquals(reordered, _doc.Blocks))
+            return blockIndex;
+
+        var heading = _doc.Blocks[blockIndex];
+        _collapsedHeadings.Clear();
+        _bus.Execute(new ReorderBlocksCommand(reordered));
+        for (var index = 0; index < reordered.Count; index++)
+        {
+            if (ReferenceEquals(reordered[index], heading))
+                return index;
+        }
+        return blockIndex;
+    }
+
+    public void CollapseHeading(int blockIndex)
+    {
+        if (!IsHeadingBlock(blockIndex) || !_collapsedHeadings.Add(blockIndex))
+            return;
+        InvalidateLayoutAndVisual();
+        DocumentChanged?.Invoke();
+    }
+
+    public void ExpandHeading(int blockIndex)
+    {
+        if (!_collapsedHeadings.Remove(blockIndex))
+            return;
+        InvalidateLayoutAndVisual();
+        DocumentChanged?.Invoke();
+    }
+
+    public bool IsHeadingCollapsed(int blockIndex) => _collapsedHeadings.Contains(blockIndex);
+
+    private bool IsHeadingBlock(int blockIndex) =>
+        blockIndex >= 0 && blockIndex < _doc.Blocks.Count
+        && _doc.Blocks[blockIndex] is Paragraph paragraph
+        && DocumentOutline.TryGetLevel(paragraph.StyleId, out _);
+
+    private HashSet<int> HiddenOutlineBlockIndices()
+    {
+        var hidden = new HashSet<int>();
+        foreach (var headingIndex in _collapsedHeadings.ToArray())
+        {
+            var (start, end) = OutlineTools.SubtreeRange(_doc.Blocks, headingIndex);
+            if (end <= start)
+            {
+                _collapsedHeadings.Remove(headingIndex);
+                continue;
+            }
+            for (var index = start + 1; index < end; index++)
+                hidden.Add(index);
+        }
+        return hidden;
     }
 
     /// <summary>If the current selection equals <paramref name="query"/>, replace it; then select the next match.</summary>
@@ -2008,6 +2085,13 @@ public sealed class DocumentView : Control
         return new ModelTableContext(caret.Table, row, cell);
     }
 
+    public void ApplyTableStyle(DocumentTableStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        if (_cellCaret is { } caret)
+            _bus.Execute(new ApplyTableStyleCommand(caret.TableBlock, style));
+    }
+
     public void ApplyTableProperties(TablePropertiesValues values)
     {
         if (IsEditingLocked || CaretTableContext() is not { } context)
@@ -3316,8 +3400,11 @@ public sealed class DocumentView : Control
         const int MaxListDepth = 9;
         var levelCounters = new int[MaxListDepth];
         var multiLevelMarkers = new MultiLevelListMarkerState(_doc.MultiLevelList.NumberFormats);
+        var hiddenBlocks = HiddenOutlineBlockIndices();
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
         {
+            if (hiddenBlocks.Contains(blockIndex))
+                continue;
             var block = _doc.Blocks[blockIndex];
             if (block is Paragraph paragraph)
             {
@@ -8714,6 +8801,142 @@ public sealed class DocumentView : Control
         return false;
     }
 
+    private readonly record struct ContentControlTarget(
+        int BlockIndex,
+        int RunIndex,
+        int? Row = null,
+        int? Column = null,
+        int? ParagraphIndex = null);
+
+    private bool TryActivateContentControl(Point point)
+    {
+        if (!TryHitTest(point, out var position)
+            || !TryGetContentControlAt(position, out var target, out var run))
+            return false;
+
+        _caret = position;
+        _selectionAnchor = position;
+        if (run.Control!.Kind == ContentControlKind.CheckBox)
+            return ApplyContentControlInteraction(target, ContentControlInteractionPlanner.ToggleCheckBox);
+        if (run.Control.Kind is ContentControlKind.DropDownList or ContentControlKind.ComboBox or ContentControlKind.DatePicker)
+            return OpenContentControlMenu(target, run);
+        return false;
+    }
+
+    private bool TryOpenContentControlMenu(Point point)
+    {
+        if (!TryHitTest(point, out var position)
+            || !TryGetContentControlAt(position, out var target, out var run))
+            return false;
+        _caret = position;
+        _selectionAnchor = position;
+        return OpenContentControlMenu(target, run);
+    }
+
+    private bool TryOpenContentControlMenuAtCaret() =>
+        TryGetContentControlAt(_caret, out var target, out var run)
+        && OpenContentControlMenu(target, run);
+
+    private bool TryGetContentControlAt(
+        DocPosition position,
+        out ContentControlTarget target,
+        out Run run)
+    {
+        target = default;
+        run = null!;
+        Paragraph? paragraph;
+        int contentOffset;
+        if (_cellCaret is { } cell && cell.TableBlock == position.Block)
+        {
+            paragraph = GetCellParagraph(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx);
+            contentOffset = cell.Offset;
+        }
+        else
+        {
+            if (position.Block < 0
+                || position.Block >= _doc.Blocks.Count
+                || _doc.Blocks[position.Block] is not Paragraph bodyParagraph)
+            {
+                return false;
+            }
+
+            paragraph = bodyParagraph;
+            contentOffset = position.Offset;
+        }
+
+        if (paragraph is null)
+            return false;
+
+        var offset = 0;
+        for (var index = 0; index < paragraph.Runs.Count; index++)
+        {
+            var candidate = paragraph.Runs[index];
+            var end = offset + candidate.Text.Length;
+            if (candidate.Control is not null
+                && contentOffset >= offset
+                && (contentOffset < end || candidate.Text.Length == 0 && contentOffset == offset))
+            {
+                target = _cellCaret is { } cellTarget
+                    ? new ContentControlTarget(cellTarget.TableBlock, index, cellTarget.Row, cellTarget.Col, cellTarget.ParaIdx)
+                    : new ContentControlTarget(position.Block, index);
+                run = candidate;
+                return true;
+            }
+            offset = end;
+        }
+        return false;
+    }
+
+    private bool OpenContentControlMenu(ContentControlTarget target, Run run)
+    {
+        if (run.Control?.Kind is not (ContentControlKind.DropDownList or ContentControlKind.ComboBox or ContentControlKind.DatePicker))
+            return false;
+
+        var isEnabled = ContentControlInteractionPlanner.CanEditExistingContentControl(run, RestrictEditingPolicy);
+        var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
+            FreeWContextMenuPlanner.BuildContentControl(run, isEnabled: isEnabled),
+            commandId =>
+            {
+                if (FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ContentChoicePrefix, out var choiceIndex))
+                    ApplyContentControlInteraction(target, item => ContentControlInteractionPlanner.SelectItem(item, choiceIndex));
+                else if (FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ContentDatePrefix, out var dateIndex))
+                    ApplyContentControlInteraction(target, item => ContentControlInteractionPlanner.SelectRelativeDate(item, dateIndex));
+            });
+        OpenContextMenu(menu);
+        return true;
+    }
+
+    private void OpenEditorContextMenu()
+    {
+        var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
+            FreeWContextMenuPlanner.BuildEditor(new FreeWEditorContextMenuState(
+                CanUndo,
+                CanRedo,
+                HasSelection: SelectedText.Length > 0,
+                CanPaste: TopLevel.GetTopLevel(this)?.Clipboard is not null,
+                CanEdit: !IsEditingLocked)),
+            commandId => ContextMenuCommandRequested?.Invoke(commandId));
+        OpenContextMenu(menu);
+    }
+
+    private void OpenContextMenu(ContextMenu menu)
+    {
+        _activeContextMenu?.Close();
+        _activeContextMenu = menu;
+        menu.Opened += (_, _) => menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)?.Focus();
+        menu.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_activeContextMenu, menu))
+                _activeContextMenu = null;
+        };
+        menu.Open(this);
+    }
+
+    private ContextMenu? _activeContextMenu;
+    internal ContextMenu? ActiveContextMenuForTests => _activeContextMenu;
+    internal void OpenEditorContextMenuForTests() => OpenEditorContextMenu();
+    internal void RaiseKeyDownForContextMenuTests(KeyEventArgs args) => OnKeyDown(args);
+
     // ---- Input ----------------------------------------------------------------------------------
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -8724,6 +8947,21 @@ public sealed class DocumentView : Control
         var point = e.GetPosition(this);
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
         var ctrlOrMeta = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+        var updateKind = e.GetCurrentPoint(this).Properties.PointerUpdateKind;
+
+        if (updateKind == PointerUpdateKind.RightButtonPressed)
+        {
+            if (!TryOpenContentControlMenu(point))
+                OpenEditorContextMenu();
+            e.Handled = true;
+            return;
+        }
+
+        if (updateKind == PointerUpdateKind.LeftButtonPressed && TryActivateContentControl(point))
+        {
+            e.Handled = true;
+            return;
+        }
 
         // AV-LINK: Ctrl+Click follows a hyperlink (Word's convention) — open an external URL via the
         // HyperlinkActivated event, or jump the caret to an internal bookmark target. Checked before the
@@ -8934,6 +9172,14 @@ public sealed class DocumentView : Control
         base.OnKeyDown(e);
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
         var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+
+        if (e.Key == Key.Apps || e.Key == Key.F10 && e.KeyModifiers == KeyModifiers.Shift)
+        {
+            if (!TryOpenContentControlMenuAtCaret())
+                OpenEditorContextMenu();
+            e.Handled = true;
+            return;
+        }
 
         if (IsEditingLocked && IsEditingKey(e.Key, ctrl))
         {
@@ -9229,28 +9475,36 @@ public sealed class DocumentView : Control
             alias: alias));
 
     public bool ToggleContentControl(int blockIndex, int runIndex) =>
-        ApplyContentControlInteraction(blockIndex, runIndex, ContentControlInteractionPlanner.ToggleCheckBox);
+        ApplyContentControlInteraction(
+            new ContentControlTarget(blockIndex, runIndex),
+            ContentControlInteractionPlanner.ToggleCheckBox);
 
     public bool SelectContentControlItem(int blockIndex, int runIndex, int itemIndex) =>
-        ApplyContentControlInteraction(blockIndex, runIndex, run =>
+        ApplyContentControlInteraction(new ContentControlTarget(blockIndex, runIndex), run =>
             ContentControlInteractionPlanner.SelectItem(run, itemIndex));
 
     public bool SelectContentControlRelativeDate(int blockIndex, int runIndex, int choiceIndex) =>
-        ApplyContentControlInteraction(blockIndex, runIndex, run =>
+        ApplyContentControlInteraction(new ContentControlTarget(blockIndex, runIndex), run =>
             ContentControlInteractionPlanner.SelectRelativeDate(run, choiceIndex));
 
-    private bool ApplyContentControlInteraction(int blockIndex, int runIndex, Func<Run, Run?> planner)
+    private bool ApplyContentControlInteraction(ContentControlTarget target, Func<Run, Run?> planner)
     {
-        if (blockIndex < 0
-            || blockIndex >= _doc.Blocks.Count
-            || _doc.Blocks[blockIndex] is not Paragraph paragraph
-            || runIndex < 0
-            || runIndex >= paragraph.Runs.Count)
+        Paragraph? paragraph;
+        if (target.Row is { } row && target.Column is { } column && target.ParagraphIndex is { } paragraphIndex)
+            paragraph = GetCellParagraph(target.BlockIndex, row, column, paragraphIndex);
+        else if (target.BlockIndex >= 0
+            && target.BlockIndex < _doc.Blocks.Count
+            && _doc.Blocks[target.BlockIndex] is Paragraph bodyParagraph)
+            paragraph = bodyParagraph;
+        else
+            paragraph = null;
+
+        if (paragraph is null || target.RunIndex < 0 || target.RunIndex >= paragraph.Runs.Count)
         {
             return false;
         }
 
-        var current = paragraph.Runs[runIndex];
+        var current = paragraph.Runs[target.RunIndex];
         if (!ContentControlInteractionPlanner.CanEditExistingContentControl(current, RestrictEditingPolicy))
             return false;
 
@@ -9258,7 +9512,21 @@ public sealed class DocumentView : Control
         if (updated is null)
             return false;
 
-        _bus.Execute(new ReplaceContentControlRunCommand(blockIndex, runIndex, updated));
+        if (target.Row is { } targetRow
+            && target.Column is { } targetColumn
+            && target.ParagraphIndex is { } targetParagraph)
+        {
+            _bus.Execute(new ReplaceCellParagraphRunsCommand(
+                target.BlockIndex,
+                targetRow,
+                targetColumn,
+                targetParagraph,
+                cellParagraph => cellParagraph.Runs[target.RunIndex] = updated));
+        }
+        else
+        {
+            _bus.Execute(new ReplaceContentControlRunCommand(target.BlockIndex, target.RunIndex, updated));
+        }
         return true;
     }
 
@@ -12924,6 +13192,12 @@ public sealed class DocumentView : Control
             doc => DocumentParagraphSpacingSet.Apply(doc, spacingSet)));
     }
 
+    public void ApplyEffectSet(DocumentEffectSet effectSet)
+    {
+        ArgumentNullException.ThrowIfNull(effectSet);
+        _bus.Execute(new DesignCatalogCommand("Theme Effects", doc => DocumentEffectSet.Apply(doc, effectSet)));
+    }
+
     /// <summary>
     /// AV-DESIGN: apply a Word-style Design &gt; Style Set to the built-in style catalog. Paragraphs retain
     /// their StyleId links and pick up the new look through normal style resolution.
@@ -13235,6 +13509,21 @@ public sealed class DocumentView : Control
             return false;
         DeleteSelection();
         return true;
+    }
+
+    public void SelectAllText()
+    {
+        var first = _doc.Blocks.FindIndex(block => block is Paragraph paragraph && IsEditable(paragraph));
+        var last = _doc.Blocks.FindLastIndex(block => block is Paragraph paragraph && IsEditable(paragraph));
+        if (first < 0 || last < 0)
+            return;
+
+        _selectionAnchor = new DocPosition(first, 0);
+        _caret = new DocPosition(last, ((Paragraph)_doc.Blocks[last]).PlainText.Length);
+        _cellCaret = null;
+        _cellAnchor = null;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
     }
 
     public bool PastePlainText(string? clipboardText) =>

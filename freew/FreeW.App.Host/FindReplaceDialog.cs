@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 
@@ -28,20 +29,6 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly CheckBox _useWildcards = new() { Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.UseWildcards), Margin = new Thickness(0, 4, 0, 0) };
     private readonly ComboBox _goToTarget = new() { MinWidth = 220, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0) };
-
-    // Special-character items shown in the "Special ▾" dropdown for quick insertion.
-    private static readonly (string Label, string Insert)[] SpecialChars =
-    [
-        ("Paragraph Mark  (^p / \\n)", "\n"),
-        ("Tab Character  (^t / \\t)", "\t"),
-        ("Any Character  (?)", "?"),
-        ("Any Digit  ([0-9])", "[0-9]"),
-        ("Any Letter  ([A-Za-z])", "[A-Za-z]"),
-        ("Beginning of Word  (<)", "<"),
-        ("End of Word  (>)", ">"),
-        ("Em Dash  (—)", "—"),
-        ("En Dash  (–)", "–"),
-    ];
 
     public FindReplaceDialog(Window owner, DocumentView editor)
     {
@@ -113,7 +100,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _replaceBox.GotFocus += (_, _) => _lastFocusedBox = _replaceBox;
 
         var menu = new ContextMenu();
-        foreach (var (label, insert) in SpecialChars)
+        foreach (var (label, insert) in FreeWContextMenuPlanner.FindSpecialCharacters)
         {
             var item = new MenuItem { Header = label };
             var insertValue = insert; // capture
