@@ -31,6 +31,7 @@ public enum SlideShowTransitionPlaybackKind
     Switch,
     Orbit,
     Ferris,
+    Flythrough,
     PageCurl,
     PushLike,
     FadeFallback
@@ -153,6 +154,8 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Orbit => SlideShowTransitionPlaybackKind.Orbit,
 
             TransitionKind.Ferris => SlideShowTransitionPlaybackKind.Ferris,
+
+            TransitionKind.Flythrough => SlideShowTransitionPlaybackKind.Flythrough,
 
             TransitionKind.PageCurlSingle or
             TransitionKind.PageCurlDouble => SlideShowTransitionPlaybackKind.PageCurl,

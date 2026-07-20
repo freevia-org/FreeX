@@ -9,7 +9,8 @@ public enum SlideShowPerspectiveTransitionKind
     Rotate,
     Switch,
     Orbit,
-    Ferris
+    Ferris,
+    Flythrough
 }
 
 /// <summary>Shared geometry policy for the 2-D host projection of PowerPoint's exciting transitions.</summary>
@@ -32,6 +33,7 @@ public static class SlideShowPerspectiveTransitionPlanner
     public const double SwitchStartScale = 0.86;
     public const double OrbitStartScale = 0.64;
     public const double FerrisStartScale = 0.72;
+    public const double FlythroughStartScale = 0.48;
     public const double CubeRotationDegrees = 90;
     public const double RotateRotationDegrees = 90;
     public const double SwitchRotationDegrees = 90;
@@ -42,6 +44,7 @@ public static class SlideShowPerspectiveTransitionPlanner
     public const double SwitchTravelFactor = 0.18;
     public const double OrbitTravelFactor = 0.25;
     public const double FerrisTravelFactor = 0.18;
+    public const double FlythroughTravelFactor = 0.30;
 
     public static SlideShowPerspectiveTransitionPlan Plan(SlideTransition transition)
     {
@@ -91,6 +94,12 @@ public static class SlideShowPerspectiveTransitionPlanner
                 FerrisStartScale,
                 sign * FerrisRotationDegrees,
                 FerrisTravelFactor),
+            TransitionKind.Flythrough => new(
+                SlideShowPerspectiveTransitionKind.Flythrough,
+                horizontal,
+                FlythroughStartScale,
+                0,
+                FlythroughTravelFactor),
             _ => throw new ArgumentException(
                 $"Unsupported perspective transition kind: {transition.Kind}",
                 nameof(transition))

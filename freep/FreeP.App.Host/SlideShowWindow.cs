@@ -919,6 +919,10 @@ public sealed class SlideShowWindow : Window
                 PlayFerrisTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Flythrough:
+                PlayFlythroughTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.PageCurl:
                 PlayPageCurlTransition(slide, t, plan);
                 return;
@@ -2444,6 +2448,12 @@ public sealed class SlideShowWindow : Window
         PlayPerspectiveTransition(slide, transition, plan);
 
     private void PlayFerrisTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlayFlythroughTransition(
         Slide slide,
         SlideTransition transition,
         SlideShowTransitionPlaybackPlan plan) =>
