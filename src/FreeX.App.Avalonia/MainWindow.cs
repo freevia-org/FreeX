@@ -11526,7 +11526,7 @@ public sealed partial class MainWindow : Window
         void FocusSearchBox()
         {
             var target = OnReplaceTab() ? replaceFindBox : findBox;
-            target.Focus();
+            FocusDialogControl(target);
             target.SelectAll();
         }
 
@@ -11643,7 +11643,7 @@ public sealed partial class MainWindow : Window
         };
 
         var root = new DockPanel { Margin = new Thickness(12) };
-        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        ConfigureDialogTabCycle(dialog, root);
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         DockPanel.SetDock(statusLabel, Dock.Bottom);
         DockPanel.SetDock(tabs, Dock.Top);
@@ -14944,7 +14944,7 @@ public sealed partial class MainWindow : Window
                 buttonRow,
             },
         };
-        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        ConfigureDialogTabCycle(dialog, root);
         dialog.Content = root;
         dialog.Opened += (_, _) =>
         {
@@ -17886,29 +17886,13 @@ public sealed partial class MainWindow : Window
             if (e.Property == ToggleButton.IsCheckedProperty)
                 RefreshCopyToState(showInvalid: showInteractiveValidation);
         };
-        dialog.AddHandler(
-            InputElement.KeyDownEvent,
-            (_, e) =>
-            {
-                if (e.Key != Key.Escape || e.KeyModifiers != KeyModifiers.None)
-                    return;
-
-                e.Handled = true;
-                dialog.Close();
-            },
-            RoutingStrategies.Tunnel,
-            handledEventsToo: true);
+        ConfigureAdvancedFilterDialogEscape(dialog, cancelButton);
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
             {
                 e.Handled = true;
                 Accept();
-            }
-            else if (e.Key == Key.Escape)
-            {
-                e.Handled = true;
-                dialog.Close();
             }
         };
 
@@ -20147,7 +20131,7 @@ public sealed partial class MainWindow : Window
                 buttonRow,
             },
         };
-        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        ConfigureDialogTabCycle(dialog, root);
         dialog.Content = root;
         dialog.Opened += (_, _) => typeBox.Focus();
         if (launchSmokeProbe is not null)
@@ -25515,7 +25499,7 @@ public sealed partial class MainWindow : Window
             IsCancel = true,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
-        ApplySelectionPaneButtonChrome(closeButton, 84, isDefault: false);
+        ApplySelectionPaneButtonChrome(closeButton, 84, isDefault: true);
         AutomationProperties.SetAutomationId(closeButton, "LegalNoticesCloseButton");
         AutomationProperties.SetHelpText(closeButton, UiText.Get("LegalNotices_ShowsTheLegalPrivacyAndThirdPartyNoticesPackagedWithThisFreeXExecutable"));
         closeButton.Click += (_, _) => dialog.Close();
@@ -25532,7 +25516,7 @@ public sealed partial class MainWindow : Window
         {
             Margin = new Thickness(16),
         };
-        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        ConfigureLegalNoticesDialogKeyboard(dialog, tabControl, closeButton);
         DockPanel.SetDock(intro, Dock.Top);
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(intro);

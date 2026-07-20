@@ -6,9 +6,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
@@ -312,6 +315,7 @@ public sealed partial class MainWindow
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "SelectionPaneDialog");
+        KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 78 };
         ApplySelectionPaneButtonChrome(ok, 78, isDefault: true);
@@ -362,6 +366,8 @@ public sealed partial class MainWindow
         AddGridChild(content, commandRow, 3, isRow: true);
         AddGridChild(content, buttonRow, 4, isRow: true);
         dialog.Content = content;
+        ConfigureNativeDialogInitialFocus(dialog, content, searchBox);
+        ConfigureDeferredDialogCancel(dialog, cancel);
 
         Rebind(null);
         if (captureSelectedRow is not null)

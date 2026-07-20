@@ -9,6 +9,8 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
@@ -266,6 +268,30 @@ public sealed partial class MainWindow
         ApplyRibbonMenuButtonChrome(closeButton, 84);
         AutomationProperties.SetAutomationId(closeButton, "WatchWindowCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
+
+        // Match WPF WatchWindowDialog.Loaded and keep the modeless route self-contained: the shared helper
+        // still owns the window/owner lifecycle, while this dialog owns its WPF-matched focus and Escape edge.
+        KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
+        dialog.Opened += (_, _) => Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (dialog.IsVisible && list.IsVisible && list.IsEffectivelyEnabled)
+                    list.Focus();
+            },
+            DispatcherPriority.Input);
+        dialog.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, args) =>
+            {
+                if (args.Key != Key.Escape || args.KeyModifiers != KeyModifiers.None)
+                    return;
+
+                if (dialog.IsVisible)
+                    dialog.Close();
+                args.Handled = true;
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
 
         // WPF order: Add Watch | Refresh | Delete Watch | Close
         var buttonRow = new StackPanel

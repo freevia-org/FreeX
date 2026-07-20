@@ -117,6 +117,7 @@ public sealed class DialogRangeSelectionTests
         source.Should().Contain("e.Key == Key.Enter");
         source.Should().Contain("session.Target.Text = session.OriginalText;");
         source.Should().Contain("RestoreDialogAfterRangeSelection(session);");
+        source.Should().Contain("session.Dialog.Activate();");
         source.Should().Contain("dialog.Closed += DialogRangePickerDialogClosed;");
         source.Should().Contain("CancelDialogRangeSelection(restoreDialog: false, restoreOriginalText: false);");
         source.Should().Contain("SpreadsheetDisplayFormatter.FormatRangeReference");

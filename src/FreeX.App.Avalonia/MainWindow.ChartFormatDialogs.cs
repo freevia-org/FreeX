@@ -5,7 +5,6 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Threading;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation;
@@ -1344,19 +1343,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, automationId);
         if (initialFocus is not null)
-        {
-            dialog.Opened += (_, _) => Dispatcher.UIThread.Post(
-                () =>
-                {
-                    if (!dialog.IsVisible || !initialFocus.IsVisible || !initialFocus.IsEffectivelyEnabled)
-                        return;
-
-                    initialFocus.Focus();
-                    if (initialFocus is TextBox textBox)
-                        textBox.SelectAll();
-                },
-                DispatcherPriority.Background);
-        }
+            ConfigureChartDialogKeyboardLifecycle(dialog, initialFocus);
         return dialog;
     }
 

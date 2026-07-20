@@ -1,6 +1,11 @@
+using System.Reflection;
 using System.Threading;
 
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Threading;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -18,6 +23,53 @@ public sealed class ChartFormatDialogLifecycleRegressionTests
             ["dialog.ChartAreaLegendDialog"] = "Button#ChartAreaFillButton",
             ["dialog.ChartAxisFormatDialog"] = "TextBox#ChartAxisMinimumBox",
         };
+
+    [Fact]
+    public async Task ChartDialogLifecycle_EstablishesNativeFocusAndRoutesRawKeyboardInput()
+    {
+        await Session.Dispatch(() =>
+        {
+            var owner = new Window { Width = 400, Height = 240 };
+            Window? dialog = null;
+            try
+            {
+                owner.Show();
+                var initial = new TextBox { Text = "Initial" };
+                var second = new Button { Content = "Second" };
+                dialog = new Window
+                {
+                    Width = 300,
+                    Height = 180,
+                    Content = new StackPanel { Children = { initial, second } },
+                };
+
+                var configure = typeof(MainWindow).GetMethod(
+                    "ConfigureChartDialogKeyboardLifecycle",
+                    BindingFlags.Static | BindingFlags.NonPublic)
+                    ?? throw new InvalidOperationException("Missing chart dialog keyboard lifecycle helper.");
+                configure.Invoke(null, [dialog, initial]);
+
+                dialog.Show(owner);
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(initial);
+
+                Send(dialog, Key.Tab, RawInputModifiers.None);
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(second);
+                Send(dialog, Key.Tab, RawInputModifiers.Shift);
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(initial);
+                Send(dialog, Key.Escape, RawInputModifiers.None);
+                dialog.IsVisible.Should().BeFalse();
+            }
+            finally
+            {
+                if (dialog?.IsVisible == true)
+                    dialog.Close();
+                if (owner.IsVisible)
+                    owner.Close();
+            }
+        }, CancellationToken.None);
+    }
 
     [Fact]
     public async Task ChartFormatFamily_MatchesWpfInitialFocusTabCycleAndEscape()
@@ -82,5 +134,11 @@ public sealed class ChartFormatDialogLifecycleRegressionTests
                 // Test cleanup must not hide a chart dialog lifecycle regression.
             }
         }
+    }
+
+    private static void Send(Window dialog, Key key, RawInputModifiers modifiers)
+    {
+        MainWindow.SendDialogKeyForTest(dialog, key, modifiers, out var error).Should().BeTrue(error);
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
     }
 }

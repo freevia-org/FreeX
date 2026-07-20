@@ -249,11 +249,7 @@ public sealed partial class MainWindow
         var content = new Grid { Margin = new Thickness(14), Children = { bodyGrid } };
         KeyboardNavigation.SetTabNavigation(content, KeyboardNavigationMode.Cycle);
         dialog.Content = content;
-        dialog.Opened += (_, _) =>
-        {
-            nameBox.Focus();
-            nameBox.SelectAll();
-        };
+        ConfigurePivotDialogLifecycle(dialog, nameBox, selectAllText: true);
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)

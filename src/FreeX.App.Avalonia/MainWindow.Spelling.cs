@@ -243,6 +243,7 @@ public sealed partial class MainWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        AutomationProperties.SetAutomationId(dialog, "SpellCheckDialog");
 
         var decision = new SpellingDecision(SpellingAction.Close, null);
 
@@ -278,13 +279,17 @@ public sealed partial class MainWindow
         var suggestionList = new ListBox
         {
             Height = 110,
+            Focusable = true,
         };
+        KeyboardNavigation.SetIsTabStop(suggestionList, true);
         AutomationProperties.SetAutomationId(suggestionList, "SpellCheckSuggestionsList");
         AvaloniaCompactDialogChrome.ApplyListBox(suggestionList, SpellingDialogChromeStyle);
         foreach (var suggestion in suggestions)
             suggestionList.Items.Add(suggestion);
         if (suggestions.Count == 0)
             suggestionList.Items.Add(UiText.Get("ShellLoc_SpellingNoSuggestions"));
+        else
+            suggestionList.SelectedIndex = 0;
         layout.Children.Add(suggestionList);
 
         // Editable replacement box, prefilled with the top suggestion when available.
@@ -308,6 +313,7 @@ public sealed partial class MainWindow
         var changeButton = new Button { Content = UiText.Get("ShellLoc_SpellingChange"), IsDefault = true };
         var changeAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingChangeAll") };
         var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true };
+        AutomationProperties.SetAutomationId(closeButton, "SpellCheckCancelButton");
         AvaloniaCompactDialogChrome.ApplyButton(ignoreButton, SpellingDialogChromeStyle, 96);
         AvaloniaCompactDialogChrome.ApplyButton(ignoreAllButton, SpellingDialogChromeStyle, 96);
         AvaloniaCompactDialogChrome.ApplyButton(changeButton, SpellingDialogChromeStyle, 96, isDefault: true);
@@ -319,24 +325,6 @@ public sealed partial class MainWindow
         changeButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.Change, replacementBox.Text); dialog.Close(); };
         changeAllButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.ChangeAll, replacementBox.Text); dialog.Close(); };
         closeButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.Close, null); dialog.Close(); };
-
-        // Match the WPF dialog's keyboard contract: the suggestion list is the initial target when
-        // suggestions exist, otherwise the replacement editor receives focus. Keep the full content
-        // scope cyclic and route Escape through the cancel button even when a text control owns focus.
-        KeyboardNavigation.SetTabNavigation(layout, KeyboardNavigationMode.Cycle);
-        dialog.AddHandler(
-            InputElement.KeyDownEvent,
-            (_, args) =>
-            {
-                if (args.Handled || args.Key != Key.Escape || args.KeyModifiers != KeyModifiers.None)
-                    return;
-
-                closeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, closeButton));
-                if (dialog.IsVisible)
-                    dialog.Close();
-                args.Handled = true;
-            },
-            RoutingStrategies.Tunnel);
 
         var buttonRowTop = AvaloniaCompactDialogChrome.CreateActionRow(
             [ignoreButton, ignoreAllButton, changeButton],
@@ -354,19 +342,9 @@ public sealed partial class MainWindow
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = layout,
         };
-
-        dialog.Opened += (_, _) => Dispatcher.UIThread.Post(
-            () =>
-            {
-                if (!dialog.IsVisible)
-                    return;
-
-                if (suggestions.Count > 0)
-                    suggestionList.Focus();
-                else
-                    replacementBox.Focus();
-            },
-            DispatcherPriority.Input);
+        var initialFocus = suggestions.Count > 0 ? (Control)suggestionList : replacementBox;
+        ConfigureNativeDialogInitialFocus(dialog, layout, initialFocus);
+        ConfigureDeferredDialogCancel(dialog, closeButton);
 
         await dialog.ShowDialog(this);
         return decision;
