@@ -153,6 +153,16 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("object.ReferenceEquals(child.Tag, groupChild.Tag)");
     }
 
+    [Fact]
+    public void FidelityRender_DoesNotScaleDirectFloatingShapesIntoTheirEffectFootprint()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("fe.Tag is FreeW.Core.Model.Shape");
+        source.Should().Contain("? Stretch.None");
+        source.Should().Contain(": Stretch.Fill");
+    }
+
     private static string RepositoryFile(params string[] parts)
     {
         var directory = AppContext.BaseDirectory;
