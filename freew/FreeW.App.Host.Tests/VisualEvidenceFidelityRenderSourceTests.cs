@@ -5,6 +5,15 @@ namespace FreeW.App.Host.Tests;
 public sealed class VisualEvidenceFidelityRenderSourceTests
 {
     [Fact]
+    public void FidelityRender_DirectFloatingImagesPreserveTheirEffectFootprint()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("fe.Tag is FreeW.Core.Model.Shape or FreeW.Core.Model.InlineImage");
+        source.Should().Contain("? Stretch.None");
+    }
+
+    [Fact]
     public void FidelityRender_EmitsSharedVisualEvidenceManifestAndTrustChecks()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
