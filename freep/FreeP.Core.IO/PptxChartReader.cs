@@ -1129,6 +1129,9 @@ internal static class PptxChartReader
                 double.TryParse(maxStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var maxV))
                 axis.Max = maxV;
         }
+
+        axis.MajorUnit = ParseDouble(axEl.Element(C + "majorUnit")?.Attribute("val")?.Value);
+        axis.MinorUnit = ParseDouble(axEl.Element(C + "minorUnit")?.Attribute("val")?.Value);
     }
 
     private static ChartTickMark? ParseTickMark(XElement? element) =>

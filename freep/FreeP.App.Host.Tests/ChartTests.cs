@@ -202,6 +202,8 @@ public sealed class ChartTests : IDisposable
         chart.CategoryAxis.LabelAlignment = ChartLabelAlignment.Right;
         chart.CategoryAxis.Crosses = ChartAxisCrossing.Max;
         chart.ValueAxis.CrossesAt = 12.5;
+        chart.ValueAxis.MajorUnit = 5;
+        chart.ValueAxis.MinorUnit = 1;
 
         var reloaded = PptxPackageReader.Read(WriteToPptx(BuildPresWithChart(chart)));
         var roundTripped = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
@@ -219,6 +221,8 @@ public sealed class ChartTests : IDisposable
         roundTripped.CategoryAxis.LabelAlignment.Should().Be(ChartLabelAlignment.Right);
         roundTripped.CategoryAxis.Crosses.Should().Be(ChartAxisCrossing.Max);
         roundTripped.ValueAxis.CrossesAt.Should().Be(12.5);
+        roundTripped.ValueAxis.MajorUnit.Should().Be(5);
+        roundTripped.ValueAxis.MinorUnit.Should().Be(1);
     }
 
     [Fact]

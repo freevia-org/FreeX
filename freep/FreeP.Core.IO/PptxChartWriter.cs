@@ -1227,7 +1227,16 @@ internal static class PptxChartWriter
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
             BuildAxisNumFmtEl(axis),
             BuildAxisCrossingElement(axis, crosses),
-            new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
+            new XElement(C + "crossAx", new XAttribute("val", crossAxId)),
+            BuildAxisUnitElements(axis));
+    }
+
+    private static IEnumerable<XElement> BuildAxisUnitElements(ChartAxis axis)
+    {
+        if (axis.MajorUnit is { } majorUnit)
+            yield return new XElement(C + "majorUnit", new XAttribute("val", majorUnit.ToString("G", CultureInfo.InvariantCulture)));
+        if (axis.MinorUnit is { } minorUnit)
+            yield return new XElement(C + "minorUnit", new XAttribute("val", minorUnit.ToString("G", CultureInfo.InvariantCulture)));
     }
 
     private static IEnumerable<XElement> BuildAxisDisplayElements(ChartAxis axis)

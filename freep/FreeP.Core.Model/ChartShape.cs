@@ -426,6 +426,12 @@ public sealed class ChartAxis
     /// <summary>Explicit maximum scale value. Null = auto.</summary>
     public double? Max { get; set; }
 
+    /// <summary>Authored major tick interval from <c>c:majorUnit/@val</c>.</summary>
+    public double? MajorUnit { get; set; }
+
+    /// <summary>Authored minor tick interval from <c>c:minorUnit/@val</c>.</summary>
+    public double? MinorUnit { get; set; }
+
     /// <summary>Whether major gridlines are shown on this axis.</summary>
     public bool HasMajorGridlines { get; set; } = true;
 
