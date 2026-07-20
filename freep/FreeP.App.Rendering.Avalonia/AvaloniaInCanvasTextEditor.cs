@@ -9,7 +9,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Rendering.Avalonia;
 
 /// <summary>
-/// Manages a plain-text in-canvas editing overlay for the Avalonia <see cref="SlideCanvas"/>.
+/// Manages rich in-canvas shape and table-cell editing for the Avalonia <see cref="SlideCanvas"/>.
 /// </summary>
 public sealed class AvaloniaInCanvasTextEditor
 {
@@ -17,13 +17,13 @@ public sealed class AvaloniaInCanvasTextEditor
     private readonly EditingSession _editor;
     private readonly Panel _overlay;
 
-    private TextBox? _textBox;
+    private AvaloniaRichTextEditor? _textBox;
     private InCanvasTextEditPlanner? _editPlan;
     private uint _editingShapeId;
     private bool _active;
     private bool _committing;
 
-    private TextBox? _cellTextBox;
+    private AvaloniaRichTextEditor? _cellTextBox;
     private Border? _cellHighlight;
     private InCanvasTableCellTextEditPlanner? _cellEditPlan;
     private uint _editingTableShapeId;
@@ -38,7 +38,7 @@ public sealed class AvaloniaInCanvasTextEditor
     /// <summary>The id of the shape currently being edited, or 0 if not active.</summary>
     public uint ActiveShapeId => _editingShapeId;
 
-    /// <summary>True while a table cell is being edited in the overlay TextBox.</summary>
+    /// <summary>True while a table cell is being edited in the rich overlay editor.</summary>
     public bool IsCellEditActive => _cellEditActive;
 
     /// <summary>The id of the table shape currently being edited, or 0 if not active.</summary>
@@ -48,27 +48,10 @@ public sealed class AvaloniaInCanvasTextEditor
     {
         if (!_active || _textBox is null)
             return false;
-
-        var overlaySelection = GetActiveShapeOverlaySelection();
-        var plan = AvaloniaInCanvasTextEditAdapter.PlanTextFormat(
-            _editor,
-            _editingShapeId,
-            kind,
-            overlaySelection.Selection);
-        if (plan.Command is null)
-            return false;
-
-        _editor.Bus.Execute(plan.Command);
-        RefreshShapeOverlayRichTextPlan(overlaySelection.Selection);
-
-        if (IsCurrentShapePlan(plan) &&
-            plan.TargetValue is { } value &&
-            overlaySelection.IsWholeText)
-        {
-            ApplyOverlayTextFormat(_textBox, kind, value);
-        }
-
-        return true;
+        bool changed = _textBox.ToggleTextFormat(kind);
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveShapeFontFamily(string? fontFamily)
@@ -76,22 +59,10 @@ public sealed class AvaloniaInCanvasTextEditor
         if (!_active || _textBox is null)
             return false;
 
-        var overlaySelection = GetActiveShapeOverlaySelection();
-        var plan = AvaloniaInCanvasTextEditAdapter.PlanFontFamily(
-            _editor,
-            _editingShapeId,
-            fontFamily,
-            overlaySelection.Selection);
-        if (plan.Command is null)
-            return false;
-
-        _editor.Bus.Execute(plan.Command);
-        RefreshShapeOverlayRichTextPlan(overlaySelection.Selection);
-
-        if (IsCurrentShapePlan(plan) && overlaySelection.IsWholeText)
-            ApplyOverlayFontFamily(_textBox, fontFamily);
-
-        return true;
+        bool changed = _textBox.ApplyFontFamily(fontFamily);
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveShapeFontSize(double? sizePt)
@@ -99,22 +70,10 @@ public sealed class AvaloniaInCanvasTextEditor
         if (!_active || _textBox is null)
             return false;
 
-        var overlaySelection = GetActiveShapeOverlaySelection();
-        var plan = AvaloniaInCanvasTextEditAdapter.PlanFontSize(
-            _editor,
-            _editingShapeId,
-            sizePt,
-            overlaySelection.Selection);
-        if (plan.Command is null)
-            return false;
-
-        _editor.Bus.Execute(plan.Command);
-        RefreshShapeOverlayRichTextPlan(overlaySelection.Selection);
-
-        if (IsCurrentShapePlan(plan) && overlaySelection.IsWholeText)
-            ApplyOverlayFontSize(_textBox, sizePt);
-
-        return true;
+        bool changed = _textBox.ApplyFontSize(sizePt);
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveShapeColor(ThemeAwareColor? color)
@@ -122,189 +81,120 @@ public sealed class AvaloniaInCanvasTextEditor
         if (!_active || _textBox is null)
             return false;
 
-        var overlaySelection = GetActiveShapeOverlaySelection();
-        var plan = AvaloniaInCanvasTextEditAdapter.PlanColor(
-            _editor,
-            _editingShapeId,
-            color,
-            overlaySelection.Selection);
-        if (plan.Command is null)
-            return false;
-
-        _editor.Bus.Execute(plan.Command);
-        RefreshShapeOverlayRichTextPlan(overlaySelection.Selection);
-
-        if (IsCurrentShapePlan(plan) && overlaySelection.IsWholeText)
-            ApplyOverlayColor(_textBox, color);
-
-        return true;
+        bool changed = _textBox.ApplyColor(color);
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellTextFormat(TableCellTextFormatKind kind)
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-
-        var plan = AvaloniaTableCellEditAdapter.PlanTextFormat(_editor, kind, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-
-        if (_cellEditActive &&
-            _cellTextBox is not null &&
-            plan.ShapeId == _editingTableShapeId &&
-            plan.Row == _editingCellRow &&
-            plan.Col == _editingCellCol &&
-            plan.TargetValue is { } value)
-        {
-            // The overlay TextBox mirrors formatting as whole-control font weight/style, which
-            // cannot represent a mixed/partial-selection result. When the selection spans the
-            // entire cell (or the caret is collapsed, matching the existing whole-cell
-            // convention), mirror the format onto the overlay control. For a genuine partial
-            // sub-range selection, skip mirroring — the overlay can't show "half bold" — the
-            // underlying rich model (committed on close) is authoritative regardless.
-            if (overlaySelection.IsWholeCell)
-                ApplyCellOverlayFormat(kind, value);
-        }
-
-        return true;
+        bool changed = _cellTextBox.ToggleTextFormat(kind);
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellFontFamily(string? fontFamily)
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = AvaloniaTableCellEditAdapter.PlanFontFamily(_editor, fontFamily, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-
-        if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
-            ApplyCellOverlayFontFamily(fontFamily);
-
-        return true;
+        bool changed = _cellTextBox.ApplyFontFamily(fontFamily);
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellFontSize(double? sizePt)
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = AvaloniaTableCellEditAdapter.PlanFontSize(_editor, sizePt, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-
-        if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
-            ApplyCellOverlayFontSize(sizePt);
-
-        return true;
+        bool changed = _cellTextBox.ApplyFontSize(sizePt);
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellColor(ThemeAwareColor? color)
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = AvaloniaTableCellEditAdapter.PlanColor(_editor, color, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-
-        if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
-            ApplyCellOverlayColor(color);
-
-        return true;
+        bool changed = _cellTextBox.ApplyColor(color);
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellParagraphAlignment(TextAlign alignment)
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = AvaloniaTableCellEditAdapter.PlanParagraphAlignment(_editor, alignment, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-
-        if (IsCurrentCellPlan(plan) && overlaySelection.IsWholeCell)
-            ApplyCellOverlayParagraphAlignment(alignment);
-
-        return true;
+        bool changed = _cellTextBox.ApplyParagraphAlignment(alignment);
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellParagraphBulletToggle()
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = AvaloniaTableCellEditAdapter.PlanParagraphBulletToggle(_editor, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-        return true;
+        bool changed = _cellTextBox.ToggleParagraphBullets();
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellParagraphNumberingToggle()
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = AvaloniaTableCellEditAdapter.PlanParagraphNumberingToggle(_editor, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-        return true;
+        bool changed = _cellTextBox.ToggleParagraphNumbering();
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellParagraphListPreset(TableCellListPresetDescriptor preset)
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = AvaloniaTableCellEditAdapter.PlanParagraphListPreset(_editor, preset, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-        return true;
+        bool changed = _cellTextBox.ApplyParagraphListPreset(preset);
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellParagraphPictureBullet(PresentationPictureBulletPayload payload)
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = AvaloniaTableCellEditAdapter.PlanParagraphPictureBullet(_editor, payload, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-        return true;
+        bool changed = _cellTextBox.ApplyParagraphPictureBullet(payload);
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellParagraphIndent()
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = AvaloniaTableCellEditAdapter.PlanParagraphIndent(_editor, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-        return true;
+        bool changed = _cellTextBox.ApplyParagraphIndent(increase: true);
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public bool TryApplyActiveTableCellParagraphOutdent()
     {
-        var overlaySelection = GetActiveCellOverlaySelection();
-        var plan = AvaloniaTableCellEditAdapter.PlanParagraphOutdent(_editor, overlaySelection.Selection);
-        if (plan.Command is null)
+        if (!_cellEditActive || _cellTextBox is null)
             return false;
-
-        _editor.Bus.Execute(plan.Command);
-        ApplyCellOverlayFormatResult(plan.ResultRichTextPlan);
-        return true;
+        bool changed = _cellTextBox.ApplyParagraphIndent(increase: false);
+        if (changed)
+            RefreshCellOverlayRichTextPlan();
+        return changed;
     }
 
     public AvaloniaInCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Panel overlay)
@@ -346,7 +236,7 @@ public sealed class AvaloniaInCanvasTextEditor
             _canvas.CurrentTransform,
             minimumWidth: 40,
             minimumHeight: 20,
-            InCanvasTextEditKind.PlainText);
+            InCanvasTextEditKind.RichText);
         if (!startPlan.IsReady || startPlan.Placement is null)
             return;
 
@@ -363,33 +253,24 @@ public sealed class AvaloniaInCanvasTextEditor
             minimumWidth: 40,
             minimumHeight: 20);
 
-        _textBox = new TextBox
+        _textBox = new AvaloniaRichTextEditor(startPlan.OriginalBody, backgroundAlpha: 0xCC)
         {
-            AcceptsReturn = true,
-            TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
-            Text = startPlan.OriginalPlainText,
             MinWidth = placement.Width,
             MinHeight = placement.Height,
             Width = placement.Width,
             Height = placement.Height,
-            Padding = new Thickness(2),
-            Background = new global::Avalonia.Media.SolidColorBrush(
-                global::Avalonia.Media.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = new global::Avalonia.Media.SolidColorBrush(
-                global::Avalonia.Media.Color.FromRgb(0x21, 0x96, 0xF3)),
-            BorderThickness = new Thickness(1.5),
         };
         AvaloniaInCanvasTextEditAdapter.ApplyRichTextEditorPlan(_textBox, startPlan.RichTextPlan);
 
         Canvas.SetLeft(_textBox, placement.Left);
         Canvas.SetTop(_textBox, placement.Top);
 
-        _textBox.LostFocus += (_, _) => Commit();
-        _textBox.KeyDown += OnTextBoxKeyDown;
+        _textBox.InputBox.LostFocus += (_, _) => Commit();
+        _textBox.InputBox.KeyDown += OnTextBoxKeyDown;
 
         _overlay.Children.Add(_textBox);
         UpdateOverlayState();
-        _textBox.Focus();
+        _textBox.FocusEditor();
         ApplyInitialSelection(_textBox, startPlan.InitialSelection);
     }
 
@@ -428,32 +309,25 @@ public sealed class AvaloniaInCanvasTextEditor
         _editor.Select(shapeId);
         _editor.SetActiveTableCell(startPlan.Row, startPlan.Col);
 
-        _cellTextBox = new TextBox
+        _cellTextBox = new AvaloniaRichTextEditor(startPlan.OriginalBody, backgroundAlpha: 0xEE)
         {
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
-            Text = InCanvasTextEditPlanner.ExtractPlainText(startPlan.OriginalBody),
             MinWidth = placement.Width,
             MinHeight = placement.Height,
             Width = placement.Width,
             Height = placement.Height,
-            Padding = new Thickness(2),
-            Background = new SolidColorBrush(Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
-            BorderThickness = new Thickness(1.5),
         };
         AvaloniaTableCellEditAdapter.ApplyRichTextEditorPlan(_cellTextBox, startPlan.RichTextPlan);
 
         Canvas.SetLeft(_cellTextBox, placement.Left);
         Canvas.SetTop(_cellTextBox, placement.Top);
 
-        _cellTextBox.LostFocus += (_, _) => CommitCellEdit();
-        _cellTextBox.KeyDown += OnCellTextBoxKeyDown;
+        _cellTextBox.InputBox.LostFocus += (_, _) => CommitCellEdit();
+        _cellTextBox.InputBox.KeyDown += OnCellTextBoxKeyDown;
 
         _overlay.Children.Add(_cellTextBox);
         RefreshTableCellHighlight();
         UpdateOverlayState();
-        _cellTextBox.Focus();
+        _cellTextBox.FocusEditor();
         ApplyInitialSelection(_cellTextBox, startPlan.InitialSelection);
     }
 
@@ -466,7 +340,7 @@ public sealed class AvaloniaInCanvasTextEditor
         _committing = true;
         try
         {
-            var newText = _textBox.Text ?? string.Empty;
+            var newBody = _textBox.EditedBody;
             var editPlan = _editPlan;
 
             _overlay.Children.Remove(_textBox);
@@ -483,7 +357,7 @@ public sealed class AvaloniaInCanvasTextEditor
             if (shape is null)
                 return;
 
-            var decision = editPlan?.CommitPlainText(newText)
+            var decision = editPlan?.CommitRichText(newBody)
                 ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
             if (decision.Command is not null)
                 _editor.Bus.Execute(decision.Command);
@@ -503,7 +377,7 @@ public sealed class AvaloniaInCanvasTextEditor
         _cellClosing = true;
         try
         {
-            var newText = _cellTextBox.Text ?? string.Empty;
+            var newBody = _cellTextBox.EditedBody;
             var editPlan = _cellEditPlan;
             var shapeId = _editingTableShapeId;
             var row = _editingCellRow;
@@ -521,18 +395,6 @@ public sealed class AvaloniaInCanvasTextEditor
             if (cell is null)
                 return;
 
-            // The overlay TextBox only ever shows/edits plain text, but formatting commands
-            // (bold/italic/underline applied while the overlay is open) mutate the rich
-            // TextBody model directly via TryApplyActiveTableCellTextFormat. If the user did
-            // not retype any text (the committed plain text still matches the current rich
-            // model's concatenated text), reuse the rich model as-is instead of rebuilding a
-            // single flattened run from run[0] — rebuilding would silently discard any other
-            // runs' distinct formatting (a data-loss bug). Only fall back to the plain rebuild
-            // when the text itself changed.
-            var currentPlainText = InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody);
-            var newBody = newText == currentPlainText
-                ? SetShapeTextBodyCommand.CloneTextBody(cell.TextBody) ?? InCanvasTextEditPlanner.BuildPlainTextBody(cell.TextBody, newText)
-                : InCanvasTextEditPlanner.BuildPlainTextBody(cell.TextBody, newText);
             var decision = AvaloniaTableCellEditAdapter.CommitRichText(editPlan, newBody);
             if (decision.Command is not null)
                 _editor.Bus.Execute(decision.Command);
@@ -673,7 +535,17 @@ public sealed class AvaloniaInCanvasTextEditor
         {
             Cancel();
             e.Handled = true;
+            return;
         }
+
+        if ((e.KeyModifiers & KeyModifiers.Control) != 0)
+            e.Handled = e.Key switch
+            {
+                Key.B => TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold),
+                Key.I => TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Italic),
+                Key.U => TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Underline),
+                _ => false,
+            };
     }
 
     private void OnCellTextBoxKeyDown(object? sender, KeyEventArgs e)
@@ -693,7 +565,17 @@ public sealed class AvaloniaInCanvasTextEditor
                 : TableCellNavigationDirection.Next;
             if (TryNavigateActiveTableCell(direction))
                 e.Handled = true;
+            return;
         }
+
+        if ((e.KeyModifiers & KeyModifiers.Control) != 0)
+            e.Handled = e.Key switch
+            {
+                Key.B => TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold),
+                Key.I => TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic),
+                Key.U => TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline),
+                _ => false,
+            };
     }
 
     private void RefreshTableCellHighlight()
@@ -757,200 +639,28 @@ public sealed class AvaloniaInCanvasTextEditor
         _overlay.IsHitTestVisible = _active || _cellEditActive;
     }
 
-    private void ApplyCellOverlayFormat(TableCellTextFormatKind kind, bool value)
+    private static void ApplyInitialSelection(AvaloniaRichTextEditor textBox, InCanvasEditorTextSelection selection)
     {
-        if (_cellTextBox is null)
-            return;
-
-        ApplyOverlayTextFormat(_cellTextBox, kind, value);
-    }
-
-    private static void ApplyOverlayTextFormat(TextBox textBox, TableCellTextFormatKind kind, bool value)
-    {
-        switch (kind)
-        {
-            case TableCellTextFormatKind.Bold:
-                textBox.FontWeight = value ? FontWeight.Bold : FontWeight.Normal;
-                break;
-            case TableCellTextFormatKind.Italic:
-                textBox.FontStyle = value ? FontStyle.Italic : FontStyle.Normal;
-                break;
-            case TableCellTextFormatKind.Underline:
-                textBox.Classes.Set("freep-table-cell-underline", value);
-                textBox.BorderThickness = value
-                    ? new Thickness(1.5, 1.5, 1.5, 3.0)
-                    : new Thickness(1.5);
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
-        }
-    }
-
-    private (bool IsWholeText, (int Start, int End)? Selection) GetActiveShapeOverlaySelection()
-    {
-        if (!_active || _textBox is null)
-            return (true, null);
-
-        int selStart = Math.Min(_textBox.SelectionStart, _textBox.SelectionEnd);
-        int selEnd = Math.Max(_textBox.SelectionStart, _textBox.SelectionEnd);
-        int textLength = _textBox.Text?.Length ?? 0;
-
-        return (
-            selStart == selEnd || (selStart == 0 && selEnd >= textLength),
-            selStart != selEnd ? (selStart, selEnd) : null);
-    }
-
-    private (bool IsWholeCell, (int Start, int End)? Selection) GetActiveCellOverlaySelection()
-    {
-        if (!_cellEditActive || _cellTextBox is null)
-            return (true, null);
-
-        int selStart = Math.Min(_cellTextBox.SelectionStart, _cellTextBox.SelectionEnd);
-        int selEnd = Math.Max(_cellTextBox.SelectionStart, _cellTextBox.SelectionEnd);
-        int textLength = _cellTextBox.Text?.Length ?? 0;
-
-        return (
-            selStart == selEnd || (selStart == 0 && selEnd >= textLength),
-            selStart != selEnd ? (selStart, selEnd) : null);
-    }
-
-    private static void ApplyInitialSelection(TextBox textBox, InCanvasEditorTextSelection selection)
-    {
-        int textLength = textBox.Text?.Length ?? 0;
+        int textLength = textBox.Text.Length;
         textBox.SelectionStart = Math.Clamp(selection.Start, 0, textLength);
         textBox.SelectionEnd = Math.Clamp(selection.End, 0, textLength);
     }
 
-    private bool IsCurrentShapePlan(InCanvasShapeTextFormatPlan plan) =>
-        _active &&
-        _textBox is not null &&
-        plan.ShapeId == _editingShapeId;
-
-    private bool IsCurrentShapePlan(InCanvasShapeTextValueFormatPlan plan) =>
-        _active &&
-        _textBox is not null &&
-        plan.ShapeId == _editingShapeId;
-
-    private bool IsCurrentCellPlan(TableCellTextValueFormatPlan plan) =>
-        _cellEditActive &&
-        _cellTextBox is not null &&
-        plan.ShapeId == _editingTableShapeId &&
-        plan.Row == _editingCellRow &&
-        plan.Col == _editingCellCol;
-
-    private bool IsCurrentCellPlan(TableCellParagraphFormatPlan plan) =>
-        _cellEditActive &&
-        _cellTextBox is not null &&
-        plan.ShapeId == _editingTableShapeId &&
-        plan.Row == _editingCellRow &&
-        plan.Col == _editingCellCol;
-
-    private void ApplyCellOverlayParagraphAlignment(TextAlign alignment)
-    {
-        if (_cellTextBox is null)
-            return;
-
-        _cellTextBox.TextAlignment = alignment switch
-        {
-            TextAlign.Center => TextAlignment.Center,
-            TextAlign.Right => TextAlignment.Right,
-            TextAlign.Justify or TextAlign.Distributed => TextAlignment.Justify,
-            _ => TextAlignment.Left,
-        };
-    }
-
-    private void ApplyCellOverlayFontFamily(string? fontFamily)
-    {
-        if (_cellTextBox is null)
-            return;
-
-        _cellTextBox.FontFamily = string.IsNullOrWhiteSpace(fontFamily)
-            ? FontFamily.Default
-            : new FontFamily(fontFamily);
-    }
-
-    private static void ApplyOverlayFontFamily(TextBox textBox, string? fontFamily)
-    {
-        textBox.FontFamily = string.IsNullOrWhiteSpace(fontFamily)
-            ? FontFamily.Default
-            : new FontFamily(fontFamily);
-    }
-
-    private void ApplyCellOverlayFontSize(double? sizePt)
-    {
-        if (_cellTextBox is null || sizePt is null)
-            return;
-
-        _cellTextBox.FontSize = sizePt.Value;
-    }
-
-    private static void ApplyOverlayFontSize(TextBox textBox, double? sizePt)
-    {
-        if (sizePt is null)
-            return;
-
-        textBox.FontSize = sizePt.Value;
-    }
-
-    private void ApplyCellOverlayColor(ThemeAwareColor? color)
-    {
-        if (_cellTextBox is null)
-            return;
-
-        _cellTextBox.Foreground = color is null
-            ? null
-            : new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B));
-    }
-
-    private static void ApplyOverlayColor(TextBox textBox, ThemeAwareColor? color)
-    {
-        textBox.Foreground = color is null
-            ? null
-            : new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B));
-    }
-
-    private void RefreshCellOverlayRichTextPlan((int Start, int End)? selection)
+    private void RefreshCellOverlayRichTextPlan()
     {
         if (!_cellEditActive || _cellTextBox is null)
             return;
-
-        var cell = _editor.CurrentSlide?
-            .Shapes.FirstOrDefault(s => s.Id == _editingTableShapeId)?
-            .Table?
-            .Rows.ElementAtOrDefault(_editingCellRow)?
-            .Cells.ElementAtOrDefault(_editingCellCol);
-        if (cell is null)
-            return;
-
-        var selectionPlan = selection is { } selected
-            ? new InCanvasEditorTextSelection(selected.Start, selected.End)
-            : TableCellEditPlanner.PlanInitialSelection(cell.TextBody);
-        var richTextPlan = TableCellEditPlanner.PlanRichTextEdit(cell.TextBody, selectionPlan);
-        AvaloniaTableCellEditAdapter.ApplyRichTextEditorPlan(_cellTextBox, richTextPlan);
+        AvaloniaTableCellEditAdapter.ApplyRichTextEditorPlan(
+            _cellTextBox,
+            _cellTextBox.CurrentPlan());
     }
 
-    private void ApplyCellOverlayFormatResult(InCanvasTableCellRichTextEditPlan? plan)
-    {
-        if (!_cellEditActive || _cellTextBox is null)
-            return;
-
-        AvaloniaTableCellEditAdapter.ApplyFormatResult(_cellTextBox, plan);
-    }
-
-    private void RefreshShapeOverlayRichTextPlan((int Start, int End)? selection)
+    private void RefreshShapeOverlayRichTextPlan()
     {
         if (!_active || _textBox is null)
             return;
-
-        var shape = _editor.CurrentSlide?
-            .Shapes.FirstOrDefault(s => s.Id == _editingShapeId);
-        if (shape?.TextBody is null)
-            return;
-
-        var selectionPlan = selection is { } selected
-            ? new InCanvasEditorTextSelection(selected.Start, selected.End)
-            : TableCellEditPlanner.PlanInitialSelection(shape.TextBody);
-        var richTextPlan = TableCellEditPlanner.PlanRichTextEdit(shape.TextBody, selectionPlan);
-        AvaloniaInCanvasTextEditAdapter.ApplyRichTextEditorPlan(_textBox, richTextPlan);
+        AvaloniaInCanvasTextEditAdapter.ApplyRichTextEditorPlan(
+            _textBox,
+            _textBox.CurrentPlan());
     }
 }

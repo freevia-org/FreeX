@@ -324,6 +324,53 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void InCanvasTextEditor_TextAndFormattingStayLocalAndCommitAsOneUndoStep()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            TextBody = MakeTwoRunBody(),
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var canvas = new SlideCanvas();
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+        canvas.Presentation = presentation;
+        canvas.Slide = slide;
+
+        canvas.TextEditor!.Activate(shape.Id);
+        var richTextBox = overlay.Children.OfType<System.Windows.Controls.RichTextBox>().Single();
+        richTextBox.SelectAll();
+        richTextBox.Selection.Text = "One committed edit";
+        richTextBox.SelectAll();
+        canvas.TextEditor.ApplyBold();
+
+        editor.CanUndo.Should().BeFalse("the active WPF rich edit is still local");
+        InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody).Should().Be("Hello world");
+
+        canvas.TextEditor.Commit();
+
+        editor.CanUndo.Should().BeTrue();
+        InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody).Should().Be("One committed edit");
+        shape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().OnlyContain(run => run.Bold);
+
+        editor.Undo();
+        editor.CanUndo.Should().BeFalse("text and formatting must share one model command");
+        InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody).Should().Be("Hello world");
+        shape.TextBody!.Paragraphs[0].Runs.Should().HaveCount(2);
+    }
+
+    [StaFact]
     public void Converter_InheritedFontFamilyAndSize_RoundTrip_StillNull()
     {
         // Arrange: run with FontFamily=null and FontSizePt=null (inherit from placeholder).
