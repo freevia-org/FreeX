@@ -60,6 +60,25 @@ public sealed class Presentation
     /// </summary>
     public long NotesPageSizeCyEmu { get; set; } = DefaultNotesPageSizeCyEmu;
 
+    /// <summary>
+    /// Native notes-master placeholder shapes imported from ppt/notesMasters.  The notes-page
+    /// planner uses their authored geometry before falling back to its deterministic defaults.
+    /// </summary>
+    public List<SlideShape> NotesMasterPlaceholders { get; } = new();
+
+    /// <summary>
+    /// Notes-master text styles from p:notesMaster/p:notesStyle.  Null means the package had no
+    /// readable notes master styles and consumers should use their existing defaults.
+    /// </summary>
+    public MasterTextStyles? NotesMasterTextStyles { get; set; }
+
+    /// <summary>
+    /// Original notes-master XML and relationships, retained so a read/write round trip does not
+    /// replace an authored notes master with the writer's minimal fallback part.
+    /// </summary>
+    public byte[]? NotesMasterXml { get; set; }
+    public byte[]? NotesMasterRelsXml { get; set; }
+
     // ── Content ───────────────────────────────────────────────────────────────────
 
     /// <summary>Slides, in presentation order.</summary>
