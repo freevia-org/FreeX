@@ -163,6 +163,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Flip, SlideShowTransitionPlaybackKind.Flip)]
     [InlineData(TransitionKind.Cube, SlideShowTransitionPlaybackKind.Cube)]
     [InlineData(TransitionKind.Rotate, SlideShowTransitionPlaybackKind.Rotate)]
+    [InlineData(TransitionKind.Honeycomb, SlideShowTransitionPlaybackKind.Honeycomb)]
     [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]
     public void PlanTransition_GroupsKindsIntoRendererNeutralPlayback(
         TransitionKind kind,
