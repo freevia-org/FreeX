@@ -47,7 +47,7 @@ namespace FreeP.App.Host;
 /// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
 /// Push (bidirectional displacement), Pan (scaled directional exchange), Gallery
 /// (two-surface gallery exchange), Conveyor (belt-like panel exchange), and Flash
-/// (white-flash). Others fall back to Fade.
+/// (white-flash). Window uses a centered aperture. Others fall back to Fade.
 /// </summary>
 public sealed class SlideShowWindow : Window
 {
@@ -880,6 +880,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Conveyor:
                 PlayConveyorTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Window:
+                PlayWindowTransition(slide, plan);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Push:
@@ -1974,6 +1978,80 @@ public sealed class SlideShowWindow : Window
 
         _pendingStoryboards.Add(storyboard);
         storyboard.Begin(this, true);
+    }
+
+    private void PlayWindowTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        var scale = new ScaleTransform(
+            SlideShowPlaybackPlanner.WindowStartScale,
+            SlideShowPlaybackPlanner.WindowStartScale,
+            w / 2,
+            h / 2);
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = scale;
+        _slideCanvas.Clip = BuildWindowTransitionGeometry(w, h, 0);
+        Grid.SetZIndex(_slideCanvas, 1);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+            Grid.SetZIndex(_transitionBackImage, 0);
+        }
+
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var scaleX = new DoubleAnimation(
+            SlideShowPlaybackPlanner.WindowStartScale, 1, duration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        var scaleY = scaleX.Clone();
+        var clip = new ObjectAnimationUsingKeyFrames { Duration = duration };
+        const int frameCount = 24;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            clip.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildWindowTransitionGeometry(w, h, progress),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        Storyboard.SetTarget(scaleX, _slideCanvas);
+        Storyboard.SetTarget(scaleY, _slideCanvas);
+        Storyboard.SetTarget(clip, _slideCanvas);
+        Storyboard.SetTargetProperty(scaleX,
+            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
+        Storyboard.SetTargetProperty(scaleY,
+            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
+        Storyboard.SetTargetProperty(clip, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(scaleX);
+        storyboard.Children.Add(scaleY);
+        storyboard.Children.Add(clip);
+        scaleX.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _slideCanvas.RenderTransform = Transform.Identity;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+            Grid.SetZIndex(_slideCanvas, 0);
+            Grid.SetZIndex(_transitionBackImage, 0);
+        };
+
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildWindowTransitionGeometry(double width, double height, double progress)
+    {
+        var opening = SlideShowPlaybackPlanner.WindowInitialOpenFactor
+            + (1 - SlideShowPlaybackPlanner.WindowInitialOpenFactor) * Math.Clamp(progress, 0, 1);
+        return BuildBoxTransitionGeometry(width, height, opening, expandsFromCenter: true);
     }
 
     private void PrepareAnimationOverlay(Slide slide)

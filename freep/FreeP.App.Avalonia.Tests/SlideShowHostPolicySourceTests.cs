@@ -62,6 +62,10 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("AnimateConveyorTransition(");
         source.Should().Contain("SlideShowPlaybackPlanner.ConveyorStartScale");
         source.Should().Contain("SlideShowPlaybackPlanner.ConveyorTiltDegrees");
+        source.Should().Contain("PlayWindowTransition(");
+        source.Should().Contain("AnimateWindowTransition(");
+        source.Should().Contain("BuildWindowTransitionGeometry(");
+        source.Should().Contain("SlideShowPlaybackPlanner.WindowInitialOpenFactor");
         source.Should().Contain("SlideShowPlaybackPlanner.GalleryStartScale");
         source.Should().Contain("SlideShowPlaybackPlanner.GalleryOutgoingEndScale");
         source.Should().Contain("PlayDissolveTransition(");

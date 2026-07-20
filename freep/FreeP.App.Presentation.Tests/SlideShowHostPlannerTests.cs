@@ -158,7 +158,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Conveyor, SlideShowTransitionPlaybackKind.Conveyor)]
     [InlineData(TransitionKind.Pan, SlideShowTransitionPlaybackKind.Pan)]
     [InlineData(TransitionKind.Doors, SlideShowTransitionPlaybackKind.Split)]
-    [InlineData(TransitionKind.Window, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Window, SlideShowTransitionPlaybackKind.Window)]
     [InlineData(TransitionKind.Morph, SlideShowTransitionPlaybackKind.FadeFallback)]
     [InlineData(TransitionKind.Cube, SlideShowTransitionPlaybackKind.FadeFallback)]
     [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]

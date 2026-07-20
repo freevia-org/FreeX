@@ -47,7 +47,7 @@ namespace FreeP.App.Avalonia;
 /// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
 /// Push (bidirectional displacement), Pan (scaled directional exchange), Gallery
 /// (two-surface gallery exchange), Conveyor (belt-like panel exchange), and Flash
-/// (white-flash). Others fall back to Fade.
+/// (white-flash). Window uses a centered aperture. Others fall back to Fade.
 ///
 /// Media
 /// ─────
@@ -827,6 +827,10 @@ public sealed class SlideShowWindow : Window
                 PlayConveyorTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Window:
+                PlayWindowTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Dissolve:
                 PlayDissolveTransition(slide, plan.DurationMs);
                 return;
@@ -1106,6 +1110,16 @@ public sealed class SlideShowWindow : Window
         bool expandsFromCenter) =>
         new(ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(
             width, height, progress, expandsFromCenter)));
+
+    private static RectangleGeometry BuildWindowTransitionGeometry(
+        double width,
+        double height,
+        double progress)
+    {
+        var opening = SlideShowPlaybackPlanner.WindowInitialOpenFactor
+            + (1 - SlideShowPlaybackPlanner.WindowInitialOpenFactor) * Math.Clamp(progress, 0, 1);
+        return BuildBoxTransitionGeometry(width, height, opening, expandsFromCenter: true);
+    }
 
     private void PlayRevealTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
     {
@@ -1690,6 +1704,93 @@ public sealed class SlideShowWindow : Window
                 _activeTimers.Remove(timer);
                 incoming.Matrix = Matrix.Identity;
                 if (outgoing is not null) outgoing.Matrix = Matrix.Identity;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
+    private void PlayWindowTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var scale = new ScaleTransform(
+            SlideShowPlaybackPlanner.WindowStartScale,
+            SlideShowPlaybackPlanner.WindowStartScale);
+        var clipRect = BuildWindowTransitionGeometry(w, h, 0);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransformOrigin = RelativePoint.Center;
+        _slideCanvas.RenderTransform = scale;
+        _slideCanvas.Clip = clipRect;
+        _slideCanvas.ZIndex = 1;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+            _transitionBackImage.ZIndex = 0;
+        }
+
+        AnimateWindowTransition(
+            scale,
+            clipRect,
+            w,
+            h,
+            plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.Clip = null;
+                _slideCanvas.RenderTransform = null;
+                _slideCanvas.ZIndex = 0;
+                _transitionBackImage.IsVisible = false;
+                _transitionBackImage.ZIndex = 0;
+            });
+    }
+
+    private void AnimateWindowTransition(
+        ScaleTransform scale,
+        RectangleGeometry clipRect,
+        double width,
+        double height,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            scale.ScaleX = scale.ScaleY = 1;
+            clipRect.Rect = ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(width, height, 1, true));
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var eased = EaseInOut(t);
+            scale.ScaleX = scale.ScaleY = SlideShowPlaybackPlanner.WindowStartScale
+                + (1 - SlideShowPlaybackPlanner.WindowStartScale) * eased;
+            var opening = SlideShowPlaybackPlanner.WindowInitialOpenFactor
+                + (1 - SlideShowPlaybackPlanner.WindowInitialOpenFactor) * eased;
+            clipRect.Rect = ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(
+                width, height, opening, true));
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                scale.ScaleX = scale.ScaleY = 1;
+                clipRect.Rect = ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(width, height, 1, true));
                 onComplete?.Invoke();
             }
         };
