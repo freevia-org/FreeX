@@ -306,9 +306,13 @@ public partial class MainWindow
     private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        // Freeze relative to the true active/anchor cell (R14-accessibility-automation-2), not
+        // SelectedRange's normalized top-left Start -- an upward/leftward extension moves Start
+        // away from the anchor Excel actually freezes around (R51-commands-freeze-split-view-3-1).
+        var anchor = _selectionAnchor ?? range.Start;
         SetFreezePanes(
-            (uint)Math.Max(0, (int)range.Start.Row - 1),
-            (uint)Math.Max(0, (int)range.Start.Col - 1));
+            (uint)Math.Max(0, (int)anchor.Row - 1),
+            (uint)Math.Max(0, (int)anchor.Col - 1));
     }
     private void FreezeTopRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -376,8 +380,11 @@ public partial class MainWindow
         uint? splitColumn = null;
         if (!wasSplit && SheetGrid.SelectedRange is { } range)
         {
-            splitRow = range.Start.Row > 1 ? range.Start.Row : null;
-            splitColumn = range.Start.Col > 1 ? range.Start.Col : null;
+            // Split relative to the true active/anchor cell, not SelectedRange's normalized
+            // top-left Start (same fix as Freeze Panes -- R51-commands-freeze-split-view-3-2).
+            var anchor = _selectionAnchor ?? range.Start;
+            splitRow = anchor.Row > 1 ? anchor.Row : null;
+            splitColumn = anchor.Col > 1 ? anchor.Col : null;
         }
 
         if (!TryExecuteGroupedSheetCommand(

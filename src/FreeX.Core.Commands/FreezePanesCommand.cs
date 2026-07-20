@@ -86,8 +86,16 @@ public sealed class SetSplitPanesCommand : IWorkbookCommand
 
         sheet.SplitRow = _splitRow;
         sheet.SplitColumn = _splitColumn;
-        sheet.FrozenRows = 0;
-        sheet.FrozenCols = 0;
+        // R51-commands-freeze-split-view-3-3: only clear an existing freeze when a real split is
+        // actually being established (a non-null split row/column). A fully-null invocation (e.g.
+        // the toggle-off path, or a Split click whose active cell was A1 so no split position was
+        // computed) must not silently wipe out unrelated freeze panes — Excel never tears down an
+        // existing pane arrangement without establishing a replacement.
+        if (_splitRow is not null || _splitColumn is not null)
+        {
+            sheet.FrozenRows = 0;
+            sheet.FrozenCols = 0;
+        }
         return new CommandOutcome(true);
     }
 

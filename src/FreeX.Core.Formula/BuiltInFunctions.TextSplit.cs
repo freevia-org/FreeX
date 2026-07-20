@@ -296,7 +296,13 @@ public static partial class BuiltInFunctions
     {
         value = defaultValue;
         error = ErrorValue.Value;
-        if (args.Count <= index || args[index] is BlankValue) return true;
+        // Only a genuinely-omitted argument slot (args.Count <= index, or the
+        // OmittedOptionalOrdinalArgumentValue sentinel FormulaEvaluator.Functions.cs substitutes for
+        // TEXTBEFORE/TEXTAFTER's instance_num) falls back to defaultValue. An explicit argument that
+        // merely evaluates to BlankValue (e.g. a reference to an empty cell) is NOT the same as
+        // omitted -- Excel coerces it to numeric 0 like any other blank-cell numeric coercion -- so it
+        // must fall through to the normal ToNumber conversion below instead of short-circuiting here.
+        if (args.Count <= index || args[index] is OmittedOptionalOrdinalArgumentValue) return true;
         if (!TryGetScalarControlArgument(args[index], out var scalar, out error)) return false;
 
         var number = ToNumber(scalar);

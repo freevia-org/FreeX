@@ -37,7 +37,22 @@ public enum ChartType
 
 public enum ChartLegendPosition { None, Left, Right, Top, Bottom }
 
-public enum ChartDataLabelPosition { BestFit, Center, InsideEnd, OutsideEnd, InsideBase }
+// R51-io-chart-datalabel-3-1: Left/Right/Top/Bottom added (at the end, preserving the existing
+// members' ordinal values) so the family of chart types whose data labels support OOXML
+// c:dLblPos val="l"/"r"/"t"/"b" (Line, 3-D Line, Scatter, Bubble) can round-trip that position
+// instead of every reader/writer site being forced to collapse it to BestFit/Center.
+public enum ChartDataLabelPosition
+{
+    BestFit,
+    Center,
+    InsideEnd,
+    OutsideEnd,
+    InsideBase,
+    Left,
+    Right,
+    Top,
+    Bottom
+}
 
 /// <summary>
 /// <see cref="Custom"/> means the source file used a literal separator string (e.g. Excel's

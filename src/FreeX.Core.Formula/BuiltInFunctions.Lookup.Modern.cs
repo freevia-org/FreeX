@@ -580,13 +580,19 @@ public static partial class BuiltInFunctions
         // type class (number / text / bool) matches the lookup value's own type class -- a
         // text or bool candidate can never be a numeric "next larger/smaller" match, mirroring
         // MATCH/VLOOKUP/HLOOKUP/LOOKUP's own ApproxLookupTypeClass filtering.
+        //
+        // A genuinely blank candidate cell is let through the type-class filter (mirrors
+        // FormulaEvaluator.LookupFastPaths.cs's EvaluateLegacyLookupDirectTable /
+        // EvaluateMatchDirectRange, R29-lookup-repass-1) so CompareScalar's own blank-to-0/""
+        // coercion gets a chance to run instead of the blank row being skipped like a foreign
+        // type (text/logical).
         int lookupClass = ApproxLookupTypeClass(lookupValue);
         int best = -1;
         for (int i = start; i != end; i += step)
         {
             var candidate = lookupVector[i];
             if (candidate is ErrorValue err) return err;
-            if (ApproxLookupTypeClass(candidate) != lookupClass) continue;
+            if (candidate is not BlankValue && ApproxLookupTypeClass(candidate) != lookupClass) continue;
             int candidateVsLookup = CompareScalar(candidate, lookupValue);
             if (nextSmaller)
             {

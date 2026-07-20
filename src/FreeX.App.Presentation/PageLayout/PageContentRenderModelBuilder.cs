@@ -771,6 +771,13 @@ public static class PageContentRenderModelBuilder
         CellStyle style,
         int? targetWidthCharacters = null)
     {
+        // Excel's "Show a zero in cells that have zero value" sheet option (sheetView showZeros):
+        // when off, a cell whose value is numeric zero prints/exports as blank, mirroring the
+        // interactive grid's expected behavior. Formula-text display mode (ShowFormulas) is
+        // unaffected since it shows the literal formula, not the computed value.
+        if (!sheet.ShowFormulas && !sheet.ShowZeros && cell.Value is NumberValue { Value: 0 })
+            return string.Empty;
+
         var raw = sheet.ShowFormulas && cell.FormulaText is not null
             ? "=" + cell.FormulaText
             : targetWidthCharacters is { } width

@@ -1307,6 +1307,18 @@ public sealed partial class ViewportService : IViewportService
             return "=" + cell.FormulaText;
         }
 
+        // Excel's "Show a zero in cells that have zero value" sheet option (sheetView
+        // showZeros): when off, a cell whose value is literally 0 renders blank instead of
+        // "0" -- UNLESS the cell's own number format defines an explicit third (zero) section,
+        // in which case that section's own rendering (which may itself already be blank, via
+        // e.g. "0;-0;;@") governs and the sheet-level preference is not consulted.
+        if (!sheet.ShowZeros &&
+            cell.Value is NumberValue { Value: 0.0 } &&
+            !NumberFormatHasExplicitZeroSection(style.NumberFormat))
+        {
+            return string.Empty;
+        }
+
         var result = NumberFormatter.FormatWithColor(
             cell.Value,
             style.NumberFormat,
@@ -1338,6 +1350,36 @@ public sealed partial class ViewportService : IViewportService
             ? cell.StyleId
             : sheet.GetStyleOnly(row, col) ?? StyleId.Default;
         return workbook.GetStyle(styleId).Hidden;
+    }
+
+    /// <summary>
+    /// True when <paramref name="numberFormat"/> defines a third (zero-specific) section --
+    /// e.g. "#,##0;(#,##0);\"-\"" -- meaning the format itself dictates how a zero value
+    /// renders and the sheet's ShowZeros preference must not override it. Sections are
+    /// separated by top-level ';' characters (not inside a quoted literal or a [bracketed]
+    /// directive); an empty/General format has a single (implicit) section.
+    /// </summary>
+    private static bool NumberFormatHasExplicitZeroSection(string? numberFormat)
+    {
+        if (string.IsNullOrEmpty(numberFormat))
+            return false;
+
+        var sectionCount = 1;
+        var inQuote = false;
+        var inBracket = false;
+        foreach (var c in numberFormat)
+        {
+            if (c == '"' && !inBracket)
+                inQuote = !inQuote;
+            else if (c == '[' && !inQuote)
+                inBracket = true;
+            else if (c == ']' && !inQuote)
+                inBracket = false;
+            else if (c == ';' && !inQuote && !inBracket)
+                sectionCount++;
+        }
+
+        return sectionCount >= 3;
     }
 
     private static bool TryParseHexColor(string? hex, out CellColor color)
