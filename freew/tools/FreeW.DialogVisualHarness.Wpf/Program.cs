@@ -172,7 +172,28 @@ static void Populate(Window dialog, Scenario scenario)
         var expander = FindVisualChildren<Expander>(dialog).FirstOrDefault(candidate => candidate.Header?.ToString() == "More");
         if (expander is not null) expander.IsExpanded = true;
     }
-    Keyboard.Focus(FindVisualChildren<Control>(dialog).FirstOrDefault(c => c.IsTabStop && c.IsEnabled));
+    FocusScenarioTarget(dialog, scenario);
+}
+
+static void FocusScenarioTarget(Window dialog, Scenario scenario)
+{
+    if (scenario.RouteId == "legal-notices")
+    {
+        var selectedText = FindVisualChildren<TabControl>(dialog)
+            .FirstOrDefault()?.SelectedItem is TabItem { Content: TextBox textBox }
+            ? textBox
+            : null;
+        if (selectedText is not null)
+        {
+            selectedText.Focus();
+            Keyboard.Focus(selectedText);
+            selectedText.CaretIndex = 0;
+            return;
+        }
+    }
+
+    if (Keyboard.FocusedElement is null)
+        Keyboard.Focus(FindVisualChildren<Control>(dialog).FirstOrDefault(c => c.IsTabStop && c.IsEnabled));
 }
 
 static Semantics ReadSemantics(Window dialog)

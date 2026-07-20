@@ -21,6 +21,9 @@ using SkiaSharp;
 
 internal static class Program
 {
+const int WpfNonClientWidth = 16;
+const int WpfNonClientHeight = 37;
+
 static async Task<int> Main(string[] args)
 {
     var inventoryPath = Required(args, "--inventory");
@@ -58,14 +61,17 @@ static Capture? CaptureOne(Scenario scenario, string output)
 {
     var dialog = AvaloniaDialogRouteFactory.Create(scenario.RouteId, scenario.State, scenario.Tab);
     if (dialog is null) return null;
-    var width = 560;
-    var height = TargetHeight(scenario);
-    dialog.Width = width;
-    dialog.Height = height;
+    var width = Math.Max(560, (int)Math.Ceiling(dialog.MinWidth));
+    var height = Math.Max(TargetHeight(scenario), (int)Math.Ceiling(dialog.MinHeight));
+    var hasNativeFrame = scenario.RouteId != "screen-clip-overlay";
+    var clientWidth = hasNativeFrame ? width - WpfNonClientWidth : width;
+    var clientHeight = hasNativeFrame ? height - WpfNonClientHeight : height;
+    dialog.Width = clientWidth;
+    dialog.Height = clientHeight;
     dialog.SizeToContent = SizeToContent.Manual;
     dialog.Show();
-    dialog.Measure(new Size(width, height));
-    dialog.Arrange(new Avalonia.Rect(0, 0, width, height));
+    dialog.Measure(new Size(clientWidth, clientHeight));
+    dialog.Arrange(new Avalonia.Rect(0, 0, clientWidth, clientHeight));
     dialog.UpdateLayout();
     Populate(dialog, scenario);
     Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
@@ -77,7 +83,10 @@ static Capture? CaptureOne(Scenario scenario, string output)
         dialog.Close();
         return Unsupported(scenario, "Avalonia headless compositor returned no frame; no placeholder image was substituted.", "avalonia-headless-render-unavailable", semantics);
     }
-    var rendered = ReadFrame(frame);
+    // WPF RenderTargetBitmap captures the outer Window bounds but leaves native frame pixels
+    // transparent. Avalonia headless has no native frame, so reserve the same logical area to
+    // compare equivalent client geometry at the same outer target size.
+    var rendered = ReadFrame(frame, width, height);
     var bytes = rendered.Png;
     var fullContent = PixelContentMetrics.Compute(rendered.Pixels, rendered.Width, rendered.Height);
     var targetContent = fullContent;
@@ -112,7 +121,29 @@ static void Populate(Window dialog, Scenario scenario)
                 pair.item is TabItem tabItem && tabItem.Header?.ToString()?.Equals(scenario.Tab, StringComparison.OrdinalIgnoreCase) == true).index;
         tabs.SelectedIndex = Math.Clamp(selectedIndex, 0, Math.Max(0, tabs.ItemCount - 1));
     }
-    FindVisualChildren<Control>(dialog).FirstOrDefault(c => c.IsTabStop && c.IsEffectivelyEnabled)?.Focus();
+    FocusScenarioTarget(dialog, scenario);
+}
+
+static void FocusScenarioTarget(Window dialog, Scenario scenario)
+{
+    if (scenario.RouteId == "legal-notices")
+    {
+        var selectedText = FindVisualChildren<TabControl>(dialog)
+            .FirstOrDefault()?.SelectedItem is TabItem { Content: TextBox textBox }
+            ? textBox
+            : null;
+        if (selectedText is not null)
+        {
+            selectedText.Focus(NavigationMethod.Tab);
+            selectedText.CaretIndex = 0;
+            return;
+        }
+    }
+
+    if (!FindVisualChildren<Control>(dialog).Any(control => control.IsFocused))
+        FindVisualChildren<Control>(dialog)
+            .FirstOrDefault(control => control.IsTabStop && control.IsEffectivelyEnabled)
+            ?.Focus(NavigationMethod.Tab);
 }
 
 static Semantics ReadSemantics(Window dialog)
@@ -130,26 +161,42 @@ static Semantics ReadSemantics(Window dialog)
         buttons.Select(b => b.Content?.ToString() ?? b.GetType().Name).ToArray(), controls);
 }
 
-static RenderedFrame ReadFrame(Avalonia.Media.Imaging.WriteableBitmap bitmap)
+static RenderedFrame ReadFrame(
+    Avalonia.Media.Imaging.WriteableBitmap bitmap,
+    int outputWidth,
+    int outputHeight)
 {
     using var locked = bitmap.Lock();
     var colorType = locked.Format == PixelFormat.Bgra8888 ? SKColorType.Bgra8888 : SKColorType.Rgba8888;
     var info = new SKImageInfo(locked.Size.Width, locked.Size.Height, colorType, SKAlphaType.Premul);
-    var pixels = new byte[checked(locked.Size.Width * locked.Size.Height * 4)];
+    var sourcePixels = new byte[checked(locked.Size.Width * locked.Size.Height * 4)];
     for (var y = 0; y < locked.Size.Height; y++)
-        System.Runtime.InteropServices.Marshal.Copy(locked.Address + y * locked.RowBytes, pixels, y * locked.Size.Width * 4, locked.Size.Width * 4);
-    using var skBitmap = new SKBitmap(info);
-    System.Runtime.InteropServices.Marshal.Copy(pixels, 0, skBitmap.GetPixels(), pixels.Length);
-    using var image = SKImage.FromBitmap(skBitmap);
-    using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-    var bgraPixels = pixels;
-    if (locked.Format != PixelFormat.Bgra8888)
+        System.Runtime.InteropServices.Marshal.Copy(
+            locked.Address + y * locked.RowBytes,
+            sourcePixels,
+            y * locked.Size.Width * 4,
+            locked.Size.Width * 4);
+    using var source = new SKBitmap(info);
+    System.Runtime.InteropServices.Marshal.Copy(sourcePixels, 0, source.GetPixels(), sourcePixels.Length);
+    using var target = new SKBitmap(new SKImageInfo(
+        outputWidth,
+        outputHeight,
+        SKColorType.Bgra8888,
+        SKAlphaType.Premul));
+    using (var canvas = new SKCanvas(target))
     {
-        bgraPixels = (byte[])pixels.Clone();
-        for (var i = 0; i < bgraPixels.Length; i += 4)
-            (bgraPixels[i], bgraPixels[i + 2]) = (bgraPixels[i + 2], bgraPixels[i]);
+        canvas.Clear(SKColors.Transparent);
+        canvas.DrawBitmap(source, 0, 0);
     }
-    return new RenderedFrame(data?.ToArray() ?? [], bgraPixels, locked.Size.Width, locked.Size.Height);
+    using var image = SKImage.FromBitmap(target);
+    using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+    var bgraPixels = new byte[checked(outputWidth * outputHeight * 4)];
+    System.Runtime.InteropServices.Marshal.Copy(
+        target.GetPixels(),
+        bgraPixels,
+        0,
+        bgraPixels.Length);
+    return new RenderedFrame(data?.ToArray() ?? [], bgraPixels, outputWidth, outputHeight);
 }
 
 static Capture Unsupported(Scenario scenario, string note, string? limitation = null, Semantics? semantics = null, PixelContent? fullContent = null, PixelContent? targetContent = null) => new(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "unsupported", "", 0, 0, 0, 0, 96, 96, new Rect(0, 0, 0, 0), semantics ?? new Semantics(null, null, null, [], []), limitation ?? scenario.Limitation, note, null, fullContent, targetContent);

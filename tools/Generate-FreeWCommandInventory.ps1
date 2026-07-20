@@ -330,8 +330,6 @@ internal static class FreeWCommandInventory
             "Routes the shared Print Layout command through WPF stateful view-mode commands and the Avalonia host callback so the Word-style page surface can be restored from print-family view changes."),
         ["freew.print-preview"] = BackstagePrintEvidence(
             "Routes the shared Print Preview command to host-backed WPF and Avalonia preview callbacks while the Backstage evidence contract retains paired fixed-layout renderer rows."),
-        ["freew.about"] = WpfHelpShellEvidence(
-            "WPF exposes About FreeW on the desktop Help/Product tab; Avalonia intentionally omits that desktop Help tab from its compact portable shell profile."),
         ["freew.arrange-all"] = WindowShellEvidence(
             "WPF exposes Arrange All for desktop multi-window tiling; Avalonia keeps the portable View > Window profile to New Window and Split only."),
         ["freew.check-updates"] = WpfHelpShellEvidence(
@@ -356,7 +354,6 @@ internal static class FreeWCommandInventory
 
     private static readonly Dictionary<string, string> PlatformOnlyNotes = new(StringComparer.Ordinal)
     {
-        ["freew.about"] = "Accepted host variance: WPF desktop Help/Product command backed by local About dialog; Avalonia compact shell omits the desktop Help tab.",
         ["freew.arrange-all"] = "Accepted host variance: WPF desktop multi-window tiling command; Avalonia portable shell intentionally exposes New Window and Split without Arrange All tiling.",
         ["freew.backstage"] = "Accepted host variance: Avalonia compact File entry opens its portable shell file surface; WPF uses the Backstage/File surface instead of this generated command id.",
         ["freew.check-updates"] = "Accepted host variance: WPF desktop Help/Product update command; Avalonia compact shell omits update orchestration from the ribbon profile.",

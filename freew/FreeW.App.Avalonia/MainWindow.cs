@@ -1576,6 +1576,7 @@ public sealed class MainWindow : Window
             SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync(),
             CompareDocuments: () => _ = CompareDocumentsAsync(),
             CombineDocuments: () => _ = CombineDocumentsAsync(),
+            OpenAbout: () => _ = OpenAboutAsync(),
             OpenLegalNotices: () => _ = OpenLegalNoticesAsync(),
             ToggleReviewBalloons: ToggleReviewBalloons,
             IsReviewBalloonsActive: () => _reviewBalloonsPane.IsVisible);
@@ -2867,6 +2868,13 @@ public sealed class MainWindow : Window
     private async Task OpenLegalNoticesAsync()
     {
         var dialog = new LegalNoticesDialog();
+        await dialog.ShowDialog(this);
+        _editor.Focus();
+    }
+
+    private async Task OpenAboutAsync()
+    {
+        var dialog = new AboutDialog();
         await dialog.ShowDialog(this);
         _editor.Focus();
     }
