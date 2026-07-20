@@ -1,0 +1,350 @@
+using Avalonia.Headless;
+using Avalonia.Input;
+using Free.Shared.Drawing;
+using Free.Shared.Ribbon;
+using FreeP.App.Compositor;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Avalonia.Tests;
+
+public sealed class PresentationClipboardInteropTests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreePHeadlessApp).Assembly);
+
+    private static readonly byte[] Png = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+
+    [Fact]
+    public async Task Copy_exports_native_image_text_and_keeps_internal_fidelity()
+    {
+        var clipboard = new FakeSystemClipboard();
+        var editor = CreateEditorWithSelectedShape(out var source);
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var written = await service.CopyAsync(editor);
+
+        written.Should().BeTrue();
+        editor.CanPaste.Should().BeTrue();
+        clipboard.LastWritten.Should().NotBeNull();
+        clipboard.LastWritten!.HasSelection.Should().BeTrue();
+        clipboard.LastWritten.HasImage.Should().BeTrue();
+        clipboard.LastWritten.Text.Should().Be("Clipboard text");
+        clipboard.LastWritten.OwnerToken.Should().NotBeNullOrWhiteSpace();
+
+        var decoded = PresentationClipboardSelectionCodec.Deserialize(
+            clipboard.LastWritten.SelectionBytes!);
+        decoded.Should().ContainSingle();
+        decoded[0].Kind.Should().Be(source.Kind);
+        decoded[0].Fill.Should().BeOfType<ShapeFill.Solid>()
+            .Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x336699));
+        decoded[0].TextBody!.Paragraphs[0].Runs[0].Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Avalonia_data_transfer_maps_custom_bitmap_and_text_formats()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var content = new PresentationClipboardContent(
+                SelectionBytes: [4, 5, 6],
+                PngBytes: Png,
+                Text: "portable text",
+                OwnerToken: "owner-token");
+            var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+                content,
+                out var bitmap);
+            try
+            {
+                transfer.Formats.Should().Contain(AvaloniaPresentationSystemClipboard.SelectionFormat);
+                transfer.Formats.Should().Contain(AvaloniaPresentationSystemClipboard.OwnerTokenFormat);
+                transfer.Formats.Should().Contain(DataFormat.Bitmap);
+                transfer.Formats.Should().Contain(DataFormat.Text);
+
+                var roundTrip = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+                roundTrip.SelectionBytes.Should().Equal(4, 5, 6);
+                roundTrip.PngBytes.Should().NotBeNullOrEmpty();
+                roundTrip.Text.Should().Be("portable text");
+                roundTrip.OwnerToken.Should().Be("owner-token");
+            }
+            finally
+            {
+                bitmap?.Dispose();
+                ((IDisposable)transfer).Dispose();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Avalonia_data_transfer_keeps_other_formats_when_one_format_fails()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var content = new PresentationClipboardContent(
+                SelectionBytes: [7, 8],
+                PngBytes: [1, 2, 3],
+                Text: "surviving text",
+                OwnerToken: "surviving-owner");
+            var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+                content,
+                out var bitmap);
+            try
+            {
+                bitmap.Should().BeNull();
+                transfer.Formats.Should().NotContain(DataFormat.Bitmap);
+                transfer.Formats.Should().Contain(DataFormat.Text);
+                transfer.Formats.Should().Contain(AvaloniaPresentationSystemClipboard.SelectionFormat);
+
+                var roundTrip = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+                roundTrip.SelectionBytes.Should().Equal(7, 8);
+                roundTrip.Text.Should().Be("surviving text");
+                roundTrip.OwnerToken.Should().Be("surviving-owner");
+            }
+            finally
+            {
+                ((IDisposable)transfer).Dispose();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Cut_exports_before_deleting_and_leaves_internal_shape_pasteable()
+    {
+        var clipboard = new FakeSystemClipboard();
+        var editor = CreateEditorWithSelectedShape(out var source);
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var written = await service.CutAsync(editor);
+
+        written.Should().BeTrue();
+        editor.CurrentSlide!.Shapes.Should().NotContain(shape => shape.Id == source.Id);
+        editor.CanPaste.Should().BeTrue();
+        clipboard.LastWritten!.Text.Should().Be("Clipboard text");
+        PresentationClipboardSelectionCodec.Deserialize(clipboard.LastWritten.SelectionBytes!)
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task External_native_selection_precedes_image_and_text()
+    {
+        var sourceEditor = CreateEditorWithSelectedShape(out var source);
+        var selected = new[] { source };
+        var native = PresentationClipboardSelectionCodec.Serialize(
+            sourceEditor.Presentation,
+            sourceEditor.CurrentSlide!,
+            selected);
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(native, Png, "fallback text", "external"),
+        };
+        var destination = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(destination);
+
+        result.Should().Be(PresentationClipboardPasteSource.NativeSelection);
+        destination.CurrentSlide!.Shapes.Should().ContainSingle();
+        destination.CurrentSlide.Shapes[0].Kind.Should().Be(SlideShapeKind.AutoShape);
+        destination.CurrentSlide.Shapes[0].TextBody!.Paragraphs[0].Runs[0].Text
+            .Should().Be("Clipboard text");
+    }
+
+    [Fact]
+    public async Task Invalid_native_selection_falls_back_to_image_before_text()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent([1, 2, 3], Png, "fallback text", "external"),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.Image);
+        editor.CurrentSlide!.Shapes.Should().ContainSingle();
+        editor.CurrentSlide.Shapes[0].Kind.Should().Be(SlideShapeKind.Picture);
+    }
+
+    [Fact]
+    public async Task Text_is_used_when_native_and_image_are_unavailable()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(Text: "external text"),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.Text);
+        editor.CurrentSlide!.Shapes.Should().ContainSingle();
+        editor.CurrentSlide.Shapes[0].TextBody!.Paragraphs[0].Runs[0].Text
+            .Should().Be("external text");
+    }
+
+    [Fact]
+    public async Task Own_copy_prefers_internal_editable_shape_over_exported_fallbacks()
+    {
+        var clipboard = new FakeSystemClipboard();
+        var editor = CreateEditorWithSelectedShape(out var source);
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        await service.CopyAsync(editor);
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.Internal);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        editor.CurrentSlide.Shapes.Last().Kind.Should().Be(source.Kind);
+        editor.CurrentSlide.Shapes.Last().Kind.Should().NotBe(SlideShapeKind.Picture);
+    }
+
+    [Fact]
+    public async Task Empty_or_unsupported_clipboard_falls_back_to_internal_then_nothing()
+    {
+        var clipboard = new FakeSystemClipboard();
+        var editor = CreateEditorWithSelectedShape(out _);
+        editor.CopySelectedShapes();
+        editor.ClearSelection();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.Internal);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+
+        var emptyEditor = CreateEmptyEditor();
+        (await service.PasteAsync(emptyEditor)).Should().Be(PresentationClipboardPasteSource.Nothing);
+        emptyEditor.CurrentSlide!.Shapes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Read_and_write_failures_degrade_without_losing_internal_cut_data()
+    {
+        var clipboard = new FakeSystemClipboard { ThrowOnWrite = true, ThrowOnRead = true };
+        var editor = CreateEditorWithSelectedShape(out _);
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.CutAsync(editor)).Should().BeFalse();
+        editor.CurrentSlide!.Shapes.Should().BeEmpty();
+        editor.CanPaste.Should().BeTrue();
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.Internal);
+        editor.CurrentSlide.Shapes.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Ribbon_and_keyboard_share_the_interoperable_clipboard_path()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var clipboard = new FakeSystemClipboard();
+            var window = new MainWindow(
+                [],
+                loadRecentFilesStore: null,
+                systemClipboard: clipboard,
+                clipboardRenderer: new StubRenderer());
+            try
+            {
+                var shape = window.Editor.InsertDefaultRectangle();
+                shape.TextBody = BuildTextBody("Ribbon text");
+                window.Editor.Select(shape.Id);
+                var registry = window.BuildCommandRegistry();
+
+                registry.TryGet("freep.copy", out var copy).Should().BeTrue();
+                copy!.Execute(RibbonCommandContext.Empty);
+                await window.ClipboardOperationForTests;
+                clipboard.WriteCount.Should().Be(1);
+
+                var beforePaste = window.Editor.CurrentSlide!.Shapes.Count;
+                registry.TryGet("freep.paste", out var paste).Should().BeTrue();
+                paste!.Execute(RibbonCommandContext.Empty);
+                await window.ClipboardOperationForTests;
+                window.Editor.CurrentSlide.Shapes.Should().HaveCount(beforePaste + 1);
+
+                var keyboardShape = window.Editor.CurrentSlide.Shapes.Last();
+                window.Editor.Select(keyboardShape.Id);
+                var cut = new KeyEventArgs { Key = Key.X, KeyModifiers = KeyModifiers.Control };
+                window.RaiseKeyDownForTests(cut);
+                await window.ClipboardOperationForTests;
+                cut.Handled.Should().BeTrue();
+                clipboard.WriteCount.Should().Be(2);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    private static EditingSession CreateEditorWithSelectedShape(out SlideShape shape)
+    {
+        var editor = CreateEmptyEditor();
+        shape = new SlideShape
+        {
+            Id = 17,
+            Name = "Clipboard shape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 2_743_200,
+            ExtentCyEmu = 1_828_800,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x336699))),
+            TextBody = BuildTextBody("Clipboard text"),
+        };
+        shape.TextBody.Paragraphs[0].Runs[0].Bold = true;
+        editor.CurrentSlide!.Shapes.Add(shape);
+        editor.Select(shape.Id);
+        return editor;
+    }
+
+    private static EditingSession CreateEmptyEditor()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        return new EditingSession(presentation, new PresentationCommandBus(presentation));
+    }
+
+    private static TextBody BuildTextBody(string text)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
+    private sealed class FakeSystemClipboard : IPresentationSystemClipboard
+    {
+        public PresentationClipboardContent Content { get; set; } = new();
+        public PresentationClipboardContent? LastWritten { get; private set; }
+        public int WriteCount { get; private set; }
+        public bool ThrowOnWrite { get; set; }
+        public bool ThrowOnRead { get; set; }
+
+        public Task WriteAsync(PresentationClipboardContent content)
+        {
+            if (ThrowOnWrite)
+                throw new InvalidOperationException("clipboard locked");
+            LastWritten = content;
+            Content = content;
+            WriteCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task<PresentationClipboardContent> ReadAsync()
+        {
+            if (ThrowOnRead)
+                throw new InvalidOperationException("clipboard unavailable");
+            return Task.FromResult(Content);
+        }
+    }
+
+    private sealed class StubRenderer : IPresentationClipboardShapeRenderer
+    {
+        public byte[] RenderSelection(
+            Presentation presentation,
+            Slide slide,
+            IReadOnlyList<SlideShape> shapes) => Png;
+    }
+}

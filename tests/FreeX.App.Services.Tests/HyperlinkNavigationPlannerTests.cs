@@ -222,14 +222,34 @@ public sealed class HyperlinkNavigationPlannerTests
     }
 
     [Fact]
-    public void TryCreatePlan_RejectsHyperlinkFormulaWithNonLiteralLinkArgument()
+    public void TryCreatePlan_ResolvesHyperlinkFormulaWithCellReferenceLinkArgument()
     {
-        // Cell-reference link_location arguments are intentionally left unresolved (no dynamic
-        // evaluation performed here) rather than misreporting a plan.
+        // R50-formula-pivot-getpivotdata-3-2: Excel makes a HYPERLINK() cell clickable even when
+        // link_location is a computed expression (a cell reference here), not only a literal string.
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sheet1");
+        var address = new CellAddress(sheetId, 1, 2);
+        sheet.SetCell(new CellAddress(sheetId, 2, 1), new TextValue("https://example.com"));
+        sheet.SetFormula(address, "HYPERLINK(A2,\"Click me\")");
+
+        HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeTrue();
+
+        plan.Should().Be(new HyperlinkNavigationPlan(
+            HyperlinkNavigationKind.External,
+            "https://example.com",
+            null));
+    }
+
+    [Fact]
+    public void TryCreatePlan_RejectsHyperlinkFormulaWhenLinkArgumentEvaluatesToAnError()
+    {
+        // Sibling no-regression case: a computed link_location that itself errors out (e.g. a
+        // dangling reference) is not a valid navigation target and must remain unresolved, matching
+        // Excel showing a broken/erroring HYPERLINK cell as inert.
         var sheetId = SheetId.New();
         var sheet = new Sheet(sheetId, "Sheet1");
         var address = new CellAddress(sheetId, 1, 1);
-        sheet.SetFormula(address, "HYPERLINK(A2,\"Click me\")");
+        sheet.SetFormula(address, "HYPERLINK(1/0,\"Click me\")");
 
         HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeFalse();
         plan.Should().BeNull();

@@ -29,8 +29,11 @@ public static partial class BuiltInFunctions
         if (f == 0) return ErrorValue.DivByZero;
         double intPart  = Math.Truncate(d);
         double fracPart = d - intPart;
+        // fraction=1 legitimately yields digits=0 (an unscaled/identity result) — clamping the
+        // digit count up to a minimum of 1 corrupted that case by inflating the multiplier from
+        // 10^0=1 to 10^1=10 (R50-formula-text-currency-numsys-3-1); f>=1 always holds here
+        // (f==0 is rejected above with #DIV/0!), so no lower-bound clamp is needed.
         int digits = (int)Math.Ceiling(Math.Log10(f));
-        if (digits < 1) digits = 1;
         return NumberResult(intPart + fracPart * Math.Pow(10, digits) / f);
     }
 
@@ -57,8 +60,9 @@ public static partial class BuiltInFunctions
         if (f == 0) return ErrorValue.DivByZero;
         double intPart  = Math.Truncate(d);
         double fracPart = d - intPart;
+        // See DollardeScalar: fraction=1 legitimately yields digits=0 (identity) — do not clamp
+        // the digit count to a minimum of 1 (R50-formula-text-currency-numsys-3-1).
         int digits = (int)Math.Ceiling(Math.Log10(f));
-        if (digits < 1) digits = 1;
         return NumberResult(intPart + fracPart * f / Math.Pow(10, digits));
     }
 }
