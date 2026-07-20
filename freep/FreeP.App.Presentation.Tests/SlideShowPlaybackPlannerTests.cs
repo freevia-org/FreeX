@@ -92,12 +92,24 @@ public sealed class SlideShowPlaybackPlannerTests
         honeycomb.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Honeycomb);
         honeycomb.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Honeycomb);
         honeycomb.DurationMs.Should().Be(400);
+
+        var orbit = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Orbit,
+            Direction = TransitionDirection.Left
+        });
+
+        orbit.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Orbit);
+        orbit.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Orbit);
     }
 
     [Theory]
     [InlineData(TransitionKind.Flip, TransitionDirection.Right, true, 0.02, 0, 0)]
     [InlineData(TransitionKind.Cube, TransitionDirection.Left, true, 0.08, -90, 0.12)]
     [InlineData(TransitionKind.Rotate, TransitionDirection.Down, false, 0.82, 90, 0.04)]
+    [InlineData(TransitionKind.Switch, TransitionDirection.Right, true, 0.86, 90, 0.18)]
+    [InlineData(TransitionKind.Orbit, TransitionDirection.Left, true, 0.64, -180, 0.25)]
+    [InlineData(TransitionKind.Ferris, TransitionDirection.Down, false, 0.72, 75, 0.18)]
     public void PerspectivePlanner_MapsAxisDirectionAndProjection(
         TransitionKind kind,
         TransitionDirection direction,
