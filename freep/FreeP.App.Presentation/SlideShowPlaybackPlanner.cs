@@ -26,6 +26,7 @@ public enum SlideShowTransitionPlaybackActionKind
     Flip,
     Cube,
     Rotate,
+    Honeycomb,
     Push
 }
 
@@ -202,6 +203,7 @@ public static class SlideShowPlaybackPlanner
             SlideShowTransitionPlaybackKind.Flip => SlideShowTransitionPlaybackActionKind.Flip,
             SlideShowTransitionPlaybackKind.Cube => SlideShowTransitionPlaybackActionKind.Cube,
             SlideShowTransitionPlaybackKind.Rotate => SlideShowTransitionPlaybackActionKind.Rotate,
+            SlideShowTransitionPlaybackKind.Honeycomb => SlideShowTransitionPlaybackActionKind.Honeycomb,
             SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Cover,
             _ => SlideShowTransitionPlaybackActionKind.Fade
         };

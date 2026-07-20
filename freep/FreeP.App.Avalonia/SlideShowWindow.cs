@@ -848,6 +848,10 @@ public sealed class SlideShowWindow : Window
                 PlayRotateTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Honeycomb:
+                PlayHoneycombTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Dissolve:
                 PlayDissolveTransition(slide, plan.DurationMs);
                 return;
@@ -2095,6 +2099,51 @@ public sealed class SlideShowWindow : Window
                 _transitionBackImage.Opacity = 1;
                 _transitionBackImage.IsVisible = false;
                 _transitionBackImage.ZIndex = 0;
+            }
+        };
+        timer.Start();
+    }
+
+    private void PlayHoneycombTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var honeycomb = SlideShowHoneycombTransitionPlanner.Plan(transition);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = BuildHoneycombTransitionGeometry(w, h, 0, honeycomb);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, plan.DurationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
+            _slideCanvas.Clip = BuildHoneycombTransitionGeometry(w, h, progress, honeycomb);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
             }
         };
         timer.Start();
@@ -3935,6 +3984,22 @@ public sealed class SlideShowWindow : Window
             ctx.LineTo(points[2]);
             ctx.LineTo(points[3]);
             ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
+    }
+
+    private static Geometry BuildHoneycombTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowHoneycombTransitionPlan plan)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
+        foreach (var polygon in SlideShowHoneycombTransitionPlanner.BuildPolygons(
+                     width, height, progress, plan))
+        {
+            geometry.Children.Add(BuildStripGeometry(polygon.Points));
         }
 
         return geometry;

@@ -81,6 +81,17 @@ public sealed class SlideShowPlaybackPlannerTests
 
         rotate.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Rotate);
         rotate.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Rotate);
+
+        var honeycomb = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Honeycomb,
+            Direction = TransitionDirection.Right,
+            DurationMs = 400
+        });
+
+        honeycomb.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Honeycomb);
+        honeycomb.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Honeycomb);
+        honeycomb.DurationMs.Should().Be(400);
     }
 
     [Theory]
@@ -105,6 +116,32 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.StartScale.Should().Be(startScale);
         plan.StartRotationDegrees.Should().Be(rotation);
         plan.TravelFactor.Should().Be(travel);
+    }
+
+    [Fact]
+    public void HoneycombPlanner_BuildsDeterministicHexagonalRevealCells()
+    {
+        var plan = SlideShowHoneycombTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Honeycomb,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.HorizontalAxis.Should().BeTrue();
+        plan.Reverse.Should().BeTrue();
+
+        var closed = SlideShowHoneycombTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowHoneycombTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowHoneycombTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowHoneycombTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().NotBeEmpty();
+        open.Count.Should().BeGreaterThanOrEqualTo(partial.Count);
+        partial.Should().HaveSameCount(repeat);
+        partial.All(cell => cell.Points.Count == 6).Should().BeTrue();
+        partial.SelectMany(cell => cell.Points)
+            .Should().BeEquivalentTo(repeat.SelectMany(cell => cell.Points));
     }
 
     [Fact]
