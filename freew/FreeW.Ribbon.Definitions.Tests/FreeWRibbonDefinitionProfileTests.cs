@@ -548,7 +548,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
                 "freew.feedback",
                 "freew.help-online",
                 "freew.import-pdf-text",
-                "freew.legal-notices",
                 "freew.new",
                 "freew.open",
                 "freew.save",
@@ -567,7 +566,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertPlatformOnlyNote(commands, "freew.feedback", "WPF desktop support shortcut");
         AssertPlatformOnlyNote(commands, "freew.help-online", "WPF desktop Help shortcut");
         AssertPlatformOnlyNote(commands, "freew.import-pdf-text", "Avalonia compact File command makes PDF text import explicit");
-        AssertPlatformOnlyNote(commands, "freew.legal-notices", "WPF desktop Help/Product legal dialog");
         AssertPlatformOnlyNote(commands, "freew.new", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.open", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.save", "Avalonia compact File command");
@@ -577,7 +575,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.wpf-help-shell",
             "WPF Help shell variance",
             "platform-only");
@@ -587,7 +585,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.wpf-help-shell",
             "WPF Help shell variance",
             "platform-only");
@@ -597,7 +595,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.wpf-help-shell",
             "WPF Help shell variance",
             "platform-only");
@@ -607,7 +605,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.View_Window_NewWindowAndArrangeAll_AreBacked",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.window-shell",
             "Window-management shell variance",
             "platform-only");
@@ -617,7 +615,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.avalonia-file-shell",
             "Avalonia compact File shell variance",
             "platform-only");
@@ -637,7 +635,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.avalonia-file-shell",
             "Avalonia compact File shell variance",
             "platform-only");
@@ -647,7 +645,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.avalonia-file-shell",
             "Avalonia compact File shell variance",
             "platform-only");
