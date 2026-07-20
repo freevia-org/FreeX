@@ -1,6 +1,10 @@
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.App.Rendering.Wpf;
@@ -23,6 +27,100 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class RichTextEditorTests
 {
+    [StaFact]
+    public void WpfAuthority_RendersAlignmentAndMixedRuns_ButKeepsBulletMetadataNonvisual()
+    {
+        var body = MakeVisualEvidenceBody();
+        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 11);
+        doc.PageWidth = 416;
+        doc.ColumnWidth = 416;
+
+        var paragraphs = doc.Blocks.OfType<WpfParagraph>().ToArray();
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].TextAlignment.Should().Be(TextAlignment.Left);
+        paragraphs[1].TextAlignment.Should().Be(TextAlignment.Center);
+        paragraphs.Should().OnlyContain(paragraph => paragraph.Inlines.FirstInline is WpfRun,
+            "current WPF authority does not inject list markers into the editable document");
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+        InCanvasTextEditPlanner.ExtractPlainText(restored)
+            .Should().Be(InCanvasTextEditPlanner.ExtractPlainText(body),
+                "bullet metadata must not enter editable model text");
+        restored.Paragraphs[0].BulletKind.Should().Be(BulletKind.Char);
+        restored.Paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
+    }
+
+    [StaFact]
+    public void WpfAuthority_ProducesNonblankPairedSelectionCaretAndParagraphEvidence()
+    {
+        var body = MakeVisualEvidenceBody();
+        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 11);
+        doc.PageWidth = 416;
+        doc.ColumnWidth = 416;
+        var box = new RichTextBox(doc)
+        {
+            Width = 420,
+            Height = 180,
+            Background = Brushes.White,
+            BorderBrush = Brushes.DodgerBlue,
+            BorderThickness = new Thickness(1.5),
+            IsInactiveSelectionHighlightEnabled = true,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+        };
+        var window = new Window
+        {
+            Width = 420,
+            Height = 180,
+            Content = box,
+            ShowInTaskbar = false,
+            WindowStyle = WindowStyle.None,
+            ResizeMode = ResizeMode.NoResize,
+            Left = -10_000,
+            Top = -10_000,
+        };
+        window.Show();
+        window.Activate();
+        box.Focus();
+        Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Render);
+
+        var runs = doc.Blocks.OfType<WpfParagraph>()
+            .SelectMany(paragraph => TextBodyFlowDocumentConverter.EnumerateLeafInlines(paragraph.Inlines))
+            .OfType<WpfRun>()
+            .ToArray();
+        runs.Should().HaveCount(3);
+        var selectionStart = runs[0].ContentStart.GetPositionAtOffset(2)!;
+        var selectionEnd = runs[1].ContentStart.GetPositionAtOffset(5)!;
+        box.Selection.Select(selectionStart, selectionEnd);
+        Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Render);
+
+        Rect selectionStartRect = selectionStart.GetCharacterRect(LogicalDirection.Forward);
+        Rect selectionEndRect = selectionEnd.GetCharacterRect(LogicalDirection.Forward);
+        Rect largeRunCaret = runs[1].ContentStart.GetPositionAtOffset(1)!
+            .GetCharacterRect(LogicalDirection.Forward);
+        selectionEndRect.X.Should().BeGreaterThan(selectionStartRect.X);
+        largeRunCaret.Height.Should().BeGreaterThan(25,
+            "WPF authority caret geometry follows the 28pt run");
+
+        try
+        {
+            string path = SaveEvidence(box, "wpf-rich-editor-selection.png");
+            new FileInfo(path).Length.Should().BeGreaterThan(1_000);
+
+            box.Selection.Select(
+                runs[1].ContentStart.GetPositionAtOffset(1)!,
+                runs[1].ContentStart.GetPositionAtOffset(1)!);
+            box.Focus();
+            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Render);
+            string caretPath = SaveEvidence(box, "wpf-rich-editor-caret.png");
+            new FileInfo(caretPath).Length.Should().BeGreaterThan(1_000);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     // ─── TextBody → FlowDocument → TextBody round-trips ──────────────────────────
 
     [StaFact]
@@ -1014,5 +1112,54 @@ public sealed class RichTextEditorTests
         });
         body.Paragraphs.Add(para);
         return body;
+    }
+
+    private static TextBody MakeVisualEvidenceBody()
+    {
+        var body = new TextBody { DefaultParaAlign = TextAlign.Left };
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Align = TextAlign.Left,
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u2022",
+            Runs =
+            {
+                new ModelRun { Text = "Small text ", FontFamily = "Arial", FontSizePt = 11 },
+                new ModelRun { Text = "LARGE TEXT", FontFamily = "Georgia", FontSizePt = 28, Bold = true },
+            },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Align = TextAlign.Center,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            Runs = { new ModelRun { Text = "Centered numbered paragraph", FontFamily = "Calibri", FontSizePt = 16, Italic = true } },
+        });
+        return body;
+    }
+
+    private static string EvidencePath(string fileName)
+    {
+        string evidenceDirectory = Environment.GetEnvironmentVariable("FREEP_RICH_EDITOR_EVIDENCE_DIR")
+            ?? Path.Combine(Path.GetTempPath(), "FreeP.RichEditorVisualGeometryEvidence");
+        Directory.CreateDirectory(evidenceDirectory);
+        return Path.Combine(evidenceDirectory, fileName);
+    }
+
+    private static string SaveEvidence(FrameworkElement element, string fileName)
+    {
+        var bitmap = new RenderTargetBitmap(
+            420,
+            180,
+            96,
+            96,
+            PixelFormats.Pbgra32);
+        bitmap.Render(element);
+        string path = EvidencePath(fileName);
+        using var stream = File.Create(path);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        encoder.Save(stream);
+        return path;
     }
 }

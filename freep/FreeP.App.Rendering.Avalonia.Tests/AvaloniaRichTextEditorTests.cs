@@ -17,7 +17,7 @@ public sealed class AvaloniaRichTextEditorTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
 
     [Fact]
-    public async Task NativeInputIsTopmostHitTarget_WithVisibleCaretAndSelectionBrushes()
+    public async Task NativeInputIsTopmostHitTarget_WhileCustomSurfaceOwnsVisibleCaretAndSelection()
     {
         await Session.Dispatch(async () =>
         {
@@ -43,9 +43,8 @@ public sealed class AvaloniaRichTextEditorTests
 
                 editor.InputBox.IsFocused.Should().BeTrue(
                     "the transparent native input must remain above the rich rendering layer");
-                editor.InputBox.CaretBrush.Should().Be(Brushes.Black);
-                editor.InputBox.SelectionBrush.Should().BeOfType<SolidColorBrush>()
-                    .Which.Color.A.Should().BeGreaterThan(0);
+                editor.InputBox.CaretBrush.Should().Be(Brushes.Transparent);
+                editor.InputBox.SelectionBrush.Should().Be(Brushes.Transparent);
                 editor.InputBox.SelectionForegroundBrush.Should().Be(Brushes.Transparent);
                 editor.InputBox.Foreground.Should().Be(Brushes.Transparent);
 
@@ -53,6 +52,81 @@ public sealed class AvaloniaRichTextEditorTests
                 editor.InputBox.SelectionEnd = 5;
                 editor.InputBox.SelectionStart.Should().NotBe(editor.InputBox.SelectionEnd);
                 editor.InputBox.CaretIndex.Should().BeInRange(1, 5);
+                editor.RichTextView.SelectionRects.Should().NotBeEmpty();
+
+                editor.InputBox.SelectionStart = 4;
+                editor.InputBox.SelectionEnd = 4;
+                editor.RichTextView.CaretRect.Height.Should().BeGreaterThan(0);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task LeftEdgeHitTestingAndNewlineSelection_KeepModelOffsetsStable()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(EvidenceBody(), backgroundAlpha: 0xFF)
+            {
+                Width = 420,
+                Height = 180,
+            };
+            var window = Show(editor, 420, 180);
+            try
+            {
+                editor.FocusEditor().Should().BeTrue();
+                await DrainInputAsync();
+
+                editor.RichTextView.HitTestLogicalPosition(new Point(5, 10)).Should().Be(0,
+                    "left-edge hit testing must map directly to the first model text offset");
+
+                int secondParagraphStart = editor.RichTextView.VisualPlan.Paragraphs[1].GlobalStart;
+                editor.SelectionStart = 2;
+                editor.SelectionEnd = secondParagraphStart + 3;
+                editor.RichTextView.SelectionRects.Should().HaveCountGreaterThanOrEqualTo(2,
+                    "selection crossing the model newline must paint both paragraphs");
+                editor.Text.Substring(editor.SelectionStart, editor.SelectionEnd - editor.SelectionStart)
+                    .Should().Contain("\n");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task MixedSizeWrappedLines_DriveCaretSelectionAndVerticalNavigationGeometry()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(EvidenceBody(), backgroundAlpha: 0xFF)
+            {
+                Width = 180,
+                Height = 220,
+            };
+            var window = Show(editor, 180, 220);
+            try
+            {
+                editor.FocusEditor().Should().BeTrue();
+                editor.SelectionStart = 11;
+                editor.SelectionEnd = 11;
+                await DrainInputAsync();
+
+                var caret = editor.RichTextView.CaretRect;
+                caret.Height.Should().BeGreaterThan(25,
+                    "the caret height must come from the 28pt rendered run, not the uniform input font");
+                int down = editor.RichTextView.MoveCaretVertically(11, 1);
+                down.Should().NotBe(11);
+
+                editor.SelectionStart = 4;
+                editor.SelectionEnd = 16;
+                editor.RichTextView.SelectionRects.Should().HaveCountGreaterThan(1,
+                    "mixed-size wrapped selection follows the same TextLayout line boxes as the glyphs");
             }
             finally
             {
@@ -148,6 +222,15 @@ public sealed class AvaloniaRichTextEditorTests
                 Press(window, Key.End, PhysicalKey.End, RawInputModifiers.None);
                 await DrainInputAsync();
                 editor.InputBox.CaretIndex.Should().Be(editor.Text.Length);
+
+                editor.SelectionStart = 2;
+                editor.SelectionEnd = 4;
+                Press(window, Key.Home, PhysicalKey.Home, RawInputModifiers.Shift);
+                await DrainInputAsync();
+                new[] { editor.SelectionStart, editor.SelectionEnd }.Order()
+                    .Should().Equal(
+                        [0, 2],
+                        "shift navigation keeps the existing selection anchor instead of a stale pointer anchor");
             }
             finally
             {
@@ -156,17 +239,17 @@ public sealed class AvaloniaRichTextEditorTests
         }, CancellationToken.None);
     }
 
-    private static Window Show(Control content)
+    private static Window Show(Control content, double width = 320, double height = 90)
     {
         var window = new Window
         {
-            Width = 320,
-            Height = 90,
+            Width = width,
+            Height = height,
             Content = content,
         };
         window.Show();
-        window.Measure(new Size(320, 90));
-        window.Arrange(new Rect(0, 0, 320, 90));
+        window.Measure(new Size(width, height));
+        window.Arrange(new Rect(0, 0, width, height));
         return window;
     }
 
@@ -207,4 +290,29 @@ public sealed class AvaloniaRichTextEditorTests
         });
         return body;
     }
+
+    private static TextBody EvidenceBody()
+    {
+        var body = new TextBody { DefaultParaAlign = TextAlign.Left };
+        body.Paragraphs.Add(new Paragraph
+        {
+            Align = TextAlign.Left,
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u2022",
+            Runs =
+            {
+                new Run { Text = "Small text ", FontFamily = "Arial", FontSizePt = 11 },
+                new Run { Text = "LARGE TEXT", FontFamily = "Georgia", FontSizePt = 28, Bold = true },
+            },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            Align = TextAlign.Center,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            Runs = { new Run { Text = "Centered numbered paragraph", FontFamily = "Calibri", FontSizePt = 16, Italic = true } },
+        });
+        return body;
+    }
+
 }
