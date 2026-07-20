@@ -70,6 +70,8 @@ public sealed class MainWindow : Window
     private readonly Button _btnWebLayout    = MakeViewModeButton("Web");
     private readonly Button _btnDraftView    = MakeViewModeButton("Draft");
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
+    private readonly Border _titleBar;
+    private IReadOnlyList<Button> _quickAccessButtons = [];
     private readonly FreeWOptions _options;
     private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly AutosaveAdapter _autosave;
@@ -137,12 +139,13 @@ public sealed class MainWindow : Window
         MinWidth = 720;
         MinHeight = 480;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        ApplyWindowIcon();
         _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
             owner: this,
             titleSpec: new SisterAvaloniaFileTitleSpec(
                 ApplicationName: DefaultTitle,
-                Separator: " - ",
-                CollapseCleanUntitledTitle: true),
+                Separator: " \u2014 ",
+                ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: UpdateStatus,
             save: () => SaveAsync().GetAwaiter().GetResult());
@@ -249,8 +252,53 @@ public sealed class MainWindow : Window
             statusBar: statusBar,
             bottomPanelsAboveStatus: [findBar]));
 
-        Content = frame.Root;
+        var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
+            Window: this,
+            Body: frame.Root,
+            TitleBarBackground: ResolveThemeBrush(
+                "FreeWTitleBarBrush",
+                new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))),
+            TitleBarForeground: ResolveThemeBrush("FreeWWhiteBrush", Brushes.White)));
+        _titleBar = windowFrame.TitleBar;
+        _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
+            windowFrame.QatHost,
+            new SisterQuickAccessToolbarActions(
+                Save: () => _ = SaveAsync(),
+                Undo: _editor.Undo,
+                Redo: _editor.Redo),
+            ResolveThemeBrush("FreeWWhiteBrush", Brushes.White));
+
+        Content = windowFrame.Root;
         UpdateStatus();
+    }
+
+    private void ApplyWindowIcon()
+    {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "FreeW.ico");
+        if (!File.Exists(iconPath))
+            return;
+
+        try
+        {
+            using var stream = File.OpenRead(iconPath);
+            Icon = new WindowIcon(stream);
+        }
+        catch
+        {
+            // Unsupported desktop icon formats must not prevent the document from opening.
+        }
+    }
+
+    private static IBrush ResolveThemeBrush(string key, IBrush fallback)
+    {
+        if (Application.Current is { } app &&
+            app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
+            value is IBrush brush)
+        {
+            return brush;
+        }
+
+        return fallback;
     }
 
     public DocumentView Editor => _editor;
@@ -269,6 +317,9 @@ public sealed class MainWindow : Window
     internal ReviewBalloonsPane ReviewBalloonsPane => _reviewBalloonsPane;
     internal bool RibbonKeyTipsVisibleForTest => _ribbonKeyTipsVisible;
     internal Control? RibbonControlForTest => _ribbonControl;
+    internal bool HasWindowIconForTests => Icon is not null;
+    internal Border TitleBarForTests => _titleBar;
+    internal IReadOnlyList<Button> QuickAccessButtonsForTests => _quickAccessButtons;
     internal void RaiseKeyDownForTest(KeyEventArgs args) => MainWindow_KeyDown(this, args);
 
     /// <summary>

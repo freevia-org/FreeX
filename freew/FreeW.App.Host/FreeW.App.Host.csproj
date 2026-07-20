@@ -64,7 +64,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Resources\FreeW.ico" />
+    <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeW.ico" Link="Resources\FreeW.ico" />
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="FreeW.Legal.ProjectLicense.txt" />
     <EmbeddedResource Include="..\..\docs\legal\legal-notices.md" LogicalName="FreeW.Legal.LegalNotices.md" />
     <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeW.Legal.PrivacyNotice.md" />
@@ -76,7 +76,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Resources\FreeW.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeW.ico"
+             Link="Resources\FreeW.ico"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <!-- FreeW's own icons: Word-specific artwork plus a few Word-unique glyphs. -->
     <Content Include="Resources\CommandIconsSvg\**\*.svg"
              CopyToOutputDirectory="PreserveNewest"
@@ -94,7 +97,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <ApplicationIcon>Resources\FreeW.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeW.ico</ApplicationIcon>
   </PropertyGroup>
 
 </Project>

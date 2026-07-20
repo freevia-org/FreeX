@@ -15,30 +15,62 @@ public sealed class MainWindowShellFrameTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
     [Fact]
-    public async Task MainWindow_content_uses_shared_client_frame_shape()
+    public async Task MainWindow_content_uses_shared_outer_and_client_frame_shape()
     {
-        int childCount = -1;
+        int outerChildCount = -1;
+        int clientChildCount = -1;
         int bottomDockedCount = -1;
         int topDockedCount = -1;
         var lastChildFill = false;
+        var titleBarHeight = 0d;
 
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
-            var root = window.Content.Should().BeOfType<DockPanel>().Subject;
-            childCount = root.Children.Count;
+            var outer = window.Content.Should().BeOfType<Grid>().Subject;
+            var root = outer.Children.OfType<DockPanel>().Single();
+            outerChildCount = outer.Children.Count;
+            clientChildCount = root.Children.Count;
             bottomDockedCount = root.Children.Count(child => DockPanel.GetDock(child) == Dock.Bottom);
             topDockedCount = root.Children.Count(child => DockPanel.GetDock(child) == Dock.Top);
             lastChildFill = root.LastChildFill;
+            titleBarHeight = window.TitleBarForTests.Height;
         });
 
         if (!ran)
             return;
 
-        childCount.Should().Be(4, "FreeW contributes ribbon, status, find bar, and workarea to the shared frame");
+        outerChildCount.Should().Be(2, "the shared outer frame contains the titlebar and client body");
+        clientChildCount.Should().Be(4, "FreeW contributes ribbon, status, find bar, and workarea to the shared client frame");
         topDockedCount.Should().Be(1, "the shared frame keeps the ribbon docked at the top");
         bottomDockedCount.Should().Be(2, "the shared frame keeps the status bar and find bar docked at the bottom");
         lastChildFill.Should().BeTrue("the workarea should fill the remaining client frame");
+        titleBarHeight.Should().Be(34);
+    }
+
+    [Fact]
+    public async Task MainWindow_uses_canonical_icon_document_first_title_and_shared_qat()
+    {
+        bool hasIcon = false;
+        string title = string.Empty;
+        string[] qatIds = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            hasIcon = window.HasWindowIconForTests;
+            title = window.Title ?? string.Empty;
+            qatIds = window.QuickAccessButtonsForTests
+                .Select(button => global::Avalonia.Automation.AutomationProperties.GetAutomationId(button) ?? string.Empty)
+                .ToArray();
+        });
+
+        if (!ran)
+            return;
+
+        hasIcon.Should().BeTrue();
+        title.Should().Be("Untitled \u2014 FreeW");
+        qatIds.Should().Equal("Save", "Undo", "Redo");
     }
 
     [Fact]
@@ -50,6 +82,10 @@ public sealed class MainWindowShellFrameTests
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
         mainWindow.Should().Contain("using Free.Shared.Shell.Avalonia;");
         mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
+        mainWindow.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
+        mainWindow.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
+        mainWindow.Should().Contain("ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication");
+        mainWindow.Should().Contain("ApplyWindowIcon();");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0))");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.CreateInfoText(\"100%\", margin: new Thickness(8, 0))");
@@ -58,8 +94,9 @@ public sealed class MainWindowShellFrameTests
         mainWindow.Should().Contain("statusBar: statusBar,");
         mainWindow.Should().Contain("bottomPanelsAboveStatus: [findBar]");
         mainWindow.Should().Contain("RightItems: BuildStatusRightItems()");
-        mainWindow.Should().Contain("Content = frame.Root;");
-        AssertBefore(mainWindow, "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "Content = frame.Root;");
+        mainWindow.Should().Contain("Content = windowFrame.Root;");
+        AssertBefore(mainWindow, "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
+        AssertBefore(mainWindow, "SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(", "Content = windowFrame.Root;");
         mainWindow.Should().NotContain("private readonly TextBlock _zoomLabel = new()");
     }
 

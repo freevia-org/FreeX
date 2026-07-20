@@ -39,7 +39,19 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Packaging\macos\FreeW.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Runtime and package assets derive from one owned FreeW identity source in the shared shell. -->
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeW.ico"
+             Link="Resources\FreeW.ico"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeW.svg"
+             Link="Resources\FreeW.svg"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeW.icns"
+             Link="FreeW.icns"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <!-- Reuse the canonical command SVGs that FreeW's WPF host links from FreeX. The shared
          Avalonia loader resolves these from Resources\CommandIconsSvg at runtime. -->
     <Content Include="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
