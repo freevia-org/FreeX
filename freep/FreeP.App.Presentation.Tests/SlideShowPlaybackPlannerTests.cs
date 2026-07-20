@@ -141,6 +141,33 @@ public sealed class SlideShowPlaybackPlannerTests
         wind.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Wind);
         wind.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Wind);
 
+        var curtains = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Curtains,
+            Direction = TransitionDirection.Right
+        });
+
+        curtains.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Curtains);
+        curtains.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Curtains);
+
+        var shred = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Shred,
+            Direction = TransitionDirection.Down
+        });
+
+        shred.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Shred);
+        shred.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Shred);
+
+        var peelOff = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.PeelOff,
+            Direction = TransitionDirection.Left
+        });
+
+        peelOff.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.PageCurl);
+        peelOff.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.PageCurl);
+
         var pageCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
             Kind = TransitionKind.PageCurlSingle,
@@ -277,6 +304,56 @@ public sealed class SlideShowPlaybackPlannerTests
         closed.Should().BeEmpty();
         partial.Should().NotBeEmpty();
         partial.Should().OnlyContain(band => band.Points.Count == 4);
+        open.Should().HaveCount(1);
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+    }
+
+    [Fact]
+    public void CurtainsPlanner_BuildsDeterministicCenterOutPanels()
+    {
+        var plan = SlideShowCurtainsTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Curtains,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.HorizontalAxis.Should().BeTrue();
+        plan.Reverse.Should().BeFalse();
+
+        var closed = SlideShowCurtainsTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowCurtainsTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowCurtainsTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowCurtainsTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().NotBeEmpty();
+        partial.Should().OnlyContain(panel => panel.Points.Count == 4);
+        open.Should().HaveCount(1);
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+    }
+
+    [Fact]
+    public void ShredPlanner_BuildsDeterministicTornFragments()
+    {
+        var plan = SlideShowShredTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Shred,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.HorizontalAxis.Should().BeTrue();
+        plan.Reverse.Should().BeFalse();
+
+        var closed = SlideShowShredTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowShredTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowShredTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowShredTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().NotBeEmpty();
+        partial.Should().OnlyContain(fragment => fragment.Points.Count == 4);
         open.Should().HaveCount(1);
         open[0].Points.Should().HaveCount(4);
         partial.Should().BeEquivalentTo(repeat);

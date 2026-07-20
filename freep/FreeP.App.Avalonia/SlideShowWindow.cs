@@ -880,6 +880,14 @@ public sealed class SlideShowWindow : Window
                 PlayWindTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Curtains:
+                PlayCurtainsTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Shred:
+                PlayShredTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.PageCurl:
                 PlayPageCurlTransition(slide, t, plan);
                 return;
@@ -2329,6 +2337,96 @@ public sealed class SlideShowWindow : Window
             frame++;
             var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
             _slideCanvas.Clip = BuildWindTransitionGeometry(w, h, progress, wind);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            }
+        };
+        timer.Start();
+    }
+
+    private void PlayCurtainsTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var curtains = SlideShowCurtainsTransitionPlanner.Plan(transition);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = BuildCurtainsTransitionGeometry(w, h, 0, curtains);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, plan.DurationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
+            _slideCanvas.Clip = BuildCurtainsTransitionGeometry(w, h, progress, curtains);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            }
+        };
+        timer.Start();
+    }
+
+    private void PlayShredTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var shred = SlideShowShredTransitionPlanner.Plan(transition);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = BuildShredTransitionGeometry(w, h, 0, shred);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, plan.DurationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
+            _slideCanvas.Clip = BuildShredTransitionGeometry(w, h, progress, shred);
             if (frame >= steps)
             {
                 timer.Stop();
@@ -4303,6 +4401,38 @@ public sealed class SlideShowWindow : Window
     {
         var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
         foreach (var polygon in SlideShowWindTransitionPlanner.BuildPolygons(
+                     width, height, progress, plan))
+        {
+            geometry.Children.Add(BuildStripGeometry(polygon.Points));
+        }
+
+        return geometry;
+    }
+
+    private static Geometry BuildCurtainsTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowCurtainsTransitionPlan plan)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
+        foreach (var polygon in SlideShowCurtainsTransitionPlanner.BuildPolygons(
+                     width, height, progress, plan))
+        {
+            geometry.Children.Add(BuildStripGeometry(polygon.Points));
+        }
+
+        return geometry;
+    }
+
+    private static Geometry BuildShredTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowShredTransitionPlan plan)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
+        foreach (var polygon in SlideShowShredTransitionPlanner.BuildPolygons(
                      width, height, progress, plan))
         {
             geometry.Children.Add(BuildStripGeometry(polygon.Points));

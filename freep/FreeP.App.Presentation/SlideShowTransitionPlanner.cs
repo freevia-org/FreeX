@@ -35,6 +35,8 @@ public enum SlideShowTransitionPlaybackKind
     Glitter,
     Ripple,
     Wind,
+    Curtains,
+    Shred,
     PageCurl,
     PushLike,
     FadeFallback
@@ -165,6 +167,14 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Ripple => SlideShowTransitionPlaybackKind.Ripple,
 
             TransitionKind.Wind => SlideShowTransitionPlaybackKind.Wind,
+
+            TransitionKind.Curtains => SlideShowTransitionPlaybackKind.Curtains,
+
+            TransitionKind.Shred => SlideShowTransitionPlaybackKind.Shred,
+
+            // Peel Off is the single-sheet page-peel family. Reuse the
+            // shared folded-page projection instead of reducing it to fade.
+            TransitionKind.PeelOff => SlideShowTransitionPlaybackKind.PageCurl,
 
             TransitionKind.PageCurlSingle or
             TransitionKind.PageCurlDouble => SlideShowTransitionPlaybackKind.PageCurl,
