@@ -6994,11 +6994,11 @@ public sealed class DocumentView : RichTextBox
                 // zero-length marked run rather than dropped, so the marker is not lost on commit.
                 var markedFmt = ReadRunFormatting(markedRun);
                 if (markers.Revision is { } rev)
-                    markedFmt = StripRevisionChrome(markedFmt, rev.Kind);
+                    markedFmt = StripRevisionChrome(markedFmt, rev.Kind, rev.RenderedColorHex);
                 // Format-revision decoration injects a dotted underline and may tint the foreground;
                 // strip both so they aren't mistaken for real formatting on commit.
-                if (markers.FormatRevision is not null)
-                    markedFmt = StripFormatRevisionChrome(markedFmt);
+                if (markers.FormatRevision is { } formatRevision)
+                    markedFmt = StripFormatRevisionChrome(markedFmt, formatRevision.RenderedColorHex);
                 // Comment and content-control both inject a background; clear it so it isn't mistaken for a
                 // real highlight on commit (matching the prior per-facet behaviour).
                 if (markers.Comment is not null || markers.Control is not null)
@@ -8842,13 +8842,14 @@ public sealed class DocumentView : RichTextBox
         //                  technique).
         if (run.Revision != RevisionKind.None)
         {
+            var revisionColorHex = ReviewRevisionColorPlanner.ResolveColorHex(document, run.RevisionAuthor);
             // RevisionMarker is ALWAYS written regardless of display mode.
-            AddMarker(wpf, m => m with { Revision = new RevisionMarker(run.Revision, run.RevisionAuthor, run.RevisionDateXml) });
+            AddMarker(wpf, m => m with { Revision = new RevisionMarker(run.Revision, run.RevisionAuthor, run.RevisionDateXml, revisionColorHex) });
 
             var decision = _renderReviewDisplayPolicy.RevisionDecision(run.Revision);
             if (decision.IsRevisionStylingApplied)
             {
-                wpf.Foreground = new SolidColorBrush(RevisionColor);
+                wpf.Foreground = new SolidColorBrush(ParseRevisionColor(revisionColorHex));
                 decorations.Add(decision.IsDeletionDecorationApplied
                     ? TextDecorations.Strikethrough[0]
                     : TextDecorations.Underline[0]);
@@ -8865,7 +8866,8 @@ public sealed class DocumentView : RichTextBox
         // Show Markup > Formatting is ON, a dotted underline in the revision colour signals the change.
         if (run.FormatRevision is { } fmtRev)
         {
-            AddMarker(wpf, m => m with { FormatRevision = new FormatRevisionMarker(fmtRev) });
+            var revisionColorHex = ReviewRevisionColorPlanner.ResolveColorHex(document, fmtRev.Author);
+            AddMarker(wpf, m => m with { FormatRevision = new FormatRevisionMarker(fmtRev, revisionColorHex) });
             if (_renderReviewDisplayPolicy.ShouldHighlightFormattingChanges)
             {
                 // A dotted underline (via a custom TextDecoration with a DashStyle) in the revision
@@ -8873,7 +8875,7 @@ public sealed class DocumentView : RichTextBox
                 var dotted = new TextDecoration
                 {
                     Location = TextDecorationLocation.Underline,
-                    Pen = new System.Windows.Media.Pen(new SolidColorBrush(RevisionColor), 1)
+                    Pen = new System.Windows.Media.Pen(new SolidColorBrush(ParseRevisionColor(revisionColorHex)), 1)
                     {
                         DashStyle = DashStyles.Dot
                     },
@@ -8882,7 +8884,7 @@ public sealed class DocumentView : RichTextBox
                 decorations.Add(dotted);
                 // Tint the foreground with the revision colour only if the run doesn't already have one.
                 if (wpf.Foreground is null || wpf.Foreground == System.Windows.Media.Brushes.Black)
-                    wpf.Foreground = new SolidColorBrush(RevisionColor);
+                    wpf.Foreground = new SolidColorBrush(ParseRevisionColor(revisionColorHex));
             }
         }
 
@@ -9079,8 +9081,8 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Muted highlight used to mark a RESOLVED comment range (a pale neutral grey).</summary>
     private static readonly Color ResolvedCommentHighlight = Color.FromRgb(0xEC, 0xEC, 0xEC);
 
-    /// <summary>The fixed colour tracked changes are rendered in (a Word-like revision maroon/red).</summary>
-    private static readonly Color RevisionColor = Color.FromRgb(0xC0, 0x00, 0x40);
+    private static Color ParseRevisionColor(string hex) =>
+        TryParseColor(hex, out var color) ? color : Color.FromRgb(0xC0, 0x00, 0x40);
 
     /// <summary>
     /// Composite review/control marker carried on a WPF run's <see cref="WpfRun.Tag"/>. A single run can
@@ -9121,7 +9123,7 @@ public sealed class DocumentView : RichTextBox
     /// Carried on a tracked-change run inside its <see cref="RunMarkers"/> so CommitToModel can round-trip
     /// its revision kind, author and date. Mirrors how CommentMarker/FootnoteMarker preserve their marks.
     /// </summary>
-    private sealed record RevisionMarker(RevisionKind Kind, string? Author, string? DateXml);
+    private sealed record RevisionMarker(RevisionKind Kind, string? Author, string? DateXml, string RenderedColorHex);
 
     /// <summary>
     /// Carried on a WPF run inside its <see cref="RunMarkers"/> so CommitToModel can round-trip the run's
@@ -9129,7 +9131,7 @@ public sealed class DocumentView : RichTextBox
     /// Written UNCONDITIONALLY when <c>run.FormatRevision</c> is non-null, regardless of whether the
     /// formatting-change decoration is currently shown, so the data is never lost on commit/save.
     /// </summary>
-    private sealed record FormatRevisionMarker(ModelFormatRevision Revision);
+    private sealed record FormatRevisionMarker(ModelFormatRevision Revision, string RenderedColorHex);
 
     /// <summary>
     /// Marks a WPF run as covered by the comment with id <paramref name="commentId"/>: a subtle
@@ -14418,9 +14420,8 @@ public sealed class DocumentView : RichTextBox
     // Undo the view-only chrome BuildRun injects for a tracked-change run: clear the revision colour
     // (so it doesn't leak into the model as an explicit colour) and remove the decoration the kind added
     // (underline for an insertion, strikethrough for a deletion). The run's own real formatting is kept.
-    private static RunFormatting StripRevisionChrome(RunFormatting formatting, RevisionKind kind)
+    private static RunFormatting StripRevisionChrome(RunFormatting formatting, RevisionKind kind, string revisionHex)
     {
-        var revisionHex = ToHex(RevisionColor);
         return formatting with
         {
             ColorHex = string.Equals(formatting.ColorHex, revisionHex, StringComparison.OrdinalIgnoreCase) ? null : formatting.ColorHex,
@@ -14434,9 +14435,8 @@ public sealed class DocumentView : RichTextBox
     /// colour tint (so it doesn't leak into the model as an explicit colour) and remove the dotted-underline
     /// decoration. The run's own real formatting (bold, italic, etc.) is kept unchanged.
     /// </summary>
-    private static RunFormatting StripFormatRevisionChrome(RunFormatting formatting)
+    private static RunFormatting StripFormatRevisionChrome(RunFormatting formatting, string revisionHex)
     {
-        var revisionHex = ToHex(RevisionColor);
         // Only strip the colour if it matches the revision tint exactly — if the run has its own colour,
         // leave it alone. The dotted underline is a WPF TextDecoration; ReadRunFormatting maps underlines
         // via the Underline property so if we added a dotted underline in BuildRun but the run itself

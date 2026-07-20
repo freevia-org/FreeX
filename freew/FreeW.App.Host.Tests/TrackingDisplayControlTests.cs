@@ -123,6 +123,35 @@ public sealed class TrackingDisplayControlTests
     }
 
     [StaFact]
+    public void AllMarkup_uses_author_palette_without_serializing_display_colours()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("alice") { Revision = RevisionKind.Inserted, RevisionAuthor = "Alice" });
+        para.Runs.Add(new Run("bob") { Revision = RevisionKind.Deleted, RevisionAuthor = "Bob" });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(paragraph => paragraph.Inlines.OfType<System.Windows.Documents.Run>())
+            .Where(run => run.Text == "alice" || run.Text == "bob")
+            .ToDictionary(
+                run => run.Text,
+                run => ((System.Windows.Media.SolidColorBrush)run.Foreground).Color);
+        rendered["alice"].Should().Be(System.Windows.Media.Color.FromRgb(0x00, 0x70, 0xC0));
+        rendered["bob"].Should().Be(System.Windows.Media.Color.FromRgb(0x80, 0x64, 0xA2));
+
+        view.CommitToModel();
+
+        var committed = ((Paragraph)view.Model.Blocks[0]).Runs;
+        committed.Should().OnlyContain(run => run.Formatting.ColorHex == null);
+    }
+
+    [StaFact]
     public void ShowMarkupInsertionsDeletions_CanBeReenabled_AfterCommit()
     {
         // Verify the flag can be toggled back ON and the model remains intact.
