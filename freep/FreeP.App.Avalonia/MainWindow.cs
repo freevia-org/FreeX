@@ -5243,6 +5243,7 @@ public sealed class MainWindow : Window
 
     private void LoadPresentationContent(Presentation presentation)
     {
+        _findReplaceDialog?.Close();
         _presentation = presentation;
 
         RebuildEditorAndRewireInteraction();

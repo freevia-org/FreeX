@@ -122,6 +122,7 @@ public sealed class MainWindow : Window
     private Canvas  _commentOverlay = null!;  // hosts speech-bubble dots over the slide canvas
     private StackPanel _commentListPanel = null!; // shows comment text list below canvas
     private Border  _commentListHost = null!; // collapsible container for _commentListPanel
+    private bool _reviewCommentsPaneRequested;
     private readonly PresentationReviewWorkflowSession _reviewWorkflowSession;
     private StackPanel _layoutPickerPanel = null!;
     private Border _layoutPickerHost = null!;
@@ -261,6 +262,7 @@ public sealed class MainWindow : Window
         _accessibilityCheckerTableStructureReviewRenderedLines.ToArray();
     internal bool IsDirty => _file.IsDirty;
     internal int ReviewCommentSelectedCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
+    internal bool IsReviewCommentsPaneVisible => _commentListHost?.Visibility == Visibility.Visible;
     internal string ReviewCommentPaneSummary => LastCommentPanePlan?.DeckSummaryLabel ?? string.Empty;
     internal IReadOnlyList<string> ReviewCommentPaneFilterStates =>
         LastCommentPanePlan?.Filters.Select(filter =>
@@ -549,6 +551,7 @@ public sealed class MainWindow : Window
 
     private void LoadModel(Presentation presentation)
     {
+        _findReplaceDialog?.Close();
         _presentation = presentation;
         RebuildEditor(); // also calls AttachCanvasEditing()
         // 3B: re-bind slide pane to the new Editor on file open/new.
@@ -1383,12 +1386,11 @@ public sealed class MainWindow : Window
                 cardHost.MouseLeftButtonDown += (_, _) => SelectReviewComment(cm.CommentIndex);
                 _commentListPanel.Children.Add(cardHost);
             }
-            _commentListHost.Visibility = Visibility.Visible;
         }
-        else
-        {
-            _commentListHost.Visibility = Visibility.Collapsed;
-        }
+
+        _commentListHost.Visibility = comments.Count > 0 || _reviewCommentsPaneRequested
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private static void AddCommentPaneSummary(Panel host, PresentationCommentPanePlan plan)
@@ -1754,9 +1756,10 @@ public sealed class MainWindow : Window
     internal void RefreshReviewWorkflowPlans()
         => _reviewWorkflowSession.RefreshReviewWorkflowPlans();
 
-    private void ShowReviewCommentsPane()
+    internal PresentationCommentPanePlan ShowReviewCommentsPane()
     {
-        RefreshCommentPane();
+        _reviewCommentsPaneRequested = true;
+        return _reviewWorkflowSession.ShowReviewCommentsPane();
     }
 
     internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)
@@ -3656,6 +3659,7 @@ public sealed class MainWindow : Window
 
     /// <summary>The live Find/Replace dialog instance (modeless).  Null when closed.</summary>
     private FindReplaceDialog? _findReplaceDialog;
+    internal FindReplaceDialog? ActiveFindReplaceDialog => _findReplaceDialog;
 
     /// <summary>
     /// Opens (or focuses) the Find dialog in Find-only mode (Ctrl+F).
@@ -3664,7 +3668,7 @@ public sealed class MainWindow : Window
     {
         if (_findReplaceDialog is null || !_findReplaceDialog.IsVisible)
         {
-            _findReplaceDialog = new FindReplaceDialog(Editor, showReplace: false);
+            _findReplaceDialog = new FindReplaceDialog(Editor, showReplace: false, RefreshCanvas);
             if (IsVisible) _findReplaceDialog.Owner = this;
             _findReplaceDialog.Closed += (_, _) => _findReplaceDialog = null;
             _findReplaceDialog.Show();
@@ -3683,7 +3687,7 @@ public sealed class MainWindow : Window
     {
         if (_findReplaceDialog is null || !_findReplaceDialog.IsVisible)
         {
-            _findReplaceDialog = new FindReplaceDialog(Editor, showReplace: true);
+            _findReplaceDialog = new FindReplaceDialog(Editor, showReplace: true, RefreshCanvas);
             if (IsVisible) _findReplaceDialog.Owner = this;
             _findReplaceDialog.Closed += (_, _) => _findReplaceDialog = null;
             _findReplaceDialog.Show();
