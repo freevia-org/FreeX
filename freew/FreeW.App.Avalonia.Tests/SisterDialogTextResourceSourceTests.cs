@@ -73,14 +73,16 @@ public sealed class SisterDialogTextResourceSourceTests
         var source = ReadAvaloniaSource("Backstage", "BackstageView.cs");
 
         source.Should().Contain("BackstageViewTextResources.WindowTitle");
-        source.Should().Contain("BackstageViewTextResources.RailEntries");
+        source.Should().Contain("SisterBackstageEntryPlanner.Build(");
+        source.Should().Contain("new AvaloniaBackstageFrame(");
+        source.Should().Contain("SisterBackstagePalette.FreeW");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
+        source.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
         source.Should().Contain("surface.DeferredNote");
         source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");

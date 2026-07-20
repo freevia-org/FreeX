@@ -184,6 +184,27 @@ public sealed class FileLifecycleTests : IDisposable
         Assert.Equal(path, file.CurrentPath);
     }
 
+    [StaFact]
+    public void SaveCopy_WritesSeparateFileWithoutChangingCurrentPathOrDirtyState()
+    {
+        var (_, editor, file, _, _) = CreateHarness();
+        var currentPath = WriteDocx("Current.docx", "Initial");
+        var copyPath = Path.Combine(_tempDir, "Copy.docx");
+        Assert.True(file.OpenPath(currentPath));
+
+        var edited = TextDocument.CreateEmpty();
+        edited.Blocks.Clear();
+        edited.Blocks.Add(new Paragraph("Unsaved copy content"));
+        editor.LoadModel(edited);
+        file.MarkDirty();
+
+        Assert.True(file.SaveCopyToPath(copyPath));
+
+        Assert.True(file.IsDirty);
+        Assert.Equal(currentPath, file.CurrentPath);
+        Assert.Equal("Unsaved copy content", DocxReader.Read(copyPath).PlainText.Trim());
+    }
+
     [Fact]
     public void WpfFileCommands_ConfirmSharedSaveCompatibilityPlanBeforeWriting()
     {

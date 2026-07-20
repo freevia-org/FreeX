@@ -42,5 +42,6 @@
     <Project Path="freew/tools/_corpus_tables/_corpus_tables.csproj" />
     <Project Path="freew/tools/_corpus_text/_corpus_text.csproj" />
     <Project Path="tools/FreeW.RenderCompare/FreeW.RenderCompare.csproj" />
+    <Project Path="tools/FreeW.BackstageParityEvidence/FreeW.BackstageParityEvidence.csproj" />
   </Folder>
 </Solution>

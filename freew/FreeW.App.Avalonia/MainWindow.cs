@@ -2392,6 +2392,7 @@ public sealed class MainWindow : Window
             GetCurrentOptions: () => _options,
             GetDataFolder: ResolveDataFolderLabel,
             GetDocument: () => _editor.Document,
+            GetIsDirty: () => _fileWorkflow.IsDirty,
 
             NewDocument: NewDocument,
             OpenRecent: path =>
@@ -2409,8 +2410,11 @@ public sealed class MainWindow : Window
             OpenFolder: OpenFolderInShell,
             Browse: () => _ = OpenAsync(),
             RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
+            ImportPdfText: () => _ = ImportPdfTextAsync(),
+            Save: () => _ = SaveAsync(),
             SaveAs: () => _ = SaveAsAsync(),
             SaveAsFormat: (ext, filterIndex) => _ = SaveAsWithFormatAsync(ext, filterIndex),
+            SaveCopy: () => _ = SaveCopyAsync(),
             OpenContainingFolder: path =>
             {
                 var folder = System.IO.Path.GetDirectoryName(path);
@@ -2418,13 +2422,78 @@ public sealed class MainWindow : Window
                     OpenFolderInShell(folder);
             },
             ExportPdf: () => _ = ExportPdfAsync(),
+            ExportXps: null,
+            EditProperties: () => _ = OpenPropertiesAsync(),
             MarkAsFinal: ToggleMarkAsFinal,
             RestrictEditing: () => _ = OpenRestrictEditingAsync(),
             InspectDocument: () => _ = InspectDocumentAsync(),
             CheckAccessibility: () => _ = CheckAccessibilityAsync(),
             OpenOptions: () => _ = OpenOptionsAsync(),
+            CloseDocument: Close,
             DirectPrintCapability: AvaloniaDirectPrintCapability,
             PrintPreview: () => _ = OpenPrintPreviewAsync());
+
+    private async Task SaveCopyAsync()
+    {
+        var savePlan = _documentPersistence.BuildSavePickerPlan(
+            _fileWorkflow.CurrentPath,
+            _fileWorkflow.CurrentFileName,
+            FileText.FallbackDisplayName);
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromSavePlan("Save a Copy", savePlan));
+        var path = file?.LocalPath;
+        if (path is null)
+            return;
+
+        await SaveCopyToPathAsync(path);
+    }
+
+    internal Task<bool> SaveCopyToPathAsync(string path, int filterIndex = 0)
+    {
+        if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex, out var target))
+        {
+            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
+                SisterAppFileTextPlanner.SaveCommand,
+                Path.GetExtension(path));
+            return Task.FromResult(false);
+        }
+
+        return SaveCopyToTargetAsync(target);
+    }
+
+    private async Task<bool> SaveCopyToTargetAsync(DocumentSaveTarget target)
+    {
+        try
+        {
+            if (!await ConfirmSaveCompatibilityAsync(target))
+            {
+                _status.Text = "Save a Copy canceled.";
+                return false;
+            }
+
+            _documentPersistence.Save(_editor.Document, target);
+            _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(target.Path)) + " (copy)";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Could not save a copy: {ex.Message}";
+            return false;
+        }
+    }
+
+    private async Task OpenPropertiesAsync()
+    {
+        var dialog = new PropertiesDialog(_editor.Document.Properties);
+        await dialog.ShowDialog(this);
+        if (!dialog.Accepted)
+            return;
+
+        _fileWorkflow.MarkDirty();
+        _status.Text = "Document properties updated.";
+        _editor.Focus();
+    }
 
     private static TextDocument CloneDocument(TextDocument document)
     {

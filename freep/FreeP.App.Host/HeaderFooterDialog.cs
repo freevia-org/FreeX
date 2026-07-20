@@ -16,13 +16,16 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly CheckBox _dontShowOnTitleSlideCheck;
     private readonly TextBox _footerBox;
 
+    internal HeaderFooterState InitialState { get; }
+    internal HeaderFooterCommandFocus RequestedFocus { get; }
     public HeaderFooterApplyPlan? LastApplyPlan { get; private set; }
 
     public HeaderFooterDialog(EditingSession editor, HeaderFooterCommandFocus focus)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        var state = HeaderFooterCommandPlanner.BuildState(editor);
-        var defaults = HeaderFooterCommandPlanner.BuildDefaultOptions(state, focus);
+        RequestedFocus = focus;
+        InitialState = HeaderFooterCommandPlanner.BuildState(editor);
+        var defaults = HeaderFooterCommandPlanner.BuildDefaultOptions(InitialState, focus);
 
         Title = "Header and Footer";
         Width = 360;
@@ -108,12 +111,7 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Content = panel;
         UpdateDateTimeEnabled();
         UpdateFooterEnabled();
-
-        if (focus == HeaderFooterCommandFocus.Footer)
-        {
-            _footerBox.Focus();
-            _footerBox.SelectAll();
-        }
+        Loaded += (_, _) => FocusRequestedControl();
     }
 
     private UIElement BuildButtonRow()
@@ -160,6 +158,23 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _dateFormatCombo.IsEnabled = showDateTime && !fixedDate;
         _fixedDateCheck.IsEnabled = showDateTime;
         _fixedDateBox.IsEnabled = showDateTime && fixedDate;
+    }
+
+    private void FocusRequestedControl()
+    {
+        switch (RequestedFocus)
+        {
+            case HeaderFooterCommandFocus.DateTime:
+                _dateTimeCheck.Focus();
+                break;
+            case HeaderFooterCommandFocus.Footer:
+                _footerBox.Focus();
+                _footerBox.SelectAll();
+                break;
+            case HeaderFooterCommandFocus.SlideNumber:
+                _slideNumberCheck.Focus();
+                break;
+        }
     }
 
     private void Apply(HeaderFooterApplyScope scope)

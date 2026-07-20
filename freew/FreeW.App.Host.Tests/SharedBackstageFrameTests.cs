@@ -197,6 +197,29 @@ public sealed class SharedBackstageFrameTests
     }
 
     [StaFact]
+    public void CommandEntry_HidesAndRaisesClosedBeforeInvokingHostAction()
+    {
+        var closedCount = 0;
+        var actionObservedHiddenFrame = false;
+        var frame = new BackstageFrame();
+        frame.SetEntries(new[]
+        {
+            BackstageEntry.Command(
+                "Save",
+                BackstageIconKind.Save,
+                () => actionObservedHiddenFrame = frame.Visibility == Visibility.Collapsed && closedCount == 1),
+        });
+        frame.Closed += () => closedCount++;
+        frame.Show();
+
+        NavButtons(frame).Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        frame.Visibility.Should().Be(Visibility.Collapsed);
+        closedCount.Should().Be(1);
+        actionObservedHiddenFrame.Should().BeTrue();
+    }
+
+    [StaFact]
     public void ArrowDown_OnRail_MovesFocusToNextNavButton()
     {
         var frame = new BackstageFrame();

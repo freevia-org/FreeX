@@ -5,11 +5,6 @@ namespace FreeW.App.Presentation.Backstage;
 public static class BackstageViewTextResources
 {
     public const string WindowTitle = "FreeW \u2014 File";
-    public const string BackButton = "\u2190 Back";
-    public const string OptionsButton = "Options";
-    public const string NotImplementedSuffix = "pane not yet implemented.";
-    public const string FileNameLabel = "File name";
-    public const string FormatLabel = "Format";
     public const string DocumentSettingsSection = "Document Settings";
     public const string EvidenceSection = "Evidence";
     public const string EvidenceScenariosLabel = "Scenarios";
@@ -36,18 +31,6 @@ public static class BackstageViewTextResources
     public const string ModifiedLabel = "Modified";
     public const string ProductName = "FreeW";
     public const string PinnedRecentSuffix = "  (pinned)";
-
-    public static readonly IReadOnlyList<BackstageRailEntryDescriptor> RailEntries =
-    [
-        new(nameof(Home), "Home"),
-        new(nameof(Open), "Open"),
-        new(nameof(SaveAs), "Save As"),
-        new(nameof(Print), "Print"),
-        new(nameof(Share), "Share"),
-        new(nameof(Export), "Export"),
-        new(nameof(Info), "Info"),
-        new(nameof(Account), "Account"),
-    ];
 
     public static BackstagePaneDescriptor Home { get; } = new(
         Title: "Home",

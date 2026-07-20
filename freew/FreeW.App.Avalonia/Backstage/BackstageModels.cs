@@ -52,6 +52,9 @@ internal sealed record BackstageCallbacks(
     /// <summary>Current live document model for Info-pane safety summaries.</summary>
     Func<TextDocument> GetDocument,
 
+    /// <summary>Whether the current document has unsaved changes.</summary>
+    Func<bool> GetIsDirty,
+
     // ── Actions ──────────────────────────────────────────────────────────────
 
     /// <summary>Create a new empty document.</summary>
@@ -69,17 +72,32 @@ internal sealed record BackstageCallbacks(
     /// <summary>Offer recovery from the latest autosave snapshot.</summary>
     Action RecoverUnsaved,
 
+    /// <summary>Import text from a PDF through the host's existing import path.</summary>
+    Action ImportPdfText,
+
+    /// <summary>Save to the current path, falling back to Save As for an untitled document.</summary>
+    Action Save,
+
     /// <summary>Trigger a Save-As dialog (format chosen by the user).</summary>
     Action SaveAs,
 
     /// <summary>Trigger a Save-As targeting a specific catalog save format (from the planner choice).</summary>
     Action<string, int> SaveAsFormat,
 
+    /// <summary>Write a separate editable copy without changing the active path or dirty state.</summary>
+    Action SaveCopy,
+
     /// <summary>Open the folder containing the current file.</summary>
     Action<string> OpenContainingFolder,
 
     /// <summary>Export the document as PDF via the existing PDF path.</summary>
     Action ExportPdf,
+
+    /// <summary>Export XPS when the target has a real XPS writer; otherwise absent.</summary>
+    Action? ExportXps,
+
+    /// <summary>Edit the document's persisted core properties.</summary>
+    Action EditProperties,
 
     /// <summary>Toggle Word-style Mark as Final advisory read-only state.</summary>
     Action MarkAsFinal,
@@ -95,6 +113,9 @@ internal sealed record BackstageCallbacks(
 
     /// <summary>Open the FreeW options editor.</summary>
     Action OpenOptions,
+
+    /// <summary>Close the document through the host dirty gate.</summary>
+    Action CloseDocument,
 
     /// <summary>Host capability/status for direct native print.</summary>
     BackstageDirectPrintCapability? DirectPrintCapability = null,

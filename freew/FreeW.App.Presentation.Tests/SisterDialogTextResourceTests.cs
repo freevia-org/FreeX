@@ -53,12 +53,9 @@ public sealed class SisterDialogTextResourceTests
     }
 
     [Fact]
-    public void BackstageViewTextResources_ExposeRailAndPaneText()
+    public void BackstageViewTextResources_ExposePaneText()
     {
         BackstageViewTextResources.WindowTitle.Should().Be("FreeW \u2014 File");
-        BackstageViewTextResources.BackButton.Should().Be("\u2190 Back");
-        BackstageViewTextResources.RailEntries.Select(entry => entry.Label)
-            .Should().Equal("Home", "Open", "Save As", "Print", "Share", "Export", "Info", "Account");
         BackstageViewTextResources.Home.Description
             .Should().Be("Start with a new document or reopen a recent file.");
         BackstageViewTextResources.EvidenceSection.Should().Be("Evidence");

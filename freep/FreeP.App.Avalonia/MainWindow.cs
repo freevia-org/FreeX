@@ -121,25 +121,8 @@ public sealed class MainWindow : Window
     private StackPanel _layoutPickerPanel = null!;
     private Border _tablePickerHost = null!;
     private WrapPanel _tablePickerPanel = null!;
-    private Border _slideSizePaneHost = null!;
-    private ComboBox _slideSizePresetCombo = null!;
-    private ComboBox _slideSizeUnitCombo = null!;
-    private TextBox _slideSizeWidthBox = null!;
-    private TextBox _slideSizeHeightBox = null!;
-    private TextBlock _slideSizeWidthUnitLabel = null!;
-    private TextBlock _slideSizeHeightUnitLabel = null!;
-    private TextBlock _slideSizeValidationText = null!;
-    private bool _slideSizePaneRefreshing;
-    private SlideSizeDialogUnit _slideSizeUnit = SlideSizeDialogUnit.Inches;
-    private Border _headerFooterPaneHost = null!;
-    private CheckBox _headerFooterDateTimeCheck = null!;
-    private ComboBox _headerFooterDateFormatCombo = null!;
-    private CheckBox _headerFooterFixedDateCheck = null!;
-    private TextBox _headerFooterFixedDateBox = null!;
-    private CheckBox _headerFooterFooterCheck = null!;
-    private TextBox _headerFooterFooterBox = null!;
-    private CheckBox _headerFooterSlideNumberCheck = null!;
-    private CheckBox _headerFooterDontShowOnTitleSlideCheck = null!;
+    private SlideSizeDialog? _slideSizeDialog;
+    private HeaderFooterDialog? _headerFooterDialog;
     private Border _reviewCommentsPaneHost = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
     private readonly PresentationReviewWorkflowSession _reviewWorkflowSession;
@@ -212,21 +195,7 @@ public sealed class MainWindow : Window
     private int _animationPaneTriggerControlCount;
     private int _animationPaneDurationControlCount;
     private int _animationPaneDelayControlCount;
-    private Border _findReplacePaneHost = null!;
-    private TextBlock _findReplacePaneHeading = null!;
-    private TextBlock _findReplaceStatusText = null!;
-    private TextBox _findReplaceFindBox = null!;
-    private TextBlock _findReplaceReplaceLabel = null!;
-    private TextBox _findReplaceReplaceBox = null!;
-    private CheckBox _findReplaceMatchCaseCheck = null!;
-    private CheckBox _findReplaceWholeWordCheck = null!;
-    private Button _findReplaceButton = null!;
-    private Button _findReplacePreviousButton = null!;
-    private Button _findReplaceReplaceButton = null!;
-    private Button _findReplaceReplaceAllButton = null!;
-    private readonly List<TextSearchMatch> _findReplaceMatches = new();
-    private int _findReplaceCurrentMatchIndex = -1;
-    private bool _findReplaceShowReplace;
+    private FindReplaceDialog? _findReplaceDialog;
     private Border _printOptionsPaneHost = null!;
     private TextBlock _printOptionsPaneHeading = null!;
     private TextBlock _printOptionsPaneMessage = null!;
@@ -345,11 +314,8 @@ public sealed class MainWindow : Window
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
     internal bool IsLayoutPickerVisible => _layoutPickerHost?.IsVisible == true;
     internal bool IsTablePickerVisible => _tablePickerHost?.IsVisible == true;
-    internal bool IsCustomSlideSizePaneVisible => _slideSizePaneHost?.IsVisible == true;
-    internal bool IsHeaderFooterPaneVisible => _headerFooterPaneHost?.IsVisible == true;
-    internal string CustomSlideSizeWidthText => _slideSizeWidthBox?.Text ?? string.Empty;
-    internal string CustomSlideSizeHeightText => _slideSizeHeightBox?.Text ?? string.Empty;
-    internal string CustomSlideSizeValidationText => _slideSizeValidationText?.Text ?? string.Empty;
+    internal SlideSizeDialog? ActiveSlideSizeDialog => _slideSizeDialog;
+    internal HeaderFooterDialog? ActiveHeaderFooterDialog => _headerFooterDialog;
     internal int TablePickerChoiceButtonCount => LastTablePickerPlan?.Choices.Count ?? 0;
     internal int TablePickerDefaultChoiceCount => LastTablePickerPlan?.Choices.Count(choice => choice.IsDefault) ?? 0;
     internal int LayoutPickerChoiceButtonCount => LastLayoutPickerPlan?.Choices.Count ?? 0;
@@ -474,10 +440,9 @@ public sealed class MainWindow : Window
     internal int AnimationPaneTriggerControlCount => _animationPaneTriggerControlCount;
     internal int AnimationPaneDurationControlCount => _animationPaneDurationControlCount;
     internal int AnimationPaneDelayControlCount => _animationPaneDelayControlCount;
-    internal bool IsFindReplacePaneVisible => _findReplacePaneHost?.IsVisible == true;
-    internal string FindReplacePaneTitle => _findReplacePaneHeading?.Text ?? string.Empty;
-    internal string FindReplacePaneStatus => _findReplaceStatusText?.Text ?? string.Empty;
-    internal bool IsFindReplaceReplaceInputVisible => _findReplaceReplaceBox?.IsVisible == true;
+    internal FindReplaceDialog? ActiveFindReplaceDialog => _findReplaceDialog;
+    internal bool IsFindReplaceDialogVisible => _findReplaceDialog?.IsVisible == true;
+    internal bool IsFindReplaceReplaceInputVisible => _findReplaceDialog?.ShowReplace == true;
     internal bool IsPrintOptionsPaneVisible => _printOptionsPaneHost?.IsVisible == true;
     internal string PrintOptionsPaneHeading => _printOptionsPaneHeading?.Text ?? string.Empty;
     internal string PrintOptionsPaneMessage => _printOptionsPaneMessage?.Text ?? string.Empty;
@@ -610,6 +575,12 @@ public sealed class MainWindow : Window
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
         Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
+        Closed += (_, _) =>
+        {
+            _findReplaceDialog?.Close();
+            _slideSizeDialog?.Close(false);
+            _headerFooterDialog?.Close(false);
+        };
 
         // ── Initial content ───────────────────────────────────────────────────
 
@@ -761,10 +732,7 @@ public sealed class MainWindow : Window
         _mediaCaptionPaneHost = BuildMediaCaptionPaneHost();
         _smartArtTextPaneHost = BuildSmartArtTextPaneHost();
         _animationPaneHost = BuildAnimationPaneHost();
-        _findReplacePaneHost = BuildFindReplacePaneHost();
         _printOptionsPaneHost = BuildPrintOptionsPaneHost();
-        _slideSizePaneHost = BuildSlideSizePaneHost();
-        _headerFooterPaneHost = BuildHeaderFooterPaneHost();
         Grid.SetRow(canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
         Grid.SetRow(_tablePickerHost, 2);
@@ -808,25 +776,18 @@ public sealed class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(slidePaneHost, 0);
         Grid.SetColumn(rightGrid,      1);
-        Grid.SetColumn(_slideSizePaneHost, 2);
-        Grid.SetColumn(_headerFooterPaneHost, 3);
-        Grid.SetColumn(_accessibilityCheckerPaneHost, 4);
-        Grid.SetColumn(_altTextPaneHost, 5);
-        Grid.SetColumn(_readingOrderPaneHost, 6);
-        Grid.SetColumn(_proofingPaneHost, 7);
-        Grid.SetColumn(_mediaCaptionPaneHost, 8);
-        Grid.SetColumn(_smartArtTextPaneHost, 9);
-        Grid.SetColumn(_animationPaneHost, 10);
-        Grid.SetColumn(_findReplacePaneHost, 11);
-        Grid.SetColumn(_printOptionsPaneHost, 12);
+        Grid.SetColumn(_accessibilityCheckerPaneHost, 2);
+        Grid.SetColumn(_altTextPaneHost, 3);
+        Grid.SetColumn(_readingOrderPaneHost, 4);
+        Grid.SetColumn(_proofingPaneHost, 5);
+        Grid.SetColumn(_mediaCaptionPaneHost, 6);
+        Grid.SetColumn(_smartArtTextPaneHost, 7);
+        Grid.SetColumn(_animationPaneHost, 8);
+        Grid.SetColumn(_printOptionsPaneHost, 9);
         body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
-        body.Children.Add(_slideSizePaneHost);
-        body.Children.Add(_headerFooterPaneHost);
         body.Children.Add(_accessibilityCheckerPaneHost);
         body.Children.Add(_altTextPaneHost);
         body.Children.Add(_readingOrderPaneHost);
@@ -834,146 +795,9 @@ public sealed class MainWindow : Window
         body.Children.Add(_mediaCaptionPaneHost);
         body.Children.Add(_smartArtTextPaneHost);
         body.Children.Add(_animationPaneHost);
-        body.Children.Add(_findReplacePaneHost);
         body.Children.Add(_printOptionsPaneHost);
 
         return body;
-    }
-
-    private Border BuildFindReplacePaneHost()
-    {
-        _findReplacePaneHeading = new TextBlock
-        {
-            Text = FindReplaceDialogPlanner.FindTitle,
-            FontSize = 15,
-            FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(12, 12, 12, 4),
-        };
-        _findReplaceFindBox = new TextBox
-        {
-            Margin = new Thickness(12, 2, 12, 8),
-            PlaceholderText = "Find what",
-        };
-        _findReplaceFindBox.TextChanged += (_, _) => InvalidateFindReplaceSearch();
-
-        _findReplaceReplaceLabel = new TextBlock
-        {
-            Text = "Replace with",
-            FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(12, 4, 12, 2),
-        };
-        _findReplaceReplaceBox = new TextBox
-        {
-            Margin = new Thickness(12, 2, 12, 8),
-            PlaceholderText = "Replacement text",
-        };
-        _findReplaceReplaceBox.TextChanged += (_, _) => RefreshFindReplaceWorkflowPlan();
-
-        _findReplaceMatchCaseCheck = new CheckBox
-        {
-            Content = "Match case",
-            Margin = new Thickness(12, 2, 12, 2),
-        };
-        _findReplaceMatchCaseCheck.IsCheckedChanged += (_, _) => InvalidateFindReplaceSearch();
-
-        _findReplaceWholeWordCheck = new CheckBox
-        {
-            Content = "Whole word",
-            Margin = new Thickness(12, 0, 12, 8),
-        };
-        _findReplaceWholeWordCheck.IsCheckedChanged += (_, _) => InvalidateFindReplaceSearch();
-
-        _findReplacePreviousButton = new Button
-        {
-            Content = "Previous",
-            MinWidth = 80,
-            Margin = new Thickness(0, 0, 6, 0),
-        };
-        _findReplacePreviousButton.Click += (_, _) => NavigateFindReplace(-1);
-
-        _findReplaceButton = new Button
-        {
-            Content = "Find Next",
-            MinWidth = 80,
-            Margin = new Thickness(0, 0, 6, 0),
-        };
-        _findReplaceButton.Click += (_, _) => NavigateFindReplace(+1);
-
-        _findReplaceReplaceButton = new Button
-        {
-            Content = "Replace",
-            MinWidth = 80,
-            Margin = new Thickness(0, 0, 6, 0),
-        };
-        _findReplaceReplaceButton.Click += (_, _) => ReplaceCurrentFindReplaceMatch();
-
-        _findReplaceReplaceAllButton = new Button
-        {
-            Content = "Replace All",
-            MinWidth = 96,
-        };
-        _findReplaceReplaceAllButton.Click += (_, _) => ReplaceAllFindReplaceMatches();
-
-        _findReplaceStatusText = new TextBlock
-        {
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
-            Margin = new Thickness(12, 8, 12, 12),
-        };
-
-        return new Border
-        {
-            Width = 300,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
-            BorderThickness = new Thickness(1, 0, 0, 0),
-            IsVisible = false,
-            Child = new ScrollViewer
-            {
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Content = new StackPanel
-                {
-                    Orientation = Orientation.Vertical,
-                    Children =
-                    {
-                        _findReplacePaneHeading,
-                        new TextBlock
-                        {
-                            Text = "Find what",
-                            FontWeight = FontWeight.SemiBold,
-                            Margin = new Thickness(12, 4, 12, 2),
-                        },
-                        _findReplaceFindBox,
-                        _findReplaceReplaceLabel,
-                        _findReplaceReplaceBox,
-                        _findReplaceMatchCaseCheck,
-                        _findReplaceWholeWordCheck,
-                        new StackPanel
-                        {
-                            Orientation = Orientation.Horizontal,
-                            Margin = new Thickness(12, 4, 12, 4),
-                            Children =
-                            {
-                                _findReplaceButton,
-                                _findReplacePreviousButton,
-                            },
-                        },
-                        new StackPanel
-                        {
-                            Orientation = Orientation.Horizontal,
-                            Margin = new Thickness(12, 4, 12, 4),
-                            Children =
-                            {
-                                _findReplaceReplaceButton,
-                                _findReplaceReplaceAllButton,
-                            },
-                        },
-                        _findReplaceStatusText,
-                    },
-                },
-            },
-        };
     }
 
     private Border BuildPrintOptionsPaneHost()
@@ -1112,234 +936,6 @@ public sealed class MainWindow : Window
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = panel,
-        };
-    }
-
-    private Border BuildSlideSizePaneHost()
-    {
-        _slideSizePresetCombo = new ComboBox
-        {
-            Margin = new Thickness(12, 4, 12, 8),
-            Items =
-            {
-                "Standard (4:3)",
-                "Widescreen (16:9)",
-                "Custom",
-            },
-        };
-        _slideSizePresetCombo.SelectionChanged += OnSlideSizePresetChanged;
-
-        _slideSizeUnitCombo = new ComboBox
-        {
-            Margin = new Thickness(12, 4, 12, 8),
-            Items =
-            {
-                "Inches",
-                "Centimeters",
-            },
-        };
-        _slideSizeUnitCombo.SelectionChanged += OnSlideSizeUnitChanged;
-
-        _slideSizeWidthBox = BuildSlideSizeTextBox();
-        _slideSizeHeightBox = BuildSlideSizeTextBox();
-        _slideSizeWidthUnitLabel = BuildSlideSizeUnitLabel();
-        _slideSizeHeightUnitLabel = BuildSlideSizeUnitLabel();
-        _slideSizeValidationText = new TextBlock
-        {
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x9B, 0x1C, 0x1C)),
-            Margin = new Thickness(12, 2, 12, 8),
-        };
-
-        var apply = new Button
-        {
-            Content = "Apply",
-            MinWidth = 78,
-            Margin = new Thickness(0, 0, 8, 0),
-        };
-        apply.Click += (_, _) => ApplyCustomSlideSize();
-
-        var close = new Button
-        {
-            Content = "Close",
-            MinWidth = 78,
-        };
-        close.Click += (_, _) => HideCustomSlideSizePane();
-
-        return new Border
-        {
-            Width = 260,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
-            BorderThickness = new Thickness(1, 0, 0, 0),
-            IsVisible = false,
-            Child = new StackPanel
-            {
-                Orientation = Orientation.Vertical,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = "Slide Size",
-                        FontSize = 15,
-                        FontWeight = FontWeight.SemiBold,
-                        Margin = new Thickness(12, 12, 12, 4),
-                    },
-                    BuildSlideSizeLabel("Preset"),
-                    _slideSizePresetCombo,
-                    BuildSlideSizeLabel("Unit"),
-                    _slideSizeUnitCombo,
-                    BuildSlideSizeLabel("Width"),
-                    BuildSlideSizeFieldRow(_slideSizeWidthBox, _slideSizeWidthUnitLabel),
-                    BuildSlideSizeLabel("Height"),
-                    BuildSlideSizeFieldRow(_slideSizeHeightBox, _slideSizeHeightUnitLabel),
-                    _slideSizeValidationText,
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Margin = new Thickness(12, 4, 12, 12),
-                        Children = { apply, close },
-                    },
-                },
-            },
-        };
-    }
-
-    private static TextBlock BuildSlideSizeLabel(string text) => new()
-    {
-        Text = text,
-        Margin = new Thickness(12, 6, 12, 0),
-        FontSize = 11,
-        Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
-    };
-
-    private static TextBox BuildSlideSizeTextBox() => new()
-    {
-        Margin = new Thickness(12, 3, 6, 3),
-        MinWidth = 120,
-    };
-
-    private static TextBlock BuildSlideSizeUnitLabel() => new()
-    {
-        Width = 28,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
-
-    private static StackPanel BuildSlideSizeFieldRow(TextBox box, TextBlock unitLabel) => new()
-    {
-        Orientation = Orientation.Horizontal,
-        Children = { box, unitLabel },
-    };
-
-    private Border BuildHeaderFooterPaneHost()
-    {
-        _headerFooterDateTimeCheck = new CheckBox
-        {
-            Content = "Date and time",
-            Margin = new Thickness(12, 4, 12, 4),
-        };
-        _headerFooterDateFormatCombo = new ComboBox
-        {
-            ItemsSource = HeaderFooterCommandPlanner.DateFormatOptions,
-            SelectedIndex = 0,
-            Margin = new Thickness(28, 0, 12, 4),
-            MinWidth = 180,
-        };
-        _headerFooterFixedDateCheck = new CheckBox
-        {
-            Content = "Fixed",
-            Margin = new Thickness(28, 0, 12, 4),
-        };
-        _headerFooterFixedDateBox = new TextBox
-        {
-            Margin = new Thickness(44, 0, 12, 8),
-            MinWidth = 164,
-        };
-        _headerFooterFooterCheck = new CheckBox
-        {
-            Content = "Footer",
-            Margin = new Thickness(12, 4, 12, 4),
-        };
-        _headerFooterFooterBox = new TextBox
-        {
-            Margin = new Thickness(28, 0, 12, 8),
-            MinWidth = 180,
-        };
-        _headerFooterSlideNumberCheck = new CheckBox
-        {
-            Content = "Slide number",
-            Margin = new Thickness(12, 4, 12, 8),
-        };
-        _headerFooterDontShowOnTitleSlideCheck = new CheckBox
-        {
-            Content = "Don't show on title slide",
-            Margin = new Thickness(12, 4, 12, 12),
-        };
-        _headerFooterFooterCheck.IsCheckedChanged += (_, _) =>
-            _headerFooterFooterBox.IsEnabled = _headerFooterFooterCheck.IsChecked == true;
-        _headerFooterDateTimeCheck.IsCheckedChanged += (_, _) => UpdateHeaderFooterDateControls();
-        _headerFooterFixedDateCheck.IsCheckedChanged += (_, _) => UpdateHeaderFooterDateControls();
-
-        var apply = new Button
-        {
-            Content = "Apply",
-            MinWidth = 78,
-            Margin = new Thickness(0, 0, 8, 0),
-        };
-        apply.Click += (_, _) => ApplyHeaderFooter(HeaderFooterApplyScope.CurrentSlide);
-
-        var applyAll = new Button
-        {
-            Content = "Apply All",
-            MinWidth = 78,
-            Margin = new Thickness(0, 0, 8, 0),
-        };
-        applyAll.Click += (_, _) => ApplyHeaderFooter(HeaderFooterApplyScope.AllSlides);
-
-        var close = new Button
-        {
-            Content = "Close",
-            MinWidth = 78,
-        };
-        close.Click += (_, _) => HideHeaderFooterPane();
-
-        return new Border
-        {
-            Width = 260,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
-            BorderThickness = new Thickness(1, 0, 0, 0),
-            IsVisible = false,
-            Child = new StackPanel
-            {
-                Orientation = Orientation.Vertical,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = "Header and Footer",
-                        FontSize = 15,
-                        FontWeight = FontWeight.SemiBold,
-                        Margin = new Thickness(12, 12, 12, 4),
-                    },
-                    _headerFooterDateTimeCheck,
-                    _headerFooterDateFormatCombo,
-                    _headerFooterFixedDateCheck,
-                    _headerFooterFixedDateBox,
-                    _headerFooterFooterCheck,
-                    _headerFooterFooterBox,
-                    _headerFooterSlideNumberCheck,
-                    _headerFooterDontShowOnTitleSlideCheck,
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Margin = new Thickness(12, 4, 12, 12),
-                        Children = { apply, applyAll, close },
-                    },
-                },
-            },
         };
     }
 
@@ -2100,11 +1696,11 @@ public sealed class MainWindow : Window
         r.Register("freep.insert-link", new ActionRibbonCommand(OpenHyperlinkDialog));
         r.Register("freep.remove-link", new ActionRibbonCommand(() => Editor.RemoveShapeHyperlink()));
         r.Register(HeaderFooterCommandPlanner.HeaderFooterCommandId,
-            new ActionRibbonCommand(() => OpenHeaderFooterPane(HeaderFooterCommandFocus.HeaderFooter)));
+            new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.HeaderFooter)));
         r.Register(HeaderFooterCommandPlanner.DateTimeCommandId,
-            new ActionRibbonCommand(() => OpenHeaderFooterPane(HeaderFooterCommandFocus.DateTime)));
+            new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.DateTime)));
         r.Register(HeaderFooterCommandPlanner.SlideNumberCommandId,
-            new ActionRibbonCommand(() => OpenHeaderFooterPane(HeaderFooterCommandFocus.SlideNumber)));
+            new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.SlideNumber)));
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
@@ -2280,7 +1876,7 @@ public sealed class MainWindow : Window
             _presentation.SlideSizeCxEmu,
             _presentation.SlideSizeCyEmu,
             SlideSizeDialogUnit.Inches);
-        ShowCustomSlideSizePane(LastCustomSlideSizeInitialState);
+        OpenSlideSizeDialog();
         _statusText.Text = "Slide Size";
     }
 
@@ -2364,8 +1960,6 @@ public sealed class MainWindow : Window
         }
 
         HideLayoutPicker();
-        HideCustomSlideSizePane();
-        HideHeaderFooterPane();
         _tablePickerHost.IsVisible = true;
     }
 
@@ -2421,8 +2015,6 @@ public sealed class MainWindow : Window
         }
 
         HideTablePicker();
-        HideCustomSlideSizePane();
-        HideHeaderFooterPane();
         _layoutPickerHost.IsVisible = true;
     }
 
@@ -2432,230 +2024,66 @@ public sealed class MainWindow : Window
             _layoutPickerHost.IsVisible = false;
     }
 
-    private void ShowCustomSlideSizePane(SlideSizeDialogInitialState state)
+    internal void OpenSlideSizeDialog()
     {
-        if (_slideSizePaneHost is null)
+        if (_slideSizeDialog is not null)
+        {
+            _slideSizeDialog.Activate();
             return;
+        }
 
         HideLayoutPicker();
         HideTablePicker();
-        HideHeaderFooterPane();
-
-        _slideSizePaneRefreshing = true;
-        try
+        var dialog = new SlideSizeDialog(Editor);
+        _slideSizeDialog = dialog;
+        dialog.Closed += (_, _) =>
         {
-            _slideSizeUnit = SlideSizeDialogUnit.Inches;
-            _slideSizePresetCombo.SelectedIndex = ToSlideSizePresetIndex(state.Preset);
-            _slideSizeUnitCombo.SelectedIndex = 0;
-            ApplySlideSizeDisplay(state.Display);
-            _slideSizeValidationText.Text = string.Empty;
-        }
-        finally
-        {
-            _slideSizePaneRefreshing = false;
-        }
+            LastCustomSlideSizeResultPlan = dialog.LastResultPlan;
+            if (dialog.LastResultPlan?.ShouldApply == true)
+            {
+                RefreshCanvas();
+                UpdateStatus();
+            }
+            _slideSizeDialog = null;
+        };
 
-        _slideSizePaneHost.IsVisible = true;
+        if (IsVisible)
+            _ = dialog.ShowDialog<bool?>(this);
+        else
+            dialog.Show();
     }
 
-    private void HideCustomSlideSizePane()
-    {
-        if (_slideSizePaneHost is not null)
-            _slideSizePaneHost.IsVisible = false;
-    }
-
-    internal void OpenHeaderFooterPane(HeaderFooterCommandFocus focus)
+    internal void OpenHeaderFooterDialog(HeaderFooterCommandFocus focus)
     {
         LastHeaderFooterFocus = focus;
         LastHeaderFooterState = HeaderFooterCommandPlanner.BuildState(Editor);
-        var options = HeaderFooterCommandPlanner.BuildDefaultOptions(LastHeaderFooterState, focus);
-
-        _headerFooterDateTimeCheck.IsChecked = options.ShowDateTime;
-        _headerFooterDateFormatCombo.SelectedItem = HeaderFooterCommandPlanner.DateFormatOptions.FirstOrDefault(option =>
-            StringComparer.Ordinal.Equals(option.FieldType, options.DateTimeFieldType)) ??
-            HeaderFooterCommandPlanner.DateFormatOptions[0];
-        _headerFooterFixedDateCheck.IsChecked = options.DateTimeMode == HeaderFooterDateTimeMode.Fixed;
-        _headerFooterFixedDateBox.Text = options.FixedDateTimeText;
-        _headerFooterFooterCheck.IsChecked = options.ShowFooter;
-        _headerFooterFooterBox.Text = options.FooterText;
-        _headerFooterFooterBox.IsEnabled = options.ShowFooter;
-        _headerFooterSlideNumberCheck.IsChecked = options.ShowSlideNumber;
-        _headerFooterDontShowOnTitleSlideCheck.IsChecked = options.SuppressOnTitleSlide;
-        UpdateHeaderFooterDateControls();
+        if (_headerFooterDialog is not null)
+        {
+            _headerFooterDialog.Activate();
+            return;
+        }
 
         HideLayoutPicker();
         HideTablePicker();
-        HideCustomSlideSizePane();
-        _headerFooterPaneHost.IsVisible = true;
+        var dialog = new HeaderFooterDialog(Editor, focus);
+        _headerFooterDialog = dialog;
         _statusText.Text = "Header and Footer";
-    }
-
-    private void HideHeaderFooterPane()
-    {
-        if (_headerFooterPaneHost is not null)
-            _headerFooterPaneHost.IsVisible = false;
-    }
-
-    internal bool ApplyHeaderFooterForTests(
-        bool showDateTime,
-        bool showFooter,
-        bool showSlideNumber,
-        string footerText,
-        HeaderFooterApplyScope scope,
-        bool suppressOnTitleSlide = false,
-        HeaderFooterDateTimeMode dateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
-        string dateTimeFieldType = "datetime1",
-        string fixedDateTimeText = "")
-    {
-        _headerFooterDateTimeCheck.IsChecked = showDateTime;
-        _headerFooterDateFormatCombo.SelectedItem = HeaderFooterCommandPlanner.DateFormatOptions.FirstOrDefault(option =>
-            StringComparer.Ordinal.Equals(option.FieldType, dateTimeFieldType)) ??
-            HeaderFooterCommandPlanner.DateFormatOptions[0];
-        _headerFooterFixedDateCheck.IsChecked = dateTimeMode == HeaderFooterDateTimeMode.Fixed;
-        _headerFooterFixedDateBox.Text = fixedDateTimeText;
-        _headerFooterFooterCheck.IsChecked = showFooter;
-        _headerFooterFooterBox.Text = footerText;
-        _headerFooterSlideNumberCheck.IsChecked = showSlideNumber;
-        _headerFooterDontShowOnTitleSlideCheck.IsChecked = suppressOnTitleSlide;
-        UpdateHeaderFooterDateControls();
-        return ApplyHeaderFooter(scope);
-    }
-
-    internal bool ApplyHeaderFooter(HeaderFooterApplyScope scope)
-    {
-        var dateFormat = _headerFooterDateFormatCombo.SelectedItem as HeaderFooterDateFormatOption ??
-            HeaderFooterCommandPlanner.DateFormatOptions[0];
-        var options = new HeaderFooterApplyOptions(
-            _headerFooterDateTimeCheck.IsChecked == true,
-            _headerFooterFooterCheck.IsChecked == true,
-            _headerFooterSlideNumberCheck.IsChecked == true,
-            _headerFooterFooterBox.Text ?? string.Empty,
-            scope,
-            _headerFooterDontShowOnTitleSlideCheck.IsChecked == true,
-            _headerFooterFixedDateCheck.IsChecked == true
-                ? HeaderFooterDateTimeMode.Fixed
-                : HeaderFooterDateTimeMode.AutoUpdate,
-            dateFormat.FieldType,
-            _headerFooterFixedDateBox.Text ?? string.Empty);
-
-        if (!HeaderFooterCommandPlanner.TryApply(Editor, options, out var plan))
+        dialog.Closed += (_, _) =>
         {
-            return false;
-        }
-
-        LastHeaderFooterApplyPlan = plan;
-        RefreshCanvas();
-        UpdateStatus();
-        HideHeaderFooterPane();
-        return true;
-    }
-
-    private void UpdateHeaderFooterDateControls()
-    {
-        var showDateTime = _headerFooterDateTimeCheck.IsChecked == true;
-        var fixedDate = _headerFooterFixedDateCheck.IsChecked == true;
-        _headerFooterDateFormatCombo.IsEnabled = showDateTime && !fixedDate;
-        _headerFooterFixedDateCheck.IsEnabled = showDateTime;
-        _headerFooterFixedDateBox.IsEnabled = showDateTime && fixedDate;
-    }
-
-    private void OnSlideSizePresetChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (_slideSizePaneRefreshing)
-            return;
-
-        var display = SlideSizeDialogPlanner.BuildPresetSelectionDisplay(
-            SlideSizePresetFromIndex(_slideSizePresetCombo.SelectedIndex),
-            _slideSizeUnit);
-        if (display is not null)
-            ApplySlideSizeDisplay(display);
-    }
-
-    private void OnSlideSizeUnitChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (_slideSizePaneRefreshing)
-            return;
-
-        var newUnit = _slideSizeUnitCombo.SelectedIndex == 1
-            ? SlideSizeDialogUnit.Centimeters
-            : SlideSizeDialogUnit.Inches;
-        if (newUnit == _slideSizeUnit)
-            return;
-
-        var display = SlideSizeDialogPlanner.BuildUnitChangeDisplay(
-            _slideSizeWidthBox.Text ?? string.Empty,
-            _slideSizeHeightBox.Text ?? string.Empty,
-            _slideSizeUnit,
-            newUnit);
-        _slideSizeUnit = newUnit;
-        ApplySlideSizeDisplay(display);
-    }
-
-    internal bool ApplyCustomSlideSizeForTests(
-        string widthText,
-        string heightText,
-        SlideSizeDialogUnit unit)
-    {
-        _slideSizePaneRefreshing = true;
-        try
-        {
-            _slideSizeUnit = unit;
-            _slideSizeUnitCombo.SelectedIndex = unit == SlideSizeDialogUnit.Centimeters ? 1 : 0;
-            _slideSizeWidthBox.Text = widthText;
-            _slideSizeHeightBox.Text = heightText;
-            _slideSizeWidthUnitLabel.Text = unit == SlideSizeDialogUnit.Centimeters ? "cm" : "in";
-            _slideSizeHeightUnitLabel.Text = unit == SlideSizeDialogUnit.Centimeters ? "cm" : "in";
-        }
-        finally
-        {
-            _slideSizePaneRefreshing = false;
-        }
-
-        return ApplyCustomSlideSize();
-    }
-
-    internal bool ApplyCustomSlideSize()
-    {
-        LastCustomSlideSizeResultPlan = SlideSizeDialogPlanner.BuildOkResult(
-            _slideSizeWidthBox.Text ?? string.Empty,
-            _slideSizeHeightBox.Text ?? string.Empty,
-            _slideSizeUnit);
-        if (!SlideSizeDialogPlanner.TryApplyResult(Editor, LastCustomSlideSizeResultPlan))
-        {
-            _slideSizeValidationText.Text = LastCustomSlideSizeResultPlan.Validation?.Message ?? string.Empty;
-            return false;
-        }
-
-        _slideSizeValidationText.Text = string.Empty;
-        RefreshCanvas();
-        UpdateStatus();
-        HideCustomSlideSizePane();
-        return true;
-    }
-
-    private void ApplySlideSizeDisplay(SlideSizeDialogDisplayState display)
-    {
-        _slideSizeWidthBox.Text = display.WidthText;
-        _slideSizeHeightBox.Text = display.HeightText;
-        _slideSizeWidthUnitLabel.Text = display.UnitLabel;
-        _slideSizeHeightUnitLabel.Text = display.UnitLabel;
-    }
-
-    private static int ToSlideSizePresetIndex(SlideSizeDialogPreset preset)
-        => preset switch
-        {
-            SlideSizeDialogPreset.Widescreen169 => 1,
-            SlideSizeDialogPreset.Custom => 2,
-            _ => 0,
+            LastHeaderFooterApplyPlan = dialog.LastApplyPlan;
+            if (dialog.LastApplyPlan?.ShouldApply == true)
+            {
+                RefreshCanvas();
+                UpdateStatus();
+            }
+            _headerFooterDialog = null;
         };
 
-    private static SlideSizeDialogPreset SlideSizePresetFromIndex(int selectedIndex)
-        => selectedIndex switch
-        {
-            1 => SlideSizeDialogPreset.Widescreen169,
-            2 => SlideSizeDialogPreset.Custom,
-            _ => SlideSizeDialogPreset.Standard43,
-        };
+        if (IsVisible)
+            _ = dialog.ShowDialog<bool?>(this);
+        else
+            dialog.Show();
+    }
 
     private static string BuildLayoutChoiceLabel(PresentationLayoutChoice choice)
     {
@@ -2917,146 +2345,61 @@ public sealed class MainWindow : Window
 
     private void OpenFindReplaceDialog(bool showReplace)
     {
-        ShowFindReplacePane(showReplace);
+        if (_findReplaceDialog is not null)
+        {
+            _findReplaceDialog.ShowReplaceMode(showReplace);
+            LastFindReplaceWorkflowPlan = _findReplaceDialog.LastWorkflowPlan;
+            _findReplaceDialog.Activate();
+            return;
+        }
+
+        var dialog = new FindReplaceDialog(
+            Editor,
+            showReplace,
+            () =>
+            {
+                RefreshCanvas();
+                RefreshSlidePane();
+                UpdateStatus();
+            });
+        _findReplaceDialog = dialog;
+        LastFindReplaceWorkflowPlan = dialog.LastWorkflowPlan;
+        dialog.Closed += (_, _) =>
+        {
+            LastFindReplaceWorkflowPlan = dialog.LastWorkflowPlan;
+            _findReplaceDialog = null;
+        };
+
+        if (IsVisible)
+            dialog.Show(this);
+        else
+            dialog.Show();
     }
 
-    internal FindReplaceWorkflowPlan SetFindReplacePaneInputForTests(
+    internal FindReplaceWorkflowPlan SetFindReplaceDialogInputForTests(
         string? query,
         string? replacement = null,
         bool matchCase = false,
         bool wholeWord = false)
     {
-        _findReplaceFindBox.Text = query ?? string.Empty;
-        _findReplaceReplaceBox.Text = replacement ?? string.Empty;
-        _findReplaceMatchCaseCheck.IsChecked = matchCase;
-        _findReplaceWholeWordCheck.IsChecked = wholeWord;
-        InvalidateFindReplaceSearch();
-        return LastFindReplaceWorkflowPlan!;
-    }
-
-    internal FindReplaceWorkflowPlan NavigateFindReplacePaneForTests(int direction) =>
-        NavigateFindReplace(direction);
-
-    internal FindReplaceWorkflowPlan ReplaceAllFindReplacePaneForTests() =>
-        ReplaceAllFindReplaceMatches();
-
-    private FindReplaceWorkflowPlan ShowFindReplacePane(bool showReplace)
-    {
-        _findReplaceShowReplace = showReplace;
-        _findReplacePaneHost.IsVisible = true;
-        _findReplaceReplaceLabel.IsVisible = showReplace;
-        _findReplaceReplaceBox.IsVisible = showReplace;
-        _findReplaceReplaceButton.IsVisible = showReplace;
-        _findReplaceReplaceAllButton.IsVisible = showReplace;
-        return RefreshFindReplaceWorkflowPlan();
-    }
-
-    private FindReplaceWorkflowPlan RefreshFindReplaceWorkflowPlan(
-        string? statusText = null,
-        FindReplacePolicyStatusKind statusKind = FindReplacePolicyStatusKind.None)
-    {
-        LastFindReplaceWorkflowPlan = FindReplaceDialogPlanner.BuildWorkflowPlan(
-            _findReplaceShowReplace,
-            _findReplaceFindBox.Text,
-            _findReplaceReplaceBox.Text,
-            _findReplaceMatchCaseCheck.IsChecked == true,
-            _findReplaceWholeWordCheck.IsChecked == true,
-            _findReplaceMatches,
-            _findReplaceCurrentMatchIndex,
-            statusText,
-            statusKind);
-
-        RenderFindReplaceWorkflowPlan(LastFindReplaceWorkflowPlan);
+        var dialog = _findReplaceDialog ?? throw new InvalidOperationException("Find/Replace is not open.");
+        LastFindReplaceWorkflowPlan = dialog.SetInputForTests(query, replacement, matchCase, wholeWord);
         return LastFindReplaceWorkflowPlan;
     }
 
-    private void RenderFindReplaceWorkflowPlan(FindReplaceWorkflowPlan plan)
+    internal FindReplaceWorkflowPlan NavigateFindReplaceDialogForTests(int direction)
     {
-        _findReplacePaneHeading.Text = plan.Title;
-        _findReplaceStatusText.Text = plan.StatusText;
-        _findReplaceStatusText.Foreground = plan.StatusKind switch
-        {
-            FindReplacePolicyStatusKind.NoMatches or FindReplacePolicyStatusKind.NoReplacements =>
-                new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)),
-            FindReplacePolicyStatusKind.Match or FindReplacePolicyStatusKind.Replacements =>
-                new SolidColorBrush(Color.FromRgb(0x1B, 0x7E, 0x30)),
-            _ => new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
-        };
-        _findReplaceButton.IsEnabled = plan.CanSearch;
-        _findReplacePreviousButton.IsEnabled = plan.CanSearch;
-        _findReplaceReplaceButton.IsEnabled = plan.CanReplace;
-        _findReplaceReplaceAllButton.IsEnabled = plan.CanReplaceAll;
+        var dialog = _findReplaceDialog ?? throw new InvalidOperationException("Find/Replace is not open.");
+        LastFindReplaceWorkflowPlan = dialog.NavigateForTests(direction);
+        return LastFindReplaceWorkflowPlan;
     }
 
-    private void InvalidateFindReplaceSearch()
+    internal FindReplaceWorkflowPlan ReplaceAllFindReplaceDialogForTests()
     {
-        _findReplaceMatches.Clear();
-        _findReplaceCurrentMatchIndex = -1;
-        RefreshFindReplaceWorkflowPlan();
+        var dialog = _findReplaceDialog ?? throw new InvalidOperationException("Find/Replace is not open.");
+        LastFindReplaceWorkflowPlan = dialog.ReplaceAllForTests();
+        return LastFindReplaceWorkflowPlan;
     }
-
-    private void EnsureFindReplaceMatches()
-    {
-        if (_findReplaceMatches.Count > 0)
-            return;
-
-        _findReplaceMatches.AddRange(Editor.FindAll(_findReplaceFindBox.Text, BuildFindReplaceOptions()));
-    }
-
-    private FindReplaceWorkflowPlan NavigateFindReplace(int direction)
-    {
-        EnsureFindReplaceMatches();
-
-        var plan = FindReplaceDialogPlanner.Navigate(
-            _findReplaceCurrentMatchIndex,
-            _findReplaceMatches.Count,
-            direction);
-        if (plan.HasMatch)
-        {
-            _findReplaceCurrentMatchIndex = plan.MatchIndex;
-            Editor.NavigateTo(_findReplaceMatches[_findReplaceCurrentMatchIndex]);
-            RefreshCanvas();
-            RefreshSlidePane();
-        }
-
-        return RefreshFindReplaceWorkflowPlan(plan.StatusText, plan.StatusKind);
-    }
-
-    private FindReplaceWorkflowPlan ReplaceCurrentFindReplaceMatch()
-    {
-        EnsureFindReplaceMatches();
-        var index = FindReplaceDialogPlanner.ReplacementTargetIndex(
-            _findReplaceCurrentMatchIndex,
-            _findReplaceMatches.Count);
-        if (index < 0)
-            return RefreshFindReplaceWorkflowPlan(
-                FindReplaceDialogPolicy.NoMatchesStatus,
-                FindReplacePolicyStatusKind.NoMatches);
-
-        Editor.ReplaceOne(_findReplaceMatches[index], _findReplaceReplaceBox.Text ?? string.Empty);
-        _findReplaceMatches.Clear();
-        _findReplaceCurrentMatchIndex = -1;
-        return NavigateFindReplace(+1);
-    }
-
-    private FindReplaceWorkflowPlan ReplaceAllFindReplaceMatches()
-    {
-        var query = _findReplaceFindBox.Text;
-        if (!FindReplaceDialogPlanner.CanReplaceAll(query))
-            return RefreshFindReplaceWorkflowPlan(
-                FindReplaceDialogPolicy.SearchTermRequiredMessage,
-                FindReplacePolicyStatusKind.None);
-
-        var count = Editor.ReplaceAll(query, _findReplaceReplaceBox.Text ?? string.Empty, BuildFindReplaceOptions());
-        _findReplaceMatches.Clear();
-        _findReplaceCurrentMatchIndex = -1;
-        var status = FindReplaceDialogPlanner.ReplacementStatus(count);
-        return RefreshFindReplaceWorkflowPlan(status.StatusText, status.StatusKind);
-    }
-
-    private TextSearchOptions BuildFindReplaceOptions() => FindReplaceDialogPlanner.BuildOptions(
-        _findReplaceMatchCaseCheck.IsChecked == true,
-        _findReplaceWholeWordCheck.IsChecked == true);
 
     private void FileNew()
     {
@@ -3679,27 +3022,51 @@ public sealed class MainWindow : Window
         _reviewCommentsPaneHost.IsVisible = true;
     }
 
-    private static Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
+    private Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
     {
-        var panel = new StackPanel
+        var labels = new StackPanel
         {
             Orientation = Orientation.Vertical,
             Spacing     = 2,
-            Margin      = new Thickness(12, 10, 12, 2),
         };
-        panel.Children.Add(new TextBlock
+        labels.Children.Add(new TextBlock
         {
             Text       = $"Comments - {plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D)),
         });
-        panel.Children.Add(new TextBlock
+        labels.Children.Add(new TextBlock
         {
             Text       = string.Join(" | ", plan.Filters.Select(filter => filter.Summary)),
             FontSize   = 11,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
         });
-        return panel;
+
+        var close = new Button
+        {
+            Content = "Close",
+            MinWidth = 64,
+            Tag = "comments-pane-close",
+        };
+        close.Click += (_, _) => HideReviewCommentsPane();
+
+        DockPanel.SetDock(close, Dock.Right);
+        return new DockPanel
+        {
+            LastChildFill = true,
+            Margin = new Thickness(12, 10, 12, 2),
+            Children =
+            {
+                close,
+                labels,
+            },
+        };
+    }
+
+    internal void HideReviewCommentsPane()
+    {
+        if (_reviewCommentsPaneHost is not null)
+            _reviewCommentsPaneHost.IsVisible = false;
     }
 
     private Control BuildReviewCommentActions(IReadOnlyList<PresentationReviewWorkflowActionPlan> actions)
@@ -5900,6 +5267,7 @@ public sealed class MainWindow : Window
 
     private void LoadPresentationContent(Presentation presentation)
     {
+        _findReplaceDialog?.Close();
         _presentation = presentation;
 
         RebuildEditorAndRewireInteraction();

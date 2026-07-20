@@ -24,6 +24,12 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly Label _widthUnitLabel;
     private readonly Label _heightUnitLabel;
 
+    internal SlideSizeDialogResultPlan? LastResultPlan { get; private set; }
+    internal SlideSizeDialogInitialState InitialState { get; }
+    internal string WidthText => _widthBox.Text;
+    internal string HeightText => _heightBox.Text;
+    internal string ValidationText => LastResultPlan?.Validation?.Message ?? string.Empty;
+
     public SlideSizeDialog(EditingSession editor)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
@@ -63,7 +69,7 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _widthUnitLabel = new Label { Content = "in", Width = 30 };
         _heightUnitLabel = new Label { Content = "in", Width = 30 };
 
-        LoadCurrentSize();
+        InitialState = LoadCurrentSize();
 
         var btnRow = DialogButtonRowFactory.Create(
             OnOk,
@@ -132,7 +138,28 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return parse.IsValid;
     }
 
-    private void LoadCurrentSize()
+    internal void SetInputForTests(string widthText, string heightText, SlideSizeDialogUnit unit)
+    {
+        _suppressPresetRefresh = true;
+        try
+        {
+            _unit = unit;
+            _inchesRadio.IsChecked = unit == SlideSizeDialogUnit.Inches;
+            _cmRadio.IsChecked = unit == SlideSizeDialogUnit.Centimeters;
+            _widthBox.Text = widthText;
+            _heightBox.Text = heightText;
+            _widthUnitLabel.Content = unit == SlideSizeDialogUnit.Inches ? "in" : "cm";
+            _heightUnitLabel.Content = unit == SlideSizeDialogUnit.Inches ? "in" : "cm";
+        }
+        finally
+        {
+            _suppressPresetRefresh = false;
+        }
+    }
+
+    internal bool ApplyForTests() => Apply(showValidationDialog: false);
+
+    private SlideSizeDialogInitialState LoadCurrentSize()
     {
         var initial = SlideSizeDialogPlanner.BuildInitialState(
             _editor.Presentation.SlideSizeCxEmu,
@@ -150,6 +177,7 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         }
 
         ApplyDisplay(initial.Display);
+        return initial;
     }
 
     private void OnPresetChanged(object sender, SelectionChangedEventArgs e)
@@ -169,6 +197,9 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void OnUnitChanged(object sender, RoutedEventArgs e)
     {
+        if (_suppressPresetRefresh)
+            return;
+
         var newUnit = _inchesRadio.IsChecked == true
             ? SlideSizeDialogUnit.Inches
             : SlideSizeDialogUnit.Centimeters;
@@ -189,23 +220,31 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     private void OnOk()
+        => Apply(showValidationDialog: true);
+
+    private bool Apply(bool showValidationDialog)
     {
-        var result = SlideSizeDialogPlanner.BuildOkResult(
+        LastResultPlan = SlideSizeDialogPlanner.BuildOkResult(
             _widthBox.Text,
             _heightBox.Text,
             _unit);
 
-        if (!result.ShouldApply)
+        if (!LastResultPlan.ShouldApply)
         {
-            var validation = result.Validation!;
-            DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption);
+            var validation = LastResultPlan.Validation!;
+            if (showValidationDialog)
+                DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption);
             FocusField(validation.FocusField);
-            return;
+            return false;
         }
 
-        SlideSizeDialogPlanner.TryApplyResult(_editor, result);
-        DialogResult = true;
-        Close();
+        SlideSizeDialogPlanner.TryApplyResult(_editor, LastResultPlan);
+        if (IsLoaded)
+        {
+            DialogResult = true;
+            Close();
+        }
+        return true;
     }
 
     private void ApplyDisplay(SlideSizeDialogDisplayState display)
