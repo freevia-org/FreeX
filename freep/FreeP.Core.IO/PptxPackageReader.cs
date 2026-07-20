@@ -40,6 +40,7 @@ public static class PptxPackageReader
     private const string TableStylesRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
     private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     private const string NotesSlideRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
+    private const string NotesMasterRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
     private const string HyperlinkRelType     = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
     private const string SlideHlinkRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
     private const string CommentsRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
@@ -179,6 +180,41 @@ public static class PptxPackageReader
         // Slides in order from sldIdLst — two-phase so internal hyperlinks can resolve to Slide.Id.
         // Phase 1: collect ordered (rId, slidePath) pairs and create placeholder Slide objects so we
         //           have a complete allSlides list before parsing shapes.
+        // Notes master: retain the native part and expose its placeholder geometry/styles to the
+        // shared notes-page planner.  This runs after slide-master themes are loaded so
+        // theme-dependent notes styles resolve against the presentation's actual first theme.
+        var notesMasterTarget = OpcRelationships.FirstTargetByType(presRels, NotesMasterRelType);
+        if (notesMasterTarget is not null)
+        {
+            var notesMasterPath = ResolveRelativeZipPath(presDir, notesMasterTarget);
+            if (TryReadPackageEntry(archive, notesMasterPath, out var notesMasterBytes))
+            {
+                presentation.NotesMasterXml = notesMasterBytes;
+                var notesMasterXml = OpcXml.TryLoadXml(notesMasterBytes);
+                if (notesMasterXml?.Root is { } notesMasterRoot)
+                {
+                    var notesMasterScheme = presentation.Theme.ColorScheme;
+                    var spTree = notesMasterRoot.Element(P + "cSld")?.Element(P + "spTree");
+                    if (spTree is not null)
+                    {
+                        foreach (var shape in ReadShapesFromTree(spTree, archive, notesMasterPath, notesMasterScheme))
+                            presentation.NotesMasterPlaceholders.Add(shape);
+                    }
+
+                    var notesStyle = notesMasterRoot.Element(P + "notesStyle");
+                    if (notesStyle is not null)
+                    {
+                        presentation.NotesMasterTextStyles = new MasterTextStyles();
+                        ReadTextStyleLevels(notesStyle, presentation.NotesMasterTextStyles.BodyStyle, notesMasterScheme);
+                    }
+                }
+            }
+
+            var notesMasterRelsPath = GetRelationshipPartPath(notesMasterPath);
+            if (TryReadPackageEntry(archive, notesMasterRelsPath, out var notesMasterRelsBytes))
+                presentation.NotesMasterRelsXml = notesMasterRelsBytes;
+        }
+
         var slideRelEntries = presRels.ToDictionary(r => r.Id, StringComparer.OrdinalIgnoreCase);
         var sldIdList = presRoot.Element(P + "sldIdLst")?.Elements(P + "sldId").ToList() ?? new();
 
@@ -353,6 +389,20 @@ public static class PptxPackageReader
         }
 
         return new PptxPackageSnapshot(entries);
+    }
+
+    private static bool TryReadPackageEntry(ZipArchive archive, string path, out byte[] bytes)
+    {
+        bytes = Array.Empty<byte>();
+        var entry = archive.GetEntry(path);
+        if (entry is null)
+            return false;
+
+        using var source = entry.Open();
+        using var ms = new MemoryStream();
+        source.CopyTo(ms);
+        bytes = ms.ToArray();
+        return bytes.Length > 0;
     }
 
     // ── Sections ─────────────────────────────────────────────────────────────────
