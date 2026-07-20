@@ -21,6 +21,7 @@ public enum SlideShowTransitionPlaybackActionKind
     Pan,
     Gallery,
     Conveyor,
+    Window,
     Push
 }
 
@@ -165,6 +166,8 @@ public static class SlideShowPlaybackPlanner
     public const double ConveyorTravelFactor = 1.0;
     public const double ConveyorCrossAxisFactor = 0.08;
     public const double ConveyorTiltDegrees = 3.0;
+    public const double WindowStartScale = 0.92;
+    public const double WindowInitialOpenFactor = 0.18;
 
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
@@ -190,6 +193,7 @@ public static class SlideShowPlaybackPlanner
             SlideShowTransitionPlaybackKind.Pan => SlideShowTransitionPlaybackActionKind.Pan,
             SlideShowTransitionPlaybackKind.Gallery => SlideShowTransitionPlaybackActionKind.Gallery,
             SlideShowTransitionPlaybackKind.Conveyor => SlideShowTransitionPlaybackActionKind.Conveyor,
+            SlideShowTransitionPlaybackKind.Window => SlideShowTransitionPlaybackActionKind.Window,
             SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Cover,
             _ => SlideShowTransitionPlaybackActionKind.Fade
         };

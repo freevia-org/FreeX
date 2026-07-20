@@ -22,6 +22,7 @@ public enum SlideShowTransitionPlaybackKind
     Pan,
     Gallery,
     Conveyor,
+    Window,
     PushLike,
     FadeFallback
 }
@@ -120,9 +121,11 @@ public static class SlideShowTransitionPlanner
             // as a centered, reduced panel.
             TransitionKind.Gallery => SlideShowTransitionPlaybackKind.Gallery,
 
-            TransitionKind.Window => SlideShowTransitionPlaybackKind.PushLike,
-
             TransitionKind.Conveyor => SlideShowTransitionPlaybackKind.Conveyor,
+
+            // Window opens the incoming slide through a centered aperture;
+            // unlike Box it starts partially open and carries a subtle scale.
+            TransitionKind.Window => SlideShowTransitionPlaybackKind.Window,
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback
         };
