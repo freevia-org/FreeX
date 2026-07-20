@@ -11246,6 +11246,42 @@ public sealed class DocumentView : Control
         });
     }
 
+    /// <summary>
+    /// Apply the WPF-authoritative Paragraph dialog fields to every selected paragraph in one undo step.
+    /// </summary>
+    public void ApplyParagraphDialogFormatting(
+        double indentLeftPt,
+        double indentRightPt,
+        double firstLineIndentPt,
+        double spaceBeforePt,
+        double spaceAfterPt,
+        double lineSpacing,
+        bool keepWithNext,
+        bool keepLinesTogether,
+        bool widowControl,
+        bool pageBreakBefore,
+        bool suppressAutoHyphens)
+    {
+        FormatSelectedParagraphs(formatting => formatting with
+        {
+            IndentLeftPt = Math.Max(0, indentLeftPt),
+            IndentRightPt = Math.Max(0, indentRightPt),
+            FirstLineIndentPt = firstLineIndentPt,
+            SpaceBeforePt = Math.Max(0, spaceBeforePt),
+            SpaceAfterPt = Math.Max(0, spaceAfterPt),
+            SpaceBeforeIsSet = true,
+            SpaceAfterIsSet = true,
+            LineRule = LineSpacingRule.Multiple,
+            LineSpacing = Math.Max(0.5, lineSpacing),
+            LineSpacingIsSet = true,
+            KeepWithNext = keepWithNext,
+            KeepLinesTogether = keepLinesTogether,
+            WidowControl = widowControl,
+            PageBreakBefore = pageBreakBefore,
+            SuppressAutoHyphens = suppressAutoHyphens
+        });
+    }
+
     public void SetSelectionFontSize(double points) => ApplyRunFormatting(f => f with { FontSizePt = points });
 
     /// <summary>

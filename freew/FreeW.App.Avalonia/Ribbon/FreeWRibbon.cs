@@ -287,5 +287,21 @@ internal sealed record RibbonHostCallbacks(
     Func<bool>? IsNotesPaneVisible = null,
     Action? OpenFootnoteEndnoteOptionsDialog = null,
     Action? OpenBookmarkManagerDialog = null,
-    Action? ShowTableOfAuthoritiesDialog = null);
+    Action? ShowTableOfAuthoritiesDialog = null,
+    /// <summary>Layout &gt; Columns &gt; More Columns. Optional owner-modal shell route.</summary>
+    Action? OpenColumnsDialog = null,
+    /// <summary>Design &gt; Paragraph Spacing &gt; Custom Paragraph Spacing. Optional owner-modal shell route.</summary>
+    Action? OpenCustomParagraphSpacingDialog = null,
+    /// <summary>Insert &gt; Drop Cap &gt; Options. Optional owner-modal shell route.</summary>
+    Action? OpenDropCapOptionsDialog = null,
+    /// <summary>Layout &gt; Hyphenation &gt; Options. Optional owner-modal shell route.</summary>
+    Action? OpenHyphenationOptionsDialog = null,
+    /// <summary>Layout &gt; Line Numbers &gt; Options. Optional owner-modal shell route.</summary>
+    Action? OpenLineNumberOptionsDialog = null,
+    /// <summary>Layout &gt; Custom Margins. Optional Page Setup route opened on the Margins tab.</summary>
+    Action? OpenCustomMarginsDialog = null,
+    /// <summary>Layout &gt; More Paper Sizes. Optional Page Setup route opened on the Paper tab.</summary>
+    Action? OpenMorePaperSizesDialog = null,
+    /// <summary>Host status for the bounded manual-hyphenation pass.</summary>
+    Action<string>? ShowHyphenationInfo = null);
 

@@ -18,10 +18,12 @@ public sealed class DesignDialogParityTests
         source.Should().Contain("CustomizeThemeColorsDialogPlanner.TryBuildResult(");
         source.Should().Contain("CustomizeThemeFontsDialogPlanner.BuildInitialState(current)");
         source.Should().Contain("CustomizeThemeFontsDialogPlanner.TryBuildResult(");
-        source.Should().Contain("CustomParagraphSpacingDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture)");
-        source.Should().Contain("CustomParagraphSpacingDialogPlanner.TryBuildResult(");
         source.Should().Contain("PageColorDialogPlanner.TryBuildResult(");
         source.Should().Contain("SetAsDefaultConfirmationPlanner.BuildState()");
+
+        var spacingSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "PageLayoutDialogs.cs"));
+        spacingSource.Should().Contain("CustomParagraphSpacingDialogPlanner.BuildInitialState(current, DialogCulture)");
+        spacingSource.Should().Contain("CustomParagraphSpacingDialogPlanner.TryBuildResult(");
 
         var borderSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogs.cs"));
         borderSource.Should().Contain("BordersAndShadingDialogPlanner.TryBuildResult(");

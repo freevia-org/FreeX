@@ -25,10 +25,10 @@ public sealed class SisterDialogTextResourceSourceTests
     {
         var source = ReadAvaloniaSource("PageSetupDialog.cs");
 
-        source.Should().Contain("Title = PageSetupDialogPlanner.Title;");
-        source.Should().Contain("PageSetupDialogPlanner.MarginsSectionLabel");
-        source.Should().Contain("PageSetupDialogPlanner.OrientationNames[0]");
-        source.Should().Contain("PageSetupDialogPlanner.OkButton");
+        source.Should().Contain("PageLayoutDialogChrome.Configure(this, PageSetupDialogPlanner.Title");
+        source.Should().Contain("PageSetupDialogPlanner.TopMarginLabel");
+        source.Should().Contain("PageSetupDialogPlanner.OrientationNames");
+        source.Should().Contain("PageLayoutDialogChrome.Actions(");
         source.Should().NotContain("Title = \"Page Setup\"");
         source.Should().NotContain("Content = \"OK\"");
         source.Should().NotContain("SectionLabel(\"Margins (points)\")");
