@@ -20,6 +20,10 @@ public sealed record LineNumberOptionsDialogResult(
 
 public static class LineNumberOptionsDialogPlanner
 {
+    public const string Title = "Line Numbering Options";
+    public const string StartAtLabel = "Start at:";
+    public const string CountByLabel = "Count by:";
+    public const string NumberingLabel = "Numbering:";
     public const string StartAtValidationMessage = "Start At must be a whole number of 1 or greater.";
     public const string CountByValidationMessage = "Count By must be a whole number of 1 or greater.";
 

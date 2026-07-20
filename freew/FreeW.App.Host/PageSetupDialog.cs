@@ -334,6 +334,23 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         FooterDistancePt: result.FooterDistancePt,
         VerticalAlignment: result.VerticalAlignment);
 
+    internal static PageSetupDialogResult ToPresentationResult(Result result) => new(
+        MarginTopPt: result.MarginTopPt,
+        MarginBottomPt: result.MarginBottomPt,
+        MarginLeftPt: result.MarginLeftPt,
+        MarginRightPt: result.MarginRightPt,
+        GutterPt: result.GutterPt,
+        Landscape: result.Landscape,
+        MirrorMargins: result.MirrorMargins,
+        WidthPt: result.WidthPt,
+        HeightPt: result.HeightPt,
+        SectionStart: result.SectionStart,
+        DifferentFirstPage: result.DifferentFirstPage,
+        DifferentOddEvenPages: result.DifferentOddEvenPages,
+        HeaderDistancePt: result.HeaderDistancePt,
+        FooterDistancePt: result.FooterDistancePt,
+        VerticalAlignment: result.VerticalAlignment);
+
     /// <summary>
     /// Test seam: builds a non-modal dialog instance seeded from <paramref name="page"/> so unit tests can
     /// exercise the control wiring (seeding, the paper-preset / orientation mapping) without a modal loop.

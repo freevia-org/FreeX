@@ -62,10 +62,11 @@ public sealed class DialogChromeDedupSourceGuardTests
             ("PageSetupDialog.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
-                "AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);",
-                "AvaloniaCompactDialogChrome.ApplyComboBox(_paperSizeBox, DialogChromeStyle);",
+                "PageLayoutDialogChrome.Configure(this, PageSetupDialogPlanner.Title",
+                "PageLayoutDialogChrome.NumberBox(",
+                "PageLayoutDialogChrome.Combo(",
                 "AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle",
-                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0))",
+                "PageLayoutDialogChrome.Actions(",
             ]),
             ("PictureFormattingDialogs.cs",
             [
@@ -83,10 +84,18 @@ public sealed class DialogChromeDedupSourceGuardTests
             ("ParagraphDialog.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
-                "AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);",
-                "AvaloniaCompactDialogChrome.ApplyComboBox(_alignBox, DialogChromeStyle);",
-                "AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle",
-                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0))",
+                "PageLayoutDialogChrome.Configure(this, \"Paragraph\"",
+                "PageLayoutDialogChrome.NumberBox(",
+                "PageLayoutDialogChrome.Combo(",
+                "PageLayoutDialogChrome.Actions(",
+            ]),
+            ("PageLayoutDialogs.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "AvaloniaCompactDialogChrome.ApplyTextBox(box, Style);",
+                "AvaloniaCompactDialogChrome.ApplyComboBox(combo, Style);",
+                "AvaloniaCompactDialogChrome.ApplyButton(ok, Style, minWidth: 84, isDefault: true);",
+                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancelButton]",
             ]),
             ("WordCountDialog.cs",
             [

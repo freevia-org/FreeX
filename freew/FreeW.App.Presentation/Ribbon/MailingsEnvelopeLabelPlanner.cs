@@ -40,6 +40,19 @@ public readonly record struct LabelSetupPlan(LabelSetupResult? Result, LabelSetu
         new(null, issue);
 }
 
+public readonly record struct EnvelopeDialogPlan(
+    IReadOnlyList<EnvelopeSetupOption> Sizes,
+    int SelectedIndex,
+    string Note);
+
+public readonly record struct LabelDialogPlan(
+    IReadOnlyList<LabelSetupOption> Presets,
+    int SelectedIndex,
+    string CustomRowsText,
+    string CustomColumnsText,
+    bool ShowCustomGrid,
+    LabelSetupIssue Issue);
+
 public static class MailingsEnvelopeLabelPlanner
 {
     public const int DefaultEnvelopeIndex = 0;
@@ -72,7 +85,29 @@ public static class MailingsEnvelopeLabelPlanner
 
     public static IReadOnlyList<EnvelopeSetupOption> GetEnvelopeSizes() => EnvelopeSizes;
 
+    public static EnvelopeDialogPlan CreateEnvelopeDialogPlan(int selectedIndex = DefaultEnvelopeIndex) =>
+        new(
+            EnvelopeSizes,
+            NormalizeIndex(selectedIndex, EnvelopeSizes.Length, DefaultEnvelopeIndex),
+            "Page orientation is set to Landscape. Narrow margins are applied automatically.");
+
     public static IReadOnlyList<LabelSetupOption> GetLabelPresets() => LabelPresets;
+
+    public static LabelDialogPlan CreateLabelDialogPlan(
+        int selectedIndex = DefaultLabelIndex,
+        string? customRowsText = null,
+        string? customColumnsText = null)
+    {
+        var index = NormalizeIndex(selectedIndex, LabelPresets.Length, DefaultLabelIndex);
+        var preset = LabelPresets[index];
+        return new(
+            LabelPresets,
+            index,
+            customRowsText ?? (preset.IsCustom ? "10" : preset.Rows.ToString()),
+            customColumnsText ?? (preset.IsCustom ? "3" : preset.Columns.ToString()),
+            preset.IsCustom,
+            LabelSetupIssue.None);
+    }
 
     public static EnvelopeSetupResult PlanEnvelope(int selectedIndex)
     {

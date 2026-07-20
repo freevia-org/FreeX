@@ -4,7 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
-using FreeW.App.Presentation.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -26,15 +26,16 @@ internal sealed class SmartArtEditDialog : Window
         CanResize = false;
         ShowInTaskbar = false;
 
+        var state = SmartArtDialogPlanner.BuildInitialState(seed);
         _kindBox = new ComboBox
         {
             ItemsSource = Enum.GetValues<SmartArtKind>(),
-            SelectedItem = seed.Kind,
+            SelectedItem = state.Kind,
             MinWidth = 180,
         };
         _nodeTextBox = new TextBox
         {
-            Text = SmartArtCommandPlanner.BuildNodeText(seed),
+            Text = string.Join(Environment.NewLine, state.NodeTexts),
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 170,
@@ -86,9 +87,13 @@ internal sealed class SmartArtEditDialog : Window
     private void Accept()
     {
         var kind = _kindBox.SelectedItem is SmartArtKind selected ? selected : SmartArtKind.List;
-        if (SmartArtCommandPlanner.BuildEditedContent(kind, _nodeTextBox.Text) is not { } result)
+        if (!SmartArtDialogPlanner.TryBuildResult(
+                kind,
+                (_nodeTextBox.Text ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries),
+                out var result,
+                out var errorMessage))
         {
-            _status.Text = "Enter at least one shape label.";
+            _status.Text = errorMessage ?? SmartArtDialogPlanner.EmptyNodesValidationMessage;
             return;
         }
         Close(result);

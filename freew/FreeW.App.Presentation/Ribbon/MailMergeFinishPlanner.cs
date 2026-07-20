@@ -37,6 +37,19 @@ public sealed record MailMergeFinishPlan(
     public bool Success => Issue == MailMergeFinishIssue.None;
 }
 
+public readonly record struct MailMergeFinishScopeChoice(
+    MailMergeRecipientScope Scope,
+    string Label);
+
+public readonly record struct MailMergeFinishDialogPlan(
+    IReadOnlyList<MailMergeFinishDestinationChoice> Destinations,
+    IReadOnlyList<MailMergeFinishScopeChoice> Scopes,
+    int DestinationIndex,
+    int ScopeIndex,
+    string FromRecordText,
+    string ToRecordText,
+    bool HasRecipients);
+
 public static class MailMergeFinishPlanner
 {
     private static readonly MailMergeFinishDestinationChoice[] DestinationChoices =
@@ -48,6 +61,25 @@ public static class MailMergeFinishPlanner
 
     public static IReadOnlyList<MailMergeFinishDestinationChoice> GetDestinationChoices() =>
         DestinationChoices;
+
+    public static MailMergeFinishDialogPlan CreateDialogPlan(int recordCount, int currentIndex)
+    {
+        var scopes = new[]
+        {
+            new MailMergeFinishScopeChoice(MailMergeRecipientScope.All, "All"),
+            new MailMergeFinishScopeChoice(MailMergeRecipientScope.CurrentRecord, "Current record"),
+            new MailMergeFinishScopeChoice(MailMergeRecipientScope.FromTo, "From record ... To record"),
+        };
+        var current = recordCount <= 0 ? 1 : Math.Clamp(currentIndex + 1, 1, recordCount);
+        return new(
+            DestinationChoices,
+            scopes,
+            DestinationIndex: 0,
+            ScopeIndex: 0,
+            FromRecordText: current.ToString(),
+            ToRecordText: current.ToString(),
+            HasRecipients: recordCount > 0);
+    }
 
     public static MailMergeFinishPlan PlanNewDocumentAllRecords(int recordCount) =>
         Plan(

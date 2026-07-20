@@ -1,0 +1,108 @@
+using System.IO;
+using Avalonia.Headless;
+using FreeW.App.Avalonia;
+using FreeW.Core.Model;
+
+namespace FreeW.App.Avalonia.Tests;
+
+public sealed class DesignDialogParityTests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    [Fact]
+    public void AvaloniaDesignDialogs_KeepDialogPolicyInPresentationPlanners()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogParity.cs"));
+        source.Should().Contain("CustomizeThemeColorsDialogPlanner.BuildInitialState(current)");
+        source.Should().Contain("CustomizeThemeColorsDialogPlanner.TryBuildResult(");
+        source.Should().Contain("CustomizeThemeFontsDialogPlanner.BuildInitialState(current)");
+        source.Should().Contain("CustomizeThemeFontsDialogPlanner.TryBuildResult(");
+        source.Should().Contain("PageColorDialogPlanner.TryBuildResult(");
+        source.Should().Contain("SetAsDefaultConfirmationPlanner.BuildState()");
+
+        var spacingSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "PageLayoutDialogs.cs"));
+        spacingSource.Should().Contain("CustomParagraphSpacingDialogPlanner.BuildInitialState(current, DialogCulture)");
+        spacingSource.Should().Contain("CustomParagraphSpacingDialogPlanner.TryBuildResult(");
+
+        var borderSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogs.cs"));
+        borderSource.Should().Contain("BordersAndShadingDialogPlanner.TryBuildResult(");
+        borderSource.Should().Contain("BordersAndShadingDialogPlanner.ArtBorders");
+    }
+
+    [Fact]
+    public async Task ThemeColorsDialog_AcceptsPresetAndCustomName()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new CustomizeThemeColorsDialog(DocumentTheme.Default);
+            dialog.AcceptForTests().Should().BeTrue();
+            dialog.Result.Should().NotBeNull();
+            dialog.Result!.Name.Should().Be("Office");
+            dialog.Result.ColorScheme.Should().Be(DocumentTheme.Default.ColorScheme);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ThemeFontsAndSpacingDialogs_AcceptWpfSeededDefaults()
+    {
+        await Session.Dispatch(() =>
+        {
+            var fonts = new CustomizeThemeFontsDialog(DocumentFontSet.Default);
+            fonts.AcceptForTests().Should().BeTrue();
+            fonts.Result.Should().Be(new DocumentFontSet("Custom", "Calibri", "Calibri"));
+
+            var spacing = new CustomParagraphSpacingDialog(DocumentParagraphSpacingSet.Default);
+            spacing.AcceptForTests().Should().BeTrue();
+            spacing.Result.Should().Be(new DocumentParagraphSpacingSet("Custom", 0, 6, 1.15));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task PageColorDialog_AcceptsCustomAndNoColorResults()
+    {
+        await Session.Dispatch(() =>
+        {
+            var custom = new PageColorDialog(null);
+            custom.SelectCustomColorForTests(" d9ead3 ");
+            custom.AcceptForTests().Should().BeTrue();
+            custom.Result.Should().Be("#D9EAD3");
+
+            var none = new PageColorDialog(null);
+            none.AcceptForTests().Should().BeTrue();
+            none.Result.Should().BeNull();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task EffectsAndDefaultConfirmationDialogs_ReturnExplicitResults()
+    {
+        await Session.Dispatch(() =>
+        {
+            var effects = new ThemeEffectsDialog("Moderate");
+            effects.AcceptForTests().Should().BeTrue();
+            effects.Result!.Name.Should().Be("Moderate");
+
+            var styleSets = new StyleSetDialog("Elegant");
+            styleSets.AcceptForTests().Should().BeTrue();
+            styleSets.Result!.Name.Should().Be("Elegant");
+
+            var confirmation = new SetAsDefaultConfirmationDialog();
+            confirmation.Confirmed.Should().BeFalse();
+        }, CancellationToken.None);
+    }
+
+    private static string RepositoryFile(params string[] parts)
+    {
+        var directory = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(directory))
+        {
+            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+
+        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
+    }
+}
