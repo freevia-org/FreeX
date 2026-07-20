@@ -44,7 +44,7 @@ public sealed partial class MainWindow : Window
         BadgeLetter = "P",
         TitleBarColor = ResolveTokenColor("FreePTitleBarBrush",   Color.FromRgb(0xB7, 0x47, 0x2A)),
         BadgeColor    = ResolveTokenColor("FreePAccentDarkBrush", Color.FromRgb(0x8F, 0x37, 0x21)),
-        CaptionHeight = 34,
+        CaptionHeight = FreePShellVisualMetrics.TitleBarHeight,
         IconUri = "pack://application:,,,/FreeP.App.Host;component/Resources/FreeP.ico"
     };
 
@@ -577,7 +577,7 @@ public sealed partial class MainWindow : Window
         // <!-- 3B SEAM: set SlidePaneHost.Child = your thumbnail panel here. -->
         SlidePaneHost = new Border
         {
-            Width      = 180,
+            Width      = FreePShellVisualMetrics.SlidePaneWidth,
             Background = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
         };
         // 3B SEAM: attach the slide-thumbnail pane.
@@ -588,7 +588,7 @@ public sealed partial class MainWindow : Window
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment   = VerticalAlignment.Stretch,
-            Margin              = new Thickness(40)
+            Margin              = new Thickness(FreePShellVisualMetrics.CanvasMargin)
         };
 
         // 3C SEAM: text-edit overlay Canvas (sits on top of the canvas, same coordinate space).
@@ -620,6 +620,7 @@ public sealed partial class MainWindow : Window
         _canvasHost = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
+            ClipToBounds = true,
             Child      = adornerDecorator
         };
 
@@ -634,7 +635,7 @@ public sealed partial class MainWindow : Window
             AcceptsReturn       = true,
             TextWrapping        = TextWrapping.Wrap,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            MinHeight           = 60,
+            MinHeight           = FreePShellVisualMetrics.NotesPaneHeight,
             MaxHeight           = 120,
             Padding             = new Thickness(8, 4, 8, 4),
             FontSize            = 12,

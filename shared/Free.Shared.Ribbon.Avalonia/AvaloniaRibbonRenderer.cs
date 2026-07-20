@@ -34,7 +34,6 @@ public static class AvaloniaRibbonRenderer
     private const string FileRibbonTabId = "FileTab";
     private const string KeyTipBadgeTag = "RibbonKeyTipBadge";
     private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
-    private const double SmallRowHeight = 26;
     private const double TabHeaderHeight = 28;
     // Selected-tab accent underline thickness — matches the WPF TabItem template's
     // BorderThickness="0,0,0,3" (MainWindowResources.xaml). Kept as a single shared token so the Linux
@@ -44,9 +43,6 @@ public static class AvaloniaRibbonRenderer
     private const double SelectedTabUnderlineThickness = 3;
     private const double RibbonCheckBoxHeight = 16;
     private const double RibbonCheckGlyphSize = 11;
-    private const double LargeIconSize = 32;
-    private const double MediumIconSize = 22;
-    private const double SmallIconSize = 22;
     private const int MaxRowsPerColumn = 3;
     private static readonly IReadOnlySet<string> StaticDrawUnavailableCommandIds = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -119,7 +115,7 @@ public static class AvaloniaRibbonRenderer
         internal FuncControlTemplate<CheckBox> CheckBoxTemplate { get; }
     }
     private static readonly FontFamily RibbonFontFamily =
-        new("Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, Noto Sans, DejaVu Sans, Helvetica, sans-serif");
+        new("Segoe UI, Arial, Liberation Sans, Noto Sans, DejaVu Sans, Helvetica, sans-serif");
     private static readonly FuncControlTemplate<Button> RibbonButtonTemplate = new((button, _) =>
     {
         var presenter = new ContentPresenter();
@@ -271,7 +267,7 @@ public static class AvaloniaRibbonRenderer
 
         var panel = new AvaloniaRibbonAdaptivePanel
         {
-            MinHeight = 82,
+            MinHeight = RibbonVisualMetrics.TabContentMinHeight,
         };
 
         var first = true;
@@ -290,7 +286,7 @@ public static class AvaloniaRibbonRenderer
         return new Border
         {
             Background = resolvedPalette.SurfaceBrush,
-            Padding = new Thickness(0, 2, 0, 0),
+            Padding = new Thickness(0, RibbonVisualMetrics.TabContentTopPadding, 0, 0),
             Child = panel,
         };
     }
@@ -414,7 +410,7 @@ public static class AvaloniaRibbonRenderer
         Content = new Border
         {
             Background = palette.SurfaceBrush,
-            MinHeight = 82,
+            MinHeight = RibbonVisualMetrics.TabContentMinHeight,
         },
         Tag = FileRibbonTabId,
     };
@@ -888,9 +884,9 @@ public static class AvaloniaRibbonRenderer
         {
             Setters =
             {
-                new Setter(Layoutable.MinHeightProperty, SmallRowHeight),
-                new Setter(Layoutable.HeightProperty, SmallRowHeight),
-                new Setter(Layoutable.MaxHeightProperty, SmallRowHeight),
+                new Setter(Layoutable.MinHeightProperty, RibbonVisualMetrics.SmallRowHeight),
+                new Setter(Layoutable.HeightProperty, RibbonVisualMetrics.SmallRowHeight),
+                new Setter(Layoutable.MaxHeightProperty, RibbonVisualMetrics.SmallRowHeight),
                 new Setter(TemplatedControl.BorderBrushProperty, palette.DividerBrush),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
                 new Setter(TemplatedControl.FontSizeProperty, 12d),
@@ -987,7 +983,7 @@ public static class AvaloniaRibbonRenderer
             RowDefinitions =
             {
                 new RowDefinition(GridLength.Star),
-                new RowDefinition(new GridLength(17)),
+                new RowDefinition(new GridLength(RibbonVisualMetrics.GroupLabelHeight)),
             },
         };
 
@@ -1000,7 +996,7 @@ public static class AvaloniaRibbonRenderer
         {
             BorderBrush = palette.DividerBrush,
             BorderThickness = new Thickness(0, 1, 0, 0),
-            MinHeight = 17,
+            MinHeight = RibbonVisualMetrics.GroupLabelHeight,
             Child = new TextBlock
             {
                 Text = group.Header,
@@ -1195,7 +1191,7 @@ public static class AvaloniaRibbonRenderer
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
         };
-        stack.Children.Add(NewIcon(control, LargeIconSize, HorizontalAlignment.Center));
+        stack.Children.Add(NewIcon(control, RibbonVisualMetrics.LargeIconSize, HorizontalAlignment.Center));
 
         // The hero button is Width 70 / Padding 3 (≈64 content). WPF's caption wraps on WORD boundaries
         // (so "Conditional Formatting" lays out as "Conditional" / "Formatting"); Avalonia's plain Wrap
@@ -1246,7 +1242,7 @@ public static class AvaloniaRibbonRenderer
             HorizontalAlignment = HorizontalAlignment.Center,
             Children =
             {
-                NewIcon(control, LargeIconSize, HorizontalAlignment.Center),
+                NewIcon(control, RibbonVisualMetrics.LargeIconSize, HorizontalAlignment.Center),
                 new TextBlock
                 {
                     Text = control.Label,
@@ -1302,7 +1298,7 @@ public static class AvaloniaRibbonRenderer
     private static Control BuildMediumControl(RibbonControl control, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
-        content.Children.Add(NewIcon(control, MediumIconSize, HorizontalAlignment.Center));
+        content.Children.Add(NewIcon(control, RibbonVisualMetrics.MediumIconSize, HorizontalAlignment.Center));
         content.Children.Add(new TextBlock
         {
             Text = control.Label,
@@ -1316,7 +1312,7 @@ public static class AvaloniaRibbonRenderer
 
         // WPF RibbonBtn: Height 22, MinWidth 84, left-aligned content, Padding 4,2.
         var button = NewButtonLike(control, palette);
-        button.Height = SmallRowHeight;
+        button.Height = RibbonVisualMetrics.SmallRowHeight;
         button.MinWidth = 88;
         button.Padding = new Thickness(4, 2);
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
@@ -1334,19 +1330,19 @@ public static class AvaloniaRibbonRenderer
         if (hasMenu)
         {
             var stack = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            stack.Children.Add(NewIcon(control, SmallIconSize, HorizontalAlignment.Center));
+            stack.Children.Add(NewIcon(control, RibbonVisualMetrics.SmallIconSize, HorizontalAlignment.Center));
             stack.Children.Add(Chevron(palette));
             content = stack;
         }
         else
         {
-            content = NewIcon(control, SmallIconSize, HorizontalAlignment.Center);
+            content = NewIcon(control, RibbonVisualMetrics.SmallIconSize, HorizontalAlignment.Center);
         }
 
         // WPF RibbonIconButton / RibbonIconToggleButton: icon-centred compact button, wider when a menu chevron is present.
         var button = NewButtonLike(control, palette);
         button.Width = hasMenu ? 42 : 30;
-        button.Height = SmallRowHeight;
+        button.Height = RibbonVisualMetrics.SmallRowHeight;
         button.Padding = new Thickness(1, 0);
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
         button.VerticalContentAlignment = VerticalAlignment.Center;
@@ -1360,9 +1356,9 @@ public static class AvaloniaRibbonRenderer
         var box = new ComboBox
         {
             Width = combo.Width ?? 110,
-            Height = SmallRowHeight,
-            MinHeight = SmallRowHeight,
-            MaxHeight = SmallRowHeight,
+            Height = RibbonVisualMetrics.SmallRowHeight,
+            MinHeight = RibbonVisualMetrics.SmallRowHeight,
+            MaxHeight = RibbonVisualMetrics.SmallRowHeight,
             FontSize = 12,
             FontFamily = RibbonFontFamily,
             Padding = new Thickness(6, 0, 18, 0),

@@ -407,7 +407,7 @@ public sealed class AvaloniaRibbonRendererTests
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.BorderThicknessProperty, new Thickness(0)));
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Border.BorderThicknessProperty, new Thickness(0)));
         Assert.DoesNotContain(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 3)));
-        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 26d));
+        Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, RibbonVisualMetrics.SmallRowHeight));
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.HeightProperty, 16d));
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, Layoutable.MaxHeightProperty, 16d));
         Assert.Contains(tabControl.Styles, style => style is Style concrete && HasSetter(concrete, TemplatedControl.TemplateProperty));
@@ -481,9 +481,9 @@ public sealed class AvaloniaRibbonRendererTests
 
         var combo = content.GetLogicalDescendants().OfType<ComboBox>().Single();
 
-        Assert.Equal(26, combo.Height);
-        Assert.Equal(26, combo.MinHeight);
-        Assert.Equal(26, combo.MaxHeight);
+        Assert.Equal(RibbonVisualMetrics.SmallRowHeight, combo.Height);
+        Assert.Equal(RibbonVisualMetrics.SmallRowHeight, combo.MinHeight);
+        Assert.Equal(RibbonVisualMetrics.SmallRowHeight, combo.MaxHeight);
         Assert.Equal(new Thickness(6, 0, 18, 0), combo.Padding);
         Assert.Equal(new Thickness(2, 0, 2, 0), combo.Margin);
         Assert.Equal(new Thickness(1), combo.BorderThickness);
