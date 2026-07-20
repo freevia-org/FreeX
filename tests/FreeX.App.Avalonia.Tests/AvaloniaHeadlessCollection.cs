@@ -41,3 +41,22 @@ namespace FreeX.App.Avalonia.Tests;
 /// </summary>
 [CollectionDefinition("AvaloniaHeadless", DisableParallelization = true)]
 public sealed class AvaloniaHeadlessCollection;
+
+[Collection("AvaloniaHeadless")]
+public sealed class AvaloniaHeadlessIsolationTests
+{
+    [Fact]
+    public void TestAssembly_UsesPerAssemblyAvaloniaIsolation()
+    {
+        var attribute = typeof(RibbonHeadlessApp).Assembly
+            .GetCustomAttributes(typeof(global::Avalonia.Headless.AvaloniaTestIsolationAttribute), inherit: false)
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeOfType<global::Avalonia.Headless.AvaloniaTestIsolationAttribute>()
+            .Which;
+
+        attribute.IsolationLevel.Should().Be(global::Avalonia.Headless.AvaloniaTestIsolationLevel.PerAssembly);
+    }
+}
