@@ -141,6 +141,15 @@ public sealed class SlideShowPlaybackPlannerTests
         wind.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Wind);
         wind.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Wind);
 
+        var curtains = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Curtains,
+            Direction = TransitionDirection.Right
+        });
+
+        curtains.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Curtains);
+        curtains.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Curtains);
+
         var pageCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
             Kind = TransitionKind.PageCurlSingle,
@@ -277,6 +286,31 @@ public sealed class SlideShowPlaybackPlannerTests
         closed.Should().BeEmpty();
         partial.Should().NotBeEmpty();
         partial.Should().OnlyContain(band => band.Points.Count == 4);
+        open.Should().HaveCount(1);
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+    }
+
+    [Fact]
+    public void CurtainsPlanner_BuildsDeterministicCenterOutPanels()
+    {
+        var plan = SlideShowCurtainsTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Curtains,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.HorizontalAxis.Should().BeTrue();
+        plan.Reverse.Should().BeFalse();
+
+        var closed = SlideShowCurtainsTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowCurtainsTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowCurtainsTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowCurtainsTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().NotBeEmpty();
+        partial.Should().OnlyContain(panel => panel.Points.Count == 4);
         open.Should().HaveCount(1);
         open[0].Points.Should().HaveCount(4);
         partial.Should().BeEquivalentTo(repeat);
