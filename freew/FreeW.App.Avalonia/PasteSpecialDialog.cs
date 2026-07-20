@@ -7,7 +7,7 @@ using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class PasteSpecialDialog : Window
+internal sealed class PasteSpecialDialog : FreeWDialogWindow
 {
     private readonly ListBox _list = new()
     {

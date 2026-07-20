@@ -16,7 +16,7 @@ namespace FreeW.App.Avalonia;
 /// uniform box in the FreeW model, so the paragraph-edge controls from WPF's combined Borders and Shading
 /// dialog do not belong on this page-only launcher.
 /// </summary>
-public sealed class PageBordersDialog : Window
+public sealed class PageBordersDialog : FreeWDialogWindow
 {
     private readonly ComboBox _setting = new() { MinWidth = 220 };
     private readonly ComboBox _style = new() { MinWidth = 220 };
@@ -132,7 +132,7 @@ public sealed class PageBordersDialog : Window
 /// AV-DESIGN: Custom Watermark dialog (Design &gt; Page Background &gt; Watermark &gt; Custom Watermark).
 /// Supports text and picture watermarks through the shared <see cref="WatermarkOptionsDialogPlanner"/>.
 /// </summary>
-public sealed class WatermarkDialog : Window
+public sealed class WatermarkDialog : FreeWDialogWindow
 {
     private static readonly FilePickerFileType WatermarkImageFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(

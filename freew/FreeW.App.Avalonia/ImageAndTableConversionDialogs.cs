@@ -9,7 +9,7 @@ using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class ImageCropDialog : Window
+internal sealed class ImageCropDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -154,7 +154,7 @@ internal sealed class ImageCropDialog : Window
     }
 }
 
-internal sealed class TableTextConversionDialog : Window
+internal sealed class TableTextConversionDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly ListBox _choices;

@@ -17,7 +17,7 @@ namespace FreeW.App.Avalonia;
 /// dialog policy.
 /// </para>
 /// </summary>
-internal sealed class ZoomDialog : Window
+internal sealed class ZoomDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

@@ -8,7 +8,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class CrossReferenceDialog : Window
+internal sealed class CrossReferenceDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -153,7 +153,7 @@ internal sealed class CrossReferenceDialog : Window
     }
 }
 
-internal sealed class SourceConflictResolutionDialog : Window
+internal sealed class SourceConflictResolutionDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -210,7 +210,7 @@ internal sealed class SourceConflictResolutionDialog : Window
     }
 }
 
-internal sealed class CitationSourcePickerDialog : Window
+internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -287,7 +287,7 @@ internal sealed class CitationSourcePickerDialog : Window
     }
 }
 
-internal sealed class MarkCitationDialog : Window
+internal sealed class MarkCitationDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -407,7 +407,7 @@ internal sealed class MarkCitationDialog : Window
     }
 }
 
-internal sealed class SourceEntryDialog : Window
+internal sealed class SourceEntryDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -579,7 +579,7 @@ internal sealed class SourceEntryDialog : Window
     }
 }
 
-internal sealed class SourceAuthorEditorDialog : Window
+internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -758,7 +758,7 @@ internal sealed class SourceAuthorEditorDialog : Window
     }
 }
 
-internal sealed class ManageSourcesDialog : Window
+internal sealed class ManageSourcesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

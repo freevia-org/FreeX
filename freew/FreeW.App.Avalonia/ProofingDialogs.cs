@@ -8,7 +8,7 @@ using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class ProofingLanguageDialog : Window
+internal sealed class ProofingLanguageDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = new(FontFamily.Default);
     private readonly ComboBox _languages = new() { MinWidth = 260 };
@@ -62,7 +62,7 @@ internal sealed class ProofingLanguageDialog : Window
     }
 }
 
-internal sealed class ThesaurusDialog : Window
+internal sealed class ThesaurusDialog : FreeWDialogWindow
 {
     public string? SelectedReplacement { get; private set; }
 

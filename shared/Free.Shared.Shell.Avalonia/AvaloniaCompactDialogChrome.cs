@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -20,6 +21,7 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public Thickness ComboBoxPadding { get; init; } = new(5, 0, 4, 0);
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
     public double ListBoxItemMinHeight { get; init; } = 24;
+    public double ActionSpacing { get; init; } = 8;
 }
 
 /// <summary>
@@ -27,13 +29,92 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
 /// </summary>
 public static class AvaloniaCompactDialogChrome
 {
+    public const string DialogWindowClass = "free-compact-dialog-window";
+    public const string ClassicTabClass = "free-classic-dialog-tabs";
+
+    public static FontFamily WindowsUiFontFamily { get; } = new(
+        "Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, " +
+        "DejaVu Sans Condensed, Arial, Liberation Sans, Noto Sans, DejaVu Sans, Helvetica, sans-serif");
+
+    public static AvaloniaCompactDialogChromeStyle WindowsStyle { get; } = new(WindowsUiFontFamily);
+
     private static readonly IBrush DefaultButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
     private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112));
     private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(130, 130, 130));
+    private static readonly IBrush DialogForegroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x1f, 0x1f, 0x1f));
     private static readonly IBrush ValidationStatusBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00));
     private static readonly IBrush DialogTabPaneBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(192, 192, 192));
     private static readonly IBrush DialogInactiveTabBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 160));
     private static readonly IBrush DialogInactiveTabBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(243, 243, 243));
+
+    /// <summary>
+    /// Gives a code-built Avalonia dialog the same inherited surface and compact control metrics as the
+    /// WPF <c>DialogWindow</c>. Descendants are normalized after the visual tree is created so every route
+    /// uses the product chrome, including controls that do not call the individual helper methods.
+    /// </summary>
+    public static void ApplyWindow(
+        Window window,
+        AvaloniaCompactDialogChromeStyle? style = null)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        style ??= WindowsStyle;
+
+        if (window.Classes.Contains(DialogWindowClass))
+            return;
+
+        window.Classes.Add(DialogWindowClass);
+        window.Background = Brushes.White;
+        window.Foreground = DialogForegroundBrush;
+        window.FontFamily = style.FontFamily;
+        window.FontSize = style.FontSize;
+        window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        window.ShowInTaskbar = false;
+        window.Opened += (_, _) => ApplyDescendantChrome(window, style);
+    }
+
+    public static void ApplyDescendantChrome(
+        Window window,
+        AvaloniaCompactDialogChromeStyle? style = null)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        style ??= WindowsStyle;
+
+        foreach (var control in window.GetVisualDescendants().OfType<Control>())
+        {
+            switch (control)
+            {
+                case TextBox textBox:
+                {
+                    var explicitFamily = textBox.FontFamily;
+                    var isMultiline = textBox.AcceptsReturn
+                        || textBox.MinHeight > style.ControlHeight
+                        || (!double.IsNaN(textBox.Height) && textBox.Height > style.ControlHeight);
+                    ApplyTextBox(textBox, style, fixedHeight: !isMultiline);
+                    if (explicitFamily != FontFamily.Default && explicitFamily != window.FontFamily)
+                        textBox.FontFamily = explicitFamily;
+                    break;
+                }
+                case ComboBox comboBox:
+                    ApplyComboBox(comboBox, style);
+                    break;
+                case CheckBox checkBox:
+                    ApplyCheckBox(checkBox, style);
+                    break;
+                case RadioButton radioButton:
+                    ApplyRadioButton(radioButton, style);
+                    break;
+                case ListBox listBox:
+                    ApplyListBox(listBox, style);
+                    break;
+                case TabControl tabControl:
+                    ApplyClassicTabChrome(tabControl, style);
+                    break;
+                case Button button:
+                    ApplyButton(button, style, button.MinWidth, button.IsDefault);
+                    break;
+            }
+        }
+    }
 
     public static void ApplyButton(
         Button button,
@@ -150,9 +231,16 @@ public static class AvaloniaCompactDialogChrome
     /// Applies the classic Windows dialog tab treatment: bordered inactive tabs, a white selected tab,
     /// and a selected-tab body that overlaps the content pane so no gap or separator line remains.
     /// </summary>
-    public static void ApplyClassicTabChrome(TabControl tabControl)
+    public static void ApplyClassicTabChrome(
+        TabControl tabControl,
+        AvaloniaCompactDialogChromeStyle? style = null)
     {
         ArgumentNullException.ThrowIfNull(tabControl);
+        style ??= WindowsStyle;
+
+        if (tabControl.Classes.Contains(ClassicTabClass))
+            return;
+        tabControl.Classes.Add(ClassicTabClass);
 
         var headerPresenterStyle = new Style(s => s
             .OfType<TabControl>()
@@ -169,7 +257,7 @@ public static class AvaloniaCompactDialogChrome
             .Name("PART_SelectedContentHost"));
         contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, DialogTabPaneBorderBrush));
         contentPaneStyle.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1)));
-        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.PaddingProperty, new Thickness(12)));
+        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.PaddingProperty, new Thickness(0)));
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
         tabControl.Styles.Add(contentPaneStyle);
 
@@ -178,7 +266,10 @@ public static class AvaloniaCompactDialogChrome
         tabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
         tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, DialogInactiveTabBackgroundBrush));
         tabStyle.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, Brushes.Black));
-        tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(10, 4)));
+        tabStyle.Setters.Add(new Setter(TemplatedControl.FontFamilyProperty, style.FontFamily));
+        tabStyle.Setters.Add(new Setter(TemplatedControl.FontSizeProperty, style.FontSize));
+        tabStyle.Setters.Add(new Setter(Layoutable.MinHeightProperty, style.ControlHeight));
+        tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(8, 2)));
         tabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, -1, 0)));
         tabControl.Styles.Add(tabStyle);
 
@@ -212,15 +303,19 @@ public static class AvaloniaCompactDialogChrome
         tabStyle.Setters.Add(new Setter(TemplatedControl.TemplateProperty, classicTabTemplate));
     }
 
-    public static StackPanel CreateActionRow(IReadOnlyList<Control> controls, Thickness margin = default)
+    public static StackPanel CreateActionRow(
+        IReadOnlyList<Control> controls,
+        Thickness margin = default,
+        AvaloniaCompactDialogChromeStyle? style = null)
     {
         ArgumentNullException.ThrowIfNull(controls);
+        style ??= WindowsStyle;
 
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
+            Spacing = style.ActionSpacing,
             Margin = margin,
         };
         foreach (var control in controls)

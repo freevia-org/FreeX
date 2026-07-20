@@ -198,7 +198,7 @@ internal sealed class AutosaveAdapter : IDisposable
 /// <summary>
 /// Minimal Yes / No prompt for the autosave recovery offer.
 /// </summary>
-internal sealed class RecoveryPromptDialog : Window
+internal sealed class RecoveryPromptDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

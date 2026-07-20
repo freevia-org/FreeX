@@ -25,7 +25,7 @@ public sealed record PageSetupDialogOutcome(
     bool BordersRequested);
 
 /// <summary>Avalonia chrome for the shared WPF-authoritative three-tab Page Setup contract.</summary>
-public sealed class PageSetupDialog : Window
+public sealed class PageSetupDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = PageLayoutDialogChrome.Style;
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;

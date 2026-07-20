@@ -10,7 +10,7 @@ using static FreeW.App.Avalonia.PictureFormattingDialogChrome;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class ImageAltTextDialog : Window
+internal sealed class ImageAltTextDialog : FreeWDialogWindow
 {
     private readonly TextBox _descriptionBox;
 
@@ -54,7 +54,7 @@ internal sealed class ImageAltTextDialog : Window
         new ImageAltTextDialog(seed).ShowDialog<string?>(owner);
 }
 
-internal sealed class ImageSizeDialog : Window
+internal sealed class ImageSizeDialog : FreeWDialogWindow
 {
     private readonly TextBox _widthBox;
     private readonly TextBox _heightBox;
@@ -166,7 +166,7 @@ internal sealed class ImageSizeDialog : Window
 
 }
 
-internal sealed class ImageBorderDialog : Window
+internal sealed class ImageBorderDialog : FreeWDialogWindow
 {
     private readonly TextBox _colorBox;
     private readonly TextBox _widthBox;

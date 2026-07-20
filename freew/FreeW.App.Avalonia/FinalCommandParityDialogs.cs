@@ -9,7 +9,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class QuickPartNameDialog : Window
+internal sealed class QuickPartNameDialog : FreeWDialogWindow
 {
     private readonly TextBox _name = new() { MinWidth = 300 };
 
@@ -82,7 +82,7 @@ internal sealed class QuickPartNameDialog : Window
     };
 }
 
-internal sealed class FieldPickerDialog : Window
+internal sealed class FieldPickerDialog : FreeWDialogWindow
 {
     private readonly ListBox _categories = new() { MinWidth = 160, MinHeight = 210 };
     private readonly ListBox _fields = new() { MinWidth = 250, MinHeight = 210 };
@@ -141,7 +141,7 @@ internal sealed class FieldPickerDialog : Window
     }
 }
 
-internal sealed class DrawTableDimensionDialog : Window
+internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
 {
     private readonly TextBox _rows = new() { Text = DrawTableCommandPlanner.DefaultRows.ToString(), Width = 72 };
     private readonly TextBox _columns = new() { Text = DrawTableCommandPlanner.DefaultColumns.ToString(), Width = 72 };
@@ -181,7 +181,7 @@ internal enum BuildingBlockActionKind
 
 internal sealed record BuildingBlockAction(BuildingBlockActionKind Kind, string Name);
 
-internal sealed class BuildingBlocksOrganizerDialog : Window
+internal sealed class BuildingBlocksOrganizerDialog : FreeWDialogWindow
 {
     private readonly QuickPartLibrary _library;
     private readonly ListBox _blocks = new() { MinWidth = 260, MinHeight = 220 };
@@ -257,7 +257,7 @@ internal sealed class BuildingBlocksOrganizerDialog : Window
     }
 }
 
-internal sealed class FreeWInfoDialog : Window
+internal sealed class FreeWInfoDialog : FreeWDialogWindow
 {
     private FreeWInfoDialog(string message)
     {

@@ -16,7 +16,7 @@ namespace FreeW.App.Avalonia;
 /// awaited by the <c>MainWindow</c> launcher). The dialogs are deliberately thin: they collect input and
 /// hand it to the editor's model-backed, undoable insert methods — no model logic lives here.
 /// </summary>
-public sealed class HyperlinkDialog : Window
+public sealed class HyperlinkDialog : FreeWDialogWindow
 {
     private readonly TextBox _displayBox = new()
     {
@@ -86,7 +86,7 @@ public sealed class HyperlinkDialog : Window
 /// <summary>
 /// AV-LINKS: Edits the ScreenTip for the hyperlink at the caret. A blank OK result clears the ScreenTip.
 /// </summary>
-public sealed class ScreenTipDialog : Window
+public sealed class ScreenTipDialog : FreeWDialogWindow
 {
     private readonly TextBox _tipBox = new()
     {
@@ -137,7 +137,7 @@ public sealed class ScreenTipDialog : Window
 /// "Go To" list of the document's existing bookmark names so the user can jump to one. Returns either a
 /// <see cref="BookmarkName"/> (to add) or a <see cref="GoToName"/> (to navigate), never both.
 /// </summary>
-public sealed class BookmarkDialog : Window
+public sealed class BookmarkDialog : FreeWDialogWindow
 {
     private readonly TextBox _nameBox = new()
     {
@@ -217,7 +217,7 @@ public sealed class BookmarkDialog : Window
 /// <summary>
 /// AV-LINKS: Picks an existing bookmark and links the current selection to it.
 /// </summary>
-public sealed class LinkBookmarkDialog : Window
+public sealed class LinkBookmarkDialog : FreeWDialogWindow
 {
     private readonly ComboBox _existing = new()
     {
@@ -273,7 +273,7 @@ public sealed class LinkBookmarkDialog : Window
 /// <see cref="QuickPartLibrary"/>-style name list is supplied the user can also pick a saved snippet. Returns
 /// the text to insert via <see cref="SnippetText"/>, or null on cancel.
 /// </summary>
-public sealed class QuickPartDialog : Window
+public sealed class QuickPartDialog : FreeWDialogWindow
 {
     private readonly TextBox _textBox = new()
     {

@@ -185,7 +185,7 @@ internal sealed class NotesPane : Border
     }
 }
 
-internal sealed class NoteTextDialog : Window
+internal sealed class NoteTextDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
     private readonly TextBox _text;

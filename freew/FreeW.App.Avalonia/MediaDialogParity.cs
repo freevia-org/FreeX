@@ -10,7 +10,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class ImageAdjustDialog : Window
+internal sealed class ImageAdjustDialog : FreeWDialogWindow
 {
     private readonly TextBox _brightness;
     private readonly TextBox _contrast;
@@ -96,7 +96,7 @@ internal sealed class ImageAdjustDialog : Window
     private static TextBox Box(string text) => Chrome.TextBox(text, 90);
 }
 
-internal sealed class ImagePositionDialog : Window
+internal sealed class ImagePositionDialog : FreeWDialogWindow
 {
     private readonly TextBox _horizontal;
     private readonly TextBox _vertical;
@@ -172,7 +172,7 @@ internal sealed class ImagePositionDialog : Window
     }
 }
 
-internal sealed class ChartTitleDialog : Window
+internal sealed class ChartTitleDialog : FreeWDialogWindow
 {
     private readonly TextBox _title;
 
@@ -200,7 +200,7 @@ internal sealed class ChartTitleDialog : Window
     private void Accept() => Close(ChartTitleDialogPlanner.BuildResult(_title.Text));
 }
 
-internal sealed class ChartAxisTitlesDialog : Window
+internal sealed class ChartAxisTitlesDialog : FreeWDialogWindow
 {
     private readonly TextBox _category;
     private readonly TextBox _value;
@@ -234,7 +234,7 @@ internal sealed class ChartAxisTitlesDialog : Window
     private void Accept() => Close(ChartAxisTitlesDialogPlanner.BuildResult(_category.Text, _value.Text));
 }
 
-internal sealed class ChartSizeDialog : Window
+internal sealed class ChartSizeDialog : FreeWDialogWindow
 {
     private readonly TextBox _width;
     private readonly TextBox _height;
@@ -285,7 +285,7 @@ internal sealed class ChartSizeDialog : Window
     }
 }
 
-internal sealed class InsertSmartArtDialog : Window
+internal sealed class InsertSmartArtDialog : FreeWDialogWindow
 {
     private readonly ComboBox _kind;
     private readonly ListBox _nodes;
@@ -380,7 +380,7 @@ internal sealed class InsertSmartArtDialog : Window
     }
 }
 
-internal sealed class InsertChartDialog : Window
+internal sealed class InsertChartDialog : FreeWDialogWindow
 {
     private sealed class RowControls
     {

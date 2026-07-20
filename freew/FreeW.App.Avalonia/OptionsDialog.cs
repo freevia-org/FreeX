@@ -12,7 +12,7 @@ namespace FreeW.App.Avalonia;
 /// Compact Avalonia editor for the FreeW options that the cross-platform shell consumes today.
 /// Parsing and normalization stay in <see cref="OptionsDialogPlanner"/>.
 /// </summary>
-internal sealed class OptionsDialog : Window
+internal sealed class OptionsDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

@@ -7,7 +7,7 @@ using Free.Shared.Shell.Avalonia;
 namespace FreeW.App.Avalonia;
 
 /// <summary>Minimal modal editor for a table cell's text. Returns the new text, or null if cancelled.</summary>
-internal sealed class CellEditDialog : Window
+internal sealed class CellEditDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

@@ -12,7 +12,7 @@ using TextAlignment = FreeW.Core.Model.TextAlignment;
 namespace FreeW.App.Avalonia;
 
 /// <summary>Avalonia chrome for the shared two-tab WPF Paragraph dialog contract.</summary>
-public sealed class ParagraphDialog : Window
+public sealed class ParagraphDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
     private readonly TabControl _tabs;

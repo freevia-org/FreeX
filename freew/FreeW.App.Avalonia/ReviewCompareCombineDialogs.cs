@@ -10,7 +10,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class CompareDocumentsDialog : Window
+internal sealed class CompareDocumentsDialog : FreeWDialogWindow
 {
     private const string ReviewerValidationMessage =
         "Enter a reviewer name to label the tracked changes.";
@@ -272,7 +272,7 @@ internal sealed class CompareDocumentsDialog : Window
     }
 }
 
-internal sealed class CombineDocumentsDialog : Window
+internal sealed class CombineDocumentsDialog : FreeWDialogWindow
 {
     private readonly string _originalPath;
     private readonly string _reviewerBPath;

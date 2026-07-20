@@ -10,7 +10,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class StyleDialog : Window
+internal sealed class StyleDialog : FreeWDialogWindow
 {
     private readonly IReadOnlyList<KeyValuePair<string, string>> _basedOnEntries;
     private readonly IReadOnlyList<KeyValuePair<string, string>> _nextEntries;
@@ -206,7 +206,7 @@ internal sealed class StyleDialog : Window
     }
 }
 
-internal sealed class ManageStylesDialog : Window
+internal sealed class ManageStylesDialog : FreeWDialogWindow
 {
     private readonly TextDocument _document;
     private readonly ListBox _styles = new() { MinHeight = 220, MinWidth = 320 };

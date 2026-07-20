@@ -116,6 +116,22 @@ public sealed class DialogChromeDedupSourceGuardTests
         }
     }
 
+    [Fact]
+    public void Shared_tab_chrome_removes_the_header_body_gap()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaCompactDialogChrome.cs"));
+
+        source.Should().Contain("ContentPresenter.PaddingProperty, new Thickness(0)");
+        source.Should().Contain("TabItem.MarginProperty, new Thickness(0, 0, -1, -1)");
+        source.Should().Contain("TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)");
+        source.Should().Contain("Layoutable.MinHeightProperty, style.ControlHeight");
+    }
+
     private static void AssertNoLocalCompactChrome(string source, string fileName)
     {
         var normalized = source.Replace("\r\n", "\n", StringComparison.Ordinal);

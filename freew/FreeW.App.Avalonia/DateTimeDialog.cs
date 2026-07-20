@@ -10,7 +10,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed record DateTimeDialogResult(string Text, bool IsField, string? FieldInstruction);
 
-internal sealed class DateTimeDialog : Window
+internal sealed class DateTimeDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
     private readonly DateTime _moment;
