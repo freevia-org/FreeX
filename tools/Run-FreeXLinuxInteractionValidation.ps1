@@ -643,6 +643,7 @@ try {
         "save-ctrl-s-persist",
         "save-shift-f12-persist",
         "inline-point-mode-click",
+        "inline-point-mode-drag-range",
         "formula-bar-point-mode-click",
         "keytips-alt",
         "keytips-f10",

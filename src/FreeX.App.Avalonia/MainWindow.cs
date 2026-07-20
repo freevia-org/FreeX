@@ -856,6 +856,7 @@ public sealed partial class MainWindow : Window
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
     private CellAddress? _cellDragSelectionAnchor;
+    private CellAddress? _cellDragFormulaPointCursor;
     private Control? _cellDragSelectionCapture;
     private IPointer? _cellDragSelectionPointer;
     private HeaderResizeKind _headerSelectionDragKind;
@@ -6669,6 +6670,7 @@ public sealed partial class MainWindow : Window
         _selectionMoveDragging = false;
         _selectionMoveSourceRange = null;
         _selectionMovePreviewRange = null;
+        _cellDragFormulaPointCursor = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
 
@@ -6706,6 +6708,7 @@ public sealed partial class MainWindow : Window
         _cellDragSelectionAnchor = null;
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
+        _cellDragFormulaPointCursor = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
         _autofillDragging = false;
@@ -6747,6 +6750,12 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (TryContinueFormulaRangeSelectionDrag(target))
+        {
+            args.Handled = true;
+            return;
+        }
+
         if (target == _selectionExtensionCursor)
             return;
 
@@ -6758,6 +6767,7 @@ public sealed partial class MainWindow : Window
 
     private async Task EndCellSelectionDragAsync(PointerReleasedEventArgs args)
     {
+        var formulaRangeEditor = GetFormulaRangeEntryEditor();
         if (_autofillDragging)
             CommitAutofillDrag(args.KeyModifiers.HasFlag(KeyModifiers.Control));
         else if (_selectionMoveDragging)
@@ -6768,6 +6778,7 @@ public sealed partial class MainWindow : Window
         _cellDragSelectionAnchor = null;
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
+        _cellDragFormulaPointCursor = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
         _autofillDragging = false;
@@ -6780,6 +6791,8 @@ public sealed partial class MainWindow : Window
         // In Draw Border mode the drag-release triggers the border apply (mirrors WPF MouseUp behaviour).
         if (_borderDrawModeActive)
             ApplyBorderDrawMode();
+
+        RestoreFormulaRangeEditorFocusAfterDrag(formulaRangeEditor);
 
         args.Handled = true;
     }
@@ -7898,6 +7911,8 @@ public sealed partial class MainWindow : Window
             if (point.Properties.IsLeftButtonPressed &&
                 TryInsertFormulaPointReference(address))
             {
+                BeginCellSelectionDrag(args, border, address);
+                TrackFormulaPointDragAnchor(address);
                 args.Handled = true;
                 return;
             }
@@ -8843,6 +8858,26 @@ public sealed partial class MainWindow : Window
             address,
             address);
     }
+
+    private bool TryContinueFormulaRangeSelectionDrag(CellAddress address)
+    {
+        if (GetFormulaRangeEntryEditor() is null)
+            return false;
+
+        if (_cellDragFormulaPointCursor == address)
+            return true;
+
+        var applied = TryApplyFormulaRangeSelection(address, extendSelection: true);
+        if (applied)
+            _cellDragFormulaPointCursor = address;
+        return applied;
+    }
+
+    private void TrackFormulaPointDragAnchor(CellAddress address) =>
+        _cellDragFormulaPointCursor = address;
+
+    private static void RestoreFormulaRangeEditorFocusAfterDrag(TextBox? editor) =>
+        editor?.Focus();
 
     private static bool IsFormulaPointModeText(string? text) =>
         !string.IsNullOrEmpty(text) &&

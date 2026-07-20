@@ -111,6 +111,54 @@ public sealed partial class MainWindow
             "focus-textinput-mode-toggle-cell-point-enter",
             $"pointStarted={formulaBarPointModeStarted}; toggled={formulaBarModeToggled}; inserted={formulaBarPointInserted}; text={formulaBarText}; committed={formulaBarCommitted}",
             "The production formula bar entered edit/Point mode through focus and TextInput, accepted a grid reference, and committed with routed Enter."));
+
+        var dragFormulaAddress = new CellAddress(sheet.Id, 6, 2);
+        var dragStart = new CellAddress(sheet.Id, 2, 2);
+        var dragEnd = new CellAddress(sheet.Id, 4, 4);
+        _session.SelectCell(dragFormulaAddress);
+        RefreshShell("Ready");
+        await RaiseEditingValidationKeyAsync(ResolveWorksheetValidationKeyTarget(), Key.F2);
+        var dragPointStarted = false;
+        var dragAnchorReplayConsumed = false;
+        var dragPointExtended = false;
+        var dragPointEditSessionPreserved = false;
+        var dragPointFocusRestored = false;
+        var dragPointText = "";
+        if (_inlineCellEditor is { } dragFormulaEditor)
+        {
+            dragFormulaEditor.SelectAll();
+            await RaiseEditingValidationTextInputAsync(dragFormulaEditor, "=");
+            dragPointStarted = TryInsertFormulaPointReference(dragStart);
+            TrackFormulaPointDragAnchor(dragStart);
+            dragAnchorReplayConsumed = TryContinueFormulaRangeSelectionDrag(dragStart);
+            dragPointExtended = TryContinueFormulaRangeSelectionDrag(dragEnd);
+            dragPointText = _inlineCellEditor?.Text ?? _inlineCellEditText ?? "";
+            dragPointEditSessionPreserved = _session.FormulaEditAddress == dragFormulaAddress &&
+                _session.ActiveCell == dragFormulaAddress;
+            RefreshShell("Formula point drag validation");
+            var liveEditorAfterRefresh = GetFormulaRangeEntryEditor();
+            _sheetGridHost.Focus();
+            RestoreFormulaRangeEditorFocusAfterDrag(liveEditorAfterRefresh);
+            dragPointFocusRestored = liveEditorAfterRefresh?.IsFocused == true;
+            if (_inlineCellEditor is { } currentDragFormulaEditor)
+                await RaiseEditingValidationKeyAsync(currentDragFormulaEditor, Key.Enter);
+        }
+
+        var dragPointCommitted = string.Equals(
+            sheet.GetCell(dragFormulaAddress)?.FormulaText,
+            "=B2:D4",
+            StringComparison.Ordinal);
+        results.Add(new InteractionValidationResult(
+            "cell-inline-formula-point-range-drag",
+            "worksheet-editing",
+            dragPointStarted && dragAnchorReplayConsumed && dragPointExtended &&
+            dragPointEditSessionPreserved && dragPointFocusRestored &&
+            string.Equals(dragPointText, "=B2:D4", StringComparison.Ordinal) && dragPointCommitted
+                ? "passed"
+                : "failed",
+            "production-point-drag-continuation-enter",
+            $"started={dragPointStarted}; anchorReplayConsumed={dragAnchorReplayConsumed}; extended={dragPointExtended}; editSessionPreserved={dragPointEditSessionPreserved}; focusRestored={dragPointFocusRestored}; text={dragPointText}; committed={dragPointCommitted}",
+            "The production inline formula editor inserted the drag anchor, extended the live reference without ordinary range-selection fallthrough, restored the live editor's focus after refresh, and committed the range formula with Enter."));
     }
 
     private InputElement ResolveWorksheetValidationKeyTarget() =>

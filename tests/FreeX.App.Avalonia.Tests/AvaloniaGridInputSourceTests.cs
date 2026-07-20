@@ -63,9 +63,23 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("DetachCellSelectionDragHandlers();");
         source.Should().Contain("args.Pointer.Capture(_sheetGridHost);");
         source.Should().Contain("TryResolveCellPointerAddress(args, out var pointerAddress)");
+        source.Should().Contain("TryContinueFormulaRangeSelectionDrag(target)");
+        source.Should().Contain("if (_cellDragFormulaPointCursor == address)");
+        source.Should().Contain("TrackFormulaPointDragAnchor(address);");
         source.Should().Contain("SelectRangeFromAnchor(anchor, target);");
         source.Should().Contain("_cellDragSelectionPointer?.Capture(null);");
         source.Should().Contain("_session.SelectRange(new GridRange(anchor, address));");
+        source.Should().Contain("TryInsertFormulaPointReference(address))");
+        source.Should().Contain("BeginCellSelectionDrag(args, border, address);");
+        source.Should().Contain("RestoreFormulaRangeEditorFocusAfterDrag(formulaRangeEditor);");
+
+        var continuation = source[
+            source.IndexOf("private void ContinueCellSelectionDrag(", StringComparison.Ordinal)..
+            source.IndexOf("private async Task EndCellSelectionDragAsync(", StringComparison.Ordinal)];
+        continuation.IndexOf("TryContinueFormulaRangeSelectionDrag(target)", StringComparison.Ordinal)
+            .Should().BeLessThan(continuation.IndexOf("SelectRangeFromAnchor(anchor, target)", StringComparison.Ordinal));
+        continuation.Replace("\r\n", "\n", StringComparison.Ordinal).Should().Contain(
+            "if (TryContinueFormulaRangeSelectionDrag(target))\n        {\n            args.Handled = true;\n            return;\n        }");
     }
 
     [Fact]
