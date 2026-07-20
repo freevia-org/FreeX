@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
@@ -11,6 +12,7 @@ namespace FreeP.App.Avalonia;
 internal sealed class CustomShowDialog : Window
 {
     private const double DragStartThreshold = 4;
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
     private readonly MainWindow _host;
     private readonly ListBox _showList = new();
@@ -35,20 +37,23 @@ internal sealed class CustomShowDialog : Window
         _host = host ?? throw new ArgumentNullException(nameof(host));
 
         Title = "Custom Shows";
-        Width = 640;
-        Height = 440;
+        Width = 625.3333333333334;
+        Height = 402.6666666666667;
         MinWidth = 560;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         _showList.Margin = new Thickness(0, 0, 10, 0);
+        ApplyListChrome(_showList);
         _showList.SelectionChanged += (_, _) => ApplySelectedShowToFields();
 
         _nameBox.MinWidth = 260;
         _nameBox.Margin = new Thickness(0, 0, 0, 8);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_nameBox, DialogChromeStyle);
 
         _customShowSlideList.MinHeight = 92;
+        ApplyListChrome(_customShowSlideList);
         _customShowSlideList.SelectionChanged += (_, _) => UpdateMoveButtons();
         DragDrop.SetAllowDrop(_customShowSlideList, true);
         _customShowSlideList.PointerPressed += OnCustomShowSlideListPointerPressed;
@@ -93,6 +98,12 @@ internal sealed class CustomShowDialog : Window
         int sourceSlideIndex,
         int targetDropIndex) =>
         ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
+
+    internal void PrepareValidationForVisualEvidence()
+    {
+        _nameBox.Text = string.Empty;
+        OnCreate();
+    }
 
     private Control BuildContent()
     {
@@ -259,6 +270,11 @@ internal sealed class CustomShowDialog : Window
                 Tag = slide.SlideId,
                 Margin = new Thickness(0, 2, 0, 2),
             };
+            AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
+            checkBox.Height = 20;
+            checkBox.MinHeight = 20;
+            checkBox.MaxHeight = 20;
+            checkBox.Padding = new Thickness(0);
             _slideCheckBoxes.Add(checkBox);
             _slidePanel.Children.Add(checkBox);
         }
@@ -555,6 +571,14 @@ internal sealed class CustomShowDialog : Window
     private void SetValidation(string? message) =>
         _validationText.Text = message ?? string.Empty;
 
+    private static void ApplyListChrome(ListBox listBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyListBox(listBox, DialogChromeStyle);
+        listBox.Background = Brushes.White;
+        listBox.BorderBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0));
+        listBox.BorderThickness = new Thickness(1);
+    }
+
     private static Button MakeButton(
         string label,
         Action onClick,
@@ -564,11 +588,10 @@ internal sealed class CustomShowDialog : Window
         var button = new Button
         {
             Content = label,
-            MinWidth = 82,
-            Padding = new Thickness(8, 3),
             IsDefault = isDefault,
             IsCancel = isCancel,
         };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 82, isDefault: isDefault);
         button.Click += (_, _) => onClick();
         return button;
     }

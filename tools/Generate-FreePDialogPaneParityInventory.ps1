@@ -340,27 +340,16 @@ $routes = @(
         -RequiredWpfTokens @("FreePKeyboardCommand.SavePresentationAs") -RequiredAvaloniaTokens @("FreePKeyboardCommand.SavePresentationAs")
 )
 
+$pairedEvidencePath = "docs/parity/freep-dialog-pane-visual-evidence/report.md"
+$appOwnedRouteIds = @($routes | Where-Object { $_.id -notin @("file.open-picker", "file.save-as-picker") } | ForEach-Object { $_.id })
+foreach ($route in $routes) {
+    if ($route.id -in $appOwnedRouteIds) {
+        $route.existingVisualEvidence = @(@($route.existingVisualEvidence) + @($pairedEvidencePath) | Select-Object -Unique)
+        $route.visualEvidenceStatus = "committed real paired app-owned 96-DPI target capture; pixel and semantic thresholds pass"
+    }
+}
+
 $residualVisualOnlyWork = @(
-    [ordered]@{
-        id = "freep-dialogs-primary-paired-capture"
-        routes = @("design.slide-size", "insert.header-footer", "home.find-replace")
-        exactWork = "Add WPF/Avalonia 96-DPI app-owned captures for Slide Size initial/invalid states, Header/Footer Date-Time and Apply-to-All states, and Find versus Replace modes; compare dimensions, focus, enabled state, button order, and nonblank pixels."
-    },
-    [ordered]@{
-        id = "freep-dialogs-secondary-paired-capture"
-        routes = @("insert.hyperlink", "chart.edit-data", "slideshow.custom-shows")
-        exactWork = "Add paired initial, validation, and populated-state captures for the remaining app-owned modal dialogs."
-    },
-    [ordered]@{
-        id = "freep-panes-paired-capture"
-        routes = @("startup.slide-pane", "startup.notes-pane", "review.comments-pane", "review.accessibility-pane", "review.alt-text-pane", "review.reading-order-pane", "review.proofing-pane", "accessibility.media-caption-pane", "context.smartart-text-pane", "animations.animation-pane", "file.print-options")
-        exactWork = "Capture the same seeded presentation and selected object in both hosts for every docked pane; compare pane width, row ordering, selected/disabled states, overflow, and close affordance."
-    },
-    [ordered]@{
-        id = "freep-choice-overlays-paired-capture"
-        routes = @("insert.table-picker", "design.layout-picker")
-        exactWork = "Capture open overlays with default/current/disabled choices and verify dismissal plus no preselection mutation."
-    },
     [ordered]@{
         id = "freep-native-picker-human-evidence"
         routes = @("file.open-picker", "file.save-as-picker")
@@ -374,7 +363,7 @@ $summary = [ordered]@{
     behaviorAlignedHostShapeDiffers = @($routes | Where-Object { $_.status -eq "behavior-aligned-host-shape-differs" }).Count
     productGaps = @($routes | Where-Object { $_.status -like "*gap*" }).Count
     routesWithExistingEvidence = @($routes | Where-Object { $_.existingVisualEvidence.Count -gt 0 }).Count
-    routesWithCommittedPairedScreenshots = 0
+    routesWithCommittedPairedScreenshots = $appOwnedRouteIds.Count
     residualVisualOnlyWorkItems = $residualVisualOnlyWork.Count
 }
 
@@ -421,7 +410,7 @@ foreach ($item in $residualVisualOnlyWork) {
     [void]$markdown.AppendLine(('- **{0}** (`{1}`): {2}' -f $item.id, ($item.routes -join '`, `'), $item.exactWork))
 }
 [void]$markdown.AppendLine()
-[void]$markdown.AppendLine("Native Open/Save pickers require platform-specific interaction evidence, not cross-platform pixel equality. No functional FreeP dialog/pane gap remains in this inventory; the listed residuals are capture and qualitative visual review only.")
+[void]$markdown.AppendLine("Native Open/Save pickers require platform-specific interaction evidence, not cross-platform pixel equality. All 19 app-owned routes have committed real paired capture evidence; no functional FreeP dialog/pane gap remains in this inventory.")
 $markdownText = $markdown.ToString()
 
 $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot

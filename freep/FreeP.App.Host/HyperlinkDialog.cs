@@ -26,6 +26,7 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox     _urlBox;
     private readonly ComboBox    _slideCombo;
     private readonly TextBox     _tooltipBox;
+    private readonly TextBlock   _validationText;
 
     // ── Result ────────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // URL row
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // slide row
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // tooltip row
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // validation
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // buttons
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -110,8 +112,18 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetRow(_tooltipBox, 3); Grid.SetColumn(_tooltipBox, 1);
         grid.Children.Add(_tooltipBox);
 
+        _validationText = new TextBlock
+        {
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xB7, 0x47, 0x2A)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 8),
+        };
+        Grid.SetRow(_validationText, 4);
+        Grid.SetColumnSpan(_validationText, 2);
+        grid.Children.Add(_validationText);
+
         var buttonRow = DialogButtonRowFactory.Create(OnOk, buttonWidth: 75);
-        Grid.SetRow(buttonRow, 4); Grid.SetColumnSpan(buttonRow, 2);
+        Grid.SetRow(buttonRow, 5); Grid.SetColumnSpan(buttonRow, 2);
         grid.Children.Add(buttonRow);
 
         Content = grid;
@@ -143,7 +155,24 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     // ── OK handler ────────────────────────────────────────────────────────────────
 
-    private void OnOk()
+    internal bool ApplyForVisualEvidence(
+        HyperlinkDialogTargetKind targetKind,
+        string url,
+        int selectedSlideIndex,
+        string tooltip)
+    {
+        _urlRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Url;
+        _slideRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Slide;
+        _urlBox.Text = url;
+        _slideCombo.SelectedIndex = selectedSlideIndex;
+        _tooltipBox.Text = tooltip;
+        UpdateEnabled();
+        return Apply(showValidationDialog: false);
+    }
+
+    private void OnOk() => Apply(showValidationDialog: true);
+
+    private bool Apply(bool showValidationDialog)
     {
         var targetKind = _urlRadio.IsChecked == true
             ? HyperlinkDialogTargetKind.Url
@@ -158,13 +187,18 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (!plan.ShouldApply)
         {
             var validation = plan.Validation!;
-            DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption);
+            _validationText.Text = validation.Message;
+            if (showValidationDialog)
+                DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption);
             FocusField(validation.FocusField);
-            return;
+            return false;
         }
 
+        _validationText.Text = string.Empty;
         Result = plan.Result;
-        DialogResult = true;
+        if (IsLoaded)
+            DialogResult = true;
+        return true;
     }
 
     private void FocusField(HyperlinkDialogField field)

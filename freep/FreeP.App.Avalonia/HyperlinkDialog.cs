@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -9,6 +10,8 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class HyperlinkDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
     private readonly RadioButton _urlRadio;
     private readonly RadioButton _slideRadio;
     private readonly TextBox _urlBox;
@@ -17,6 +20,21 @@ internal sealed class HyperlinkDialog : Window
     private readonly TextBlock _validationText;
 
     internal Hyperlink? Result { get; private set; }
+
+    internal bool ApplyForVisualEvidence(
+        HyperlinkDialogTargetKind targetKind,
+        string url,
+        int selectedSlideIndex,
+        string tooltip)
+    {
+        _urlRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Url;
+        _slideRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Slide;
+        _urlBox.Text = url;
+        _slideCombo.SelectedIndex = selectedSlideIndex;
+        _tooltipBox.Text = tooltip;
+        UpdateEnabled();
+        return Apply();
+    }
 
     public HyperlinkDialog(IReadOnlyList<Slide> slides, Hyperlink? current = null)
         : this(HyperlinkDialogPlanner.BuildDialogRequest(slides, current))
@@ -28,40 +46,40 @@ internal sealed class HyperlinkDialog : Window
         ArgumentNullException.ThrowIfNull(request);
 
         Title = HyperlinkDialogPlanner.Caption;
-        Width = 440;
-        SizeToContent = SizeToContent.Height;
+        Width = 405.3333333333333;
+        Height = 216;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF7));
+        Background = Brushes.White;
 
         _urlRadio = new RadioButton
         {
-            Content = "Web address",
+            Content = "Web address:",
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 4),
         };
         _slideRadio = new RadioButton
         {
-            Content = "Slide in this presentation",
+            Content = "Slide in this presentation:",
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 8),
         };
         _urlBox = new TextBox
         {
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, 4),
             MinWidth = 260,
             PlaceholderText = "https://example.com",
         };
         _slideCombo = new ComboBox
         {
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, 4),
             MinWidth = 260,
             ItemsSource = request.SlideOptions,
             SelectedIndex = request.SelectedSlideIndex,
         };
         _tooltipBox = new TextBox
         {
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, 8),
             MinWidth = 260,
         };
         _validationText = new TextBlock
@@ -70,6 +88,22 @@ internal sealed class HyperlinkDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 8),
         };
+        AvaloniaCompactDialogChrome.ApplyRadioButton(_urlRadio, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyRadioButton(_slideRadio, DialogChromeStyle);
+        foreach (var radio in new[] { _urlRadio, _slideRadio })
+        {
+            radio.Height = 20;
+            radio.MinHeight = 20;
+            radio.MaxHeight = 20;
+            radio.Padding = new Thickness(0);
+        }
+        AvaloniaCompactDialogChrome.ApplyTextBox(_urlBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_slideCombo, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_tooltipBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(
+            _validationText,
+            DialogChromeStyle,
+            new Thickness(0, 2, 0, 4));
 
         var initial = request.InitialState;
         _urlRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Url;
@@ -88,7 +122,7 @@ internal sealed class HyperlinkDialog : Window
     {
         var grid = new Grid
         {
-            Margin = new Thickness(14),
+            Margin = new Thickness(12),
             RowDefinitions =
             {
                 new RowDefinition { Height = GridLength.Auto },
@@ -100,7 +134,7 @@ internal sealed class HyperlinkDialog : Window
             },
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = new GridLength(96) },
+                new ColumnDefinition { Width = new GridLength(90) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
         };
@@ -157,7 +191,7 @@ internal sealed class HyperlinkDialog : Window
         {
             Text = text,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 6),
+            Margin = new Thickness(0, 0, 6, 4),
         };
         Grid.SetRow(label, row);
         Grid.SetColumn(label, 0);
@@ -169,11 +203,10 @@ internal sealed class HyperlinkDialog : Window
         var button = new Button
         {
             Content = label,
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
             IsDefault = isDefault,
             IsCancel = !isDefault,
         };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 74, isDefault: isDefault);
         button.Click += (_, _) => onClick();
         return button;
     }
@@ -185,7 +218,9 @@ internal sealed class HyperlinkDialog : Window
         _slideCombo.IsEnabled = !isUrl;
     }
 
-    private void OnOk()
+    private void OnOk() => Apply();
+
+    private bool Apply()
     {
         var selectedSlideId = (_slideCombo.SelectedItem as HyperlinkDialogSlideOption)?.Id;
         var plan = HyperlinkDialogPlanner.BuildResult(
@@ -201,11 +236,13 @@ internal sealed class HyperlinkDialog : Window
             var validation = plan.Validation!;
             _validationText.Text = validation.Message;
             FocusField(validation.FocusField);
-            return;
+            return false;
         }
 
         Result = plan.Result;
-        Close(Result);
+        if (IsVisible)
+            Close(Result);
+        return true;
     }
 
     private void FocusField(HyperlinkDialogField field)
