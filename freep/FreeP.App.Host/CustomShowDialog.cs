@@ -88,6 +88,12 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         int targetDropIndex) =>
         ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
 
+    internal void PrepareValidationForVisualEvidence()
+    {
+        _nameBox.Text = string.Empty;
+        OnCreate();
+    }
+
     private UIElement BuildContent()
     {
         var root = new Grid { Margin = new Thickness(14) };

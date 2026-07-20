@@ -215,6 +215,29 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         string dateTimeFieldType = "datetime1",
         string fixedDateTimeText = "")
     {
+        PrepareForVisualEvidence(
+            showDateTime,
+            showFooter,
+            showSlideNumber,
+            footerText,
+            suppressOnTitleSlide,
+            dateTimeMode,
+            dateTimeFieldType,
+            fixedDateTimeText);
+        Apply(scope);
+        return LastApplyPlan?.ShouldApply == true;
+    }
+
+    internal void PrepareForVisualEvidence(
+        bool showDateTime,
+        bool showFooter,
+        bool showSlideNumber,
+        string footerText,
+        bool suppressOnTitleSlide = false,
+        HeaderFooterDateTimeMode dateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
+        string dateTimeFieldType = "datetime1",
+        string fixedDateTimeText = "")
+    {
         _dateTimeCheck.IsChecked = showDateTime;
         _fixedDateCheck.IsChecked = dateTimeMode == HeaderFooterDateTimeMode.Fixed;
         _fixedDateBox.Text = fixedDateTimeText;
@@ -226,7 +249,5 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _slideNumberCheck.IsChecked = showSlideNumber;
         _dontShowOnTitleSlideCheck.IsChecked = suppressOnTitleSlide;
         UpdateDateTimeEnabled();
-        Apply(scope);
-        return LastApplyPlan?.ShouldApply == true;
     }
 }

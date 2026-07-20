@@ -29,6 +29,8 @@ namespace FreeP.RenderCompare;
 /// </summary>
 internal static class ImageDiff
 {
+    internal const int DefaultChangedChannelThreshold = 24;
+
     /// <summary>Compare two PNG files and return metrics. Writes a heatmap if <paramref name="heatmapPath"/> is non-null.</summary>
     internal static DiffResult Compare(string pathA, string pathB, string? heatmapPath = null)
     {
@@ -113,6 +115,125 @@ internal static class ImageDiff
         return new DiffResult(widthA, heightA, widthB, heightB, meanPct, maxDiff);
     }
 
+    internal static NormalizedDiffResult CompareNormalized(
+        string pathA,
+        string pathB,
+        int normalizedWidth,
+        int normalizedHeight,
+        string? heatmapPath = null,
+        int changedChannelThreshold = DefaultChangedChannelThreshold)
+    {
+        var bitmapA = WpfImageDiff.LoadBitmap(pathA);
+        var bitmapB = WpfImageDiff.LoadBitmap(pathB);
+        var pixelsA = NormalizeOverWhite(bitmapA, normalizedWidth, normalizedHeight);
+        var pixelsB = NormalizeOverWhite(bitmapB, normalizedWidth, normalizedHeight);
+        var backgroundA = EstimateCornerBackground(pixelsA, normalizedWidth, normalizedHeight);
+        var backgroundB = EstimateCornerBackground(pixelsB, normalizedWidth, normalizedHeight);
+
+        long totalDelta = 0;
+        var maxDelta = 0;
+        long changedPixels = 0;
+        long foregroundUnionPixels = 0;
+        long foregroundChangedPixels = 0;
+        var pixelCount = checked((long)normalizedWidth * normalizedHeight);
+        var heatPixels = heatmapPath is null ? null : new byte[checked((int)pixelCount)];
+
+        for (var pixel = 0; pixel < pixelCount; pixel++)
+        {
+            var offset = checked((int)pixel * 4);
+            var dB = Math.Abs(pixelsA[offset] - pixelsB[offset]);
+            var dG = Math.Abs(pixelsA[offset + 1] - pixelsB[offset + 1]);
+            var dR = Math.Abs(pixelsA[offset + 2] - pixelsB[offset + 2]);
+            var pixelMax = Math.Max(dR, Math.Max(dG, dB));
+            var changed = pixelMax >= changedChannelThreshold;
+            var foreground = IsForeground(pixelsA, offset, backgroundA) ||
+                IsForeground(pixelsB, offset, backgroundB);
+
+            totalDelta += dR + dG + dB;
+            maxDelta = Math.Max(maxDelta, pixelMax);
+            if (changed)
+                changedPixels++;
+            if (foreground)
+            {
+                foregroundUnionPixels++;
+                if (changed)
+                    foregroundChangedPixels++;
+            }
+            if (heatPixels is not null)
+                heatPixels[pixel] = (byte)Math.Min(255, (dR + dG + dB) / 3);
+        }
+
+        if (heatmapPath is not null && heatPixels is not null)
+            WriteHeatmap(heatPixels, normalizedWidth, normalizedHeight, heatmapPath);
+
+        var meanChannelDelta = pixelCount == 0 ? 0 : totalDelta / (pixelCount * 3d);
+        return new NormalizedDiffResult(
+            bitmapA.PixelWidth,
+            bitmapA.PixelHeight,
+            bitmapB.PixelWidth,
+            bitmapB.PixelHeight,
+            normalizedWidth,
+            normalizedHeight,
+            pixelCount,
+            foregroundUnionPixels,
+            changedPixels,
+            foregroundChangedPixels,
+            pixelCount == 0 ? 0 : changedPixels / (double)pixelCount,
+            foregroundUnionPixels == 0 ? 0 : foregroundChangedPixels / (double)foregroundUnionPixels,
+            meanChannelDelta,
+            maxDelta,
+            changedChannelThreshold,
+            "alpha-composited-over-white; corner-background-estimate; high-quality-scale-to-logical-96-dpi");
+    }
+
+    private static byte[] NormalizeOverWhite(BitmapSource source, int width, int height)
+    {
+        var visual = new DrawingVisual();
+        RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);
+        using (var drawing = visual.RenderOpen())
+        {
+            drawing.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+            drawing.DrawImage(source, new Rect(0, 0, width, height));
+        }
+
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var pixels = new byte[checked(width * height * 4)];
+        bitmap.CopyPixels(pixels, width * 4, 0);
+        return pixels;
+    }
+
+    private static (byte B, byte G, byte R) EstimateCornerBackground(byte[] pixels, int width, int height)
+    {
+        long b = 0;
+        long g = 0;
+        long r = 0;
+        var count = 0;
+        var sampleSize = Math.Min(4, Math.Min(width, height));
+        foreach (var origin in new[] { (0, 0), (width - sampleSize, 0), (0, height - sampleSize), (width - sampleSize, height - sampleSize) })
+        {
+            for (var y = origin.Item2; y < origin.Item2 + sampleSize; y++)
+            {
+                for (var x = origin.Item1; x < origin.Item1 + sampleSize; x++)
+                {
+                    var offset = (y * width + x) * 4;
+                    b += pixels[offset];
+                    g += pixels[offset + 1];
+                    r += pixels[offset + 2];
+                    count++;
+                }
+            }
+        }
+        return ((byte)(b / count), (byte)(g / count), (byte)(r / count));
+    }
+
+    private static bool IsForeground(byte[] pixels, int offset, (byte B, byte G, byte R) background) =>
+        Math.Max(
+            Math.Abs(pixels[offset] - background.B),
+            Math.Max(
+                Math.Abs(pixels[offset + 1] - background.G),
+                Math.Abs(pixels[offset + 2] - background.R))) >= 12;
+
     // -----------------------------------------------------------------------
     // Heatmap writer — false-colour: blue (diff=0) -> green -> red (diff=255)
     // -----------------------------------------------------------------------
@@ -165,3 +286,21 @@ internal sealed record DiffResult(
     int    HeightB,
     double MeanChannelDiffPercent,
     int    MaxChannelDiff);
+
+internal sealed record NormalizedDiffResult(
+    int WidthA,
+    int HeightA,
+    int WidthB,
+    int HeightB,
+    int NormalizedWidth,
+    int NormalizedHeight,
+    long ComparedPixelCount,
+    long ForegroundUnionPixelCount,
+    long ChangedPixelCount,
+    long ForegroundChangedPixelCount,
+    double ChangedPixelRatio,
+    double ForegroundChangedPixelRatio,
+    double MeanChannelDelta,
+    int MaxChannelDelta,
+    int ChangedChannelThreshold,
+    string BackgroundHandling);
