@@ -365,7 +365,9 @@ internal static class InsertDialogLayout
     public static StackPanel OkCancelRow(Action ok, Action cancel)
     {
         var okButton = MakeButton(InsertDialogTextResources.OkButton, (_, _) => ok());
+        okButton.IsDefault = true;
         var cancelButton = MakeButton(InsertDialogTextResources.CancelButton, (_, _) => cancel());
+        cancelButton.IsCancel = true;
         return AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(14, 12, 14, 12));
     }
 
