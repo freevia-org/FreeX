@@ -1591,30 +1591,17 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.redo", new ActionRibbonCommand(() => { if (editor.CanRedo) editor.Redo(); }));
 
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
-        registry.Register("freew.orientation", new PageCommand(editor, page =>
-        {
-            (page.WidthPt, page.HeightPt) = (page.HeightPt, page.WidthPt);
-            page.Landscape = !page.Landscape;
-        }));
-        registry.Register("freew.margins", new PageCommand(editor, page =>
-        {
-            var narrow = page.MarginLeftPt > 54;
-            var margin = narrow ? 36.0 : 72.0;
-            page.MarginLeftPt = page.MarginRightPt = page.MarginTopPt = page.MarginBottomPt = margin;
-        }));
-        registry.Register("freew.size", new PageCommand(editor, page =>
-        {
-            var isLetter = Math.Abs(page.WidthPt - 612) < 1 && Math.Abs(page.HeightPt - 792) < 1;
-            (page.WidthPt, page.HeightPt) = isLetter ? (595.0, 842.0) : (612.0, 792.0); // toggle Letter <-> A4
-        }));
+        registry.Register("freew.orientation", new PageCommand(editor, PageLayoutCommandPlanner.ToggleOrientation));
+        registry.Register("freew.margins", new PageCommand(editor, PageLayoutCommandPlanner.ToggleNormalNarrowMargins));
+        registry.Register("freew.size", new PageCommand(editor, PageLayoutCommandPlanner.ToggleLetterA4Paper));
         // Columns: open the Columns dialog or apply Word's backed preset menu choices directly, mutating
         // PageSettings and re-rendering so the live document flow changes immediately.
         registry.Register("freew.columns", new ColumnsCommand(editor));
-        registry.Register("freew.columns-one", new ColumnsPresetCommand(editor, ColumnsPreset.One));
-        registry.Register("freew.columns-two", new ColumnsPresetCommand(editor, ColumnsPreset.Two));
-        registry.Register("freew.columns-three", new ColumnsPresetCommand(editor, ColumnsPreset.Three));
-        registry.Register("freew.columns-left", new ColumnsPresetCommand(editor, ColumnsPreset.Left));
-        registry.Register("freew.columns-right", new ColumnsPresetCommand(editor, ColumnsPreset.Right));
+        registry.Register("freew.columns-one", new ColumnsPresetCommand(editor, PageColumnPreset.One));
+        registry.Register("freew.columns-two", new ColumnsPresetCommand(editor, PageColumnPreset.Two));
+        registry.Register("freew.columns-three", new ColumnsPresetCommand(editor, PageColumnPreset.Three));
+        registry.Register("freew.columns-left", new ColumnsPresetCommand(editor, PageColumnPreset.Left));
+        registry.Register("freew.columns-right", new ColumnsPresetCommand(editor, PageColumnPreset.Right));
         registry.Register("freew.columns-more", new ColumnsCommand(editor));
         // Page Setup: the unified Margins / Paper / Layout dialog (Word's Layout > Page Setup launcher). The
         // "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the Margins / Paper tab.
@@ -3041,7 +3028,7 @@ internal static class FreeWRibbonCommands
 
     private sealed class PageCommand(DocumentView editor, Action<PageSettings> apply) : IRibbonCommand
     {
-        public void Execute(RibbonCommandContext context) => apply(editor.Model.Page);
+        public void Execute(RibbonCommandContext context) => editor.ApplyPageSettings(apply);
     }
 
     // Home / Design > Borders and Shading…: opens the full dialog (paragraph border, page border, shading)
@@ -3077,65 +3064,16 @@ internal static class FreeWRibbonCommands
             if (result is null)
                 return;
 
-            editor.ApplyPageSettings(page =>
-            {
-                page.ColumnCount = result.Count;
-                page.ColumnSpacingPt = result.SpacingPt;
-                page.ColumnsLineBetween = result.LineBetween;
-                page.ColumnWidthsPt = result.WidthsPt;
-            });
+            editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyColumnsResult(page, result));
         }
-    }
-
-    private enum ColumnsPreset
-    {
-        One,
-        Two,
-        Three,
-        Left,
-        Right
     }
 
     // Word's Layout > Columns dropdown applies common presets immediately. Equal presets clear explicit
     // widths; Left/Right set the classic narrow/wide two-column split using the current page content width.
-    private sealed class ColumnsPresetCommand(DocumentView editor, ColumnsPreset preset) : IRibbonCommand
+    private sealed class ColumnsPresetCommand(DocumentView editor, PageColumnPreset preset) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page =>
-            {
-                var spacing = page.ColumnSpacingPt;
-                page.ColumnsLineBetween = false;
-                page.ColumnWidthsPt = null;
-
-                switch (preset)
-                {
-                    case ColumnsPreset.One:
-                        page.ColumnCount = 1;
-                        break;
-                    case ColumnsPreset.Two:
-                        page.ColumnCount = 2;
-                        break;
-                    case ColumnsPreset.Three:
-                        page.ColumnCount = 3;
-                        break;
-                    case ColumnsPreset.Left:
-                        page.ColumnCount = 2;
-                        page.ColumnWidthsPt = UnequalWidths(page, narrowFirst: true, spacing);
-                        break;
-                    case ColumnsPreset.Right:
-                        page.ColumnCount = 2;
-                        page.ColumnWidthsPt = UnequalWidths(page, narrowFirst: false, spacing);
-                        break;
-                }
-            });
-
-        private static IReadOnlyList<double> UnequalWidths(PageSettings page, bool narrowFirst, double spacing)
-        {
-            var contentWidthPt = Math.Max(72, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
-            const double narrowPt = 108; // 1.5 inch, matching the Columns dialog's Left/Right presets.
-            var widePt = Math.Max(36, contentWidthPt - spacing - narrowPt);
-            return narrowFirst ? [narrowPt, widePt] : [widePt, narrowPt];
-        }
+            editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyColumnPreset(page, preset));
     }
 
     // Opens the unified Page Setup dialog (Margins / Paper / Layout tabs) and applies the chosen geometry,
@@ -3155,23 +3093,8 @@ internal static class FreeWRibbonCommands
                 return;
 
             var settings = o.Settings;
-            editor.ApplyPageSettings(page =>
-            {
-                page.MarginTopPt = settings.MarginTopPt;
-                page.MarginBottomPt = settings.MarginBottomPt;
-                page.MarginLeftPt = settings.MarginLeftPt;
-                page.MarginRightPt = settings.MarginRightPt;
-                page.GutterPt = settings.GutterPt;
-                page.Landscape = settings.Landscape;
-                page.MirrorMargins = settings.MirrorMargins;
-                page.WidthPt = settings.WidthPt;
-                page.HeightPt = settings.HeightPt;
-                page.DifferentFirstPage = settings.DifferentFirstPage;
-                page.DifferentOddEvenPages = settings.DifferentOddEvenPages;
-                page.HeaderDistancePt = settings.HeaderDistancePt;
-                page.FooterDistancePt = settings.FooterDistancePt;
-                page.VerticalAlignment = settings.VerticalAlignment;
-            });
+            var planned = PageSetupDialog.ToPresentationResult(settings);
+            editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyPageSetupResult(page, planned));
 
             // Defer to the existing features for the Layout-tab launchers, so a single source of truth drives
             // line numbering and page/paragraph borders.
@@ -3188,12 +3111,7 @@ internal static class FreeWRibbonCommands
     private sealed class LineNumberCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.LineNumberMode = page.LineNumberMode switch
-            {
-                LineNumberMode.None => LineNumberMode.Continuous,
-                LineNumberMode.Continuous => LineNumberMode.RestartEachPage,
-                _ => LineNumberMode.None
-            });
+            editor.ApplyPageSettings(PageLayoutCommandPlanner.CycleLineNumberMode);
     }
 
     // Word's Layout > Line Numbers dropdown exposes discrete mode choices. These commands set the exact backed
@@ -3209,7 +3127,7 @@ internal static class FreeWRibbonCommands
     private sealed class HyphenationCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.AutoHyphenation = !page.AutoHyphenation);
+            editor.ApplyPageSettings(PageLayoutCommandPlanner.ToggleHyphenation);
     }
 
     // Hyphenation dropdown — None / Automatic: sets the document's automatic-hyphenation flag explicitly
@@ -3231,7 +3149,7 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             editor.CommitToModel();
-            var candidates = CountHyphenationCandidates(editor.Model);
+            var candidates = PageLayoutCommandPlanner.CountHyphenationCandidates(editor.Model);
             editor.ApplyPageSettings(page => page.AutoHyphenation = true);
 
             var owner = Window.GetWindow(editor);
@@ -3243,18 +3161,6 @@ internal static class FreeWRibbonCommands
                     "Hyphenation");
         }
 
-        // Count distinct word occurrences in the live document that the pure Hyphenator would break.
-        private static int CountHyphenationCandidates(TextDocument model)
-        {
-            var count = 0;
-            foreach (var block in model.Blocks)
-                if (block is FreeW.Core.Model.Paragraph { Formatting.SuppressAutoHyphens: false } paragraph)
-                    foreach (var run in paragraph.Runs)
-                        foreach (var token in run.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
-                            if (Hyphenator.BreakPoints(token.Trim('(', ')', ',', '.', ';', ':', '"', '\'')).Count > 0)
-                                count++;
-            return count;
-        }
     }
 
     // Hyphenation dropdown — Hyphenation Options…: opens the dialog (auto toggle, zone, consecutive-hyphen
@@ -3270,13 +3176,7 @@ internal static class FreeWRibbonCommands
             if (result is null)
                 return;
 
-            editor.ApplyPageSettings(page =>
-            {
-                page.AutoHyphenation = result.AutoHyphenation;
-                page.HyphenationZonePt = result.ZonePt;
-                page.ConsecutiveHyphenLimit = result.ConsecutiveLimit;
-                page.DoNotHyphenateCaps = !result.HyphenateCaps;
-            });
+            editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyHyphenationOptions(page, result));
         }
     }
 
@@ -4259,7 +4159,7 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var result = DropCapOptionsDialog.Ask(Window.GetWindow(editor));
+            var result = global::FreeW.App.Host.DropCapOptionsDialog.Prompt(Window.GetWindow(editor));
             if (result is null)
                 return;
             if (result.Position == DropCapDialogPosition.None)
@@ -4270,11 +4170,7 @@ internal static class FreeWRibbonCommands
             // Map lines-to-drop to an approximate point size (Word default body is 12 pt; each drop
             // line therefore adds ~12 pt to the cap height — a reasonable approximation without live
             // pagination).  Clamp to a sensible range.
-            var sizePt = Math.Max(14, result.LinesToDrop * 14.4);
-            var position = result.Position == DropCapDialogPosition.InMargin
-                ? DropCapPosition.InMargin
-                : DropCapPosition.Dropped;
-            editor.ApplyDropCap(position, sizePt, result.LinesToDrop, result.DistanceFromTextPt);
+            editor.ApplyDropCap(result.ModelPosition, result.SizePt, result.LinesToDrop, result.DistanceFromTextPt);
         }
     }
 
@@ -9220,121 +9116,6 @@ internal static class FreeWRibbonCommands
     }
 
     // -----------------------------------------------------------------------------------------
-    // Drop Cap Options dialog — position / font / lines / distance
-    // -----------------------------------------------------------------------------------------
-
-    /// <summary>Drop-cap position choices matching Word's Drop Cap Options dialog.</summary>
-    private enum DropCapDialogPosition { None, Dropped, InMargin }
-
-    /// <summary>Result returned by <see cref="DropCapOptionsDialog.Ask"/>.</summary>
-    private sealed record DropCapOptionsResult(
-        DropCapDialogPosition Position,
-        string? Font,
-        int LinesToDrop,
-        double DistanceFromTextPt);
-
-    // Drop Cap Options dialog: choose position (None / Dropped / In Margin), font, lines to drop
-    // (1–10), and distance from text (0–100 pt). Returns null on cancel.
-    private static class DropCapOptionsDialog
-    {
-        public static DropCapOptionsResult? Ask(Window? owner)
-        {
-            // --- Position radio buttons ---
-            var rbNone     = new System.Windows.Controls.RadioButton { Content = "None",      GroupName = "pos", Margin = new Thickness(4, 2, 12, 2) };
-            var rbDropped  = new System.Windows.Controls.RadioButton { Content = "Dropped",   GroupName = "pos", Margin = new Thickness(4, 2, 12, 2), IsChecked = true };
-            var rbInMargin = new System.Windows.Controls.RadioButton { Content = "In Margin", GroupName = "pos", Margin = new Thickness(4, 2, 12, 2) };
-
-            var posRow = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                Margin = new Thickness(0, 0, 0, 8)
-            };
-            posRow.Children.Add(rbNone);
-            posRow.Children.Add(rbDropped);
-            posRow.Children.Add(rbInMargin);
-
-            // --- Font combo ---
-            var fontCombo = new System.Windows.Controls.ComboBox
-            {
-                IsEditable = true,
-                MinWidth = 160,
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-            foreach (var f in new[] { "(Current font)", "Arial", "Calibri", "Times New Roman", "Georgia", "Cambria" })
-                fontCombo.Items.Add(f);
-            fontCombo.SelectedIndex = 0;
-
-            // --- Lines to drop spinner (1–10) ---
-            var linesBox = new System.Windows.Controls.TextBox { Text = "3", Width = 50, Margin = new Thickness(0, 0, 0, 6) };
-
-            // --- Distance from text (0–100 pt) ---
-            var distanceBox = new System.Windows.Controls.TextBox { Text = "0", Width = 50, Margin = new Thickness(0, 0, 0, 12) };
-
-            // --- Form layout ---
-            StackPanel Row(string label, System.Windows.UIElement control)
-            {
-                var row = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 0, 4) };
-                row.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 2) });
-                row.Children.Add(control);
-                return row;
-            }
-
-            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel  = true, MinWidth = 72 };
-
-            DropCapOptionsResult? result = null;
-            var dialog = new Window
-            {
-                Title = "Drop Cap Options",
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            ok.Click += (_, _) =>
-            {
-                var position = rbNone.IsChecked == true     ? DropCapDialogPosition.None
-                             : rbInMargin.IsChecked == true ? DropCapDialogPosition.InMargin
-                             :                                DropCapDialogPosition.Dropped;
-                _ = int.TryParse(linesBox.Text, out var lines);
-                lines = Math.Clamp(lines, 1, 10);
-                _ = double.TryParse(distanceBox.Text, out var dist);
-                dist = Math.Clamp(dist, 0, 100);
-                var font = fontCombo.Text is "(Current font)" or "" ? null : fontCombo.Text;
-                result = new DropCapOptionsResult(position, font, lines, dist);
-                dialog.DialogResult = true;
-            };
-
-            var btnRow = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            btnRow.Children.Add(ok);
-            btnRow.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 280 };
-            panel.Children.Add(new System.Windows.Controls.TextBlock
-            {
-                Text = "Position:",
-                FontWeight = System.Windows.FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 4)
-            });
-            panel.Children.Add(posRow);
-            panel.Children.Add(new System.Windows.Controls.Separator { Margin = new Thickness(0, 0, 0, 8) });
-            panel.Children.Add(Row("Font:", fontCombo));
-            panel.Children.Add(Row("Lines to drop:", linesBox));
-            panel.Children.Add(Row("Distance from text (pt):", distanceBox));
-            panel.Children.Add(btnRow);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
-        }
-    }
-
-    // -----------------------------------------------------------------------------------------
     // Feature 1 — Line Number Options dialog and command
     // -----------------------------------------------------------------------------------------
 
@@ -9353,12 +9134,7 @@ internal static class FreeWRibbonCommands
                 page.LineNumberCountBy,
                 page.LineNumberMode == LineNumberMode.None ? LineNumberMode.RestartEachPage : page.LineNumberMode);
             if (result is null) return;
-            editor.ApplyPageSettings(p =>
-            {
-                p.LineNumberStartAt = result.StartAt;
-                p.LineNumberCountBy = result.CountBy;
-                p.LineNumberMode    = result.Mode;
-            });
+            editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyLineNumberOptions(page, result));
         }
     }
 

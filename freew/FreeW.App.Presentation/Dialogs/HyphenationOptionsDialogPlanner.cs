@@ -23,6 +23,11 @@ public sealed record HyphenationOptionsDialogResult(
 
 public static class HyphenationOptionsDialogPlanner
 {
+    public const string Title = "Hyphenation";
+    public const string AutomaticLabel = "Automatically hyphenate document";
+    public const string ZoneLabel = "Hyphenation zone (pt):";
+    public const string ConsecutiveLimitLabel = "Limit consecutive hyphens to (0 = no limit):";
+    public const string HyphenateCapsLabel = "Hyphenate words in CAPS";
     public const string ValidationMessage =
         "Enter a non-negative hyphenation zone and a non-negative consecutive-hyphen limit (0 = no limit).";
 

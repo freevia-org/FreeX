@@ -3,260 +3,258 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Localization;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-/// <summary>
-/// FreeW Avalonia Page Setup dialog: a modal <see cref="Window"/> that lets the user inspect and
-/// change the document's page geometry (size, orientation, margins).
-/// </summary>
+public enum PageSetupDialogTab
+{
+    Margins,
+    Paper,
+    Layout
+}
+
+public sealed record PageSetupDialogOutcome(
+    PageSetupDialogResult Settings,
+    bool LineNumbersRequested,
+    bool BordersRequested);
+
+/// <summary>Avalonia chrome for the shared WPF-authoritative three-tab Page Setup contract.</summary>
 public sealed class PageSetupDialog : Window
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
-    private static readonly CultureInfo DialogCulture = CultureInfo.InvariantCulture;
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = PageLayoutDialogChrome.Style;
+    private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
 
-    private readonly TextBox _topBox = MakeNumericBox();
-    private readonly TextBox _bottomBox = MakeNumericBox();
-    private readonly TextBox _leftBox = MakeNumericBox();
-    private readonly TextBox _rightBox = MakeNumericBox();
-    private readonly RadioButton _portraitRadio = new() { Content = PageSetupDialogPlanner.OrientationNames[0], IsChecked = true, Margin = new Thickness(0, 4, 12, 0), GroupName = "Orientation" };
-    private readonly RadioButton _landscapeRadio = new() { Content = PageSetupDialogPlanner.OrientationNames[1], IsChecked = false, Margin = new Thickness(0, 4, 12, 0), GroupName = "Orientation" };
-    private readonly ComboBox _paperSizeBox;
-    private readonly TextBox _paperWidthBox = MakeNumericBox();
-    private readonly TextBox _paperHeightBox = MakeNumericBox();
-    private readonly StackPanel _customSizePanel;
-    private readonly TextBlock _status = new();
+    private readonly TextBox _top;
+    private readonly TextBox _bottom;
+    private readonly TextBox _left;
+    private readonly TextBox _right;
+    private readonly TextBox _gutter;
+    private readonly ComboBox _orientation;
+    private readonly ComboBox _multiplePages;
+    private readonly ComboBox _applyTo;
+    private readonly ComboBox _paperSize;
+    private readonly TextBox _width;
+    private readonly TextBox _height;
+    private readonly ComboBox _sectionStart;
+    private readonly CheckBox _differentFirstPage;
+    private readonly CheckBox _differentOddEven;
+    private readonly TextBox _headerDistance;
+    private readonly TextBox _footerDistance;
+    private readonly ComboBox _verticalAlignment;
+    private readonly TextBlock _status = PageLayoutDialogChrome.Status();
+    private bool _suppressPaperSync;
+    private bool _lineNumbersRequested;
+    private bool _bordersRequested;
 
-    public PageSetupDialog(PageSettings current)
+    public PageSetupDialog(PageSettings current, PageSetupDialogTab initialTab = PageSetupDialogTab.Margins)
     {
         ArgumentNullException.ThrowIfNull(current);
-
-        Title = PageSetupDialogPlanner.Title;
-        Width = 400;
-        SizeToContent = SizeToContent.Height;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        CanResize = false;
-        ShowInTaskbar = false;
+        PageLayoutDialogChrome.Configure(this, PageSetupDialogPlanner.Title, 440);
 
         var state = PageSetupDialogPlanner.BuildInitialState(
             current,
             SectionBreakKind.NextPage,
-            PageSetupDialogPlanner.AvaloniaPaperOptions,
-            PageSetupGeometryMode.NormalizeToOrientation,
+            PageSetupDialogPlanner.HostPaperOptions,
+            PageSetupGeometryMode.PortraitInputSwappedWhenLandscape,
             DialogCulture);
+        _top = NumberBox(state.MarginTopText);
+        _bottom = NumberBox(state.MarginBottomText);
+        _left = NumberBox(state.MarginLeftText);
+        _right = NumberBox(state.MarginRightText);
+        _gutter = NumberBox(state.GutterText);
+        _orientation = Combo(PageSetupDialogPlanner.OrientationNames, state.OrientationIndex);
+        _multiplePages = Combo(PageSetupDialogPlanner.MultiplePagesNames, state.MultiplePagesIndex);
+        _applyTo = Combo(PageSetupDialogPlanner.ApplyToNames, 0);
+        _paperSize = Combo(PageSetupDialogPlanner.HostPaperOptions.Select(option => option.HostLabel), state.PaperSizeIndex);
+        _width = NumberBox(state.WidthText);
+        _height = NumberBox(state.HeightText);
+        _sectionStart = Combo(PageSetupDialogPlanner.SectionStartNames, state.SectionStartIndex);
+        _differentFirstPage = Check("Different first page", state.DifferentFirstPage);
+        _differentOddEven = Check("Different odd and even", state.DifferentOddEvenPages);
+        _headerDistance = NumberBox(state.HeaderDistanceText);
+        _footerDistance = NumberBox(state.FooterDistanceText);
+        _verticalAlignment = Combo(PageSetupDialogPlanner.VerticalAlignmentNames, state.VerticalAlignmentIndex);
 
-        _topBox.Text = PageSetupDialogPlanner.FormatCompactPoints(current.MarginTopPt, DialogCulture);
-        _bottomBox.Text = PageSetupDialogPlanner.FormatCompactPoints(current.MarginBottomPt, DialogCulture);
-        _leftBox.Text = PageSetupDialogPlanner.FormatCompactPoints(current.MarginLeftPt, DialogCulture);
-        _rightBox.Text = PageSetupDialogPlanner.FormatCompactPoints(current.MarginRightPt, DialogCulture);
+        _paperSize.SelectionChanged += (_, _) => ApplyPaperPreset();
+        _width.TextChanged += (_, _) => SyncPaperToCustom();
+        _height.TextChanged += (_, _) => SyncPaperToCustom();
 
-        _portraitRadio.IsChecked = state.OrientationIndex != 1;
-        _landscapeRadio.IsChecked = state.OrientationIndex == 1;
+        var tabs = new TabControl { Margin = new Thickness(16, 14, 16, 0), SelectedIndex = (int)initialTab };
+        tabs.Items.Add(new TabItem { Header = "Margins", Content = BuildMarginsTab() });
+        tabs.Items.Add(new TabItem { Header = "Paper", Content = BuildPaperTab() });
+        tabs.Items.Add(new TabItem { Header = "Layout", Content = BuildLayoutTab() });
 
-        _paperSizeBox = new ComboBox { MinWidth = 200 };
-        AvaloniaCompactDialogChrome.ApplyComboBox(_paperSizeBox, DialogChromeStyle);
-        _paperSizeBox.ItemsSource = PageSetupDialogPlanner.AvaloniaPaperOptions
-            .Select(option => option.AvaloniaLabel)
-            .ToArray();
-        _paperSizeBox.SelectedIndex = state.PaperSizeIndex;
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
+        var root = new StackPanel();
+        root.Children.Add(tabs);
+        root.Children.Add(_status);
+        root.Children.Add(PageLayoutDialogChrome.Actions(Accept, () => Close(null)));
+        if (root.Children[^1] is Control actions)
+            actions.Margin = new Thickness(16, 12, 16, 16);
+        Content = root;
 
-        _paperWidthBox.Text = PageSetupDialogPlanner.FormatCompactPoints(current.WidthPt, DialogCulture);
-        _paperHeightBox.Text = PageSetupDialogPlanner.FormatCompactPoints(current.HeightPt, DialogCulture);
-        AvaloniaCompactDialogChrome.ApplyRadioButton(_portraitRadio, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyRadioButton(_landscapeRadio, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(0, 6, 0, 0));
-
-        var customIndex = PageSetupDialogPlanner.CustomIndex(PageSetupDialogPlanner.AvaloniaPaperOptions);
-        _customSizePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        _customSizePanel.Children.Add(new TextBlock { Text = PageSetupDialogPlanner.CustomWidthLabel, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
-        _customSizePanel.Children.Add(_paperWidthBox);
-        _customSizePanel.Children.Add(new TextBlock { Text = PageSetupDialogPlanner.CustomHeightLabel, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 0) });
-        _customSizePanel.Children.Add(_paperHeightBox);
-        _customSizePanel.IsVisible = state.PaperSizeIndex == customIndex;
-
-        _paperSizeBox.SelectionChanged += (_, _) =>
-        {
-            _customSizePanel.IsVisible = _paperSizeBox.SelectedIndex == customIndex;
-        };
-
-        var content = new StackPanel { Margin = new Thickness(16, 14, 16, 16) };
-
-        content.Children.Add(SectionLabel(PageSetupDialogPlanner.MarginsSectionLabel));
-        var marginGrid = new Grid();
-        marginGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        marginGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
-        marginGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        marginGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        marginGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        AddLabeledCell(marginGrid, PageSetupDialogPlanner.TopMarginLabel, _topBox, 0, 0);
-        AddLabeledCell(marginGrid, PageSetupDialogPlanner.BottomMarginLabel, _bottomBox, 0, 2);
-        AddLabeledCell(marginGrid, PageSetupDialogPlanner.LeftMarginLabel, _leftBox, 1, 0);
-        AddLabeledCell(marginGrid, PageSetupDialogPlanner.RightMarginLabel, _rightBox, 1, 2);
-        content.Children.Add(marginGrid);
-
-        content.Children.Add(SectionLabel(PageSetupDialogPlanner.OrientationSectionLabel));
-        var orientRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
-        orientRow.Children.Add(_portraitRadio);
-        orientRow.Children.Add(_landscapeRadio);
-        content.Children.Add(orientRow);
-
-        content.Children.Add(SectionLabel(PageSetupDialogPlanner.PaperSizeSectionLabel));
-        content.Children.Add(_paperSizeBox);
-        content.Children.Add(_customSizePanel);
-
-        content.Children.Add(_status);
-        var ok = new Button { Content = PageSetupDialogPlanner.OkButton, IsDefault = true };
-        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
-        var cancel = new Button { Content = PageSetupDialogPlanner.CancelButton, MinWidth = 84, IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 84);
-        ok.Click += (_, _) => OnOk();
-        cancel.Click += (_, _) => Close(null);
-        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0)));
-
-        Content = content;
-
-        KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape)
-            {
-                Close(null);
-                e.Handled = true;
-            }
-        };
+        Opened += (_, _) => PageLayoutDialogChrome.FocusAndSelect(_top);
+        PageLayoutDialogChrome.WireEscape<PageSetupDialogOutcome?>(this);
     }
 
-    /// <summary>Result produced by the dialog on OK.</summary>
-    public sealed record PageSetupDialogResult(
-        double MarginTopPt,
-        double MarginBottomPt,
-        double MarginLeftPt,
-        double MarginRightPt,
-        bool Landscape,
-        double WidthPt,
-        double HeightPt);
-
-    private void OnOk()
+    private Control BuildMarginsTab()
     {
-        _status.IsVisible = false;
+        var panel = TabPanel();
+        panel.Children.Add(PageLayoutDialogChrome.Row("Top (pt):", _top));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Bottom (pt):", _bottom));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Left (pt):", _left));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Right (pt):", _right));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Gutter (pt):", _gutter));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Orientation:", _orientation));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Multiple pages:", _multiplePages));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Apply to:", _applyTo));
+        return panel;
+    }
 
+    private Control BuildPaperTab()
+    {
+        var panel = TabPanel();
+        panel.Children.Add(PageLayoutDialogChrome.Row("Paper size:", _paperSize));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Width (pt):", _width));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Height (pt):", _height));
+        return panel;
+    }
+
+    private Control BuildLayoutTab()
+    {
+        var panel = TabPanel();
+        panel.Children.Add(PageLayoutDialogChrome.Row("Section start:", _sectionStart));
+        panel.Children.Add(_differentFirstPage);
+        panel.Children.Add(_differentOddEven);
+        panel.Children.Add(PageLayoutDialogChrome.Row("Header from edge (pt):", _headerDistance));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Footer from edge (pt):", _footerDistance));
+        panel.Children.Add(PageLayoutDialogChrome.Row("Vertical alignment:", _verticalAlignment));
+
+        var launchers = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 12, 0, 0) };
+        var lineNumbers = new Button { Content = "Line Numbers..." };
+        var borders = new Button { Content = "Borders..." };
+        AvaloniaCompactDialogChrome.ApplyButton(lineNumbers, DialogChromeStyle, minWidth: 112);
+        AvaloniaCompactDialogChrome.ApplyButton(borders, DialogChromeStyle, minWidth: 92);
+        lineNumbers.Click += (_, _) =>
+        {
+            _lineNumbersRequested = true;
+            Accept();
+        };
+        borders.Click += (_, _) =>
+        {
+            _bordersRequested = true;
+            Accept();
+        };
+        launchers.Children.Add(lineNumbers);
+        launchers.Children.Add(borders);
+        panel.Children.Add(launchers);
+        return panel;
+    }
+
+    private void ApplyPaperPreset()
+    {
+        var preset = PageSetupDialogPlanner.ApplyPaperPreset(
+            PageSetupDialogPlanner.HostPaperOptions,
+            _paperSize.SelectedIndex,
+            DialogCulture);
+        if (preset is null)
+            return;
+
+        _suppressPaperSync = true;
+        _width.Text = preset.Value.WidthText;
+        _height.Text = preset.Value.HeightText;
+        _suppressPaperSync = false;
+    }
+
+    private void SyncPaperToCustom()
+    {
+        if (_suppressPaperSync ||
+            !double.TryParse(_width.Text, NumberStyles.Float, DialogCulture, out var width) ||
+            !double.TryParse(_height.Text, NumberStyles.Float, DialogCulture, out var height))
+            return;
+
+        _paperSize.SelectedIndex = PageSetupDialogPlanner.PaperIndexFor(
+            PageSetupDialogPlanner.HostPaperOptions,
+            width,
+            height);
+    }
+
+    private void Accept()
+    {
         var input = new PageSetupDialogInput(
-            MarginTopText: _topBox.Text,
-            MarginBottomText: _bottomBox.Text,
-            MarginLeftText: _leftBox.Text,
-            MarginRightText: _rightBox.Text,
-            GutterText: "0",
-            OrientationIndex: _landscapeRadio.IsChecked == true ? 1 : 0,
-            MultiplePagesIndex: 0,
-            WidthText: _paperWidthBox.Text,
-            HeightText: _paperHeightBox.Text,
-            PaperSizeIndex: _paperSizeBox.SelectedIndex,
-            SectionStartIndex: 1,
-            DifferentFirstPage: false,
-            DifferentOddEvenPages: false,
-            HeaderDistanceText: "0",
-            FooterDistanceText: "0",
-            VerticalAlignmentIndex: 0,
-            UseSelectedPaperPreset: true,
-            GeometryMode: PageSetupGeometryMode.NormalizeToOrientation,
-            ValidationProfile: PageSetupValidationProfile.CompactDialog);
-
+            MarginTopText: _top.Text,
+            MarginBottomText: _bottom.Text,
+            MarginLeftText: _left.Text,
+            MarginRightText: _right.Text,
+            GutterText: _gutter.Text,
+            OrientationIndex: _orientation.SelectedIndex,
+            MultiplePagesIndex: _multiplePages.SelectedIndex,
+            WidthText: _width.Text,
+            HeightText: _height.Text,
+            PaperSizeIndex: _paperSize.SelectedIndex,
+            SectionStartIndex: _sectionStart.SelectedIndex,
+            DifferentFirstPage: _differentFirstPage.IsChecked == true,
+            DifferentOddEvenPages: _differentOddEven.IsChecked == true,
+            HeaderDistanceText: _headerDistance.Text,
+            FooterDistanceText: _footerDistance.Text,
+            VerticalAlignmentIndex: _verticalAlignment.SelectedIndex,
+            UseSelectedPaperPreset: false,
+            GeometryMode: PageSetupGeometryMode.PortraitInputSwappedWhenLandscape,
+            ValidationProfile: PageSetupValidationProfile.UnifiedDialog);
         if (!PageSetupDialogPlanner.TryBuildResult(
                 input,
-                PageSetupDialogPlanner.AvaloniaPaperOptions,
+                PageSetupDialogPlanner.HostPaperOptions,
                 DialogCulture,
-                out var planned,
+                out var result,
                 out var error))
         {
-            ShowError(error ?? PageSetupDialogPlanner.UnifiedValidationMessage);
+            PageLayoutDialogChrome.ShowError(_status, error ?? PageSetupDialogPlanner.UnifiedValidationMessage);
             return;
         }
 
-        Close(new PageSetupDialogResult(
-            MarginTopPt: planned!.MarginTopPt,
-            MarginBottomPt: planned.MarginBottomPt,
-            MarginLeftPt: planned.MarginLeftPt,
-            MarginRightPt: planned.MarginRightPt,
-            Landscape: planned.Landscape,
-            WidthPt: planned.WidthPt,
-            HeightPt: planned.HeightPt));
+        Close(new PageSetupDialogOutcome(result!, _lineNumbersRequested, _bordersRequested));
     }
 
-    /// <summary>
-    /// Build a <see cref="PageSettings"/> from <paramref name="result"/>, copying it over the
-    /// current <see cref="TextDocument.Page"/> via <see cref="DocumentView.SetPageSettings"/>.
-    /// </summary>
-    public static void ApplyResult(DocumentView editor, PageSetupDialogResult result)
+    public static void ApplyResult(DocumentView editor, PageSetupDialogResult result) =>
+        editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyPageSetupResult(page, result));
+
+    public static async Task ShowAndApplyAsync(
+        Window owner,
+        DocumentView editor,
+        PageSetupDialogTab initialTab = PageSetupDialogTab.Margins,
+        Func<Task>? openLineNumbers = null,
+        Func<Task>? openBorders = null)
     {
-        ArgumentNullException.ThrowIfNull(editor);
-        ArgumentNullException.ThrowIfNull(result);
-
-        var settings = editor.Document.Page.Clone();
-        settings.MarginTopPt = result.MarginTopPt;
-        settings.MarginBottomPt = result.MarginBottomPt;
-        settings.MarginLeftPt = result.MarginLeftPt;
-        settings.MarginRightPt = result.MarginRightPt;
-        settings.Landscape = result.Landscape;
-        settings.WidthPt = result.WidthPt;
-        settings.HeightPt = result.HeightPt;
-
-        editor.SetPageSettings(settings);
-    }
-
-    /// <summary>
-    /// Shows the Page Setup dialog modally and, on OK, applies the changes to the document.
-    /// Must be called from the UI thread.
-    /// </summary>
-    public static async Task ShowAndApplyAsync(Window owner, DocumentView editor)
-    {
-        ArgumentNullException.ThrowIfNull(owner);
-        ArgumentNullException.ThrowIfNull(editor);
-
-        var current = editor.Document.Page;
-        var dialog = new PageSetupDialog(current);
-        var result = await dialog.ShowDialog<PageSetupDialogResult?>(owner);
-        if (result is null)
+        var outcome = await new PageSetupDialog(editor.Document.Page, initialTab)
+            .ShowDialog<PageSetupDialogOutcome?>(owner);
+        if (outcome is null)
             return;
 
-        ApplyResult(editor, result);
+        ApplyResult(editor, outcome.Settings);
+        if (outcome.LineNumbersRequested && openLineNumbers is not null)
+            await openLineNumbers();
+        else if (outcome.BordersRequested && openBorders is not null)
+            await openBorders();
+        editor.Focus();
     }
 
-    private void ShowError(string msg)
-    {
-        _status.Text = msg;
-        _status.IsVisible = true;
-    }
+    private static StackPanel TabPanel() => new() { Margin = new Thickness(12), Spacing = 4 };
 
-    private static TextBox MakeNumericBox()
+    private static TextBox NumberBox(string value) => PageLayoutDialogChrome.NumberBox(value, 120);
+
+    private static ComboBox Combo(IEnumerable<string> values, int selectedIndex) =>
+        PageLayoutDialogChrome.Combo(values, selectedIndex, 170);
+
+    private static CheckBox Check(string label, bool value)
     {
-        var box = new TextBox { Width = 80, Margin = new Thickness(0, 4, 0, 0) };
-        AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+        var box = new CheckBox { Content = label, IsChecked = value, Margin = new Thickness(0, 5, 0, 0) };
+        AvaloniaCompactDialogChrome.ApplyCheckBox(box, DialogChromeStyle);
         return box;
-    }
-
-    private static TextBlock SectionLabel(string text) => new()
-    {
-        Text = text,
-        FontWeight = FontWeight.SemiBold,
-        Margin = new Thickness(0, 10, 0, 2),
-    };
-
-    private static void AddLabeledCell(Grid grid, string label, Control ctrl, int row, int col)
-    {
-        var lbl = new TextBlock
-        {
-            Text = label,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(0, 6, 0, 2),
-        };
-        var cell = new StackPanel { Children = { lbl, ctrl } };
-        Grid.SetRow(cell, row);
-        Grid.SetColumn(cell, col);
-        grid.Children.Add(cell);
     }
 }

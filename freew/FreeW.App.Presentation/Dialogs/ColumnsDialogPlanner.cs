@@ -27,6 +27,11 @@ public sealed record ColumnsDialogResult(
 
 public static class ColumnsDialogPlanner
 {
+    public const string Title = "Columns";
+    public const string PresetsLabel = "Presets:";
+    public const string CountLabel = "Number of columns:";
+    public const string SpacingLabel = "Spacing (pt):";
+    public const string LineBetweenLabel = "Line between";
     public const string ValidationMessage =
         "Enter 1-12 columns and a non-negative spacing in points.";
 
