@@ -451,15 +451,7 @@ public sealed class MainWindow : Window
             StatusBar: status));
         var root = clientFrame.Root;
 
-        // File keyboard shortcuts.
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.New,    (_, _) => _file.New()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Open,   (_, _) => _file.Open()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Save,   (_, _) => _file.Save()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()));
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Print,  (_, _) => RefreshPrintBackstagePlan()));
-
-        // Editing keyboard shortcuts (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Delete / Ctrl+D).
-        AddEditingKeyBindings();
+        InstallSharedKeyboardShortcuts();
 
         Closing += (_, e) =>
         {
@@ -3177,78 +3169,75 @@ public sealed class MainWindow : Window
 
     // ── Keyboard bindings ─────────────────────────────────────────────────────────
 
-    private void AddEditingKeyBindings()
+    private void InstallSharedKeyboardShortcuts()
     {
-        // Undo: Ctrl+Z
-        CommandBindings.Add(new CommandBinding(ApplicationCommands.Undo, (_, _) => Editor.Undo()));
-        InputBindings.Add(new KeyBinding(ApplicationCommands.Undo,
-            new KeyGesture(Key.Z, ModifierKeys.Control)));
+        var commands = Enum.GetValues<FreePKeyboardCommand>()
+            .ToDictionary(
+                command => command,
+                command => new RoutedUICommand(command.ToString(), $"FreeP{command}", typeof(MainWindow)));
 
-        // Redo: Ctrl+Y
-        var redoCommand = new RoutedCommand("Redo", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(redoCommand, (_, _) => Editor.Redo()));
-        InputBindings.Add(new KeyBinding(redoCommand, new KeyGesture(Key.Y, ModifierKeys.Control)));
-        InputBindings.Add(new KeyBinding(redoCommand, new KeyGesture(Key.Z, ModifierKeys.Control | ModifierKeys.Shift)));
-
-        // Delete: delete selected shapes (only when canvas-region has focus — 3C refines).
-        var deleteCommand = new RoutedCommand("DeleteSelected", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(deleteCommand, (_, _) => Editor.DeleteSelected()));
-        InputBindings.Add(new KeyBinding(deleteCommand, new KeyGesture(Key.Delete)));
-
-        // Ctrl+D: duplicate current slide.
-        var dupSlideCommand = new RoutedCommand("DuplicateSlide", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(dupSlideCommand, (_, _) => Editor.DuplicateCurrentSlide()));
-        InputBindings.Add(new KeyBinding(dupSlideCommand, new KeyGesture(Key.D, ModifierKeys.Control)));
-
-        // F5: Start slide show from the beginning.
-        var slideShowFromStart = new RoutedCommand("SlideShowFromStart", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(slideShowFromStart, (_, _) => StartSlideShow(fromStart: true)));
-        InputBindings.Add(new KeyBinding(slideShowFromStart, new KeyGesture(Key.F5)));
-
-        // Shift+F5: Start slide show from the current slide.
-        var slideShowFromCurrent = new RoutedCommand("SlideShowFromCurrent", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(slideShowFromCurrent, (_, _) => StartSlideShow(fromStart: false)));
-        InputBindings.Add(new KeyBinding(slideShowFromCurrent, new KeyGesture(Key.F5, ModifierKeys.Shift)));
-
-        // Wave 5B / 10B: Clipboard keyboard shortcuts (Ctrl+C / Ctrl+X / Ctrl+V).
-        // Copy and Cut update both the internal clipboard (EditingSession) AND the OS clipboard
-        // (OsClipboardService) so shapes can be pasted into other apps.
-        // Paste checks OS clipboard first (image → picture, text → textbox) then internal.
-        var copyCommand = new RoutedCommand("CopyShapes", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(copyCommand, (_, _) =>
+        foreach (var (command, routedCommand) in commands)
         {
-            Editor.CopySelectedShapes();
-            _osClipboard.PlaceSelectionOnOsClipboard(Editor);
-        }));
-        InputBindings.Add(new KeyBinding(copyCommand, new KeyGesture(Key.C, ModifierKeys.Control)));
+            CommandBindings.Add(new CommandBinding(
+                routedCommand,
+                (_, _) => ExecuteKeyboardCommand(command)));
+        }
 
-        var cutCommand = new RoutedCommand("CutShapes", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(cutCommand, (_, _) =>
+        foreach (var shortcut in FreePKeyboardShortcutCatalog.All)
         {
-            // Y7: capture the selection on the OS clipboard BEFORE CutSelectedShapes()
-            // calls DeleteSelected() → ClearSelection(), which would leave an empty
-            // selection and cause PlaceSelectionOnOsClipboard to silently no-op.
-            // Order: (1) deep-clone to internal clipboard, (2) render+push to OS clipboard,
-            // (3) delete the originals.  Both clipboards end up populated.
-            Editor.CopySelectedShapes();
-            _osClipboard.PlaceSelectionOnOsClipboard(Editor);
-            Editor.DeleteSelected();
-        }));
-        InputBindings.Add(new KeyBinding(cutCommand, new KeyGesture(Key.X, ModifierKeys.Control)));
+            InputBindings.Add(new KeyBinding(
+                commands[shortcut.Command],
+                new KeyGesture(ToWpfKey(shortcut.Key), ToWpfModifiers(shortcut.Modifiers))));
+        }
+    }
 
-        var pasteCommand = new RoutedCommand("PasteShapes", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(pasteCommand, (_, _) =>
-            _osClipboard.Paste(Editor, preferOsClipboard: true)));
-        InputBindings.Add(new KeyBinding(pasteCommand, new KeyGesture(Key.V, ModifierKeys.Control)));
+    private void ExecuteKeyboardCommand(FreePKeyboardCommand command)
+    {
+        switch (command)
+        {
+            case FreePKeyboardCommand.NewPresentation: _file.New(); break;
+            case FreePKeyboardCommand.OpenPresentation: _file.Open(); break;
+            case FreePKeyboardCommand.SavePresentation: _file.Save(); break;
+            case FreePKeyboardCommand.SavePresentationAs: _file.SaveAs(); break;
+            case FreePKeyboardCommand.PrintPresentation: RefreshPrintBackstagePlan(); break;
+            case FreePKeyboardCommand.Undo: Editor.Undo(); break;
+            case FreePKeyboardCommand.Redo: Editor.Redo(); break;
+            case FreePKeyboardCommand.DeleteSelectedShapes: Editor.DeleteSelected(); break;
+            case FreePKeyboardCommand.DuplicateCurrentSlide: Editor.DuplicateCurrentSlide(); break;
+            case FreePKeyboardCommand.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
+            case FreePKeyboardCommand.StartSlideShowFromCurrentSlide: StartSlideShow(fromStart: false); break;
+            case FreePKeyboardCommand.Copy:
+                Editor.CopySelectedShapes();
+                _osClipboard.PlaceSelectionOnOsClipboard(Editor);
+                break;
+            case FreePKeyboardCommand.Cut:
+                Editor.CopySelectedShapes();
+                _osClipboard.PlaceSelectionOnOsClipboard(Editor);
+                Editor.DeleteSelected();
+                break;
+            case FreePKeyboardCommand.Paste:
+                _osClipboard.Paste(Editor, preferOsClipboard: true);
+                break;
+            case FreePKeyboardCommand.Find: OpenFindDialog(); break;
+            case FreePKeyboardCommand.Replace: OpenFindReplaceDialog(); break;
+            case FreePKeyboardCommand.SelectAll: Editor.SelectAll(); break;
+            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
+        }
+    }
 
-        // Wave 12B: Ctrl+F — Find, Ctrl+H — Find & Replace.
-        var findCommand = new RoutedCommand("FindText", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(findCommand, (_, _) => OpenFindDialog()));
-        InputBindings.Add(new KeyBinding(findCommand, new KeyGesture(Key.F, ModifierKeys.Control)));
+    private static Key ToWpfKey(FreePKeyboardKey key) =>
+        Enum.Parse<Key>(key.ToString());
 
-        var replaceCommand = new RoutedCommand("ReplaceText", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(replaceCommand, (_, _) => OpenFindReplaceDialog()));
-        InputBindings.Add(new KeyBinding(replaceCommand, new KeyGesture(Key.H, ModifierKeys.Control)));
+    private static ModifierKeys ToWpfModifiers(FreePKeyboardModifiers modifiers)
+    {
+        var result = ModifierKeys.None;
+        if ((modifiers & FreePKeyboardModifiers.Control) != 0)
+            result |= ModifierKeys.Control;
+        if ((modifiers & FreePKeyboardModifiers.Shift) != 0)
+            result |= ModifierKeys.Shift;
+        if ((modifiers & FreePKeyboardModifiers.Alt) != 0)
+            result |= ModifierKeys.Alt;
+        return result;
     }
 
     // ── Slide show (Wave 4B) ──────────────────────────────────────────────────────

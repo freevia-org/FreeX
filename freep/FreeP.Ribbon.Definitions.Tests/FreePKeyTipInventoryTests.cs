@@ -1,0 +1,98 @@
+using Free.Shared.Ribbon;
+
+namespace FreeP.Ribbon.Definitions.Tests;
+
+public sealed class FreePKeyTipInventoryTests
+{
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EveryVisibleTabGroupAndActionableControlHasAnUnambiguousKeyTip(bool avalonia)
+    {
+        var definition = FreePRibbon.Build(
+            avalonia ? FreePRibbonCapabilities.Avalonia : FreePRibbonCapabilities.Wpf);
+
+        definition.Tabs.Select(tab => tab.KeyTip).Should().NotContainNulls();
+        definition.Tabs.Select(tab => tab.KeyTip!).Should().OnlyHaveUniqueItems();
+
+        foreach (var tab in definition.Tabs)
+        {
+            tab.KeyTip.Should().NotBeNullOrWhiteSpace($"tab {tab.Id} must be keyboard reachable");
+            tab.Groups.Select(group => group.KeyTip).Should().NotContainNulls();
+            tab.Groups.Select(group => group.KeyTip!).Should().OnlyHaveUniqueItems();
+
+            foreach (var group in tab.Groups)
+            {
+                group.KeyTip.Should().NotBeNullOrWhiteSpace(
+                    $"group {tab.Id}/{group.Id} must be keyboard reachable");
+                var actionable = group.Controls
+                    .Where(control => control is not RibbonSeparator and not RibbonComboBox)
+                    .ToArray();
+                actionable.Should().OnlyContain(
+                    control => !string.IsNullOrWhiteSpace(control.KeyTip),
+                    $"every actionable control in {tab.Id}/{group.Id} must have a KeyTip");
+                actionable.Select(control => control.KeyTip!).Should().OnlyHaveUniqueItems(
+                    $"control KeyTips in {tab.Id}/{group.Id} must be unambiguous");
+
+                foreach (var control in actionable)
+                    AssertMenuKeyTips(control, $"{tab.Id}/{group.Id}/{control.CommandId.Value}");
+            }
+        }
+    }
+
+    [Fact]
+    public void SharedCommandKeyTipsMatchExceptForDeclaredProfileOverrides()
+    {
+        var wpf = FlattenControls(FreePRibbon.Build(FreePRibbonCapabilities.Wpf));
+        var avalonia = FlattenControls(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia));
+        var declaredOverrides = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "freep.new-slide",
+        };
+
+        foreach (var commandId in wpf.Keys.Intersect(avalonia.Keys, StringComparer.Ordinal))
+        {
+            if (declaredOverrides.Contains(commandId))
+            {
+                wpf[commandId].Should().NotBe(avalonia[commandId]);
+                continue;
+            }
+
+            avalonia[commandId].Should().Be(wpf[commandId],
+                $"shared command {commandId} must keep the same KeyTip");
+        }
+    }
+
+    private static Dictionary<string, string?> FlattenControls(RibbonDefinition definition) =>
+        definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .Where(control => !string.IsNullOrWhiteSpace(control.CommandId.Value))
+            .ToDictionary(control => control.CommandId.Value, control => control.KeyTip, StringComparer.Ordinal);
+
+    private static void AssertMenuKeyTips(RibbonControl control, string scope)
+    {
+        var menu = control switch
+        {
+            RibbonSplitButton split => split.Menu,
+            RibbonDropdown dropdown => dropdown.Menu,
+            _ => null,
+        };
+        if (menu is null)
+            return;
+
+        AssertMenuItems(menu.Items, scope);
+    }
+
+    private static void AssertMenuItems(IEnumerable<RibbonMenuItem> items, string scope)
+    {
+        var actionable = items.Where(item => item.CommandId is not null).ToArray();
+        actionable.Should().OnlyContain(
+            item => !string.IsNullOrWhiteSpace(item.KeyTip),
+            $"every actionable menu item in {scope} must have a KeyTip");
+        actionable.Select(item => item.KeyTip!).Should().OnlyHaveUniqueItems();
+
+        foreach (var item in items)
+            AssertMenuItems(item.Children, $"{scope}/{item.Header}");
+    }
+}

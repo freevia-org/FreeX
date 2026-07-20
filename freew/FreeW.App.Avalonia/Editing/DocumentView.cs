@@ -5021,7 +5021,7 @@ public sealed class DocumentView : Control
         {
             if (!reviewPolicy.IsRevisionTextVisible(cells[c].Revision))
             {
-                _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null));
+                _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
                 continue;
             }
 
@@ -5063,12 +5063,12 @@ public sealed class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, plan.Leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null));
+                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement));
+            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -6564,6 +6564,7 @@ public sealed class DocumentView : Control
         var selection = NormalizedSelection();
         var proofingOffsets = BuildProofingOffsetSet();
         var reviewPolicy = CurrentReviewDisplayPolicy;
+        var revisionColors = ReviewRevisionColorPlanner.BuildAuthorColors(_doc);
         for (var placedIndex = 0; placedIndex < _placed.Count; placedIndex++)
         {
             var pc = _placed[placedIndex];
@@ -6624,11 +6625,12 @@ public sealed class DocumentView : Control
 
             // AV-TRACKEDIT: tracked insertions/deletions draw in the revision colour; insertions are also
             // underlined and deletions struck through (the marks layered on top of any run decorations below).
+            var revisionColorHex = ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.RevisionAuthor);
             if (revisionDecision.IsRevisionStylingApplied)
-                drawFmt = drawFmt with { ColorHex = RevisionColorHex };
+                drawFmt = drawFmt with { ColorHex = revisionColorHex };
             var formatRevisionHighlighted = pc.HasFormatRevision && reviewPolicy.ShouldHighlightFormattingChanges;
             if (formatRevisionHighlighted && string.IsNullOrWhiteSpace(drawFmt.ColorHex))
-                drawFmt = drawFmt with { ColorHex = RevisionColorHex };
+                drawFmt = drawFmt with { ColorHex = ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor) };
 
             if (pc.EquationElement is { } equationElement)
             {
@@ -6649,9 +6651,9 @@ public sealed class DocumentView : Control
                     DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
                 if (drawFmt.Strikethrough)
                     DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
-                DrawRevisionDecoration(context, pc, revisionDecision);
+                DrawRevisionDecoration(context, pc, revisionDecision, revisionColorHex);
                 if (formatRevisionHighlighted)
-                    DrawFormatRevisionDecoration(context, pc);
+                    DrawFormatRevisionDecoration(context, pc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
                 continue;
             }
 
@@ -6663,9 +6665,9 @@ public sealed class DocumentView : Control
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
             if (drawFmt.Strikethrough)
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
-            DrawRevisionDecoration(context, pc, revisionDecision);
+            DrawRevisionDecoration(context, pc, revisionDecision, revisionColorHex);
             if (formatRevisionHighlighted)
-                DrawFormatRevisionDecoration(context, pc);
+                DrawFormatRevisionDecoration(context, pc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
             if (!pc.IsCell && proofingOffsets.Contains((pc.Block, pc.Offset)))
                 DrawProofingSquiggle(context, pc);
         }
@@ -8661,32 +8663,33 @@ public sealed class DocumentView : Control
     /// insertion (Word's w:ins decoration) or a revision-coloured strikethrough across a tracked deletion
     /// (w:del). A no-op for ordinary (un-tracked) glyphs.
     /// </summary>
-    private static void DrawRevisionDecoration(
+    private void DrawRevisionDecoration(
         DrawingContext context,
         PlacedChar pc,
-        ReviewRevisionDisplayDecision decision)
+        ReviewRevisionDisplayDecision decision,
+        string colorHex)
     {
         if (pc.W <= 0 || !decision.IsRevisionStylingApplied)
             return;
         if (decision.IsInsertionDecorationApplied)
         {
             var y = pc.Y + pc.LineHeight * 0.86;
-            context.DrawLine(RevisionInsertUnderlinePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
+            context.DrawLine(new Pen(BrushFor(colorHex), 1.0), new Point(pc.X, y), new Point(pc.X + pc.W, y));
         }
         else if (decision.IsDeletionDecorationApplied)
         {
             var y = pc.Y + pc.LineHeight * 0.5;
-            context.DrawLine(RevisionDeleteStrikePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
+            context.DrawLine(new Pen(BrushFor(colorHex), 1.0), new Point(pc.X, y), new Point(pc.X + pc.W, y));
         }
     }
 
-    private static void DrawFormatRevisionDecoration(DrawingContext context, PlacedChar pc)
+    private void DrawFormatRevisionDecoration(DrawingContext context, PlacedChar pc, string colorHex)
     {
         if (pc.W <= 0)
             return;
 
         var y = pc.Y + pc.LineHeight * 0.92;
-        context.DrawLine(FormatRevisionUnderlinePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
+        context.DrawLine(new Pen(BrushFor(colorHex), 1.0, new DashStyle([1, 2], 0)), new Point(pc.X, y), new Point(pc.X + pc.W, y));
     }
 
     private static void DrawProofingSquiggle(DrawingContext context, PlacedChar pc)
@@ -15294,15 +15297,8 @@ public sealed class DocumentView : Control
     private static IBrush CellBlockSelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x66, 0x33, 0x99, 0xFF));
 
     // ── AV-TRACKEDIT: tracked-change render assets ────────────────────────────────────────────────
-    // Word's default single-author revision colour is a deep red/maroon. Tracked insertions draw in this
-    // colour and underlined; tracked deletions draw in this colour and struck through.
-    private static Color RevisionColor { get; } = Color.FromRgb(0xC0, 0x00, 0x4B);
-    private const string RevisionColorHex = "#C0004B";
-    private static IBrush RevisionBrush { get; } = new SolidColorBrush(RevisionColor);
-    private static readonly Pen RevisionInsertUnderlinePen = new(RevisionBrush, 1.0);
-    private static readonly Pen RevisionDeleteStrikePen = new(RevisionBrush, 1.0);
-    private static readonly Pen FormatRevisionUnderlinePen = new(RevisionBrush, 1.0, new DashStyle([1, 2], 0));
-    private static readonly Pen SimpleMarkupChangeBarPen = new(RevisionBrush, 2.0);
+    private static IBrush RevisionFallbackBrush { get; } = new SolidColorBrush(Color.FromRgb(0xC0, 0x00, 0x40));
+    private static readonly Pen SimpleMarkupChangeBarPen = new(RevisionFallbackBrush, 2.0);
     private static readonly Pen ProofingSquigglePen = new(new SolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38)), 1.15);
 
     // ── AV-LINK: hyperlink render colour ──────────────────────────────────────────────────────────
@@ -15363,11 +15359,13 @@ public sealed class DocumentView : Control
         // AV-TRACKEDIT: tracked-change mark on this glyph so the render can colour/underline insertions and
         // strike deletions. None for ordinary text.
         RevisionKind Revision = RevisionKind.None,
+        string? RevisionAuthor = null,
         // AV-LINK: the hyperlink target this glyph belongs to (null = not a hyperlink), so the render can
         // style it (blue + underline) and the pointer hit-test can follow it on Ctrl+Click.
         LinkInfo? Link = null,
         bool HasFormatRevision = false,
-        EquationVisualElement? EquationElement = null)
+        EquationVisualElement? EquationElement = null,
+        string? FormatRevisionAuthor = null)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;

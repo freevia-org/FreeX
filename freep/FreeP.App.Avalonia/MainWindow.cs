@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
@@ -240,6 +241,8 @@ public sealed class MainWindow : Window
     private SelectionAdornerLayer?       _adorner;
     private AvaloniaCanvasGestureHandler? _gestureHandler;
     private AvaloniaInCanvasTextEditor?  _textEditor;
+    private Control? _ribbonControl;
+    private bool _ribbonKeyTipsVisible;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
 
@@ -257,6 +260,9 @@ public sealed class MainWindow : Window
 
     /// <summary>Current slide index (0-based) — read by the launch-smoke coordinator.</summary>
     internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
+    internal bool RibbonKeyTipsVisibleForTests => _ribbonKeyTipsVisible;
+    internal Control? RibbonControlForTests => _ribbonControl;
+    internal void RaiseKeyDownForTests(KeyEventArgs args) => MainWindow_KeyDown(this, args);
     internal int SlidePaneSlideItemCount => _slidePaneList.Items
         .OfType<ListBoxItem>()
         .Count(item => item.Tag is int);
@@ -598,6 +604,12 @@ public sealed class MainWindow : Window
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
         KeyDown += MainWindow_KeyDown;
+        AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, _) => SetRibbonKeyTipsVisible(false),
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
+        Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
 
         // ── Initial content ───────────────────────────────────────────────────
 
@@ -1888,7 +1900,7 @@ public sealed class MainWindow : Window
     {
         var registry = BuildCommandRegistry();
 
-        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
+        _ribbonControl = AvaloniaRibbonRenderer.BuildRibbon(
             FreePRibbonAvalonia.Build(),
             registry,
             afterExecute: null,
@@ -1901,7 +1913,7 @@ public sealed class MainWindow : Window
             Background      = Brushes.White,
             BorderBrush     = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Child           = ribbon,
+            Child           = _ribbonControl,
         };
     }
 
@@ -5990,6 +6002,7 @@ public sealed class MainWindow : Window
                     ContextMenu = BuildSlidePaneContextMenu(plan.SlideIndex),
                 };
                 ToolTip.SetTip(item, plan.ToolTipText);
+                WireContextMenuLifecycle(item);
                 item.KeyDown += OnSlidePaneItemKeyDown;
                 item.PointerEntered += (_, _) =>
                 {
@@ -6069,6 +6082,7 @@ public sealed class MainWindow : Window
             ContextMenu = BuildSlidePaneSectionContextMenu(entry),
         };
         ToolTip.SetTip(item, plan.ToolTipText);
+        WireContextMenuLifecycle(item);
         item.PointerEntered += (_, _) => headerChrome.Background = hoverBackground;
         item.PointerExited += (_, _) => headerChrome.Background = normalBackground;
         item.PointerPressed += (_, e) =>
@@ -6082,6 +6096,9 @@ public sealed class MainWindow : Window
         };
         item.KeyDown += (_, e) =>
         {
+            if (TryHandleContextMenuKeyboard(item, e))
+                return;
+
             if (e.Key is Key.Enter or Key.Space)
             {
                 ToggleSlidePaneSection(plan.SectionId);
@@ -6096,38 +6113,19 @@ public sealed class MainWindow : Window
     {
         var menu = new ContextMenu();
 
-        foreach (var action in SlideSectionPlanner.BuildSlideContextActions(
-                     _presentation.Slides,
-                     _presentation.Sections,
-                     slideIndex))
-        {
-            var item = new MenuItem
-            {
-                Header = action.Text,
-                IsEnabled = action.IsEnabled,
-            };
-            item.Click += async (_, _) => await ApplySlideSectionActionAsync(action);
-            menu.Items.Add(item);
-        }
-
-        menu.Items.Add(new Separator());
-
-        foreach (var action in SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex))
-        {
-            if (action.Kind == SlidePaneActionKind.DeleteSlide)
-                menu.Items.Add(new Separator());
-
-            var item = new MenuItem
-            {
-                Header = action.Text,
-                IsEnabled = action.IsEnabled,
-            };
-            item.Click += (_, _) => TryApplySlidePaneContextAction(slideIndex, action.Kind);
-            menu.Items.Add(item);
-        }
+        AddContextMenuEntries(
+            menu,
+            FreePContextMenuCatalog.BuildSlideMenu(
+                _presentation.Slides,
+                _presentation.Sections,
+                slideIndex),
+            command => ApplyContextMenuCommandAsync(command, slideIndex, sectionIndex: -1));
 
         return menu;
     }
+
+    internal ContextMenu BuildSlidePaneContextMenuForTests(int slideIndex) =>
+        BuildSlidePaneContextMenu(slideIndex);
 
     internal bool TryApplySlidePaneContextAction(int slideIndex, SlidePaneActionKind kind)
     {
@@ -6141,24 +6139,84 @@ public sealed class MainWindow : Window
     {
         var menu = new ContextMenu();
 
-        foreach (var action in SlideSectionPlanner.BuildSectionHeaderActions(
-                     _presentation.Sections,
-                     entry.SectionIndex,
-                     entry.SlideIndex))
+        AddContextMenuEntries(
+            menu,
+            FreePContextMenuCatalog.BuildSectionHeaderMenu(
+                _presentation.Sections,
+                entry.SectionIndex,
+                entry.SlideIndex),
+            command => ApplyContextMenuCommandAsync(command, entry.SlideIndex, entry.SectionIndex));
+
+        return menu;
+    }
+
+    internal ContextMenu BuildSlidePaneSectionContextMenuForTests(SlidePaneEntry entry) =>
+        BuildSlidePaneSectionContextMenu(entry);
+
+    private static void AddContextMenuEntries(
+        ContextMenu menu,
+        IReadOnlyList<FreePContextMenuEntryPlan> entries,
+        Func<FreePContextMenuCommand, Task> execute)
+    {
+        foreach (var entry in entries)
         {
-            if (action.Kind == SlideSectionActionKind.RemoveSection)
+            if (entry.Kind == FreePContextMenuEntryKind.Separator)
+            {
                 menu.Items.Add(new Separator());
+                continue;
+            }
 
             var item = new MenuItem
             {
-                Header = action.Text,
-                IsEnabled = action.IsEnabled,
+                Header = entry.Text,
+                IsEnabled = entry.IsEnabled,
+                IsChecked = entry.IsChecked,
+                Tag = entry.Command,
             };
-            item.Click += async (_, _) => await ApplySlideSectionActionAsync(action);
+            if (entry.IsCheckable)
+                item.ToggleType = MenuItemToggleType.CheckBox;
+            item.Click += async (_, _) => await execute(entry.Command!.Value);
             menu.Items.Add(item);
         }
+    }
 
-        return menu;
+    private async Task ApplyContextMenuCommandAsync(
+        FreePContextMenuCommand command,
+        int slideIndex,
+        int sectionIndex)
+    {
+        if (command is FreePContextMenuCommand.NewSlide or
+            FreePContextMenuCommand.DuplicateSlide or
+            FreePContextMenuCommand.DeleteSlide)
+        {
+            var kind = command switch
+            {
+                FreePContextMenuCommand.NewSlide => SlidePaneActionKind.InsertAfterSlide,
+                FreePContextMenuCommand.DuplicateSlide => SlidePaneActionKind.DuplicateSlide,
+                _ => SlidePaneActionKind.DeleteSlide,
+            };
+            TryApplySlidePaneContextAction(slideIndex, kind);
+            return;
+        }
+
+        var sectionActionKind = command switch
+        {
+            FreePContextMenuCommand.AddSection => SlideSectionActionKind.AddSection,
+            FreePContextMenuCommand.RenameSection => SlideSectionActionKind.RenameSection,
+            FreePContextMenuCommand.RemoveSection => SlideSectionActionKind.RemoveSection,
+            FreePContextMenuCommand.RemoveAllSections => SlideSectionActionKind.RemoveAllSections,
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
+        };
+        var actions = sectionActionKind == SlideSectionActionKind.AddSection
+            ? SlideSectionPlanner.BuildSlideContextActions(
+                _presentation.Slides,
+                _presentation.Sections,
+                slideIndex)
+            : SlideSectionPlanner.BuildSectionHeaderActions(
+                _presentation.Sections,
+                sectionIndex,
+                slideIndex);
+        await ApplySlideSectionActionAsync(actions.Single(candidate => candidate.Kind == sectionActionKind));
     }
 
     private async Task ApplySlideSectionActionAsync(SlideSectionActionPlan action)
@@ -6422,11 +6480,62 @@ public sealed class MainWindow : Window
 
     private void OnSlidePaneItemKeyDown(object? sender, KeyEventArgs e)
     {
+        if (sender is Control anchor && TryHandleContextMenuKeyboard(anchor, e))
+            return;
+
         if (!TryMapSlidePaneKeyboardIntent(e, out var intent))
             return;
 
         if (TryApplySlidePaneKeyboardAction(intent))
             e.Handled = true;
+    }
+
+    private static void WireContextMenuLifecycle(Control anchor)
+    {
+        if (anchor.ContextMenu is not { } menu)
+            return;
+
+        menu.Opened += (_, _) => Dispatcher.UIThread.Post(() =>
+            menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)?.Focus());
+        menu.Closed += (_, _) => Dispatcher.UIThread.Post(() => anchor.Focus());
+        menu.KeyDown += (_, args) =>
+        {
+            if (!TryMapKeyboardKey(args.Key, out var key) ||
+                !FreePContextMenuCatalog.IsKeyboardDismissal(key, ToKeyboardModifiers(args.KeyModifiers)))
+            {
+                return;
+            }
+
+            menu.Close();
+            args.Handled = true;
+        };
+    }
+
+    private static bool TryHandleContextMenuKeyboard(Control anchor, KeyEventArgs args)
+    {
+        if (anchor.ContextMenu is not { } menu ||
+            !TryMapKeyboardKey(args.Key, out var key))
+        {
+            return false;
+        }
+
+        var modifiers = ToKeyboardModifiers(args.KeyModifiers);
+        if (FreePContextMenuCatalog.IsKeyboardInvocation(key, modifiers))
+        {
+            anchor.Focus();
+            menu.Open(anchor);
+            args.Handled = true;
+            return true;
+        }
+
+        if (menu.IsOpen && FreePContextMenuCatalog.IsKeyboardDismissal(key, modifiers))
+        {
+            menu.Close();
+            args.Handled = true;
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryMapSlidePaneKeyboardIntent(
@@ -6658,38 +6767,17 @@ public sealed class MainWindow : Window
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
-        var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+        if (TryHandleRibbonKeyTips(e))
+            return;
 
-        // ── Ctrl shortcuts ──────────────────────────────────────────────────────
-        if (ctrl)
+        if (TryMapKeyboardKey(e.Key, out var key) &&
+            FreePKeyboardShortcutCatalog.TryDispatch(
+                key,
+                ToKeyboardModifiers(e.KeyModifiers),
+                ExecuteKeyboardCommand))
         {
-            switch (e.Key)
-            {
-                case Key.N: FileNew(); e.Handled = true; return;
-                case Key.O: _ = FileOpenAsync(); e.Handled = true; return;
-                case Key.S when (e.KeyModifiers & KeyModifiers.Shift) != 0:
-                    _ = FileSaveAsAsync(); e.Handled = true; return;
-                case Key.S: _ = FileSaveAsync(); e.Handled = true; return;
-                case Key.Z: Editor.Undo(); e.Handled = true; return;
-                case Key.Y: Editor.Redo(); e.Handled = true; return;
-                case Key.A: Editor.SelectAll(); e.Handled = true; return;
-            }
-        }
-
-        // ── Slide show keys (no modifier) ─────────────────────────────────────
-        if (!ctrl)
-        {
-            switch (e.Key)
-            {
-                case Key.F5 when (e.KeyModifiers & KeyModifiers.Shift) != 0:
-                    StartSlideShow(fromStart: false);
-                    e.Handled = true;
-                    return;
-                case Key.F5:
-                    StartSlideShow(fromStart: true);
-                    e.Handled = true;
-                    return;
-            }
+            e.Handled = true;
+            return;
         }
 
         // ── Arrow / Delete keys — delegate to gesture handler (Theme 15) ────────
@@ -6705,6 +6793,121 @@ public sealed class MainWindow : Window
                 _slideCanvas.Refresh();
             }
         }
+    }
+
+    private void ExecuteKeyboardCommand(FreePKeyboardCommand command)
+    {
+        switch (command)
+        {
+            case FreePKeyboardCommand.NewPresentation: FileNew(); break;
+            case FreePKeyboardCommand.OpenPresentation: _ = FileOpenAsync(); break;
+            case FreePKeyboardCommand.SavePresentation: _ = FileSaveAsync(); break;
+            case FreePKeyboardCommand.SavePresentationAs: _ = FileSaveAsAsync(); break;
+            case FreePKeyboardCommand.PrintPresentation: ShowPrintOptionsPane(); break;
+            case FreePKeyboardCommand.Undo: Editor.Undo(); break;
+            case FreePKeyboardCommand.Redo: Editor.Redo(); break;
+            case FreePKeyboardCommand.DeleteSelectedShapes: Editor.DeleteSelected(); break;
+            case FreePKeyboardCommand.DuplicateCurrentSlide: Editor.DuplicateCurrentSlide(); break;
+            case FreePKeyboardCommand.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
+            case FreePKeyboardCommand.StartSlideShowFromCurrentSlide: StartSlideShow(fromStart: false); break;
+            case FreePKeyboardCommand.Copy: Editor.CopySelectedShapes(); break;
+            case FreePKeyboardCommand.Cut: Editor.CutSelectedShapes(); break;
+            case FreePKeyboardCommand.Paste: Editor.Paste(); break;
+            case FreePKeyboardCommand.Find: OpenFindDialog(); break;
+            case FreePKeyboardCommand.Replace: OpenFindReplaceDialog(); break;
+            case FreePKeyboardCommand.SelectAll: Editor.SelectAll(); break;
+            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
+        }
+    }
+
+    private bool TryHandleRibbonKeyTips(KeyEventArgs args)
+    {
+        if (args.Key is Key.LeftAlt or Key.RightAlt)
+        {
+            SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
+            args.Handled = true;
+            return true;
+        }
+
+        if (!_ribbonKeyTipsVisible)
+            return false;
+
+        if (args.Key == Key.Escape)
+        {
+            SetRibbonKeyTipsVisible(false);
+            args.Handled = true;
+            return true;
+        }
+
+        var token = ToRibbonKeyTipToken(args.Key);
+        if (token is null || _ribbonControl is null ||
+            !AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, token))
+        {
+            return false;
+        }
+
+        SetRibbonKeyTipsVisible(false);
+        args.Handled = true;
+        return true;
+    }
+
+    private void SetRibbonKeyTipsVisible(bool visible)
+    {
+        _ribbonKeyTipsVisible = visible;
+        if (_ribbonControl is not null)
+            AvaloniaRibbonRenderer.SetTopLevelKeyTipsVisible(_ribbonControl, visible);
+    }
+
+    private static bool TryMapKeyboardKey(Key key, out FreePKeyboardKey mapped)
+    {
+        mapped = key switch
+        {
+            Key.A => FreePKeyboardKey.A,
+            Key.C => FreePKeyboardKey.C,
+            Key.D => FreePKeyboardKey.D,
+            Key.F => FreePKeyboardKey.F,
+            Key.H => FreePKeyboardKey.H,
+            Key.N => FreePKeyboardKey.N,
+            Key.O => FreePKeyboardKey.O,
+            Key.P => FreePKeyboardKey.P,
+            Key.S => FreePKeyboardKey.S,
+            Key.V => FreePKeyboardKey.V,
+            Key.X => FreePKeyboardKey.X,
+            Key.Y => FreePKeyboardKey.Y,
+            Key.Z => FreePKeyboardKey.Z,
+            Key.Delete => FreePKeyboardKey.Delete,
+            Key.F5 => FreePKeyboardKey.F5,
+            Key.F10 => FreePKeyboardKey.F10,
+            Key.Apps => FreePKeyboardKey.Apps,
+            Key.Escape => FreePKeyboardKey.Escape,
+            _ => default,
+        };
+
+        return key is Key.A or Key.C or Key.D or Key.F or Key.H or Key.N or Key.O or
+            Key.P or Key.S or Key.V or Key.X or Key.Y or Key.Z or Key.Delete or Key.F5 or
+            Key.F10 or Key.Apps or Key.Escape;
+    }
+
+    private static FreePKeyboardModifiers ToKeyboardModifiers(KeyModifiers modifiers)
+    {
+        var result = FreePKeyboardModifiers.None;
+        if ((modifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+            result |= FreePKeyboardModifiers.Control;
+        if ((modifiers & KeyModifiers.Shift) != 0)
+            result |= FreePKeyboardModifiers.Shift;
+        if ((modifiers & KeyModifiers.Alt) != 0)
+            result |= FreePKeyboardModifiers.Alt;
+        return result;
+    }
+
+    private static string? ToRibbonKeyTipToken(Key key)
+    {
+        var name = key.ToString();
+        if (name.Length == 1 && char.IsAsciiLetterOrDigit(name[0]))
+            return name.ToUpperInvariant();
+        if (name.Length == 2 && name[0] == 'D' && char.IsAsciiDigit(name[1]))
+            return name[1].ToString();
+        return null;
     }
 
     // ── Slide show launch ──────────────────────────────────────────────────────
