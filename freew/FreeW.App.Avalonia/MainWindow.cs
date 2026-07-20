@@ -2524,9 +2524,15 @@ public sealed class MainWindow : Window
     {
         var dialog = new SymbolPickerDialog();
         await dialog.ShowDialog(this);
-        if (!string.IsNullOrEmpty(dialog.Result))
-            _editor.InsertSymbol(dialog.Result);
+        ApplySymbolPickerResult(_editor, dialog.Result);
         _editor.Focus();
+    }
+
+    internal static void ApplySymbolPickerResult(DocumentView editor, string? symbol)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        if (!string.IsNullOrEmpty(symbol))
+            editor.InsertSymbol(symbol);
     }
 
     private async Task OpenLegalNoticesAsync()
@@ -2540,18 +2546,30 @@ public sealed class MainWindow : Window
     {
         var dialog = new TableFormulaDialog(initialState);
         await dialog.ShowDialog(this);
-        if (dialog.Result is { } formula)
-            _editor.InsertTableFormula(formula);
+        ApplyTableFormulaResult(_editor, dialog.Result);
         _editor.Focus();
+    }
+
+    internal static void ApplyTableFormulaResult(DocumentView editor, TableFormulaField? formula)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        if (formula is not null)
+            editor.InsertTableFormula(formula);
     }
 
     private async Task OpenTablePropertiesDialogAsync(ModelTableContext context)
     {
         var dialog = new TablePropertiesDialog(context);
         await dialog.ShowDialog(this);
-        if (dialog.Result is { } values)
-            _editor.ApplyTableProperties(values);
+        ApplyTablePropertiesResult(_editor, dialog.Result);
         _editor.Focus();
+    }
+
+    internal static void ApplyTablePropertiesResult(DocumentView editor, TablePropertiesValues? values)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        if (values is not null)
+            editor.ApplyTableProperties(values);
     }
 
     private async Task InsertScreenClipAsync()

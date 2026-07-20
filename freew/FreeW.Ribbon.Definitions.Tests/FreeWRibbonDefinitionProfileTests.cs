@@ -7,10 +7,7 @@ namespace FreeW.Ribbon.Definitions.Tests;
 
 public sealed class FreeWRibbonDefinitionProfileTests
 {
-    private static readonly string[] WpfOnlyTabIds =
-    [
-        "help",
-    ];
+    private static readonly string[] WpfOnlyTabIds = [];
 
     private static readonly string[] AvaloniaOnlyTabIds =
     [
@@ -76,6 +73,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "mailings" or
             "review" or
             "view" or
+            "help" or
             "picture-format" or
             "drawing-format" or
             "chart-design" or
@@ -1185,7 +1183,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         WithUiCulture("en-US", () =>
         {
             AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Wpf), includesMenu: false);
-            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Avalonia), includesMenu: true);
+            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Avalonia), includesMenu: false);
             AssertPageBackgroundSurfaceUsesResources(PageBackgroundSurface(FreeWRibbonCapabilities.Wpf), includesPalette: false);
             AssertPageBackgroundSurfaceUsesResources(PageBackgroundSurface(FreeWRibbonCapabilities.Avalonia), includesPalette: true);
 
@@ -1197,9 +1195,9 @@ public sealed class FreeWRibbonDefinitionProfileTests
             var symbols = SymbolSurface(FreeWRibbonCapabilities.Avalonia);
             var pageBackground = PageBackgroundSurface(FreeWRibbonCapabilities.Avalonia);
 
-            AssertSymbolSurfaceUsesResources(symbols, includesMenu: true);
+            AssertSymbolSurfaceUsesResources(symbols, includesMenu: false);
             AssertPageBackgroundSurfaceUsesResources(pageBackground, includesPalette: true);
-            symbols.SymbolMenuHeaders![0].Should().Be($"€   {Loc.Get("Ribbon_Palette_Symbol_Euro_Label")}");
+            symbols.SymbolMenuHeaders.Should().BeNull();
             pageBackground.PageColorMenuHeaders![0].Should().Be(Loc.Get("Ribbon_Palette_PageColor_NoColor_Label"));
 
             return true;
@@ -1233,7 +1231,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
         avaloniaSource.Should().Contain("FreeWRibbonText.SymbolCommand");
         avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.PageColors");
-        avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.Symbols");
+        avaloniaSource.Should().NotContain("FreeWRibbonDefinitionData.Symbols");
 
         dataSource.Should().NotContain("(\"freew.page-color.none\", \"No Color\")");
         dataSource.Should().NotContain("\"Outline: 1. / 1.1. / 1.1.1.\"");
