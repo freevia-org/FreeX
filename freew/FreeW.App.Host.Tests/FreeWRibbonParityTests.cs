@@ -3,6 +3,7 @@ using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Tests;
@@ -1099,6 +1100,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.merge-preview-previous",
                 "freew.merge-preview-next",
                 "freew.merge-preview-last",
+                "freew.merge-find-recipient",
+                "freew.merge-check-errors",
                 // Finish group
                 "freew.merge-finish",
                 "freew.merge-email");
@@ -1121,6 +1124,8 @@ public sealed class FreeWRibbonParityTests
                 "Previous Record",
                 "Next Record",
                 "Last Record",
+                "Find Recipient",
+                "Check for Errors",
                 "Finish & Merge",
                 "Send E-mail Messages");
 
@@ -1168,6 +1173,97 @@ public sealed class FreeWRibbonParityTests
                      .Where(item => item.Kind == RibbonMenuItemKind.Command)
                      .Select(item => item.CommandId!.Value))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Rules menu");
+    }
+
+    [StaFact]
+    public void FinalCommandProfileAsymmetries_RouteToBackedWpfCommands()
+    {
+        var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+
+        registry.TryGet("freew.chart-size", out var chartSize).Should().BeTrue();
+        registry.TryGet("freew.chart-size-dialog", out var chartSizeDialog).Should().BeTrue();
+        chartSizeDialog.Should().BeSameAs(chartSize,
+            "both chart size controls must route to the existing owner-modal size behavior");
+
+        registry.TryGet("freew.merge-find-recipient", out var findRecipient).Should().BeTrue();
+        findRecipient.Should().BeOfType<FreeWRibbonCommands.FindMergeRecipientCommand>();
+
+        registry.TryGet("freew.merge-check-errors", out var checkErrors).Should().BeTrue();
+        checkErrors.Should().BeOfType<FreeWRibbonCommands.CheckMergeErrorsCommand>();
+    }
+
+    [StaFact]
+    public void MailingsFindRecipientAndCheckErrors_UseSharedPlannersThroughWpfCommands()
+    {
+        var editor = new DocumentView();
+        var session = new FreeWRibbonCommands.MailMergeSession
+        {
+            Data = MergeData.FromCsv("Name,City\nAda,London\nGrace,New York"),
+            CurrentIndex = 1,
+        };
+        var messages = new List<string>();
+
+        var findRecipient = new FreeWRibbonCommands.FindMergeRecipientCommand(
+            editor,
+            session,
+            ask: _ => "ada",
+            showInfo: (_, message) => messages.Add(message));
+        findRecipient.Execute(RibbonCommandContext.Empty);
+
+        session.CurrentIndex.Should().Be(0);
+        messages.Should().ContainSingle().Which.Should().Be("Found recipient 1 of 2.");
+
+        var checkErrors = new FreeWRibbonCommands.CheckMergeErrorsCommand(
+            editor,
+            session,
+            ask: _ => MailMergeCheckForErrorsMode.CompleteAndPause,
+            showInfo: (_, message) => messages.Add(message));
+        checkErrors.Execute(RibbonCommandContext.Empty);
+
+        messages.Should().Contain("Mail merge error check selected: CompleteAndPause.");
+    }
+
+    [StaFact]
+    public void MailingsFindRecipientAndCheckErrors_PreserveStateOnCancelAndRejectMissingRecipients()
+    {
+        var editor = new DocumentView();
+        var session = new FreeWRibbonCommands.MailMergeSession { CurrentIndex = 3 };
+        var prompts = 0;
+        var messages = new List<string>();
+
+        var findRecipient = new FreeWRibbonCommands.FindMergeRecipientCommand(
+            editor,
+            session,
+            ask: _ => { prompts++; return "Ada"; },
+            showInfo: (_, message) => messages.Add(message));
+        findRecipient.Execute(RibbonCommandContext.Empty);
+
+        prompts.Should().Be(0);
+        session.CurrentIndex.Should().Be(3);
+        messages.Should().ContainSingle().Which.Should().Contain("Select recipients first");
+
+        session.Data = MergeData.FromCsv("Name\nAda");
+        var cancelled = new FreeWRibbonCommands.FindMergeRecipientCommand(
+            editor,
+            session,
+            ask: _ => null,
+            showInfo: (_, message) => messages.Add(message));
+        cancelled.Execute(RibbonCommandContext.Empty);
+
+        session.CurrentIndex.Should().Be(3);
+        messages.Should().HaveCount(1);
+
+        session.Data = null;
+        var checkErrors = new FreeWRibbonCommands.CheckMergeErrorsCommand(
+            editor,
+            session,
+            ask: _ => { prompts++; return MailMergeCheckForErrorsMode.SimulateAndReport; },
+            showInfo: (_, message) => messages.Add(message));
+        checkErrors.Execute(RibbonCommandContext.Empty);
+
+        prompts.Should().Be(0);
+        messages.Should().HaveCount(2);
+        messages[^1].Should().Contain("Select recipients first");
     }
 
     [StaFact]
@@ -1437,12 +1533,13 @@ public sealed class FreeWRibbonParityTests
 
         CommandIds(chartFormat)
             .Should()
-            .Equal("freew.chart-size");
+            .Equal("freew.chart-size", "freew.chart-size-dialog");
         Labels(chartFormat)
             .Should()
-            .Equal("Size");
+            .Equal("Size", "More Size Options...");
 
         registry.TryGet("freew.chart-size", out _).Should().BeTrue("freew.chart-size must execute from Chart Format");
+        registry.TryGet("freew.chart-size-dialog", out _).Should().BeTrue("freew.chart-size-dialog must execute from Chart Format");
     }
 
     [StaFact]

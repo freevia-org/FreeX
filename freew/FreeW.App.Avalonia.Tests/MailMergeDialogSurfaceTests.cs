@@ -41,6 +41,34 @@ public sealed class MailMergeDialogSurfaceTests
             .Should()
             .OnlyContain(method => method.ReturnType == typeof(Task) ||
                                    (method.ReturnType.IsGenericType &&
-                                    method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>)));
+                                   method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>)));
+    }
+
+    [Fact]
+    public void MailingsCommandHost_RoutesFindAndErrorChecksThroughDialogsAndSharedPlanners()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("OpenFindRecipientAsync");
+        source.Should().Contain("MailMergeDialogs.AskFindRecipientAsync(this)");
+        source.Should().Contain("MailMergeFindRecipientPlanner.Find(data, query");
+        source.Should().Contain("if (query is null)");
+        source.Should().Contain("OpenCheckForErrorsAsync");
+        source.Should().Contain("MailMergeDialogs.AskCheckForErrorsAsync(this)");
+        source.Should().Contain("Mail merge error check selected:");
+    }
+
+    private static string RepositoryFile(params string[] relativeParts)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new FileNotFoundException($"Could not locate {Path.Combine(relativeParts)}.");
     }
 }

@@ -264,6 +264,7 @@ internal static class FreeWRibbonIcons
             ["freew.chart-axis-titles"] = RibbonCommandIconKind.Ruler,
             ["freew.chart-toggle-legend"] = RibbonCommandIconKind.List,
             ["freew.chart-size"] = RibbonCommandIconKind.Size,
+            ["freew.chart-size-dialog"] = RibbonCommandIconKind.Size,
 
             // Insert: media (equation / chart / WordArt / SmartArt / OLE object)
             ["freew.equation"] = RibbonCommandIconKind.Equation,
@@ -474,6 +475,8 @@ internal static class FreeWRibbonIcons
             ["freew.merge-preview-previous"] = RibbonCommandIconKind.Previous,
             ["freew.merge-preview-next"] = RibbonCommandIconKind.Next,
             ["freew.merge-preview-last"] = RibbonCommandIconKind.Next,
+            ["freew.merge-find-recipient"] = RibbonCommandIconKind.Search,
+            ["freew.merge-check-errors"] = RibbonCommandIconKind.Warning,
             ["freew.merge-finish"] = RibbonCommandIconKind.FinishMerge,
 
             // Review

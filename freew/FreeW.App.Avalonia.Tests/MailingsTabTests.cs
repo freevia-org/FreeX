@@ -357,6 +357,8 @@ public sealed class MailingsTabTests
             "freew.merge-preview-previous",
             "freew.merge-preview-next",
             "freew.merge-preview-last",
+            "freew.merge-find-recipient",
+            "freew.merge-check-errors",
             "freew.merge-finish",
             "freew.merge-email",
             "freew.select-recipients",
