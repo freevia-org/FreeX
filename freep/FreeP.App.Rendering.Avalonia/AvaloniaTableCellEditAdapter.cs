@@ -1,5 +1,3 @@
-using Avalonia.Controls;
-using Avalonia.Media;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -229,58 +227,33 @@ public static class AvaloniaTableCellEditAdapter
             selection);
     }
 
-    public static void ApplyRichTextEditorPlan(
-        TextBox textBox,
+    internal static void ApplyRichTextEditorPlan(
+        AvaloniaRichTextEditor editor,
         InCanvasTableCellRichTextEditPlan? plan)
     {
-        ArgumentNullException.ThrowIfNull(textBox);
+        ArgumentNullException.ThrowIfNull(editor);
 
         if (plan is null)
             return;
 
-        textBox.Tag = plan;
-        textBox.Classes.Set("freep-table-cell-rich-editor", plan.HasRichFormatting);
-        textBox.Classes.Set("freep-table-cell-mixed-formatting", plan.HasMixedFormatting);
-        ApplyEditorStyle(textBox, plan.SuggestedEditorStyle);
+        editor.ApplyPlanMetadata(
+            plan,
+            "freep-table-cell-rich-editor",
+            "freep-table-cell-mixed-formatting");
     }
 
-    public static void ApplyFormatResult(
-        TextBox textBox,
+    internal static void ApplyFormatResult(
+        AvaloniaRichTextEditor editor,
         InCanvasTableCellRichTextEditPlan? plan)
     {
-        ApplyRichTextEditorPlan(textBox, plan);
+        ApplyRichTextEditorPlan(editor, plan);
 
         if (plan is null)
             return;
 
-        int textLength = textBox.Text?.Length ?? 0;
+        int textLength = editor.Text.Length;
         var selection = TableCellEditPlanner.PlanPreservedSelection(plan.Selection, textLength);
-        textBox.SelectionStart = selection.Start;
-        textBox.SelectionEnd = selection.End;
-    }
-
-    private static void ApplyEditorStyle(
-        TextBox textBox,
-        InCanvasEditorTextStyleState style)
-    {
-        if (!string.IsNullOrWhiteSpace(style.FontFamily))
-            textBox.FontFamily = new FontFamily(style.FontFamily);
-        if (style.FontSizePt is { } fontSizePt)
-            textBox.FontSize = fontSizePt;
-
-        textBox.FontWeight = style.Bold == true ? FontWeight.Bold : FontWeight.Normal;
-        textBox.FontStyle = style.Italic == true ? FontStyle.Italic : FontStyle.Normal;
-
-        textBox.Classes.Set("freep-table-cell-underline", style.Underline == true);
-        textBox.BorderThickness = style.Underline == true
-            ? new global::Avalonia.Thickness(1.5, 1.5, 1.5, 3.0)
-            : new global::Avalonia.Thickness(1.5);
-
-        textBox.Foreground = style.Color is null
-            ? textBox.Foreground
-            : new SolidColorBrush(Color.FromRgb(
-                style.Color.Resolved.R,
-                style.Color.Resolved.G,
-                style.Color.Resolved.B));
+        editor.SelectionStart = selection.Start;
+        editor.SelectionEnd = selection.End;
     }
 }

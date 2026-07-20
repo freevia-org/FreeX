@@ -227,9 +227,10 @@ public sealed class SlideCanvasAvaloniaTests
             textEditor.IsActive.Should().BeTrue();
             overlay.Children.Should().ContainSingle();
 
-            var box = overlay.Children[0].Should().BeOfType<global::Avalonia.Controls.TextBox>().Subject;
-            box.Width.Should().BeApproximately(288, 0.1);
-            box.Height.Should().BeApproximately(144, 0.1);
+            var richEditor = RichEditor(overlay);
+            var box = richEditor.InputBox;
+            richEditor.Width.Should().BeApproximately(288, 0.1);
+            richEditor.Height.Should().BeApproximately(144, 0.1);
             box.Text = "Changed\nText";
 
             textEditor.Commit();
@@ -275,7 +276,7 @@ public sealed class SlideCanvasAvaloniaTests
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.Activate(shape!.Id);
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var box = RichInput(overlay);
             box.Text.Should().Be("Hello world");
 
             textEditor.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
@@ -297,6 +298,60 @@ public sealed class SlideCanvasAvaloniaTests
         editor.Undo();
         shape.TextBody!.Paragraphs[0].Runs.Should().OnlyContain(r => !r.Bold);
         shape.TextBody.Paragraphs[0].Runs[1].Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task InCanvasTextEditor_TextAndFormattingStayLocalAndCommitAsOneUndoStep()
+    {
+        SlideShape? shape = null;
+        EditingSession? editor = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = new SlideShape
+                {
+                    Id = 28,
+                    OffsetXEmu = 0,
+                    OffsetYEmu = 0,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    TextBody = MakeMixedRunTextBody(),
+                };
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(shape!.Id);
+            textEditor.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Underline).Should().BeTrue();
+            RichInput(overlay).Text = "One committed edit";
+
+            editor.CanUndo.Should().BeFalse("the active rich edit is still a local transaction");
+            InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody).Should().Be("Hello world");
+            shape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+                .Should().OnlyContain(run => !run.Underline);
+
+            textEditor.Commit();
+        });
+
+        editor!.CanUndo.Should().BeTrue();
+        InCanvasTextEditPlanner.ExtractPlainText(shape!.TextBody).Should().Be("One committed edit");
+        shape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().OnlyContain(run => run.Underline);
+
+        editor.Undo();
+        editor.CanUndo.Should().BeFalse("text and formatting must share one model command");
+        InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody).Should().Be("Hello world");
+        shape.TextBody!.Paragraphs[0].Runs.Should().HaveCount(2);
+        shape.TextBody.Paragraphs[0].Runs[1].Italic.Should().BeTrue();
+        shape.TextBody.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().OnlyContain(run => !run.Underline);
     }
 
     [Fact]
@@ -335,7 +390,7 @@ public sealed class SlideCanvasAvaloniaTests
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.Activate(shape!.Id);
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var box = RichInput(overlay);
             startPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
             projectedFontFamily = box.FontFamily.ToString();
             projectedFontSize = box.FontSize;
@@ -347,6 +402,9 @@ public sealed class SlideCanvasAvaloniaTests
             box.SelectionEnd = 11;
             textEditor.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
             selectedPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
+            shape.TextBody!.Paragraphs[0].Runs[1].Bold.Should().BeFalse(
+                "inline formatting remains local until the edit commits");
+            textEditor.Commit();
         });
 
         startPlan!.PlainText.Should().Be("Hello world");
@@ -434,7 +492,7 @@ public sealed class SlideCanvasAvaloniaTests
             overlay.IsVisible.Should().BeTrue();
             overlay.IsHitTestVisible.Should().BeTrue();
 
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var box = RichInput(overlay);
             box.SelectionStart.Should().Be(0);
             box.SelectionEnd.Should().Be("Original".Length);
             box.Text = "Changed\nText";
@@ -476,7 +534,7 @@ public sealed class SlideCanvasAvaloniaTests
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.ActivateCellEdit(shape!.Id, 0, 0);
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var box = RichInput(overlay);
 
             textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
             textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic).Should().BeTrue();
@@ -486,6 +544,9 @@ public sealed class SlideCanvasAvaloniaTests
             overlayItalic = box.FontStyle == FontStyle.Italic;
             overlayUnderlineClass = box.Classes.Contains("freep-table-cell-underline");
             overlayUnderlineBorder = box.BorderThickness.Bottom == 3.0;
+            shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Bold.Should().BeFalse(
+                "the live model must not change before the rich edit transaction commits");
+            textEditor.CommitCellEdit();
         });
 
         var run = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0];
@@ -527,7 +588,7 @@ public sealed class SlideCanvasAvaloniaTests
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.ActivateCellEdit(shape!.Id, 0, 0);
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var box = RichInput(overlay);
             box.Text.Should().Be("HelloWorld");
 
             // Apply Bold to the whole cell (collapsed caret / no explicit selection set here —
@@ -573,7 +634,7 @@ public sealed class SlideCanvasAvaloniaTests
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.ActivateCellEdit(shape!.Id, 0, 0);
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var box = RichInput(overlay);
             box.Text.Should().Be("one two three");
 
             // Select just "two" (offsets 4..7).
@@ -581,6 +642,7 @@ public sealed class SlideCanvasAvaloniaTests
             box.SelectionEnd = 7;
 
             textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
+            textEditor.CommitCellEdit();
         });
 
         var runs = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
@@ -629,7 +691,7 @@ public sealed class SlideCanvasAvaloniaTests
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.ActivateCellEdit(shape!.Id, 0, 0);
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var box = RichInput(overlay);
             startPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
             projectedFontFamily = box.FontFamily.ToString();
             projectedFontSize = box.FontSize;
@@ -643,6 +705,7 @@ public sealed class SlideCanvasAvaloniaTests
             selectedPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
             selectionStartAfterFormat = box.SelectionStart;
             selectionEndAfterFormat = box.SelectionEnd;
+            textEditor.CommitCellEdit();
         });
 
         startPlan!.PlainText.Should().Be("HelloWorld");
@@ -697,7 +760,8 @@ public sealed class SlideCanvasAvaloniaTests
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.ActivateCellEdit(shape!.Id, 0, 0);
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var richEditor = RichEditor(overlay);
+            var box = richEditor.InputBox;
             box.Text.Should().Be("Alpha\nBeta\nGamma");
             box.SelectionStart = 6;
             box.SelectionEnd = 10;
@@ -707,6 +771,7 @@ public sealed class SlideCanvasAvaloniaTests
             selectedPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
             selectionStartAfterFormat = box.SelectionStart;
             selectionEndAfterFormat = box.SelectionEnd;
+            textEditor.CommitCellEdit();
         });
 
         selectedPlan!.Selection.Should().Be(new InCanvasEditorTextSelection(6, 10));
@@ -760,7 +825,8 @@ public sealed class SlideCanvasAvaloniaTests
             var color = new ThemeAwareColor(new SrgbColor(0x22, 0x44, 0x66));
 
             textEditor.ActivateCellEdit(shape!.Id, 0, 0);
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var richEditor = RichEditor(overlay);
+            var box = richEditor.InputBox;
             box.Text.Should().Be("HelloWorld");
 
             textEditor.TryApplyActiveTableCellFontFamily("Consolas").Should().BeTrue();
@@ -769,7 +835,10 @@ public sealed class SlideCanvasAvaloniaTests
 
             overlayFontFamily = box.FontFamily.ToString();
             overlayFontSize = box.FontSize;
-            overlayColor = box.Foreground.Should().BeOfType<SolidColorBrush>().Subject.Color;
+            overlayColor = richEditor.RichTextView.Inlines!
+                .OfType<global::Avalonia.Controls.Documents.Run>()
+                .First()
+                .Foreground.Should().BeOfType<SolidColorBrush>().Subject.Color;
 
             textEditor.CommitCellEdit();
         });
@@ -808,7 +877,7 @@ public sealed class SlideCanvasAvaloniaTests
             var color = new ThemeAwareColor(new SrgbColor(0xAA, 0x33, 0x11));
 
             textEditor.ActivateCellEdit(shape!.Id, 0, 0);
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var box = RichInput(overlay);
             box.Text.Should().Be("one two three");
             box.SelectionStart = 4;
             box.SelectionEnd = 7;
@@ -816,6 +885,7 @@ public sealed class SlideCanvasAvaloniaTests
             textEditor.TryApplyActiveTableCellFontFamily("Consolas").Should().BeTrue();
             textEditor.TryApplyActiveTableCellFontSize(28).Should().BeTrue();
             textEditor.TryApplyActiveTableCellColor(color).Should().BeTrue();
+            textEditor.CommitCellEdit();
         });
 
         var runs = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
@@ -944,13 +1014,15 @@ public sealed class SlideCanvasAvaloniaTests
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.ActivateCellEdit(shape!.Id, 0, 0);
-            overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single().Text = "Discarded";
+            RichInput(overlay).Text = "Discarded";
+            textEditor.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
 
             textEditor.CancelCellEdit();
         });
 
         editor!.CanUndo.Should().BeFalse();
         shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Bold.Should().BeFalse();
     }
 
     [Fact]
@@ -980,7 +1052,7 @@ public sealed class SlideCanvasAvaloniaTests
             handled.Should().BeTrue();
             textEditor.IsCellEditActive.Should().BeTrue();
             editor.ActiveTableCell.Should().Be((0, 0));
-            overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single().Text.Should().Be("Anchor");
+            RichInput(overlay).Text.Should().Be("Anchor");
         });
 
         textEditor!.ActiveTableShapeId.Should().Be(shape!.Id);
@@ -1011,19 +1083,19 @@ public sealed class SlideCanvasAvaloniaTests
             textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.ActivateCellEdit(shape.Id, 0, 1);
-            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            var box = RichInput(overlay);
             box.Text = "Edited Anchor";
 
             textEditor.TryNavigateActiveTableCell(TableCellNavigationDirection.Next).Should().BeTrue();
 
             editor.ActiveTableCell.Should().Be((0, 2));
             shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Edited Anchor");
-            overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single().Text.Should().Be("Right");
+            RichInput(overlay).Text.Should().Be("Right");
         });
 
         textEditor!.IsCellEditActive.Should().BeTrue();
         textEditor.ActiveTableShapeId.Should().Be(shape!.Id);
-        overlay!.Children.OfType<global::Avalonia.Controls.TextBox>().Should().ContainSingle();
+        overlay!.Children.OfType<AvaloniaRichTextEditor>().Should().ContainSingle();
         editor!.CanUndo.Should().BeTrue();
     }
 
@@ -1099,12 +1171,12 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("AvaloniaTableCellEditAdapter.CommitRichText");
         source.Should().Contain("AvaloniaTableCellEditAdapter.Cancel");
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanNavigation");
-        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanTextFormat");
-        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontFamily");
-        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontSize");
-        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanColor");
-        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanParagraphListPreset");
-        source.Should().Contain("AvaloniaTableCellEditAdapter.ApplyFormatResult");
+        source.Should().Contain("_cellTextBox.ToggleTextFormat");
+        source.Should().Contain("_cellTextBox.ApplyFontFamily");
+        source.Should().Contain("_cellTextBox.ApplyFontSize");
+        source.Should().Contain("_cellTextBox.ApplyColor");
+        source.Should().Contain("_cellTextBox.ApplyParagraphListPreset");
+        source.Should().Contain("_cellTextBox.EditedBody");
         source.Should().Contain("ApplyInitialSelection(_cellTextBox, startPlan.InitialSelection)");
         source.Should().NotContain("_editor.PlanActiveTableCell");
         source.Should().Contain("TryApplyActiveTableCellTextFormat");
@@ -1124,10 +1196,11 @@ public sealed class SlideCanvasAvaloniaTests
             "FreeP.App.Rendering.Avalonia",
             "AvaloniaInCanvasTextEditor.cs"));
 
-        source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanTextFormat");
-        source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanFontFamily");
-        source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanFontSize");
-        source.Should().Contain("AvaloniaInCanvasTextEditAdapter.PlanColor");
+        source.Should().Contain("_textBox.ToggleTextFormat");
+        source.Should().Contain("_textBox.ApplyFontFamily");
+        source.Should().Contain("_textBox.ApplyFontSize");
+        source.Should().Contain("_textBox.ApplyColor");
+        source.Should().Contain("_textBox.EditedBody");
         source.Should().Contain("AvaloniaInCanvasTextEditAdapter.ApplyRichTextEditorPlan(_textBox, startPlan.RichTextPlan)");
         source.Should().Contain("ApplyInitialSelection(_textBox, startPlan.InitialSelection)");
         source.Should().Contain("RefreshShapeOverlayRichTextPlan");
@@ -2659,6 +2732,12 @@ public sealed class SlideCanvasAvaloniaTests
         thrown.Should().BeNull(
             "Wave 22A: combo chart with OverrideChartType=Line (no markers) must render without throwing");
     }
+
+    private static global::Avalonia.Controls.TextBox RichInput(global::Avalonia.Controls.Canvas overlay) =>
+        RichEditor(overlay).InputBox;
+
+    private static AvaloniaRichTextEditor RichEditor(global::Avalonia.Controls.Canvas overlay) =>
+        overlay.Children.OfType<AvaloniaRichTextEditor>().Single();
 }
 
 // ── Theme 15: Avalonia interaction layer tests ─────────────────────────────────────────────────

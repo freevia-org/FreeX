@@ -642,6 +642,40 @@ public static class TableCellEditPlanner
             Math.Clamp(selection.End, 0, textLength));
     }
 
+    internal static TextBody ApplyParagraphAlignmentToBody(
+        TextBody source,
+        TextAlign alignment,
+        (int Start, int End)? selection) =>
+        ApplyParagraphAlignment(source, alignment, selection);
+
+    internal static TextBody ApplyParagraphBulletToggleToBody(
+        TextBody source,
+        (int Start, int End)? selection) =>
+        ApplyParagraphBulletToggle(source, selection, out _);
+
+    internal static TextBody ApplyParagraphNumberingToggleToBody(
+        TextBody source,
+        (int Start, int End)? selection) =>
+        ApplyParagraphNumberingToggle(source, selection, out _);
+
+    internal static TextBody ApplyParagraphListPresetToBody(
+        TextBody source,
+        (int Start, int End)? selection,
+        TableCellListPresetDescriptor preset) =>
+        ApplyParagraphListPreset(source, selection, preset);
+
+    internal static TextBody ApplyParagraphPictureBulletToBody(
+        TextBody source,
+        (int Start, int End)? selection,
+        ImagePart image) =>
+        ApplyParagraphPictureBullet(source, selection, image);
+
+    internal static TextBody ApplyParagraphIndentToBody(
+        TextBody source,
+        bool increase,
+        (int Start, int End)? selection) =>
+        ApplyParagraphIndent(source, increase, selection);
+
     public static TableCellTextFormatPlan PlanTextFormat(
         int slideIndex,
         Slide? slide,

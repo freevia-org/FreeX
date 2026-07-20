@@ -427,7 +427,7 @@ public sealed class InCanvasTextEditPlanner
             var pb = b.Paragraphs[pi];
             if (pa.Runs.Count != pb.Runs.Count)
                 return false;
-            if (compareParagraphAlignment && pa.Align != pb.Align)
+            if (!ParagraphsEqualForRichTextCommit(pa, pb, compareParagraphAlignment))
                 return false;
 
             for (int ri = 0; ri < pa.Runs.Count; ri++)
@@ -441,9 +441,58 @@ public sealed class InCanvasTextEditPlanner
                     || ra.Strikethrough != rb.Strikethrough
                     || ra.FontFamily != rb.FontFamily
                     || ra.FontSizePt != rb.FontSizePt
+                    || ra.BaselineOffset != rb.BaselineOffset
                     || !TextBodyModelCloner.ColorsEqual(ra.Color, rb.Color))
                     return false;
             }
+        }
+
+        return true;
+    }
+
+    private static bool ParagraphsEqualForRichTextCommit(
+        Paragraph a,
+        Paragraph b,
+        bool compareAlignment) =>
+        (!compareAlignment || a.Align == b.Align)
+        && a.Level == b.Level
+        && a.BulletKind == b.BulletKind
+        && a.BulletSuppressed == b.BulletSuppressed
+        && a.BulletChar == b.BulletChar
+        && ImagePartsEqual(a.BulletImage, b.BulletImage)
+        && a.AutoNumType == b.AutoNumType
+        && a.AutoNumStartAt == b.AutoNumStartAt
+        && a.MarginLeftEmu == b.MarginLeftEmu
+        && a.IndentEmu == b.IndentEmu
+        && TextBodyModelCloner.ColorsEqual(a.BulletColor, b.BulletColor)
+        && a.BulletColorFollowsText == b.BulletColorFollowsText
+        && a.BulletSizePct == b.BulletSizePct
+        && a.BulletSizePt == b.BulletSizePt
+        && a.BulletSizeFollowsText == b.BulletSizeFollowsText
+        && a.BulletFontFamily == b.BulletFontFamily
+        && a.BulletFontFollowsText == b.BulletFontFollowsText
+        && a.SpaceBeforePt == b.SpaceBeforePt
+        && a.SpaceAfterPt == b.SpaceAfterPt
+        && TabStopsEqual(a.TabStops, b.TabStops);
+
+    private static bool ImagePartsEqual(ImagePart? a, ImagePart? b)
+    {
+        if (a is null || b is null)
+            return a is null && b is null;
+
+        return a.ContentType == b.ContentType && a.Bytes.AsSpan().SequenceEqual(b.Bytes);
+    }
+
+    private static bool TabStopsEqual(IReadOnlyList<TabStop> a, IReadOnlyList<TabStop> b)
+    {
+        if (a.Count != b.Count)
+            return false;
+
+        for (int index = 0; index < a.Count; index++)
+        {
+            if (a[index].PositionEmu != b[index].PositionEmu
+                || a[index].Alignment != b[index].Alignment)
+                return false;
         }
 
         return true;
@@ -838,7 +887,7 @@ internal static class TextBodyModelCloner
         return SchemeColorRefsEqual(a.SchemeColor, b.SchemeColor);
     }
 
-    private static Paragraph CloneParagraph(Paragraph source)
+    internal static Paragraph CloneParagraph(Paragraph source)
     {
         var copy = new Paragraph
         {
@@ -885,7 +934,7 @@ internal static class TextBodyModelCloner
                 ContentType = source.ContentType
             };
 
-    private static Run CloneRun(Run source) => new()
+    internal static Run CloneRun(Run source) => new()
     {
         Text = source.Text,
         FontFamily = source.FontFamily,
