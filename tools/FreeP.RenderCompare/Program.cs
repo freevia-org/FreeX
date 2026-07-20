@@ -80,6 +80,7 @@ internal static class Program
                 "--slide-pane-thumbnail-compare" => RunSlidePaneThumbnailCompare(args[1..]),
                 "--notes-page-preview-evidence" => RunNotesPagePreviewEvidence(args[1..]),
                 "--export-backstage-evidence" => RunExportBackstageEvidence(args[1..]),
+                "--dialog-pane-visual-evidence" => RunDialogPaneVisualEvidence(args[1..]),
                 "--corpus-summary"    => RunCorpusSummary(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
                 "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
@@ -93,6 +94,28 @@ internal static class Program
             Console.Error.WriteLine(ex.StackTrace);
             return 1;
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Mode: --dialog-pane-visual-evidence
+    // -----------------------------------------------------------------------
+    private static int RunDialogPaneVisualEvidence(string[] args)
+    {
+        if (args.Length < 1)
+        {
+            Console.Error.WriteLine("usage: --dialog-pane-visual-evidence <outDir> [--wpf-exe <path>] [--avalonia-exe <path>] [--timeout-seconds N]");
+            return 2;
+        }
+
+        var outputDirectory = Path.GetFullPath(args[0]);
+        var wpfExecutable = ReadOption(args, "--wpf-exe") ?? Path.GetFullPath(
+            Path.Combine("freep", "FreeP.App.Host", "bin", "Release", "net10.0-windows10.0.19041.0", "FreeP.App.Host.exe"));
+        var avaloniaExecutable = ReadOption(args, "--avalonia-exe") ?? Path.GetFullPath(
+            Path.Combine("freep", "FreeP.App.Avalonia", "bin", "Release", "net10.0", "FreeP.exe"));
+        var timeoutSeconds = int.TryParse(ReadOption(args, "--timeout-seconds"), out var parsedTimeout)
+            ? parsedTimeout
+            : 30;
+        return DialogPaneVisualEvidence.Run(outputDirectory, wpfExecutable, avaloniaExecutable, TimeSpan.FromSeconds(timeoutSeconds));
     }
 
     // -----------------------------------------------------------------------
@@ -615,6 +638,12 @@ internal static class Program
     private static bool HasFlag(string[] args, string flag) =>
         args.Any(arg => arg.Equals(flag, StringComparison.OrdinalIgnoreCase));
 
+    private static string? ReadOption(string[] args, string option)
+    {
+        var index = Array.FindIndex(args, arg => arg.Equals(option, StringComparison.OrdinalIgnoreCase));
+        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+    }
+
     private static void PrintUsage()
     {
         Console.WriteLine("FreeP.RenderCompare — PowerPoint interop harness (Wave 1F)");
@@ -647,6 +676,9 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("  --export-backstage-evidence <deck.pptx> <outDir>");
         Console.WriteLine("      Shared Backstage export/print evidence rows; PowerPoint COM baselines stay n/a/deferred.");
+        Console.WriteLine();
+        Console.WriteLine("  --dialog-pane-visual-evidence <outDir> [--wpf-exe <path>] [--avalonia-exe <path>] [--timeout-seconds N]");
+        Console.WriteLine("      Capture and compare paired WPF/Avalonia dialog, pane, and choice-overlay fixtures at 96 DPI.");
         Console.WriteLine();
         Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>] [--manifest <out.json>] [--require-complete-refs] [--allow-missing-powerpoint]");
         Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");

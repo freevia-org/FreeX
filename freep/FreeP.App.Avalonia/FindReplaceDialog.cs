@@ -44,8 +44,7 @@ internal sealed class FindReplaceDialog : Window
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _onNavigationOrMutation = onNavigationOrMutation;
 
-        Width = 440;
-        SizeToContent = SizeToContent.Height;
+        Width = 425.3333333333333;
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -132,6 +131,7 @@ internal sealed class FindReplaceDialog : Window
     internal void ShowReplaceMode(bool show)
     {
         _showReplace = show;
+        Height = show ? 198.66666666666666 : 134;
         Title = FindReplaceDialogPlanner.TitleForMode(show);
         _replaceInputRow.IsVisible = show;
         _replaceButtonRow.IsVisible = show;

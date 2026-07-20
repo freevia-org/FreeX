@@ -20,6 +20,7 @@ namespace FreeP.App.Host;
 internal static class WpfDialogPaneVisualEvidenceCapture
 {
     internal const string OutputArgument = "--dialog-pane-visual-evidence-output";
+    internal const string ScenarioArgument = "--dialog-pane-visual-evidence-scenario";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -44,11 +45,31 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             return true;
         }
 
-        exitCode = Run(Path.GetFullPath(args[index + 1]));
+        var scenarioIndex = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, ScenarioArgument));
+        string? scenarioId = null;
+        if (scenarioIndex >= 0)
+        {
+            if (scenarioIndex + 1 >= args.Length || string.IsNullOrWhiteSpace(args[scenarioIndex + 1]))
+            {
+                Console.Error.WriteLine($"{ScenarioArgument} requires a scenario id.");
+                exitCode = 2;
+                return true;
+            }
+
+            scenarioId = args[scenarioIndex + 1];
+            if (!DialogPaneVisualEvidenceCatalog.All.Any(scenario => StringComparer.Ordinal.Equals(scenario.Id, scenarioId)))
+            {
+                Console.Error.WriteLine($"Unknown visual evidence scenario: {scenarioId}");
+                exitCode = 2;
+                return true;
+            }
+        }
+
+        exitCode = Run(Path.GetFullPath(args[index + 1]), scenarioId);
         return true;
     }
 
-    private static int Run(string outputRoot)
+    private static int Run(string outputRoot, string? scenarioId)
     {
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         AppComposition.InstallSharedSeams();
@@ -59,7 +80,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         {
             try
             {
-                result = CaptureAll(outputRoot);
+                result = CaptureAll(outputRoot, scenarioId);
             }
             catch (Exception ex)
             {
@@ -75,7 +96,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         return result;
     }
 
-    private static int CaptureAll(string outputRoot)
+    private static int CaptureAll(string outputRoot, string? scenarioId)
     {
         var hostDirectory = Path.Combine(outputRoot, "wpf");
         Directory.CreateDirectory(hostDirectory);
@@ -87,7 +108,11 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             "Visible WPF windows are captured from their app-owned render targets; native non-client title-bar pixels are excluded.",
         };
 
-        foreach (var scenario in DialogPaneVisualEvidenceCatalog.All)
+        var scenarios = scenarioId is null
+            ? DialogPaneVisualEvidenceCatalog.All
+            : [DialogPaneVisualEvidenceCatalog.Get(scenarioId)];
+
+        foreach (var scenario in scenarios)
         {
             File.AppendAllText(progressPath, $"start {scenario.Id}{Environment.NewLine}");
             var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
@@ -106,6 +131,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             try
             {
                 owner.Show();
+                NormalizeOwnerContentSize(owner);
                 owner.Activate();
                 var assertions = owner.PrepareDialogPaneVisualEvidence(scenario, fixture).ToList();
                 Window target = owner;
@@ -127,8 +153,14 @@ internal static class WpfDialogPaneVisualEvidenceCapture
 
                 var fileName = scenario.Id + ".png";
                 var imagePath = Path.Combine(hostDirectory, fileName);
-                var raster = Capture(target, imagePath);
+                var captureRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                    ? AppOwnedClientRoot(target)
+                    : target.Content as FrameworkElement ?? target;
+                var raster = Capture(captureRoot, imagePath);
                 assertions.AddRange(owner.CompleteDialogPaneVisualEvidence(scenario));
+                var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                    ? target
+                    : owner.DialogPaneVisualEvidenceMetadataRoot(scenario);
 
                 var focus = DescribeFocus(Keyboard.FocusedElement);
                 captures.Add(new DialogPaneVisualEvidenceCapture(
@@ -138,8 +170,8 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                     "wpf",
                     raster.NonBackgroundPixelCount > 0 ? "complete" : "blocked",
                     Path.Combine("wpf", fileName).Replace('\\', '/'),
-                    target.ActualWidth,
-                    target.ActualHeight,
+                    raster.LogicalWidth,
+                    raster.LogicalHeight,
                     raster.PixelWidth,
                     raster.PixelHeight,
                     raster.DpiX,
@@ -147,8 +179,8 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                     raster.NonBackgroundPixelCount,
                     focus.Role,
                     focus.Label,
-                    Buttons(target),
-                    Controls(target),
+                    Buttons(metadataRoot),
+                    Controls(metadataRoot),
                     assertions,
                     raster.Limitations));
                 File.AppendAllText(progressPath, $"complete {scenario.Id}{Environment.NewLine}");
@@ -179,7 +211,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         File.WriteAllText(
             Path.Combine(hostDirectory, "manifest.json"),
             JsonSerializer.Serialize(manifest, JsonOptions));
-        return captures.Count == DialogPaneVisualEvidenceCatalog.All.Count ? 0 : 1;
+        return captures.Count == scenarios.Count ? 0 : 1;
     }
 
     private static Window CreateDialog(
@@ -194,10 +226,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             {
                 var dialog = new SlideSizeDialog(owner.Editor);
                 if (scenario.StateId == "invalid")
-                {
                     dialog.SetInputForTests("0", "7.5", SlideSizeDialogUnit.Inches);
-                    assertions.Add(new("validation-visible", !dialog.ApplyForTests(), dialog.ValidationText));
-                }
                 return dialog;
             }
             case "insert.header-footer":
@@ -255,25 +284,31 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         DialogPaneVisualEvidenceScenario scenario,
         List<DialogPaneVisualEvidenceAssertion> assertions)
     {
+        if (dialog is SlideSizeDialog slideSize && scenario.RouteId == "design.slide-size" && scenario.StateId == "invalid")
+        {
+            var valid = slideSize.ApplyForTests();
+            assertions.Add(new("validation-visible", !valid, slideSize.ValidationText));
+            return;
+        }
+
         if (dialog is null || scenario.RouteId != "chart.edit-data" || scenario.StateId != "validation")
             return;
 
-        var numericBox = Descendants(dialog).OfType<TextBox>()
-            .FirstOrDefault(box => double.TryParse(box.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out _));
-        if (numericBox is not null)
-        {
-            numericBox.Text = "not-a-number";
-            numericBox.Focus();
-        }
+        var prepared = ((ChartDataDialog)dialog).PrepareValidationForVisualEvidence();
         assertions.Add(new(
-            "validation-input-prepared",
-            numericBox is not null,
-            numericBox is null ? "No realized numeric chart cell was available." : "A realized chart value cell contains invalid numeric input."));
+            "validation-visible",
+            prepared,
+            prepared
+                ? $"Invalid chart value remains open with inline validation: {((ChartDataDialog)dialog).ValidationText}"
+                : "The chart dialog could not enter and reject an invalid numeric cell."));
     }
 
     private static void FocusFirstInputIfNeeded(Window target, DialogPaneVisualEvidenceScenario scenario)
     {
-        if (!scenario.CompareFocus || Keyboard.FocusedElement is not null)
+        if (!scenario.CompareFocus)
+            return;
+
+        if (!string.IsNullOrWhiteSpace(DescribeFocus(Keyboard.FocusedElement).Role))
             return;
 
         Descendants(target).OfType<Control>()
@@ -281,17 +316,25 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             ?.Focus();
     }
 
-    private static CaptureRaster Capture(Window target, string path)
+    private static CaptureRaster Capture(FrameworkElement target, string path)
     {
         var source = PresentationSource.FromVisual(target);
         var scaleX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1d;
         var scaleY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1d;
-        var dpiX = 96d * scaleX;
-        var dpiY = 96d * scaleY;
-        var width = Math.Max(1, (int)Math.Ceiling(target.ActualWidth * scaleX));
-        var height = Math.Max(1, (int)Math.Ceiling(target.ActualHeight * scaleY));
-        var bitmap = new RenderTargetBitmap(width, height, dpiX, dpiY, PixelFormats.Pbgra32);
-        bitmap.Render(target);
+        var desktopDpiX = 96d * scaleX;
+        var desktopDpiY = 96d * scaleY;
+        var nativeWidth = Math.Max(1, (int)Math.Ceiling(target.ActualWidth * scaleX));
+        var nativeHeight = Math.Max(1, (int)Math.Ceiling(target.ActualHeight * scaleY));
+        var nativeBitmap = new RenderTargetBitmap(nativeWidth, nativeHeight, desktopDpiX, desktopDpiY, PixelFormats.Pbgra32);
+        nativeBitmap.Render(target);
+
+        var width = Math.Max(1, (int)Math.Ceiling(target.ActualWidth));
+        var height = Math.Max(1, (int)Math.Ceiling(target.ActualHeight));
+        var normalizedVisual = new DrawingVisual();
+        using (var drawing = normalizedVisual.RenderOpen())
+            drawing.DrawImage(nativeBitmap, new Rect(0, 0, target.ActualWidth, target.ActualHeight));
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(normalizedVisual);
 
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
@@ -302,12 +345,17 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         var pixels = new byte[stride * height];
         bitmap.CopyPixels(pixels, stride, 0);
         var nonBackground = CountNonBackgroundPixels(pixels);
-        var limitations = Math.Abs(dpiX - DialogPaneVisualEvidenceCatalog.TargetDpi) <= 0.5 &&
-            Math.Abs(dpiY - DialogPaneVisualEvidenceCatalog.TargetDpi) <= 0.5
+        var limitations = Math.Abs(desktopDpiX - DialogPaneVisualEvidenceCatalog.TargetDpi) <= 0.5 &&
+            Math.Abs(desktopDpiY - DialogPaneVisualEvidenceCatalog.TargetDpi) <= 0.5
             ? Array.Empty<string>()
-            : [$"WPF desktop DPI is {dpiX:0.##}x{dpiY:0.##}; the 96-DPI target could not be forced without changing the active desktop session."];
-        return new CaptureRaster(width, height, dpiX, dpiY, nonBackground, limitations);
+            : [$"WPF app-owned content was rasterized at 96 DPI; the foreground desktop itself is {desktopDpiX:0.##}x{desktopDpiY:0.##} DPI."];
+        return new CaptureRaster(target.ActualWidth, target.ActualHeight, width, height, 96, 96, nonBackground, limitations);
     }
+
+    private static FrameworkElement AppOwnedClientRoot(Window window) =>
+        VisualTreeHelper.GetChildrenCount(window) > 0 && VisualTreeHelper.GetChild(window, 0) is FrameworkElement client
+            ? client
+            : window.Content as FrameworkElement ?? window;
 
     private static long CountNonBackgroundPixels(byte[] pixels)
     {
@@ -327,18 +375,18 @@ internal static class WpfDialogPaneVisualEvidenceCapture
 
     private static IReadOnlyList<DialogPaneVisualEvidenceButton> Buttons(DependencyObject root) =>
         Descendants(root).OfType<Button>()
-            .Select(button => new DialogPaneVisualEvidenceButton(
-                NormalizeLabel(button.Content?.ToString()),
-                button.IsEnabled,
-                button.IsDefault,
-                button.IsCancel))
-            .Where(button => !string.IsNullOrWhiteSpace(button.Label))
+            .Where(button => button.TemplatedParent is null)
+            .Select(ToButton)
+            .Where(button => button is not null)
+            .Cast<DialogPaneVisualEvidenceButton>()
             .ToArray();
 
     private static IReadOnlyList<DialogPaneVisualEvidenceControlState> Controls(DependencyObject root) =>
         Descendants(root).OfType<Control>()
+            .Where(control => control.TemplatedParent is null)
             .Select(ToControlState)
-            .Where(state => state is not null)
+            .Where(state => state is not null &&
+                (state.Role is "button" or "checkbox" or "radio" || !string.IsNullOrWhiteSpace(state.Label)))
             .Cast<DialogPaneVisualEvidenceControlState>()
             .ToArray();
 
@@ -346,9 +394,9 @@ internal static class WpfDialogPaneVisualEvidenceCapture
     {
         return control switch
         {
-            Button button => new("button", NormalizeLabel(button.Content?.ToString()), button.IsEnabled),
-            CheckBox check => new("checkbox", NormalizeLabel(check.Content?.ToString()), check.IsEnabled, check.IsChecked),
-            RadioButton radio => new("radio", NormalizeLabel(radio.Content?.ToString()), radio.IsEnabled, radio.IsChecked),
+            Button button when ToButton(button) is { } action => new("button", action.ActionId, button.IsEnabled),
+            CheckBox check => new("checkbox", NormalizeLabel(null, check.Content?.ToString()), check.IsEnabled, check.IsChecked),
+            RadioButton radio => new("radio", NormalizeLabel(null, radio.Content?.ToString()), radio.IsEnabled, radio.IsChecked),
             ComboBox combo => new("combobox", NormalizeLabel(AutomationProperties.GetName(combo)), combo.IsEnabled, null, combo.SelectedIndex >= 0),
             TextBox box => new("textbox", NormalizeLabel(AutomationProperties.GetName(box)), box.IsEnabled),
             _ => null,
@@ -357,17 +405,49 @@ internal static class WpfDialogPaneVisualEvidenceCapture
 
     private static (string Role, string Label) DescribeFocus(IInputElement? focused) => focused switch
     {
-        Button button => ("button", NormalizeLabel(button.Content?.ToString())),
-        CheckBox check => ("checkbox", NormalizeLabel(check.Content?.ToString())),
-        RadioButton radio => ("radio", NormalizeLabel(radio.Content?.ToString())),
+        Button button => ("button", NormalizeLabel(AutomationProperties.GetName(button), button.Content?.ToString())),
+        CheckBox check => ("checkbox", NormalizeLabel(null, check.Content?.ToString())),
+        RadioButton radio => ("radio", NormalizeLabel(null, radio.Content?.ToString())),
         ComboBox combo => ("combobox", NormalizeLabel(AutomationProperties.GetName(combo))),
         TextBox box => ("textbox", NormalizeLabel(AutomationProperties.GetName(box))),
-        FrameworkElement element => (element.GetType().Name.ToLowerInvariant(), NormalizeLabel(AutomationProperties.GetName(element))),
         _ => (string.Empty, string.Empty),
     };
 
-    private static string NormalizeLabel(string? label) =>
-        (label ?? string.Empty).Trim().TrimEnd(':');
+    private static DialogPaneVisualEvidenceButton? ToButton(Button button)
+    {
+        var fallback = button.Content as string;
+        var label = NormalizeLabel(AutomationProperties.GetName(button), fallback);
+        var automationId = NormalizeLabel(AutomationProperties.GetAutomationId(button));
+        var actionId = string.IsNullOrWhiteSpace(automationId) ? SemanticActionId(label) : automationId;
+        return string.IsNullOrWhiteSpace(actionId)
+            ? null
+            : new(actionId, label, button.IsEnabled, button.IsDefault, button.IsCancel);
+    }
+
+    private static string SemanticActionId(string label)
+    {
+        var value = label.Trim().ToLowerInvariant();
+        if (value.StartsWith("+", StringComparison.Ordinal))
+            value = "add " + value[1..];
+        else if (value.StartsWith("-", StringComparison.Ordinal))
+            value = "remove " + value[1..];
+        var chars = value.Select(character => char.IsLetterOrDigit(character) ? character : '-').ToArray();
+        return string.Join('-', new string(chars).Split('-', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static string NormalizeLabel(string? label, string? fallback = null) =>
+        (string.IsNullOrWhiteSpace(label) ? fallback ?? string.Empty : label).Trim().TrimEnd(':').Replace("_", string.Empty);
+
+    private static void NormalizeOwnerContentSize(Window owner)
+    {
+        owner.WindowState = WindowState.Normal;
+        owner.UpdateLayout();
+        if (owner.Content is not FrameworkElement content)
+            return;
+        owner.Width += DialogPaneVisualEvidenceCatalog.LogicalShellWidth - content.ActualWidth;
+        owner.Height += DialogPaneVisualEvidenceCatalog.LogicalShellHeight - content.ActualHeight;
+        owner.UpdateLayout();
+    }
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
     {
@@ -392,6 +472,8 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         Application.Current.Dispatcher.Invoke(DispatcherPriority.ApplicationIdle, new Action(() => { }));
 
     private sealed record CaptureRaster(
+        double LogicalWidth,
+        double LogicalHeight,
         int PixelWidth,
         int PixelHeight,
         double DpiX,

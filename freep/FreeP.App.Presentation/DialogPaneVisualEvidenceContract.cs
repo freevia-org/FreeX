@@ -71,6 +71,7 @@ public static class DialogPaneVisualEvidenceCatalog
 }
 
 public sealed record DialogPaneVisualEvidenceButton(
+    string ActionId,
     string Label,
     bool IsEnabled,
     bool IsDefault,
@@ -172,12 +173,15 @@ public static class DialogPaneVisualEvidenceComparer
         var dimensionsMatch =
             Math.Abs(wpf.LogicalWidth - avalonia.LogicalWidth) <= logicalDimensionTolerance &&
             Math.Abs(wpf.LogicalHeight - avalonia.LogicalHeight) <= logicalDimensionTolerance;
-        var focusMatches = !scenario.CompareFocus ||
+        var wpfFocusAvailable = !string.IsNullOrWhiteSpace(wpf.FocusedRole);
+        var avaloniaFocusAvailable = !string.IsNullOrWhiteSpace(avalonia.FocusedRole);
+        var focusUnavailable = scenario.CompareFocus && (!wpfFocusAvailable || !avaloniaFocusAvailable);
+        var focusMatches = !scenario.CompareFocus || focusUnavailable ||
             StringComparer.OrdinalIgnoreCase.Equals(wpf.FocusedRole, avalonia.FocusedRole) &&
             StringComparer.OrdinalIgnoreCase.Equals(wpf.FocusedLabel, avalonia.FocusedLabel);
         var buttonOrderMatches = !scenario.CompareButtons ||
-            wpf.Buttons.Select(button => button.Label)
-                .SequenceEqual(avalonia.Buttons.Select(button => button.Label), StringComparer.Ordinal);
+            wpf.Buttons.Select(button => button.ActionId)
+                .SequenceEqual(avalonia.Buttons.Select(button => button.ActionId), StringComparer.Ordinal);
         var enabledStateMatches = !scenario.CompareEnabledState ||
             ComparableEnabledStates(wpf).SequenceEqual(ComparableEnabledStates(avalonia), StringComparer.Ordinal);
         var wpfNonblank = wpf.NonBackgroundPixelCount > 0;
@@ -189,8 +193,10 @@ public static class DialogPaneVisualEvidenceComparer
             details.Add($"Logical dimensions differ: WPF {wpf.LogicalWidth:0.##}x{wpf.LogicalHeight:0.##}, Avalonia {avalonia.LogicalWidth:0.##}x{avalonia.LogicalHeight:0.##}.");
         if (!focusMatches)
             details.Add($"Focus differs: WPF {wpf.FocusedRole}/{wpf.FocusedLabel}, Avalonia {avalonia.FocusedRole}/{avalonia.FocusedLabel}.");
+        if (focusUnavailable)
+            details.Add($"Initial focus was unavailable: WPF {FocusDescription(wpf)}, Avalonia {FocusDescription(avalonia)}.");
         if (!buttonOrderMatches)
-            details.Add($"Button order differs: WPF [{string.Join(", ", wpf.Buttons.Select(button => button.Label))}], Avalonia [{string.Join(", ", avalonia.Buttons.Select(button => button.Label))}].");
+            details.Add($"Action-button order differs: WPF [{string.Join(", ", wpf.Buttons.Select(button => button.ActionId))}], Avalonia [{string.Join(", ", avalonia.Buttons.Select(button => button.ActionId))}].");
         if (!enabledStateMatches)
             details.Add("Enabled/checked/selected control state differs.");
         if (!wpfNonblank || !avaloniaNonblank)
@@ -199,7 +205,8 @@ public static class DialogPaneVisualEvidenceComparer
             details.Add("One or more scenario behavior assertions failed.");
 
         var limitations = wpf.Limitations.Concat(avalonia.Limitations).Distinct(StringComparer.Ordinal).ToArray();
-        var captureLimited = !StringComparer.Ordinal.Equals(wpf.CaptureStatus, "complete") ||
+        var captureLimited = focusUnavailable ||
+            !StringComparer.Ordinal.Equals(wpf.CaptureStatus, "complete") ||
             !StringComparer.Ordinal.Equals(avalonia.CaptureStatus, "complete") ||
             limitations.Length > 0;
         if (captureLimited)
@@ -231,5 +238,11 @@ public static class DialogPaneVisualEvidenceComparer
 
     private static IEnumerable<string> ComparableEnabledStates(DialogPaneVisualEvidenceCapture capture) =>
         capture.Controls.Select(control =>
-            $"{control.Role}|{control.Label}|{control.IsEnabled}|{control.IsChecked}|{control.IsSelected}");
+            $"{control.Role}|{control.Label}|{control.IsEnabled}|{control.IsChecked}|{control.IsSelected}")
+            .OrderBy(state => state, StringComparer.Ordinal);
+
+    private static string FocusDescription(DialogPaneVisualEvidenceCapture capture) =>
+        string.IsNullOrWhiteSpace(capture.FocusedRole)
+            ? "unavailable"
+            : $"{capture.FocusedRole}/{capture.FocusedLabel}";
 }

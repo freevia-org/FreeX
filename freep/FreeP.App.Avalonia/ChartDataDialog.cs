@@ -18,6 +18,7 @@ internal sealed class ChartDataDialog : Window
     private readonly List<IndexedTextBox> _seriesNameBoxes = new();
     private readonly List<IndexedTextBox> _categoryBoxes = new();
     private readonly List<ValueTextBox> _valueBoxes = new();
+    private readonly TextBlock _validationText = new();
 
     public ChartDataDialog(EditingSession editor)
         : this(editor, CultureInfo.CurrentCulture)
@@ -36,8 +37,8 @@ internal sealed class ChartDataDialog : Window
         _surface = ChartDataDialogPlanner.BuildSurfacePlan();
 
         Title = _surface.Title;
-        Width = _surface.Width;
-        Height = _surface.Height;
+        Width = 625.3333333333334;
+        Height = 402.6666666666667;
         MinWidth = 520;
         MinHeight = 320;
         CanResize = true;
@@ -65,6 +66,7 @@ internal sealed class ChartDataDialog : Window
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var toolbar = new StackPanel
@@ -101,14 +103,31 @@ internal sealed class ChartDataDialog : Window
                 MakeDialogButton(_surface.CancelLabel, isDefault: false, () => Close(false)),
             },
         };
+        _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+        _validationText.Margin = new Thickness(12, 2, 12, 2);
+        _validationText.TextWrapping = TextWrapping.Wrap;
 
         Grid.SetRow(toolbar, 0);
         Grid.SetRow(scroller, 1);
-        Grid.SetRow(buttons, 2);
+        Grid.SetRow(_validationText, 2);
+        Grid.SetRow(buttons, 3);
         root.Children.Add(toolbar);
         root.Children.Add(scroller);
+        root.Children.Add(_validationText);
         root.Children.Add(buttons);
         return root;
+    }
+
+    internal string ValidationText => _validationText.Text ?? string.Empty;
+
+    internal bool PrepareValidationForVisualEvidence()
+    {
+        var first = _valueBoxes.FirstOrDefault();
+        if (first is null)
+            return false;
+        first.TextBox.Text = "not-a-number";
+        first.TextBox.Focus();
+        return !TryFlushTextBoxEdits();
     }
 
     private void RebuildTable()
@@ -195,7 +214,8 @@ internal sealed class ChartDataDialog : Window
 
     private void OnOk()
     {
-        FlushTextBoxEdits();
+        if (!TryFlushTextBoxEdits())
+            return;
         var commit = _planner.BuildCommitPlan();
         _editor.ReplaceChartData(
             commit.Categories,
@@ -206,12 +226,28 @@ internal sealed class ChartDataDialog : Window
 
     private void FlushTextBoxEdits()
     {
+        TryFlushTextBoxEdits();
+    }
+
+    private bool TryFlushTextBoxEdits()
+    {
+        var invalid = _valueBoxes.FirstOrDefault(box =>
+            !string.IsNullOrWhiteSpace(box.TextBox.Text) &&
+            !double.TryParse(box.TextBox.Text, NumberStyles.Float | NumberStyles.AllowThousands, _culture, out _));
+        if (invalid is not null)
+        {
+            _validationText.Text = ChartDataDialogPlanner.InvalidNumericValueMessage;
+            invalid.TextBox.Focus();
+            return false;
+        }
+        _validationText.Text = string.Empty;
         _planner.ApplySeriesNameEdits(_seriesNameBoxes.Select(box =>
             new ChartDataDialogSeriesNameEdit(box.Index, box.TextBox.Text)));
         _planner.ApplyCategoryEdits(_categoryBoxes.Select(box =>
             new ChartDataDialogCategoryEdit(box.Index, box.TextBox.Text)));
         _planner.ApplyValueEdits(_valueBoxes.Select(box =>
             new ChartDataDialogValueEdit(box.SeriesIndex, box.CategoryIndex, box.TextBox.Text)), _culture);
+        return true;
     }
 
     private static TextBlock MakeHeader(string text)

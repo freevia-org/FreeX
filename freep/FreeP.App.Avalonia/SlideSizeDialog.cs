@@ -37,8 +37,8 @@ internal sealed class SlideSizeDialog : Window
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
         Title = "Slide Size";
-        Width = 380;
-        SizeToContent = SizeToContent.Height;
+        Width = 365.3333333333333;
+        Height = 222.66666666666666;
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;

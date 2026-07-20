@@ -13,6 +13,7 @@ public sealed class App : Application
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
     internal static LaunchSmokeOptions? LaunchSmokeOptions { get; set; }
     internal static string? DialogPaneVisualEvidenceOutputRoot { get; set; }
+    internal static string? DialogPaneVisualEvidenceScenarioId { get; set; }
     internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeP;
 
     public override void OnFrameworkInitializationCompleted()
@@ -36,7 +37,7 @@ public sealed class App : Application
                 {
                     if (DialogPaneVisualEvidenceOutputRoot is { } outputRoot)
                     {
-                        AvaloniaDialogPaneVisualEvidenceCapture.Start(mainWindow, outputRoot);
+                        AvaloniaDialogPaneVisualEvidenceCapture.Start(mainWindow, outputRoot, DialogPaneVisualEvidenceScenarioId);
                         return;
                     }
                     if (LaunchSmokeOptions is { } options)

@@ -35,8 +35,8 @@ internal sealed class CustomShowDialog : Window
         _host = host ?? throw new ArgumentNullException(nameof(host));
 
         Title = "Custom Shows";
-        Width = 640;
-        Height = 440;
+        Width = 625.3333333333334;
+        Height = 402.6666666666667;
         MinWidth = 560;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;

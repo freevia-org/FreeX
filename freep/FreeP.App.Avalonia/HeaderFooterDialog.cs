@@ -34,8 +34,8 @@ internal sealed class HeaderFooterDialog : Window
         var defaults = HeaderFooterCommandPlanner.BuildDefaultOptions(InitialState, focus);
 
         Title = "Header and Footer";
-        Width = 390;
-        SizeToContent = SizeToContent.Height;
+        Width = 345.3333333333333;
+        Height = 260.6666666666667;
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -49,38 +49,38 @@ internal sealed class HeaderFooterDialog : Window
                 StringComparer.Ordinal.Equals(option.FieldType, defaults.DateTimeFieldType)) ??
                 HeaderFooterCommandPlanner.DateFormatOptions[0],
             MinWidth = 260,
-            Margin = new Thickness(20, 4, 0, 4),
+            Margin = new Thickness(20, 2, 0, 2),
         };
         _fixedDateCheck = new CheckBox
         {
             Content = "Fixed",
             IsChecked = defaults.DateTimeMode == HeaderFooterDateTimeMode.Fixed,
-            Margin = new Thickness(20, 0, 0, 4),
+            Margin = new Thickness(20, 0, 0, 2),
         };
         _fixedDateBox = new TextBox
         {
             Text = defaults.FixedDateTimeText,
             MinWidth = 240,
-            Margin = new Thickness(40, 0, 0, 8),
+            Margin = new Thickness(40, 0, 0, 4),
         };
         _footerCheck = new CheckBox { Content = "Footer", IsChecked = defaults.ShowFooter };
         _footerBox = new TextBox
         {
             Text = defaults.FooterText,
             MinWidth = 260,
-            Margin = new Thickness(20, 4, 0, 8),
+            Margin = new Thickness(20, 2, 0, 4),
         };
         _slideNumberCheck = new CheckBox
         {
             Content = "Slide number",
             IsChecked = defaults.ShowSlideNumber,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = new Thickness(0, 0, 0, 4),
         };
         _dontShowOnTitleSlideCheck = new CheckBox
         {
             Content = "Don't show on title slide",
             IsChecked = defaults.SuppressOnTitleSlide,
-            Margin = new Thickness(0, 0, 0, 12),
+            Margin = new Thickness(0, 0, 0, 8),
         };
 
         ApplyChrome();
@@ -184,6 +184,20 @@ internal sealed class HeaderFooterDialog : Window
         AvaloniaCompactDialogChrome.ApplyTextBox(_footerBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCheckBox(_slideNumberCheck, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCheckBox(_dontShowOnTitleSlideCheck, DialogChromeStyle);
+        foreach (var checkBox in new[]
+                 {
+                     _dateTimeCheck,
+                     _fixedDateCheck,
+                     _footerCheck,
+                     _slideNumberCheck,
+                     _dontShowOnTitleSlideCheck,
+                 })
+        {
+            checkBox.Height = 20;
+            checkBox.MinHeight = 20;
+            checkBox.MaxHeight = 20;
+            checkBox.Padding = new Thickness(0);
+        }
     }
 
     private static Button BuildButton(

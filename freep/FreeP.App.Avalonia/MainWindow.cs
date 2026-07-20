@@ -1951,6 +1951,7 @@ public sealed partial class MainWindow : Window
                     ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF2, 0xEC))
                     : Brushes.White,
             };
+            AutomationProperties.SetAutomationId(button, $"table-{choice.Rows}x{choice.Columns}");
             button.Click += (_, _) =>
             {
                 if (button.Tag is TableInsertionPickerChoice tableChoice)
@@ -2003,6 +2004,8 @@ public sealed partial class MainWindow : Window
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     IsEnabled = choice.Chrome.IsEnabled,
                 };
+                AutomationProperties.SetName(button, BuildLayoutChoiceLabel(choice));
+                AutomationProperties.SetAutomationId(button, $"layout-{choice.LayoutId}");
                 button.Click += (_, _) =>
                 {
                     if (button.Tag is string layoutId)
@@ -3002,7 +3005,6 @@ public sealed partial class MainWindow : Window
         _reviewCommentsPanePanel.Children.Clear();
         _reviewCommentsPanePanel.Children.Add(BuildReviewCommentsPaneHeader(plan));
         _reviewCommentsPanePanel.Children.Add(BuildAddCommentInput());
-        _reviewCommentsPanePanel.Children.Add(BuildReviewCommentActions(plan.Actions));
 
         if (plan.Comments.Count == 0)
         {
@@ -3762,36 +3764,6 @@ public sealed partial class MainWindow : Window
             },
         };
 
-        var moveEarlierButton = new Button
-        {
-            Content = "Earlier",
-            IsEnabled = item.CanMoveEarlier,
-            Padding = new Thickness(8, 3),
-            Margin = new Thickness(0, 6, 6, 0),
-            Tag = item.Index,
-        };
-        moveEarlierButton.Click += (_, _) => MoveAnimationPaneItem(item.Index, -1);
-
-        var moveLaterButton = new Button
-        {
-            Content = "Later",
-            IsEnabled = item.CanMoveLater,
-            Padding = new Thickness(8, 3),
-            Margin = new Thickness(0, 6, 6, 0),
-            Tag = item.Index,
-        };
-        moveLaterButton.Click += (_, _) => MoveAnimationPaneItem(item.Index, 1);
-
-        var actionPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Children =
-            {
-                moveEarlierButton,
-                moveLaterButton,
-            }
-        };
-
         var panel = new StackPanel
         {
             Orientation = Orientation.Vertical,
@@ -3829,7 +3801,6 @@ public sealed partial class MainWindow : Window
                     Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
                     TextWrapping = TextWrapping.Wrap,
                 },
-                actionPanel,
             }
         };
 
@@ -4111,26 +4082,6 @@ public sealed partial class MainWindow : Window
         ToolTip.SetTip(action, row.CommandHint);
         action.Click += (_, _) => ApplyAccessibilityCheckerRowAction(row.RowIndex);
 
-        var select = new Button
-        {
-            Content = "Select",
-            Tag = row.RowIndex,
-            MinWidth = 72,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(0, 8, 6, 0),
-        };
-        select.Click += (_, _) => SelectAccessibilityCheckerRow(row.RowIndex);
-
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Children =
-            {
-                select,
-                action,
-            }
-        };
-
         var panel = new StackPanel
         {
             Orientation = Orientation.Vertical,
@@ -4157,7 +4108,7 @@ public sealed partial class MainWindow : Window
                     Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
                     TextWrapping = TextWrapping.Wrap,
                 },
-                buttons,
+                action,
             }
         };
 
@@ -4171,7 +4122,7 @@ public sealed partial class MainWindow : Window
             });
         }
 
-        return new Border
+        var border = new Border
         {
             Background = row.IsSelected
                 ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
@@ -4185,6 +4136,8 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(12, 0, 12, 10),
             Child = panel,
         };
+        border.PointerPressed += (_, _) => SelectAccessibilityCheckerRow(row.RowIndex);
+        return border;
     }
 
     private void ClearTableStructureReviewDisplay()

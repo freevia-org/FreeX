@@ -13,6 +13,7 @@ public sealed partial class MainWindow
         Editor.Select(fixture.SelectionForRoute(scenario.RouteId));
         RefreshCanvas();
 
+        var seededSelection = Editor.SelectedShapeIds.ToArray();
         var beforeShapeCount = Editor.CurrentSlide!.Shapes.Count;
         var beforeLayout = Editor.CurrentSlide.LayoutId;
         switch (scenario.RouteId)
@@ -66,16 +67,47 @@ public sealed partial class MainWindow
                 $"Loaded {Editor.Presentation.Slides.Count} seeded slides."),
             new DialogPaneVisualEvidenceAssertion(
                 "seeded-selection",
-                Editor.SelectedShapeIds.SequenceEqual([fixture.SelectionForRoute(scenario.RouteId)]),
-                $"Selected shape ids: {string.Join(",", Editor.SelectedShapeIds)}."),
+                seededSelection.SequenceEqual([fixture.SelectionForRoute(scenario.RouteId)]),
+                $"Initially selected shape ids: {string.Join(",", seededSelection)}."),
             new DialogPaneVisualEvidenceAssertion(
                 "no-preselection-mutation",
                 scenario.SurfaceKind != DialogPaneVisualEvidenceSurfaceKind.ChoiceOverlay ||
                     (Editor.CurrentSlide.Shapes.Count == beforeShapeCount &&
                      StringComparer.Ordinal.Equals(Editor.CurrentSlide.LayoutId, beforeLayout)),
                 "Opening the choice overlay did not mutate shape count or layout."),
+            new DialogPaneVisualEvidenceAssertion(
+                "choice-state",
+                scenario.RouteId switch
+                {
+                    "insert.table-picker" => LastTablePickerPlan is { Choices.Count: 25 } &&
+                        LastTablePickerPlan.Choices.Count(choice => choice.IsDefault) == 1,
+                    "design.layout-picker" => LastLayoutPickerPlan is not null &&
+                        LastLayoutPickerPlan.Choices.Count(choice => choice.Chrome.IsCurrent) == 1 &&
+                        LastLayoutPickerPlan.Choices.Count(choice => !choice.Chrome.IsEnabled) == 1,
+                    _ => true,
+                },
+                "The picker exposes its expected default/current/disabled choice state."),
         ];
     }
+
+    internal DependencyObject DialogPaneVisualEvidenceMetadataRoot(DialogPaneVisualEvidenceScenario scenario) =>
+        scenario.RouteId switch
+        {
+            "startup.slide-pane" => SlidePaneHost,
+            "startup.notes-pane" => _notesBox,
+            "review.comments-pane" => _commentListHost,
+            "review.accessibility-pane" => _accessibilityCheckerPaneHost,
+            "review.alt-text-pane" => _altTextPaneHost,
+            "review.reading-order-pane" => _readingOrderPaneHost,
+            "review.proofing-pane" => _proofingPaneHost,
+            "accessibility.media-caption-pane" => _mediaCaptionPaneHost,
+            "context.smartart-text-pane" => _smartArtTextPaneHost,
+            "animations.animation-pane" => _animPaneHost,
+            "file.print-options" => _backstage,
+            "insert.table-picker" => _tablePickerHost,
+            "design.layout-picker" => _layoutPickerHost,
+            _ => this,
+        };
 
     internal IReadOnlyList<DialogPaneVisualEvidenceAssertion> CompleteDialogPaneVisualEvidence(
         DialogPaneVisualEvidenceScenario scenario)

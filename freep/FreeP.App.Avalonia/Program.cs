@@ -18,7 +18,7 @@ internal static class Program
         // Set identity before any shared storage path is resolved.
         AppProduct.Current = new AppProductIdentity("FreeP", "FREEP_DIAGNOSTICS", "FreeP");
 
-        if (AvaloniaDialogPaneVisualEvidenceCapture.TryParse(args, out var evidenceOutput, out var evidenceError))
+        if (AvaloniaDialogPaneVisualEvidenceCapture.TryParse(args, out var evidenceOutput, out var evidenceScenario, out var evidenceError))
         {
             if (evidenceError is not null)
             {
@@ -27,6 +27,7 @@ internal static class Program
             }
 
             App.DialogPaneVisualEvidenceOutputRoot = evidenceOutput;
+            App.DialogPaneVisualEvidenceScenarioId = evidenceScenario;
             args = [];
         }
 

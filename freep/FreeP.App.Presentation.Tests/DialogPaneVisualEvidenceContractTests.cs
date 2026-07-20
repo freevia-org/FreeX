@@ -45,7 +45,7 @@ public sealed class DialogPaneVisualEvidenceContractTests
         var avalonia = Capture("avalonia", nonBackgroundPixels: 0) with
         {
             LogicalHeight = 310,
-            Buttons = [new("Cancel", true, false, true), new("OK", true, true, false)],
+            Buttons = [new("cancel", "Cancel", true, false, true), new("ok", "OK", true, true, false)],
         };
 
         var comparison = DialogPaneVisualEvidenceComparer.Compare(scenario, wpf, avalonia);
@@ -84,7 +84,7 @@ public sealed class DialogPaneVisualEvidenceContractTests
             nonBackgroundPixels,
             "textbox",
             "Width",
-            [new("OK", true, true, false), new("Cancel", true, false, true)],
+            [new("ok", "OK", true, true, false), new("cancel", "Cancel", true, false, true)],
             [new("textbox", "Width", true)],
             [new("state-prepared", true, "State prepared.")],
             []);

@@ -19,6 +19,7 @@ namespace FreeP.App.Avalonia;
 internal static class AvaloniaDialogPaneVisualEvidenceCapture
 {
     internal const string OutputArgument = "--dialog-pane-visual-evidence-output";
+    internal const string ScenarioArgument = "--dialog-pane-visual-evidence-scenario";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -27,12 +28,13 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 
-    internal static bool TryParse(string[] args, out string? outputRoot, out string? error)
+    internal static bool TryParse(string[] args, out string? outputRoot, out string? scenarioId, out string? error)
     {
         var index = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, OutputArgument));
         if (index < 0)
         {
             outputRoot = null;
+            scenarioId = null;
             error = null;
             return false;
         }
@@ -40,23 +42,41 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]))
         {
             outputRoot = null;
+            scenarioId = null;
             error = $"{OutputArgument} requires an output directory.";
             return true;
         }
 
         outputRoot = Path.GetFullPath(args[index + 1]);
+        var scenarioIndex = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, ScenarioArgument));
+        var scenarioCandidate = scenarioIndex >= 0 && scenarioIndex + 1 < args.Length
+            ? args[scenarioIndex + 1]
+            : null;
+        scenarioId = scenarioCandidate;
+        if (scenarioIndex >= 0 && string.IsNullOrWhiteSpace(scenarioCandidate))
+        {
+            error = $"{ScenarioArgument} requires a scenario id.";
+            return true;
+        }
+        if (scenarioCandidate is not null &&
+            !DialogPaneVisualEvidenceCatalog.All.Any(scenario => StringComparer.Ordinal.Equals(scenario.Id, scenarioCandidate)))
+        {
+            error = $"Unknown visual evidence scenario: {scenarioCandidate}";
+            return true;
+        }
+
         error = null;
         return true;
     }
 
-    internal static void Start(MainWindow anchor, string outputRoot)
+    internal static void Start(MainWindow anchor, string outputRoot, string? scenarioId)
     {
         Dispatcher.UIThread.Post(async () =>
         {
             var exitCode = 1;
             try
             {
-                exitCode = await CaptureAll(anchor, outputRoot);
+                exitCode = await CaptureAll(anchor, outputRoot, scenarioId);
             }
             catch (Exception ex)
             {
@@ -70,7 +90,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         }, DispatcherPriority.Background);
     }
 
-    private static async Task<int> CaptureAll(MainWindow anchor, string outputRoot)
+    private static async Task<int> CaptureAll(MainWindow anchor, string outputRoot, string? scenarioId)
     {
         var hostDirectory = Path.Combine(outputRoot, "avalonia");
         Directory.CreateDirectory(hostDirectory);
@@ -87,7 +107,11 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         anchor.Position = new PixelPoint(40, 40);
         anchor.Show();
 
-        foreach (var scenario in DialogPaneVisualEvidenceCatalog.All)
+        var scenarios = scenarioId is null
+            ? DialogPaneVisualEvidenceCatalog.All
+            : [DialogPaneVisualEvidenceCatalog.Get(scenarioId)];
+
+        foreach (var scenario in scenarios)
         {
             File.AppendAllText(progressPath, $"start {scenario.Id}{Environment.NewLine}");
             Window? dialog = null;
@@ -118,6 +142,9 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                 var raster = Capture(target, imagePath);
                 assertions.AddRange(anchor.CompleteDialogPaneVisualEvidence(scenario));
                 var focus = DescribeFocus(target.FocusManager?.GetFocusedElement());
+                var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                    ? target
+                    : anchor.DialogPaneVisualEvidenceMetadataRoot(scenario);
 
                 captures.Add(new DialogPaneVisualEvidenceCapture(
                     scenario.Id,
@@ -135,8 +162,8 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                     raster.NonBackgroundPixelCount,
                     focus.Role,
                     focus.Label,
-                    Buttons(target),
-                    Controls(target),
+                    Buttons(metadataRoot),
+                    Controls(metadataRoot),
                     assertions,
                     []));
                 File.AppendAllText(progressPath, $"complete {scenario.Id}{Environment.NewLine}");
@@ -167,7 +194,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         File.WriteAllText(
             Path.Combine(hostDirectory, "manifest.json"),
             JsonSerializer.Serialize(manifest, JsonOptions));
-        return captures.Count == DialogPaneVisualEvidenceCatalog.All.Count ? 0 : 1;
+        return captures.Count == scenarios.Count ? 0 : 1;
     }
 
     private static Window CreateDialog(
@@ -182,10 +209,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             {
                 var dialog = new SlideSizeDialog(owner.Editor);
                 if (scenario.StateId == "invalid")
-                {
                     dialog.SetInputForTests("0", "7.5", SlideSizeDialogUnit.Inches);
-                    assertions.Add(new("validation-visible", !dialog.ApplyForTests(), dialog.ValidationText));
-                }
                 return dialog;
             }
             case "insert.header-footer":
@@ -243,25 +267,30 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         DialogPaneVisualEvidenceScenario scenario,
         List<DialogPaneVisualEvidenceAssertion> assertions)
     {
+        if (dialog is SlideSizeDialog slideSize && scenario.RouteId == "design.slide-size" && scenario.StateId == "invalid")
+        {
+            var valid = slideSize.ApplyForTests();
+            assertions.Add(new("validation-visible", !valid, slideSize.ValidationText));
+            return;
+        }
+
         if (dialog is null || scenario.RouteId != "chart.edit-data" || scenario.StateId != "validation")
             return;
 
-        var numericBox = Descendants(dialog).OfType<TextBox>()
-            .FirstOrDefault(box => double.TryParse(box.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out _));
-        if (numericBox is not null)
-        {
-            numericBox.Text = "not-a-number";
-            numericBox.Focus();
-        }
+        var prepared = ((ChartDataDialog)dialog).PrepareValidationForVisualEvidence();
         assertions.Add(new(
-            "validation-input-prepared",
-            numericBox is not null,
-            numericBox is null ? "No realized numeric chart cell was available." : "A realized chart value cell contains invalid numeric input."));
+            "validation-visible",
+            prepared,
+            prepared
+                ? $"Invalid chart value remains open with inline validation: {((ChartDataDialog)dialog).ValidationText}"
+                : "The chart dialog could not enter and reject an invalid numeric cell."));
     }
 
     private static void FocusFirstInputIfNeeded(Window target, DialogPaneVisualEvidenceScenario scenario)
     {
-        if (!scenario.CompareFocus || target.FocusManager?.GetFocusedElement() is not null)
+        if (!scenario.CompareFocus)
+            return;
+        if (!string.IsNullOrWhiteSpace(DescribeFocus(target.FocusManager?.GetFocusedElement()).Role))
             return;
         Descendants(target).OfType<Control>()
             .FirstOrDefault(control => control is TextBox or ComboBox && control.IsEnabled && control.Focusable)
@@ -310,26 +339,26 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
 
     private static IReadOnlyList<DialogPaneVisualEvidenceButton> Buttons(Visual root) =>
         Descendants(root).OfType<Button>()
-            .Select(button => new DialogPaneVisualEvidenceButton(
-                NormalizeLabel(button.Content?.ToString()),
-                button.IsEnabled,
-                button.IsDefault,
-                button.IsCancel))
-            .Where(button => !string.IsNullOrWhiteSpace(button.Label))
+            .Where(button => button is not ToggleButton && button.TemplatedParent is null)
+            .Select(ToButton)
+            .Where(button => button is not null)
+            .Cast<DialogPaneVisualEvidenceButton>()
             .ToArray();
 
     private static IReadOnlyList<DialogPaneVisualEvidenceControlState> Controls(Visual root) =>
         Descendants(root).OfType<Control>()
+            .Where(control => control.TemplatedParent is null)
             .Select(ToControlState)
-            .Where(state => state is not null)
+            .Where(state => state is not null &&
+                (state.Role is "button" or "checkbox" or "radio" || !string.IsNullOrWhiteSpace(state.Label)))
             .Cast<DialogPaneVisualEvidenceControlState>()
             .ToArray();
 
     private static DialogPaneVisualEvidenceControlState? ToControlState(Control control) => control switch
     {
-        CheckBox check => new("checkbox", NormalizeLabel(check.Content?.ToString()), check.IsEnabled, check.IsChecked),
-        RadioButton radio => new("radio", NormalizeLabel(radio.Content?.ToString()), radio.IsEnabled, radio.IsChecked),
-        Button button => new("button", NormalizeLabel(button.Content?.ToString()), button.IsEnabled),
+        CheckBox check => new("checkbox", NormalizeLabel(null, check.Content?.ToString()), check.IsEnabled, check.IsChecked),
+        RadioButton radio => new("radio", NormalizeLabel(null, radio.Content?.ToString()), radio.IsEnabled, radio.IsChecked),
+        Button button when button is not ToggleButton && ToButton(button) is { } action => new("button", action.ActionId, button.IsEnabled),
         ComboBox combo => new("combobox", NormalizeLabel(AutomationProperties.GetName(combo)), combo.IsEnabled, null, combo.SelectedIndex >= 0),
         TextBox box => new("textbox", NormalizeLabel(AutomationProperties.GetName(box)), box.IsEnabled),
         _ => null,
@@ -337,17 +366,38 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
 
     private static (string Role, string Label) DescribeFocus(IInputElement? focused) => focused switch
     {
-        CheckBox check => ("checkbox", NormalizeLabel(check.Content?.ToString())),
-        RadioButton radio => ("radio", NormalizeLabel(radio.Content?.ToString())),
-        Button button => ("button", NormalizeLabel(button.Content?.ToString())),
+        CheckBox check => ("checkbox", NormalizeLabel(null, check.Content?.ToString())),
+        RadioButton radio => ("radio", NormalizeLabel(null, radio.Content?.ToString())),
+        Button button => ("button", NormalizeLabel(AutomationProperties.GetName(button), button.Content?.ToString())),
         ComboBox combo => ("combobox", NormalizeLabel(AutomationProperties.GetName(combo))),
         TextBox box => ("textbox", NormalizeLabel(AutomationProperties.GetName(box))),
-        Control control => (control.GetType().Name.ToLowerInvariant(), NormalizeLabel(AutomationProperties.GetName(control))),
         _ => (string.Empty, string.Empty),
     };
 
-    private static string NormalizeLabel(string? label) =>
-        (label ?? string.Empty).Trim().TrimEnd(':');
+    private static DialogPaneVisualEvidenceButton? ToButton(Button button)
+    {
+        var fallback = button.Content as string;
+        var label = NormalizeLabel(AutomationProperties.GetName(button), fallback);
+        var automationId = NormalizeLabel(AutomationProperties.GetAutomationId(button));
+        var actionId = string.IsNullOrWhiteSpace(automationId) ? SemanticActionId(label) : automationId;
+        return string.IsNullOrWhiteSpace(actionId)
+            ? null
+            : new(actionId, label, button.IsEnabled, button.IsDefault, button.IsCancel);
+    }
+
+    private static string SemanticActionId(string label)
+    {
+        var value = label.Trim().ToLowerInvariant();
+        if (value.StartsWith("+", StringComparison.Ordinal))
+            value = "add " + value[1..];
+        else if (value.StartsWith("-", StringComparison.Ordinal))
+            value = "remove " + value[1..];
+        var chars = value.Select(character => char.IsLetterOrDigit(character) ? character : '-').ToArray();
+        return string.Join('-', new string(chars).Split('-', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static string NormalizeLabel(string? label, string? fallback = null) =>
+        (string.IsNullOrWhiteSpace(label) ? fallback ?? string.Empty : label).Trim().TrimEnd(':').Replace("_", string.Empty);
 
     private static IEnumerable<Visual> Descendants(Visual root)
     {
