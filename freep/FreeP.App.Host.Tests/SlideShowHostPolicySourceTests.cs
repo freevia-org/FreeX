@@ -75,6 +75,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlaySwitchTransition(");
         source.Should().Contain("PlayOrbitTransition(");
         source.Should().Contain("PlayFerrisTransition(");
+        source.Should().Contain("PlayPageCurlTransition(");
+        source.Should().Contain("SlideShowPageCurlTransitionPlanner.Plan(");
+        source.Should().Contain("BuildPageCurlGeometry(");
         source.Should().Contain("BuildWindowTransitionGeometry(");
         source.Should().Contain("SlideShowPlaybackPlanner.WindowInitialOpenFactor");
         source.Should().Contain("SlideShowPlaybackPlanner.GalleryStartScale");

@@ -864,6 +864,10 @@ public sealed class SlideShowWindow : Window
                 PlayFerrisTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.PageCurl:
+                PlayPageCurlTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Dissolve:
                 PlayDissolveTransition(slide, plan.DurationMs);
                 return;
@@ -2188,6 +2192,54 @@ public sealed class SlideShowWindow : Window
         Matrix.CreateScale(scaleX, scaleY)
             * Matrix.CreateRotation(rotationDegrees * Math.PI / 180)
             * Matrix.CreateTranslation(translateX, translateY);
+
+    private void PlayPageCurlTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var curl = SlideShowPageCurlTransitionPlanner.Plan(transition);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = null;
+        _slideCanvas.Refresh();
+
+        if (snapshot is null)
+            return;
+
+        _transitionBackImage.Source = snapshot;
+        _transitionBackImage.IsVisible = true;
+        _transitionBackImage.Clip = BuildPageCurlGeometry(w, h, 0, curl);
+        _transitionBackImage.ZIndex = 1;
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, plan.DurationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
+            _transitionBackImage.Clip = BuildPageCurlGeometry(w, h, progress, curl);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                _transitionBackImage.Clip = null;
+                _transitionBackImage.IsVisible = false;
+                _transitionBackImage.ZIndex = 0;
+            }
+        };
+        timer.Start();
+    }
 
     private void AnimateGalleryTransition(
         MatrixTransform incoming,
@@ -4027,6 +4079,22 @@ public sealed class SlideShowWindow : Window
     {
         var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
         foreach (var polygon in SlideShowHoneycombTransitionPlanner.BuildPolygons(
+                     width, height, progress, plan))
+        {
+            geometry.Children.Add(BuildStripGeometry(polygon.Points));
+        }
+
+        return geometry;
+    }
+
+    private static Geometry BuildPageCurlGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowPageCurlTransitionPlan plan)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
+        foreach (var polygon in SlideShowPageCurlTransitionPlanner.BuildPolygons(
                      width, height, progress, plan))
         {
             geometry.Children.Add(BuildStripGeometry(polygon.Points));
