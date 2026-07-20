@@ -81,6 +81,7 @@ internal static class Program
                 "--notes-page-preview-evidence" => RunNotesPagePreviewEvidence(args[1..]),
                 "--export-backstage-evidence" => RunExportBackstageEvidence(args[1..]),
                 "--dialog-pane-visual-evidence" => RunDialogPaneVisualEvidence(args[1..]),
+                "--dialog-pane-visual-report" => RunDialogPaneVisualReport(args[1..]),
                 "--corpus-summary"    => RunCorpusSummary(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
                 "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
@@ -116,6 +117,17 @@ internal static class Program
             ? parsedTimeout
             : 30;
         return DialogPaneVisualEvidence.Run(outputDirectory, wpfExecutable, avaloniaExecutable, TimeSpan.FromSeconds(timeoutSeconds));
+    }
+
+    private static int RunDialogPaneVisualReport(string[] args)
+    {
+        if (args.Length != 1)
+        {
+            Console.Error.WriteLine("usage: --dialog-pane-visual-report <evidenceDir>");
+            return 2;
+        }
+
+        return DialogPaneVisualEvidence.RegenerateReports(args[0]);
     }
 
     // -----------------------------------------------------------------------
@@ -678,6 +690,7 @@ internal static class Program
         Console.WriteLine("      Shared Backstage export/print evidence rows; PowerPoint COM baselines stay n/a/deferred.");
         Console.WriteLine();
         Console.WriteLine("  --dialog-pane-visual-evidence <outDir> [--wpf-exe <path>] [--avalonia-exe <path>] [--timeout-seconds N]");
+        Console.WriteLine("  --dialog-pane-visual-report <evidenceDir>");
         Console.WriteLine("      Capture and compare paired WPF/Avalonia dialog, pane, and choice-overlay fixtures at 96 DPI.");
         Console.WriteLine();
         Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>] [--manifest <out.json>] [--require-complete-refs] [--allow-missing-powerpoint]");
