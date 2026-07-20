@@ -3878,6 +3878,8 @@ public static class PptxPackageWriter
             rPr.Add(new XAttribute("cap", run.Caps == RunTextCaps.All ? "all" : "small"));
         if (run.FontSizePt.HasValue)
             rPr.Add(new XAttribute("sz", (int)Math.Round(run.FontSizePt.Value * 100)));
+        if (run.BaselineOffset.HasValue)
+            rPr.Add(new XAttribute("baseline", run.BaselineOffset.Value));
 
         // CT_TextCharacterProperties child order (ECMA-376):
         //   a:ln → fill group (noFill/solidFill/gradFill/…) → a:effectLst → a:latin/ea/cs → a:hlinkClick

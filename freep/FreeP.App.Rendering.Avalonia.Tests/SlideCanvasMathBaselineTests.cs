@@ -113,6 +113,33 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithBaseline_WrapsAndPreservesOffsets_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "long ", FontFamily = "Arial", FontSizePt = 18, Color = SrgbColor.Black },
+                        new ResolvedRun { Text = "script", FontFamily = "Arial", FontSizePt = 18, BaselineOffset = -25000, Color = SrgbColor.Black },
+                        new ResolvedRun { Text = " text that wraps", FontFamily = "Arial", FontSizePt = 18, Color = SrgbColor.Black }
+                    }
+                };
+                var rtb = new RenderTargetBitmap(new PixelSize(160, 120));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithBaseline(dc, para, startX: 10, startY: 20, maxWidth: 70);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("wrapped baseline runs must render through the baseline-aware line owner");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_FractionTypes_UseSharedDrawPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

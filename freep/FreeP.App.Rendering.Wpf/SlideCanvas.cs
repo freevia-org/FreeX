@@ -1530,10 +1530,17 @@ public sealed class SlideCanvas : FrameworkElement
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
         foreach (var label in plan.DataLabels)
         {
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+            if (label.LegendKeyBounds is { } keyBounds && label.LegendKeyFill is { } keyFill)
+                dc.DrawRectangle(ToBrush(keyFill), null, ToRect(keyBounds));
+
+            DrawChartLabel(dc, label.Text, ToRect(label.TextBounds ?? label.Bounds),
                 label.IsBold,
                 label.FontSize,
-                ToTextAlignment(label.Alignment));
+                ToTextAlignment(label.Alignment),
+                isItalic: label.IsItalic,
+                textColor: label.TextColor,
+                fontFamily: label.FontFamily,
+                maxLineCount: label.WrapText ? 2 : 1);
         }
     }
 
@@ -1880,6 +1887,9 @@ public sealed class SlideCanvas : FrameworkElement
                 case TextParagraphRenderRoute.Tabs:
                     RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
                     break;
+                case TextParagraphRenderRoute.Baseline:
+                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
+                    break;
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
                         ft.MaxTextWidth = placement.MaxWidthDip;
@@ -2013,6 +2023,7 @@ public sealed class SlideCanvas : FrameworkElement
                     Text = text,
                     FontFamily = run.FontFamily,
                     FontSizePt = run.FontSizePt,
+                    BaselineOffset = run.BaselineOffset,
                     Bold = run.Bold,
                     Italic = run.Italic,
                     Underline = run.Underline,
@@ -2125,6 +2136,9 @@ public sealed class SlideCanvas : FrameworkElement
                     break;
                 case TextParagraphRenderRoute.Tabs:
                     RenderParaWithTabs(dc, para, placement.X, placementY, para.TabStops);
+                    break;
+                case TextParagraphRenderRoute.Baseline:
+                    RenderParaWithBaseline(dc, para, placement.X, placementY, placement.MaxWidthDip);
                     break;
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
@@ -2274,6 +2288,172 @@ public sealed class SlideCanvas : FrameworkElement
             var ft = BuildSingleRunFormattedTextAt(para.Runs[segment.RunIndex], segment.Text);
             dc.DrawText(ft, new Point(segment.X, startY));
         }
+    }
+
+    /// <summary>
+    /// Draws plain runs with authored DrawingML baseline offsets while keeping
+    /// one shared line baseline. Tabs, math, and text effects retain their
+    /// existing renderer-specific owners.
+    /// </summary>
+    internal static void RenderParaWithBaseline(
+        DrawingContext dc,
+        ResolvedParagraph para,
+        double startX,
+        double startY,
+        double maxWidth)
+    {
+        var formatted = para.Runs
+            .Select(run => BuildSingleRunFormattedTextAt(
+                run,
+                run.Text,
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0))
+            .ToArray();
+        double lineAscent = formatted.Length == 0 ? 0 : formatted.Max(ft => ft.Baseline);
+        double baselineY = ComputeBaselineY(startY, lineAscent);
+        double totalWidth = formatted.Sum(ft => ft.WidthIncludingTrailingWhitespace);
+        if (maxWidth > 0 && totalWidth > maxWidth)
+        {
+            RenderWrappedBaseline(dc, para, startX, startY, maxWidth);
+            return;
+        }
+        double alignWidth = maxWidth > 0 ? maxWidth : totalWidth;
+        double x = startX + (para.Align switch
+        {
+            TextAlign.Center => Math.Max(0, (alignWidth - totalWidth) / 2.0),
+            TextAlign.Right => Math.Max(0, alignWidth - totalWidth),
+            _ => 0
+        });
+
+        for (int i = 0; i < para.Runs.Count; i++)
+        {
+            var run = para.Runs[i];
+            var ft = formatted[i];
+            double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(run.BaselineOffset, run.FontSizePt);
+            dc.DrawText(ft, new Point(x, baselineY - ft.Baseline - offsetDip));
+            x += ft.WidthIncludingTrailingWhitespace;
+        }
+    }
+
+    private sealed class BaselineLine
+    {
+        public List<(ResolvedRun Run, FormattedText Text, double Width)> Fragments { get; } = new();
+        public double Width { get; set; }
+        public double Ascent { get; set; }
+        public double Height { get; set; }
+    }
+
+    private static void RenderWrappedBaseline(
+        DrawingContext dc,
+        ResolvedParagraph para,
+        double startX,
+        double startY,
+        double maxWidth)
+    {
+        var lines = BuildBaselineLines(para, maxWidth);
+        double lineY = startY;
+        foreach (var line in lines)
+        {
+            if (line.Fragments.Count == 0)
+            {
+                lineY += Math.Max(1, line.Height);
+                continue;
+            }
+
+            double x = startX + (para.Align switch
+            {
+                TextAlign.Center => Math.Max(0, (maxWidth - line.Width) / 2.0),
+                TextAlign.Right => Math.Max(0, maxWidth - line.Width),
+                _ => 0
+            });
+            double baselineY = ComputeBaselineY(lineY, line.Ascent);
+            foreach (var fragment in line.Fragments)
+            {
+                double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(
+                    fragment.Run.BaselineOffset,
+                    fragment.Run.FontSizePt);
+                dc.DrawText(
+                    fragment.Text,
+                    new Point(x, baselineY - fragment.Text.Baseline - offsetDip));
+                x += fragment.Width;
+            }
+            lineY += Math.Max(1, line.Height);
+        }
+    }
+
+    private static List<BaselineLine> BuildBaselineLines(
+        ResolvedParagraph para,
+        double maxWidth)
+    {
+        var lines = new List<BaselineLine> { new() };
+
+        void NewLine() => lines.Add(new BaselineLine());
+
+        void AddMeasured(ResolvedRun run, string text)
+        {
+            var formatted = BuildSingleRunFormattedTextAt(
+                run,
+                text,
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0);
+            double width = formatted.WidthIncludingTrailingWhitespace;
+            var line = lines[^1];
+            if (line.Fragments.Count > 0 && line.Width + width > maxWidth)
+            {
+                NewLine();
+                line = lines[^1];
+            }
+            line.Fragments.Add((run, formatted, width));
+            line.Width += width;
+            line.Ascent = Math.Max(line.Ascent, formatted.Baseline);
+            line.Height = Math.Max(line.Height, formatted.Height);
+        }
+
+        foreach (var run in para.Runs)
+        {
+            for (int index = 0; index < run.Text.Length;)
+            {
+                char first = run.Text[index];
+                if (first is '\r' or '\n')
+                {
+                    if (first == '\r' && index + 1 < run.Text.Length && run.Text[index + 1] == '\n')
+                        index++;
+                    NewLine();
+                    index++;
+                    continue;
+                }
+
+                bool whitespace = char.IsWhiteSpace(first);
+                int end = index + 1;
+                while (end < run.Text.Length && run.Text[end] is not '\r' and not '\n' &&
+                       char.IsWhiteSpace(run.Text[end]) == whitespace)
+                    end++;
+
+                string token = run.Text[index..end];
+                var line = lines[^1];
+                var tokenText = BuildSingleRunFormattedTextAt(
+                    run,
+                    token,
+                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0);
+                double tokenWidth = tokenText.WidthIncludingTrailingWhitespace;
+                if (whitespace && (line.Fragments.Count == 0 || line.Width + tokenWidth > maxWidth))
+                {
+                    index = end;
+                    continue;
+                }
+
+                if (!whitespace && tokenWidth > maxWidth)
+                {
+                    foreach (char character in token)
+                        AddMeasured(run, character.ToString());
+                }
+                else
+                {
+                    AddMeasured(run, token);
+                }
+                index = end;
+            }
+        }
+
+        return lines;
     }
 
     // ── Theme 27: math rendering ────────────────────────────────────────────────
@@ -2464,13 +2644,16 @@ public sealed class SlideCanvas : FrameworkElement
     }
 
     /// <summary>Builds a single-run FormattedText for the given text segment (may be a tab-split piece).</summary>
-    private static FormattedText BuildSingleRunFormattedTextAt(ResolvedRun run, string text)
+    private static FormattedText BuildSingleRunFormattedTextAt(
+        ResolvedRun run,
+        string text,
+        double fontSizeScale = 1.0)
     {
         var typeface = new Typeface(new FontFamily(run.FontFamily),
             run.Italic ? FontStyles.Italic : FontStyles.Normal,
             run.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStretches.Normal);
-        double emSizePx = run.FontSizePt * (96.0 / 72.0);
+        double emSizePx = run.FontSizePt * fontSizeScale * (96.0 / 72.0);
         var brush = new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B));
         if (brush.CanFreeze) brush.Freeze();
         var ft = new FormattedText(
@@ -2528,6 +2711,7 @@ public sealed class SlideCanvas : FrameworkElement
             Text = text,
             FontFamily = run.FontFamily,
             FontSizePt = run.FontSizePt,
+            BaselineOffset = run.BaselineOffset,
             Bold = run.Bold,
             Italic = run.Italic,
             Underline = run.Underline,

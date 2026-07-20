@@ -258,6 +258,13 @@ public sealed class Run
     /// <summary>Font size in points, or null to inherit.</summary>
     public double? FontSizePt { get; set; }
 
+    /// <summary>
+    /// Raw DrawingML <c>a:rPr/@baseline</c> value in ST_Percentage units
+    /// (one thousandth of a percent). Positive values raise the run and
+    /// negative values lower it. Null means the attribute was absent.
+    /// </summary>
+    public int? BaselineOffset { get; set; }
+
     public bool Bold { get; set; }
     public bool Italic { get; set; }
 
