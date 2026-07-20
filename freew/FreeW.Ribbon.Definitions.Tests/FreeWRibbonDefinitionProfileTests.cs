@@ -361,7 +361,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         using var document = JsonDocument.Parse(ReadRepositoryFile("docs", "parity", "freew-command-inventory.json"));
         var root = document.RootElement;
 
-        root.GetProperty("schema").GetString().Should().Be("freew.command-inventory.v4");
+        root.GetProperty("schema").GetString().Should().Be("freew.command-inventory.v5");
         root.GetProperty("generatedBy").GetString().Should().Be("tools/Generate-FreeWCommandInventory.ps1");
         root.GetProperty("topologySource").GetString().Should().Contain("FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf/Avalonia)");
         root.GetProperty("sourceLiteralEvidenceNote").GetString().Should().Contain("not behavior proof");
@@ -371,7 +371,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         root.GetProperty("classificationRules").EnumerateArray()
             .Select(rule => rule.GetProperty("name").GetString())
             .Should()
-            .Equal("shared-profile", "profile-shape-only", "command-id-alias", "platform-only", "deferred", "actionable-gap");
+            .Equal("shared-profile", "command-id-alias", "platform-only", "profile-shape-only", "deferred", "actionable-gap");
 
         var summary = root.GetProperty("summary");
         summary.GetProperty("totalCommands").GetInt32().Should().Be(commandIds.Length);
@@ -428,6 +428,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
 
         AssertGapClassification(commands, "freew.accept-all", "shared-profile");
         AssertGapClassification(commands, "freew.font-color.black", "profile-shape-only");
+        AssertGapClassification(commands, "freew.image-crop", "shared-profile");
+        AssertGapClassification(commands, "freew.table-to-text", "shared-profile");
         AssertGapClassification(commands, "freew.bookmark", "shared-profile");
         AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");
         AssertGapClassification(commands, "freew.about", "platform-only");
@@ -443,6 +445,19 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.thesaurus", "shared-profile");
         AssertGapClassification(commands, "freew.set-proofing-language", "shared-profile");
         AssertGapClassification(commands, "freew.split", "command-id-alias");
+        var unsupportedDirectRows = commands
+            .Where(command => command.GetProperty("profileSurface").GetString() != "both")
+            .Where(command => !command.TryGetProperty("behaviorEvidence", out _))
+            .Where(command => command.GetProperty("wpfLocations").EnumerateArray()
+                    .Concat(command.GetProperty("avaloniaLocations").EnumerateArray())
+                    .Any(location => location.GetProperty("controlType").GetString() is
+                        "RibbonButton" or "RibbonToggleButton" or "RibbonSplitButton" or "RibbonCheckBox"))
+            .ToArray();
+        unsupportedDirectRows
+            .Select(command => command.GetProperty("gapClassification").GetString())
+            .Should().OnlyContain(classification =>
+                classification == "command-id-alias" || classification == "actionable-gap",
+            "a direct one-sided command without paired behavior evidence must remain explicit parity debt or a named alias");
         var platformOnlyRows = commands
             .Where(command => command.GetProperty("gapClassification").GetString() == "platform-only")
             .ToArray();

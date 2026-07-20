@@ -352,6 +352,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // Data.
         r.Register("freew.table-repeat-header", new ActionRibbonCommand(editor.ToggleTableRepeatHeaderRow));
         r.Register("freew.table-formula", new TableFormulaCommand(editor, callbacks));
+        r.Register("freew.table-to-text", new TableToTextCommand(editor, callbacks));
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
@@ -518,7 +519,7 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterDesignCommands(r, editor, callbacks);
 
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
-        RegisterFloatingFormatCommands(r, editor);
+        RegisterFloatingFormatCommands(r, editor, callbacks);
 
         // ── AV-CHARTTAB: Chart Design/Format + SmartArt Design contextual tabs ─
         RegisterChartSmartArtFormatCommands(r, editor);
@@ -1139,7 +1140,10 @@ internal static class FreeWAvaloniaRibbonCommands
     /// commands are generated from the shared object-format planner.
     /// </para>
     /// </summary>
-    private static void RegisterFloatingFormatCommands(RibbonCommandRegistry r, DocumentView editor)
+    private static void RegisterFloatingFormatCommands(
+        RibbonCommandRegistry r,
+        DocumentView editor,
+        RibbonHostCallbacks callbacks)
     {
         foreach (var target in ObjectFormatCommandPlanner.Targets)
         {
@@ -1176,6 +1180,7 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         RegisterFloatingPositionCommands(r, editor, "image", "Image");
+        r.Register("freew.image-crop", new ImageCropCommand(editor, callbacks));
         r.Register("freew.image-align-left", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Left));
         r.Register("freew.image-align-center", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Center));
         r.Register("freew.image-align-right", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Right));
@@ -1243,6 +1248,34 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: editor.CanArrangeSelectedFloatingObjects(kind));
+    }
+
+    private sealed class ImageCropCommand(
+        DocumentView editor,
+        RibbonHostCallbacks callbacks) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                callbacks.OpenImageCropDialog?.Invoke();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingImage() is not null && callbacks.OpenImageCropDialog is not null);
+    }
+
+    private sealed class TableToTextCommand(
+        DocumentView editor,
+        RibbonHostCallbacks callbacks) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                callbacks.OpenTableToTextDialog?.Invoke();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.CanConvertTableToText && callbacks.OpenTableToTextDialog is not null);
     }
 
     private sealed class FloatingObjectParagraphAlignCommand(
