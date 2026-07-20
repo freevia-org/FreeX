@@ -269,6 +269,8 @@ public static class SlideCloner
         LabelOffsetPercent = a.LabelOffsetPercent,
         NoMultiLevelLabels = a.NoMultiLevelLabels,
         CrossBetween      = a.CrossBetween,
+        AutoCrossing      = a.AutoCrossing,
+        LabelAlignment    = a.LabelAlignment,
         Delete            = a.Delete,
     };
 

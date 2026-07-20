@@ -198,6 +198,8 @@ public sealed class ChartTests : IDisposable
         chart.ValueAxis.MinorTickMark = ChartTickMark.In;
         chart.ValueAxis.TickLabelPosition = ChartTickLabelPosition.High;
         chart.ValueAxis.CrossBetween = ChartCrossBetween.MidCat;
+        chart.CategoryAxis.AutoCrossing = false;
+        chart.CategoryAxis.LabelAlignment = ChartLabelAlignment.Right;
 
         var reloaded = PptxPackageReader.Read(WriteToPptx(BuildPresWithChart(chart)));
         var roundTripped = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
@@ -211,6 +213,8 @@ public sealed class ChartTests : IDisposable
         roundTripped.ValueAxis.MinorTickMark.Should().Be(ChartTickMark.In);
         roundTripped.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.High);
         roundTripped.ValueAxis.CrossBetween.Should().Be(ChartCrossBetween.MidCat);
+        roundTripped.CategoryAxis.AutoCrossing.Should().BeFalse();
+        roundTripped.CategoryAxis.LabelAlignment.Should().Be(ChartLabelAlignment.Right);
     }
 
     [Fact]

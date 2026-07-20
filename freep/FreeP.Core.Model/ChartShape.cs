@@ -76,6 +76,9 @@ public enum ChartTickLabelPosition { None, Low, High, NextTo }
 /// <summary>Authored value-axis category-boundary placement.</summary>
 public enum ChartCrossBetween { Between, MidCat }
 
+/// <summary>Authored category-axis label alignment.</summary>
+public enum ChartLabelAlignment { Left, Center, Right }
+
 /// <summary>Authored classic 3-D chart family read from OOXML chart-type elements.</summary>
 public enum ChartThreeDStyle { None, Pie, Line, Area, Column, Bar }
 
@@ -440,6 +443,12 @@ public sealed class ChartAxis
 
     /// <summary>Authored value-axis category-boundary placement from <c>c:crossBetween/@val</c>.</summary>
     public ChartCrossBetween? CrossBetween { get; set; }
+
+    /// <summary>Authored category-axis automatic crossing state from <c>c:auto/@val</c>.</summary>
+    public bool? AutoCrossing { get; set; }
+
+    /// <summary>Authored category-axis label alignment from <c>c:lblAlgn/@val</c>.</summary>
+    public ChartLabelAlignment? LabelAlignment { get; set; }
 
     /// <summary>True if the axis is deleted (hidden) in the chart XML.</summary>
     public bool Delete { get; set; }
