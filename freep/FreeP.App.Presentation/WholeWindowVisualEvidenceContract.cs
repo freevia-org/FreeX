@@ -29,7 +29,7 @@ public static class WholeWindowVisualEvidenceCatalog
 
     public static IReadOnlyList<WholeWindowVisualEvidenceScenario> All { get; } =
     [
-        Scenario("startup.slide", WholeWindowVisualEvidenceScenarioKind.Startup, "slide", selectionRouteId: "shape"),
+        Scenario("startup.slide", WholeWindowVisualEvidenceScenarioKind.Startup, "slide", selectionRouteId: "none"),
         Scenario("startup.notes", WholeWindowVisualEvidenceScenarioKind.Startup, "notes", selectionRouteId: "none", slideIndex: 1),
 
         Ribbon("home"),

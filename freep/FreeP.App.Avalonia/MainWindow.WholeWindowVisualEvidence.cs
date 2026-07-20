@@ -14,7 +14,9 @@ public sealed partial class MainWindow
         WholeWindowVisualEvidenceScenario scenario,
         DialogPaneVisualEvidenceFixture fixture)
     {
-        LoadPresentationContent(fixture.Presentation);
+        var cleanStartupState = scenario.Kind == WholeWindowVisualEvidenceScenarioKind.Startup && scenario.ActivationId == "slide";
+        if (!cleanStartupState)
+            LoadPresentationContent(fixture.Presentation);
         Editor.SelectSlide(scenario.SlideIndex);
         var selection = WholeWindowVisualEvidenceCatalog.SelectionFor(scenario, fixture);
         if (selection == 0)
@@ -52,13 +54,16 @@ public sealed partial class MainWindow
         RefreshCanvas();
         RefreshNotesPane();
         UpdateStatus();
+        NormalizeWholeWindowVisualEvidenceShellState(scenario);
 
         return
         [
             new(
                 "fixture-loaded",
-                Editor.Presentation.Slides.Count == 3,
-                $"Loaded {Editor.Presentation.Slides.Count} seeded slides."),
+                Editor.Presentation.Slides.Count == (cleanStartupState ? 1 : 3),
+                cleanStartupState
+                    ? $"Captured the clean startup document with {Editor.Presentation.Slides.Count} slide."
+                    : $"Loaded {Editor.Presentation.Slides.Count} seeded slides."),
             new(
                 "slide-activated",
                 Editor.CurrentSlideIndex == scenario.SlideIndex,
@@ -68,6 +73,12 @@ public sealed partial class MainWindow
                 selectionPrepared,
                 $"Selected shape ids: {string.Join(",", Editor.SelectedShapeIds)}."),
         ];
+    }
+
+    internal void NormalizeWholeWindowVisualEvidenceShellState(WholeWindowVisualEvidenceScenario scenario)
+    {
+        Title = "Untitled — FreeP";
+        _statusText.Text = $"Slide {Editor.CurrentSlideIndex + 1} / {Editor.Presentation.Slides.Count}";
     }
 
     internal WholeWindowVisualEvidenceSemanticState CaptureWholeWindowVisualEvidenceSemanticState(

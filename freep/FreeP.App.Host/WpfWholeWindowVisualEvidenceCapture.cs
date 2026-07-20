@@ -125,6 +125,8 @@ internal static class WpfWholeWindowVisualEvidenceCapture
                 PumpLayout(owner);
                 owner.Activate();
                 PumpLayout(owner);
+                owner.NormalizeWholeWindowVisualEvidenceShellState(scenario);
+                owner.UpdateLayout();
 
                 var root = owner.Content as FrameworkElement
                     ?? throw new InvalidOperationException("The WPF whole-window capture has no app-owned client root.");

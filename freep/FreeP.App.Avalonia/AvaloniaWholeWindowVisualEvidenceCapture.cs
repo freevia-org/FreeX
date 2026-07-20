@@ -112,6 +112,7 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
                 await PumpLayout();
                 anchor.Activate();
                 await PumpLayout();
+                anchor.NormalizeWholeWindowVisualEvidenceShellState(scenario);
 
                 var fullPath = Path.Combine(fullDirectory, scenario.Id + ".png");
                 var clientPath = Path.Combine(clientDirectory, scenario.Id + ".png");
