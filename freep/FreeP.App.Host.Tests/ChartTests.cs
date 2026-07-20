@@ -111,6 +111,29 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void SlideCloner_ChartPreservesAxisDisplayMetadata()
+    {
+        var chart = BuildColumnChart();
+        chart.CategoryAxis.MajorTickMark = ChartTickMark.Out;
+        chart.CategoryAxis.MinorTickMark = ChartTickMark.None;
+        chart.CategoryAxis.TickLabelPosition = ChartTickLabelPosition.NextTo;
+        chart.CategoryAxis.LabelOffsetPercent = 100;
+        chart.CategoryAxis.NoMultiLevelLabels = false;
+        chart.ValueAxis.MajorTickMark = ChartTickMark.Cross;
+
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.Chart, Chart = chart });
+        var clone = SlideCloner.CloneSlide(slide).Shapes.Single().Chart!;
+
+        clone.CategoryAxis.MajorTickMark.Should().Be(ChartTickMark.Out);
+        clone.CategoryAxis.MinorTickMark.Should().Be(ChartTickMark.None);
+        clone.CategoryAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.NextTo);
+        clone.CategoryAxis.LabelOffsetPercent.Should().Be(100);
+        clone.CategoryAxis.NoMultiLevelLabels.Should().BeFalse();
+        clone.ValueAxis.MajorTickMark.Should().Be(ChartTickMark.Cross);
+    }
+
+    [Fact]
     public void ChartSeries_DefaultValues()
     {
         var series = new ChartSeries();
@@ -160,6 +183,32 @@ public sealed class ChartTests : IDisposable
         var shape = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart);
         shape.Chart.Should().NotBeNull();
         shape.Chart!.ChartType.Should().Be(ChartType.ColumnClustered);
+    }
+
+    [Fact]
+    public void RoundTrip_Chart_AxisDisplayMetadataPreserved()
+    {
+        var chart = BuildColumnChart();
+        chart.CategoryAxis.MajorTickMark = ChartTickMark.Out;
+        chart.CategoryAxis.MinorTickMark = ChartTickMark.None;
+        chart.CategoryAxis.TickLabelPosition = ChartTickLabelPosition.NextTo;
+        chart.CategoryAxis.LabelOffsetPercent = 100;
+        chart.CategoryAxis.NoMultiLevelLabels = false;
+        chart.ValueAxis.MajorTickMark = ChartTickMark.Cross;
+        chart.ValueAxis.MinorTickMark = ChartTickMark.In;
+        chart.ValueAxis.TickLabelPosition = ChartTickLabelPosition.High;
+
+        var reloaded = PptxPackageReader.Read(WriteToPptx(BuildPresWithChart(chart)));
+        var roundTripped = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+
+        roundTripped.CategoryAxis.MajorTickMark.Should().Be(ChartTickMark.Out);
+        roundTripped.CategoryAxis.MinorTickMark.Should().Be(ChartTickMark.None);
+        roundTripped.CategoryAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.NextTo);
+        roundTripped.CategoryAxis.LabelOffsetPercent.Should().Be(100);
+        roundTripped.CategoryAxis.NoMultiLevelLabels.Should().BeFalse();
+        roundTripped.ValueAxis.MajorTickMark.Should().Be(ChartTickMark.Cross);
+        roundTripped.ValueAxis.MinorTickMark.Should().Be(ChartTickMark.In);
+        roundTripped.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.High);
     }
 
     [Fact]

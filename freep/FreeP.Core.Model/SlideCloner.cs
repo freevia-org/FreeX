@@ -263,6 +263,11 @@ public static class SlideCloner
         Min               = a.Min,
         Max               = a.Max,
         HasMajorGridlines = a.HasMajorGridlines,
+        MajorTickMark     = a.MajorTickMark,
+        MinorTickMark     = a.MinorTickMark,
+        TickLabelPosition = a.TickLabelPosition,
+        LabelOffsetPercent = a.LabelOffsetPercent,
+        NoMultiLevelLabels = a.NoMultiLevelLabels,
         Delete            = a.Delete,
     };
 

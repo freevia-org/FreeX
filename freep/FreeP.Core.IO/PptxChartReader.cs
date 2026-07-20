@@ -1096,6 +1096,11 @@ internal static class PptxChartReader
     {
         axis.Delete = axEl.Element(C + "delete")?.Attribute("val")?.Value is "1" or "true";
         axis.HasMajorGridlines = axEl.Element(C + "majorGridlines") is not null;
+        axis.MajorTickMark = ParseTickMark(axEl.Element(C + "majorTickMark"));
+        axis.MinorTickMark = ParseTickMark(axEl.Element(C + "minorTickMark"));
+        axis.TickLabelPosition = ParseTickLabelPosition(axEl.Element(C + "tickLblPos"));
+        axis.LabelOffsetPercent = ParseNullableInt(axEl.Element(C + "lblOffset")?.Attribute("val")?.Value);
+        axis.NoMultiLevelLabels = ParseNullableBoolElement(axEl.Element(C + "noMultiLvlLbl"));
         axis.Title = ReadTitle(axEl.Element(C + "title"));
 
         var numFmt = axEl.Element(C + "numFmt");
@@ -1120,6 +1125,26 @@ internal static class PptxChartReader
                 axis.Max = maxV;
         }
     }
+
+    private static ChartTickMark? ParseTickMark(XElement? element) =>
+        element?.Attribute("val")?.Value switch
+        {
+            "none"  => ChartTickMark.None,
+            "cross" => ChartTickMark.Cross,
+            "in"    => ChartTickMark.In,
+            "out"   => ChartTickMark.Out,
+            _       => null
+        };
+
+    private static ChartTickLabelPosition? ParseTickLabelPosition(XElement? element) =>
+        element?.Attribute("val")?.Value switch
+        {
+            "none"   => ChartTickLabelPosition.None,
+            "low"    => ChartTickLabelPosition.Low,
+            "high"   => ChartTickLabelPosition.High,
+            "nextTo" => ChartTickLabelPosition.NextTo,
+            _        => null
+        };
 
     // ── Data-label parsing ─────────────────────────────────────────────────────
 

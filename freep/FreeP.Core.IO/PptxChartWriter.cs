@@ -1191,6 +1191,7 @@ internal static class PptxChartWriter
             new XElement(C + "delete",
                 new XAttribute("val", axis.Delete ? "1" : "0")),
             new XElement(C + "axPos", new XAttribute("val", "b")),
+            BuildAxisDisplayElements(axis),
             axis.HasMajorGridlines
                 ? new XElement(C + "majorGridlines")
                 : null,
@@ -1218,6 +1219,7 @@ internal static class PptxChartWriter
             new XElement(C + "delete",
                 new XAttribute("val", axis.Delete ? "1" : "0")),
             new XElement(C + "axPos", new XAttribute("val", axPos)),
+            BuildAxisDisplayElements(axis),
             axis.HasMajorGridlines
                 ? new XElement(C + "majorGridlines")
                 : null,
@@ -1228,6 +1230,38 @@ internal static class PptxChartWriter
                 : null,
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
     }
+
+    private static IEnumerable<XElement> BuildAxisDisplayElements(ChartAxis axis)
+    {
+        if (axis.MajorTickMark is { } major)
+            yield return new XElement(C + "majorTickMark", new XAttribute("val", TickMarkValue(major)));
+        if (axis.MinorTickMark is { } minor)
+            yield return new XElement(C + "minorTickMark", new XAttribute("val", TickMarkValue(minor)));
+        if (axis.TickLabelPosition is { } position)
+            yield return new XElement(C + "tickLblPos", new XAttribute("val", TickLabelPositionValue(position)));
+        if (axis.LabelOffsetPercent is { } offset)
+            yield return new XElement(C + "lblOffset", new XAttribute("val", Math.Clamp(offset, 0, 100)));
+        if (axis.NoMultiLevelLabels is { } noMultiLevelLabels)
+            yield return new XElement(C + "noMultiLvlLbl", new XAttribute("val", BoolValue(noMultiLevelLabels)));
+    }
+
+    private static string TickMarkValue(ChartTickMark value) => value switch
+    {
+        ChartTickMark.None  => "none",
+        ChartTickMark.Cross => "cross",
+        ChartTickMark.In    => "in",
+        ChartTickMark.Out   => "out",
+        _                   => "none"
+    };
+
+    private static string TickLabelPositionValue(ChartTickLabelPosition value) => value switch
+    {
+        ChartTickLabelPosition.None   => "none",
+        ChartTickLabelPosition.Low    => "low",
+        ChartTickLabelPosition.High   => "high",
+        ChartTickLabelPosition.NextTo => "nextTo",
+        _                            => "nextTo"
+    };
 
     private static XElement? BuildAxisNumFmtEl(ChartAxis axis)
     {
