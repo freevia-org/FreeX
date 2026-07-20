@@ -45,7 +45,6 @@ public sealed class SlideCanvas : FrameworkElement
     // PowerPoint's imported isometricTopUp sample exposes a short projected
     // side wall even though its sp3d payload has no extrusionH. Keep this
     // renderer-local until the shared camera/material model covers it.
-    private const double ImportedIsometricCrossDepthDip = 6.0;
 
     // ── Dependency properties ──────────────────────────────────────────────────
 
@@ -76,7 +75,6 @@ public sealed class SlideCanvas : FrameworkElement
         get => (Slide?)GetValue(SlideProperty);
         set => SetValue(SlideProperty, value);
     }
-
     /// <summary>
     /// Shape ids temporarily omitted from the base canvas while the slideshow host
     /// renders an animation overlay for the same shape.
@@ -299,8 +297,9 @@ public sealed class SlideCanvas : FrameworkElement
         if (shape.Effects is not null)
             RenderShapeEffects(dc, shape);
 
-        if (shape.Effects is not null)
-            RenderImportedIsometricCrossDepth(dc, shape);
+        var materialPlan = ShapeMaterialRenderPlanner.Plan(shape);
+        if (materialPlan.Kind == ImportedShapeMaterialKind.IsometricCrossDepth)
+            RenderImportedShapeDepth(dc, shape, materialPlan);
 
         // Wave 26: if an explicit elbow route is provided, draw it as a polyline and
         // skip the bbox-derived elbow geometry.
@@ -325,18 +324,16 @@ public sealed class SlideCanvas : FrameworkElement
             var pen = shape.Effects?.HasSoftEdge == true ? null : MakePen(shape.Outline);
             dc.DrawGeometry(fillBrush, pen, geometry);
 
-            RenderImportedCircleMaterial(dc, shape, geometry);
+            if (materialPlan.Kind == ImportedShapeMaterialKind.Circle)
+                RenderImportedShapeMaterial(dc, materialPlan, geometry);
         }
 
         // Bevel overlay: painted ON TOP of the fill (but before text)
         if (shape.Effects is not null)
             RenderShapeBevel(dc, shape);
 
-        if (shape.Effects is not null)
-            RenderImportedRelaxedMaterial(dc, shape, ContourListToGeometry(shape.Geometry));
-
-        if (shape.Effects is not null)
-            RenderImportedAngleMaterial(dc, shape, ContourListToGeometry(shape.Geometry));
+        if (materialPlan.Kind is ImportedShapeMaterialKind.RelaxedInset or ImportedShapeMaterialKind.Angle)
+            RenderImportedShapeMaterial(dc, materialPlan, ContourListToGeometry(shape.Geometry));
 
         // Draw text overlay
         if (shape.Text is not null)
@@ -419,54 +416,32 @@ public sealed class SlideCanvas : FrameworkElement
         && Math.Abs(effects.OuterShadowDistDip - 11.31) < 0.01
         && Math.Abs(effects.OuterShadowDirDeg - 45) < 0.01;
 
-    private static void RenderImportedIsometricCrossDepth(DrawingContext dc, DrawOp.Shape shape)
+    private static void RenderImportedShapeDepth(
+        DrawingContext dc,
+        DrawOp.Shape shape,
+        ShapeMaterialRenderPlan plan)
     {
-        var fx = shape.Effects;
-        if (fx is null
-            || shape.ShapeId != 6
-            || !string.Equals(fx.Scene3dCameraPreset, "isometricTopUp", StringComparison.OrdinalIgnoreCase)
-            || fx.BevelTop is null
-            || !string.Equals(fx.BevelTop.PresetName, "softRound", StringComparison.OrdinalIgnoreCase)
-            || fx.ExtrusionDepthDip > 0
-            || shape.Fill is not ResolvedFill.Solid solid)
-            return;
-
-        var face = fx.ExtrusionColor ?? DarkenImportedDepthFace(solid.Color);
-        var brush = new SolidColorBrush(Color.FromArgb(solid.Alpha, face.R, face.G, face.B));
+        var brush = new SolidColorBrush(Color.FromArgb(
+            plan.FaceAlpha,
+            plan.ExtrusionColor!.Value.R,
+            plan.ExtrusionColor.Value.G,
+            plan.ExtrusionColor.Value.B));
         if (brush.CanFreeze) brush.Freeze();
 
         var geometry = ContourListToGeometry(shape.Geometry);
-        dc.PushTransform(new TranslateTransform(
-            ImportedIsometricCrossDepthDip,
-            ImportedIsometricCrossDepthDip));
+        dc.PushTransform(new TranslateTransform(plan.DepthOffsetDip, plan.DepthOffsetDip));
         dc.DrawGeometry(brush, null, geometry);
         dc.Pop();
     }
 
-    private static SrgbColor DarkenImportedDepthFace(SrgbColor color) =>
-        new(
-            (byte)Math.Round(color.R * 0.32),
-            (byte)Math.Round(color.G * 0.32),
-            (byte)Math.Round(color.B * 0.32));
-
-    private static void RenderImportedCircleMaterial(
+    private static void RenderImportedShapeMaterial(
         DrawingContext dc,
-        DrawOp.Shape shape,
+        ShapeMaterialRenderPlan plan,
         Geometry shapeGeo)
     {
-        var fx = shape.Effects;
-        if (fx is null
-            || shape.ShapeId != 3
-            || !string.Equals(fx.Scene3dCameraPreset, "orthographicFront", StringComparison.OrdinalIgnoreCase)
-            || fx.ExtrusionDepthDip > 0
-            || fx.BevelTop is null
-            || !string.IsNullOrEmpty(fx.BevelTop.PresetName)
-            || shape.Fill is not ResolvedFill.Solid)
-            return;
-
-        var bounds = shape.BoundsDip;
-        const double edgeDip = 9.0;
-        var coreBrush = new SolidColorBrush(Color.FromRgb(0x1B, 0x69, 0x8C));
+        var bounds = plan.Bounds;
+        var coreBrush = new SolidColorBrush(Color.FromRgb(
+            plan.FaceColor.R, plan.FaceColor.G, plan.FaceColor.B));
         if (coreBrush.CanFreeze) coreBrush.Freeze();
 
         dc.PushClip(shapeGeo);
@@ -474,151 +449,31 @@ public sealed class SlideCanvas : FrameworkElement
             new Rect(bounds.X + 1, bounds.Y + 1,
                 Math.Max(0, bounds.Width - 2), Math.Max(0, bounds.Height - 2)));
 
-        DrawMaterialBand(dc, CreateMaterialBrush(true,
-                (0.00, 0x0B3345), (0.14, 0x1F6889), (0.42, 0x3B8CB1),
-                (0.64, 0x51A2C7), (0.84, 0x2A7A9E), (1.00, 0x1B698C)),
-            new Rect(bounds.X + 1, bounds.Y + 1,
-                Math.Max(0, bounds.Width - 2), edgeDip));
-        DrawMaterialBand(dc, CreateMaterialBrush(false,
-                (0.00, 0x104D6B), (0.40, 0x1A6789), (1.00, 0x1B698C)),
-            new Rect(bounds.X + 1, bounds.Y + 1, edgeDip,
-                Math.Max(0, bounds.Height - 2)));
-        DrawMaterialBand(dc, CreateMaterialBrush(true,
-                (0.00, 0x1B698C), (0.45, 0x1E6484), (1.00, 0x18313B)),
-            new Rect(bounds.X + 1, bounds.Bottom - edgeDip - 1,
-                Math.Max(0, bounds.Width - 2), edgeDip));
-        DrawMaterialBand(dc, CreateMaterialBrush(false,
-                (0.00, 0x1B698C), (0.45, 0x155D7E), (1.00, 0x050E11)),
-            new Rect(bounds.Right - edgeDip - 1, bounds.Y + 1, edgeDip,
-                Math.Max(0, bounds.Height - 2)));
+        foreach (var band in plan.Bands)
+        {
+            DrawMaterialBand(dc, CreateMaterialBrush(band), new Rect(
+                band.Bounds.X, band.Bounds.Y, band.Bounds.Width, band.Bounds.Height));
+        }
         dc.Pop();
     }
 
-    private static LinearGradientBrush CreateMaterialBrush(
-        bool vertical,
-        params (double Position, int Rgb)[] stops)
+    private static LinearGradientBrush CreateMaterialBrush(ShapeMaterialBandPlan band)
     {
         var brush = new LinearGradientBrush
         {
             StartPoint = new Point(0, 0),
-            EndPoint = vertical ? new Point(0, 1) : new Point(1, 0),
+            EndPoint = band.IsVertical ? new Point(0, 1) : new Point(1, 0),
             MappingMode = BrushMappingMode.RelativeToBoundingBox
         };
-        foreach (var (position, rgb) in stops)
-        {
+        foreach (var stop in band.Stops)
             brush.GradientStops.Add(new System.Windows.Media.GradientStop(
-                Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb), position));
-        }
+                Color.FromRgb(stop.Color.R, stop.Color.G, stop.Color.B), stop.Position));
         if (brush.CanFreeze) brush.Freeze();
         return brush;
     }
 
-    private static void DrawMaterialBand(
-        DrawingContext dc,
-        LinearGradientBrush brush,
-        Rect bounds)
-    {
+    private static void DrawMaterialBand(DrawingContext dc, LinearGradientBrush brush, Rect bounds) =>
         dc.DrawRectangle(brush, null, bounds);
-    }
-
-    private static void RenderImportedRelaxedMaterial(
-        DrawingContext dc,
-        DrawOp.Shape shape,
-        Geometry shapeGeo)
-    {
-        var fx = shape.Effects;
-        if (fx is null
-            || shape.ShapeId != 4
-            || !string.Equals(fx.Scene3dCameraPreset, "orthographicFront", StringComparison.OrdinalIgnoreCase)
-            || fx.ExtrusionDepthDip < 25 || fx.ExtrusionDepthDip > 28
-            || fx.BevelTop is null
-            || !string.Equals(fx.BevelTop.PresetName, "relaxedInset", StringComparison.OrdinalIgnoreCase)
-            || shape.Fill is not ResolvedFill.Solid)
-            return;
-
-        var bounds = shape.BoundsDip;
-        const double edgeDip = 13.0;
-        var coreBrush = new SolidColorBrush(Color.FromRgb(0xF7, 0x7A, 0x39));
-        if (coreBrush.CanFreeze) coreBrush.Freeze();
-
-        dc.PushClip(shapeGeo);
-        dc.DrawRectangle(coreBrush, null,
-            new Rect(bounds.X + 1, bounds.Y + 1,
-                Math.Max(0, bounds.Width - 2), Math.Max(0, bounds.Height - 2)));
-
-        DrawMaterialBand(dc, CreateMaterialBrush(true,
-                (0.00, 0xC66734), (0.10, 0xFC7C38), (0.20, 0xFF8B46),
-                (0.30, 0xFF9D58), (0.40, 0xEEA061), (0.50, 0x763D1F),
-                (0.60, 0x763D1F), (0.70, 0x8D4A2A), (0.80, 0xAA5C32),
-                (0.90, 0xC56734), (1.00, 0xDF7136)),
-            new Rect(bounds.X + 1, bounds.Y + 1,
-                Math.Max(0, bounds.Width - 2), edgeDip));
-        DrawMaterialBand(dc, CreateMaterialBrush(false,
-                (0.00, 0x974E27), (0.12, 0xBF5D2A), (0.24, 0xCF642E),
-                (0.38, 0xDD6C32), (0.50, 0x7B3C1A), (0.62, 0x924720),
-                (0.76, 0xC6612C), (0.90, 0xE16F33), (1.00, 0xF57938)),
-            new Rect(bounds.X + 1, bounds.Y + 1, edgeDip,
-                Math.Max(0, bounds.Height - 2)));
-        DrawMaterialBand(dc, CreateMaterialBrush(true,
-                (0.00, 0xFC7D3B), (0.08, 0xFF803D), (0.16, 0xFF8440),
-                (0.25, 0xFF813C), (0.34, 0xFE7C37), (0.50, 0xCF6F3C),
-                (0.67, 0xAC5E32), (0.82, 0x7F4324), (0.92, 0x8C563A),
-                (1.00, 0x2B4753)),
-            new Rect(bounds.X + 1, bounds.Bottom - edgeDip - 1,
-                Math.Max(0, bounds.Width - 2), edgeDip));
-        DrawMaterialBand(dc, CreateMaterialBrush(false,
-                (0.00, 0xF77A39), (0.45, 0xF57938), (0.70, 0xAC5424),
-                (0.88, 0x542A14), (1.00, 0x070B0D)),
-            new Rect(bounds.Right - edgeDip - 1, bounds.Y + 1, edgeDip,
-                Math.Max(0, bounds.Height - 2)));
-        dc.Pop();
-    }
-
-    private static void RenderImportedAngleMaterial(
-        DrawingContext dc,
-        DrawOp.Shape shape,
-        Geometry shapeGeo)
-    {
-        var fx = shape.Effects;
-        if (fx is null
-            || shape.ShapeId != 5
-            || !string.Equals(fx.Scene3dCameraPreset, "orthographicFront", StringComparison.OrdinalIgnoreCase)
-            || fx.ExtrusionDepthDip < 52 || fx.ExtrusionDepthDip > 55
-            || fx.BevelTop is null
-            || !string.Equals(fx.BevelTop.PresetName, "cross", StringComparison.OrdinalIgnoreCase)
-            || shape.Fill is not ResolvedFill.Solid)
-            return;
-
-        var bounds = shape.BoundsDip;
-        const double edgeDip = 8.0;
-        var coreBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x74, 0x2A));
-        if (coreBrush.CanFreeze) coreBrush.Freeze();
-
-        dc.PushClip(shapeGeo);
-        dc.DrawRectangle(coreBrush, null,
-            new Rect(bounds.X + 1, bounds.Y + 1,
-                Math.Max(0, bounds.Width - 2), Math.Max(0, bounds.Height - 2)));
-        DrawMaterialBand(dc, CreateMaterialBrush(true,
-                (0.00, 0x1C672D), (0.45, 0x1F742A), (1.00, 0x1F742A)),
-            new Rect(bounds.X + 1, bounds.Y + 1,
-                Math.Max(0, bounds.Width - 2), edgeDip));
-        DrawMaterialBand(dc, CreateMaterialBrush(false,
-                (0.00, 0x1C6B2D), (0.35, 0x1F742A), (0.55, 0x195E22),
-                (0.72, 0x1E7129), (1.00, 0x1F742A)),
-            new Rect(bounds.X + 1, bounds.Y + 1, edgeDip,
-                Math.Max(0, bounds.Height - 2)));
-        DrawMaterialBand(dc, CreateMaterialBrush(true,
-                (0.00, 0x1F742A), (0.35, 0x22712C), (0.60, 0x1F742A),
-                (0.80, 0x1B662D), (1.00, 0x17313D)),
-            new Rect(bounds.X + 1, bounds.Bottom - edgeDip - 1,
-                Math.Max(0, bounds.Width - 2), edgeDip));
-        DrawMaterialBand(dc, CreateMaterialBrush(false,
-                (0.00, 0x1F742A), (0.35, 0x1C6C26), (0.55, 0x124018),
-                (0.75, 0x14501D), (1.00, 0x1F742A)),
-            new Rect(bounds.Right - edgeDip - 1, bounds.Y + 1, edgeDip,
-                Math.Max(0, bounds.Height - 2)));
-        dc.Pop();
-    }
 
     /// <summary>
     /// Renders the bevel highlight/shade overlay for a shape.
