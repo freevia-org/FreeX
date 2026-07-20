@@ -2271,9 +2271,16 @@ public sealed class SlideCanvas : Control
                 run.Text,
                 run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0))
             .ToArray();
+        var widths = para.Runs
+            .Select((run, index) => MeasureBaselineTextWidth(
+                run,
+                run.Text,
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                formatted[index]))
+            .ToArray();
         double lineAscent = formatted.Length == 0 ? 0 : formatted.Max(ft => ft.Baseline);
         double baselineY = ComputeBaselineY(startY, lineAscent);
-        double totalWidth = formatted.Sum(ft => ft.Width);
+        double totalWidth = widths.Sum();
         if (maxWidth > 0 && totalWidth > maxWidth)
         {
             RenderWrappedBaseline(dc, para, startX, startY, maxWidth);
@@ -2293,7 +2300,7 @@ public sealed class SlideCanvas : Control
             var ft = formatted[i];
             double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(run.BaselineOffset, run.FontSizePt);
             dc.DrawText(ft, new Point(x, baselineY - ft.Baseline - offsetDip));
-            x += ft.Width;
+            x += widths[i];
         }
     }
 
@@ -2357,7 +2364,11 @@ public sealed class SlideCanvas : Control
                 run,
                 text,
                 run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0);
-            double width = formatted.Width;
+            double width = MeasureBaselineTextWidth(
+                run,
+                text,
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                formatted);
             var line = lines[^1];
             if (line.Fragments.Count > 0 && line.Width + width > maxWidth)
             {
@@ -2396,7 +2407,11 @@ public sealed class SlideCanvas : Control
                     run,
                     token,
                     run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0);
-                double tokenWidth = tokenText.Width;
+                double tokenWidth = MeasureBaselineTextWidth(
+                    run,
+                    token,
+                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                    tokenText);
                 if (whitespace && (line.Fragments.Count == 0 || line.Width + tokenWidth > maxWidth))
                 {
                     index = end;
@@ -2417,6 +2432,29 @@ public sealed class SlideCanvas : Control
         }
 
         return lines;
+    }
+
+    /// <summary>
+    /// Avalonia's FormattedText.Width trims trailing whitespace. Baseline runs
+    /// are laid out token-by-token, so that trim would remove the advance of a
+    /// separator between two runs. Measure a trailing-space token with a
+    /// sentinel glyph and subtract the sentinel's width to retain the authored
+    /// whitespace advance.
+    /// </summary>
+    internal static double MeasureBaselineTextWidth(
+        ResolvedRun run,
+        string text,
+        double fontScale,
+        FormattedText? formatted = null)
+    {
+        formatted ??= BuildSingleRunFormattedTextAt(run, text, fontScale);
+        if (text.Length == 0 || !char.IsWhiteSpace(text[^1]))
+            return formatted.Width;
+
+        const string sentinel = "M";
+        var withSentinel = BuildSingleRunFormattedTextAt(run, text + sentinel, fontScale);
+        var sentinelWidth = BuildSingleRunFormattedTextAt(run, sentinel, fontScale).Width;
+        return Math.Max(formatted.Width, withSentinel.Width - sentinelWidth);
     }
 
     // ── Theme 27: math rendering ────────────────────────────────────────────────

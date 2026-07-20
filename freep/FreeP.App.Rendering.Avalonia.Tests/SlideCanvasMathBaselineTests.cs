@@ -140,6 +140,28 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task MeasureBaselineTextWidth_PreservesTrailingWhitespaceAdvance()
+    {
+        double withSpace = 0;
+        double withoutSpace = 0;
+        await Run(() =>
+        {
+            var run = new ResolvedRun
+            {
+                FontFamily = "Arial",
+                FontSizePt = 18,
+                Color = SrgbColor.Black
+            };
+            withoutSpace = SlideCanvas.MeasureBaselineTextWidth(run, "long", 1.0);
+            withSpace = SlideCanvas.MeasureBaselineTextWidth(run, "long ", 1.0);
+        });
+
+        withSpace.Should().BeGreaterThan(
+            withoutSpace,
+            "baseline runs must retain the separator advance between independently drawn runs");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_FractionTypes_UseSharedDrawPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;
