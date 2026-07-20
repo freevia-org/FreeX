@@ -5,6 +5,7 @@ namespace FreeP.App.Compositor;
 public sealed record SlideShowPageCurlTransitionPlan(
     bool HorizontalAxis,
     bool CurlFromEnd,
+    bool DoubleFold,
     double FoldDepthFactor);
 
 /// <summary>
@@ -28,7 +29,11 @@ public static class SlideShowPageCurlTransitionPlanner
             TransitionDirection.RightUp or
             TransitionDirection.RightDown;
 
-        return new(horizontal, curlFromEnd, DefaultFoldDepthFactor);
+        return new(
+            horizontal,
+            curlFromEnd,
+            transition.Kind == TransitionKind.PageCurlDouble,
+            DefaultFoldDepthFactor);
     }
 
     public static IReadOnlyList<SlideShowMaskPolygon> BuildPolygons(
@@ -48,6 +53,9 @@ public static class SlideShowPageCurlTransitionPlanner
             return new[] { new SlideShowMaskPolygon(BuildRectangle(width, height)) };
 
         var remaining = 1 - progress;
+        if (plan.DoubleFold)
+            return BuildDoubleFoldPolygons(width, height, remaining, plan);
+
         if (plan.HorizontalAxis)
         {
             var edge = plan.CurlFromEnd ? width * remaining : width * progress;
@@ -94,6 +102,63 @@ public static class SlideShowPageCurlTransitionPlanner
                 new SlideShowMaskPoint(0, height)
             };
         return new[] { new SlideShowMaskPolygon(verticalPoints) };
+    }
+
+    private static IReadOnlyList<SlideShowMaskPolygon> BuildDoubleFoldPolygons(
+        double width,
+        double height,
+        double remaining,
+        SlideShowPageCurlTransitionPlan plan)
+    {
+        var depth = Math.Min(width, height) * plan.FoldDepthFactor * remaining;
+        if (plan.HorizontalAxis)
+        {
+            var leftEdge = width * 0.5 * remaining;
+            var rightEdge = width - leftEdge;
+            var centerY = height / 2;
+            return new[]
+            {
+                new SlideShowMaskPolygon(new[]
+                {
+                    new SlideShowMaskPoint(0, 0),
+                    new SlideShowMaskPoint(leftEdge, 0),
+                    new SlideShowMaskPoint(Math.Min(width, leftEdge + depth), centerY),
+                    new SlideShowMaskPoint(leftEdge, height),
+                    new SlideShowMaskPoint(0, height)
+                }),
+                new SlideShowMaskPolygon(new[]
+                {
+                    new SlideShowMaskPoint(rightEdge, 0),
+                    new SlideShowMaskPoint(width, 0),
+                    new SlideShowMaskPoint(width, height),
+                    new SlideShowMaskPoint(rightEdge, height),
+                    new SlideShowMaskPoint(Math.Max(0, rightEdge - depth), centerY)
+                })
+            };
+        }
+
+        var topEdge = height * 0.5 * remaining;
+        var bottomEdge = height - topEdge;
+        var centerX = width / 2;
+        return new[]
+        {
+            new SlideShowMaskPolygon(new[]
+            {
+                new SlideShowMaskPoint(0, 0),
+                new SlideShowMaskPoint(width, 0),
+                new SlideShowMaskPoint(width, Math.Min(height, topEdge + depth)),
+                new SlideShowMaskPoint(centerX, topEdge),
+                new SlideShowMaskPoint(0, topEdge)
+            }),
+            new SlideShowMaskPolygon(new[]
+            {
+                new SlideShowMaskPoint(0, bottomEdge),
+                new SlideShowMaskPoint(centerX, Math.Max(0, bottomEdge - depth)),
+                new SlideShowMaskPoint(width, bottomEdge),
+                new SlideShowMaskPoint(width, height),
+                new SlideShowMaskPoint(0, height)
+            })
+        };
     }
 
     private static IReadOnlyList<SlideShowMaskPoint> BuildRectangle(double width, double height) =>

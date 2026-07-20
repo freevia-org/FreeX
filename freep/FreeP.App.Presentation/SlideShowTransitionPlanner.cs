@@ -154,7 +154,8 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Ferris => SlideShowTransitionPlaybackKind.Ferris,
 
-            TransitionKind.PageCurlSingle => SlideShowTransitionPlaybackKind.PageCurl,
+            TransitionKind.PageCurlSingle or
+            TransitionKind.PageCurlDouble => SlideShowTransitionPlaybackKind.PageCurl,
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback
         };
