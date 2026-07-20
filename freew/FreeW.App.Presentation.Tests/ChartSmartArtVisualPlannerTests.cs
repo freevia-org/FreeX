@@ -180,6 +180,29 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartPlan_EveryQuickLayoutMatchesTheSharedCatalogFlags()
+    {
+        foreach (var layout in ChartQuickLayout.Catalog)
+        {
+            var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], title: "Revenue");
+            chart.ShowLegend = !layout.ShowLegend;
+            chart.CategoryAxisTitle = "Category";
+            chart.ValueAxisTitle = "Value";
+            chart.QuickLayoutId = layout.Id;
+
+            var plan = ChartSmartArtVisualPlanner.BuildChartPlan(chart);
+
+            plan.QuickLayoutId.Should().Be(layout.Id);
+            plan.ShowTitle.Should().Be(layout.ShowTitle);
+            plan.ShowLegend.Should().Be(layout.ShowLegend);
+            plan.ShowDataLabels.Should().Be(layout.ShowDataLabels);
+            plan.ShowGridlines.Should().Be(layout.ShowGridlines);
+            (plan.CategoryAxisTitle is not null).Should().Be(layout.ShowAxisTitles);
+            (plan.ValueAxisTitle is not null).Should().Be(layout.ShowAxisTitles);
+        }
+    }
+
+    [Fact]
     public void ChartPlan_MultiSeriesLegendFollowsExplicitModelFlag()
     {
         var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], seriesName: "Series 1");

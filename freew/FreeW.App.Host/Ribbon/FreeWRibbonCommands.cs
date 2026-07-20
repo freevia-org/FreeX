@@ -629,11 +629,9 @@ internal static class FreeWRibbonCommands
         foreach (var layout in ChartQuickLayout.Catalog)
         {
             var l = layout;
-            registry.Register($"freew.chart-quick-layout-{l.Id}", new ActionRibbonCommand(() =>
-            {
-                editor.Focus();
-                editor.ApplySelectedChartQuickLayout(l);
-            }));
+            registry.Register(
+                $"freew.chart-quick-layout-{l.Id}",
+                new ChartQuickLayoutRibbonCommand(editor, l));
         }
         foreach (var style in ChartStyle.Catalog)
         {
@@ -4074,6 +4072,23 @@ internal static class FreeWRibbonCommands
     }
 
     // Drawing Format / Picture Format > Arrange > Group: group ≥2 selected floating objects.
+    private sealed class ChartQuickLayoutRibbonCommand(
+        DocumentView editor,
+        ChartQuickLayout layout) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!GetState().IsEnabled)
+                return;
+
+            editor.Focus();
+            editor.ApplySelectedChartQuickLayout(layout);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedChart() is not null);
+    }
+
     private sealed class ObjectGroupCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)

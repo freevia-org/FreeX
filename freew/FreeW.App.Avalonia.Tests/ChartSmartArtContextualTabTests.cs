@@ -96,7 +96,17 @@ public sealed class ChartSmartArtContextualTabTests
         var cd = def.FindTab("chart-design")!;
         cd.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.ChartContextKey);
         cd.Context.Color.Should().Be(RibbonContextColor.Green);
-        cd.Groups.Select(g => g.Id).Should().Contain("chart-elements");
+        cd.Groups.Select(g => g.Id).Should().ContainInOrder(
+            "chart-type", "chart-data", "chart-quick-layout", "chart-styles", "chart-elements");
+        var quickLayouts = cd.Groups.Single(g => g.Id == "chart-quick-layout").Controls
+            .Cast<RibbonButton>()
+            .ToArray();
+        quickLayouts.Select(control => control.CommandId.Value)
+            .Should().Equal(ChartQuickLayout.Catalog.Select(layout => $"freew.chart-quick-layout-{layout.Id}"));
+        quickLayouts.Select(control => control.Label)
+            .Should().Equal(ChartQuickLayout.Catalog.Select(layout => layout.Name));
+        quickLayouts.Should().OnlyContain(control =>
+            control.Icon != null && control.Icon.Kind == RibbonCommandIconKind.Grid);
         cd.Groups.Single(g => g.Id == "chart-elements").Controls
             .Select(GetCommandId)
             .Where(id => id is not null)
@@ -135,6 +145,10 @@ public sealed class ChartSmartArtContextualTabTests
         foreach (var id in ids)
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"command '{id}' must be registered");
+
+        foreach (var layout in ChartQuickLayout.Catalog)
+            registry.TryGet(new RibbonCommandId($"freew.chart-quick-layout-{layout.Id}"), out _)
+                .Should().BeTrue($"quick layout {layout.Id} must be registered");
     }
 
     [Fact]
@@ -313,6 +327,72 @@ public sealed class ChartSmartArtContextualTabTests
         before.Should().BeNull();
         after.Should().Be("mono-blue", "chart-colors-mono-blue must set the scheme id");
         undone.Should().BeNull("undo must revert the colour scheme");
+    }
+
+    [Fact]
+    public async Task ChartQuickLayoutCatalog_commands_apply_preserve_selection_and_support_undo_redo()
+    {
+        var ran = await OnUi(() =>
+        {
+            foreach (var layout in ChartQuickLayout.Catalog)
+            {
+                var (doc, bi, ri) = DocWithFloatingChart();
+                var chart = ((Paragraph)doc.Blocks[bi]).Runs[ri].Chart!;
+                chart.ShowLegend = true;
+                chart.CategoryAxisTitle = "Quarter";
+                chart.ValueAxisTitle = "USD";
+                chart.StyleId = 7;
+                chart.ColorSchemeId = "mono-blue";
+                var categories = chart.Categories.ToArray();
+                var values = chart.Series[0].Values.ToArray();
+
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.Measure(new Size(800, 2000));
+                view.SelectFloating(bi, ri);
+
+                var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+                registry.TryGet(new RibbonCommandId($"freew.chart-quick-layout-{layout.Id}"), out var command)
+                    .Should().BeTrue();
+                var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+                stateful.GetState().IsEnabled.Should().BeTrue();
+
+                command!.Execute(RibbonCommandContext.Empty);
+
+                chart.QuickLayoutId.Should().Be(layout.Id);
+                chart.StyleId.Should().Be(7);
+                chart.ColorSchemeId.Should().Be("mono-blue");
+                chart.Categories.Should().Equal(categories);
+                chart.Series[0].Values.Should().Equal(values);
+                view.GetSelectedChartInfo().Should().NotBeNull();
+
+                view.Undo();
+                chart.QuickLayoutId.Should().Be(0);
+                view.Redo();
+                chart.QuickLayoutId.Should().Be(layout.Id);
+            }
+        });
+        ran.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ChartQuickLayoutCatalog_commands_are_disabled_without_a_chart_selection()
+    {
+        var ran = await OnUi(() =>
+        {
+            var view = new DocumentView();
+            view.LoadDocument(TextDocument.CreateEmpty());
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+            foreach (var layout in ChartQuickLayout.Catalog)
+            {
+                registry.TryGet(new RibbonCommandId($"freew.chart-quick-layout-{layout.Id}"), out var command)
+                    .Should().BeTrue();
+                command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject
+                    .GetState().IsEnabled.Should().BeFalse();
+            }
+        });
+        ran.Should().BeTrue();
     }
 
     [Fact]

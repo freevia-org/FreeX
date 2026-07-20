@@ -209,6 +209,27 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Chart_quick_layout_catalog_has_identical_profile_placement_labels_and_icons()
+    {
+        var expectedIds = FreeW.Core.Model.ChartQuickLayout.Catalog
+            .Select(layout => $"freew.chart-quick-layout-{layout.Id}")
+            .ToArray();
+        var expectedLabels = FreeW.Core.Model.ChartQuickLayout.Catalog
+            .Select(layout => layout.Name)
+            .ToArray();
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var chartDesign = FreeWRibbon.Build(capabilities).FindTab("chart-design")!;
+            var controls = chartDesign.FindGroup("chart-quick-layout")!.Controls.Cast<RibbonButton>().ToArray();
+            controls.Select(control => control.CommandId.Value).Should().Equal(expectedIds);
+            controls.Select(control => control.Label).Should().Equal(expectedLabels);
+            controls.Should().OnlyContain(control =>
+                control.Icon != null && control.Icon.Kind == RibbonCommandIconKind.Grid);
+        }
+    }
+
+    [Fact]
     public void Home_design_parity_slice_command_ids_are_shared_where_backed()
     {
         var wpfIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf))

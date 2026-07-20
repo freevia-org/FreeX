@@ -1714,6 +1714,14 @@ internal static class FreeWAvaloniaRibbonCommands
             r.Register($"freew.chart-style-{s.Id}", new ActionRibbonCommand(() => editor.SetChartStyle(s.Id)));
         }
 
+        foreach (var layout in ChartQuickLayout.Catalog)
+        {
+            var captured = layout;
+            r.Register(
+                $"freew.chart-quick-layout-{captured.Id}",
+                new ChartQuickLayoutRibbonCommand(editor, captured));
+        }
+
         // Change Colors — dropdown opener + one command per catalog colour scheme.
         r.Register("freew.chart-colors", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         foreach (var scheme in ChartColorScheme.Catalog)
@@ -1752,6 +1760,20 @@ internal static class FreeWAvaloniaRibbonCommands
             var sc = scheme;
             r.Register($"freew.smartart-colors-{sc.Id}", new ActionRibbonCommand(() => editor.SetSmartArtColor(sc.Id)));
         }
+    }
+
+    private sealed class ChartQuickLayoutRibbonCommand(
+        DocumentView editor,
+        ChartQuickLayout layout) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                editor.SetChartQuickLayout(layout);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.GetSelectedChartInfo() is not null);
     }
 
     private static bool TryBuildChartDataPreset(string? value, out Chart chart)

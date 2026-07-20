@@ -37,6 +37,44 @@ public sealed class ChartEditCommandTests
     }
 
     [Fact]
+    public void SetChartQuickLayoutCommand_AppliesEveryCatalogEntryWithoutChangingChartContentOrStyle()
+    {
+        foreach (var layout in ChartQuickLayout.Catalog)
+        {
+            var (_, bus, chart) = NewChartDoc(showLegend: true, quickLayoutId: 2);
+            chart.Title = "Revenue";
+            chart.CategoryAxisTitle = "Quarter";
+            chart.ValueAxisTitle = "USD";
+            chart.StyleId = 7;
+            chart.ColorSchemeId = "mono-blue";
+            chart.WidthPt = 420;
+            chart.HeightPt = 260;
+            var categories = chart.Categories.ToArray();
+            var series = chart.Series.Select(item => (item.Name, Values: item.Values.ToArray())).ToArray();
+
+            bus.Execute(new SetChartQuickLayoutCommand(0, 0, layout));
+
+            chart.QuickLayoutId.Should().Be(layout.Id);
+            chart.Title.Should().Be("Revenue");
+            chart.ShowLegend.Should().BeTrue();
+            chart.CategoryAxisTitle.Should().Be("Quarter");
+            chart.ValueAxisTitle.Should().Be("USD");
+            chart.StyleId.Should().Be(7);
+            chart.ColorSchemeId.Should().Be("mono-blue");
+            chart.WidthPt.Should().Be(420);
+            chart.HeightPt.Should().Be(260);
+            chart.Categories.Should().Equal(categories);
+            chart.Series.Select(item => (item.Name, Values: item.Values.ToArray()))
+                .Should().BeEquivalentTo(series, options => options.WithStrictOrdering());
+
+            bus.Undo().Should().BeTrue();
+            chart.QuickLayoutId.Should().Be(2);
+            bus.Redo().Should().BeTrue();
+            chart.QuickLayoutId.Should().Be(layout.Id);
+        }
+    }
+
+    [Fact]
     public void SetChartLegendCommand_ClearsQuickLayoutOverrideAndRestoresItOnUndo()
     {
         var (_, bus, chart) = NewChartDoc(showLegend: false, quickLayoutId: 3);

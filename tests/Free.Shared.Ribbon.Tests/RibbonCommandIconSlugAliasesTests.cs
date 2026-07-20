@@ -85,4 +85,15 @@ public sealed class RibbonCommandIconSlugAliasesTests
     public void Unknown_slug_is_preserved() =>
         Free.Shared.Ribbon.Icons.RibbonCommandIconSlugAliases.GetCandidates("wordart")
             .Should().Equal("wordart");
+
+    [Fact]
+    public void Chart_quick_layout_labels_resolve_to_the_Wpf_command_assets()
+    {
+        for (var id = 1; id <= 9; id++)
+        {
+            Free.Shared.Ribbon.Icons.RibbonCommandIconSlugAliases.GetCandidates($"layout-{id}")
+                .Take(2)
+                .Should().Equal($"chart-quick-layout-{id}", $"layout-{id}");
+        }
+    }
 }

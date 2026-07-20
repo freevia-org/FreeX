@@ -8311,6 +8311,18 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-CHARTTAB: Apply a shared Quick Layout catalog entry to the selected floating chart.
+    /// Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void SetChartQuickLayout(ChartQuickLayout layout)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        _bus.Execute(new SetChartQuickLayoutCommand(sel.BlockIndex, sel.RunIndex, layout));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
     /// AV-CHARTTAB: Toggle the legend on the selected floating chart.
     /// Undoable + re-renders. No-op when the selected float is not a chart.
     /// </summary>

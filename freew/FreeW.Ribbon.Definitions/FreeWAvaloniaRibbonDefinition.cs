@@ -1201,6 +1201,16 @@ internal static class FreeWAvaloniaRibbonDefinition
                             Width = 132
                         });
                     });
+                    tab.Group("chart-quick-layout", "Quick Layout", null, 85, g =>
+                    {
+                        foreach (var layout in ChartQuickLayout.Catalog)
+                        {
+                            g.Button($"freew.chart-quick-layout-{layout.Id}", layout.Name, b => b with
+                            {
+                                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Grid)
+                            });
+                        }
+                    });
                     tab.Group("chart-styles", "Chart Styles", null, 90, g =>
                     {
                         g.Dropdown("freew.chart-style",  "Chart Styles",  BuildChartStyleMenu());
