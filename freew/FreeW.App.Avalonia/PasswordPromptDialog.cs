@@ -1,0 +1,103 @@
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
+
+namespace FreeW.App.Avalonia;
+
+/// <summary>Single-field password prompt matching the FreeW WPF authority surface.</summary>
+internal sealed class PasswordPromptDialog : Window
+{
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        new(FontFamily.Default);
+
+    private readonly TextBox _passwordBox = new()
+    {
+        MinWidth = 220,
+        PasswordChar = '*',
+    };
+
+    public string? Result { get; private set; }
+
+    private PasswordPromptDialog(string title, string prompt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentNullException.ThrowIfNull(prompt);
+
+        Title = title;
+        Width = 320;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        CanResize = false;
+        ShowInTaskbar = false;
+
+        AutomationProperties.SetAutomationId(this, "PasswordPromptDialog");
+        AutomationProperties.SetName(this, title);
+        AutomationProperties.SetAutomationId(_passwordBox, "PasswordPromptPasswordBox");
+        AutomationProperties.SetName(_passwordBox, prompt);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_passwordBox, DialogChromeStyle);
+
+        var body = new StackPanel
+        {
+            Margin = new Thickness(14),
+            Spacing = 8,
+        };
+        body.Children.Add(new TextBlock
+        {
+            Text = prompt,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        body.Children.Add(_passwordBox);
+
+        var ok = new Button { Content = "OK", IsDefault = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, 72, isDefault: true);
+        AutomationProperties.SetAutomationId(ok, "PasswordPromptOkButton");
+        ok.Click += (_, _) => Accept();
+
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, 72);
+        AutomationProperties.SetAutomationId(cancel, "PasswordPromptCancelButton");
+        cancel.Click += (_, _) => Close();
+        body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
+            [ok, cancel],
+            new Thickness(0, 4, 0, 0)));
+
+        Content = body;
+        Opened += (_, _) =>
+        {
+            _passwordBox.Focus();
+            _passwordBox.SelectAll();
+        };
+    }
+
+    public static async Task<string?> ShowAsync(Window owner, string title, string prompt)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        var dialog = new PasswordPromptDialog(title, prompt);
+        await dialog.ShowDialog(owner);
+        return dialog.Result;
+    }
+
+    internal static PasswordPromptDialog CreateForTest(string title, string prompt) =>
+        new(title, prompt);
+
+    internal TextBox PasswordBoxForTest => _passwordBox;
+
+    internal string? AcceptForTest(string? password)
+    {
+        _passwordBox.Text = password;
+        Accept(close: false);
+        return Result;
+    }
+
+    private void Accept() => Accept(close: true);
+
+    private void Accept(bool close)
+    {
+        Result = _passwordBox.Text ?? string.Empty;
+        if (close)
+            Close();
+    }
+}

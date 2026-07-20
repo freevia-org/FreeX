@@ -46,7 +46,7 @@ public class RibbonAndDocumentTests
     }
 
     [Fact]
-    public void Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent()
+    public void Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed()
     {
         var definition = FreeWRibbon.BuildDefinition();
         var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), NoopCallbacks());
@@ -72,9 +72,8 @@ public class RibbonAndDocumentTests
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"Avalonia compact File shell command '{id}' must be host-backed");
 
-        definition.Tabs.Select(tab => tab.Id)
-            .Should()
-            .NotContain("help", "the portable Avalonia shell intentionally omits WPF's desktop Help/Product tab");
+        definition.Tabs.Select(tab => tab.Id).Should().Contain("help");
+        commandIds.Should().Contain("freew.legal-notices");
 
         commandIds.Should().NotContain(new[]
         {
@@ -83,7 +82,6 @@ public class RibbonAndDocumentTests
             "freew.copy-diagnostics",
             "freew.check-updates",
             "freew.about",
-            "freew.legal-notices",
             "freew.arrange-all",
         });
     }
