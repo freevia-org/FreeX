@@ -179,6 +179,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Origami, SlideShowTransitionPlaybackKind.PageCurl)]
     [InlineData(TransitionKind.Vortex, SlideShowTransitionPlaybackKind.Vortex)]
     [InlineData(TransitionKind.Warp, SlideShowTransitionPlaybackKind.Warp)]
+    [InlineData(TransitionKind.Fracture, SlideShowTransitionPlaybackKind.Fracture)]
     [InlineData(TransitionKind.PageCurlSingle, SlideShowTransitionPlaybackKind.PageCurl)]
     [InlineData(TransitionKind.PageCurlDouble, SlideShowTransitionPlaybackKind.PageCurl)]
     [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]
