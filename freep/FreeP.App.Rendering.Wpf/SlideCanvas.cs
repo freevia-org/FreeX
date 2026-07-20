@@ -1887,6 +1887,9 @@ public sealed class SlideCanvas : FrameworkElement
                 case TextParagraphRenderRoute.Tabs:
                     RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
                     break;
+                case TextParagraphRenderRoute.Baseline:
+                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
+                    break;
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
                         ft.MaxTextWidth = placement.MaxWidthDip;
@@ -2020,6 +2023,7 @@ public sealed class SlideCanvas : FrameworkElement
                     Text = text,
                     FontFamily = run.FontFamily,
                     FontSizePt = run.FontSizePt,
+                    BaselineOffset = run.BaselineOffset,
                     Bold = run.Bold,
                     Italic = run.Italic,
                     Underline = run.Underline,
@@ -2132,6 +2136,9 @@ public sealed class SlideCanvas : FrameworkElement
                     break;
                 case TextParagraphRenderRoute.Tabs:
                     RenderParaWithTabs(dc, para, placement.X, placementY, para.TabStops);
+                    break;
+                case TextParagraphRenderRoute.Baseline:
+                    RenderParaWithBaseline(dc, para, placement.X, placementY, placement.MaxWidthDip);
                     break;
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
@@ -2280,6 +2287,49 @@ public sealed class SlideCanvas : FrameworkElement
         {
             var ft = BuildSingleRunFormattedTextAt(para.Runs[segment.RunIndex], segment.Text);
             dc.DrawText(ft, new Point(segment.X, startY));
+        }
+    }
+
+    /// <summary>
+    /// Draws plain runs with authored DrawingML baseline offsets while keeping
+    /// one shared line baseline. Tabs, math, and text effects retain their
+    /// existing renderer-specific owners.
+    /// </summary>
+    internal static void RenderParaWithBaseline(
+        DrawingContext dc,
+        ResolvedParagraph para,
+        double startX,
+        double startY,
+        double maxWidth)
+    {
+        var formatted = para.Runs
+            .Select(run => BuildSingleRunFormattedTextAt(run, run.Text))
+            .ToArray();
+        double lineAscent = formatted.Length == 0 ? 0 : formatted.Max(ft => ft.Baseline);
+        double baselineY = ComputeBaselineY(startY, lineAscent);
+        double totalWidth = formatted.Sum(ft => ft.WidthIncludingTrailingWhitespace);
+        if (maxWidth > 0 && totalWidth > maxWidth)
+        {
+            // Keep existing wrapping/pagination ownership until baseline-aware
+            // line fragmentation has its own measured contract.
+            dc.DrawText(BuildFormattedText(para, maxWidth, wrap: true), new Point(startX, startY));
+            return;
+        }
+        double alignWidth = maxWidth > 0 ? maxWidth : totalWidth;
+        double x = startX + (para.Align switch
+        {
+            TextAlign.Center => Math.Max(0, (alignWidth - totalWidth) / 2.0),
+            TextAlign.Right => Math.Max(0, alignWidth - totalWidth),
+            _ => 0
+        });
+
+        for (int i = 0; i < para.Runs.Count; i++)
+        {
+            var run = para.Runs[i];
+            var ft = formatted[i];
+            double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(run.BaselineOffset, run.FontSizePt);
+            dc.DrawText(ft, new Point(x, baselineY - ft.Baseline - offsetDip));
+            x += ft.WidthIncludingTrailingWhitespace;
         }
     }
 

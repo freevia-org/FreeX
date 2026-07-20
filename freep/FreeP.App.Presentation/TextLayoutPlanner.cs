@@ -149,6 +149,10 @@ public enum TextParagraphRenderRoute
     Tabs,
     Effects,
     /// <summary>
+    /// Plain text with one or more authored DrawingML baseline offsets.
+    /// </summary>
+    Baseline,
+    /// <summary>
     /// The paragraph contains one or more OMML math runs.
     /// The renderer should call <see cref="FreeP.App.Compositor.Math.MathBoxRenderPlanner.Plan"/>
     /// for each math run and draw the resulting operations inline.
@@ -327,6 +331,7 @@ public static class TextLayoutPlanner
                 Text = run.Text,
                 FontFamily = run.FontFamily,
                 FontSizePt = run.FontSizePt * scale,
+                BaselineOffset = run.BaselineOffset,
                 Bold = run.Bold,
                 Italic = run.Italic,
                 Underline = run.Underline,
@@ -368,10 +373,21 @@ public static class TextLayoutPlanner
         if (text.WarpPreset is not null || HasTextEffects(paragraph))
             return TextParagraphRenderRoute.Effects;
 
-        return HasTabCharacters(paragraph)
-            ? TextParagraphRenderRoute.Tabs
+        if (HasTabCharacters(paragraph))
+            return TextParagraphRenderRoute.Tabs;
+
+        return paragraph.Runs.Any(run => run.BaselineOffset.HasValue)
+            ? TextParagraphRenderRoute.Baseline
             : TextParagraphRenderRoute.Plain;
     }
+
+    /// <summary>
+    /// Converts DrawingML ST_Percentage baseline units to slide-space DIPs.
+    /// The token is one thousandth of a percent of the run's font size.
+    /// Positive values raise the run; negative values lower it.
+    /// </summary>
+    public static double BaselineOffsetToDip(int? baselineOffset, double fontSizePt) =>
+        baselineOffset.GetValueOrDefault() / 100000.0 * PointsToDip(fontSizePt);
 
     public static TextParagraphMeasure CreateParagraphMeasure(
         int paragraphIndex,

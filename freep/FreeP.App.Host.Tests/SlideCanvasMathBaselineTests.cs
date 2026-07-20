@@ -101,6 +101,29 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithBaseline_UsesSignedRunOffsets_DoesNotThrow()
+    {
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "H", FontFamily = "Calibri", FontSizePt = 18, Color = SrgbColor.Black },
+                new ResolvedRun { Text = "2", FontFamily = "Calibri", FontSizePt = 12, BaselineOffset = 30000, Color = SrgbColor.Black },
+                new ResolvedRun { Text = "O", FontFamily = "Calibri", FontSizePt = 18, Color = SrgbColor.Black }
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithBaseline(dc, para, startX: 10, startY: 20, maxWidth: 200);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_FractionTypes_UseSharedDrawPlan_DoesNotThrow()
     {
         var mathNode = ParseOmml(
