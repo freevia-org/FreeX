@@ -56,7 +56,7 @@ public static class RibbonTabControlFactory
             Background = SurfaceBrush,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(0),
-            MinHeight = 116
+            MinHeight = RibbonVisualMetrics.TabContentMinHeight + 28
         };
 
         // Resolve accent brushes from Application.Current.Resources (set by WpfThemeApplier) so

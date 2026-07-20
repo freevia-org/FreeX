@@ -21,8 +21,8 @@ namespace Free.Shared.Ribbon.Wpf;
 /// </summary>
 public sealed record RibbonWpfRendererOptions(
     bool UseExternalDropdownZones = false,
-    double MediumIconSize = 16,
-    double SmallIconSize = 18)
+    double MediumIconSize = RibbonVisualMetrics.MediumIconSize,
+    double SmallIconSize = RibbonVisualMetrics.SmallIconSize)
 {
     public static RibbonWpfRendererOptions Default { get; } = new();
 
@@ -32,8 +32,6 @@ public sealed record RibbonWpfRendererOptions(
 
 public static class RibbonWpfRenderer
 {
-    private const double SmallRowHeight = 22;
-    private const double LargeIconSize = 32;
     private const int MaxRowsPerColumn = 3;
 
     public static FrameworkElement BuildTabContent(
@@ -46,7 +44,7 @@ public static class RibbonWpfRenderer
         options ??= RibbonWpfRendererOptions.Default;
         var panel = new RibbonAdaptivePanel
         {
-            MinHeight = 88,
+            MinHeight = RibbonVisualMetrics.TabContentMinHeight,
             RefreshFullWidthsFromFullContent = tab.IsContextual
         };
 
@@ -78,7 +76,7 @@ public static class RibbonWpfRenderer
         return new Border
         {
             Background = Brush(resourceHost, "FreeXRibbonSurfaceBrush", Brushes.White),
-            Padding = new Thickness(0, 4, 0, 0),
+            Padding = new Thickness(0, RibbonVisualMetrics.TabContentTopPadding, 0, 0),
             Child = panel
         };
     }
@@ -133,7 +131,7 @@ public static class RibbonWpfRenderer
         if (!string.IsNullOrEmpty(group.Header))
             RibbonMetadata.SetGroupName(grid, group.Header);
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(18) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(RibbonVisualMetrics.GroupLabelHeight) });
 
         var content = BuildGroupContent(group, resourceHost, registry, stateStore, options);
         Grid.SetRow(content, 0);
@@ -290,7 +288,7 @@ public static class RibbonWpfRenderer
         {
             Content = check.Label,
             FontSize = 12,
-            Height = SmallRowHeight,
+            Height = RibbonVisualMetrics.SmallRowHeight,
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2, 1, 2, 1)
         };
@@ -306,7 +304,7 @@ public static class RibbonWpfRenderer
         RibbonWpfRendererOptions options)
     {
         var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-        stack.Children.Add(NewIcon(control, LargeIconSize, HorizontalAlignment.Center));
+        stack.Children.Add(NewIcon(control, RibbonVisualMetrics.LargeIconSize, HorizontalAlignment.Center));
 
         var caption = new TextBlock
         {
@@ -359,7 +357,7 @@ public static class RibbonWpfRenderer
             RibbonMetadata.SetCommandContentLayout(content, RibbonCommandContentLayout.Medium);
 
         var button = NewButton(control, resourceHost, "RibbonBtn");
-        button.Height = SmallRowHeight;
+        button.Height = RibbonVisualMetrics.SmallRowHeight;
         button.MinWidth = 84;
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
         ((ContentControl)button).Content = content;
@@ -417,7 +415,7 @@ public static class RibbonWpfRenderer
         var box = new ComboBox
         {
             Width = combo.Width ?? 110,
-            Height = SmallRowHeight,
+            Height = RibbonVisualMetrics.SmallRowHeight,
             Margin = new Thickness(1, 0, 1, 0),
             IsEditable = true,
             Background = Brushes.White
