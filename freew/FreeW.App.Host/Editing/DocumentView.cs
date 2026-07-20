@@ -855,15 +855,17 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Mutate the page settings and re-render so layout-affecting changes (notably the column count)
-    /// show immediately. Pending in-progress edits are committed first so the re-render does not drop
-    /// them. Used by the Layout ribbon's page-setup commands.
+    /// Mutate page settings as one undoable command and re-render through the command bus. Pending
+    /// in-progress edits are committed first so the layout refresh does not drop them.
     /// </summary>
     public void ApplyPageSettings(Action<PageSettings> apply)
     {
+        ArgumentNullException.ThrowIfNull(apply);
+
         CommitToModel();
-        apply(_model.Page);
-        Render();
+        var settings = _model.Page.Clone();
+        apply(settings);
+        _commands.Execute(new SetPageSettingsCommand(settings));
     }
 
     public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>

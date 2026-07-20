@@ -184,6 +184,14 @@ internal static class FreeWRibbonCommands
             stateful.Add((id, cmd));
         }
 
+        void PageSetting(string id, Action<PageSettings> apply, Func<PageSettings, bool>? isChecked = null)
+        {
+            var command = new PageCommand(editor, apply, isChecked);
+            registry.Register(id, command);
+            stateful.Add((id, command));
+            stateStore.SetState(id, command.GetState());
+        }
+
         Toggle("freew.bold", EditingCommands.ToggleBold, TextElement.FontWeightProperty,
             v => v is FontWeight w && w >= FontWeights.Bold);
         Toggle("freew.italic", EditingCommands.ToggleItalic, TextElement.FontStyleProperty,
@@ -1591,17 +1599,27 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.redo", new ActionRibbonCommand(() => { if (editor.CanRedo) editor.Redo(); }));
 
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
-        registry.Register("freew.orientation", new PageCommand(editor, PageLayoutCommandPlanner.ToggleOrientation));
-        registry.Register("freew.margins", new PageCommand(editor, PageLayoutCommandPlanner.ToggleNormalNarrowMargins));
-        registry.Register("freew.size", new PageCommand(editor, PageLayoutCommandPlanner.ToggleLetterA4Paper));
+        PageSetting("freew.orientation", PageLayoutCommandPlanner.ToggleOrientation);
+        PageSetting("freew.margins", PageLayoutCommandPlanner.ToggleNormalNarrowMargins);
+        PageSetting("freew.size", PageLayoutCommandPlanner.ToggleLetterA4Paper);
         // Columns: open the Columns dialog or apply Word's backed preset menu choices directly, mutating
         // PageSettings and re-rendering so the live document flow changes immediately.
         registry.Register("freew.columns", new ColumnsCommand(editor));
-        registry.Register("freew.columns-one", new ColumnsPresetCommand(editor, PageColumnPreset.One));
-        registry.Register("freew.columns-two", new ColumnsPresetCommand(editor, PageColumnPreset.Two));
-        registry.Register("freew.columns-three", new ColumnsPresetCommand(editor, PageColumnPreset.Three));
-        registry.Register("freew.columns-left", new ColumnsPresetCommand(editor, PageColumnPreset.Left));
-        registry.Register("freew.columns-right", new ColumnsPresetCommand(editor, PageColumnPreset.Right));
+        PageSetting("freew.columns-one",
+            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.One),
+            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.One));
+        PageSetting("freew.columns-two",
+            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Two),
+            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Two));
+        PageSetting("freew.columns-three",
+            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Three),
+            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Three));
+        PageSetting("freew.columns-left",
+            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Left),
+            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Left));
+        PageSetting("freew.columns-right",
+            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Right),
+            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Right));
         registry.Register("freew.columns-more", new ColumnsCommand(editor));
         // Page Setup: the unified Margins / Paper / Layout dialog (Word's Layout > Page Setup launcher). The
         // "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the Margins / Paper tab.
@@ -1610,10 +1628,13 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.more-paper-sizes", new PageSetupCommand(editor, PageSetupDialog.Tab.Paper));
         // Line Numbers: Word-style menu items set the backed mode explicitly, while the top-level command keeps
         // the existing cycle behavior for quick access (shown in print preview and the live page adorner).
-        registry.Register("freew.line-numbers", new LineNumberCommand(editor));
-        registry.Register("freew.line-numbers-none", new LineNumberModeCommand(editor, LineNumberMode.None));
-        registry.Register("freew.line-numbers-continuous", new LineNumberModeCommand(editor, LineNumberMode.Continuous));
-        registry.Register("freew.line-numbers-restart-page", new LineNumberModeCommand(editor, LineNumberMode.RestartEachPage));
+        PageSetting("freew.line-numbers", PageLayoutCommandPlanner.CycleLineNumberMode);
+        PageSetting("freew.line-numbers-none", page => page.LineNumberMode = LineNumberMode.None,
+            page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.None));
+        PageSetting("freew.line-numbers-continuous", page => page.LineNumberMode = LineNumberMode.Continuous,
+            page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.Continuous));
+        PageSetting("freew.line-numbers-restart-page", page => page.LineNumberMode = LineNumberMode.RestartEachPage,
+            page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.RestartEachPage));
         // Line Numbering Options…: dedicated dialog (Start At / Count By / Restart mode), not Page Setup.
         registry.Register("freew.line-numbers-options", new LineNumberOptionsCommand(editor));
 
@@ -1625,13 +1646,15 @@ internal static class FreeWRibbonCommands
         //    the live document (settings.xml w:autoHyphenation + zone/limit/caps sub-options).
         //  - Page Vertical Alignment: cycle Top -> Center -> Justified (-> Bottom) (sectPr w:vAlign).
         //  - Different First Page: toggle a distinct first-page header/footer (sectPr w:titlePg).
-        registry.Register("freew.hyphenation", new HyphenationCommand(editor));
-        registry.Register("freew.hyphenation-none", new HyphenationModeCommand(editor, auto: false));
-        registry.Register("freew.hyphenation-auto", new HyphenationModeCommand(editor, auto: true));
+        PageSetting("freew.hyphenation", PageLayoutCommandPlanner.ToggleHyphenation, page => page.AutoHyphenation);
+        PageSetting("freew.hyphenation-none", page => page.AutoHyphenation = false, page => !page.AutoHyphenation);
+        PageSetting("freew.hyphenation-auto", page => page.AutoHyphenation = true, page => page.AutoHyphenation);
         registry.Register("freew.hyphenation-manual", new HyphenationManualCommand(editor));
         registry.Register("freew.hyphenation-options", new HyphenationOptionsCommand(editor));
         registry.Register("freew.page-valign", new PageVerticalAlignmentCommand(editor));
-        registry.Register("freew.different-first-page", new DifferentFirstPageCommand(editor));
+        PageSetting("freew.different-first-page",
+            page => page.DifferentFirstPage = !page.DifferentFirstPage,
+            page => page.DifferentFirstPage);
 
         // Design tab — Page Background: "Page Borders" opens the full Borders and Shading dialog,
         // and Watermark sets/clears the page watermark. Both ultimately mutate PageSettings via
@@ -3026,9 +3049,16 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    private sealed class PageCommand(DocumentView editor, Action<PageSettings> apply) : IRibbonCommand
+    private sealed class PageCommand(
+        DocumentView editor,
+        Action<PageSettings> apply,
+        Func<PageSettings, bool>? isChecked = null) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context) => editor.ApplyPageSettings(apply);
+
+        public RibbonCommandState GetState() => new(
+            IsEnabled: !editor.IsReadOnly,
+            IsChecked: isChecked?.Invoke(editor.Model.Page) == true);
     }
 
     // Home / Design > Borders and Shading…: opens the full dialog (paragraph border, page border, shading)

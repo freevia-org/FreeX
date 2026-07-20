@@ -106,10 +106,10 @@ public sealed class PageSetupDialog : Window
     private Control BuildMarginsTab()
     {
         var panel = TabPanel();
-        panel.Children.Add(PageLayoutDialogChrome.Row("Top (pt):", _top));
-        panel.Children.Add(PageLayoutDialogChrome.Row("Bottom (pt):", _bottom));
-        panel.Children.Add(PageLayoutDialogChrome.Row("Left (pt):", _left));
-        panel.Children.Add(PageLayoutDialogChrome.Row("Right (pt):", _right));
+        panel.Children.Add(PageLayoutDialogChrome.Row(PageSetupDialogPlanner.TopMarginLabel, _top));
+        panel.Children.Add(PageLayoutDialogChrome.Row(PageSetupDialogPlanner.BottomMarginLabel, _bottom));
+        panel.Children.Add(PageLayoutDialogChrome.Row(PageSetupDialogPlanner.LeftMarginLabel, _left));
+        panel.Children.Add(PageLayoutDialogChrome.Row(PageSetupDialogPlanner.RightMarginLabel, _right));
         panel.Children.Add(PageLayoutDialogChrome.Row("Gutter (pt):", _gutter));
         panel.Children.Add(PageLayoutDialogChrome.Row("Orientation:", _orientation));
         panel.Children.Add(PageLayoutDialogChrome.Row("Multiple pages:", _multiplePages));
@@ -121,8 +121,8 @@ public sealed class PageSetupDialog : Window
     {
         var panel = TabPanel();
         panel.Children.Add(PageLayoutDialogChrome.Row("Paper size:", _paperSize));
-        panel.Children.Add(PageLayoutDialogChrome.Row("Width (pt):", _width));
-        panel.Children.Add(PageLayoutDialogChrome.Row("Height (pt):", _height));
+        panel.Children.Add(PageLayoutDialogChrome.Row(PageSetupDialogPlanner.CustomWidthLabel, _width));
+        panel.Children.Add(PageLayoutDialogChrome.Row(PageSetupDialogPlanner.CustomHeightLabel, _height));
         return panel;
     }
 

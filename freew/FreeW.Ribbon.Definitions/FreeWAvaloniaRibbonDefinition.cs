@@ -190,6 +190,8 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Three", new RibbonCommandId("freew.columns-three")),
             new("Left", new RibbonCommandId("freew.columns-left")),
             new("Right", new RibbonCommandId("freew.columns-right")),
+            RibbonMenuItem.Separator(),
+            new("More Columns...", new RibbonCommandId("freew.columns-more")),
         });
 
     private static RibbonMenu BuildBreaksMenu() =>
@@ -303,14 +305,15 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Motion",  new RibbonCommandId("freew.cover-page.motion")),
         });
 
-    /// <summary>AV-INSERT2: Insert &gt; Drop Cap menu — Dropped / In Margin (approx) / None.</summary>
+    /// <summary>AV-INSERT2: Insert &gt; Drop Cap menu matching the WPF host routes.</summary>
     private static RibbonMenu BuildDropCapMenu() =>
         new(new RibbonMenuItem[]
         {
-            new("Dropped",   new RibbonCommandId("freew.drop-cap.dropped")),
-            new("In Margin", new RibbonCommandId("freew.drop-cap.in-margin")),
+            new("Dropped",   new RibbonCommandId("freew.drop-cap-dropped")),
+            new("In Margin", new RibbonCommandId("freew.drop-cap-in-margin")),
+            new("None (Remove)", new RibbonCommandId("freew.drop-cap-none")),
             RibbonMenuItem.Separator(),
-            new("None",      new RibbonCommandId("freew.drop-cap.none")),
+            new("Drop Cap Options...", new RibbonCommandId("freew.drop-cap-options")),
         });
 
     /// <summary>
@@ -383,7 +386,32 @@ internal static class FreeWAvaloniaRibbonDefinition
         new(DocumentParagraphSpacingSet.Catalog
             .Select(s => new RibbonMenuItem(s.Name,
                 new RibbonCommandId($"freew.para-spacing.{ParaSpacingId(s.Name)}")))
+            .Concat(new[]
+            {
+                RibbonMenuItem.Separator(),
+                new RibbonMenuItem("Custom Paragraph Spacing...", new RibbonCommandId("freew.custom-paragraph-spacing")),
+            })
             .ToArray());
+
+    private static RibbonMenu BuildLineNumbersMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("None", new RibbonCommandId("freew.line-numbers-none")),
+            new("Continuous", new RibbonCommandId("freew.line-numbers-continuous")),
+            new("Restart Each Page", new RibbonCommandId("freew.line-numbers-restart-page")),
+            RibbonMenuItem.Separator(),
+            new("Line Numbering Options...", new RibbonCommandId("freew.line-numbers-options")),
+        });
+
+    private static RibbonMenu BuildHyphenationMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("None", new RibbonCommandId("freew.hyphenation-none")),
+            new("Automatic", new RibbonCommandId("freew.hyphenation-auto")),
+            new("Manual", new RibbonCommandId("freew.hyphenation-manual")),
+            RibbonMenuItem.Separator(),
+            new("Hyphenation Options...", new RibbonCommandId("freew.hyphenation-options")),
+        });
 
     private static RibbonMenu BuildEffectsMenu() => FreeWContextMenuPlanner.BuildEffects();
 
@@ -688,9 +716,45 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Dropdown("freew.size", "Size", BuildPageSizeMenu());
                     g.Dropdown("freew.columns", "Columns", BuildColumnsMenu());
                     g.Dropdown("freew.breaks", "Breaks", BuildBreaksMenu());
+                    g.Dropdown("freew.line-numbers", "Line Numbers", BuildLineNumbersMenu());
+                    g.Dropdown("freew.hyphenation", "Hyphenation", BuildHyphenationMenu());
                     g.Toggle("freew.different-first-page", "Different First Page");
                     g.Button("freew.page-valign", "Vertical Align");
                     g.Button("freew.page-setup", "Page Setup...");
+                });
+                tab.Group("paragraph", "Paragraph", null, 92, g =>
+                {
+                    g.Button("freew.indent-decrease", "Decrease Indent");
+                    g.Button("freew.indent-increase", "Increase Indent");
+                    g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
+                    {
+                        Items = new[] { "1.0", "1.15", "1.5", "2.0" },
+                        Width = 52
+                    });
+                    g.ComboBox("freew.indent-left", "Indent Left", c => c with
+                    {
+                        Items = new[] { "0", "18", "36", "54", "72" },
+                        Width = 52
+                    });
+                    g.ComboBox("freew.indent-right", "Indent Right", c => c with
+                    {
+                        Items = new[] { "0", "18", "36", "54", "72" },
+                        Width = 52
+                    });
+                    g.Button("freew.space-before-toggle", "Add Space Before Paragraph");
+                    g.Button("freew.space-after-toggle", "Add Space After Paragraph");
+                    g.ComboBox("freew.space-before", "Spacing Before", c => c with
+                    {
+                        Items = new[] { "0", "6", "12", "18", "24" },
+                        Width = 52
+                    });
+                    g.ComboBox("freew.space-after", "Spacing After", c => c with
+                    {
+                        Items = new[] { "0", "6", "8", "12", "18", "24" },
+                        Width = 52
+                    });
+                    g.Button("freew.paragraph-dialog", "Paragraph Settings");
+                    g.Button("freew.tabs-dialog", "Tabs");
                 });
                 tab.Group("data", "Data", null, 95, g =>
                 {

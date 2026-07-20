@@ -119,6 +119,20 @@ public static class PageLayoutCommandPlanner
         page.ColumnWidthsPt = result.WidthsPt;
     }
 
+    public static bool IsColumnPresetChecked(PageSettings page, PageColumnPreset preset)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        var expectedIndex = preset switch
+        {
+            PageColumnPreset.One => 0,
+            PageColumnPreset.Two => 1,
+            PageColumnPreset.Three => 2,
+            PageColumnPreset.Left => 3,
+            _ => 4
+        };
+        return ColumnsDialogPlanner.PresetIndexFor(page) == expectedIndex;
+    }
+
     public static void ApplyPageSetupResult(PageSettings page, PageSetupDialogResult result) =>
         PageSetupDialogPlanner.ApplyToPageSettings(page, result);
 
