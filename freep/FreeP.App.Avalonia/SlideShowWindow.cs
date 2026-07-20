@@ -46,7 +46,8 @@ namespace FreeP.App.Avalonia;
 /// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover
 /// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
 /// Push (bidirectional displacement), Pan (scaled directional exchange), Gallery
-/// (two-surface gallery exchange), and Flash (white-flash). Others fall back to Fade.
+/// (two-surface gallery exchange), Conveyor (belt-like panel exchange), and Flash
+/// (white-flash). Others fall back to Fade.
 ///
 /// Media
 /// ─────
@@ -822,6 +823,10 @@ public sealed class SlideShowWindow : Window
                 PlayGalleryTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Conveyor:
+                PlayConveyorTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Dissolve:
                 PlayDissolveTransition(slide, plan.DurationMs);
                 return;
@@ -1572,6 +1577,123 @@ public sealed class SlideShowWindow : Window
                 _transitionBackImage.IsVisible = false;
                 _transitionBackImage.ZIndex = 0;
             });
+    }
+
+    private void PlayConveyorTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var horizontal = Math.Abs(plan.IncomingOffsetX) > 0;
+        var travelX = plan.IncomingOffsetX * w * SlideShowPlaybackPlanner.ConveyorTravelFactor;
+        var travelY = plan.IncomingOffsetY * h * SlideShowPlaybackPlanner.ConveyorTravelFactor;
+        var crossX = horizontal
+            ? 0
+            : Math.Sign(plan.IncomingOffsetY) * w * SlideShowPlaybackPlanner.ConveyorCrossAxisFactor;
+        var crossY = horizontal
+            ? -Math.Sign(plan.IncomingOffsetX) * h * SlideShowPlaybackPlanner.ConveyorCrossAxisFactor
+            : 0;
+        var endX = travelX + crossX;
+        var endY = travelY + crossY;
+        var tilt = (horizontal ? -Math.Sign(plan.IncomingOffsetX) : Math.Sign(plan.IncomingOffsetY))
+            * SlideShowPlaybackPlanner.ConveyorTiltDegrees;
+
+        var incomingTransform = new MatrixTransform(Matrix.CreateScale(
+            SlideShowPlaybackPlanner.ConveyorStartScale,
+            SlideShowPlaybackPlanner.ConveyorStartScale)
+            * Matrix.CreateRotation(tilt * Math.PI / 180)
+            * Matrix.CreateTranslation(endX, endY));
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransformOrigin = RelativePoint.Center;
+        _slideCanvas.RenderTransform = incomingTransform;
+        _slideCanvas.ZIndex = 1;
+        _slideCanvas.Refresh();
+
+        MatrixTransform? outgoingTransform = null;
+        if (snapshot is not null)
+        {
+            outgoingTransform = new MatrixTransform(Matrix.Identity);
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.RenderTransformOrigin = RelativePoint.Center;
+            _transitionBackImage.RenderTransform = outgoingTransform;
+            _transitionBackImage.IsVisible = true;
+            _transitionBackImage.ZIndex = 0;
+        }
+
+        AnimateConveyorTransition(
+            incomingTransform,
+            outgoingTransform,
+            endX,
+            endY,
+            tilt,
+            plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.RenderTransform = null;
+                _slideCanvas.ZIndex = 0;
+                _transitionBackImage.RenderTransform = null;
+                _transitionBackImage.IsVisible = false;
+                _transitionBackImage.ZIndex = 0;
+            });
+    }
+
+    private void AnimateConveyorTransition(
+        MatrixTransform incoming,
+        MatrixTransform? outgoing,
+        double endX,
+        double endY,
+        double tilt,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            incoming.Matrix = Matrix.Identity;
+            if (outgoing is not null) outgoing.Matrix = Matrix.Identity;
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var eased = EaseInOut(t);
+            var incomingScale = SlideShowPlaybackPlanner.ConveyorStartScale
+                + (1 - SlideShowPlaybackPlanner.ConveyorStartScale) * eased;
+            var incomingAngle = tilt * (1 - eased) * Math.PI / 180;
+            incoming.Matrix = Matrix.CreateScale(incomingScale, incomingScale)
+                * Matrix.CreateRotation(incomingAngle)
+                * Matrix.CreateTranslation(endX * (1 - eased), endY * (1 - eased));
+
+            if (outgoing is not null)
+            {
+                var outgoingScale = 1
+                    + (SlideShowPlaybackPlanner.ConveyorOutgoingEndScale - 1) * eased;
+                outgoing.Matrix = Matrix.CreateScale(outgoingScale, outgoingScale)
+                    * Matrix.CreateRotation(-tilt * eased * Math.PI / 180)
+                    * Matrix.CreateTranslation(endX * eased, endY * eased);
+            }
+
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                incoming.Matrix = Matrix.Identity;
+                if (outgoing is not null) outgoing.Matrix = Matrix.Identity;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
     }
 
     private void AnimateGalleryTransition(
