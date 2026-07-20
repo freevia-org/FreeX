@@ -342,8 +342,6 @@ internal static class FreeWCommandInventory
             "WPF exposes Feedback on the desktop Help tab; Avalonia intentionally omits that desktop support shortcut from its compact portable shell profile."),
         ["freew.help-online"] = WpfHelpShellEvidence(
             "WPF exposes Help Online on the desktop Help tab; Avalonia intentionally omits that desktop Help tab from its compact portable shell profile."),
-        ["freew.legal-notices"] = WpfHelpShellEvidence(
-            "WPF exposes Legal Notices on the desktop Help/Product tab; Avalonia intentionally omits that desktop Help tab from its compact portable shell profile."),
         ["freew.backstage"] = AvaloniaFileShellEvidence(
             "Avalonia exposes a compact File entry for the portable shell; WPF routes file lifecycle through its Backstage/File surface instead of this generated command id."),
         ["freew.import-pdf-text"] = AvaloniaPdfImportEvidence(
@@ -366,7 +364,6 @@ internal static class FreeWCommandInventory
         ["freew.feedback"] = "Accepted host variance: WPF desktop support shortcut on Help; Avalonia compact shell omits the desktop Help tab.",
         ["freew.help-online"] = "Accepted host variance: WPF desktop Help shortcut; Avalonia compact shell omits the desktop Help tab.",
         ["freew.import-pdf-text"] = "Accepted host variance: Avalonia compact File command makes PDF text import explicit; WPF covers PDF/import through file workflow and document-persistence evidence.",
-        ["freew.legal-notices"] = "Accepted host variance: WPF desktop Help/Product legal dialog; Avalonia compact shell omits the desktop Help tab.",
         ["freew.new"] = "Accepted host variance: Avalonia compact File command; WPF routes New through Backstage/File lifecycle workflow instead of this generated command id.",
         ["freew.open"] = "Accepted host variance: Avalonia compact File command; WPF routes Open through Backstage/File lifecycle workflow instead of this generated command id.",
         ["freew.save"] = "Accepted host variance: Avalonia compact File command; WPF routes Save through Backstage/File lifecycle workflow instead of this generated command id.",
@@ -780,7 +777,7 @@ internal static class FreeWCommandInventory
                 Test: "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands"),
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-                Test: "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent"));
+                Test: "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed"));
 
     private static CommandBehaviorEvidence WindowShellEvidence(string summary) =>
         new(
@@ -792,7 +789,7 @@ internal static class FreeWCommandInventory
                 Test: "FreeWRibbonParityTests.View_Window_NewWindowAndArrangeAll_AreBacked"),
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-                Test: "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent"));
+                Test: "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed"));
 
     private static CommandBehaviorEvidence AvaloniaFileShellEvidence(string summary) =>
         new(
@@ -804,7 +801,7 @@ internal static class FreeWCommandInventory
                 Test: "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip"),
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-                Test: "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent"));
+                Test: "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed"));
 
     private static CommandBehaviorEvidence AvaloniaPdfImportEvidence(string summary) =>
         new(

@@ -17,15 +17,23 @@ internal sealed class RestrictEditingDialog : Window
     private readonly RadioButton[] _radios;
     private readonly TextBox _passwordBox = CreatePasswordBox();
     private readonly TextBox _confirmBox = CreatePasswordBox();
-    private readonly TextBox _stopPasswordBox = CreatePasswordBox();
     private readonly TextBlock _validation = new();
+    private readonly Func<Window, string, string, Task<string?>> _askPassword;
 
     public ProtectionSettings? Result { get; private set; }
 
     public RestrictEditingDialog(ProtectionSettings current)
+        : this(current, PasswordPromptDialog.ShowAsync)
+    {
+    }
+
+    internal RestrictEditingDialog(
+        ProtectionSettings current,
+        Func<Window, string, string, Task<string?>> askPassword)
     {
         _currentProtection = current;
         _plan = RestrictEditingDialogPlanner.BuildPlan(current);
+        _askPassword = askPassword ?? throw new ArgumentNullException(nameof(askPassword));
 
         Title = RestrictEditingDialogPlanner.Title;
         Width = 380;
@@ -83,12 +91,6 @@ internal sealed class RestrictEditingDialog : Window
             AddPasswordField(body, RestrictEditingDialogPlanner.ConfirmLabel, _confirmBox);
         }
 
-        if (_plan.ShowStopPasswordField)
-        {
-            body.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 2) });
-            AddPasswordField(body, RestrictEditingDialogPlanner.StopPasswordPrompt, _stopPasswordBox);
-        }
-
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_validation, DialogChromeStyle, new Thickness(0, 4, 0, 0));
         body.Children.Add(_validation);
 
@@ -108,7 +110,7 @@ internal sealed class RestrictEditingDialog : Window
             IsEnabled = _plan.CanStopProtection,
         };
         AvaloniaCompactDialogChrome.ApplyButton(stop, DialogChromeStyle, minWidth: 150, isDefault: !_plan.CanStartProtection);
-        stop.Click += (_, _) => StopProtection();
+        stop.Click += async (_, _) => await StopProtectionAsync();
 
         var cancel = new Button { Content = RestrictEditingDialogPlanner.CancelButtonText, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
@@ -117,6 +119,7 @@ internal sealed class RestrictEditingDialog : Window
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow([start, stop, cancel], new Thickness(16, 12, 16, 14));
         DockPanel.SetDock(buttons, Dock.Bottom);
         Content = new DockPanel { LastChildFill = true, Children = { buttons, body } };
+        Opened += (_, _) => _radios[0].Focus();
     }
 
     private void StartProtection()
@@ -137,22 +140,34 @@ internal sealed class RestrictEditingDialog : Window
         Close();
     }
 
-    private void StopProtection()
+    private async Task StopProtectionAsync()
     {
+        string? password = null;
+        if (_currentProtection.HasPassword)
+        {
+            password = await _askPassword(
+                this,
+                "Stop Protection",
+                RestrictEditingDialogPlanner.StopPasswordPrompt);
+            if (password is null)
+                return;
+        }
+
         if (!RestrictEditingDialogPlanner.TryCreateStopSettings(
             _currentProtection,
-            _stopPasswordBox.Text,
+            password,
             out var settings,
             out var validationMessage))
         {
             ShowValidation(validationMessage);
-            _stopPasswordBox.Focus();
             return;
         }
 
         Result = settings;
         Close();
     }
+
+    internal Task StopProtectionForTestAsync() => StopProtectionAsync();
 
     private ProtectionMode SelectedMode()
     {

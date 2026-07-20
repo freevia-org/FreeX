@@ -117,6 +117,8 @@ public sealed partial class MainWindow : Window
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
     private readonly BackstageView _backstage;
+    private readonly Border _titleBar;
+    private IReadOnlyList<Button> _quickAccessButtons = [];
     private Border _layoutPickerHost = null!;
     private StackPanel _layoutPickerPanel = null!;
     private Border _tablePickerHost = null!;
@@ -232,6 +234,10 @@ public sealed partial class MainWindow : Window
     internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
     internal bool RibbonKeyTipsVisibleForTests => _ribbonKeyTipsVisible;
     internal Control? RibbonControlForTests => _ribbonControl;
+    internal Border TitleBarForTests => _titleBar;
+    internal IReadOnlyList<Button> QuickAccessButtonsForTests => _quickAccessButtons;
+    internal string StatusTextForTests => _statusText.Text ?? string.Empty;
+    internal bool HasWindowIconForTests => Icon is not null;
     internal void RaiseKeyDownForTests(KeyEventArgs args) => MainWindow_KeyDown(this, args);
     internal int SlidePaneSlideItemCount => _slidePaneList.Items
         .OfType<ListBoxItem>()
@@ -479,6 +485,7 @@ public sealed partial class MainWindow : Window
         MinWidth = 800;
         MinHeight = 500;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        ApplyWindowIcon();
         _options = options ?? new FreePOptions();
         _options.Normalize();
 
@@ -528,12 +535,15 @@ public sealed partial class MainWindow : Window
         };
         _notesBox.TextChanged += OnNotesTextChanged;
 
-        _statusText = SisterAppStatusBarChrome.CreateInfoText(foreground: Brushes.White, margin: new Thickness(8, 0));
+        _statusText = SisterAppStatusBarChrome.CreateInfoText(
+            foreground: ResolveThemeBrush("FreePWhiteBrush", Brushes.White),
+            margin: new Thickness(12, 0, 0, 0));
         _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
             owner: this,
             titleSpec: new SisterAvaloniaFileTitleSpec(
                 ApplicationName: DefaultTitle,
-                Separator: " \u2014 "),
+                Separator: " \u2014 ",
+                ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: UpdateStatus,
             save: () => FileSaveAsync().GetAwaiter().GetResult(),
@@ -557,16 +567,34 @@ public sealed partial class MainWindow : Window
 
         var ribbon = BuildRibbon();
         var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
-            Background: new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Background: ResolveThemeBrush(
+                "FreePStatusSurfaceBrush",
+                new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))),
             LeftContent: _statusText)).Root;
         var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
             chrome: ribbon,
             workArea: BuildBody(),
             statusBar: statusBar));
         _backstage = new BackstageView(BuildBackstageCallbacks());
-        var root = new Grid();
-        root.Children.Add(frame.Root);
-        root.Children.Add(_backstage);
+        var clientRoot = new Grid();
+        clientRoot.Children.Add(frame.Root);
+        clientRoot.Children.Add(_backstage);
+
+        var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
+            Window: this,
+            Body: clientRoot,
+            TitleBarBackground: ResolveThemeBrush(
+                "FreePTitleBarBrush",
+                new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))),
+            TitleBarForeground: ResolveThemeBrush("FreePWhiteBrush", Brushes.White)));
+        _titleBar = windowFrame.TitleBar;
+        _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
+            windowFrame.QatHost,
+            new SisterQuickAccessToolbarActions(
+                Save: () => _ = FileSaveAsync(),
+                Undo: () => Editor.Undo(),
+                Redo: () => Editor.Redo()),
+            ResolveThemeBrush("FreePWhiteBrush", Brushes.White));
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
@@ -594,8 +622,37 @@ public sealed partial class MainWindow : Window
         else
             LoadPresentationAsSaved(_presentation, path: null);
 
-        Content = root;
+        Content = windowFrame.Root;
         UpdateStatus();
+    }
+
+    private void ApplyWindowIcon()
+    {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "FreeP.ico");
+        if (!File.Exists(iconPath))
+            return;
+
+        try
+        {
+            using var stream = File.OpenRead(iconPath);
+            Icon = new WindowIcon(stream);
+        }
+        catch
+        {
+            // An unsupported desktop icon must not prevent the presentation from opening.
+        }
+    }
+
+    private static IBrush ResolveThemeBrush(string key, IBrush fallback)
+    {
+        if (Application.Current is { } app &&
+            app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
+            value is IBrush brush)
+        {
+            return brush;
+        }
+
+        return fallback;
     }
 
     // ── Editor construction ────────────────────────────────────────────────────
@@ -6114,7 +6171,10 @@ public sealed partial class MainWindow : Window
     {
         var count   = _presentation.Slides.Count;
         var current = Editor.CurrentSlideIndex;
-        _statusText.Text = SisterAppStatusBarTextPlanner.FormatPresentationSlideStatus(current, count);
+        _statusText.Text = SisterAppStatusBarTextPlanner.FormatPresentationSlideStatus(
+            current,
+            count,
+            ResolveDataFolderLabel());
     }
 
     // ── Keyboard shortcuts ─────────────────────────────────────────────────────

@@ -16,13 +16,25 @@
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="LibVLCSharp.Avalonia" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Condition="'$(RuntimeIdentifier)' == '' Or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win'))" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Runtime and package assets derive from one FreeP identity source in the shared shell. -->
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico"
+             Link="Resources\FreeP.ico"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.svg"
+             Link="Resources\FreeP.svg"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
+    <ProjectReference Include="..\FreeP.App.Media\FreeP.App.Media.csproj" />
     <ProjectReference Include="..\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj" />
     <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />

@@ -11611,13 +11611,21 @@ public sealed class DocumentView : Control
     /// <param name="widthPt">Display width in points.</param>
     /// <param name="heightPt">Display height in points.</param>
     /// <param name="format">Binary format; auto-detected from <paramref name="bytes"/> when null.</param>
-    public void InsertInlineImage(byte[] bytes, double widthPt, double heightPt, ImageFormat? format = null)
+    public void InsertInlineImage(
+        byte[] bytes,
+        double widthPt,
+        double heightPt,
+        ImageFormat? format = null,
+        int originalPixelWidth = 0,
+        int originalPixelHeight = 0)
     {
         ArgumentNullException.ThrowIfNull(bytes);
         var fmt = format ?? InlineImage.DetectFormat(bytes);
         var image = new InlineImage(bytes, Math.Max(1, widthPt), Math.Max(1, heightPt), fmt)
         {
             Wrapping = ImageWrapping.Inline,
+            OriginalPixelWidth = Math.Max(0, originalPixelWidth),
+            OriginalPixelHeight = Math.Max(0, originalPixelHeight),
         };
         InsertObjectRun(new Run(string.Empty, RunFormatting.Default) { Image = image });
     }

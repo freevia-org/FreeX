@@ -1801,6 +1801,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             if (IsClosedXmlRelationshipLookupFailure(ex))
                 return OpenPivotStripped();
 
+            if (IsClosedXmlSharedFormulaReconstructionFailure(ex))
+                return OpenOrphanedSharedFormulaSlavesStripped();
+
             packageStream.Position = 0;
             var fallbackPackageStream = MeasurePackagePreparation(() => CreateClosedXmlParsePackage(
                 packageStream,
@@ -1840,6 +1843,33 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             {
                 if (!ReferenceEquals(pivotStrippedPackageStream, packageStream))
                     pivotStrippedPackageStream.Dispose();
+                throw;
+            }
+        }
+
+        ClosedXmlLoadResult OpenOrphanedSharedFormulaSlavesStripped()
+        {
+            packageStream.Position = 0;
+            var orphanStrippedPackageStream = MeasurePackagePreparation(() =>
+            {
+                var basePackageStream = CreateClosedXmlParsePackage(
+                    packageStream,
+                    styleOnlyWorksheetPathsToStrip,
+                    sanitizationHints,
+                    removeUnsupportedConditionalFormatting: false);
+                StripOrphanedSharedFormulaSlaves(basePackageStream);
+                return basePackageStream;
+            });
+            try
+            {
+                return Complete(
+                    orphanStrippedPackageStream,
+                    MeasureWorkbookOpen(() => new XLWorkbook(orphanStrippedPackageStream)));
+            }
+            catch
+            {
+                if (!ReferenceEquals(orphanStrippedPackageStream, packageStream))
+                    orphanStrippedPackageStream.Dispose();
                 throw;
             }
         }
@@ -1945,6 +1975,74 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         }
 
         return false;
+    }
+
+    // A shared-formula slave cell (<c><f t="shared" si="N"/><v>...</v></c>) has no formula text
+    // of its own -- it relies on a master cell elsewhere on the same sheet (<f t="shared"
+    // ref="..." si="N">...formula text...</f>) to reconstruct its actual formula. If that master
+    // is missing (deleted by a buggy writer, dropped by a partial/failed save, or lost in a
+    // manual merge -- exactly the corruption shape FreeXR13S10Tests.cs guards against on FreeX's
+    // OWN save path) ClosedXML has nothing to reconstruct the slave's R1C1 formula from and
+    // throws deep inside its parser (ClosedXML.Parser.ModContext..ctor via FormulaConverter.ToR1C1)
+    // rather than degrading gracefully. Real Excel opens such a file and keeps the orphaned
+    // slave's cached value. Recognize the failure signature so the caller can retry with the
+    // dangling shared-formula references stripped instead of failing the whole workbook load.
+    private static bool IsClosedXmlSharedFormulaReconstructionFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is ArgumentException &&
+                current.StackTrace?.Contains("ModContext", StringComparison.Ordinal) == true)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static readonly XNamespace SharedFormulaWorksheetNamespace =
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    // Removes <f t="shared" si="N"/> slave references whose si has no master (<f t="shared"
+    // ref="..." si="N">formula text</f>) anywhere on the same worksheet, leaving the cell's
+    // existing <v> (and <c> type attribute) untouched -- turning the orphaned formula cell into a
+    // plain cached value, matching Excel's own degrade-on-open behavior for this corruption shape.
+    // Per-worksheet scoping matters: shared-formula si indices are only unique within one
+    // worksheet, so a sheet's masters must not be used to "rescue" another sheet's orphaned si.
+    private static void StripOrphanedSharedFormulaSlaves(MemoryStream packageStream)
+    {
+        packageStream.Position = 0;
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
+            if (worksheetXml.Root is not { } root)
+                continue;
+
+            var sharedFormulas = root
+                .Descendants(SharedFormulaWorksheetNamespace + "f")
+                .Where(f => string.Equals(f.Attribute("t")?.Value, "shared", StringComparison.Ordinal) &&
+                    f.Attribute("si")?.Value is { Length: > 0 })
+                .ToList();
+            if (sharedFormulas.Count == 0)
+                continue;
+
+            var masterSharedFormulaIds = sharedFormulas
+                .Where(f => !string.IsNullOrEmpty(f.Value))
+                .Select(f => f.Attribute("si")!.Value)
+                .ToHashSet(StringComparer.Ordinal);
+
+            var orphanedSlaves = sharedFormulas
+                .Where(f => string.IsNullOrEmpty(f.Value) &&
+                    !masterSharedFormulaIds.Contains(f.Attribute("si")!.Value))
+                .ToList();
+            if (orphanedSlaves.Count == 0)
+                continue;
+
+            orphanedSlaves.Remove();
+            XlsxPackageXmlEditor.ReplaceXml(archive, entry.FullName, worksheetXml);
+        }
+
+        packageStream.Position = 0;
     }
 
     private static MemoryStream CreateClosedXmlParsePackage(

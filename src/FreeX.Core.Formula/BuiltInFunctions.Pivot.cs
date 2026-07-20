@@ -480,6 +480,14 @@ public static partial class BuiltInFunctions
         BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
         ErrorValue error => error.Code,
         ReferencedScalarValue referenced => PivotText(referenced.Value),
+        // GETPIVOTDATA's field_name/item/data_field arguments are declared
+        // SingleCellReferenceRangeFunctions, so a bare cell reference (e.g. G1, not "Region")
+        // arrives here already wrapped in a 1x1 RangeValue by the generic arg-expansion path
+        // (FormulaEvaluator.Functions.cs), not as the cell's own scalar. Without this arm the
+        // switch fell through to the `_` case and stringified the RangeValue record itself
+        // (garbage text), which never matched any pivot header and produced a spurious #REF!
+        // (R50-formula-pivot-getpivotdata-3-1) — resolve to the referenced cell's actual value.
+        RangeValue range when range.Cells.Length > 0 => PivotText(range.Cells[0, 0]),
         _ => value.ToString() ?? ""
     };
 

@@ -75,7 +75,8 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand, IAffectedCellsCo
         if (_scopeSheetId is { } scopeSheetId)
         {
             _existed = ctx.Workbook.ScopedNamedRanges.TryGetValue((_name, scopeSheetId), out _previousRange);
-            if (!_allowRedefine && _existed)
+            var collidesWithFormula = !_existed && ctx.Workbook.ScopedNamedFormulas.ContainsKey((_name, scopeSheetId));
+            if (!_allowRedefine && (_existed || collidesWithFormula))
                 return new CommandOutcome(false, $"The name '{_name}' already exists in this scope.");
 
             if (_existed)
@@ -88,7 +89,8 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand, IAffectedCellsCo
         }
 
         _existed = ctx.Workbook.TryGetNamedRange(_name, out _previousRange);
-        if (!_allowRedefine && _existed)
+        var collidesWithGlobalFormula = !_existed && ctx.Workbook.NamedFormulas.ContainsKey(_name);
+        if (!_allowRedefine && (_existed || collidesWithGlobalFormula))
             return new CommandOutcome(false, $"The name '{_name}' already exists in this scope.");
 
         if (_existed && ctx.Workbook.TryGetNamedRangeMetadata(_name, out var metadata))
