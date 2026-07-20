@@ -2829,6 +2829,34 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScatterPrimitivePlan_LegendKeyOnlyKeepsSwatchesWithoutText()
+    {
+        var series = new ChartSeries { Name = "XY" };
+        series.XValues.AddRange(new double?[] { 0, 50 });
+        series.Values.AddRange(new double?[] { 10, 20 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Scatter,
+            ScatterStyle = ScatterStyle.Marker,
+            DataLabels = new ChartDataLabels { ShowLegendKey = true }
+        };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 100, 100),
+            new[] { new SrgbColor(0x20, 0x40, 0x60) });
+
+        plan.DataLabels.Should().HaveCount(2);
+        plan.DataLabels.Should().OnlyContain(label =>
+            label.Text == string.Empty &&
+            label.LegendKeyBounds.HasValue &&
+            label.LegendKeyFill.HasValue &&
+            label.TextBounds.HasValue);
+    }
+
+    [Fact]
     public void BuildScatterPrimitivePlan_SmoothStylePlansCubicPath()
     {
         var series = new ChartSeries { Name = "XY" };
@@ -3690,6 +3718,51 @@ public sealed class ChartRenderPlannerTests
             new ChartPlanRect(0, 0, 200, 100));
 
         planned.Should().HaveCount(chart.Categories.Count * chart.Series.Count);
+        planned.Should().OnlyContain(label =>
+            label.Text == string.Empty &&
+            label.LegendKeyBounds.HasValue &&
+            label.LegendKeyFill.HasValue &&
+            label.TextBounds.HasValue);
+    }
+
+    [Theory]
+    [InlineData(ChartType.LineMarkers)]
+    [InlineData(ChartType.BarClustered)]
+    public void BuildDataLabelPlans_NonColumnLegendKeyOnlyKeepsSwatches(ChartType chartType)
+    {
+        var chart = MakeTwoSeriesChart(chartType);
+        chart.DataLabels = new ChartDataLabels { ShowLegendKey = true };
+
+        var planned = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        planned.Should().HaveCount(chart.Categories.Count * chart.Series.Count);
+        planned.Should().OnlyContain(label =>
+            label.Text == string.Empty &&
+            label.LegendKeyBounds.HasValue &&
+            label.LegendKeyFill.HasValue &&
+            label.TextBounds.HasValue);
+    }
+
+    [Fact]
+    public void BuildDataLabelPlans_PieLegendKeyOnlyKeepsSwatchesWithoutText()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            DataLabels = new ChartDataLabels { ShowLegendKey = true }
+        };
+        chart.Categories.AddRange(new[] { "Alpha", "Beta", "Gamma" });
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 40, 35, 25 });
+        chart.Series.Add(series);
+
+        var planned = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 200, 200));
+
+        planned.Should().HaveCount(3);
         planned.Should().OnlyContain(label =>
             label.Text == string.Empty &&
             label.LegendKeyBounds.HasValue &&

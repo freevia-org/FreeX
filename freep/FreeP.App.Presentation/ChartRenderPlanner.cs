@@ -4858,7 +4858,12 @@ public static partial class ChartRenderPlanner
                 previousPoint = point.Value;
             }
 
-            dataLabels.AddRange(BuildScatterDataLabelPlans(chart, seriesIndex, points));
+            dataLabels.AddRange(BuildScatterDataLabelPlans(
+                chart,
+                seriesIndex,
+                points,
+                seriesColors,
+                fillPlans));
             bool isSmoothed = drawLines &&
                 (series.SmoothLine ?? (chart.ScatterStyle is ScatterStyle.Smooth or ScatterStyle.SmoothMarker));
 
@@ -5354,7 +5359,7 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartDataLabelPlan>();
 
         if (family == ChartRenderFamily.Pie)
-            return BuildPieDataLabelPlans(chart, plot);
+            return BuildPieDataLabelPlans(chart, plot, seriesColors, fillPlans);
 
         var plans = new List<ChartDataLabelPlan>();
         bool isLineOrArea = IsLineOrArea(chart.ChartType);
@@ -5372,9 +5377,9 @@ public static partial class ChartRenderPlanner
                 : isBar;
 
             IReadOnlyList<ChartDataLabelPlan> seriesPlans = seriesIsLineOrArea
-                ? BuildLineDataLabelPlans(chart, seriesIndex, plot)
+                ? BuildLineDataLabelPlans(chart, seriesIndex, plot, seriesColors, fillPlans)
                 : seriesIsBar
-                    ? BuildBarDataLabelPlans(chart, seriesIndex, plot)
+                    ? BuildBarDataLabelPlans(chart, seriesIndex, plot, seriesColors, fillPlans)
                     : BuildColumnDataLabelPlans(chart, seriesIndex, plot, seriesColors, fillPlans);
 
             plans.AddRange(seriesPlans);
@@ -5398,6 +5403,39 @@ public static partial class ChartRenderPlanner
                 FontFamily = style.FontFamily ?? plan.FontFamily,
                 TextColor = style.Color?.Resolved ?? plan.TextColor
             };
+    }
+
+    private static ChartDataLabelPlan ApplyLegendKey(
+        ChartDataLabelPlan plan,
+        ChartDataLabels labels,
+        int seriesIndex,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
+    {
+        if (!labels.ShowLegendKey)
+            return plan;
+
+        const double keySize = 6.0;
+        const double keyGap = 3.0;
+        var bounds = plan.Bounds;
+        return plan with
+        {
+            TextBounds = new ChartPlanRect(
+                bounds.X + keySize + keyGap,
+                bounds.Y,
+                Math.Max(1.0, bounds.Width - keySize - keyGap),
+                bounds.Height),
+            LegendKeyBounds = new ChartPlanRect(
+                bounds.X,
+                bounds.Y + (bounds.Height - keySize) / 2.0,
+                keySize,
+                keySize),
+            LegendKeyFill = ResolveSeriesFill(
+                seriesIndex,
+                seriesColors,
+                RectSeriesFillAlpha,
+                fillPlans)
+        };
     }
 
     public static (double min, double max, double majorUnit) ComputePrimaryValueAxisRange(
@@ -6702,7 +6740,9 @@ public static partial class ChartRenderPlanner
     private static IReadOnlyList<ChartDataLabelPlan> BuildScatterDataLabelPlans(
         ChartShape chart,
         int seriesIndex,
-        IReadOnlyList<ChartPlanPoint?> points)
+        IReadOnlyList<ChartPlanPoint?> points,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
     {
         var labels = ResolveEffectiveLabels(chart, seriesIndex);
         if (labels is null || seriesIndex < 0 || seriesIndex >= chart.Series.Count)
@@ -6728,14 +6768,20 @@ public static partial class ChartRenderPlanner
             if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 
-            plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
+            var labelPlan = ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                 seriesIndex,
                 pointIndex,
                 text,
                 PlanScatterDataLabelBounds(point.Value, labels.Position ?? DataLabelPosition.Above),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels));
+                Alignment: ChartPlanTextAlignment.Center), labels);
+            plans.Add(ApplyLegendKey(
+                labelPlan,
+                labels,
+                seriesIndex,
+                seriesColors,
+                fillPlans));
         }
 
         return plans;
@@ -6957,7 +7003,9 @@ public static partial class ChartRenderPlanner
     private static IReadOnlyList<ChartDataLabelPlan> BuildLineDataLabelPlans(
         ChartShape chart,
         int seriesIndex,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
     {
         var labels = ResolveEffectiveLabels(chart, seriesIndex);
         if (labels is null || seriesIndex < 0 || seriesIndex >= chart.Series.Count)
@@ -6998,14 +7046,20 @@ public static partial class ChartRenderPlanner
             if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 
-            plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
+            var labelPlan = ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                 seriesIndex,
                 categoryIndex,
                 text,
                 new ChartPlanRect(x - 20, y - ResolveDataLabelHeight(chart) - 3, 40, ResolveDataLabelHeight(chart)),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels));
+                Alignment: ChartPlanTextAlignment.Center), labels);
+            plans.Add(ApplyLegendKey(
+                labelPlan,
+                labels,
+                seriesIndex,
+                seriesColors,
+                fillPlans));
         }
 
         return plans;
@@ -7014,7 +7068,9 @@ public static partial class ChartRenderPlanner
     private static IReadOnlyList<ChartDataLabelPlan> BuildBarDataLabelPlans(
         ChartShape chart,
         int seriesIndex,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
     {
         var labels = ResolveEffectiveLabels(chart, seriesIndex);
         if (labels is null || seriesIndex < 0 || seriesIndex >= chart.Series.Count)
@@ -7140,14 +7196,20 @@ public static partial class ChartRenderPlanner
             };
             double labelY = barY + slot.SeriesSize / 2 - labelHeight / 2;
 
-            plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
+            var labelPlan = ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                 seriesIndex,
                 categoryIndex,
                 text,
                 new ChartPlanRect(labelX, labelY, 44, labelHeight),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels));
+                Alignment: ChartPlanTextAlignment.Center), labels);
+            plans.Add(ApplyLegendKey(
+                labelPlan,
+                labels,
+                seriesIndex,
+                seriesColors,
+                fillPlans));
         }
 
         return plans;
@@ -7155,7 +7217,9 @@ public static partial class ChartRenderPlanner
 
     private static IReadOnlyList<ChartDataLabelPlan> BuildPieDataLabelPlans(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
     {
         var labels = ResolveEffectiveLabels(chart, 0);
         if (labels is null || chart.Series.Count == 0)
@@ -7193,7 +7257,7 @@ public static partial class ChartRenderPlanner
                 double labelX = centerX + labelRadius * Math.Cos(midAngle);
                 double labelY = centerY + labelRadius * Math.Sin(midAngle);
                 double labelWidth = Math.Max(64, text.Length * 12.0);
-                plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
+                var labelPlan = ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                     SeriesIndex: 0,
                     CategoryIndex: visibleValue.PointIndex,
                     Text: text,
@@ -7205,7 +7269,13 @@ public static partial class ChartRenderPlanner
                     TextColor = UsesImportedPieLegendDefaults(chart)
                         ? new SrgbColor(0x00, 0x00, 0x00)
                         : null
-                }, labels));
+                }, labels);
+                plans.Add(ApplyLegendKey(
+                    labelPlan,
+                    labels,
+                    seriesIndex: 0,
+                    seriesColors: seriesColors,
+                    fillPlans: fillPlans));
             }
 
             startAngle += sweepAngle;
