@@ -79,7 +79,7 @@ public static class StructuredReferenceResolver
                 // un-bracketed "Col1:Col2" selector that exactly matches one existing column's literal
                 // name resolves to that column, not to a range from Col1 through Col2.
                 var isBareColonSelector = !selector.Contains('[', StringComparison.Ordinal);
-                if (!(isBareColonSelector && FindColumnIndex(table, selector) >= 0) &&
+                if (!(isBareColonSelector && FindColumnIndex(sheet, table, selector) >= 0) &&
                     TryParseColumnRangeSelector(selector, out var startColumn, out var endColumn))
                     return ResolveSectionColumnRange(sheet, table, "#DATA", startColumn, endColumn);
 
@@ -91,10 +91,10 @@ public static class StructuredReferenceResolver
                         sheet,
                         table,
                         currentAddress,
-                        FirstColumnNameOrEmpty(table),
-                        LastColumnNameOrEmpty(table));
+                        FirstColumnNameOrEmpty(sheet, table),
+                        LastColumnNameOrEmpty(sheet, table));
 
-                var columnIndex = FindColumnIndex(table, selector);
+                var columnIndex = FindColumnIndex(sheet, table, selector);
                 if (columnIndex < 0)
                     return null;
 
@@ -134,7 +134,7 @@ public static class StructuredReferenceResolver
                 if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
                     continue;
 
-                var columnIndex = FindColumnIndex(table, columnName);
+                var columnIndex = FindColumnIndex(sheet, table, columnName);
                 if (columnIndex < 0)
                     return null;
 
@@ -172,7 +172,7 @@ public static class StructuredReferenceResolver
         string section,
         string columnName)
     {
-        var columnIndex = FindColumnIndex(table, columnName);
+        var columnIndex = FindColumnIndex(sheet, table, columnName);
         if (columnIndex < 0)
             return null;
 
@@ -200,8 +200,8 @@ public static class StructuredReferenceResolver
         string startColumnName,
         string endColumnName)
     {
-        var startColumnIndex = FindColumnIndex(table, startColumnName);
-        var endColumnIndex = FindColumnIndex(table, endColumnName);
+        var startColumnIndex = FindColumnIndex(sheet, table, startColumnName);
+        var endColumnIndex = FindColumnIndex(sheet, table, endColumnName);
         if (startColumnIndex < 0 || endColumnIndex < 0)
             return null;
 
@@ -240,8 +240,8 @@ public static class StructuredReferenceResolver
         if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
             return null;
 
-        var startColumnIndex = FindColumnIndex(table, startColumnName);
-        var endColumnIndex = FindColumnIndex(table, endColumnName);
+        var startColumnIndex = FindColumnIndex(sheet, table, startColumnName);
+        var endColumnIndex = FindColumnIndex(sheet, table, endColumnName);
         if (startColumnIndex < 0 || endColumnIndex < 0)
             return null;
 
@@ -314,25 +314,41 @@ public static class StructuredReferenceResolver
         return cleaned.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
     }
 
-    private static string FirstColumnNameOrEmpty(StructuredTableModel table) =>
-        table.Columns.Count == 0 ? "" : table.Columns[0].Name;
+    private static string FirstColumnNameOrEmpty(Sheet sheet, StructuredTableModel table) =>
+        table.Columns.Count == 0 ? "" : ColumnHeaderText(sheet, table, 0);
 
-    private static string LastColumnNameOrEmpty(StructuredTableModel table) =>
-        table.Columns.LastOrDefault()?.Name ?? "";
+    private static string LastColumnNameOrEmpty(Sheet sheet, StructuredTableModel table) =>
+        table.Columns.Count == 0 ? "" : ColumnHeaderText(sheet, table, table.Columns.Count - 1);
 
-    private static int FindColumnIndex(StructuredTableModel table, string columnName)
+    private static int FindColumnIndex(Sheet sheet, StructuredTableModel table, string columnName)
     {
         for (var index = 0; index < table.Columns.Count; index++)
         {
-            if (ColumnNameMatches(table.Columns[index], columnName))
+            if (string.Equals(ColumnHeaderText(sheet, table, index), columnName, StringComparison.OrdinalIgnoreCase))
                 return index;
         }
 
         return -1;
     }
 
-    private static bool ColumnNameMatches(StructuredTableColumnModel column, string columnName) =>
-        string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase);
+    // Resolves the column's EFFECTIVE name for structured-reference matching: the table's header
+    // ROW cell text when present (an ordinary EditCellsCommand edit to a header cell — e.g.
+    // retyping "Sales" to "Revenue" — updates the sheet cell immediately but nothing currently
+    // syncs that back into StructuredTableColumnModel.Name; see R50-io-table-totals-calc-3-1), so
+    // structured refs like Table1[Revenue] must match what the user actually sees in the header
+    // row rather than the possibly-stale stored column name. Falls back to the stored model name
+    // for a headerless table (HeaderRowCount == 0, no header row to read) or a blank header cell.
+    private static string ColumnHeaderText(Sheet sheet, StructuredTableModel table, int index)
+    {
+        var storedName = table.Columns[index].Name;
+        if (HeaderRowCount(table) == 0)
+            return storedName;
+
+        var headerCol = table.Range.Start.Col + (uint)index;
+        return sheet.GetCell(table.Range.Start.Row, headerCol)?.Value is TextValue { Value.Length: > 0 } text
+            ? text.Value
+            : storedName;
+    }
 
     private static bool IsThisRowSection(string selector) =>
         string.Equals(selector.Trim(), "#THIS ROW", StringComparison.OrdinalIgnoreCase);

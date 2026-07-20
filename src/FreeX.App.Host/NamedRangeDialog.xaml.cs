@@ -79,6 +79,25 @@ public sealed partial class NamedRangeDialog : Window
                 metadata.Comment));
         }
 
+        // Named formulas/constants (Excel names whose "Refers To" is a formula expression, e.g.
+        // "=1.05" or "=SUM(Sheet1!A:A)", rather than a plain cell range) live in a separate
+        // dictionary from NamedRanges and must also be listed, or a whole class of commonly-used
+        // Excel defined names is invisible in the Name Manager and unreachable for Edit/Delete.
+        foreach (var (name, formulaText) in _workbook.NamedFormulas)
+        {
+            var metadata = _workbook.TryGetNamedRangeMetadata(name, out var savedMetadata)
+                ? savedMetadata
+                : NamedRangeMetadata.WorkbookScope;
+            _items.Add(new NamedRangeViewModel(name, formulaText, formulaText, metadata.Scope, metadata.Comment));
+        }
+
+        foreach (var ((name, scopeSheetId), formulaText) in _workbook.ScopedNamedFormulas)
+        {
+            _workbook.TryGetScopedNamedRangeMetadata(name, scopeSheetId, out var metadata);
+            var scopeLabel = _workbook.GetSheet(scopeSheetId)?.Name ?? metadata.Scope;
+            _items.Add(new NamedRangeViewModel(name, formulaText, formulaText, scopeLabel, metadata.Comment));
+        }
+
         ApplyFilter();
     }
 
@@ -164,7 +183,7 @@ public sealed partial class NamedRangeDialog : Window
             new NameDefinitionDialogResult("", "Workbook", "", _initialRefersTo),
             GetScopeOptions(),
             RequestRangeSelection,
-            isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _),
+            isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _) || IsPossibleNamedFormulaText(rangeText),
             validateName: _workbook.ValidateNamedRangeName) { Owner = this };
         ShowNameDefinitionDialog(dialog, originalName: null, originalScope: null);
     }
@@ -182,7 +201,7 @@ public sealed partial class NamedRangeDialog : Window
             new NameDefinitionDialogResult(vm.Name, vm.Scope, vm.Comment, vm.RefersTo),
             GetScopeOptions(),
             RequestRangeSelection,
-            isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _),
+            isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _) || IsPossibleNamedFormulaText(rangeText),
             validateName: _workbook.ValidateNamedRangeName)
         {
             Owner = this
@@ -227,13 +246,6 @@ public sealed partial class NamedRangeDialog : Window
             return;
         }
 
-        if (!NamedRangeInputParser.TryParseRange(_workbook, rangeText, out var range))
-        {
-            DialogMessageHelper.ShowWarning(this, UiText.Get("NamedRange_InvalidRangeFormatMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
-            FocusRefersToSummary();
-            return;
-        }
-
         // Editing the exact same (name, scope) pair replaces that entry; anything else — a brand
         // new name, or an edit that changed the name and/or scope — must not silently clobber an
         // unrelated existing name already occupying that scope (Excel's New Name dialog rejects
@@ -243,6 +255,16 @@ public sealed partial class NamedRangeDialog : Window
             isEditingExisting &&
             string.Equals(originalName, name, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(originalScope, scope, StringComparison.OrdinalIgnoreCase);
+
+        if (!NamedRangeInputParser.TryParseRange(_workbook, rangeText, out var range))
+        {
+            // Not a parseable cell range — Excel's Name Manager also supports named
+            // FORMULAS/constants (Refers To can be any formula expression, e.g. "=1.05" or
+            // "=SUM(Sheet1!A:A)", not just a range), so fall back to the formula counterpart of
+            // DefineNamedRangeCommand below instead of rejecting outright.
+            DefineOrUpdateNamedFormula(name, rangeText, scope, isSameEntry);
+            return;
+        }
 
         // NOTE: renaming an existing name (or moving it to a different scope) intentionally does
         // NOT remove the old entry first. FreeX resolves names in formulas by literal text (e.g.
@@ -277,6 +299,67 @@ public sealed partial class NamedRangeDialog : Window
             RefersToBox.Text = updated.RefersTo;
         }
     }
+
+    /// <summary>
+    /// Defines or updates a named FORMULA/constant (Refers To text that isn't a parseable cell
+    /// range) via <see cref="DefineNamedFormulaCommand"/> — the formula counterpart of
+    /// <see cref="DefineNamedRangeCommand"/> used by <see cref="DefineOrUpdateName"/> for ranges.
+    /// Unlike DefineNamedRangeCommand, DefineNamedFormulaCommand always overwrites any existing
+    /// formula of the same name/scope (it has no allowRedefine guard), so New/Edit's own-scope
+    /// duplicate rejection is performed here first, mirroring the range branch's behavior.
+    /// </summary>
+    private void DefineOrUpdateNamedFormula(string name, string rangeText, string scope, bool isSameEntry)
+    {
+        var formulaText = rangeText.StartsWith('=') ? rangeText[1..].Trim() : rangeText;
+        if (string.IsNullOrWhiteSpace(formulaText))
+        {
+            DialogMessageHelper.ShowWarning(this, UiText.Get("NamedRange_InvalidRangeFormatMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
+            FocusRefersToSummary();
+            return;
+        }
+
+        if (!isSameEntry && NameAlreadyExistsInScope(name, scope))
+        {
+            DialogMessageHelper.ShowWarning(this, $"The name '{name}' already exists in this scope.", UiText.Get("NamedRange_NamedRangeTitle"));
+            FocusNamesListOrNewButton();
+            return;
+        }
+
+        var cmd = new DefineNamedFormulaCommand(name, formulaText, ResolveScopeSheetId(scope));
+        var outcome = _commandBus.Execute(_workbook.Id, cmd);
+        if (!outcome.Success)
+        {
+            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("NamedRange_DefineFailedMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
+            FocusNamesListOrNewButton();
+            return;
+        }
+
+        RefreshList();
+        if (FindItemByName(name) is { } updated)
+        {
+            ApplyFilter();
+            NamesList.SelectedItem = updated;
+            RefersToBox.Text = updated.RefersTo;
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="name"/> is already defined (as either a range or a formula) in the
+    /// exact target scope — used to reject a brand-new named-formula create/rename that would
+    /// otherwise silently overwrite an unrelated existing definition, since
+    /// <see cref="DefineNamedFormulaCommand"/> itself has no such guard.
+    /// </summary>
+    private bool NameAlreadyExistsInScope(string name, string scope) =>
+        ResolveScopeSheetId(scope) is { } scopeSheetId
+            ? _workbook.ScopedNamedRanges.ContainsKey((name, scopeSheetId)) || _workbook.ScopedNamedFormulas.ContainsKey((name, scopeSheetId))
+            : _workbook.NamedRanges.ContainsKey(name) || _workbook.NamedFormulas.ContainsKey(name);
+
+    /// <summary>
+    /// Accepts any non-blank Refers To text as a potential named formula/constant (Excel's New
+    /// Name dialog allows any formula expression there, not just ranges); actual validity is
+    /// resolved on demand by the formula engine, matching Excel's own lazy behavior.
+    /// </summary>
+    private static bool IsPossibleNamedFormulaText(string rangeText) => !string.IsNullOrWhiteSpace(rangeText);
 
     private void DeleteButton_Click(object sender, RoutedEventArgs e)
     {

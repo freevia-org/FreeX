@@ -305,10 +305,15 @@ public static partial class BuiltInFunctions
                 sb.Append("blank");
                 break;
             case NumberValue n:
-                sb.Append("number:").Append(n.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                // Normalize -0.0 to +0.0 before formatting: Excel treats -0 and 0 as equal
+                // everywhere (including dedup/equality contexts like UNIQUE), but
+                // double.ToString("R") renders "-0" for the negative-zero bit pattern, which
+                // would otherwise split (0,"x") and (-0,"x") rows into distinct dedup keys
+                // (R50-formula-dynamic-filter-unique-3-1).
+                sb.Append("number:").Append((n.Value == 0d ? 0d : n.Value).ToString("R", System.Globalization.CultureInfo.InvariantCulture));
                 break;
             case DateTimeValue dt:
-                sb.Append("number:").Append(dt.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                sb.Append("number:").Append((dt.Value == 0d ? 0d : dt.Value).ToString("R", System.Globalization.CultureInfo.InvariantCulture));
                 break;
             case TextValue t:
                 sb.Append("text:").Append(t.Value.ToUpperInvariant());

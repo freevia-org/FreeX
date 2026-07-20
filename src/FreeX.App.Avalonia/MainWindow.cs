@@ -1411,9 +1411,6 @@ public sealed partial class MainWindow : Window
                     ["Manual"] = SetCalculationModeManual,
                     ["Automatic Except Data Tables"] = SetCalculationModeAutomaticExceptDataTables,
 
-                    // Data ▸ Connections ▸ Refresh All (parity: recalculates the workbook).
-                    ["data.refresh"] = CalculateNow,
-
                     // Data ▸ Sort & Filter ▸ Sort button (canonical id "Sort", no dotted prefix).
                     ["Sort"] = () => _ = ShowSortDialogAsync(),
 
