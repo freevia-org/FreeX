@@ -85,6 +85,26 @@ internal static class DialogPaneVisualEvidence
         }
     }
 
+    internal static int RegenerateReports(string outputDirectory)
+    {
+        outputDirectory = Path.GetFullPath(outputDirectory);
+        var wpf = ReadHostManifest(outputDirectory, "wpf");
+        var avalonia = ReadHostManifest(outputDirectory, "avalonia");
+        var summary = BuildSummary(wpf, avalonia, evidenceRoot: outputDirectory);
+        WriteReports(outputDirectory, summary);
+        Console.WriteLine($"Regenerated paired evidence reports: {summary.PassCount} pass, {summary.MismatchCount} mismatch, {summary.LimitationCount} limitation.");
+        return 0;
+    }
+
+    private static DialogPaneVisualEvidenceHostManifest ReadHostManifest(string outputDirectory, string host)
+    {
+        var path = Path.Combine(outputDirectory, host, "manifest.json");
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"{host} evidence manifest was not found.", path);
+        return JsonSerializer.Deserialize<DialogPaneVisualEvidenceHostManifest>(File.ReadAllText(path), JsonOptions)
+            ?? throw new InvalidDataException($"{host} evidence manifest could not be read.");
+    }
+
     internal static DialogPaneVisualEvidenceSummary BuildSummary(
         DialogPaneVisualEvidenceHostManifest wpf,
         DialogPaneVisualEvidenceHostManifest avalonia,
@@ -355,7 +375,7 @@ internal static class DialogPaneVisualEvidence
                 """);
         }
 
-        return $$$"""
+        var html = $$$"""
             <!doctype html>
             <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
             <title>FreeP paired dialog/pane visual evidence</title>
@@ -369,6 +389,11 @@ internal static class DialogPaneVisualEvidence
             {{{rows}}}
             </main></body></html>
             """;
+        return string.Join(
+            Environment.NewLine,
+            html.Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Split('\n')
+                .Select(line => line.TrimEnd()));
     }
 
     private static DialogPaneVisualEvidenceHostManifest CaptureHost(
