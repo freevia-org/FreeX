@@ -13,30 +13,6 @@ public sealed class FreePRibbonDefinitionProfileTests
     private static readonly IReadOnlyDictionary<string, string[]> PlatformOnlyShellCommandEvidence =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["freep.file.new"] =
-            [
-                "Intended shell/profile variance",
-                "ApplicationCommands.New",
-                "FileCommands.New"
-            ],
-            ["freep.file.open"] =
-            [
-                "Intended shell/profile variance",
-                "ApplicationCommands.Open",
-                "FileCommands.Open"
-            ],
-            ["freep.file.save"] =
-            [
-                "Intended shell/profile variance",
-                "ApplicationCommands.Save",
-                "FileCommands.Save"
-            ],
-            ["freep.file.save-as"] =
-            [
-                "Intended shell/profile variance",
-                "ApplicationCommands.SaveAs",
-                "FileCommands.SaveAs"
-            ],
             ["freep.undo"] =
             [
                 "Intended shell/profile variance",
@@ -173,12 +149,6 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(wpf, "freep.slideshow.from-current-slide").Label,
                 RequiredControl(wpf, "freep.slideshow.custom-shows").Label,
                 RequiredControl(wpf, "freep.slideshow.custom-shows").KeyTip!,
-                RequiredGroup(avalonia, "home", "file").Header,
-                RequiredGroup(avalonia, "home", "file").KeyTip!,
-                RequiredControl(avalonia, "freep.file.new").Label,
-                RequiredControl(avalonia, "freep.file.open").Label,
-                RequiredControl(avalonia, "freep.file.save").Label,
-                RequiredControl(avalonia, "freep.file.save-as").Label,
                 RequiredGroup(avalonia, "home", "slides").Header,
                 RequiredControl(avalonia, "freep.new-slide").Label,
                 RequiredControl(avalonia, "freep.new-slide").KeyTip!,
@@ -244,7 +214,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.find").KeyTip!,
                 RequiredControl(avalonia, "freep.replace").Label,
                 RequiredControl(avalonia, "freep.replace").KeyTip!,
-                RequiredGroup(avalonia, "home", "slideshow").Header,
+                RequiredGroup(avalonia, "transitions", "slideshow-from-transitions").Header,
                 RequiredControl(avalonia, "freep.slideshow.from-beginning").Label,
                 RequiredControl(avalonia, "freep.slideshow.from-current-slide").Label,
                 RequiredControl(avalonia, "freep.slideshow.custom-shows").Label,
@@ -762,8 +732,8 @@ public sealed class FreePRibbonDefinitionProfileTests
         {
             var wpfTab = wpf.FindTab(tabId)!;
             var avaloniaTab = avalonia.FindTab(tabId)!;
-            var commonWpfGroups = wpfTab.Groups.Where(group => group.Id != "slideshow-from-transitions").ToArray();
-            var commonAvaloniaGroups = avaloniaTab.Groups.Where(group => group.Id != "slideshow-from-transitions").ToArray();
+            var commonWpfGroups = wpfTab.Groups.ToArray();
+            var commonAvaloniaGroups = avaloniaTab.Groups.ToArray();
             commonAvaloniaGroups.Select(group => group.Id).Should().Equal(commonWpfGroups.Select(group => group.Id));
 
             foreach (var (wpfGroup, avaloniaGroup) in commonWpfGroups.Zip(commonAvaloniaGroups))

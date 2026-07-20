@@ -37,10 +37,6 @@ public static class FreePRibbon
             var priority = profile.HomeGroupPriorities[groupId];
             switch (groupId)
             {
-                case FreePRibbonHomeGroupId.File:
-                    tab.Group("file", FreePRibbonText.FileGroupLabel, FreePRibbonText.FileGroupKeyTip, priority,
-                        AddFileControls);
-                    break;
                 case FreePRibbonHomeGroupId.Slides:
                     tab.Group("slides", FreePRibbonText.SlidesGroupLabel, FreePRibbonText.SlidesGroupKeyTip, priority,
                         group => AddSlidesControls(group, profile));
@@ -69,26 +65,10 @@ public static class FreePRibbon
                     tab.Group("editing", FreePRibbonText.EditingGroupLabel, FreePRibbonText.EditingGroupKeyTip,
                         priority, AddEditingControls);
                     break;
-                case FreePRibbonHomeGroupId.SlideShow:
-                    tab.Group("slideshow", FreePRibbonText.SlideShowGroupLabel, profile.SlideShowGroupKeyTip,
-                        priority, group => AddSlideShowControls(group, profile));
-                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(groupId), groupId, "Unknown FreeP ribbon group.");
             }
         }
-    }
-
-    private static void AddFileControls(RibbonGroupBuilder group)
-    {
-        group.Large("freep.file.new", FreePRibbonText.FileNewLabel, RibbonCommandIconKind.Insert,
-            FreePRibbonText.FileNewKeyTip);
-        group.Large("freep.file.open", FreePRibbonText.FileOpenLabel, RibbonCommandIconKind.Refresh,
-            FreePRibbonText.FileOpenKeyTip);
-        group.Large("freep.file.save", FreePRibbonText.FileSaveLabel, RibbonCommandIconKind.Save,
-            FreePRibbonText.FileSaveKeyTip);
-        group.Medium("freep.file.save-as", FreePRibbonText.FileSaveAsLabel, RibbonCommandIconKind.Save,
-            FreePRibbonText.FileSaveAsKeyTip);
     }
 
     private static void AddSlidesControls(RibbonGroupBuilder group, FreePRibbonProfile profile)
@@ -307,11 +287,8 @@ public static class FreePRibbon
             group.Medium("freep.transition.apply-all", FreePRibbonText.TransitionApplyAllCommand.Label,
                 RibbonCommandIconKind.Refresh, FreePRibbonText.TransitionApplyAllCommand.KeyTip);
         });
-        if (!profile.SlideShowOnHome)
-        {
-            tab.Group("slideshow-from-transitions", FreePRibbonText.SlideShowGroupLabel,
-                profile.SlideShowGroupKeyTip, 80, group => AddSlideShowControls(group, profile));
-        }
+        tab.Group("slideshow-from-transitions", FreePRibbonText.SlideShowGroupLabel,
+            profile.SlideShowGroupKeyTip, 80, group => AddSlideShowControls(group, profile));
     }
 
     private static void AddAnimationGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
