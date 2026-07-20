@@ -372,12 +372,23 @@ public sealed class SlideShowWindow : Window
     public SlideShowInkExecutionResult UndoLastPresenterInkStroke() =>
         ApplyInkExecution(_session.UndoLastInkStroke());
 
-    private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend() =>
-        new WindowsRecordingCaptureBackend(
+    private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend()
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            return new LinuxNarrationCaptureBackend(
+                new LinuxRecordingHostMetadata(
+                    "Avalonia slideshow",
+                    "Avalonia Linux narration capture adapter",
+                    "ppt/media/freep-recordings/avalonia"));
+        }
+
+        return new WindowsRecordingCaptureBackend(
             new WindowsRecordingHostMetadata(
                 "Avalonia slideshow",
                 "Avalonia Windows recording capture adapter",
                 "ppt/media/freep-recordings/avalonia"));
+    }
 
     /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
     internal SlideCanvas CanvasForTest => _slideCanvas;

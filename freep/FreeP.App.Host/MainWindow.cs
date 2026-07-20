@@ -3231,13 +3231,10 @@ public sealed partial class MainWindow : Window
             case FreePKeyboardCommand.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
             case FreePKeyboardCommand.StartSlideShowFromCurrentSlide: StartSlideShow(fromStart: false); break;
             case FreePKeyboardCommand.Copy:
-                Editor.CopySelectedShapes();
-                _osClipboard.PlaceSelectionOnOsClipboard(Editor);
+                WpfClipboardCommands.Copy(Editor, _osClipboard);
                 break;
             case FreePKeyboardCommand.Cut:
-                Editor.CopySelectedShapes();
-                _osClipboard.PlaceSelectionOnOsClipboard(Editor);
-                Editor.DeleteSelected();
+                WpfClipboardCommands.Cut(Editor, _osClipboard);
                 break;
             case FreePKeyboardCommand.Paste:
                 _osClipboard.Paste(Editor, preferOsClipboard: true);

@@ -367,6 +367,11 @@ public sealed class WindowsRecordingCaptureBackendTests
             source.Should().NotContain("AvaloniaWindowsRecording");
         }
 
+        avaloniaSource.Should().Contain("OperatingSystem.IsLinux()");
+        avaloniaSource.Should().Contain("new LinuxNarrationCaptureBackend(");
+        avaloniaSource.Should().Contain("new LinuxRecordingHostMetadata(");
+        wpfSource.Should().NotContain("LinuxNarrationCaptureBackend");
+
         Read(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj")
             .Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
         Read(root, "freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj")
