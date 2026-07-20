@@ -339,13 +339,21 @@ public sealed class LinuxNarrationCaptureBackendTests
         }
     }
 
-    private sealed class FakeChildProcess(bool exitsDuringStartup, string standardError)
-        : ILinuxRecordingChildProcess
+    private sealed class FakeChildProcess : ILinuxRecordingChildProcess
     {
-        private bool _hasExited = exitsDuringStartup;
-        private int? _exitCode = exitsDuringStartup ? 1 : null;
+        private readonly bool _exitsDuringStartup;
+        private bool _hasExited;
+        private int? _exitCode;
         private bool _startupWaitPending = true;
         private bool _disposed;
+
+        public FakeChildProcess(bool exitsDuringStartup, string standardError)
+        {
+            _exitsDuringStartup = exitsDuringStartup;
+            _hasExited = exitsDuringStartup;
+            _exitCode = exitsDuringStartup ? 1 : null;
+            StandardError = standardError;
+        }
 
         public int ProcessId => 42;
 
@@ -353,7 +361,7 @@ public sealed class LinuxNarrationCaptureBackendTests
 
         public int? ExitCode => _exitCode;
 
-        public string StandardError => standardError;
+        public string StandardError { get; }
 
         public int DisposeCount { get; private set; }
 
@@ -362,7 +370,7 @@ public sealed class LinuxNarrationCaptureBackendTests
             if (_startupWaitPending)
             {
                 _startupWaitPending = false;
-                return exitsDuringStartup;
+                return _exitsDuringStartup;
             }
             return _hasExited;
         }
