@@ -239,7 +239,11 @@ internal static partial class XlsxPivotTableReader
                 ReadNativePivotCacheFieldGroups(pivotCache),
                 ReadFreeXPivotFieldGroups(root, workbookNs)));
         var nativeFieldMetadata = ReadNativePivotFieldMetadata(pivotFieldsElement, workbookNs);
-        var firstPivotFieldElement = FindFirstPivotFieldElement(pivotFieldsElement, workbookNs);
+        var firstPivotFieldElement = FindFirstPivotFieldElement(
+            pivotFieldsElement,
+            workbookNs,
+            root.Element(workbookNs + "rowFields"),
+            root.Element(workbookNs + "colFields"));
         var nativeFiltersElement = root.Element(workbookNs + "filters");
         var calculatedFieldsElement = root.Element(workbookNs + "calculatedFields");
         var calculatedFields = ReadPivotCalculatedFields(calculatedFieldsElement, workbookNs, pivotCache);
@@ -344,13 +348,44 @@ internal static partial class XlsxPivotTableReader
         return true;
     }
 
-    private static XElement? FindFirstPivotFieldElement(XElement? pivotFieldsElement, XNamespace workbookNs)
+    // R52-io-pivot-layout-3-2: PivotTableModel.ShowSubtotals/SubtotalPlacement collapse the per-pivotField
+    // defaultSubtotal/subtotalTop settings into one table-wide flag. The pivotField carrying the setting
+    // that actually matters is whichever field is really placed on the row or column axis (rowFields is
+    // listed before colFields in CT_pivotTableDefinition, so it takes precedence) -- NOT simply the first
+    // <pivotField> in cache/document order, which may be an unrelated page/filter field (subtotals don't
+    // apply to filter fields, so its defaultSubtotal/subtotalTop attributes are irrelevant/default).
+    private static XElement? FindFirstPivotFieldElement(
+        XElement? pivotFieldsElement,
+        XNamespace workbookNs,
+        XElement? rowFieldsElement,
+        XElement? colFieldsElement)
     {
         if (pivotFieldsElement is null)
             return null;
 
-        foreach (var pivotFieldElement in pivotFieldsElement.Elements(workbookNs + "pivotField"))
-            return pivotFieldElement;
+        var pivotFields = pivotFieldsElement.Elements(workbookNs + "pivotField").ToList();
+        var axisFieldIndex = FindFirstAxisFieldIndex(rowFieldsElement, workbookNs)
+            ?? FindFirstAxisFieldIndex(colFieldsElement, workbookNs);
+        if (axisFieldIndex is { } index && index >= 0 && index < pivotFields.Count)
+            return pivotFields[index];
+
+        return pivotFields.Count > 0 ? pivotFields[0] : null;
+    }
+
+    // Returns the SourceFieldIndex of the first real field listed in a rowFields/colFields element,
+    // skipping the x="-2" "Σ Values" pseudo-field placeholder (R52-io-pivot-layout-3-1), which has no
+    // corresponding pivotField/cache field to look subtotal settings up on.
+    private static int? FindFirstAxisFieldIndex(XElement? fieldsElement, XNamespace workbookNs)
+    {
+        if (fieldsElement is null)
+            return null;
+
+        foreach (var field in fieldsElement.Elements(workbookNs + "field"))
+        {
+            var index = XlsxXmlAttributeReader.ReadIntAttribute(field, "x");
+            if (index is { } value && value != -2)
+                return value;
+        }
 
         return null;
     }

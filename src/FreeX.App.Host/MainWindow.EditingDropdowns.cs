@@ -397,30 +397,42 @@ public partial class MainWindow
         dialog.Top = screenPoint.Y;
     }
 
+    // Resolves the row/col address span a cell-anchored overlay (DV in-cell dropdown arrow,
+    // input-message tooltip, autofilter flyout) must cover: the WHOLE merged block if addr sits
+    // inside one, otherwise just the single cell itself. Excel renders these overlays against the
+    // full merged cell, not just its own row/column metrics (R52-commands-data-validation-
+    // apply-3-4).
+    private (CellAddress Start, CellAddress End) GetOverlayAddressRange(Sheet? sheet, CellAddress addr) =>
+        sheet is { MergedRegions.Count: > 0 } && sheet.GetMergeRegion(addr) is { } merge
+            ? (merge.Start, merge.End)
+            : (addr, addr);
+
     private Rect? TryGetCellOverlayRect(CellAddress addr)
     {
         var vp = SheetGrid.Viewport;
         if (vp is null)
             return null;
 
+        var (startAddr, endAddr) = GetOverlayAddressRange(_workbook.GetSheet(_currentSheetId), addr);
+
         RowMetric? rowMetric = null;
+        RowMetric? endRowMetric = null;
         foreach (var metric in vp.RowMetrics)
         {
-            if (metric.Row == addr.Row)
-            {
+            if (metric.Row == startAddr.Row)
                 rowMetric = metric;
-                break;
-            }
+            if (metric.Row == endAddr.Row)
+                endRowMetric = metric;
         }
 
         ColMetric? colMetric = null;
+        ColMetric? endColMetric = null;
         foreach (var metric in vp.ColMetrics)
         {
-            if (metric.Col == addr.Col)
-            {
+            if (metric.Col == startAddr.Col)
                 colMetric = metric;
-                break;
-            }
+            if (metric.Col == endAddr.Col)
+                endColMetric = metric;
         }
 
         if (rowMetric is null || colMetric is null)
@@ -428,7 +440,9 @@ public partial class MainWindow
 
         var left = colMetric.LeftOffset + SheetGrid.ActualRowHeaderWidth;
         var top = rowMetric.TopOffset + FreeX.App.UI.GridView.ColHeaderHeight;
-        return new Rect(left, top, colMetric.Width, rowMetric.Height);
+        var width = endColMetric is { } lastCol ? lastCol.LeftOffset + lastCol.Width - colMetric.LeftOffset : colMetric.Width;
+        var height = endRowMetric is { } lastRow ? lastRow.TopOffset + lastRow.Height - rowMetric.TopOffset : rowMetric.Height;
+        return new Rect(left, top, width, height);
     }
 
     private void ValidationDropdown_SelectionChanged(object sender, SelectionChangedEventArgs e)

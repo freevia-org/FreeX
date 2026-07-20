@@ -438,6 +438,15 @@ internal static partial class XlsxPivotTableWriter
                     // intentionally not emitted to keep output schema-valid; the modeled value is preserved
                     // and round-trips through the native JSON adapter.
                     isAxisField && pivot.BlankLineAfterItems ? new XAttribute("insertBlankRow", "1") : null,
+                    // R52-io-pivot-layout-3-4: CT_PivotField's own compact/outline attributes (both default
+                    // true when omitted) are what a real Excel client actually applies when rendering this
+                    // field's header form -- the table-level compact/outline/outlineData/compactData
+                    // attributes (PivotReportLayoutAttributes, written on the root <pivotTableDefinition>
+                    // above) are only the defaults Excel seeds onto newly-added fields, not a live override of
+                    // an existing field's own attributes. Without emitting these here, every axis field keeps
+                    // the schema default (Compact form) regardless of the table's actual ReportLayout choice.
+                    isAxisField ? new XAttribute("compact", pivot.ReportLayout == PivotReportLayout.Compact ? "1" : "0") : null,
+                    isAxisField ? new XAttribute("outline", pivot.ReportLayout == PivotReportLayout.Tabular ? "0" : "1") : null,
                     pivot.ShowSubtotals ? new XAttribute("defaultSubtotal", "1") : null,
                     pivot.ShowSubtotals && pivot.SubtotalPlacement == PivotSubtotalPlacement.Top ? new XAttribute("subtotalTop", "1") : null,
                     new XAttribute("showAll", metadataField?.ShowAll == true ? "1" : "0"),

@@ -8177,7 +8177,7 @@ public sealed partial class MainWindow : Window
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(args.Key),
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
             address,
-            pageSize: Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
+            pageSize: Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(address.Sheet)) - 1),
             allowFormulaBarNavigationKeys: false,
             formulaRangeEntryActive: formulaRangeEntryActive,
             inlineEditorCommitsOnArrow: FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
@@ -8387,8 +8387,8 @@ public sealed partial class MainWindow : Window
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
             current,
             _session.Workbook.GetSheet(current.Sheet),
-            Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
-            Math.Max(1, _session.Viewport.ColMetrics.Count - 1));
+            Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
+            Math.Max(1, CountScrollableColumns(_session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1));
         if (target is null)
             return false;
 
@@ -15713,7 +15713,7 @@ public sealed partial class MainWindow : Window
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key),
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers),
             current,
-            pageSize: Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
+            pageSize: Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
             allowFormulaBarNavigationKeys: !formulaTextActive,
             formulaRangeEntryActive: formulaRangeEntryActive,
             moveSelectionAfterEnter: MoveSelectionAfterEnter,
@@ -23770,6 +23770,42 @@ public sealed partial class MainWindow : Window
         Close();
     }
 
+    /// <summary>
+    /// Counts the scrollable (non-frozen) rows in <paramref name="viewport"/>'s RowMetrics, mirroring
+    /// the WPF host's MainWindow.Viewport.cs CountScrollableRows so that PageUp/PageDown and other
+    /// page-size computations exclude pinned frozen rows from the jump distance (R52-render-scroll-
+    /// viewport-nav-3-2: RowMetrics.Count alone includes the frozen rows and over-pages).
+    /// </summary>
+    private static int CountScrollableRows(ViewportModel viewport, Sheet? sheet)
+    {
+        var frozenRows = sheet?.FrozenRows ?? 0;
+        var count = 0;
+        foreach (var row in viewport.RowMetrics)
+        {
+            if (row.Row > frozenRows)
+                count++;
+        }
+
+        return Math.Max(1, count);
+    }
+
+    /// <summary>
+    /// Column counterpart of <see cref="CountScrollableRows"/> -- excludes frozen columns from the
+    /// scrollable count used for PageUp/PageDown-style horizontal page-size computations.
+    /// </summary>
+    private static int CountScrollableColumns(ViewportModel viewport, Sheet? sheet)
+    {
+        var frozenCols = sheet?.FrozenCols ?? 0;
+        var count = 0;
+        foreach (var column in viewport.ColMetrics)
+        {
+            if (column.Col > frozenCols)
+                count++;
+        }
+
+        return Math.Max(1, count);
+    }
+
     private void NavigateActiveCell(KeyEventArgs e)
     {
         if (e.Key == Key.F2)
@@ -23798,8 +23834,8 @@ public sealed partial class MainWindow : Window
         if (!ExcelWorksheetNavigationPlanner.ShouldHandleWorksheetNavigationKey(navigationKey, navigationKey, navigationModifiers, _endMode))
             return;
 
-        var pageRows = Math.Max(1, _session.Viewport.RowMetrics.Count - 1);
-        var pageCols = Math.Max(1, _session.Viewport.ColMetrics.Count - 1);
+        var pageRows = Math.Max(1, CountScrollableRows(_session.Viewport, _session.ActiveSheet) - 1);
+        var pageCols = Math.Max(1, CountScrollableColumns(_session.Viewport, _session.ActiveSheet) - 1);
         var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var moveOnly = navigationKey is ExcelWorksheetNavigationKey.Enter or ExcelWorksheetNavigationKey.Tab;
         var useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(navigationKey, navigationModifiers, _endMode);

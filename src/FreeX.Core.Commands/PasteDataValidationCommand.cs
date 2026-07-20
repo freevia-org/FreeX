@@ -49,7 +49,12 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         // whole selection (matching the tiled-paste footprint below); otherwise fall back to the
         // single-anchor footprint sized to the copied source range, as before.
         var clearFootprint = _destinationRange ?? GetDestinationRange(_sourceRange, _destination, _transpose);
-        targetSheet.DataValidations.RemoveAll(rule => rule.AppliesTo.Overlaps(clearFootprint));
+        // R52-commands-data-validation-apply-3-1/-3-2: a real Excel paste only supersedes
+        // validation on the destination cells themselves -- a pre-existing rule whose AppliesTo
+        // (or AdditionalRanges, per -3-2) merely overlaps the paste footprint must be shrunk to
+        // its surviving (non-overlapping) portion(s), not deleted wholesale, or cells outside the
+        // paste destination silently lose validation they were never part of pasting over.
+        ClearOverlappingValidationRanges(targetSheet, clearFootprint);
 
         foreach (var tileAnchor in EnumerateTileAnchors())
         {
@@ -145,6 +150,65 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
 
     private static GridRange? Intersect(GridRange first, GridRange second) =>
         GridRange.TryIntersect(first, second, out var intersection) ? intersection : null;
+
+    // R52-commands-data-validation-apply-3-1/-3-2: mirrors ClearDataValidationCommand.Apply's
+    // subtract-and-replace loop (SetDataValidationCommand.cs) -- checking AppliesTo AND
+    // AdditionalRanges for overlap (-3-2) and, for any rule that overlaps, replacing it with
+    // clones covering only the surviving (non-overlapping) remainder of each of its ranges,
+    // instead of deleting the whole rule just because part of it touches the paste footprint.
+    private static void ClearOverlappingValidationRanges(Sheet sheet, GridRange footprint)
+    {
+        for (var i = sheet.DataValidations.Count - 1; i >= 0; i--)
+        {
+            var rule = sheet.DataValidations[i];
+            var allRanges = new[] { rule.AppliesTo }.Concat(rule.AdditionalRanges).ToArray();
+            if (!allRanges.Any(range => range.Overlaps(footprint)))
+                continue;
+
+            sheet.DataValidations.RemoveAt(i);
+            var remainingRanges = allRanges.SelectMany(range => Subtract(range, footprint)).ToList();
+            // includeAdditionalRanges:false -- each surviving fragment (from AppliesTo OR from an
+            // AdditionalRanges entry, per -3-2) becomes its own standalone rule; carrying the
+            // ORIGINAL rule's AdditionalRanges along would silently reintroduce the very range(s)
+            // this loop just subtracted out.
+            var replacements = remainingRanges
+                .Select(range => DataValidationCopySupport.CloneValidation(
+                    rule, range, hostSheetName: null, rowDelta: 0, colDelta: 0, includeAdditionalRanges: false))
+                .ToList();
+            for (var r = replacements.Count - 1; r >= 0; r--)
+                sheet.DataValidations.Insert(i, replacements[r]);
+        }
+    }
+
+    private static IEnumerable<GridRange> Subtract(GridRange source, GridRange remove)
+    {
+        if (!source.Overlaps(remove))
+        {
+            yield return source;
+            yield break;
+        }
+
+        var top = Math.Max(source.Start.Row, remove.Start.Row);
+        var bottom = Math.Min(source.End.Row, remove.End.Row);
+        var left = Math.Max(source.Start.Col, remove.Start.Col);
+        var right = Math.Min(source.End.Col, remove.End.Col);
+        var sheet = source.Start.Sheet;
+
+        if (source.Start.Row < top)
+            yield return MakeRange(sheet, source.Start.Row, source.Start.Col, top - 1, source.End.Col);
+
+        if (bottom < source.End.Row)
+            yield return MakeRange(sheet, bottom + 1, source.Start.Col, source.End.Row, source.End.Col);
+
+        if (source.Start.Col < left)
+            yield return MakeRange(sheet, top, source.Start.Col, bottom, left - 1);
+
+        if (right < source.End.Col)
+            yield return MakeRange(sheet, top, right + 1, bottom, source.End.Col);
+    }
+
+    private static GridRange MakeRange(SheetId sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>
+        new(new CellAddress(sheet, startRow, startCol), new CellAddress(sheet, endRow, endCol));
 
     private static IEnumerable<GridRange> EnumerateRuleRanges(DataValidation rule)
     {

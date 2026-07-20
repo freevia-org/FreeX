@@ -1292,6 +1292,15 @@ public sealed partial class XlsxFileAdapter
                     .Concat(worksheetViewChangesByWorksheet.Keys)
                     .Distinct(StringComparer.OrdinalIgnoreCase);
 
+                // Every LiteralValue-kind edit that overwrites a cell previously stored as t="s"
+                // (a shared-string reference) removes exactly one reference from xl/sharedStrings.xml's
+                // <sst count="..."> total -- RewriteLiteralCellValue always converts the changed cell to
+                // t="inlineStr"/t="str"/etc, so it never keeps or re-adds a shared-string reference.
+                // Track how many such conversions happen across every worksheet in this patch so the
+                // shared-strings part's stale reference count can be corrected below (see
+                // R52-io-sst-shared-inline-3-1).
+                var sharedStringReferencesRemoved = 0;
+
                 foreach (var worksheetPath in worksheetPaths)
                 {
                     var worksheetEntry = archive.GetEntry(worksheetPath);
@@ -1306,16 +1315,25 @@ public sealed partial class XlsxFileAdapter
                         XlsxCellPatchBaseline.TryApplySimpleExistingCellChangesStreaming(
                             archive,
                             worksheetPath,
-                            streamingCellChanges))
+                            streamingCellChanges,
+                            out var streamedSharedStringReferencesRemoved))
                     {
+                        sharedStringReferencesRemoved += streamedSharedStringReferencesRemoved;
                         continue;
                     }
 
                     var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-                    if (cellChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetCellChanges) &&
-                        !XlsxCellPatchBaseline.ApplyChanges(worksheetXml, worksheetCellChanges))
+                    if (cellChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetCellChanges))
                     {
-                        return Fail("patch_apply_cell_values", out diagnostics, invalidatesCalcChain);
+                        if (!XlsxCellPatchBaseline.ApplyChanges(
+                                worksheetXml,
+                                worksheetCellChanges,
+                                out var nonStreamedSharedStringReferencesRemoved))
+                        {
+                            return Fail("patch_apply_cell_values", out diagnostics, invalidatesCalcChain);
+                        }
+
+                        sharedStringReferencesRemoved += nonStreamedSharedStringReferencesRemoved;
                     }
 
                     if (dimensionChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetDimensionPatch) &&
@@ -1357,6 +1375,9 @@ public sealed partial class XlsxFileAdapter
 
                     XlsxPackageXmlEditor.ReplaceXml(archive, commentPartPath, commentsXml);
                 }
+
+                if (sharedStringReferencesRemoved > 0)
+                    DecrementSharedStringsReferenceCount(archive, sharedStringReferencesRemoved);
 
                 // The cell-patch loop above rewrote worksheet XML (and may have touched header
                 // elements such as dimension / merge / hyperlinks / sheetViews) without going through
@@ -2147,6 +2168,37 @@ public sealed partial class XlsxFileAdapter
         {
             XlsxRichTextFontNormalizer.NormalizeSharedStrings(archive);
             XlsxSharedStringPackageGraphNormalizer.NormalizePackage(archive);
+        }
+
+        // Patch-save always rewrites an edited shared-string cell (t="s") as an inline/literal value
+        // (RewriteLiteralCellValue) instead of decrementing its reference in xl/sharedStrings.xml, so
+        // the <sst count="..."> total (the workbook-wide count of cell references to shared strings)
+        // goes stale by exactly one per such edit. This does not attempt full orphan-<si> pruning or
+        // uniqueCount recomputation (both require a whole-workbook scan of every remaining t="s" cell
+        // to know whether a given shared-string index still has any referrer, which patch-save's
+        // per-worksheet streaming design intentionally avoids for performance) -- it only corrects the
+        // one piece of information already known for free at the edit site: how many references were
+        // just removed. See R52-io-sst-shared-inline-3-1.
+        private static void DecrementSharedStringsReferenceCount(ZipArchive archive, int removedReferenceCount)
+        {
+            var sharedStringsEntry = archive.GetEntry("xl/sharedStrings.xml");
+            if (sharedStringsEntry is null)
+                return;
+
+            var sharedStringsXml = XlsxPackageXmlEditor.LoadXml(sharedStringsEntry);
+            var countAttribute = sharedStringsXml.Root?.Attribute("count");
+            if (countAttribute is null ||
+                !int.TryParse(countAttribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var currentCount))
+            {
+                return;
+            }
+
+            var updatedCount = Math.Max(0, currentCount - removedReferenceCount);
+            if (updatedCount == currentCount)
+                return;
+
+            countAttribute.Value = updatedCount.ToString(CultureInfo.InvariantCulture);
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/sharedStrings.xml", sharedStringsXml);
         }
 
         private static void NormalizePatchDocumentThumbnail(ZipArchive archive)
@@ -6550,8 +6602,10 @@ public sealed partial class XlsxFileAdapter
         public static bool TryApplySimpleExistingCellChangesStreaming(
             ZipArchive archive,
             string worksheetPath,
-            IReadOnlyList<XlsxCellValuePatch> changes)
+            IReadOnlyList<XlsxCellValuePatch> changes,
+            out int sharedStringReferencesRemoved)
         {
+            sharedStringReferencesRemoved = 0;
             if (!CanStreamSimpleExistingCellChanges(changes))
                 return false;
 
@@ -6590,8 +6644,10 @@ public sealed partial class XlsxFileAdapter
                             if (cell is null)
                                 return false;
 
-                            if (!ApplySimpleExistingCellChange(cell, worksheetNs, change))
+                            if (!ApplySimpleExistingCellChange(cell, worksheetNs, change, out var removedSharedStringReference))
                                 return false;
+                            if (removedSharedStringReference)
+                                sharedStringReferencesRemoved++;
 
                             cell.WriteTo(writer);
                             found++;
@@ -6649,11 +6705,13 @@ public sealed partial class XlsxFileAdapter
         private static bool ApplySimpleExistingCellChange(
             XElement cell,
             XNamespace worksheetNs,
-            XlsxCellValuePatch change)
+            XlsxCellValuePatch change,
+            out bool removedSharedStringReference)
         {
+            removedSharedStringReference = false;
             if (change.Kind == XlsxCellValuePatchKind.LiteralValue)
             {
-                RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns);
+                removedSharedStringReference = RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns);
             }
             else if (change.Kind == XlsxCellValuePatchKind.FormulaCachedValue)
             {
@@ -6728,8 +6786,12 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
-        public static bool ApplyChanges(XDocument worksheetXml, IEnumerable<XlsxCellValuePatch> changes)
+        public static bool ApplyChanges(
+            XDocument worksheetXml,
+            IEnumerable<XlsxCellValuePatch> changes,
+            out int sharedStringReferencesRemoved)
         {
+            sharedStringReferencesRemoved = 0;
             var root = worksheetXml.Root;
             if (root is null)
                 return false;
@@ -6817,7 +6879,8 @@ public sealed partial class XlsxFileAdapter
                 }
                 else
                 {
-                    RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns);
+                    if (RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns))
+                        sharedStringReferencesRemoved++;
                 }
 
                 if (change.HasStyleChange)
@@ -8383,12 +8446,21 @@ public sealed partial class XlsxFileAdapter
         private static bool CellReferenceMatches(XElement cell, string reference) =>
             string.Equals(cell.Attribute("r")?.Value, reference, StringComparison.OrdinalIgnoreCase);
 
-        private static void RewriteLiteralCellValue(
+        /// <returns>
+        /// <c>true</c> if <paramref name="cell"/> was a shared-string reference (t="s") before this
+        /// call -- i.e. exactly one reference to xl/sharedStrings.xml's shared-string table was just
+        /// removed, since every branch below unconditionally replaces the cell's t attribute/value with
+        /// a non-shared-string representation (or clears both entirely for a blank). Callers that patch
+        /// xl/sharedStrings.xml's stale "count" total (see R52-io-sst-shared-inline-3-1) use this.
+        /// </returns>
+        private static bool RewriteLiteralCellValue(
             XElement cell,
             XNamespace worksheetNs,
             ScalarValue value,
             IReadOnlyList<CellTextRun>? richRuns = null)
         {
+            var wasSharedStringReference = string.Equals(cell.Attribute("t")?.Value, "s", StringComparison.Ordinal);
+
             // A rich value (linked data type, IMAGE()-produced value, etc.) is stored for backward
             // compatibility as a t="e" (#VALUE!) placeholder cell whose vm/cm attribute indexes into
             // xl/metadata.xml's valueMetadata/cellMetadata to resolve the real rich-value content. If the
@@ -8440,6 +8512,8 @@ public sealed partial class XlsxFileAdapter
                     AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", FormatNumber(number.Value)));
                     break;
             }
+
+            return wasSharedStringReference;
         }
 
         private static bool RewriteFormulaCachedCellValue(XElement cell, XNamespace worksheetNs, ScalarValue value)

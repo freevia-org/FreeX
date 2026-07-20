@@ -43,6 +43,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private List<CellAddress>? _movedDestinationCells;
+    // R52-commands-clear-delete-3-1: style-only (formatted-but-empty) cells are invisible to
+    // sheet.GetOccupiedCellMap() (which only sees value/formula-bearing Cell entries), so the
+    // band-scoped shift below never moved or cleared them, silently destroying or misplacing
+    // format-only cells such as a fill color applied to an empty cell.
+    private List<(uint Row, uint Col, StyleId StyleId)>? _styleOnlySnapshot;
 
     public string Label => "Insert Cells";
 
@@ -124,6 +129,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             ShiftAnnotationsInBandRight(sheet.HyperlinkMetadata, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
             _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             ShiftAnnotationsInBandRight(sheet.RichTextRuns, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
+            // R52-commands-clear-delete-3-1: shift style-only (formatted-but-empty) cells in lockstep
+            // with the value cells in the same band, so a fill/border applied to an empty cell moves
+            // (or is displaced) exactly the way the same formatting on a value-bearing cell would.
+            _styleOnlySnapshot = CaptureStyleOnlyEntries(sheet);
+            ShiftStyleOnlyInBandRight(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
 
             // Snapshot and update merged regions
             _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -221,6 +231,9 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             ShiftAnnotationsInBandDown(sheet.HyperlinkMetadata, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
             _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             ShiftAnnotationsInBandDown(sheet.RichTextRuns, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
+            // R52-commands-clear-delete-3-1: see the Shift-Right branch above.
+            _styleOnlySnapshot = CaptureStyleOnlyEntries(sheet);
+            ShiftStyleOnlyInBandDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
 
             // Snapshot and update merged regions
             _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -310,6 +323,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
+        RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
     }
 
     private void InsertShiftRight(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
@@ -779,6 +793,81 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             addresses.Add(new CellAddress(addr.Sheet, addr.Row + count, addr.Col));
     }
 
+    // ── Style-only (formatted-but-empty) cell shift helpers (R52-commands-clear-delete-3-1) ──
+    // Style-only entries live in Sheet's own row/col-keyed store (Sheet.StyleOnly.cs), entirely
+    // separate from sheet.GetOccupiedCellMap() (which CaptureCellsForMove/CaptureCellsForDelete
+    // use and which only sees value/formula-bearing Cell entries). Without these helpers, a
+    // fill/border applied to an empty cell was invisible to this band-scoped command and got
+    // silently dropped (via Sheet.SetCell's ClearStyleOnly side-effect on whatever cell later
+    // landed at that address) instead of moving with the rest of the band, unlike the
+    // whole-row/whole-column insert/delete family (RowColumnShiftHelpers.AddressState.cs's
+    // CaptureStyleOnlyEntries/ApplyShiftedStyleOnlyEntries), which already handles this.
+
+    /// <summary>Captures every style-only entry in the sheet (row/col/style triples) for full restore on undo.</summary>
+    internal static List<(uint Row, uint Col, StyleId StyleId)>? CaptureStyleOnlyEntries(Sheet sheet)
+    {
+        if (!sheet.HasStyleOnlyCells)
+            return null;
+
+        var entries = new List<(uint Row, uint Col, StyleId StyleId)>(sheet.StyleOnlyCellCount);
+        foreach (var (key, styleId) in sheet.GetStyleOnlyEntries())
+            entries.Add((key.Row, key.Col, styleId));
+        return entries;
+    }
+
+    /// <summary>Restores a full pre-Apply style-only snapshot captured by <see cref="CaptureStyleOnlyEntries"/>.</summary>
+    internal static void RestoreStyleOnlyEntries(Sheet sheet, List<(uint Row, uint Col, StyleId StyleId)>? entries)
+    {
+        sheet.ClearStyleOnlyEntries();
+        if (entries is null)
+            return;
+
+        foreach (var (row, col, styleId) in entries)
+            sheet.SetStyleOnly(row, col, styleId);
+    }
+
+    /// <summary>Shift-right: move style-only entries in rows [bandStartRow..bandEndRow] at col >= fromCol rightward by count.</summary>
+    internal static void ShiftStyleOnlyInBandRight(Sheet sheet, uint bandStartRow, uint bandEndRow, uint fromCol, uint count)
+    {
+        if (!sheet.HasStyleOnlyCells)
+            return;
+
+        List<(uint Row, uint Col, StyleId StyleId)>? shifted = null;
+        foreach (var (key, styleId) in sheet.GetStyleOnlyEntries())
+        {
+            if (key.Row >= bandStartRow && key.Row <= bandEndRow && key.Col >= fromCol)
+                (shifted ??= []).Add((key.Row, key.Col, styleId));
+        }
+
+        if (shifted is null) return;
+
+        foreach (var (row, col, _) in shifted)
+            sheet.ClearStyleOnly(row, col);
+        foreach (var (row, col, styleId) in shifted)
+            sheet.SetStyleOnly(row, col + count, styleId);
+    }
+
+    /// <summary>Shift-down: move style-only entries in cols [bandStartCol..bandEndCol] at row >= fromRow downward by count.</summary>
+    internal static void ShiftStyleOnlyInBandDown(Sheet sheet, uint bandStartCol, uint bandEndCol, uint fromRow, uint count)
+    {
+        if (!sheet.HasStyleOnlyCells)
+            return;
+
+        List<(uint Row, uint Col, StyleId StyleId)>? shifted = null;
+        foreach (var (key, styleId) in sheet.GetStyleOnlyEntries())
+        {
+            if (key.Col >= bandStartCol && key.Col <= bandEndCol && key.Row >= fromRow)
+                (shifted ??= []).Add((key.Row, key.Col, styleId));
+        }
+
+        if (shifted is null) return;
+
+        foreach (var (row, col, _) in shifted)
+            sheet.ClearStyleOnly(row, col);
+        foreach (var (row, col, styleId) in shifted)
+            sheet.SetStyleOnly(row + count, col, styleId);
+    }
+
     // ── AutoFilter / structured-table guard (finding G3) ───────────────────────
 
     /// <summary>
@@ -1059,6 +1148,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private List<CellAddress>? _movedDestinationCells;
+    // R52-commands-clear-delete-3-1: see InsertCellsCommand's field of the same name.
+    private List<(uint Row, uint Col, StyleId StyleId)>? _styleOnlySnapshot;
 
     public string Label => "Delete Cells";
 
@@ -1128,6 +1219,11 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             DeleteAnnotationsInBandLeft(sheet.HyperlinkMetadata, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
             _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             DeleteAnnotationsInBandLeft(sheet.RichTextRuns, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+            // R52-commands-clear-delete-3-1: clear/shift style-only (formatted-but-empty) cells in
+            // lockstep with the value cells in the same band — see InsertCellsCommand's Shift-Right
+            // branch for the full rationale.
+            _styleOnlySnapshot = InsertCellsCommand.CaptureStyleOnlyEntries(sheet);
+            DeleteStyleOnlyInBandLeft(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
 
             // Snapshot and update merged regions
             _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -1220,6 +1316,9 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             DeleteAnnotationsInBandUp(sheet.HyperlinkMetadata, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
             _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             DeleteAnnotationsInBandUp(sheet.RichTextRuns, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+            // R52-commands-clear-delete-3-1: see the Delete-Shift-Left branch above.
+            _styleOnlySnapshot = InsertCellsCommand.CaptureStyleOnlyEntries(sheet);
+            DeleteStyleOnlyInBandUp(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
 
             // Snapshot and update merged regions
             _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -1301,6 +1400,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
+        InsertCellsCommand.RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
     }
 
     private void DeleteShiftLeft(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
@@ -1653,6 +1753,85 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
                 addresses.Remove(addr);
             foreach (var addr in shifted)
                 addresses.Add(new CellAddress(addr.Sheet, addr.Row - count, addr.Col));
+        }
+    }
+
+    // ── Style-only (formatted-but-empty) cell delete/shift helpers (R52-commands-clear-delete-3-1) ──
+    // See InsertCellsCommand's equivalent helpers (ShiftStyleOnlyInBandRight/Down) for the full
+    // rationale; these are the Delete-Left/Delete-Up analogues, mirroring
+    // DeleteAnnotationsInBandLeft/Up above.
+
+    /// <summary>Delete-left: remove style-only entries at deleted cols, shift entries at cols > deletedEndCol leftward.</summary>
+    private static void DeleteStyleOnlyInBandLeft(
+        Sheet sheet,
+        uint bandStartRow, uint bandEndRow,
+        uint deletedStartCol, uint deletedEndCol, uint count)
+    {
+        if (!sheet.HasStyleOnlyCells)
+            return;
+
+        List<(uint Row, uint Col, StyleId StyleId)>? removed = null;
+        List<(uint Row, uint Col, StyleId StyleId)>? shifted = null;
+
+        foreach (var (key, styleId) in sheet.GetStyleOnlyEntries())
+        {
+            if (key.Row < bandStartRow || key.Row > bandEndRow) continue;
+
+            if (key.Col >= deletedStartCol && key.Col <= deletedEndCol)
+                (removed ??= []).Add((key.Row, key.Col, styleId));
+            else if (key.Col > deletedEndCol)
+                (shifted ??= []).Add((key.Row, key.Col, styleId));
+        }
+
+        if (removed is not null)
+        {
+            foreach (var (row, col, _) in removed)
+                sheet.ClearStyleOnly(row, col);
+        }
+
+        if (shifted is not null)
+        {
+            foreach (var (row, col, _) in shifted)
+                sheet.ClearStyleOnly(row, col);
+            foreach (var (row, col, styleId) in shifted)
+                sheet.SetStyleOnly(row, col - count, styleId);
+        }
+    }
+
+    /// <summary>Delete-up: remove style-only entries at deleted rows, shift entries at rows > deletedEndRow upward.</summary>
+    private static void DeleteStyleOnlyInBandUp(
+        Sheet sheet,
+        uint bandStartCol, uint bandEndCol,
+        uint deletedStartRow, uint deletedEndRow, uint count)
+    {
+        if (!sheet.HasStyleOnlyCells)
+            return;
+
+        List<(uint Row, uint Col, StyleId StyleId)>? removed = null;
+        List<(uint Row, uint Col, StyleId StyleId)>? shifted = null;
+
+        foreach (var (key, styleId) in sheet.GetStyleOnlyEntries())
+        {
+            if (key.Col < bandStartCol || key.Col > bandEndCol) continue;
+
+            if (key.Row >= deletedStartRow && key.Row <= deletedEndRow)
+                (removed ??= []).Add((key.Row, key.Col, styleId));
+            else if (key.Row > deletedEndRow)
+                (shifted ??= []).Add((key.Row, key.Col, styleId));
+        }
+
+        if (removed is not null)
+        {
+            foreach (var (row, col, _) in removed)
+                sheet.ClearStyleOnly(row, col);
+        }
+
+        if (shifted is not null)
+        {
+            foreach (var (row, col, _) in shifted)
+                sheet.ClearStyleOnly(row, col);
+            foreach (var (row, col, styleId) in shifted)
+                sheet.SetStyleOnly(row - count, col, styleId);
         }
     }
 }

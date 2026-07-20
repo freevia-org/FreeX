@@ -462,7 +462,21 @@ internal static class XlsxClosedXmlCellMapper
             xlStyle.Alignment.TextRotation = style.TextRotation;
 
         if (style.NumberFormat != def.NumberFormat)
-            xlStyle.NumberFormat.Format = style.NumberFormat;
+        {
+            if (BuiltInNumberFormatCatalog.TryResolveNumberFormatIdForCode(style.NumberFormat, out var builtInNumberFormatId) &&
+                builtInNumberFormatId is { } resolvedNumberFormatId)
+            {
+                // Prefer the implicit builtin numFmtId (matching real Excel/ClosedXML behavior) over an
+                // explicit <numFmt> entry so common ribbon actions (Comma Style, Accounting, Percentage,
+                // Fraction, Scientific, Text) round-trip as their native Format Cells category instead of
+                // "Custom".
+                xlStyle.NumberFormat.NumberFormatId = resolvedNumberFormatId;
+            }
+            else
+            {
+                xlStyle.NumberFormat.Format = style.NumberFormat;
+            }
+        }
 
         if (style.Locked != def.Locked)
             xlStyle.Protection.Locked = style.Locked;

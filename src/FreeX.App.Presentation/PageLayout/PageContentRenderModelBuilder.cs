@@ -774,8 +774,13 @@ public static class PageContentRenderModelBuilder
         // Excel's "Show a zero in cells that have zero value" sheet option (sheetView showZeros):
         // when off, a cell whose value is numeric zero prints/exports as blank, mirroring the
         // interactive grid's expected behavior. Formula-text display mode (ShowFormulas) is
-        // unaffected since it shows the literal formula, not the computed value.
-        if (!sheet.ShowFormulas && !sheet.ShowZeros && cell.Value is NumberValue { Value: 0 })
+        // unaffected since it shows the literal formula, not the computed value. UNLESS the
+        // cell's own number format defines an explicit third (zero) section (e.g.
+        // "0;-0;\"zero\""), in which case that section's own rendering governs and the
+        // sheet-level preference is not consulted -- mirrors ViewportService.GetDisplayText's
+        // NumberFormatHasExplicitZeroSection guard (same r51 fix, screen/print parity).
+        if (!sheet.ShowFormulas && !sheet.ShowZeros && cell.Value is NumberValue { Value: 0 } &&
+            !NumberFormatHasExplicitZeroSection(style.NumberFormat))
             return string.Empty;
 
         var raw = sheet.ShowFormulas && cell.FormulaText is not null
@@ -800,6 +805,39 @@ public static class PageContentRenderModelBuilder
 
     private static string FormatPrintedCellText(string displayText, WorksheetPrintErrorValue printErrorValue)
         => PagePrintTextPlanner.FormatPrintedCellText(displayText, printErrorValue);
+
+    /// <summary>
+    /// True when <paramref name="numberFormat"/> defines a third (zero-specific) section --
+    /// e.g. "#,##0;(#,##0);\"-\"" -- meaning the format itself dictates how a zero value
+    /// renders and the sheet's ShowZeros preference must not override it. Mirrors
+    /// <c>ViewportService.NumberFormatHasExplicitZeroSection</c> (the interactive grid's sibling
+    /// r51 fix) so print/PDF and the on-screen grid agree on zero-valued cells with a custom
+    /// zero section. Sections are separated by top-level ';' characters (not inside a quoted
+    /// literal or a [bracketed] directive); an empty/General format has a single (implicit)
+    /// section.
+    /// </summary>
+    private static bool NumberFormatHasExplicitZeroSection(string? numberFormat)
+    {
+        if (string.IsNullOrEmpty(numberFormat))
+            return false;
+
+        var sectionCount = 1;
+        var inQuote = false;
+        var inBracket = false;
+        foreach (var c in numberFormat)
+        {
+            if (c == '"' && !inBracket)
+                inQuote = !inQuote;
+            else if (c == '[' && !inQuote)
+                inBracket = true;
+            else if (c == ']' && !inQuote)
+                inBracket = false;
+            else if (c == ';' && !inQuote && !inBracket)
+                sectionCount++;
+        }
+
+        return sectionCount >= 3;
+    }
 
     /// <summary>
     /// Converts a printed column's pixel width to an approximate character-width budget, matching

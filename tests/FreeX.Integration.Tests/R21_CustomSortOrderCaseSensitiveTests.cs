@@ -31,11 +31,16 @@ public sealed class R21_CustomSortOrderCaseSensitiveTests
         customOrder.Compare("Apple", "apple", caseSensitive: true).Should().NotBe(0);
         customOrder.Compare("Apple", "APPLE", caseSensitive: true).Should().NotBe(0);
 
-        // And the ordering must match Excel's case-sensitive ordinal order: uppercase letters sort
-        // before their lowercase counterparts (StringComparison.Ordinal), so "APPLE" < "Apple" < "apple".
-        customOrder.Compare("APPLE", "Apple", caseSensitive: true).Should().BeLessThan(0);
-        customOrder.Compare("Apple", "apple", caseSensitive: true).Should().BeLessThan(0);
-        customOrder.Compare("apple", "APPLE", caseSensitive: true).Should().BeGreaterThan(0);
+        // R52 correction: Excel's case-sensitive sort is alphabetical-first with case only breaking a
+        // same-letter tie, and in that tiebreak LOWERCASE sorts before uppercase (MS: "in a case-
+        // sensitive sort, lowercase letters sort before uppercase"). So the order is
+        // "apple" < "Apple" < "APPLE" (NOT the raw-ordinal uppercase-first this test previously pinned;
+        // raw ordinal would clump all-caps words ahead of all-lowercase, which Excel does not do). This
+        // matches the codebase's own canonical SortCommand.CompareCaseSensitiveText and the r51
+        // Round51CommandsBucketTests.CustomSortOrder_CaseSensitive_* tests.
+        customOrder.Compare("APPLE", "Apple", caseSensitive: true).Should().BeGreaterThan(0);
+        customOrder.Compare("Apple", "apple", caseSensitive: true).Should().BeGreaterThan(0);
+        customOrder.Compare("apple", "APPLE", caseSensitive: true).Should().BeLessThan(0);
     }
 
     [Fact]

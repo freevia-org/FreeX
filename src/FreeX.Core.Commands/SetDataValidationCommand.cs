@@ -11,6 +11,12 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly DataValidation _rule;
     private DataValidation? _previous;   // non-null only when replacing an existing rule with the same Id
+    // R52-commands-data-validation-apply-3-3: tracks any OTHER pre-existing rules that had to be
+    // cleared/split because they overlapped this rule's target range(s), so a newly-applied rule
+    // fully supersedes prior validation the way Excel does, instead of merely being layered
+    // alongside a differently-anchored rule that also covers part of the same selection.
+    private List<(int Index, DataValidation Rule)>? _clearedOverlapsRemoved;
+    private List<(int Index, DataValidation Rule)>? _clearedOverlapsAdded;
 
     public string Label => "Set Data Validation";
 
@@ -45,11 +51,23 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
         if (!HasRequiredCriteria(_rule))
             return new CommandOutcome(false, "Data validation criteria are incomplete.");
 
-        var idx = FindDataValidationReplacementIndex(sheet, _rule);
-        if (idx >= 0)
+        var matchedRule = FindDataValidationReplacement(sheet, _rule);
+
+        // R52-commands-data-validation-apply-3-3: a newly-applied rule must fully supersede any
+        // OTHER pre-existing rule over every cell in its own target range(s) -- Excel never
+        // leaves two rules layered on the same cell. matchedRule (the rule being edited/replaced
+        // in place, found by exact Id or exact identical AppliesTo) is excluded so it is simply
+        // overwritten below instead of being clipped against itself.
+        (_clearedOverlapsRemoved, _clearedOverlapsAdded) = ClearOtherOverlappingRules(sheet, _rule, matchedRule);
+
+        if (matchedRule is not null)
         {
-            _previous = sheet.DataValidations[idx];
-            sheet.DataValidations[idx] = _rule;
+            var idx = FindDataValidationIndex(sheet, matchedRule.Id);
+            _previous = idx >= 0 ? sheet.DataValidations[idx] : null;
+            if (idx >= 0)
+                sheet.DataValidations[idx] = _rule;
+            else
+                sheet.DataValidations.Add(_rule);
         }
         else
         {
@@ -74,18 +92,84 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
         {
             sheet.DataValidations.RemoveAll(r => r.Id == _rule.Id);
         }
-    }
 
-    private static int FindDataValidationReplacementIndex(Sheet sheet, DataValidation rule)
-    {
-        for (var i = 0; i < sheet.DataValidations.Count; i++)
+        // R52-commands-data-validation-apply-3-3: undo the overlap-clearing step in the opposite
+        // order Apply performed it (overlap-clearing ran BEFORE the primary replace/add above).
+        if (_clearedOverlapsAdded is not null)
         {
-            var existing = sheet.DataValidations[i];
-            if (existing.Id == rule.Id || existing.AppliesTo == rule.AppliesTo)
-                return i;
+            foreach (var (_, addedRule) in _clearedOverlapsAdded)
+                sheet.DataValidations.Remove(addedRule);
         }
 
-        return -1;
+        if (_clearedOverlapsRemoved is not null)
+        {
+            foreach (var (index, removedRule) in _clearedOverlapsRemoved)
+                sheet.DataValidations.Insert(Math.Min(index, sheet.DataValidations.Count), removedRule);
+        }
+    }
+
+    private static DataValidation? FindDataValidationReplacement(Sheet sheet, DataValidation rule)
+    {
+        foreach (var existing in sheet.DataValidations)
+        {
+            if (existing.Id == rule.Id || existing.AppliesTo == rule.AppliesTo)
+                return existing;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// R52-commands-data-validation-apply-3-3: clears/splits every rule OTHER than
+    /// <paramref name="excludeRule"/> whose AppliesTo or AdditionalRanges overlap any of
+    /// <paramref name="rule"/>'s own ranges, mirroring ClearDataValidationCommand.Apply's
+    /// subtract-and-replace loop -- so applying a new rule to a selection always fully supersedes
+    /// whatever validation previously covered any cell in that selection.
+    /// </summary>
+    private static (List<(int Index, DataValidation Rule)> Removed, List<(int Index, DataValidation Rule)> Added)
+        ClearOtherOverlappingRules(Sheet sheet, DataValidation rule, DataValidation? excludeRule)
+    {
+        var removed = new List<(int Index, DataValidation Rule)>();
+        var added = new List<(int Index, DataValidation Rule)>();
+        var footprints = new[] { rule.AppliesTo }.Concat(rule.AdditionalRanges).ToArray();
+
+        for (var i = sheet.DataValidations.Count - 1; i >= 0; i--)
+        {
+            var existing = sheet.DataValidations[i];
+            if (ReferenceEquals(existing, excludeRule))
+                continue;
+
+            var existingRanges = new[] { existing.AppliesTo }.Concat(existing.AdditionalRanges).ToArray();
+            if (!existingRanges.Any(er => footprints.Any(fp => er.Overlaps(fp))))
+                continue;
+
+            removed.Add((i, existing));
+            sheet.DataValidations.RemoveAt(i);
+
+            // Subtract every footprint range from every existing range in turn, keeping only the
+            // portion that survives ALL of them.
+            IEnumerable<GridRange> remainder = existingRanges;
+            foreach (var footprint in footprints)
+                remainder = remainder.SelectMany(range => ClearDataValidationCommand.Subtract(range, footprint));
+
+            // includeAdditionalRanges:false -- see PasteDataValidationCommand's identical fix
+            // (R52-commands-data-validation-apply-3-2): each surviving fragment becomes its own
+            // standalone rule, and carrying the ORIGINAL rule's AdditionalRanges along would
+            // silently reintroduce the very range(s) this loop just subtracted out.
+            var replacements = remainder
+                .Select(range => DataValidationCopySupport.CloneValidation(
+                    existing, range, hostSheetName: null, rowDelta: 0, colDelta: 0, includeAdditionalRanges: false))
+                .ToList();
+            for (var r = replacements.Count - 1; r >= 0; r--)
+            {
+                sheet.DataValidations.Insert(i, replacements[r]);
+                added.Add((i, replacements[r]));
+            }
+        }
+
+        removed.Reverse();
+        added.Reverse();
+        return (removed, added);
     }
 
     private static bool IsValidWorksheetRange(GridRange range) =>
@@ -187,7 +271,10 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
             sheet.DataValidations.Insert(Math.Min(index, sheet.DataValidations.Count), rule);
     }
 
-    private static IEnumerable<GridRange> Subtract(GridRange source, GridRange remove)
+    // R52-commands-data-validation-apply-3-3: widened from private to internal so
+    // SetDataValidationCommand.ClearOtherOverlappingRules (same file) can reuse this
+    // rectangle-subtraction logic instead of duplicating it.
+    internal static IEnumerable<GridRange> Subtract(GridRange source, GridRange remove)
     {
         if (!source.Overlaps(remove))
         {

@@ -184,6 +184,29 @@ public static class FormulaReferenceHighlightPlanner
             sheetId = resolveSheetId?.Invoke(sheetName) ?? currentSheetId;
         }
 
+        // Whole-column (A:A) / whole-row (3:3) references have no row-in-the-first-token or
+        // column-in-the-first-token respectively, so TryReadCell below (which requires both a
+        // column and a row) can never parse them. Try that shape first; Excel boxes these
+        // references in the formula bar exactly like any other reference.
+        if (TryReadWholeColumnOrRow(text, cellStart, sheetId, out var wholeRange, out var wholeEnd))
+        {
+            if (!IsReferenceBoundaryAfter(text, wholeEnd))
+            {
+                nextIndex = wholeEnd;
+                return false;
+            }
+
+            nextIndex = wholeEnd;
+            highlight = new FormulaReferenceHighlight(
+                referenceStart,
+                wholeEnd - referenceStart,
+                paletteIndex,
+                text[referenceStart..wholeEnd],
+                sheetName,
+                wholeRange);
+            return true;
+        }
+
         if (!TryReadCell(text, cellStart, sheetId, out var firstCell, out var cellEnd, out var invalidEnd))
         {
             nextIndex = Math.Max(nextIndex, invalidEnd);
@@ -337,6 +360,138 @@ public static class FormulaReferenceHighlightPlanner
         }
 
         cell = new CellAddress(sheetId, row, column);
+        end = index;
+        return true;
+    }
+
+    /// <summary>
+    /// Tries to read a whole-column pair ("A:A", "$A:$C") or whole-row pair ("3:3", "$1:$5")
+    /// starting at <paramref name="start"/>, mirroring the formula parser's convention that a
+    /// whole-column reference spans row 1..MaxRow and a whole-row reference spans col A..MaxCol
+    /// (Parser.cs ParseFullColumnRangePart/ParseFullRowRangePart).
+    /// </summary>
+    private static bool TryReadWholeColumnOrRow(
+        string text,
+        int start,
+        SheetId sheetId,
+        out GridRange range,
+        out int end)
+    {
+        if (TryReadWholeColumnPair(text, start, sheetId, out range, out end))
+            return true;
+
+        return TryReadWholeRowPair(text, start, sheetId, out range, out end);
+    }
+
+    private static bool TryReadWholeColumnPair(
+        string text,
+        int start,
+        SheetId sheetId,
+        out GridRange range,
+        out int end)
+    {
+        range = default;
+        end = start;
+
+        if (!TryReadColumnOnly(text, start, out var firstColumn, out var afterFirst))
+            return false;
+
+        if (afterFirst >= text.Length || text[afterFirst] != ':')
+            return false;
+
+        if (!TryReadColumnOnly(text, afterFirst + 1, out var secondColumn, out var afterSecond))
+            return false;
+
+        end = afterSecond;
+        range = new GridRange(
+            new CellAddress(sheetId, 1, firstColumn),
+            new CellAddress(sheetId, CellAddress.MaxRow, secondColumn));
+        return true;
+    }
+
+    private static bool TryReadWholeRowPair(
+        string text,
+        int start,
+        SheetId sheetId,
+        out GridRange range,
+        out int end)
+    {
+        range = default;
+        end = start;
+
+        if (!TryReadRowOnly(text, start, out var firstRow, out var afterFirst))
+            return false;
+
+        if (afterFirst >= text.Length || text[afterFirst] != ':')
+            return false;
+
+        if (!TryReadRowOnly(text, afterFirst + 1, out var secondRow, out var afterSecond))
+            return false;
+
+        end = afterSecond;
+        range = new GridRange(
+            new CellAddress(sheetId, firstRow, 1),
+            new CellAddress(sheetId, secondRow, CellAddress.MaxCol));
+        return true;
+    }
+
+    /// <summary>
+    /// Reads a bare column token ("A", "$AB") with no trailing row digits. Used only for the
+    /// whole-column-pair shape ("A:A") -- a column token that IS followed by row digits is a
+    /// normal cell reference and must fall through to <see cref="TryReadCell"/> instead.
+    /// </summary>
+    private static bool TryReadColumnOnly(string text, int start, out uint column, out int end)
+    {
+        column = 0;
+        end = start;
+
+        var index = start;
+        if (index < text.Length && text[index] == '$')
+            index++;
+
+        var columnStart = index;
+        while (index < text.Length && char.IsAsciiLetter(text[index]))
+            index++;
+
+        if (index == columnStart || (index < text.Length && char.IsDigit(text[index])))
+            return false;
+
+        var columnNumber = CellAddress.ColumnNameToNumber(text[columnStart..index]);
+        if (columnNumber is 0 || columnNumber > CellAddress.MaxCol)
+            return false;
+
+        column = columnNumber;
+        end = index;
+        return true;
+    }
+
+    /// <summary>
+    /// Reads a bare row token ("3", "$15") with no leading column letters. Used only for the
+    /// whole-row-pair shape ("3:3").
+    /// </summary>
+    private static bool TryReadRowOnly(string text, int start, out uint row, out int end)
+    {
+        row = 0;
+        end = start;
+
+        var index = start;
+        if (index < text.Length && text[index] == '$')
+            index++;
+
+        var rowStart = index;
+        while (index < text.Length && char.IsDigit(text[index]))
+            index++;
+
+        if (index == rowStart)
+            return false;
+
+        if (!uint.TryParse(text[rowStart..index], out var rowNumber) ||
+            rowNumber is 0 || rowNumber > CellAddress.MaxRow)
+        {
+            return false;
+        }
+
+        row = rowNumber;
         end = index;
         return true;
     }

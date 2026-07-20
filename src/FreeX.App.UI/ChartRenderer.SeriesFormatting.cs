@@ -997,6 +997,8 @@ public static partial class ChartRenderer
                 plusAmount = customPlus is not null && index < customPlus.Count ? Math.Abs(customPlus[index]) : 0;
                 minusAmount = customMinus is not null && index < customMinus.Count ? Math.Abs(customMinus[index]) : 0;
                 return 0;
+            case ChartErrorBarKind.StdDev:
+                return chart.ErrorBarValue * CalculateSampleStandardDeviation(values);
             default:
                 return CalculateStandardError(values);
         }
@@ -1015,6 +1017,25 @@ public static partial class ChartRenderer
 
         var variance = sumSquares / (values.Count - 1);
         return Math.Sqrt(variance) / Math.Sqrt(values.Count);
+    }
+
+    /// <summary>
+    /// Sample standard deviation (STDEV.S) of the series' plotted values — Excel's "Standard Deviation"
+    /// error-bar amount kind is this value multiplied by the user's "Number of standard deviations" (<see
+    /// cref="ChartModel.ErrorBarValue"/>), the same for every point in the series.
+    /// </summary>
+    private static double CalculateSampleStandardDeviation(IReadOnlyList<double> values)
+    {
+        if (values.Count < 2)
+            return 0;
+
+        var mean = values.Average();
+        var sumSquares = 0.0;
+        for (var i = 0; i < values.Count; i++)
+            sumSquares += (values[i] - mean) * (values[i] - mean);
+
+        var variance = sumSquares / (values.Count - 1);
+        return Math.Sqrt(variance);
     }
 
     /// <summary>

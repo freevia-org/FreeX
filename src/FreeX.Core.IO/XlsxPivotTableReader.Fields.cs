@@ -241,7 +241,15 @@ internal static partial class XlsxPivotTableReader
             .Select(field =>
             {
                 var index = XlsxXmlAttributeReader.ReadIntAttribute(field, "x");
-                return index.HasValue
+                // R52-io-pivot-layout-3-1: x="-2" is the OOXML placeholder marking where the "Σ Values"
+                // pseudo-field sits within this axis (rowFields/colFields) whenever a pivot has 2+ data
+                // fields -- it has no corresponding pivot-cache field. PivotTableModel.DataOnRows already
+                // conveys whether the Values pseudo-column/row is on rows or columns, so this marker carries
+                // no information FreeX's model needs. Treating it as a real SourceFieldIndex corrupts any
+                // downstream consumer that indexes per-cache-field arrays/dictionaries by SourceFieldIndex
+                // (e.g. PivotTableRefreshService.Writers.cs `headers[rowFields[index].SourceFieldIndex]`),
+                // so it must be skipped here rather than modeled as a normal field.
+                return index.HasValue && index.Value != -2
                     ? CreatePivotFieldModel(
                         index.Value,
                         field.Attribute("name")?.Value,
