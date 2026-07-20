@@ -106,14 +106,23 @@ public static partial class BuiltInFunctions
         // depreciation that the *next* full period would have produced (this also covers the
         // 0 < period < 1 case, where there are no full periods and the whole result is a
         // fraction of period-one's depreciation).
-        int fullPeriods = (int)Math.Floor(period);
-        double fraction = period - fullPeriods;
+        double flooredPeriod = Math.Floor(period);
+        double fraction = period - flooredPeriod;
         double dep = 0;
-        for (int p = 1; p <= fullPeriods; p++)
+        // Iterate using a double counter (never truncate `period`/`flooredPeriod` into an int
+        // loop bound: a huge-but-legal period, e.g. 500,000,000 or one exceeding Int32.MaxValue,
+        // would otherwise force an unbounded synchronous loop and, past int range, an undefined
+        // cast). Once book value has been driven down to the salvage floor, `dep` is pinned at 0
+        // and book value stops changing, so every remaining full period is provably identical to
+        // the last one computed -- the loop can stop as soon as that convergence is detected
+        // without altering the result.
+        for (double p = 1; p <= flooredPeriod; p++)
         {
             dep = Math.Min(bookValue - salvage, bookValue * factor / life);
             dep = Math.Max(dep, 0);
             bookValue -= dep;
+            if (dep <= 0)
+                break;
         }
         if (fraction > 0)
         {
@@ -266,6 +275,14 @@ public static partial class BuiltInFunctions
             }
             bookValue -= nRate;
             result = nRate;
+            // Once a period's rounded depreciation underflows to exactly zero, book value no
+            // longer changes, so every remaining period recomputes the identical zero forever
+            // (and `rest` can never cross below zero to trigger the early-return above). Without
+            // this check a huge-but-legal `period` (e.g. 500,000,000) forces the loop to spin for
+            // the full remaining iteration count doing nothing; breaking here is exactly
+            // equivalent to letting the loop run to completion, since `result` would still be 0.
+            if (nRate == 0)
+                return NumberResult(0);
         }
         return NumberResult(result);
     }
@@ -305,7 +322,16 @@ public static partial class BuiltInFunctions
             double dep = p == 0 ? annualDep * firstFrac : annualDep;
             dep = Math.Max(0, Math.Min(dep, bookValue - salvage));
             if (p < iper)
+            {
                 bookValue -= dep;
+                // Once book value has been driven down to the salvage floor, `dep` is pinned at
+                // exactly 0 and book value stops changing, so every later period -- including
+                // whichever one turns out to be the final `iper`th period, however far off that
+                // is -- is provably also 0. Returning here avoids an unbounded loop for a
+                // huge-but-legal `period` (e.g. 500,000,000) without altering the result.
+                if (dep <= 0)
+                    return NumberResult(0);
+            }
             else
                 return NumberResult(dep);
         }

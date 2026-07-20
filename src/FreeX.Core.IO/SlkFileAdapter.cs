@@ -382,5 +382,14 @@ public sealed class SlkFileAdapter : IFileAdapter
         ["#CIRCULAR!"] = ErrorValue.Circular,
         ["#SPILL!"] = ErrorValue.Spill,
         ["#CALC!"] = ErrorValue.Calc,
+        // Extended Excel-365 error codes: the write side (FormatValue above) already emits these
+        // verbatim via ErrorValue.Code, but without an entry here ParseValue's lookup misses and
+        // falls through to the final `return new TextValue(raw)` -- silently reclassifying a
+        // reloaded error cell as text (ISERROR/ISNA would then wrongly return FALSE).
+        ["#FIELD!"] = ErrorValue.Field,
+        ["#CONNECT!"] = new ErrorValue("#CONNECT!"),
+        ["#UNKNOWN!"] = new ErrorValue("#UNKNOWN!"),
+        ["#BLOCKED!"] = new ErrorValue("#BLOCKED!"),
+        ["#GETTING_DATA"] = new ErrorValue("#GETTING_DATA"),
     };
 }

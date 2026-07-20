@@ -50,6 +50,19 @@ public static class ConditionalIconGlyphResolver
         ResolveStyleTraits(style).GlyphKind;
 
     /// <summary>
+    /// True for the alternate icon-set variant within a style family that has two visually distinct
+    /// forms sharing the same <see cref="ConditionalIconGlyphKind"/> -- "3 Traffic Lights (Rimmed)"
+    /// (style <c>"3TrafficLights2"</c>, vs the default Unrimmed <c>"3TrafficLights1"</c>) and
+    /// "3 Symbols (Uncircled)" (style <c>"3Symbols2"</c>, vs the default Circled <c>"3Symbols"</c>) are
+    /// the two real Excel gallery presets this distinguishes (R54-render-cf-icon-databar-4-2;
+    /// see ConditionalFormatPresetGalleryPlanner.cs / ConditionalFormatPresetFactory.cs). Both members
+    /// of a pair otherwise resolve to the exact same glyph kind, so a caller that wants to actually draw
+    /// them differently (a rim/bezel ring around the traffic light, no circular backdrop behind the
+    /// symbol mark) passes this flag on to <see cref="ConditionalIconGlyphGeometry.Build"/>.
+    /// </summary>
+    public static bool IsAlternateGlyphVariant(string? style) => ResolveStyleTraits(style).IsAlternateVariant;
+
+    /// <summary>
     /// The fixed gold fill color used for all buckets of a star icon set. Excel renders all star
     /// buckets in the same gold color; the fill fraction (controlled by bucket index) varies how
     /// much of the star outline is filled rather than the hue.
@@ -131,12 +144,17 @@ public static class ConditionalIconGlyphResolver
         var traits = new StyleTraits(
             glyphKind,
             style.Contains("Gray", StringComparison.OrdinalIgnoreCase),
-            glyphKind == ConditionalIconGlyphKind.Star);
+            glyphKind == ConditionalIconGlyphKind.Star,
+            // "3TrafficLights2" (Rimmed) / "3Symbols2" (Uncircled) are the only real style names in
+            // their respective families with a trailing "2"; the default/unsuffixed member of each
+            // pair ("3TrafficLights1", "3Symbols") is the primary variant.
+            IsAlternateVariant: style.EndsWith("2", StringComparison.Ordinal));
         return StyleTraitCache.GetOrAdd(style, traits);
     }
 
     private readonly record struct StyleTraits(
         ConditionalIconGlyphKind GlyphKind,
         bool IsGray,
-        bool IsStar = false);
+        bool IsStar = false,
+        bool IsAlternateVariant = false);
 }

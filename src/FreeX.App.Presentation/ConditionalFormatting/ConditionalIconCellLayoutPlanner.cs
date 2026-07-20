@@ -45,12 +45,21 @@ public static class ConditionalIconCellLayoutPlanner
     /// <param name="cellWidth">Cell width (≥ 0).</param>
     /// <param name="cellHeight">Cell height (≥ 0).</param>
     /// <param name="showValue">Whether the rule also draws the cell value next to the glyph.</param>
+    /// <param name="isRightToLeft">
+    /// R54-render-cf-icon-databar-4-3: <c>true</c> when the sheet's reading order is right-to-left
+    /// (<c>Sheet.IsRightToLeft</c>). Excel mirrors icon-set glyphs to the cell's RIGHT edge (with the
+    /// value pushed toward the left) on an RTL sheet, matching how it already mirrors data bars (see
+    /// <c>ViewportConditionalFormatEvaluator.Thresholds.cs</c>'s <c>MirrorDataBarIfRightToLeft</c>), row
+    /// headers, and cell alignment. Defaults to <c>false</c> (the pre-existing left-pinned layout) for
+    /// callers that don't yet pass the sheet's reading order.
+    /// </param>
     public static ConditionalIconCellLayout CalculateCellLayout(
         double cellLeft,
         double cellTop,
         double cellWidth,
         double cellHeight,
-        bool showValue)
+        bool showValue,
+        bool isRightToLeft = false)
     {
         var cellRight = cellLeft + cellWidth;
 
@@ -59,14 +68,30 @@ public static class ConditionalIconCellLayoutPlanner
             Math.Min(
                 Math.Max(0, cellWidth - 8),
                 Math.Max(0, cellHeight - 6)));
-        var iconLeft = Math.Round(Math.Clamp(cellLeft + IconLeftInset, cellLeft, cellRight - size));
+        var iconLeft = isRightToLeft
+            ? Math.Round(Math.Clamp(cellRight - IconLeftInset - size, cellLeft, cellRight - size))
+            : Math.Round(Math.Clamp(cellLeft + IconLeftInset, cellLeft, cellRight - size));
         var iconTop = Math.Round(cellTop + (cellHeight - size) / 2);
 
         if (!showValue)
             return new ConditionalIconCellLayout(size, iconLeft, iconTop, TextLeft: 0, TextWidth: 0, ShouldDrawText: false);
 
-        var textLeft = Math.Min(cellRight, cellLeft + GutterWidth);
-        var textWidth = Math.Max(0, cellRight - textLeft);
+        double textLeft;
+        double textWidth;
+        if (isRightToLeft)
+        {
+            // Mirror image of the LTR layout: the gutter is reserved next to the (right-pinned) icon,
+            // so the value text runs from the cell's left edge up to where that gutter begins.
+            textLeft = cellLeft;
+            var textRight = Math.Max(cellLeft, cellRight - GutterWidth);
+            textWidth = Math.Max(0, textRight - cellLeft);
+        }
+        else
+        {
+            textLeft = Math.Min(cellRight, cellLeft + GutterWidth);
+            textWidth = Math.Max(0, cellRight - textLeft);
+        }
+
         return new ConditionalIconCellLayout(
             size,
             iconLeft,

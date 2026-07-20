@@ -48,6 +48,27 @@ public static class InsertCopiedCellsPlanner
                 InsertCellsShiftDirection.Right)
         };
 
+        // R54-meta-1: describes exactly which live workbook state `insertCommand` (above) will have
+        // already relocated by the time CutMoveFollowUpCommand runs (it is always the LAST command in
+        // the composite), so the follow-up can translate its captured _sourceRange to match wherever
+        // the insert's shift actually left the (blanked) source cells, rather than scanning for
+        // references/rules/merges at the ORIGINAL pre-insert coordinates the insert already moved.
+        var postInsertShift = choice switch
+        {
+            KeyboardInsertDeleteDialogChoice.ShiftDown => new PostInsertShift(
+                IsRowAxis: true, Threshold: insertRange.Start.Row, Amount: sourceRange.RowCount,
+                BandStart: insertRange.Start.Col, BandEnd: insertRange.End.Col),
+            KeyboardInsertDeleteDialogChoice.EntireRow => new PostInsertShift(
+                IsRowAxis: true, Threshold: destinationRange.Start.Row, Amount: sourceRange.RowCount,
+                BandStart: 0u, BandEnd: CellAddress.MaxCol),
+            KeyboardInsertDeleteDialogChoice.EntireColumn => new PostInsertShift(
+                IsRowAxis: false, Threshold: destinationRange.Start.Col, Amount: sourceRange.ColCount,
+                BandStart: 0u, BandEnd: CellAddress.MaxRow),
+            _ => new PostInsertShift(
+                IsRowAxis: false, Threshold: insertRange.Start.Col, Amount: sourceRange.ColCount,
+                BandStart: insertRange.Start.Row, BandEnd: insertRange.End.Row),
+        };
+
         var pasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
             workbook,
             sheetId,
@@ -94,7 +115,7 @@ public static class InsertCopiedCellsPlanner
                     // the paste half independently duplicated at the destination). This follow-up
                     // corrects all three, mirroring the true-move semantics MoveRangeCommand already
                     // applies for the ordinary Ctrl+X/Ctrl+V path.
-                    new CutMoveFollowUpCommand(sheetId, sourceRange, destinationRange, cells)
+                    new CutMoveFollowUpCommand(sheetId, sourceRange, destinationRange, cells, postInsertShift)
                 ]);
         }
 
@@ -108,6 +129,42 @@ public static class InsertCopiedCellsPlanner
             destination.Row + sourceRange.RowCount - 1,
             destination.Col + sourceRange.ColCount - 1);
         return new GridRange(destination, end);
+    }
+
+    /// <summary>
+    /// Describes the row/column shift <c>insertCommand</c> (the sibling command that runs BEFORE
+    /// <see cref="CutMoveFollowUpCommand"/> in the same composite) applies to any live workbook state
+    /// -- cell references, CF/DV rule ranges, merges, hyperlinks -- that sits at/after
+    /// <see cref="Threshold"/> along the shifted axis and within [<see cref="BandStart"/>..<see cref="BandEnd"/>]
+    /// on the other axis (R54-meta-1).
+    /// </summary>
+    private readonly record struct PostInsertShift(bool IsRowAxis, uint Threshold, uint Amount, uint BandStart, uint BandEnd);
+
+    /// <summary>
+    /// Translates <paramref name="range"/> by <paramref name="shift"/> if it falls entirely at/after
+    /// the shift's threshold and within its band -- i.e. if it is exactly the sort of range the
+    /// insert command would already have relocated -- otherwise returns it unchanged.
+    /// </summary>
+    private static GridRange AdjustForInsertShift(GridRange range, PostInsertShift shift)
+    {
+        if (shift.IsRowAxis)
+        {
+            if (range.Start.Col < shift.BandStart || range.End.Col > shift.BandEnd)
+                return range;
+            if (range.Start.Row < shift.Threshold)
+                return range;
+            return new GridRange(
+                new CellAddress(range.Start.Sheet, range.Start.Row + shift.Amount, range.Start.Col),
+                new CellAddress(range.End.Sheet, range.End.Row + shift.Amount, range.End.Col));
+        }
+
+        if (range.Start.Row < shift.BandStart || range.End.Row > shift.BandEnd)
+            return range;
+        if (range.Start.Col < shift.Threshold)
+            return range;
+        return new GridRange(
+            new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col + shift.Amount),
+            new CellAddress(range.End.Sheet, range.End.Row, range.End.Col + shift.Amount));
     }
 
     /// <summary>
@@ -132,6 +189,7 @@ public static class InsertCopiedCellsPlanner
         private readonly GridRange _sourceRange;
         private readonly GridRange _destinationRange;
         private readonly IReadOnlyList<(CellAddress Source, Cell Cell)> _cutCells;
+        private readonly PostInsertShift _postInsertShift;
 
         private Dictionary<CellAddress, string?>? _destinationFormulaSnapshot;
         private Dictionary<CellAddress, string>? _externalFormulaSnapshot;
@@ -149,12 +207,14 @@ public static class InsertCopiedCellsPlanner
             SheetId sheetId,
             GridRange sourceRange,
             GridRange destinationRange,
-            IReadOnlyList<(CellAddress Source, Cell Cell)> cutCells)
+            IReadOnlyList<(CellAddress Source, Cell Cell)> cutCells,
+            PostInsertShift postInsertShift)
         {
             _sheetId = sheetId;
             _sourceRange = sourceRange;
             _destinationRange = destinationRange;
             _cutCells = cutCells;
+            _postInsertShift = postInsertShift;
         }
 
         public CommandOutcome Apply(ICommandContext ctx)
@@ -167,7 +227,20 @@ public static class InsertCopiedCellsPlanner
             if (rowDelta == 0 && colDelta == 0)
                 return new CommandOutcome(true, AffectedCells: affected);
 
-            var moveOp = new MoveRangeOp(
+            // R54-meta-1: `insertCommand` (in the composite built by CreateCommand) runs BEFORE this
+            // follow-up and, if its shift band overlapped _sourceRange, has already relocated every
+            // live reference/rule/merge/hyperlink that pointed at (or lived inside) it to a NEW
+            // location -- a whole-row/column (or band-scoped) insert rewrites EVERY workbook formula
+            // referencing that region, whether or not it has anything to do with this cut/paste.
+            // `effectiveSourceRange` is where the (blanked) source cells -- and anything that pointed
+            // at them -- now actually live; it equals _sourceRange unchanged whenever the insert's
+            // shift band did not overlap it (the ordinary case exercised by the pre-existing tests).
+            var effectiveSourceRange = AdjustForInsertShift(_sourceRange, _postInsertShift);
+
+            // Own-formula fixup (below) must use the ORIGINAL, pre-insert _sourceRange: `originalFormula`
+            // is the pre-cut captured text, whose own references (including any pointing at sibling
+            // cells still inside the selection) were written against the PRE-insert coordinate system.
+            var ownMoveOp = new MoveRangeOp(
                 sheet.Name,
                 _sourceRange.Start.Row,
                 _sourceRange.Start.Col,
@@ -175,6 +248,20 @@ public static class InsertCopiedCellsPlanner
                 _sourceRange.End.Col,
                 rowDelta,
                 colDelta);
+
+            // External-reference repoint (below) scans CURRENT (post-insert) formula text elsewhere in
+            // the workbook, so it must match against the POST-insert (effective) source rectangle, with
+            // the delta recomputed from that same effective rectangle to the (unaffected) destination.
+            var externalRowDelta = checked((int)((long)_destinationRange.Start.Row - effectiveSourceRange.Start.Row));
+            var externalColDelta = checked((int)((long)_destinationRange.Start.Col - effectiveSourceRange.Start.Col));
+            var externalMoveOp = new MoveRangeOp(
+                sheet.Name,
+                effectiveSourceRange.Start.Row,
+                effectiveSourceRange.Start.Col,
+                effectiveSourceRange.End.Row,
+                effectiveSourceRange.End.Col,
+                externalRowDelta,
+                externalColDelta);
 
             // (1) Own-formula fixup: recompute each pasted formula from its ORIGINAL (pre-cut)
             // captured text using move semantics, overwriting whatever the blanket-offset paste wrote.
@@ -193,7 +280,7 @@ public static class InsertCopiedCellsPlanner
                 if (destCell is null)
                     continue;
 
-                var corrected = FormulaRewriter.Rewrite(originalFormula, moveOp, sheet.Name) ?? originalFormula;
+                var corrected = FormulaRewriter.Rewrite(originalFormula, ownMoveOp, sheet.Name) ?? originalFormula;
                 if (destCell.FormulaText == corrected)
                     continue;
 
@@ -206,20 +293,21 @@ public static class InsertCopiedCellsPlanner
 
             // (2) External-reference repoint: any OTHER formula in the workbook that referenced a cut
             // cell must follow it to the destination. The moved cells themselves (now living in
-            // _destinationRange, already handled above) and the (cleared) _sourceRange are excluded.
+            // _destinationRange, already handled above) and the (cleared, possibly insert-shifted)
+            // effectiveSourceRange are excluded.
             _externalFormulaSnapshot = [];
             foreach (var otherSheet in ctx.Workbook.Sheets)
             {
                 foreach (var addr in otherSheet.EnumerateFormulaCells())
                 {
-                    if (_sourceRange.Contains(addr) || _destinationRange.Contains(addr))
+                    if (effectiveSourceRange.Contains(addr) || _destinationRange.Contains(addr))
                         continue;
 
                     var cell = otherSheet.GetCell(addr);
                     if (cell?.FormulaText is null)
                         continue;
 
-                    var rewritten = FormulaRewriter.Rewrite(cell.FormulaText, moveOp, otherSheet.Name);
+                    var rewritten = FormulaRewriter.Rewrite(cell.FormulaText, externalMoveOp, otherSheet.Name);
                     if (rewritten is null)
                         continue;
 
@@ -229,15 +317,18 @@ public static class InsertCopiedCellsPlanner
                 }
             }
 
-            // (3) CF/DV rules scoped entirely to the cut source range follow the move.
-            TranslateFullyContainedRules(sheet, rowDelta, colDelta);
+            // (3) CF/DV rules scoped entirely to the cut source range follow the move. Rule ranges are
+            // CURRENT (post-insert) state too, so match against effectiveSourceRange and translate by
+            // the same external delta used for external formulas above.
+            TranslateFullyContainedRules(sheet, externalRowDelta, externalColDelta, effectiveSourceRange);
 
             // (4) Detach the vacated source's merge/hyperlink now that paste has already carried them
             // to the destination (PasteMergedRegionsCommand / the paste's hyperlink carry both re-read
             // sheet.MergedRegions/Hyperlinks at THEIR OWN Apply time, which already ran by this point
             // in the composite -- doing this any earlier would starve them of the state they need to
-            // recreate the merge/hyperlink at the destination in the first place).
-            _removedMergedRegions = sheet.MergedRegions.Where(region => IsFullyContained(region, _sourceRange)).ToList();
+            // recreate the merge/hyperlink at the destination in the first place). sheet.MergedRegions/
+            // Hyperlinks are current (post-insert) state, so use effectiveSourceRange here too.
+            _removedMergedRegions = sheet.MergedRegions.Where(region => IsFullyContained(region, effectiveSourceRange)).ToList();
             if (_removedMergedRegions.Count > 0)
             {
                 sheet.ReplaceMergedRegions(
@@ -246,7 +337,7 @@ public static class InsertCopiedCellsPlanner
 
             _removedHyperlinks = [];
             _removedHyperlinkMetadata = [];
-            foreach (var address in _sourceRange.AllCells())
+            foreach (var address in effectiveSourceRange.AllCells())
             {
                 if (sheet.Hyperlinks.TryGetValue(address, out var link))
                 {
@@ -313,14 +404,14 @@ public static class InsertCopiedCellsPlanner
             }
         }
 
-        private void TranslateFullyContainedRules(Sheet sheet, int rowDelta, int colDelta)
+        private void TranslateFullyContainedRules(Sheet sheet, int rowDelta, int colDelta, GridRange sourceContainer)
         {
             _dvAppliesToSnapshot = [];
             _dvAdditionalSnapshot = [];
             var dvChanged = false;
             foreach (var rule in sheet.DataValidations)
             {
-                if (IsFullyContained(rule.AppliesTo, _sourceRange))
+                if (IsFullyContained(rule.AppliesTo, sourceContainer))
                 {
                     _dvAppliesToSnapshot.Add((rule, rule.AppliesTo));
                     rule.AppliesTo = Translate(rule.AppliesTo, rowDelta, colDelta);
@@ -329,7 +420,7 @@ public static class InsertCopiedCellsPlanner
 
                 for (var i = 0; i < rule.AdditionalRanges.Count; i++)
                 {
-                    if (IsFullyContained(rule.AdditionalRanges[i], _sourceRange))
+                    if (IsFullyContained(rule.AdditionalRanges[i], sourceContainer))
                     {
                         _dvAdditionalSnapshot.Add((rule, i, rule.AdditionalRanges[i]));
                         rule.AdditionalRanges[i] = Translate(rule.AdditionalRanges[i], rowDelta, colDelta);
@@ -346,7 +437,7 @@ public static class InsertCopiedCellsPlanner
             var cfChanged = false;
             foreach (var rule in sheet.ConditionalFormats)
             {
-                if (IsFullyContained(rule.AppliesTo, _sourceRange))
+                if (IsFullyContained(rule.AppliesTo, sourceContainer))
                 {
                     _cfAppliesToSnapshot.Add((rule, rule.AppliesTo));
                     rule.AppliesTo = Translate(rule.AppliesTo, rowDelta, colDelta);
@@ -359,7 +450,7 @@ public static class InsertCopiedCellsPlanner
                     var anyChanged = false;
                     foreach (var ar in additional)
                     {
-                        if (IsFullyContained(ar, _sourceRange))
+                        if (IsFullyContained(ar, sourceContainer))
                         {
                             result.Add(Translate(ar, rowDelta, colDelta));
                             anyChanged = true;

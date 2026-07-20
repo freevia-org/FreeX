@@ -137,16 +137,22 @@ internal static class XlsxClosedXmlCellMapper
         // what Excel itself would round-trip; the in-app grid/error-checking display of "#CIRCULAR!" is
         // unaffected because that reads the live ScalarValue.Circular, not this xlsx-serialization path.
         ErrorValue e when e.Code.Equals("#CIRCULAR!", StringComparison.OrdinalIgnoreCase) => 0d,
-        // #SPILL!/#CALC! ARE valid OOXML error codes (Excel round-trips them verbatim), but
+        // #SPILL!/#CALC! (and the newer Excel-365 #FIELD!/#CONNECT!/#UNKNOWN!/#BLOCKED!/
+        // #GETTING_DATA codes) ARE valid OOXML error codes (Excel round-trips them verbatim), but
         // ClosedXML 0.105.0's XLError enum only defines the 7 "classic" codes (NullValue,
         // DivisionByZero, IncompatibleValue, CellReference, NameNotRecognized, NumberInvalid,
-        // NoValueAvailable) — there is no XLError member that serializes as "#SPILL!" or "#CALC!", so
+        // NoValueAvailable) — there is no XLError member that serializes as any of these, so
         // MapErrorValueInverse cannot represent them as a true error cell. Silently downgrading to
         // #N/A would swap in a different, wrong-but-valid error with no indication anything changed.
-        // Preserve the exact code as visible text instead: a saved cell reading literally "#SPILL!" or
-        // "#CALC!" is honest about what happened, unlike a cell that silently became "#N/A".
+        // Preserve the exact code as visible text instead: a saved cell reading literally "#SPILL!"
+        // or "#GETTING_DATA" is honest about what happened, unlike a cell that silently became "#N/A".
         ErrorValue e when e.Code.Equals("#SPILL!", StringComparison.OrdinalIgnoreCase) ||
-                          e.Code.Equals("#CALC!", StringComparison.OrdinalIgnoreCase) => e.Code,
+                          e.Code.Equals("#CALC!", StringComparison.OrdinalIgnoreCase) ||
+                          e.Code.Equals("#FIELD!", StringComparison.OrdinalIgnoreCase) ||
+                          e.Code.Equals("#CONNECT!", StringComparison.OrdinalIgnoreCase) ||
+                          e.Code.Equals("#UNKNOWN!", StringComparison.OrdinalIgnoreCase) ||
+                          e.Code.Equals("#BLOCKED!", StringComparison.OrdinalIgnoreCase) ||
+                          e.Code.Equals("#GETTING_DATA", StringComparison.OrdinalIgnoreCase) => e.Code,
         ErrorValue e => MapErrorValueInverse(e),
         _ => Blank.Value
     };

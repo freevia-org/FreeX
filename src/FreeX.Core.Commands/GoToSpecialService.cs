@@ -476,8 +476,13 @@ public static class GoToSpecialService
             AddIfInRange(result, range, textBox.Anchor);
         foreach (var control in sheet.FormControls)
         {
-            if (control.Anchor is { } controlAnchor)
-                AddIfInRange(result, range, controlAnchor.Start);
+            // A form control's anchor is a full GridRange (unlike the single-CellAddress
+            // anchors above), so it must be selected whenever ANY part of its extent
+            // overlaps the search range -- not just when its start cell happens to fall
+            // inside it -- to match Excel's bounding-box-intersection behavior.
+            if (control.Anchor is { } controlAnchor && controlAnchor.Overlaps(range) &&
+                !result.Contains(controlAnchor.Start))
+                result.Add(controlAnchor.Start);
         }
 
         return result;

@@ -105,7 +105,21 @@ public partial class MainWindow
         IWorkbookCommand command = targetSheetIds.Count > 1
             ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
             : new EditCellsCommand(_currentSheetId, edits);
-        return TryExecuteCommand(command, title, out outcome);
+        var executed = TryExecuteCommand(command, title, out outcome);
+
+        // R54-render-copy-cut-marquee-4-1: Excel cancels an active Copy/Cut marching-ants mode
+        // as soon as an ordinary cell edit is committed -- a subsequent Paste must not silently
+        // move/copy a source range that the user has since overwritten. TryExecuteCommand itself
+        // is a generic low-level executor shared by many unrelated command kinds (charts, styles,
+        // print settings, ...), so the cancellation is scoped here, at the specific "committing a
+        // normal cell edit" call site, rather than in the generic executor.
+        if (executed && !outcome.IsNoOp && (_internalClipboard is not null || SheetGrid.ClipboardRange is not null))
+        {
+            _internalClipboard = null;
+            ClearClipboardVisualState();
+        }
+
+        return executed;
     }
 
     private bool TryExecuteEditCells(

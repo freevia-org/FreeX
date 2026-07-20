@@ -214,6 +214,11 @@ public static class WorkbookPdfContentBuilder
                     HorizontalAlignment.Center
                         or HorizontalAlignment.Justify
                         or HorizontalAlignment.Distributed => x + ((w - textWidth) / 2.0),
+                    // Fill: matches the on-screen GridView (DoesHorizontalAlignmentConsumeIndent excludes
+                    // Fill) and the canonical CellTextOrientationLayoutPlanner (Fill => cellRect.Left + 2,
+                    // no indent term) -- Excel's Format Cells indent stepper is disabled for Fill, so any
+                    // leftover nonzero IndentLevel on a Fill-aligned cell must not shift the text.
+                    HorizontalAlignment.Fill => x + (2.0 * textScale),
                     _ => x + (2.0 * textScale) + indentPt
                 };
 

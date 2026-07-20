@@ -134,6 +134,15 @@ public static class ConditionalIconGlyphGeometry
     /// that rect's coordinate space (so a renderer that draws onto a same-sized canvas at the origin
     /// passes 0,0,size,size).
     /// </summary>
+    /// <param name="isAlternateVariant">
+    /// R54-render-cf-icon-databar-4-2: <c>true</c> for the alternate member of a style pair that
+    /// shares a <see cref="ConditionalIconGlyphKind"/> but is visually distinct in Excel --
+    /// "3 Traffic Lights (Rimmed)" (adds a bezel ring around the light) and "3 Symbols (Uncircled)"
+    /// (drops the circular backdrop behind the mark). See
+    /// <see cref="ConditionalIconGlyphResolver.IsAlternateGlyphVariant"/>. Ignored by every other
+    /// glyph kind. Defaults to <c>false</c> (the primary/default variant of each pair), matching the
+    /// pre-existing behavior for callers that don't yet distinguish the two.
+    /// </param>
     public static IReadOnlyList<CfGlyphOp> Build(
         ConditionalIconGlyphKind glyphKind,
         int iconIndex,
@@ -141,14 +150,15 @@ public static class ConditionalIconGlyphGeometry
         double x,
         double y,
         double width,
-        double height)
+        double height,
+        bool isAlternateVariant = false)
     {
         var r = new RectInfo(x, y, width, height);
         return glyphKind switch
         {
-            ConditionalIconGlyphKind.TrafficLight => new[] { FilledEllipse(r) },
+            ConditionalIconGlyphKind.TrafficLight => TrafficLightGlyph(r, isAlternateVariant),
             ConditionalIconGlyphKind.Sign => SignGlyph(iconIndex, r),
-            ConditionalIconGlyphKind.Symbol => SymbolGlyph(iconIndex, r),
+            ConditionalIconGlyphKind.Symbol => SymbolGlyph(iconIndex, r, isAlternateVariant),
             ConditionalIconGlyphKind.Flag => FlagGlyph(r),
             ConditionalIconGlyphKind.Rating => RatingBarsGlyph(iconIndex, iconCount, r),
             ConditionalIconGlyphKind.Star => StarGlyph(iconIndex, iconCount, r),
@@ -172,6 +182,28 @@ public static class ConditionalIconGlyphGeometry
 
     private static CfGlyphOp FilledEllipse(RectInfo r) =>
         CfGlyphOp.Ellipse(CfGlyphFill.Icon, CfGlyphStroke.Outline, r.Center, r.Width / 2, r.Height / 2);
+
+    /// <summary>
+    /// "3 Traffic Lights" glyph. Unrimmed (the default) is a single filled circle with its own thin
+    /// outline. Rimmed adds a darker bezel ring around a slightly smaller filled disc, distinguishing
+    /// style "3TrafficLights2" (Rimmed) from "3TrafficLights1" (Unrimmed) -- previously both rendered
+    /// pixel-identical (R54-render-cf-icon-databar-4-2).
+    /// </summary>
+    private static CfGlyphOp[] TrafficLightGlyph(RectInfo r, bool isRimmed)
+    {
+        if (!isRimmed)
+            return new[] { FilledEllipse(r) };
+
+        var bezelRadiusX = r.Width / 2;
+        var bezelRadiusY = r.Height / 2;
+        var discRadiusX = bezelRadiusX * 0.82;
+        var discRadiusY = bezelRadiusY * 0.82;
+        return new[]
+        {
+            CfGlyphOp.Ellipse(CfGlyphFill.None, CfGlyphStroke.Outline, r.Center, bezelRadiusX, bezelRadiusY),
+            CfGlyphOp.Ellipse(CfGlyphFill.Icon, CfGlyphStroke.Outline, r.Center, discRadiusX, discRadiusY),
+        };
+    }
 
     private static CfGlyphOp[] SignGlyph(int iconIndex, RectInfo r)
     {
@@ -198,10 +230,22 @@ public static class ConditionalIconGlyphGeometry
         return CheckMarkCircle(r);
     }
 
-    private static CfGlyphOp[] SymbolGlyph(int iconIndex, RectInfo r)
+    private static CfGlyphOp[] SymbolGlyph(int iconIndex, RectInfo r, bool isUncircled = false)
     {
         if (iconIndex <= 0)
         {
+            // R54-render-cf-icon-databar-4-2: Uncircled (style "3Symbols2") drops the diamond backdrop
+            // entirely and draws just the bare cross mark, unlike Circled (the default), which keeps
+            // the filled diamond behind a white cross.
+            if (isUncircled)
+            {
+                return new[]
+                {
+                    CfGlyphOp.Line(CfGlyphStroke.Outline, r.Frac(0.24, 0.24), r.Frac(0.76, 0.76)),
+                    CfGlyphOp.Line(CfGlyphStroke.Outline, r.Frac(0.76, 0.24), r.Frac(0.24, 0.76)),
+                };
+            }
+
             return new[]
             {
                 CfGlyphOp.Polygon(CfGlyphFill.Icon, CfGlyphStroke.Outline, DiamondPoints(r)),
@@ -212,10 +256,22 @@ public static class ConditionalIconGlyphGeometry
 
         if (iconIndex == 1)
         {
+            if (isUncircled)
+                return new[] { CfGlyphOp.Line(CfGlyphStroke.Outline, r.Frac(0.2, 0.5), r.Frac(0.8, 0.5)) };
+
             return new[]
             {
                 FilledEllipse(r),
                 CfGlyphOp.Line(CfGlyphStroke.WhiteThin, r.Frac(0.3, 0.5), r.Frac(0.7, 0.5)),
+            };
+        }
+
+        if (isUncircled)
+        {
+            return new[]
+            {
+                CfGlyphOp.Line(CfGlyphStroke.Outline, r.Frac(0.28, 0.56), r.Frac(0.44, 0.72)),
+                CfGlyphOp.Line(CfGlyphStroke.Outline, r.Frac(0.44, 0.72), r.Frac(0.76, 0.3)),
             };
         }
 
@@ -232,7 +288,13 @@ public static class ConditionalIconGlyphGeometry
 
     private static CfGlyphOp[] QuarterGlyph(int iconIndex, int iconCount, RectInfo r)
     {
-        var sweepFraction = Math.Max(1, iconIndex + 1) / Math.Max(1d, iconCount);
+        // R54-render-cf-icon-databar-4-1: Excel's "5 Quarters" icon set fills 0/4, 1/4, 2/4, 3/4, 4/4
+        // quarters for buckets 0..4 (worst bucket is a fully EMPTY circle). Mirrors the same
+        // index/(count-1) mapping StarGlyph already uses two methods below, rather than
+        // (index+1)/count, which is 20 points too full for every bucket and never reaches empty.
+        var sweepFraction = iconCount <= 1
+            ? 1d
+            : Math.Clamp(iconIndex / (double)(iconCount - 1), 0d, 1d);
         return new[]
         {
             CfGlyphOp.Ellipse(CfGlyphFill.White, CfGlyphStroke.Outline, r.Center, r.Width / 2, r.Height / 2),

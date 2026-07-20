@@ -502,7 +502,8 @@ public sealed partial class XlsxFileAdapter
 
                 var changedItemFilters = RewritePreservedPivotFieldItemFilters(root, pivot, cache, workbookNs);
                 var changedPageFields = RewritePreservedPivotPageFieldSelections(root, pivot, cache, workbookNs);
-                if (changedItemFilters || changedPageFields)
+                var changedValueLabelFilters = RewritePreservedPivotValueAndLabelFilters(root, pivot, workbookNs);
+                if (changedItemFilters || changedPageFields || changedValueLabelFilters)
                     XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, pivotXml);
             }
         }
@@ -721,6 +722,290 @@ public sealed partial class XlsxFileAdapter
             map[realRawIndexes[rank]] = rank;
 
         return map;
+    }
+
+    // R54-io-pivot-filter-3-1: value/label/top-N pivot filter edits (add/change/clear) made to the
+    // loaded PivotTableModel after Load() were silently dropped on save, because nothing on this
+    // preserved-part path ever wrote pivot.ValueFilters/LabelFilters back -- XlsxPivotTableWriter.Save
+    // (the only code that emits <valueFilters>/<labelFilters>/native <filters> XML) is gated behind
+    // !hasSourcePackage and never runs here. Rewrite the preserved part's filter state from the model,
+    // but ONLY when it actually differs from what is currently encoded there (decoded via the same
+    // native-token/invented-token mappings XlsxPivotTableReader uses) -- this keeps a file the user never
+    // touched byte-stable, rather than unconditionally converting a perfectly valid, Excel-authored
+    // native <filters> element into FreeX's own non-schema <valueFilters>/<labelFilters> elements on
+    // every single save.
+    private static bool RewritePreservedPivotValueAndLabelFilters(
+        XElement pivotTableDefinitionRoot,
+        PivotTableModel pivot,
+        XNamespace workbookNs)
+    {
+        var existingValueFilters = ReadPreservedPivotValueFilters(pivotTableDefinitionRoot, workbookNs);
+        var existingLabelFilters = ReadPreservedPivotLabelFilters(pivotTableDefinitionRoot, workbookNs);
+
+        var valueFiltersChanged = !existingValueFilters.SequenceEqual(pivot.ValueFilters);
+        var labelFiltersChanged = !existingLabelFilters.SequenceEqual(pivot.LabelFilters);
+        if (!valueFiltersChanged && !labelFiltersChanged)
+            return false;
+
+        // Remove every previously-preserved representation (the real native <filters> element AND any
+        // earlier FreeX-authored invented <valueFilters>/<labelFilters> elements) so re-adding below can't
+        // create duplicates that XlsxPivotTableReader would concatenate back together on the next Load().
+        pivotTableDefinitionRoot.Element(workbookNs + "filters")?.Remove();
+        pivotTableDefinitionRoot.Element(workbookNs + "valueFilters")?.Remove();
+        pivotTableDefinitionRoot.Element(workbookNs + "labelFilters")?.Remove();
+
+        var newValueFilters = XlsxPivotTableWriter.ToPivotValueFiltersXml(pivot.ValueFilters, workbookNs);
+        var newLabelFilters = XlsxPivotTableWriter.ToPivotLabelFiltersXml(pivot.LabelFilters, workbookNs);
+
+        // Mirror XlsxPivotTableWriter's own element order for a fresh part: valueFilters, then
+        // labelFilters, positioned right before pivotSorts (or pivotTableStyleInfo, which is required and
+        // always present, if there is no pivotSorts) so a mixed preserved+regenerated part stays
+        // internally consistent.
+        var anchor = pivotTableDefinitionRoot.Element(workbookNs + "pivotSorts")
+            ?? pivotTableDefinitionRoot.Element(workbookNs + "pivotTableStyleInfo");
+        InsertBeforeAnchorOrAppend(pivotTableDefinitionRoot, anchor, newLabelFilters);
+        InsertBeforeAnchorOrAppend(pivotTableDefinitionRoot, anchor, newValueFilters);
+
+        return true;
+    }
+
+    private static void InsertBeforeAnchorOrAppend(XElement root, XElement? anchor, XElement? element)
+    {
+        if (element is null)
+            return;
+
+        if (anchor is not null)
+            anchor.AddBeforeSelf(element);
+        else
+            root.Add(element);
+    }
+
+    // Decodes the CURRENTLY preserved value filters (both FreeX's invented <valueFilters> element and
+    // the real native <filters> element), combined in the exact same order XlsxPivotTableReader.Load
+    // combines them (invented first, then native), purely so RewritePreservedPivotValueAndLabelFilters
+    // above can tell whether the model has actually changed since load.
+    private static List<PivotValueFilterModel> ReadPreservedPivotValueFilters(XElement root, XNamespace workbookNs)
+    {
+        var invented = root.Element(workbookNs + "valueFilters")?
+            .Elements(workbookNs + "valueFilter")
+            .Select(filter => new PivotValueFilterModel(
+                XlsxXmlAttributeReader.ReadIntAttribute(filter, "dataField") ?? -1,
+                DecodeInventedPivotValueFilterKind(filter.Attribute("type")?.Value),
+                XlsxXmlAttributeReader.ReadIntAttribute(filter, "count") ?? 0,
+                XlsxXmlAttributeReader.ReadDoubleAttribute(filter, "comparisonValue"),
+                XlsxXmlAttributeReader.ReadDoubleAttribute(filter, "comparisonValue2"),
+                XlsxXmlAttributeReader.ReadIntAttribute(filter, "field")))
+            .Where(filter => filter.DataFieldIndex >= 0 &&
+                             (filter.Count > 0 ||
+                              filter.ComparisonValue is not null ||
+                              filter.Kind is PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage))
+            .ToList()
+            ?? [];
+
+        var nativeFiltersElement = root.Element(workbookNs + "filters");
+        var native = nativeFiltersElement?
+            .Elements(workbookNs + "filter")
+            .Select(filter =>
+            {
+                var kind = DecodeNativePivotValueFilterKind(filter.Attribute("type")?.Value);
+                if (kind is null)
+                    return null;
+
+                return new PivotValueFilterModel(
+                    XlsxXmlAttributeReader.ReadIntAttribute(filter, "iMeasureFld") ?? XlsxXmlAttributeReader.ReadIntAttribute(filter, "dataField") ?? 0,
+                    kind.Value,
+                    XlsxXmlAttributeReader.ReadIntAttribute(filter, "count") ?? XlsxXmlAttributeReader.ReadIntAttribute(filter, "val") ?? (kind.Value is PivotValueFilterKind.Top or PivotValueFilterKind.Bottom ? 10 : 0),
+                    ReadNativePivotFilterDoubleValueLocal(filter, "stringValue1", "value1", "val"),
+                    ReadNativePivotFilterDoubleValueLocal(filter, "stringValue2", "value2"),
+                    XlsxXmlAttributeReader.ReadIntAttribute(filter, "fld") ?? XlsxXmlAttributeReader.ReadIntAttribute(filter, "field"));
+            })
+            .Where(filter => filter is not null)
+            .Select(filter => filter!)
+            .ToList()
+            ?? [];
+
+        return invented.Concat(native).ToList();
+    }
+
+    // Sibling of ReadPreservedPivotValueFilters, for label filters.
+    private static List<PivotLabelFilterModel> ReadPreservedPivotLabelFilters(XElement root, XNamespace workbookNs)
+    {
+        var invented = root.Element(workbookNs + "labelFilters")?
+            .Elements(workbookNs + "labelFilter")
+            .Select(filter => new PivotLabelFilterModel(
+                XlsxXmlAttributeReader.ReadIntAttribute(filter, "field") ?? -1,
+                DecodeInventedPivotLabelFilterKind(filter.Attribute("type")?.Value),
+                filter.Attribute("value")?.Value ?? "",
+                filter.Attribute("value2")?.Value))
+            .Where(filter => filter.SourceFieldIndex >= 0 && !string.IsNullOrEmpty(filter.Value))
+            .ToList()
+            ?? [];
+
+        var nativeFiltersElement = root.Element(workbookNs + "filters");
+        var native = nativeFiltersElement?
+            .Elements(workbookNs + "filter")
+            .Select(filter =>
+            {
+                var kind = DecodeNativePivotLabelFilterKind(filter.Attribute("type")?.Value);
+                if (kind is null)
+                    return null;
+
+                var value = ReadNativePivotFilterTextValueLocal(filter, "stringValue1", "value1", "val");
+                if (string.IsNullOrEmpty(value) && !PreservedPivotDateFilterKindsWithoutValue.Contains(kind.Value))
+                    return null;
+
+                return new PivotLabelFilterModel(
+                    XlsxXmlAttributeReader.ReadIntAttribute(filter, "fld") ?? XlsxXmlAttributeReader.ReadIntAttribute(filter, "field") ?? -1,
+                    kind.Value,
+                    value ?? "",
+                    ReadNativePivotFilterTextValueLocal(filter, "stringValue2", "value2"));
+            })
+            .Where(filter => filter is not null && filter.SourceFieldIndex >= 0)
+            .Select(filter => filter!)
+            .ToList()
+            ?? [];
+
+        return invented.Concat(native).ToList();
+    }
+
+    private static readonly HashSet<PivotLabelFilterKind> PreservedPivotDateFilterKindsWithoutValue =
+    [
+        PivotLabelFilterKind.Yesterday,
+        PivotLabelFilterKind.Today,
+        PivotLabelFilterKind.Tomorrow,
+        PivotLabelFilterKind.LastWeek,
+        PivotLabelFilterKind.ThisWeek,
+        PivotLabelFilterKind.NextWeek,
+        PivotLabelFilterKind.LastMonth,
+        PivotLabelFilterKind.ThisMonth,
+        PivotLabelFilterKind.NextMonth,
+        PivotLabelFilterKind.LastQuarter,
+        PivotLabelFilterKind.ThisQuarter,
+        PivotLabelFilterKind.NextQuarter,
+        PivotLabelFilterKind.LastYear,
+        PivotLabelFilterKind.ThisYear,
+        PivotLabelFilterKind.NextYear,
+        PivotLabelFilterKind.YearToDate,
+    ];
+
+    // Mirrors XlsxPivotTableReader.Converters.cs's ReadPivotValueFilterKind (the invented-format token
+    // decode) -- duplicated locally because that method is private to XlsxPivotTableReader.
+    private static PivotValueFilterKind DecodeInventedPivotValueFilterKind(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "bottom" => PivotValueFilterKind.Bottom,
+            "greaterthan" or "greater_than" => PivotValueFilterKind.GreaterThan,
+            "greaterthanorequal" or "greater_than_or_equal" => PivotValueFilterKind.GreaterThanOrEqual,
+            "lessthan" or "less_than" => PivotValueFilterKind.LessThan,
+            "lessthanorequal" or "less_than_or_equal" => PivotValueFilterKind.LessThanOrEqual,
+            "equals" or "equal" => PivotValueFilterKind.Equals,
+            "doesnotequal" or "not_equal" => PivotValueFilterKind.DoesNotEqual,
+            "between" => PivotValueFilterKind.Between,
+            "notbetween" or "not_between" => PivotValueFilterKind.NotBetween,
+            "aboveaverage" or "above_average" => PivotValueFilterKind.AboveAverage,
+            "belowaverage" or "below_average" => PivotValueFilterKind.BelowAverage,
+            _ => PivotValueFilterKind.Top
+        };
+
+    // Mirrors XlsxPivotTableReader.Converters.cs's ReadPivotLabelFilterKind.
+    private static PivotLabelFilterKind DecodeInventedPivotLabelFilterKind(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "doesnotequal" or "not_equal" => PivotLabelFilterKind.DoesNotEqual,
+            "beginswith" or "begins_with" => PivotLabelFilterKind.BeginsWith,
+            "endswith" or "ends_with" => PivotLabelFilterKind.EndsWith,
+            "contains" => PivotLabelFilterKind.Contains,
+            "doesnotcontain" or "does_not_contain" => PivotLabelFilterKind.DoesNotContain,
+            "greaterthan" or "greater_than" => PivotLabelFilterKind.GreaterThan,
+            "greaterthanorequal" or "greater_than_or_equal" => PivotLabelFilterKind.GreaterThanOrEqual,
+            "lessthan" or "less_than" => PivotLabelFilterKind.LessThan,
+            "lessthanorequal" or "less_than_or_equal" => PivotLabelFilterKind.LessThanOrEqual,
+            "between" => PivotLabelFilterKind.Between,
+            _ => PivotLabelFilterKind.Equals
+        };
+
+    // Mirrors XlsxPivotTableReader.FiltersAndSorts.cs's ReadNativePivotValueFilterKind (the real
+    // ST_PivotFilterType token decode) -- duplicated locally because that method is private to
+    // XlsxPivotTableReader.
+    private static PivotValueFilterKind? DecodeNativePivotValueFilterKind(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "count" or "topcount" or "top" => PivotValueFilterKind.Top,
+            "bottomcount" or "bottom" => PivotValueFilterKind.Bottom,
+            "valueequal" or "valueequals" => PivotValueFilterKind.Equals,
+            "valuenotequal" or "valuedoesnotequal" => PivotValueFilterKind.DoesNotEqual,
+            "valuegreaterthan" => PivotValueFilterKind.GreaterThan,
+            "valuegreaterthanorequal" => PivotValueFilterKind.GreaterThanOrEqual,
+            "valuelessthan" => PivotValueFilterKind.LessThan,
+            "valuelessthanorequal" => PivotValueFilterKind.LessThanOrEqual,
+            "valuebetween" => PivotValueFilterKind.Between,
+            "valuenotbetween" => PivotValueFilterKind.NotBetween,
+            _ => null
+        };
+
+    // Mirrors XlsxPivotTableReader.FiltersAndSorts.cs's ReadNativePivotLabelFilterKind.
+    private static PivotLabelFilterKind? DecodeNativePivotLabelFilterKind(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "captionequal" or "captionequals" => PivotLabelFilterKind.Equals,
+            "captionnotequal" or "captiondoesnotequal" => PivotLabelFilterKind.DoesNotEqual,
+            "captionbeginswith" => PivotLabelFilterKind.BeginsWith,
+            "captionendswith" => PivotLabelFilterKind.EndsWith,
+            "captioncontains" => PivotLabelFilterKind.Contains,
+            "captionnotcontains" or "captiondoesnotcontain" => PivotLabelFilterKind.DoesNotContain,
+            "captiongreaterthan" => PivotLabelFilterKind.GreaterThan,
+            "captiongreaterthanorequal" => PivotLabelFilterKind.GreaterThanOrEqual,
+            "captionlessthan" => PivotLabelFilterKind.LessThan,
+            "captionlessthanorequal" => PivotLabelFilterKind.LessThanOrEqual,
+            "captionbetween" => PivotLabelFilterKind.Between,
+            "dateequal" => PivotLabelFilterKind.DateEqual,
+            "datenotequal" => PivotLabelFilterKind.DateNotEqual,
+            "dateolderthan" => PivotLabelFilterKind.DateOlderThan,
+            "dateolderthanorequal" => PivotLabelFilterKind.DateOlderThanOrEqual,
+            "datenewerthan" => PivotLabelFilterKind.DateNewerThan,
+            "datenewerthanorequal" => PivotLabelFilterKind.DateNewerThanOrEqual,
+            "datebetween" => PivotLabelFilterKind.DateBetween,
+            "datenotbetween" => PivotLabelFilterKind.DateNotBetween,
+            "yesterday" => PivotLabelFilterKind.Yesterday,
+            "today" => PivotLabelFilterKind.Today,
+            "tomorrow" => PivotLabelFilterKind.Tomorrow,
+            "lastweek" => PivotLabelFilterKind.LastWeek,
+            "thisweek" => PivotLabelFilterKind.ThisWeek,
+            "nextweek" => PivotLabelFilterKind.NextWeek,
+            "lastmonth" => PivotLabelFilterKind.LastMonth,
+            "thismonth" => PivotLabelFilterKind.ThisMonth,
+            "nextmonth" => PivotLabelFilterKind.NextMonth,
+            "lastquarter" => PivotLabelFilterKind.LastQuarter,
+            "thisquarter" => PivotLabelFilterKind.ThisQuarter,
+            "nextquarter" => PivotLabelFilterKind.NextQuarter,
+            "lastyear" => PivotLabelFilterKind.LastYear,
+            "thisyear" => PivotLabelFilterKind.ThisYear,
+            "nextyear" => PivotLabelFilterKind.NextYear,
+            "yeartodate" => PivotLabelFilterKind.YearToDate,
+            _ => null
+        };
+
+    private static string? ReadNativePivotFilterTextValueLocal(XElement filter, params string[] attributeNames)
+    {
+        foreach (var attributeName in attributeNames)
+        {
+            var value = filter.Attribute(attributeName)?.Value;
+            if (!string.IsNullOrEmpty(value))
+                return value;
+        }
+
+        return null;
+    }
+
+    private static double? ReadNativePivotFilterDoubleValueLocal(XElement filter, params string[] attributeNames)
+    {
+        foreach (var attributeName in attributeNames)
+        {
+            if (double.TryParse(filter.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+                return value;
+        }
+
+        return null;
     }
 
     private static XlsxExcelCompatibilityNormalizationPlan CreateExcelCompatibilityNormalizationPlan(

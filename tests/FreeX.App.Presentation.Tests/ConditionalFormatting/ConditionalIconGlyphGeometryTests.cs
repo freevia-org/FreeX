@@ -49,22 +49,39 @@ public sealed class ConditionalIconGlyphGeometryTests
         Describe(ops[1]).Should().Be("Polygon Icon/Outline [4,1.28 16,2.88 13.12,7.36 4,6.08]");
     }
 
+    // R54-render-cf-icon-databar-4-1: "5 Quarters" (IconSetStyle "5Quarters") is the only real Excel
+    // Quarters gallery preset (see ConditionalFormatPresetGalleryPlanner.cs / ConditionalFormatPresetFactory.cs)
+    // -- its per-cell IconCount is always 5 (ViewportConditionalFormatEvaluator.Thresholds.cs'
+    // GetIconSetCount takes the leading style digit, clamped 3..5). These golden tests previously
+    // pinned an unrealistic iconCount=4, which happened to mask the bucket-index off-by-one bug in
+    // QuarterGlyph's sweep-fraction formula; they now exercise the real count=5 so the fractions
+    // (0, 1/4, 2/4, 3/4, 4/4 = 0%, 25%, 50%, 75%, 100%) match what Excel actually renders, with the
+    // worst bucket (index 0) a fully EMPTY circle (zero sweep), not a 20%-filled pie slice.
     [Fact]
-    public void Build_Quarter_EmitsBackingDiscPieAndRing()
+    public void Build_Quarter_Index0_IsFullyEmpty()
     {
-        var ops = ConditionalIconGlyphGeometry.Build(ConditionalIconGlyphKind.Quarter, 0, 4, 0, 0, Size, Size);
+        var ops = ConditionalIconGlyphGeometry.Build(ConditionalIconGlyphKind.Quarter, 0, 5, 0, 0, Size, Size);
 
         ops.Should().HaveCount(3);
         Describe(ops[0]).Should().Be("Ellipse White/Outline c=8,8 r=8,8");
-        // index 0 of 4 → quarter sweep → end point at 3-o'clock, small arc.
-        Describe(ops[1]).Should().Be("Pie Icon/None c=8,8 r=8,8 [8,0 16,8] largeArc=False");
+        // index 0 of 5 (worst bucket) → 0/4 = 0% sweep → fully empty pie (start point == end point).
+        Describe(ops[1]).Should().Be("Pie Icon/None c=8,8 r=8,8 [8,0 8,0] largeArc=False");
         Describe(ops[2]).Should().Be("Ellipse None/Outline c=8,8 r=8,8");
     }
 
     [Fact]
-    public void Build_Quarter_FullSweepUsesLargeArc()
+    public void Build_Quarter_Index1_IsQuarterSweep()
     {
-        var ops = ConditionalIconGlyphGeometry.Build(ConditionalIconGlyphKind.Quarter, 3, 4, 0, 0, Size, Size);
+        var ops = ConditionalIconGlyphGeometry.Build(ConditionalIconGlyphKind.Quarter, 1, 5, 0, 0, Size, Size);
+
+        // index 1 of 5 → 1/4 = 25% sweep → end point at 3-o'clock, small arc.
+        Describe(ops[1]).Should().Be("Pie Icon/None c=8,8 r=8,8 [8,0 16,8] largeArc=False");
+    }
+
+    [Fact]
+    public void Build_Quarter_LastIndex_FullSweepUsesLargeArc()
+    {
+        var ops = ConditionalIconGlyphGeometry.Build(ConditionalIconGlyphKind.Quarter, 4, 5, 0, 0, Size, Size);
         Describe(ops[1]).Should().Contain("largeArc=True");
     }
 

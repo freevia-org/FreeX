@@ -856,7 +856,7 @@ public sealed partial class FormulaEvaluator
             if (candidate is ErrorValue error)
                 return error;
 
-            if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
+            if (candidate is not BlankValue && BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
 
             var candidateVsLookup = BuiltInFunctions.CompareScalar(candidate, lookupValue);
             if (nextSmaller)

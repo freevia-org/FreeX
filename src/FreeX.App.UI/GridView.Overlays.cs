@@ -67,6 +67,12 @@ public partial class GridView
         var cbRange = ClipboardRange;
         if (cbRange == null || Viewport == null) return;
 
+        // The marquee only belongs on the sheet the range was copied/cut from - Excel hides the
+        // marching ants while any other sheet is active. ClipboardRange is not cleared on a sheet
+        // switch, so without this check a same-numbered range (e.g. A1:B2) on an unrelated sheet
+        // would draw a marquee for cells that were never copied there.
+        if (cbRange.Value.Start.Sheet != ActiveSheetId || cbRange.Value.End.Sheet != ActiveSheetId) return;
+
         var rect = CalculateClipboardMarquee(
             Viewport,
             cbRange.Value,

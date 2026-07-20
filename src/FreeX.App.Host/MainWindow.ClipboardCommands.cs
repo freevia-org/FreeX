@@ -830,16 +830,25 @@ public partial class MainWindow
         if (mode != PasteMode.All || options != default)
             return false;
 
-        // MoveRangeCommand only supports a same-sheet move; grouped multi-sheet editing cannot be
-        // expressed as a single move, so fall back to the grouped copy+clear path below.
+        // Grouped multi-sheet editing cannot be expressed as a single move (it would have to move
+        // the same range on every grouped sheet at once), so fall back to the grouped copy+clear
+        // path below whenever grouped editing is actually active across more than one sheet.
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        if (targetSheetIds.Count != 1 || targetSheetIds[0] != clip.SourceRange.Start.Sheet)
+        if (targetSheetIds.Count != 1)
             return false;
 
-        if (clip.SourceRange.Start.Sheet != _currentSheetId || destination.Sheet != _currentSheetId)
+        // The paste destination must be the single active/grouped-edit sheet (it always is in
+        // practice, since the destination comes from the currently displayed SheetGrid). The
+        // SOURCE sheet, however, is allowed to differ from the destination sheet: MoveRangeCommand
+        // fully supports a cross-sheet move (its isCrossSheet branch rewrites references across
+        // sheets), so a Cut on one sheet followed by a Paste on another is exactly this gesture
+        // and must not be downgraded to the copy+clear fallback (which never repoints other
+        // formulas to follow the moved cells) -- matching WorkbookSession.cs's Avalonia-facing
+        // equivalent, which already allows this.
+        if (targetSheetIds[0] != destination.Sheet)
             return false;
 
-        command = new MoveRangeCommand(_currentSheetId, clip.SourceRange, destination);
+        command = new MoveRangeCommand(clip.SourceRange.Start.Sheet, clip.SourceRange, destination);
         return true;
     }
 
@@ -932,6 +941,15 @@ public partial class MainWindow
                 (sheetId, currentRange) => new ClearContentsCommand(sheetId, currentRange),
                 out var outcome))
             return;
+
+        // R54-render-copy-cut-marquee-4-1: Delete/Clear Contents on a still-active Copy/Cut
+        // marquee must cancel it, matching Excel -- otherwise a later Paste would silently
+        // move/copy the source range using its now-cleared (not the originally copied) contents.
+        if (_internalClipboard is not null || SheetGrid.ClipboardRange is not null)
+        {
+            _internalClipboard = null;
+            ClearClipboardVisualState();
+        }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();

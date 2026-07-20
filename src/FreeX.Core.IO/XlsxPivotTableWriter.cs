@@ -320,7 +320,7 @@ internal static partial class XlsxPivotTableWriter
                 new XAttribute("firstDataCol", Math.Max(0, pivot.FirstDataColumn).ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("firstDataRow", Math.Max(0, pivot.FirstDataRow).ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("firstHeaderRow", Math.Max(0, pivot.FirstHeaderRow).ToString(CultureInfo.InvariantCulture))),
-            ToPivotFieldsXml(pivot, calculatedFieldIndexes, workbookNs),
+            ToPivotFieldsXml(pivot, pivotCache, calculatedFieldIndexes, workbookNs),
             ToPivotFieldCollectionXml("rowFields", pivot.RowFields, workbookNs),
             ToPivotFieldCollectionXml("colFields", pivot.ColumnFields, workbookNs),
             ToPivotPageFieldsXml(pivot.PageFields, pivotCache, workbookNs),
@@ -398,6 +398,7 @@ internal static partial class XlsxPivotTableWriter
 
     private static XElement ToPivotFieldsXml(
         PivotTableModel pivot,
+        PivotCacheModel? pivotCache,
         IReadOnlyDictionary<string, int> calculatedFieldIndexes,
         XNamespace workbookNs)
     {
@@ -457,10 +458,54 @@ internal static partial class XlsxPivotTableWriter
                     ToOptionalBoolAttribute("dragToPage", metadataField?.DragToPage),
                     ToOptionalBoolAttribute("dragToData", metadataField?.DragToData),
                     ToOptionalBoolAttribute("showDropDowns", metadataField?.ShowDropDowns),
-                    new XElement(workbookNs + "items",
-                        new XAttribute("count", "1"),
-                        new XElement(workbookNs + "item", new XAttribute("t", "default"))));
+                    ToPivotFieldItemsXml(metadataField, pivotCache, index, workbookNs));
             }));
+    }
+
+    // R54-io-pivot-filter-3-3: a manual per-item filter (unchecked values in a field's filter dropdown --
+    // PivotFieldModel.SelectedItems) was previously dropped entirely for a brand-new pivot table's first
+    // save: this always emitted a single placeholder <items count="1"><item t="default"/></items>
+    // regardless of SelectedItems, never reading it or enumerating one <item> per pivot-cache shared item.
+    // Emit one <item x="i" hidden="1"?/> per shared item (matching real Excel's shape -- and
+    // XlsxFileAdapter.SavePostProcessing.cs's RewritePreservedPivotFieldItemFilters/
+    // ResolvePreservedRawToMaterializedIndexMap, which already reads this exact shape back on the
+    // preserved-part path) whenever the model records an explicit selection for this field; otherwise
+    // keep the schema-minimum placeholder (no explicit selection means "everything visible", the default).
+    private static XElement ToPivotFieldItemsXml(
+        PivotFieldModel? metadataField,
+        PivotCacheModel? pivotCache,
+        int fieldIndex,
+        XNamespace workbookNs)
+    {
+        if (metadataField?.SelectedItems is { } selectedItems &&
+            pivotCache is not null &&
+            fieldIndex >= 0 &&
+            fieldIndex < pivotCache.Fields.Count &&
+            pivotCache.Fields[fieldIndex].SharedItems is { Count: > 0 } sharedItems)
+        {
+            var selectedSet = new HashSet<string>(selectedItems, StringComparer.Ordinal);
+            var items = new List<XElement>(sharedItems.Count + 1);
+            for (var rawIndex = 0; rawIndex < sharedItems.Count; rawIndex++)
+            {
+                var isHidden = !selectedSet.Contains(sharedItems[rawIndex]);
+                items.Add(new XElement(
+                    workbookNs + "item",
+                    new XAttribute("x", rawIndex.ToString(CultureInfo.InvariantCulture)),
+                    isHidden ? new XAttribute("hidden", "1") : null));
+            }
+
+            items.Add(new XElement(workbookNs + "item", new XAttribute("t", "default")));
+
+            return new XElement(
+                workbookNs + "items",
+                new XAttribute("count", items.Count.ToString(CultureInfo.InvariantCulture)),
+                items);
+        }
+
+        return new XElement(
+            workbookNs + "items",
+            new XAttribute("count", "1"),
+            new XElement(workbookNs + "item", new XAttribute("t", "default")));
     }
 
     private static PivotFieldModel? FindPivotField(PivotTableModel pivot, int sourceFieldIndex) =>
@@ -649,7 +694,10 @@ internal static partial class XlsxPivotTableWriter
                                 new XAttribute("count", "0"),
                                 new XAttribute("selected", "0")))))));
 
-    private static XElement? ToPivotValueFiltersXml(IReadOnlyList<PivotValueFilterModel> filters, XNamespace workbookNs) =>
+    // Internal (not private): also called from XlsxFileAdapter.SavePostProcessing.cs's
+    // RewritePreservedPivotValueAndLabelFilters to regenerate these elements on the hasSourcePackage
+    // (preserved-part) save path, where this class's own Save() never runs (R54-io-pivot-filter-3-1).
+    internal static XElement? ToPivotValueFiltersXml(IReadOnlyList<PivotValueFilterModel> filters, XNamespace workbookNs) =>
         filters.Count == 0
             ? null
             : new XElement(
@@ -664,7 +712,7 @@ internal static partial class XlsxPivotTableWriter
                     filter.ComparisonValue is null ? null : new XAttribute("comparisonValue", FormatInvariant(filter.ComparisonValue.Value)),
                     filter.ComparisonValue2 is null ? null : new XAttribute("comparisonValue2", FormatInvariant(filter.ComparisonValue2.Value)))));
 
-    private static XElement? ToPivotLabelFiltersXml(IReadOnlyList<PivotLabelFilterModel> filters, XNamespace workbookNs) =>
+    internal static XElement? ToPivotLabelFiltersXml(IReadOnlyList<PivotLabelFilterModel> filters, XNamespace workbookNs) =>
         filters.Count == 0
             ? null
             : new XElement(

@@ -277,6 +277,13 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     anchor = anchor with { Width = xfrmWidthPixels, Height = xfrmHeightPixels };
             }
 
+            // R54-io-drawing-group-transform-4-1: compose the picture's own local rotation/flip with
+            // every ancestor group's rotation/flip (see ComposeShapeOrientationWithGroups) so a picture
+            // nested in a rotated/flipped group gets its true rendered facing direction, not just its
+            // own local (pre-group) one.
+            var (pictureRotation, pictureFlipHorizontal, pictureFlipVertical) = ComposeShapeOrientationWithGroups(
+                ReadDrawingRotation(pictureTransform), ReadDrawingFlipHorizontal(pictureTransform), ReadDrawingFlipVertical(pictureTransform), groupTransform);
+
             pictures.Add(new XlsxPicturePackagePart(
                 ReadEntryBytes(imageEntry),
                 XlsxPackagePath.GetImageContentType(imagePath),
@@ -284,9 +291,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 title,
                 altText,
                 anchor,
-                ReadDrawingRotation(pictureTransform),
-                ReadDrawingFlipHorizontal(pictureTransform),
-                ReadDrawingFlipVertical(pictureTransform),
+                pictureRotation,
+                pictureFlipHorizontal,
+                pictureFlipVertical,
                 ReadSourceRectangleRatio(sourceRectangle, "l"),
                 ReadSourceRectangleRatio(sourceRectangle, "t"),
                 ReadSourceRectangleRatio(sourceRectangle, "r"),
@@ -380,10 +387,14 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var altText = ReadNonVisualDescription(shapeElement);
         var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
         var transform = spPr?.Element(drawingNs + "xfrm");
-        var rotation = ReadDrawingRotation(transform);
-        var flipHorizontal = ReadDrawingFlipHorizontal(transform);
-        var flipVertical = ReadDrawingFlipVertical(transform);
         var groupTransform = ComputeGroupTransform(shapeElement, spreadsheetDrawingNs, drawingNs);
+        // R54-io-drawing-group-transform-4-1: a shape's own <a:xfrm> rot/flipH/flipV describe only its
+        // facing direction WITHIN its immediate parent's coordinate space -- when that parent is a
+        // rotated and/or flipped <xdr:grpSp>, the shape's true rendered facing direction also includes
+        // every ancestor group's own rotation/flip, exactly as ComputeGroupTransform already composes
+        // for POSITION.
+        var (rotation, flipHorizontal, flipVertical) = ComposeShapeOrientationWithGroups(
+            ReadDrawingRotation(transform), ReadDrawingFlipHorizontal(transform), ReadDrawingFlipVertical(transform), groupTransform);
         var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs, groupTransform);
         var (gradFillStartColor, _, gradFillEndColor, _, gradFillDirection, _) =
             ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
@@ -699,10 +710,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var altText = ReadNonVisualDescription(cxnSpElement);
         var spPr = cxnSpElement.Element(spreadsheetDrawingNs + "spPr");
         var transform = spPr?.Element(drawingNs + "xfrm");
-        var rotation = ReadDrawingRotation(transform);
-        var flipHorizontal = ReadDrawingFlipHorizontal(transform);
-        var flipVertical = ReadDrawingFlipVertical(transform);
         var groupTransform = ComputeGroupTransform(cxnSpElement, spreadsheetDrawingNs, drawingNs);
+        // R54-io-drawing-group-transform-4-1: see ReadSpElement's identical composition.
+        var (rotation, flipHorizontal, flipVertical) = ComposeShapeOrientationWithGroups(
+            ReadDrawingRotation(transform), ReadDrawingFlipHorizontal(transform), ReadDrawingFlipVertical(transform), groupTransform);
         var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs, groupTransform);
         var lnElement = spPr?.Element(drawingNs + "ln");
         var outlineFill = lnElement?.Element(drawingNs + "solidFill");
@@ -941,9 +952,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// </summary>
     private readonly record struct DrawingGroupTransform(
         double OffsetXEmu, double OffsetYEmu, double ScaleX, double ScaleY,
-        double MatrixA, double MatrixB, double MatrixC, double MatrixD)
+        double MatrixA, double MatrixB, double MatrixC, double MatrixD,
+        double OrientationA = 1, double OrientationB = 0, double OrientationC = 0, double OrientationD = 1)
     {
-        public static readonly DrawingGroupTransform Identity = new(0, 0, 1, 1, 1, 0, 0, 1);
+        public static readonly DrawingGroupTransform Identity = new(0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1);
     }
 
     /// <summary>
@@ -970,6 +982,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
     {
         double scaleX = 1, scaleY = 1;
         double matrixA = 1, matrixB = 0, matrixC = 0, matrixD = 1, translateX = 0, translateY = 0;
+        // R54-io-drawing-group-transform-4-1: a SEPARATE, scale-free rotation/flip-only 2x2 matrix,
+        // composed purely from each ancestor group's own rot/flipH/flipV (never its off/ext/chOff/chExt
+        // scale) -- this is the piece the shape's own FACING direction (RotationDegrees/FlipHorizontal/
+        // FlipVertical) needs to be composed with at the call sites below; MatrixA-D above already mixes
+        // in scale and is used only for POSITION mapping.
+        double orientationA = 1, orientationB = 0, orientationC = 0, orientationD = 1;
         foreach (var group in element.Ancestors(spreadsheetDrawingNs + "grpSp"))
         {
             var groupXfrm = group.Element(spreadsheetDrawingNs + "grpSpPr")?.Element(drawingNs + "xfrm");
@@ -1008,9 +1026,108 @@ internal static partial class XlsxWorksheetDrawingPartReader
             matrixD = newMatrixD;
             translateX = newTranslateX;
             translateY = newTranslateY;
+
+            var (levelOrientationA, levelOrientationB, levelOrientationC, levelOrientationD) =
+                ToOrientationMatrix(groupRotationDegrees, groupFlipH, groupFlipV);
+            (orientationA, orientationB, orientationC, orientationD) = ComposeOrientationMatrices(
+                levelOrientationA, levelOrientationB, levelOrientationC, levelOrientationD,
+                orientationA, orientationB, orientationC, orientationD);
         }
 
-        return new DrawingGroupTransform(translateX, translateY, scaleX, scaleY, matrixA, matrixB, matrixC, matrixD);
+        return new DrawingGroupTransform(
+            translateX, translateY, scaleX, scaleY, matrixA, matrixB, matrixC, matrixD,
+            orientationA, orientationB, orientationC, orientationD);
+    }
+
+    /// <summary>
+    /// Builds the 2x2 linear map for a single flip-then-rotate orientation step: mirror about the
+    /// local axes (per <c>flipH</c>/<c>flipV</c>), then rotate by <paramref name="rotationDegrees"/> --
+    /// exactly the order <see cref="ApplyGroupLevelPoint"/> already applies when composing position, so
+    /// composing this matrix across the ancestor chain (and then with a shape's own local rotation/flip)
+    /// yields the shape's true composed facing direction (R54-io-drawing-group-transform-4-1).
+    /// </summary>
+    private static (double A, double B, double C, double D) ToOrientationMatrix(double rotationDegrees, bool flipH, bool flipV)
+    {
+        var fH = flipH ? -1.0 : 1.0;
+        var fV = flipV ? -1.0 : 1.0;
+        if (rotationDegrees == 0)
+            return (fH, 0, 0, fV);
+
+        var radians = rotationDegrees * Math.PI / 180.0;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        // R(rot) * diag(fH, fV):
+        return (cos * fH, -sin * fV, sin * fH, cos * fV);
+    }
+
+    /// <summary>
+    /// Composes two orientation steps, <paramref name="outer"/> applied AFTER <paramref name="inner"/>
+    /// (standard matrix multiplication <c>outer * inner</c>).
+    /// </summary>
+    private static (double A, double B, double C, double D) ComposeOrientationMatrices(
+        double outerA, double outerB, double outerC, double outerD,
+        double innerA, double innerB, double innerC, double innerD) => (
+        outerA * innerA + outerB * innerC,
+        outerA * innerB + outerB * innerD,
+        outerC * innerA + outerD * innerC,
+        outerC * innerB + outerD * innerD);
+
+    /// <summary>
+    /// Decomposes a composed orientation matrix (a flip-then-rotate 2x2 linear map, determinant
+    /// &#177;1) back into a single <c>(rotationDegrees, flipHorizontal, flipVertical)</c> triple in the
+    /// same <c>R(rot) * diag(flipH?-1:1, flipV?-1:1)</c> canonical form OOXML's own <c>rot</c>/
+    /// <c>flipH</c>/<c>flipV</c> attributes use -- so the composed facing direction can be stored back
+    /// onto <c>RotationDegrees</c>/<c>FlipHorizontal</c>/<c>FlipVertical</c> exactly like an ordinary
+    /// (non-grouped) shape's own local transform already is. A reflection (determinant -1) is always
+    /// normalized to FlipHorizontal-only (never FlipVertical, and never both at once) plus a
+    /// compensating rotation, matching how Excel itself always authors a single flip axis.
+    /// </summary>
+    private static (double RotationDegrees, bool FlipHorizontal, bool FlipVertical) DecomposeOrientationMatrix(
+        double a, double b, double c, double d)
+    {
+        var determinant = a * d - b * c;
+        if (determinant < 0)
+        {
+            // Solve R(rot) * diag(-1, 1) = [[-cos,-sin],[-sin,cos]] = [[a,b],[c,d]] for rot:
+            // cos(rot) = -a, sin(rot) = -c.
+            var rotationDegreesFlipped = Math.Atan2(-c, -a) * 180.0 / Math.PI;
+            return (NormalizeDegrees(rotationDegreesFlipped), true, false);
+        }
+
+        var rotationDegrees = Math.Atan2(c, a) * 180.0 / Math.PI;
+        return (NormalizeDegrees(rotationDegrees), false, false);
+    }
+
+    private static double NormalizeDegrees(double degrees)
+    {
+        var normalized = degrees % 360.0;
+        if (normalized < 0)
+            normalized += 360.0;
+        return normalized;
+    }
+
+    /// <summary>
+    /// Composes a shape's own local <c>RotationDegrees</c>/<c>FlipHorizontal</c>/<c>FlipVertical</c>
+    /// (read from its own <c>&lt;a:xfrm&gt;</c>) with the ancestor group chain's orientation (from
+    /// <see cref="ComputeGroupTransform"/>), so a shape's facing direction reflects every enclosing
+    /// group's own rotation/flip -- not just its own -- matching real Excel's rendering
+    /// (R54-io-drawing-group-transform-4-1). Returns the local values unchanged when there is no
+    /// enclosing group (identity orientation).
+    /// </summary>
+    private static (double RotationDegrees, bool FlipHorizontal, bool FlipVertical) ComposeShapeOrientationWithGroups(
+        double localRotationDegrees, bool localFlipHorizontal, bool localFlipVertical, DrawingGroupTransform groupTransform)
+    {
+        if (groupTransform.OrientationA == 1 && groupTransform.OrientationB == 0 &&
+            groupTransform.OrientationC == 0 && groupTransform.OrientationD == 1)
+        {
+            return (localRotationDegrees, localFlipHorizontal, localFlipVertical);
+        }
+
+        var (localA, localB, localC, localD) = ToOrientationMatrix(localRotationDegrees, localFlipHorizontal, localFlipVertical);
+        var (composedA, composedB, composedC, composedD) = ComposeOrientationMatrices(
+            groupTransform.OrientationA, groupTransform.OrientationB, groupTransform.OrientationC, groupTransform.OrientationD,
+            localA, localB, localC, localD);
+        return DecomposeOrientationMatrix(composedA, composedB, composedC, composedD);
     }
 
     /// <summary>
