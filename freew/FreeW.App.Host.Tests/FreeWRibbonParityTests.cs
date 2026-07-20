@@ -2370,6 +2370,78 @@ public sealed class FreeWRibbonParityTests
         run.SmartArt!.Nodes.Should().HaveCount(2, "Remove Shape must remove the last node");
     }
 
+    [StaFact]
+    public void SmartArtDesignContextualTab_AllEightCommandsMatchSelectionMutationAndUndoBehavior()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var smartArt = SmartArt.Create(SmartArtKind.Hierarchy, ["Root", "Sibling", "Third"]);
+        smartArt.Nodes[0].Children.Add(new SmartArtNode("Child"));
+        smartArt.LayoutId = "hierarchy1";
+        smartArt.ColorSchemeId = "colorful2";
+        smartArt.StyleId = "flat1";
+        editor.InsertSmartArt(smartArt);
+        editor.CommitToModel();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        foreach (var id in new[]
+        {
+            "freew.smartart-add-shape", "freew.smartart-remove-shape",
+            "freew.smartart-promote", "freew.smartart-demote",
+            "freew.smartart-move-up", "freew.smartart-move-down",
+            "freew.smartart-edit-text", "freew.smartart-change-style",
+        })
+        {
+            registry.TryGet(id, out var command).Should().BeTrue();
+            command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject.GetState().IsEnabled.Should().BeTrue();
+        }
+
+        var before = smartArt.Nodes.Select(node => node.Text).ToArray();
+        registry.TryGet("freew.smartart-add-shape", out var add);
+        add!.Execute(RibbonCommandContext.Empty);
+        smartArt.Nodes.Should().HaveCount(before.Length + 1);
+        editor.Undo();
+        smartArt.Nodes.Select(node => node.Text).Should().Equal(before);
+        editor.Redo();
+        smartArt.Nodes.Should().HaveCount(before.Length + 1);
+        editor.Undo();
+
+        registry.TryGet("freew.smartart-move-up", out var moveUp);
+        moveUp!.Execute(RibbonCommandContext.Empty);
+        smartArt.Nodes.Select(node => node.Text).Should().Equal("Root", "Third", "Sibling");
+        editor.Undo();
+        smartArt.Nodes.Select(node => node.Text).Should().Equal(before);
+
+        registry.TryGet("freew.smartart-promote", out var promote);
+        promote!.Execute(RibbonCommandContext.Empty);
+        smartArt.Nodes.Select(node => node.Text).Should().Equal("Root", "Child", "Sibling", "Third");
+        editor.Undo();
+        smartArt.Nodes[0].Children.Should().ContainSingle().Which.Text.Should().Be("Child");
+
+        registry.TryGet("freew.smartart-demote", out var demote);
+        demote!.Execute(RibbonCommandContext.Empty);
+        smartArt.Nodes.Select(node => node.Text).Should().Equal("Root", "Sibling");
+        smartArt.Nodes[^1].Children.Should().ContainSingle().Which.Text.Should().Be("Third");
+        editor.Undo();
+        smartArt.Nodes.Select(node => node.Text).Should().Equal(before);
+
+        registry.TryGet("freew.smartart-edit-text", out var edit);
+        edit!.Execute(RibbonCommandContext.ForSelectedValue("One\nTwo"));
+        smartArt.Nodes.Select(node => node.Text).Should().Equal("One", "Two");
+        smartArt.LayoutId.Should().Be("hierarchy1");
+        smartArt.ColorSchemeId.Should().Be("colorful2");
+        smartArt.StyleId.Should().Be("flat1");
+        editor.Undo();
+        smartArt.Nodes.Select(node => node.Text).Should().Equal(before);
+
+        registry.TryGet("freew.smartart-change-style", out var style);
+        style!.Execute(RibbonCommandContext.ForSelectedValue(SmartArtStyle.Catalog[4].Name));
+        smartArt.StyleId.Should().Be(SmartArtStyle.Catalog[4].Id);
+        smartArt.Nodes.Select(node => node.Text).Should().Equal(before);
+        editor.Undo();
+        smartArt.StyleId.Should().Be("flat1");
+    }
+
     // ── Header & Footer Design contextual tab ───────────────────────────────────────────────────
 
     [Fact]

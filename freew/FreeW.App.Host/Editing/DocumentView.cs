@@ -2611,11 +2611,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SmartArtAddShape()
     {
-        CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null) return;
-        smartArt.Nodes.Add(new SmartArtNode("New Item"));
-        Render();
+        ExecuteSmartArtStructureCommand(SmartArtStructureOperation.AddShape);
     }
 
     /// <summary>
@@ -2624,11 +2620,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SmartArtRemoveShape()
     {
-        CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null || smartArt.Nodes.Count <= 1) return;
-        smartArt.Nodes.RemoveAt(smartArt.Nodes.Count - 1);
-        Render();
+        ExecuteSmartArtStructureCommand(SmartArtStructureOperation.RemoveShape);
     }
 
     /// <summary>
@@ -2637,13 +2629,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SmartArtMoveUp()
     {
-        CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null || smartArt.Nodes.Count <= 1) return;
-        var idx = smartArt.Nodes.Count - 1;
-        if (idx <= 0) return;
-        (smartArt.Nodes[idx], smartArt.Nodes[idx - 1]) = (smartArt.Nodes[idx - 1], smartArt.Nodes[idx]);
-        Render();
+        ExecuteSmartArtStructureCommand(SmartArtStructureOperation.MoveUp);
     }
 
     /// <summary>
@@ -2652,13 +2638,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SmartArtMoveDown()
     {
-        CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null || smartArt.Nodes.Count <= 1) return;
-        var idx = 0;
-        if (idx >= smartArt.Nodes.Count - 1) return;
-        (smartArt.Nodes[idx], smartArt.Nodes[idx + 1]) = (smartArt.Nodes[idx + 1], smartArt.Nodes[idx]);
-        Render();
+        ExecuteSmartArtStructureCommand(SmartArtStructureOperation.MoveDown);
     }
 
     /// <summary>
@@ -2668,20 +2648,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SmartArtPromote()
     {
-        CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null || smartArt.Kind != SmartArtKind.Hierarchy) return;
-        // Find a parent that has children and promote the last child to sibling after the parent.
-        for (var i = 0; i < smartArt.Nodes.Count; i++)
-        {
-            var node = smartArt.Nodes[i];
-            if (node.Children.Count <= 0) continue;
-            var last = node.Children[^1];
-            node.Children.RemoveAt(node.Children.Count - 1);
-            smartArt.Nodes.Insert(i + 1, last);
-            break;
-        }
-        Render();
+        ExecuteSmartArtStructureCommand(SmartArtStructureOperation.Promote);
     }
 
     /// <summary>
@@ -2691,13 +2658,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SmartArtDemote()
     {
-        CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null || smartArt.Kind != SmartArtKind.Hierarchy || smartArt.Nodes.Count < 2) return;
-        var last = smartArt.Nodes[^1];
-        smartArt.Nodes.RemoveAt(smartArt.Nodes.Count - 1);
-        smartArt.Nodes[^1].Children.Add(last);
-        Render();
+        ExecuteSmartArtStructureCommand(SmartArtStructureOperation.Demote);
     }
 
     /// <summary>
@@ -2708,13 +2669,9 @@ public sealed class DocumentView : RichTextBox
     public void ReplaceSelectedSmartArt(SmartArt replacement)
     {
         CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null) return;
-        smartArt.Kind = replacement.Kind;
-        smartArt.Nodes.Clear();
-        foreach (var node in replacement.Nodes)
-            smartArt.Nodes.Add(node);
-        Render();
+        var location = SelectedSmartArtLocation();
+        if (location.SmartArt is null) return;
+        _commands.Execute(new ReplaceSmartArtContentCommand(location.BlockIndex, location.RunIndex, replacement));
     }
 
     /// <summary>
@@ -2754,10 +2711,18 @@ public sealed class DocumentView : RichTextBox
     public void ApplySmartArtStyle(SmartArtStyle style)
     {
         CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null) return;
-        smartArt.StyleId = style.Id;
-        Render();
+        var location = SelectedSmartArtLocation();
+        if (location.SmartArt is null) return;
+        _commands.Execute(new SetSmartArtStyleCommand(location.BlockIndex, location.RunIndex, style.Id));
+    }
+
+    private void ExecuteSmartArtStructureCommand(SmartArtStructureOperation operation)
+    {
+        CommitToModel();
+        var location = SelectedSmartArtLocation();
+        if (!MutateSmartArtStructureCommand.CanApply(location.SmartArt, operation))
+            return;
+        _commands.Execute(new MutateSmartArtStructureCommand(location.BlockIndex, location.RunIndex, operation));
     }
 
     /// <summary>

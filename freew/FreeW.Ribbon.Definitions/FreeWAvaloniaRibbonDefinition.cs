@@ -1252,6 +1252,19 @@ internal static class FreeWAvaloniaRibbonDefinition
                 new RibbonTabContext(capabilities.SmartArtContextKey, "SmartArt Tools", RibbonContextColor.Blue),
                 tab =>
                 {
+                    tab.Group("smartart-create-graphic", "Create Graphic", null, 120, g =>
+                    {
+                        g.Button("freew.smartart-add-shape", "Add Shape");
+                        g.Button("freew.smartart-remove-shape", "Remove Shape");
+                        g.RowBreak();
+                        g.Button("freew.smartart-promote", "Promote");
+                        g.Button("freew.smartart-demote", "Demote");
+                        g.RowBreak();
+                        g.Button("freew.smartart-move-up", "Move Up");
+                        g.Button("freew.smartart-move-down", "Move Down");
+                    });
+                    tab.Group("smartart-edit", "Edit", null, 90, g =>
+                        g.Button("freew.smartart-edit-text", "Edit Text"));
                     tab.Group("smartart-layouts", "Layouts", null, 100, g =>
                     {
                         g.Dropdown("freew.smartart-layout", "Layouts", BuildSmartArtLayoutMenu());
@@ -1259,6 +1272,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                     tab.Group("smartart-styles", "SmartArt Styles", null, 90, g =>
                     {
                         g.Dropdown("freew.smartart-colors", "Change Colors", BuildSmartArtColorsMenu());
+                        g.ComboBox("freew.smartart-change-style", "Styles", combo => combo with
+                        {
+                            Items = SmartArtStyle.Catalog.Select(style => style.Name).ToArray(),
+                            Width = 116,
+                        });
                     });
                     tab.Group("smartart-arrange", "Arrange", null, 80, g =>
                     {

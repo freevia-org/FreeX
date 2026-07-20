@@ -230,6 +230,33 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void SmartArt_command_slice_uses_shared_ids_and_catalog_across_profiles()
+    {
+        var expected = new[]
+        {
+            "freew.smartart-add-shape", "freew.smartart-remove-shape",
+            "freew.smartart-promote", "freew.smartart-demote",
+            "freew.smartart-move-up", "freew.smartart-move-down",
+            "freew.smartart-edit-text", "freew.smartart-change-style",
+        };
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var ids = CommandEntries(FreeWRibbon.Build(capabilities))
+                .Where(entry => entry.TabId == "smartart-design")
+                .Select(entry => entry.CommandId)
+                .ToArray();
+            ids.Should().Contain(expected);
+        }
+
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia).FindTab("smartart-design")!;
+        var styles = avalonia.FindGroup("smartart-styles")!.Controls
+            .OfType<RibbonComboBox>()
+            .Single(control => control.CommandId.Value == "freew.smartart-change-style");
+        styles.Items.Should().Equal(FreeW.Core.Model.SmartArtStyle.Catalog.Select(style => style.Name));
+    }
+
+    [Fact]
     public void Home_design_parity_slice_command_ids_are_shared_where_backed()
     {
         var wpfIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf))

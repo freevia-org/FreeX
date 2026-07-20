@@ -267,5 +267,7 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>Picture Format &gt; Picture Border. Optional host callback that owns the modal border workflow.</summary>
     Action? OpenImageBorderDialog = null,
     /// <summary>Table Layout &gt; Convert to Text. Optional host callback that owns delimiter selection.</summary>
-    Action? OpenTableToTextDialog = null);
+    Action? OpenTableToTextDialog = null,
+    /// <summary>SmartArt Design &gt; Edit Text. Optional host callback that owns the modal editor.</summary>
+    Action? OpenSmartArtEditDialog = null);
 

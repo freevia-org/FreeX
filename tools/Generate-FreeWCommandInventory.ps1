@@ -227,6 +227,20 @@ internal static class FreeWCommandInventory
             "Sets or clears selected chart axis titles through the shared chart edit command, clears quick-layout overrides, and keeps the change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_AxisTitlesSetterMutatesSelectedChartAndUndoRestoresIt",
             "ChartSmartArtContextualTabTests.ToggleChartAxisTitles_command_sets_default_titles_and_reverts_on_undo"),
+        ["freew.smartart-add-shape"] = SmartArtStructureEvidence("adds a shape"),
+        ["freew.smartart-remove-shape"] = SmartArtStructureEvidence("removes the final shape while retaining the one-node invariant"),
+        ["freew.smartart-promote"] = SmartArtStructureEvidence("promotes the final child into the top-level hierarchy"),
+        ["freew.smartart-demote"] = SmartArtStructureEvidence("demotes the final top-level shape beneath its previous sibling"),
+        ["freew.smartart-move-up"] = SmartArtStructureEvidence("moves the final top-level shape upward"),
+        ["freew.smartart-move-down"] = SmartArtStructureEvidence("moves the first top-level shape downward"),
+        ["freew.smartart-edit-text"] = SmartArtCommandEvidence(
+            "Edits SmartArt node text through the seeded host dialog or selected-value route, preserving layout, color, style, size, placement, selection, and undo.",
+            "FreeWRibbonParityTests.SmartArtDesignContextualTab_AllEightCommandsMatchSelectionMutationAndUndoBehavior",
+            "ChartSmartArtContextualTabTests.SmartArt_edit_and_style_commands_mutate_preserve_metadata_and_support_undo"),
+        ["freew.smartart-change-style"] = SmartArtCommandEvidence(
+            "Applies a shared SmartArtStyle catalog entry in both shells while preserving node structure and supporting undo.",
+            "FreeWRibbonParityTests.SmartArtDesignContextualTab_AllEightCommandsMatchSelectionMutationAndUndoBehavior",
+            "ChartSmartArtContextualTabTests.SmartArt_edit_and_style_commands_mutate_preserve_metadata_and_support_undo"),
         ["freew.chart-edit-data"] = ChartCommandEvidence(
             "Replaces the selected chart's editable category and series data through the shared chart model route and keeps the change undoable in Avalonia.",
             "FreeWRibbonParityTests.ChartDesign_ReplaceChartDataMutatesModel",
@@ -654,6 +668,27 @@ internal static class FreeWCommandInventory
             $"Applies {layoutName} from the shared nine-entry chart layout catalog in both shells, preserves chart data and style, follows selection enablement, and supports undo/redo.",
             "FreeWRibbonParityTests.ChartDesign_QuickLayoutCatalogCommandsMatchSelectionMutationAndUndoBehavior",
             "ChartSmartArtContextualTabTests.ChartQuickLayoutCatalog_commands_apply_preserve_selection_and_support_undo_redo");
+
+    private static CommandBehaviorEvidence SmartArtStructureEvidence(string behavior) =>
+        SmartArtCommandEvidence(
+            $"Uses the shared structural command to {behavior}, follows selection enablement, preserves unrelated SmartArt state, and supports undo/redo in both shells.",
+            "FreeWRibbonParityTests.SmartArtDesignContextualTab_AllEightCommandsMatchSelectionMutationAndUndoBehavior",
+            "ChartSmartArtContextualTabTests.SmartArt_structure_commands_mutate_preserve_selection_and_support_undo_redo");
+
+    private static CommandBehaviorEvidence SmartArtCommandEvidence(
+        string summary,
+        string wpfTest,
+        string avaloniaTest) =>
+        new(
+            EvidenceId: "freew.smartart.shared-behavior",
+            Slice: "SmartArt command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+                Test: wpfTest),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
+                Test: avaloniaTest));
 
     private static CommandBehaviorEvidence BackstagePrintEvidence(string summary) =>
         new(

@@ -661,6 +661,157 @@ public sealed class ChartSmartArtContextualTabTests
     }
 
     [Fact]
+    public void SmartArt_contextual_tab_exposes_all_shared_commands_and_style_catalog()
+    {
+        var tab = FreeWRibbon.BuildDefinition().FindTab("smartart-design")!;
+        var commandIds = tab.Groups.SelectMany(group => group.Controls)
+            .Select(GetCommandId)
+            .Where(id => id is not null)
+            .Select(id => id!.Value.Value)
+            .ToArray();
+
+        commandIds.Should().Contain(new[]
+        {
+            "freew.smartart-add-shape",
+            "freew.smartart-remove-shape",
+            "freew.smartart-promote",
+            "freew.smartart-demote",
+            "freew.smartart-move-up",
+            "freew.smartart-move-down",
+            "freew.smartart-edit-text",
+            "freew.smartart-change-style",
+        });
+        var styles = tab.FindGroup("smartart-styles")!.Controls.OfType<RibbonComboBox>().Single();
+        styles.Items.Should().Equal(SmartArtStyle.Catalog.Select(style => style.Name));
+    }
+
+    [Fact]
+    public async Task SmartArt_structure_commands_mutate_preserve_selection_and_support_undo_redo()
+    {
+        var ran = await OnUi(() =>
+        {
+            foreach (var (commandId, operation) in new[]
+            {
+                ("freew.smartart-add-shape", SmartArtStructureOperation.AddShape),
+                ("freew.smartart-remove-shape", SmartArtStructureOperation.RemoveShape),
+                ("freew.smartart-move-up", SmartArtStructureOperation.MoveUp),
+                ("freew.smartart-move-down", SmartArtStructureOperation.MoveDown),
+            })
+            {
+                var (doc, bi, ri) = DocWithFloatingSmartArt();
+                var smartArt = ((Paragraph)doc.Blocks[bi]).Runs[ri].SmartArt!;
+                var before = smartArt.Nodes.Select(node => node.Text).ToArray();
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.Measure(new Size(800, 2000));
+                view.SelectFloating(bi, ri);
+                var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+                registry.TryGet(new RibbonCommandId(commandId), out var command).Should().BeTrue();
+                command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject.GetState().IsEnabled.Should().BeTrue();
+
+                command!.Execute(RibbonCommandContext.Empty);
+
+                smartArt.Nodes.Select(node => node.Text).Should().NotEqual(before);
+                view.SelectedFloatingSmartArt().Should().BeSameAs(smartArt);
+                view.Undo();
+                smartArt.Nodes.Select(node => node.Text).Should().Equal(before);
+                view.Redo();
+                MutateSmartArtStructureCommand.CanApply(smartArt, operation).Should().BeTrue();
+            }
+
+            var (hierarchyDoc, hierarchyBi, hierarchyRi) = DocWithFloatingSmartArt();
+            var hierarchy = ((Paragraph)hierarchyDoc.Blocks[hierarchyBi]).Runs[hierarchyRi].SmartArt!;
+            hierarchy.Kind = SmartArtKind.Hierarchy;
+            hierarchy.Nodes.Clear();
+            hierarchy.Nodes.Add(new SmartArtNode("Root", [new SmartArtNode("Child")]));
+            var hierarchyView = new DocumentView();
+            hierarchyView.LoadDocument(hierarchyDoc);
+            hierarchyView.Measure(new Size(800, 2000));
+            hierarchyView.SelectFloating(hierarchyBi, hierarchyRi);
+            var hierarchyRegistry = FreeWAvaloniaRibbonCommands.Build(hierarchyView, NoopCallbacks());
+
+            hierarchyRegistry.TryGet(new RibbonCommandId("freew.smartart-promote"), out var promote).Should().BeTrue();
+            promote.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject.GetState().IsEnabled.Should().BeTrue();
+            promote!.Execute(RibbonCommandContext.Empty);
+            hierarchy.Nodes.Select(node => node.Text).Should().Equal("Root", "Child");
+            hierarchyView.Undo();
+            hierarchy.Nodes.Should().ContainSingle();
+
+            hierarchy.Nodes.Add(new SmartArtNode("Sibling"));
+            hierarchyRegistry.TryGet(new RibbonCommandId("freew.smartart-demote"), out var demote).Should().BeTrue();
+            demote.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject.GetState().IsEnabled.Should().BeTrue();
+            demote!.Execute(RibbonCommandContext.Empty);
+            hierarchy.Nodes.Should().ContainSingle();
+            hierarchyView.Undo();
+            hierarchy.Nodes.Select(node => node.Text).Should().Equal("Root", "Sibling");
+        });
+        ran.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SmartArt_edit_and_style_commands_mutate_preserve_metadata_and_support_undo()
+    {
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingSmartArt();
+            var smartArt = ((Paragraph)doc.Blocks[bi]).Runs[ri].SmartArt!;
+            smartArt.LayoutId = "list1";
+            smartArt.ColorSchemeId = "colorful2";
+            smartArt.StyleId = "flat1";
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            var dialogOpened = false;
+            var registry = FreeWAvaloniaRibbonCommands.Build(
+                view,
+                NoopCallbacks() with { OpenSmartArtEditDialog = () => dialogOpened = true });
+
+            registry.TryGet(new RibbonCommandId("freew.smartart-edit-text"), out var edit).Should().BeTrue();
+            edit!.Execute(RibbonCommandContext.Empty);
+            dialogOpened.Should().BeTrue();
+            edit!.Execute(RibbonCommandContext.ForSelectedValue("One\nTwo"));
+            smartArt.Nodes.Select(node => node.Text).Should().Equal("One", "Two");
+            smartArt.LayoutId.Should().Be("list1");
+            smartArt.ColorSchemeId.Should().Be("colorful2");
+            smartArt.StyleId.Should().Be("flat1");
+            view.Undo();
+            smartArt.Nodes.Select(node => node.Text).Should().Equal("Step A", "Step B", "Step C");
+
+            registry.TryGet(new RibbonCommandId("freew.smartart-change-style"), out var styles).Should().BeTrue();
+            styles!.Execute(RibbonCommandContext.ForSelectedValue(SmartArtStyle.Catalog[4].Name));
+            smartArt.StyleId.Should().Be(SmartArtStyle.Catalog[4].Id);
+            smartArt.Nodes.Select(node => node.Text).Should().Equal("Step A", "Step B", "Step C");
+            view.Undo();
+            smartArt.StyleId.Should().Be("flat1");
+        });
+        ran.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SmartArt_commands_are_disabled_without_a_smartart_selection()
+    {
+        var ran = await OnUi(() =>
+        {
+            var view = new DocumentView();
+            view.LoadDocument(TextDocument.CreateEmpty());
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            foreach (var id in new[]
+            {
+                "freew.smartart-add-shape", "freew.smartart-remove-shape",
+                "freew.smartart-promote", "freew.smartart-demote",
+                "freew.smartart-move-up", "freew.smartart-move-down",
+                "freew.smartart-edit-text", "freew.smartart-change-style",
+            })
+            {
+                registry.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
+                command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject.GetState().IsEnabled.Should().BeFalse();
+            }
+        });
+        ran.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task ChartCommand_does_not_affect_smartart_and_vice_versa()
     {
         ChartKind? chartKind = null;

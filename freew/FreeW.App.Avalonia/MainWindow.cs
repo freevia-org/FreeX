@@ -417,6 +417,17 @@ public sealed class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task OpenSmartArtEditDialogAsync()
+    {
+        if (_editor.SelectedFloatingSmartArt() is not { } smartArt)
+            return;
+
+        var replacement = await SmartArtEditDialog.ShowAsync(this, smartArt);
+        if (replacement is not null)
+            _editor.ReplaceSelectedSmartArt(replacement);
+        _editor.Focus();
+    }
+
     /// <summary>
     /// Opens the Page Setup dialog (modal). Pre-populates from the document's current page
     /// geometry; on OK applies the changes as a single undoable step.
@@ -1223,6 +1234,7 @@ public sealed class MainWindow : Window
             OpenImageAltTextDialog: () => _ = OpenImageAltTextDialogAsync(),
             OpenImageBorderDialog: () => _ = OpenImageBorderDialogAsync(),
             OpenTableToTextDialog: () => _ = OpenTableToTextDialogAsync(),
+            OpenSmartArtEditDialog: () => _ = OpenSmartArtEditDialogAsync(),
             ToggleOrientation:   ToggleOrientation,
             ApplyMarginPreset:   ApplyMarginPreset,
             ApplyPaperSize:      ApplyPaperSize,

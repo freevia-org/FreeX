@@ -8440,6 +8440,50 @@ public sealed class DocumentView : Control
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
     }
 
+    /// <summary>Return the currently selected floating SmartArt model, or null for another selection kind.</summary>
+    public SmartArt? SelectedFloatingSmartArt()
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel) return null;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph paragraph) return null;
+        if (sel.RunIndex < 0 || sel.RunIndex >= paragraph.Runs.Count) return null;
+        return paragraph.Runs[sel.RunIndex].SmartArt;
+    }
+
+    /// <summary>Apply a shared structural SmartArt command and retain the floating selection.</summary>
+    public void MutateSelectedSmartArt(SmartArtStructureOperation operation)
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel
+            || !MutateSmartArtStructureCommand.CanApply(SelectedFloatingSmartArt(), operation))
+        {
+            return;
+        }
+
+        _bus.Execute(new MutateSmartArtStructureCommand(sel.BlockIndex, sel.RunIndex, operation));
+        RefreshSelectedSmartArt(sel);
+    }
+
+    /// <summary>Replace SmartArt kind and node text through the shared undoable content command.</summary>
+    public void ReplaceSelectedSmartArt(SmartArt replacement)
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
+        _bus.Execute(new ReplaceSmartArtContentCommand(sel.BlockIndex, sel.RunIndex, replacement));
+        RefreshSelectedSmartArt(sel);
+    }
+
+    /// <summary>Apply a shared SmartArt style catalog entry and retain the floating selection.</summary>
+    public void SetSmartArtStyle(SmartArtStyle style)
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
+        _bus.Execute(new SetSmartArtStyleCommand(sel.BlockIndex, sel.RunIndex, style.Id));
+        RefreshSelectedSmartArt(sel);
+    }
+
+    private void RefreshSelectedSmartArt((int BlockIndex, int RunIndex, string Kind, Rect Rect) sel)
+    {
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
     /// <summary>
     /// AV-CHARTTAB: Read the selected chart's current kind/style/colour-scheme, or null when the
     /// selected float is not a chart. Used by tests and the contextual-tab live-state.

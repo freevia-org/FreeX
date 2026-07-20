@@ -1064,52 +1064,25 @@ internal static class FreeWRibbonCommands
             editor.InsertSmartArt(result);
         }));
         // SmartArt Design contextual tab — node mutation commands.
-        registry.Register("freew.smartart-add-shape", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.SmartArtAddShape();
-        }));
-        registry.Register("freew.smartart-remove-shape", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.SmartArtRemoveShape();
-        }));
-        registry.Register("freew.smartart-promote", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.SmartArtPromote();
-        }));
-        registry.Register("freew.smartart-demote", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.SmartArtDemote();
-        }));
-        registry.Register("freew.smartart-move-up", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.SmartArtMoveUp();
-        }));
-        registry.Register("freew.smartart-move-down", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.SmartArtMoveDown();
-        }));
-        registry.Register("freew.smartart-edit-text", new ActionRibbonCommand(() =>
-        {
-            var owner = Application.Current?.MainWindow;
-            var current = editor.SelectedSmartArt();
-            if (current is null) return;
-            var result = InsertSmartArtDialog.Prompt(owner, current);
-            if (result is null) return;
-            editor.Focus();
-            editor.ReplaceSelectedSmartArt(result);
-        }));
+        registry.Register("freew.smartart-add-shape", new SmartArtStructureRibbonCommand(
+            editor, SmartArtStructureOperation.AddShape, editor.SmartArtAddShape));
+        registry.Register("freew.smartart-remove-shape", new SmartArtStructureRibbonCommand(
+            editor, SmartArtStructureOperation.RemoveShape, editor.SmartArtRemoveShape));
+        registry.Register("freew.smartart-promote", new SmartArtStructureRibbonCommand(
+            editor, SmartArtStructureOperation.Promote, editor.SmartArtPromote));
+        registry.Register("freew.smartart-demote", new SmartArtStructureRibbonCommand(
+            editor, SmartArtStructureOperation.Demote, editor.SmartArtDemote));
+        registry.Register("freew.smartart-move-up", new SmartArtStructureRibbonCommand(
+            editor, SmartArtStructureOperation.MoveUp, editor.SmartArtMoveUp));
+        registry.Register("freew.smartart-move-down", new SmartArtStructureRibbonCommand(
+            editor, SmartArtStructureOperation.MoveDown, editor.SmartArtMoveDown));
+        registry.Register("freew.smartart-edit-text", new SmartArtEditTextRibbonCommand(editor));
         // SmartArt Design contextual tab — gallery placeholder commands (no-ops; galleries are injected
         // as live-preview custom content via InjectGallery; these ids must be registered so the ribbon
         // renderer does not log "unknown command" warnings for the stub buttons).
         registry.Register("freew.smartart-change-layout", EmptyRibbonCommand.Instance);
         registry.Register("freew.smartart-change-colors", EmptyRibbonCommand.Instance);
-        registry.Register("freew.smartart-change-style", EmptyRibbonCommand.Instance);
+        registry.Register("freew.smartart-change-style", new SmartArtStyleRibbonCommand(editor));
         registry.Register("freew.object", new ActionRibbonCommand(() =>
         {
             editor.Focus();
@@ -4087,6 +4060,65 @@ internal static class FreeWRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: editor.SelectedChart() is not null);
+    }
+
+    private sealed class SmartArtStructureRibbonCommand(
+        DocumentView editor,
+        SmartArtStructureOperation operation,
+        Action execute) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!GetState().IsEnabled)
+                return;
+            editor.Focus();
+            execute();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: SmartArtCommandPlanner.IsEnabled(editor.SelectedSmartArt(), operation));
+    }
+
+    private sealed class SmartArtEditTextRibbonCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var current = editor.SelectedSmartArt();
+            if (!SmartArtCommandPlanner.CanEdit(current))
+                return;
+
+            SmartArt? replacement;
+            if (context.SelectedValue is { } nodeText)
+            {
+                replacement = SmartArtCommandPlanner.BuildEditedContent(current!.Kind, nodeText);
+            }
+            else
+            {
+                replacement = InsertSmartArtDialog.Prompt(Application.Current?.MainWindow, current);
+            }
+
+            if (replacement is null)
+                return;
+            editor.Focus();
+            editor.ReplaceSelectedSmartArt(replacement);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedSmartArt()));
+    }
+
+    private sealed class SmartArtStyleRibbonCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!GetState().IsEnabled || SmartArtCommandPlanner.ResolveStyle(context.SelectedValue) is not { } style)
+                return;
+            editor.Focus();
+            editor.ApplySmartArtStyle(style);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedSmartArt()));
     }
 
     private sealed class ObjectGroupCommand(DocumentView editor) : IRibbonCommand

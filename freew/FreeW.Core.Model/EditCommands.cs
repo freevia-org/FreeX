@@ -3387,3 +3387,219 @@ public sealed class SetSmartArtColorCommand(int paragraphIndex, int runIndex, st
     }
 }
 
+/// <summary>Structural SmartArt operation shared by the WPF and Avalonia contextual ribbons.</summary>
+public enum SmartArtStructureOperation
+{
+    AddShape,
+    RemoveShape,
+    Promote,
+    Demote,
+    MoveUp,
+    MoveDown,
+}
+
+/// <summary>
+/// Apply one structural operation to the SmartArt carried by the addressed run. The complete diagram is
+/// snapshotted so undo restores node text and hierarchy while size, placement, layout, colors, and style
+/// remain unchanged by the operation itself.
+/// </summary>
+public sealed class MutateSmartArtStructureCommand(
+    int paragraphIndex,
+    int runIndex,
+    SmartArtStructureOperation operation) : IDocumentCommand
+{
+    private SmartArt? _previous;
+    private bool _applied;
+
+    public string Label => operation switch
+    {
+        SmartArtStructureOperation.AddShape => "Add SmartArt Shape",
+        SmartArtStructureOperation.RemoveShape => "Remove SmartArt Shape",
+        SmartArtStructureOperation.Promote => "Promote SmartArt Shape",
+        SmartArtStructureOperation.Demote => "Demote SmartArt Shape",
+        SmartArtStructureOperation.MoveUp => "Move SmartArt Shape Up",
+        SmartArtStructureOperation.MoveDown => "Move SmartArt Shape Down",
+        _ => "Edit SmartArt",
+    };
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } smartArt
+            || !CanApply(smartArt, operation))
+        {
+            return;
+        }
+
+        _previous = SmartArtCommandCopy.Clone(smartArt);
+        ApplyOperation(smartArt, operation);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || _previous is null
+            || ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } smartArt)
+        {
+            return;
+        }
+
+        SmartArtCommandCopy.Copy(_previous, smartArt);
+        _applied = false;
+    }
+
+    public static bool CanApply(SmartArt? smartArt, SmartArtStructureOperation candidate) =>
+        smartArt is not null && candidate switch
+        {
+            SmartArtStructureOperation.AddShape => true,
+            SmartArtStructureOperation.RemoveShape => smartArt.Nodes.Count > 1,
+            SmartArtStructureOperation.Promote => smartArt.Kind == SmartArtKind.Hierarchy
+                && smartArt.Nodes.Any(node => node.Children.Count > 0),
+            SmartArtStructureOperation.Demote => smartArt.Kind == SmartArtKind.Hierarchy
+                && smartArt.Nodes.Count > 1,
+            SmartArtStructureOperation.MoveUp or SmartArtStructureOperation.MoveDown => smartArt.Nodes.Count > 1,
+            _ => false,
+        };
+
+    private static void ApplyOperation(SmartArt smartArt, SmartArtStructureOperation candidate)
+    {
+        switch (candidate)
+        {
+            case SmartArtStructureOperation.AddShape:
+                smartArt.Nodes.Add(new SmartArtNode("New Item"));
+                break;
+            case SmartArtStructureOperation.RemoveShape:
+                smartArt.Nodes.RemoveAt(smartArt.Nodes.Count - 1);
+                break;
+            case SmartArtStructureOperation.Promote:
+                for (var index = 0; index < smartArt.Nodes.Count; index++)
+                {
+                    var parent = smartArt.Nodes[index];
+                    if (parent.Children.Count == 0)
+                        continue;
+                    var promoted = parent.Children[^1];
+                    parent.Children.RemoveAt(parent.Children.Count - 1);
+                    smartArt.Nodes.Insert(index + 1, promoted);
+                    break;
+                }
+                break;
+            case SmartArtStructureOperation.Demote:
+                var demoted = smartArt.Nodes[^1];
+                smartArt.Nodes.RemoveAt(smartArt.Nodes.Count - 1);
+                smartArt.Nodes[^1].Children.Add(demoted);
+                break;
+            case SmartArtStructureOperation.MoveUp:
+                var last = smartArt.Nodes.Count - 1;
+                (smartArt.Nodes[last], smartArt.Nodes[last - 1]) = (smartArt.Nodes[last - 1], smartArt.Nodes[last]);
+                break;
+            case SmartArtStructureOperation.MoveDown:
+                (smartArt.Nodes[0], smartArt.Nodes[1]) = (smartArt.Nodes[1], smartArt.Nodes[0]);
+                break;
+        }
+    }
+}
+
+/// <summary>
+/// Replace the selected diagram's kind and node tree while preserving its geometry, placement, layout,
+/// colors, and style. This backs the shared Edit Text workflow and is fully undoable.
+/// </summary>
+public sealed class ReplaceSmartArtContentCommand(
+    int paragraphIndex,
+    int runIndex,
+    SmartArt replacement) : IDocumentCommand
+{
+    private SmartArt? _previous;
+    private bool _applied;
+
+    public string Label => "Edit SmartArt Text";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } smartArt)
+            return;
+
+        _previous = SmartArtCommandCopy.Clone(smartArt);
+        smartArt.Kind = replacement.Kind;
+        SmartArtCommandCopy.CopyNodes(replacement.Nodes, smartArt.Nodes);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || _previous is null
+            || ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } smartArt)
+        {
+            return;
+        }
+
+        SmartArtCommandCopy.Copy(_previous, smartArt);
+        _applied = false;
+    }
+}
+
+/// <summary>Apply a shared SmartArt style catalog entry and preserve every unrelated diagram property.</summary>
+public sealed class SetSmartArtStyleCommand(int paragraphIndex, int runIndex, string? styleId) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Change SmartArt Style";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } smartArt)
+            return;
+        _previous = smartArt.StyleId;
+        smartArt.StyleId = styleId;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } smartArt)
+            return;
+        smartArt.StyleId = _previous;
+        _applied = false;
+    }
+}
+
+internal static class SmartArtCommandCopy
+{
+    public static SmartArt Clone(SmartArt source)
+    {
+        var clone = new SmartArt();
+        Copy(source, clone);
+        return clone;
+    }
+
+    public static void Copy(SmartArt source, SmartArt target)
+    {
+        target.Kind = source.Kind;
+        target.WidthPt = source.WidthPt;
+        target.HeightPt = source.HeightPt;
+        target.Placement = source.Placement is null
+            ? null
+            : new FloatingPlacement
+            {
+                Wrapping = source.Placement.Wrapping,
+                HorizontalOffsetPt = source.Placement.HorizontalOffsetPt,
+                VerticalOffsetPt = source.Placement.VerticalOffsetPt,
+                HorizontalAnchor = source.Placement.HorizontalAnchor,
+                VerticalAnchor = source.Placement.VerticalAnchor,
+                ZOrderIndex = source.Placement.ZOrderIndex,
+            };
+        target.LayoutId = source.LayoutId;
+        target.ColorSchemeId = source.ColorSchemeId;
+        target.StyleId = source.StyleId;
+        CopyNodes(source.Nodes, target.Nodes);
+    }
+
+    public static void CopyNodes(IEnumerable<SmartArtNode> source, List<SmartArtNode> target)
+    {
+        target.Clear();
+        target.AddRange(source.Select(CloneNode));
+    }
+
+    private static SmartArtNode CloneNode(SmartArtNode source) =>
+        new(source.Text, source.Children.Select(CloneNode));
+}
+

@@ -522,7 +522,7 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterFloatingFormatCommands(r, editor, callbacks);
 
         // ── AV-CHARTTAB: Chart Design/Format + SmartArt Design contextual tabs ─
-        RegisterChartSmartArtFormatCommands(r, editor);
+        RegisterChartSmartArtFormatCommands(r, editor, callbacks);
 
         return r;
     }
@@ -1694,7 +1694,10 @@ internal static class FreeWAvaloniaRibbonCommands
     /// <see cref="DocumentView.SetSmartArtColor"/>.
     /// </para>
     /// </summary>
-    private static void RegisterChartSmartArtFormatCommands(RibbonCommandRegistry r, DocumentView editor)
+    private static void RegisterChartSmartArtFormatCommands(
+        RibbonCommandRegistry r,
+        DocumentView editor,
+        RibbonHostCallbacks callbacks)
     {
         // ── Chart Design ──────────────────────────────────────────────────────
         // Change Chart Type — dropdown opener + one command per ChartKind.
@@ -1760,6 +1763,73 @@ internal static class FreeWAvaloniaRibbonCommands
             var sc = scheme;
             r.Register($"freew.smartart-colors-{sc.Id}", new ActionRibbonCommand(() => editor.SetSmartArtColor(sc.Id)));
         }
+
+        RegisterSmartArtStructureCommand(r, editor, "freew.smartart-add-shape", SmartArtStructureOperation.AddShape);
+        RegisterSmartArtStructureCommand(r, editor, "freew.smartart-remove-shape", SmartArtStructureOperation.RemoveShape);
+        RegisterSmartArtStructureCommand(r, editor, "freew.smartart-promote", SmartArtStructureOperation.Promote);
+        RegisterSmartArtStructureCommand(r, editor, "freew.smartart-demote", SmartArtStructureOperation.Demote);
+        RegisterSmartArtStructureCommand(r, editor, "freew.smartart-move-up", SmartArtStructureOperation.MoveUp);
+        RegisterSmartArtStructureCommand(r, editor, "freew.smartart-move-down", SmartArtStructureOperation.MoveDown);
+        r.Register("freew.smartart-edit-text", new SmartArtEditTextRibbonCommand(editor, callbacks.OpenSmartArtEditDialog));
+        r.Register("freew.smartart-change-style", new SmartArtStyleRibbonCommand(editor));
+    }
+
+    private static void RegisterSmartArtStructureCommand(
+        RibbonCommandRegistry registry,
+        DocumentView editor,
+        string commandId,
+        SmartArtStructureOperation operation) =>
+        registry.Register(commandId, new SmartArtStructureRibbonCommand(editor, operation));
+
+    private sealed class SmartArtStructureRibbonCommand(
+        DocumentView editor,
+        SmartArtStructureOperation operation) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                editor.MutateSelectedSmartArt(operation);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: SmartArtCommandPlanner.IsEnabled(editor.SelectedFloatingSmartArt(), operation));
+    }
+
+    private sealed class SmartArtEditTextRibbonCommand(
+        DocumentView editor,
+        Action? openDialog) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var selected = editor.SelectedFloatingSmartArt();
+            if (!SmartArtCommandPlanner.CanEdit(selected))
+                return;
+
+            if (context.SelectedValue is { } nodeText)
+            {
+                if (SmartArtCommandPlanner.BuildEditedContent(selected!.Kind, nodeText) is { } replacement)
+                    editor.ReplaceSelectedSmartArt(replacement);
+                return;
+            }
+
+            openDialog?.Invoke();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedFloatingSmartArt()));
+    }
+
+    private sealed class SmartArtStyleRibbonCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!GetState().IsEnabled || SmartArtCommandPlanner.ResolveStyle(context.SelectedValue) is not { } style)
+                return;
+            editor.SetSmartArtStyle(style);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedFloatingSmartArt()));
     }
 
     private sealed class ChartQuickLayoutRibbonCommand(
