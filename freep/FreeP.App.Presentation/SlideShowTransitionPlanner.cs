@@ -172,6 +172,10 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Shred => SlideShowTransitionPlaybackKind.Shred,
 
+            // Peel Off is the single-sheet page-peel family. Reuse the
+            // shared folded-page projection instead of reducing it to fade.
+            TransitionKind.PeelOff => SlideShowTransitionPlaybackKind.PageCurl,
+
             TransitionKind.PageCurlSingle or
             TransitionKind.PageCurlDouble => SlideShowTransitionPlaybackKind.PageCurl,
 

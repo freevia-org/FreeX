@@ -159,6 +159,15 @@ public sealed class SlideShowPlaybackPlannerTests
         shred.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Shred);
         shred.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Shred);
 
+        var peelOff = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.PeelOff,
+            Direction = TransitionDirection.Left
+        });
+
+        peelOff.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.PageCurl);
+        peelOff.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.PageCurl);
+
         var pageCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
             Kind = TransitionKind.PageCurlSingle,
