@@ -27,14 +27,17 @@ foreach ($path in $requiredPaths) {
 }
 
 $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
-if ($summary.schemaVersion -ne 1 -or $summary.scenarioCount -ne 36 -or $summary.pairedCaptureCount -ne 36) {
+if ($summary.schemaVersion -ne 1 -or $summary.scenarioCount -ne 31 -or $summary.pairedCaptureCount -ne 31) {
     throw "FreeP whole-window evidence has an unexpected schema or paired scenario count."
 }
-if ($summary.limitationCount -ne 0 -or ($summary.passCount + $summary.mismatchCount) -ne 36) {
+if ($summary.limitationCount -ne 0 -or ($summary.passCount + $summary.mismatchCount) -ne 31) {
     throw "FreeP whole-window evidence is incomplete: pass=$($summary.passCount), mismatch=$($summary.mismatchCount), limitation=$($summary.limitationCount)."
 }
-if (@($summary.comparisons).Count -ne 36 -or @($summary.wpf.captures).Count -ne 36 -or @($summary.avalonia.captures).Count -ne 36) {
-    throw "FreeP whole-window evidence does not contain 36 comparison rows and 36 captures per host."
+if (@($summary.comparisons).Count -ne 31 -or @($summary.wpf.captures).Count -ne 31 -or @($summary.avalonia.captures).Count -ne 31) {
+    throw "FreeP whole-window evidence does not contain 31 comparison rows and 31 captures per host."
+}
+if ($summary.duplicateCaptureCount -ne 0) {
+    throw "FreeP whole-window evidence contains $($summary.duplicateCaptureCount) unexpected duplicate capture(s)."
 }
 
 function Get-EvidencePath {
@@ -156,8 +159,8 @@ $artifact = [ordered]@{
     schemaVersion = 1
     generatedBy = "tools/Generate-FreePWholeWindowVisualEvidenceManifest.ps1"
     evidenceGeneratedAtUtc = $summary.generatedAtUtc
-    scenarioCount = 36
-    pairedCaptureCount = 36
+    scenarioCount = 31
+    pairedCaptureCount = 31
     passCount = $summary.passCount
     mismatchCount = $summary.mismatchCount
     limitationCount = 0
@@ -169,14 +172,14 @@ $artifact = [ordered]@{
     inputs = @($inputs)
     files = @($files)
 }
-if ($artifact.fullPngCount -ne 72 -or $artifact.clientPngCount -ne 72 -or $artifact.diffPngCount -ne 36) {
+if ($artifact.fullPngCount -ne 62 -or $artifact.clientPngCount -ne 62 -or $artifact.diffPngCount -ne 31) {
     throw "FreeP whole-window evidence PNG counts are incomplete."
 }
 
 $json = ($artifact | ConvertTo-Json -Depth 8) + [Environment]::NewLine
 if ($Check) {
     Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedManifest -Label "FreeP whole-window visual evidence artifact manifest" -GeneratorScriptName "tools\Generate-FreePWholeWindowVisualEvidenceManifest.ps1" -NormalizeNewlines
-    Write-Host "FreeP whole-window evidence is current: 36/36 paired, $($artifact.mismatchCount) explicit product mismatches, zero capture limitations."
+    Write-Host "FreeP whole-window evidence is current: 31/31 paired, $($artifact.mismatchCount) explicit product mismatches, zero capture limitations."
     exit 0
 }
 

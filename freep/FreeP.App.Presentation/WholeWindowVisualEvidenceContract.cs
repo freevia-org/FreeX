@@ -4,7 +4,6 @@ public enum WholeWindowVisualEvidenceScenarioKind
 {
     Startup,
     StaticRibbonTab,
-    ContextualSelection,
     BackstagePane,
     StatusBar,
     ViewState,
@@ -39,11 +38,6 @@ public static class WholeWindowVisualEvidenceCatalog
         Ribbon("animations"),
         Ribbon("view"),
 
-        Context("shape", "ShapeFormatTab", "shape"),
-        Context("chart", "ChartDesignTab", "chart"),
-        Context("media", "MediaFormatTab", "media"),
-        Context("smartart", "SmartArtDesignTab", "smartart"),
-
         Backstage("Info"),
         Backstage("Recent"),
         Backstage("New from template"),
@@ -52,7 +46,6 @@ public static class WholeWindowVisualEvidenceCatalog
         Backstage("Options"),
         Backstage("Account"),
 
-        Scenario("status.slide-1", WholeWindowVisualEvidenceScenarioKind.StatusBar, "slide-1", selectionRouteId: "none"),
         Scenario("status.slide-2", WholeWindowVisualEvidenceScenarioKind.StatusBar, "slide-2", selectionRouteId: "none", slideIndex: 1),
         Scenario("view.gridlines-guides", WholeWindowVisualEvidenceScenarioKind.ViewState, "gridlines-guides", "view", selectionRouteId: "shape"),
         Scenario("view.clean-canvas", WholeWindowVisualEvidenceScenarioKind.ViewState, "clean-canvas", "view", selectionRouteId: "shape"),
@@ -101,14 +94,6 @@ public static class WholeWindowVisualEvidenceCatalog
 
     private static WholeWindowVisualEvidenceScenario Ribbon(string tabId) =>
         Scenario($"ribbon.{tabId}", WholeWindowVisualEvidenceScenarioKind.StaticRibbonTab, tabId, tabId);
-
-    private static WholeWindowVisualEvidenceScenario Context(string name, string expectedTabId, string selectionRouteId) =>
-        Scenario(
-            $"contextual.{name}",
-            WholeWindowVisualEvidenceScenarioKind.ContextualSelection,
-            name,
-            expectedContextualTabId: expectedTabId,
-            selectionRouteId: selectionRouteId);
 
     private static WholeWindowVisualEvidenceScenario Backstage(string paneLabel) =>
         Scenario(

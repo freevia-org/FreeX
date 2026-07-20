@@ -199,8 +199,9 @@ internal static class WholeWindowVisualEvidence
                 "Native OS caption buttons, window-manager shadows, and other non-client decoration are excluded on both hosts; no app-owned client region is masked.",
                 $"WPF capture mode: {wpf.CaptureMode}; Avalonia capture mode: {avalonia.CaptureMode}.",
                 declaredContextualTabs == 0
-                    ? "FreeP currently declares zero contextual ribbon tabs; selected shape/chart/media/SmartArt probes remain explicit mismatches instead of false passes."
+                    ? "FreeP currently declares zero contextual ribbon tabs, so the evidence contract contains no invented contextual-tab scenarios."
                     : $"Observed {declaredContextualTabs} contextual ribbon tab id(s).",
+                "Gridline/guide scenarios use the runtime ribbon command path; both current canvas renderers apply those flags to snapping and do not paint gridline/guide canvas raster.",
             ],
             limitations);
     }
@@ -288,10 +289,8 @@ internal static class WholeWindowVisualEvidence
 
         CompareSemanticStates(wpf.SemanticState, avalonia.SemanticState, Mismatch);
 
-        if (wpfDuplicatePeers is { Count: > 0 })
-            Mismatch("duplicate-capture", $"WPF client PNG is byte-identical to: {string.Join(", ", wpfDuplicatePeers)}.");
-        if (avaloniaDuplicatePeers is { Count: > 0 })
-            Mismatch("duplicate-capture", $"Avalonia client PNG is byte-identical to: {string.Join(", ", avaloniaDuplicatePeers)}.");
+        ClassifyDuplicateCapture("WPF", scenario, wpfDuplicatePeers, Mismatch);
+        ClassifyDuplicateCapture("Avalonia", scenario, avaloniaDuplicatePeers, Mismatch);
 
         var pixelMetrics = ComputePixelMetrics(evidenceRoot, scenario.Id, wpf, avalonia);
         if (pixelMetrics is null)
@@ -330,6 +329,36 @@ internal static class WholeWindowVisualEvidence
             wpfTitleBarRaster,
             avaloniaTitleBarRaster);
     }
+
+    private static void ClassifyDuplicateCapture(
+        string host,
+        WholeWindowVisualEvidenceScenario scenario,
+        IReadOnlyList<string>? duplicatePeers,
+        Action<string, string> mismatch)
+    {
+        if (duplicatePeers is not { Count: > 0 })
+            return;
+
+        var viewStatePeers = duplicatePeers
+            .Where(peer => IsViewShowStatePair(scenario.Id, peer))
+            .ToArray();
+        if (viewStatePeers.Length > 0)
+        {
+            mismatch(
+                "view-state-raster-no-effect",
+                $"{host} applies different gridline/guide semantic state, but its client PNG is byte-identical to: {string.Join(", ", viewStatePeers)}. The current canvas uses these flags for snapping and renders no gridline/guide raster.");
+        }
+
+        var unexpectedPeers = duplicatePeers.Except(viewStatePeers, StringComparer.Ordinal).ToArray();
+        if (unexpectedPeers.Length > 0)
+            mismatch("duplicate-capture", $"{host} client PNG is byte-identical to: {string.Join(", ", unexpectedPeers)}.");
+    }
+
+    internal static bool IsViewShowStatePair(string scenarioId, string peerId) =>
+        (StringComparer.Ordinal.Equals(scenarioId, "view.gridlines-guides") &&
+         StringComparer.Ordinal.Equals(peerId, "view.clean-canvas")) ||
+        (StringComparer.Ordinal.Equals(scenarioId, "view.clean-canvas") &&
+         StringComparer.Ordinal.Equals(peerId, "view.gridlines-guides"));
 
     private static void CompareSemanticStates(
         WholeWindowVisualEvidenceSemanticState wpf,

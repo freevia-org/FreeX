@@ -5,6 +5,17 @@ namespace FreeP.RenderCompare.Tests;
 
 public sealed class WholeWindowVisualEvidenceTests
 {
+    [Theory]
+    [InlineData("view.gridlines-guides", "view.clean-canvas")]
+    [InlineData("view.clean-canvas", "view.gridlines-guides")]
+    public void View_show_state_duplicates_are_classified_as_missing_raster_effect(
+        string scenarioId,
+        string peerId)
+    {
+        WholeWindowVisualEvidence.IsViewShowStatePair(scenarioId, peerId).Should().BeTrue();
+        WholeWindowVisualEvidence.IsViewShowStatePair(scenarioId, "ribbon.home").Should().BeFalse();
+    }
+
     [Fact]
     public void Pixel_content_gate_rejects_black_transparent_and_uniform_captures()
     {
