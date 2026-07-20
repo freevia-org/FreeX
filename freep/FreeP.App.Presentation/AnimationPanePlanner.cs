@@ -19,7 +19,8 @@ public sealed record AnimationPaneEffectOptionDescriptor(
     string Id,
     string DisplayText,
     AnimationDirection? Direction,
-    bool IsSelected);
+    bool IsSelected,
+    int? WheelSpokeCount = null);
 
 public sealed record AnimationPaneEffectOptionsPlan(
     bool CanApply,
@@ -27,14 +28,19 @@ public sealed record AnimationPaneEffectOptionsPlan(
     string EffectText,
     string SelectedOptionText,
     IReadOnlyList<AnimationPaneEffectOptionDescriptor> Options,
-    string? DisabledReason);
+    string? DisabledReason)
+{
+    public IReadOnlyList<AnimationPaneEffectOptionDescriptor> WheelSpokeOptions { get; init; } =
+        Array.Empty<AnimationPaneEffectOptionDescriptor>();
+}
 
 public sealed record AnimationPaneEffectOptionMutationPlan(
     bool ShouldApply,
     int AnimationIndex,
     AnimationDirection? Direction,
     string DisplayText,
-    string? DisabledReason);
+    string? DisabledReason,
+    int? WheelSpokeCount = null);
 
 public sealed record AnimationPaneTimingMutationPlan(
     bool ShouldApply,
@@ -818,12 +824,30 @@ public static class AnimationPanePlanner
         }
 
         var descriptors = BuildSupportedEffectOptions(animation).ToArray();
-        if (descriptors.Length == 0)
+        var wheelSpokeOptions = animation.Preset == AnimationPreset.Wheel
+            ? BuildWheelSpokeOptions(animation.WheelSpokeCount).ToArray()
+            : Array.Empty<AnimationPaneEffectOptionDescriptor>();
+        if (descriptors.Length == 0 && wheelSpokeOptions.Length == 0)
         {
             return DisabledEffectOptionsPlan(
                 animationIndex,
                 FormatEffect(animation),
                 UnsupportedEffectOptionMessage);
+        }
+
+        if (descriptors.Length == 0)
+        {
+            var selectedWheelOption = wheelSpokeOptions.First(option => option.IsSelected);
+            return new AnimationPaneEffectOptionsPlan(
+                true,
+                animationIndex,
+                FormatEffect(animation),
+                selectedWheelOption.DisplayText,
+                Array.Empty<AnimationPaneEffectOptionDescriptor>(),
+                null)
+            {
+                WheelSpokeOptions = wheelSpokeOptions
+            };
         }
 
         var selected = descriptors.FirstOrDefault(option => option.Direction == animation.Direction)
@@ -838,7 +862,10 @@ public static class AnimationPanePlanner
             FormatEffect(animation),
             selected.DisplayText,
             normalized,
-            null);
+            null)
+        {
+            WheelSpokeOptions = wheelSpokeOptions
+        };
     }
 
     public static AnimationPaneEffectOptionMutationPlan BuildEffectOptionMutationPlan(
@@ -854,28 +881,40 @@ public static class AnimationPanePlanner
                 animationIndex,
                 null,
                 string.Empty,
-                optionsPlan.DisabledReason);
+                optionsPlan.DisabledReason,
+                null);
         }
 
-        var option = optionsPlan.Options.FirstOrDefault(candidate =>
+        var option = optionsPlan.Options
+            .Concat(optionsPlan.WheelSpokeOptions)
+            .FirstOrDefault(candidate =>
             StringComparer.Ordinal.Equals(candidate.Id, optionId));
         if (option is null)
         {
+            var selected = optionsPlan.Options.FirstOrDefault(candidate => candidate.IsSelected)
+                ?? optionsPlan.WheelSpokeOptions.First(candidate => candidate.IsSelected);
             return new AnimationPaneEffectOptionMutationPlan(
                 false,
                 animationIndex,
-                optionsPlan.Options.First(option => option.IsSelected).Direction,
+                selected.Direction,
                 optionsPlan.SelectedOptionText,
-                InvalidEffectOptionMessage);
+                InvalidEffectOptionMessage,
+                null);
         }
 
         var animation = animations[animationIndex];
+        var currentWheelSpokeCount = ResolveWheelSpokeCount(animation);
+        var direction = option.Direction ?? animation.Direction;
         return new AnimationPaneEffectOptionMutationPlan(
-            animation.Direction != option.Direction,
+            animation.Direction != direction
+                || (animation.Preset == AnimationPreset.Wheel
+                    && option.WheelSpokeCount is not null
+                    && currentWheelSpokeCount != option.WheelSpokeCount),
             animationIndex,
-            option.Direction,
+            direction,
             option.DisplayText,
-            null);
+            null,
+            option.WheelSpokeCount ?? animation.WheelSpokeCount);
     }
 
     public static bool TryApplyEffectOptionMutation(
@@ -893,6 +932,8 @@ public static class AnimationPanePlanner
 
         var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
         updated.Direction = plan.Direction;
+        if (current.Preset == AnimationPreset.Wheel)
+            updated.WheelSpokeCount = plan.WheelSpokeCount;
         editor.SetAnimation(plan.AnimationIndex, updated);
         return true;
     }
@@ -1421,4 +1462,27 @@ public static class AnimationPanePlanner
         string displayText,
         AnimationDirection direction)
         => new(id, displayText, direction, false);
+
+    private static IEnumerable<AnimationPaneEffectOptionDescriptor> BuildWheelSpokeOptions(int? authoredCount)
+    {
+        var counts = new SortedSet<int> { 1, 2, 3, 4, 8 };
+        if (authoredCount is > 0)
+            counts.Add(authoredCount.Value);
+        var selected = authoredCount is > 0 ? authoredCount.Value : 4;
+
+        foreach (var count in counts)
+        {
+            yield return new AnimationPaneEffectOptionDescriptor(
+                $"spokes-{count}",
+                count == 1 ? "1 spoke" : $"{count} spokes",
+                null,
+                count == selected,
+                count);
+        }
+    }
+
+    private static int? ResolveWheelSpokeCount(ShapeAnimation animation) =>
+        animation.Preset == AnimationPreset.Wheel
+            ? animation.WheelSpokeCount is > 0 ? animation.WheelSpokeCount.Value : 4
+            : null;
 }

@@ -3841,6 +3841,39 @@ public sealed partial class MainWindow : Window
         if (item.EffectOptions.Options.Count > 0)
             _animationPaneEffectOptionControlCount++;
 
+        var wheelSpokeCombo = new ComboBox
+        {
+            ItemsSource = item.EffectOptions.WheelSpokeOptions
+                .Select(option => option.DisplayText)
+                .ToArray(),
+            SelectedIndex = item.EffectOptions.WheelSpokeOptions
+                .Select((option, index) => (option, index))
+                .FirstOrDefault(pair => pair.option.IsSelected)
+                .index,
+            Width = 86,
+            Height = 24,
+            FontSize = 10,
+            Margin = new Thickness(2),
+            Tag = item.Index,
+            IsEnabled = item.EffectOptions.CanApply,
+            IsVisible = item.EffectOptions.WheelSpokeOptions.Count > 0,
+        };
+        ToolTip.SetTip(wheelSpokeCombo, "Wheel spokes");
+        wheelSpokeCombo.SelectionChanged += (_, _) =>
+        {
+            if (wheelSpokeCombo.SelectedIndex < 0
+                || wheelSpokeCombo.SelectedIndex >= item.EffectOptions.WheelSpokeOptions.Count)
+            {
+                return;
+            }
+
+            ApplyAnimationPaneEffectOptionEdit(
+                item.Index,
+                item.EffectOptions.WheelSpokeOptions[wheelSpokeCombo.SelectedIndex].Id);
+        };
+        if (item.EffectOptions.WheelSpokeOptions.Count > 0)
+            _animationPaneEffectOptionControlCount++;
+
         var triggerCombo = new ComboBox
         {
             ItemsSource = AnimationPanePlanner.TriggerLabels,
@@ -3906,6 +3939,7 @@ public sealed partial class MainWindow : Window
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = GridLength.Auto },
             },
         };
         var orderLabel = new TextBlock
@@ -3941,9 +3975,10 @@ public sealed partial class MainWindow : Window
                      (nameLabel, 1),
                      (effectLabel, 2),
                      (effectOptionCombo, 3),
-                     (triggerCombo, 4),
-                     (durationBox, 5),
-                     (delayBox, 6),
+                     (wheelSpokeCombo, 4),
+                     (triggerCombo, 5),
+                     (durationBox, 6),
+                     (delayBox, 7),
                  })
         {
             Grid.SetColumn(placement.Control, placement.Column);

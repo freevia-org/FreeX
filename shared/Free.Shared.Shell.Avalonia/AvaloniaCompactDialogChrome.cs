@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Layout;
@@ -9,6 +10,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
+using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -41,7 +43,11 @@ public static class AvaloniaCompactDialogChrome
 
     private static readonly IBrush ButtonBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(221, 221, 221));
     private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
+    private static readonly IBrush DefaultButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
     private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(130, 130, 130));
+    private static readonly IBrush ComboBoxBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240));
+    private static readonly IBrush SelectedItemBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 232, 255));
+    private static readonly IBrush SelectedItemBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(153, 209, 255));
     private static readonly IBrush DialogForegroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x1f, 0x1f, 0x1f));
     private static readonly IBrush ValidationStatusBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00));
     private static readonly IBrush DialogTabPaneBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(192, 192, 192));
@@ -132,7 +138,7 @@ public static class AvaloniaCompactDialogChrome
         button.MaxHeight = style.ButtonHeight;
         button.Padding = style.ButtonPadding;
         button.Background = ButtonBackgroundBrush;
-        button.BorderBrush = ButtonBorderBrush;
+        button.BorderBrush = isDefault ? DefaultButtonBorderBrush : ButtonBorderBrush;
         button.BorderThickness = new Thickness(1);
         button.FontSize = style.FontSize;
         button.FontFamily = style.FontFamily;
@@ -172,6 +178,7 @@ public static class AvaloniaCompactDialogChrome
         comboBox.Padding = style.ComboBoxPadding;
         comboBox.FontSize = style.FontSize;
         comboBox.FontFamily = style.FontFamily;
+        comboBox.Background = ComboBoxBackgroundBrush;
         comboBox.BorderBrush = InputBorderBrush;
         comboBox.BorderThickness = new Thickness(1);
         comboBox.VerticalContentAlignment = VerticalAlignment.Center;
@@ -184,6 +191,57 @@ public static class AvaloniaCompactDialogChrome
 
         checkBox.FontSize = style.FontSize;
         checkBox.FontFamily = style.FontFamily;
+    }
+
+    public static void ApplyCompactCheckBox(CheckBox checkBox, AvaloniaCompactDialogChromeStyle style)
+    {
+        ApplyCheckBox(checkBox, style);
+        checkBox.Height = 18;
+        checkBox.MinHeight = 18;
+        checkBox.Padding = new Thickness(0);
+        checkBox.Template = new FuncControlTemplate<CheckBox>((control, _) =>
+        {
+            var checkMark = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = Geometry.Parse("M 2 6 L 5 9 L 11 2"),
+                Stroke = DialogForegroundBrush,
+                StrokeThickness = 1.4,
+                Width = 11,
+                Height = 10,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            checkMark.Bind(
+                Visual.IsVisibleProperty,
+                new Binding(nameof(ToggleButton.IsChecked))
+                {
+                    Source = control,
+                });
+
+            var indicator = new Border
+            {
+                Width = 13,
+                Height = 13,
+                Background = Brushes.White,
+                BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
+                BorderThickness = new Thickness(1),
+                Child = checkMark,
+            };
+            var content = new ContentPresenter
+            {
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            content.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
+            content.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = control });
+
+            return new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+                Spacing = 4,
+                Children = { indicator, content },
+            };
+        });
     }
 
     public static void ApplyRadioButton(RadioButton radioButton, AvaloniaCompactDialogChromeStyle style)
@@ -217,6 +275,27 @@ public static class AvaloniaCompactDialogChrome
         ArgumentNullException.ThrowIfNull(style);
 
         listBox.FontSize = style.FontSize;
+        listBox.Background = Brushes.White;
+        listBox.BorderBrush = InputBorderBrush;
+        listBox.BorderThickness = new Thickness(1);
+        var itemTemplate = new FuncControlTemplate<ListBoxItem>((item, _) =>
+        {
+            var presenter = new ContentPresenter
+            {
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = item });
+            presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = item });
+            presenter.Bind(ContentPresenter.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = item });
+
+            var border = new Border();
+            border.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = item });
+            border.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = item });
+            border.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = item });
+            border.Child = presenter;
+            return border;
+        });
         listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
         {
             Setters =
@@ -224,6 +303,16 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(TemplatedControl.PaddingProperty, style.ListBoxItemPadding),
                 new Setter(Layoutable.MinHeightProperty, style.ListBoxItemMinHeight),
                 new Setter(TemplatedControl.FontSizeProperty, style.FontSize),
+                new Setter(TemplatedControl.TemplateProperty, itemTemplate),
+            },
+        });
+        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>().Class(":selected"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, SelectedItemBackgroundBrush),
+                new Setter(TemplatedControl.BorderBrushProperty, SelectedItemBorderBrush),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
             },
         });
     }
@@ -326,5 +415,52 @@ public static class AvaloniaCompactDialogChrome
         }
 
         return row;
+    }
+
+    public static Button CreateActionButton(
+        string content,
+        Action action,
+        double minWidth,
+        bool isDefault = false,
+        bool isCancel = false,
+        AvaloniaCompactDialogChromeStyle? style = null)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(action);
+        style ??= WindowsStyle;
+
+        var button = new Button
+        {
+            Content = content,
+            IsDefault = isDefault,
+            IsCancel = isCancel,
+        };
+        ApplyButton(button, style, minWidth, isDefault);
+        global::Avalonia.Automation.AutomationProperties.SetName(button, ShellStrings.Current.CreateAutomationName(content));
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    public static StackPanel CreateOkCancelRow(
+        Action accept,
+        Action cancel,
+        double buttonWidth,
+        Thickness margin = default,
+        AvaloniaCompactDialogChromeStyle? style = null)
+    {
+        style ??= WindowsStyle;
+        var ok = CreateActionButton(
+            ShellStrings.Current.Ok,
+            accept,
+            buttonWidth,
+            isDefault: true,
+            style: style);
+        var cancelButton = CreateActionButton(
+            ShellStrings.Current.Cancel,
+            cancel,
+            buttonWidth,
+            isCancel: true,
+            style: style);
+        return CreateActionRow([ok, cancelButton], margin, style);
     }
 }
