@@ -193,8 +193,8 @@ static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureM
         }
         var leftPath = ResolveCapturePath(wpf, left.FullPngPath);
         var rightPath = ResolveCapturePath(avalonia, right.FullPngPath);
-        var leftTarget = EnsureTargetCrop(left, leftPath, output, "wpf");
-        var rightTarget = EnsureTargetCrop(right, rightPath, output, "avalonia");
+        var leftTarget = EnsureTargetCrop(left, wpf, leftPath, output, "wpf");
+        var rightTarget = EnsureTargetCrop(right, avalonia, rightPath, output, "avalonia");
         using var a = DecodeAndScale(leftTarget, left.LogicalWidth, left.LogicalHeight);
         using var b = DecodeAndScale(rightTarget, right.LogicalWidth, right.LogicalHeight);
         var metrics = PixelMetrics.Compute(a, b);
@@ -227,8 +227,13 @@ static string? SemanticDiff(Semantics left, Semantics right)
     return differences.Count == 0 ? null : string.Join(",", differences);
 }
 
-static string EnsureTargetCrop(Capture capture, string fullPath, string output, string host)
+static string EnsureTargetCrop(Capture capture, CaptureManifest manifest, string fullPath, string output, string host)
 {
+    if (!string.IsNullOrWhiteSpace(capture.TargetPngPath))
+    {
+        var recordedTarget = ResolveCapturePath(manifest, capture.TargetPngPath);
+        if (File.Exists(recordedTarget)) return recordedTarget;
+    }
     var target = Path.Combine(output, "crops", host, Safe(capture.ScenarioId) + ".png");
     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
     using var bitmap = SKBitmap.Decode(fullPath) ?? throw new InvalidOperationException($"Cannot decode {fullPath}");
@@ -324,7 +329,7 @@ public record EvidenceInventory(string Schema, string GeneratedFromSha256, IRead
 public record Route(string Host, string RouteId, string TypeName, string SourcePath, string ModalMode, IReadOnlyList<string> Tabs, string? Limitation);
 public record Scenario(string Id, string Host, string RouteId, string State, string? Tab, string Description, string? Limitation);
 public record CaptureManifest(string Schema, int SchemaVersion, string Host, string CaptureRoot, IReadOnlyList<Capture> Captures);
-public record Capture(string ScenarioId, string Host, string RouteId, string State, string Status, string FullPngPath, int LogicalWidth, int LogicalHeight, int ActualWidth, int ActualHeight, double DpiX, double DpiY, Rect TargetCrop, Semantics Semantics, string? Limitation, string? Note)
+public record Capture(string ScenarioId, string Host, string RouteId, string State, string Status, string FullPngPath, int LogicalWidth, int LogicalHeight, int ActualWidth, int ActualHeight, double DpiX, double DpiY, Rect TargetCrop, Semantics Semantics, string? Limitation, string? Note, string? TargetPngPath = null)
 {
     public string Key => ScenarioId;
 }

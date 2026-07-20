@@ -51,7 +51,7 @@ static async Task<int> Main(string[] args)
 
 static Capture? CaptureOne(Scenario scenario, string output)
 {
-    if (scenario.RouteId is not ("page-setup" or "options"))
+    if (scenario.RouteId is not ("page-setup" or "options" or "columns" or "custom-paragraph-spacing" or "drop-cap-options" or "hyphenation-options" or "line-number-options"))
         return null;
     var dialog = CreateDialog(scenario.RouteId);
     if (dialog is null) return null;
@@ -76,19 +76,38 @@ static Capture? CaptureOne(Scenario scenario, string output)
         return Unsupported(scenario, "Avalonia headless renderer returned zero-byte PNG output on this machine; no placeholder image was substituted.", "avalonia-headless-render-unavailable");
     }
     var path = Path.Combine(output, "full", "avalonia", Safe(scenario.Id) + ".png");
+    var cropPath = Path.Combine(output, "crops", "avalonia", Safe(scenario.Id) + ".png");
     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+    Directory.CreateDirectory(Path.GetDirectoryName(cropPath)!);
     File.WriteAllBytes(path, bytes);
+    File.WriteAllBytes(cropPath, bytes);
     var semantics = ReadSemantics(dialog);
     dialog.Close();
-    return new Capture(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "captured", Relative(output, path), 560, 600, 560, 600, 96, 96, new Rect(0, 0, 560, 600), semantics, null, "Real app-owned Avalonia dialog rendered through the headless compositor.");
+    return new Capture(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "captured", Relative(output, path), 560, 600, 560, 600, 96, 96, new Rect(0, 0, 560, 600), semantics, null, "Real app-owned Avalonia dialog rendered through the headless compositor.", Relative(output, cropPath));
 }
 
 static Window? CreateDialog(string route)
 {
     var assembly = typeof(MainWindow).Assembly;
     if (route == "page-setup") return new PageSetupDialog(new PageSettings());
-    var type = assembly.GetType("FreeW.App.Avalonia.OptionsDialog", throwOnError: true)!;
-    return (Window?)Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object?[] { new FreeWOptions() }, null);
+    var typeName = route switch
+    {
+        "options" => "FreeW.App.Avalonia.OptionsDialog",
+        "columns" => "FreeW.App.Avalonia.ColumnsDialog",
+        "custom-paragraph-spacing" => "FreeW.App.Avalonia.CustomParagraphSpacingDialog",
+        "drop-cap-options" => "FreeW.App.Avalonia.DropCapOptionsDialog",
+        "hyphenation-options" => "FreeW.App.Avalonia.HyphenationOptionsDialog",
+        "line-number-options" => "FreeW.App.Avalonia.LineNumberOptionsDialog",
+        _ => throw new ArgumentOutOfRangeException(nameof(route))
+    };
+    var type = assembly.GetType(typeName, throwOnError: true)!;
+    var args = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+        .Single(c => c.GetParameters().Length == 0 || c.GetParameters().All(p => p.ParameterType == typeof(PageSettings) || p.ParameterType == typeof(FreeWOptions) || p.ParameterType == typeof(FreeW.Core.Model.DocumentParagraphSpacingSet)));
+    var values = args.GetParameters().Select(p =>
+        p.ParameterType == typeof(PageSettings) ? (object?)new PageSettings() :
+        p.ParameterType == typeof(FreeWOptions) ? new FreeWOptions() :
+        null).ToArray();
+    return (Window?)args.Invoke(values);
 }
 
 static void Populate(Window dialog, string state)

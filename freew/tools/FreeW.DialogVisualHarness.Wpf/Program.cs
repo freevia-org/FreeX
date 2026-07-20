@@ -29,7 +29,7 @@ static int Main(string[] args)
     foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "wpf"))
     {
         if (!TryCapture(scenario, output, out var capture))
-            capture = Unsupported(scenario, "The WPF adapter currently captures the page-setup and options families; other families remain in the generated inventory until an app-owned route adapter is added.");
+            capture = Unsupported(scenario, "The WPF adapter currently captures the options, page-setup, and page-layout families; other families remain in the generated inventory until an app-owned route adapter is added.");
         captures.Add(capture);
     }
     var manifest = new CaptureManifest("freew.dialog-capture-manifest.v1", 1, "wpf", output, captures);
@@ -42,7 +42,7 @@ static int Main(string[] args)
 static bool TryCapture(Scenario scenario, string output, out Capture capture)
 {
     capture = default!;
-    if (scenario.RouteId is not ("page-setup" or "options")) return false;
+    if (scenario.RouteId is not ("page-setup" or "options" or "columns" or "custom-paragraph-spacing" or "drop-cap-options" or "hyphenation-options" or "line-number-options")) return false;
     var owner = new Window { Width = 960, Height = 720, ShowInTaskbar = false };
     Window? dialog = null;
     try
@@ -61,15 +61,21 @@ static bool TryCapture(Scenario scenario, string output, out Capture capture)
         var width = Math.Max(1, (int)Math.Ceiling(dialog.ActualWidth));
         var height = Math.Max(1, (int)Math.Ceiling(dialog.ActualHeight));
         var path = Path.Combine(output, "full", "wpf", Safe(scenario.Id) + ".png");
+        var cropPath = Path.Combine(output, "crops", "wpf", Safe(scenario.Id) + ".png");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(cropPath)!);
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(dialog);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        using (var stream = File.Create(path)) encoder.Save(stream);
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        var png = stream.ToArray();
+        File.WriteAllBytes(path, png);
+        File.WriteAllBytes(cropPath, png);
         var dpi = VisualTreeHelper.GetDpi(dialog);
         var semantics = ReadSemantics(dialog);
-        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, "Real app-owned WPF dialog rendered through RenderTargetBitmap.");
+        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, "Real app-owned WPF dialog rendered through RenderTargetBitmap.", Relative(output, cropPath));
         return true;
     }
     catch (Exception ex)
@@ -91,12 +97,30 @@ static Window? CreateDialog(string route, Window owner)
         var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Host.OptionsDialog", throwOnError: true)!;
         return (Window?)Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object?[] { owner, new FreeWOptions() }, null);
     }
-    var pageType = typeof(MainWindow).Assembly.GetType("FreeW.App.Host.PageSetupDialog", throwOnError: true)!;
-    var ctor = pageType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single(c => c.GetParameters().Length >= 2);
+    var typeName = route switch
+    {
+        "page-setup" => "FreeW.App.Host.PageSetupDialog",
+        "columns" => "FreeW.App.Host.ColumnsDialog",
+        "custom-paragraph-spacing" => "FreeW.App.Host.CustomParagraphSpacingDialog",
+        "drop-cap-options" => "FreeW.App.Host.DropCapOptionsDialog",
+        "hyphenation-options" => "FreeW.App.Host.HyphenationOptionsDialog",
+        "line-number-options" => "FreeW.App.Host.LineNumberOptionsDialog",
+        _ => throw new ArgumentOutOfRangeException(nameof(route))
+    };
+    var pageType = typeof(MainWindow).Assembly.GetType(typeName, throwOnError: true)!;
+    var ctor = pageType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+        .Single(c => c.GetParameters().All(p => typeof(Window).IsAssignableFrom(p.ParameterType)
+            || p.ParameterType == typeof(PageSettings)
+            || p.ParameterType == typeof(int)
+            || p.ParameterType == typeof(FreeW.Core.Model.DocumentParagraphSpacingSet)
+            || p.ParameterType.IsEnum
+            || p.HasDefaultValue));
     var args = ctor.GetParameters().Select(p =>
     {
         if (typeof(Window).IsAssignableFrom(p.ParameterType)) return (object?)owner;
         if (p.ParameterType == typeof(PageSettings)) return (object?)new PageSettings();
+        if (p.ParameterType == typeof(int)) return 1;
+        if (p.ParameterType == typeof(FreeW.Core.Model.DocumentParagraphSpacingSet)) return null;
         if (p.ParameterType.IsEnum) return Enum.GetValues(p.ParameterType).GetValue(0);
         return p.HasDefaultValue ? p.DefaultValue : null;
     }).ToArray();
