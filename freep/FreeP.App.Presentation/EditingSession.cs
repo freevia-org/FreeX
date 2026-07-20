@@ -766,30 +766,44 @@ public sealed class EditingSession
     /// </summary>
     public void PasteShapes()
     {
-        if (CurrentSlide is null) return;
         if (_shapeClipboard is not { Count: > 0 }) return;
+        PasteShapeCopies(_shapeClipboard);
+    }
 
-        // Deep-clone again so repeated Paste produces independent copies.
-        var clones = _shapeClipboard.Select(s => SlideCloner.CloneShape(s)).ToList();
+    /// <summary>
+    /// Pastes shapes decoded from the native FreeP system-clipboard format.
+    /// The source objects are cloned, assigned fresh IDs, offset, and inserted as one
+    /// undoable command using the same behavior as an in-process paste.
+    /// </summary>
+    public void PasteExternalShapes(IEnumerable<SlideShape> shapes)
+    {
+        ArgumentNullException.ThrowIfNull(shapes);
+        PasteShapeCopies(shapes);
+    }
 
-        // Assign fresh Ids and apply paste offset.
+    private void PasteShapeCopies(IEnumerable<SlideShape> shapes)
+    {
+        if (CurrentSlide is null) return;
+
+        var clones = shapes.Select(SlideCloner.CloneShape).ToList();
+        if (clones.Count == 0) return;
+
         uint nextId = CurrentSlide.Shapes.Count == 0
             ? 1u
             : CurrentSlide.Shapes.Max(s => s.Id) + 1u;
 
-        foreach (var c in clones)
+        foreach (var clone in clones)
         {
-            c.Id          = nextId++;
-            c.OffsetXEmu += PasteOffset.Emu;
-            c.OffsetYEmu += PasteOffset.Emu;
+            clone.Id = nextId++;
+            clone.OffsetXEmu += PasteOffset.Emu;
+            clone.OffsetYEmu += PasteOffset.Emu;
         }
 
         Bus.Execute(new PasteShapesCommand(_currentSlideIndex, clones));
 
-        // Select the pasted shapes.
         _selectedShapeIds.Clear();
-        foreach (var c in clones)
-            _selectedShapeIds.Add(c.Id);
+        foreach (var clone in clones)
+            _selectedShapeIds.Add(clone.Id);
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
