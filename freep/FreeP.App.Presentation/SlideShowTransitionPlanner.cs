@@ -24,6 +24,9 @@ public enum SlideShowTransitionPlaybackKind
     Conveyor,
     Window,
     Morph,
+    Flip,
+    Cube,
+    Rotate,
     PushLike,
     FadeFallback
 }
@@ -131,6 +134,12 @@ public static class SlideShowTransitionPlanner
             // Morph is object-aware when both slides expose stable ids or
             // unique names; the host falls back only when no match exists.
             TransitionKind.Morph => SlideShowTransitionPlaybackKind.Morph,
+
+            TransitionKind.Flip => SlideShowTransitionPlaybackKind.Flip,
+
+            TransitionKind.Cube => SlideShowTransitionPlaybackKind.Cube,
+
+            TransitionKind.Rotate => SlideShowTransitionPlaybackKind.Rotate,
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback
         };

@@ -353,6 +353,33 @@ public sealed class MainWindow : Window
     private Task OpenSortDialogAsync() =>
         SortDialog.ShowAndApplyAsync(this, _editor);
 
+    private async Task OpenImageCropDialogAsync()
+    {
+        if (_editor.SelectedFloatingImage() is not { } image)
+            return;
+
+        var result = await ImageCropDialog.ShowAsync(
+            this,
+            image.CropLeft,
+            image.CropRight,
+            image.CropTop,
+            image.CropBottom);
+        if (result is not null)
+            _editor.SetSelectedImageCrop(result.Left, result.Right, result.Top, result.Bottom);
+        _editor.Focus();
+    }
+
+    private async Task OpenTableToTextDialogAsync()
+    {
+        if (!_editor.CanConvertTableToText)
+            return;
+
+        var delimiter = await TableTextConversionDialog.ShowAsync(this, "Convert Table to Text");
+        if (delimiter is { } value)
+            _editor.ConvertTableToText(value);
+        _editor.Focus();
+    }
+
     /// <summary>
     /// Opens the Page Setup dialog (modal). Pre-populates from the document's current page
     /// geometry; on OK applies the changes as a single undoable step.
@@ -1154,6 +1181,8 @@ public sealed class MainWindow : Window
             OpenParagraphDialog: () => _ = OpenParagraphDialogAsync(),
             OpenPageSetupDialog: () => _ = OpenPageSetupDialogAsync(),
             OpenPageNumberFormatDialog: () => _ = OpenPageNumberFormatDialogAsync(),
+            OpenImageCropDialog: () => _ = OpenImageCropDialogAsync(),
+            OpenTableToTextDialog: () => _ = OpenTableToTextDialogAsync(),
             ToggleOrientation:   ToggleOrientation,
             ApplyMarginPreset:   ApplyMarginPreset,
             ApplyPaperSize:      ApplyPaperSize,

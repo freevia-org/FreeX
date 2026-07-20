@@ -160,7 +160,9 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Doors, SlideShowTransitionPlaybackKind.Split)]
     [InlineData(TransitionKind.Window, SlideShowTransitionPlaybackKind.Window)]
     [InlineData(TransitionKind.Morph, SlideShowTransitionPlaybackKind.Morph)]
-    [InlineData(TransitionKind.Cube, SlideShowTransitionPlaybackKind.FadeFallback)]
+    [InlineData(TransitionKind.Flip, SlideShowTransitionPlaybackKind.Flip)]
+    [InlineData(TransitionKind.Cube, SlideShowTransitionPlaybackKind.Cube)]
+    [InlineData(TransitionKind.Rotate, SlideShowTransitionPlaybackKind.Rotate)]
     [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]
     public void PlanTransition_GroupsKindsIntoRendererNeutralPlayback(
         TransitionKind kind,

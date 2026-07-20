@@ -836,6 +836,18 @@ public sealed class SlideShowWindow : Window
                 PlayMorphTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Flip:
+                PlayFlipTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Cube:
+                PlayCubeTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Rotate:
+                PlayRotateTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Dissolve:
                 PlayDissolveTransition(slide, plan.DurationMs);
                 return;
@@ -1956,6 +1968,147 @@ public sealed class SlideShowWindow : Window
             transform.ScaleDipToScreen(SlideTransformCore.EmuToDip(shape.ExtentCxEmu)),
             transform.ScaleDipToScreen(SlideTransformCore.EmuToDip(shape.ExtentCyEmu)));
     }
+
+    private void PlayFlipTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlayCubeTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlayRotateTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    /// <summary>Shared two-surface projection for Flip, Cube, and Rotate.</summary>
+    private void PlayPerspectiveTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var perspective = SlideShowPerspectiveTransitionPlanner.Plan(transition);
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var travelX = plan.IncomingOffsetX * w * perspective.TravelFactor;
+        var travelY = plan.IncomingOffsetY * h * perspective.TravelFactor;
+
+        var incomingScaleX = perspective.HorizontalAxis ? perspective.StartScale : 1;
+        var incomingScaleY = perspective.HorizontalAxis ? 1 : perspective.StartScale;
+        if (!perspective.IsAxisCollapsed)
+        {
+            incomingScaleX = perspective.StartScale;
+            incomingScaleY = perspective.StartScale;
+        }
+
+        var incoming = new MatrixTransform(BuildPerspectiveMatrix(
+            incomingScaleX,
+            incomingScaleY,
+            perspective.StartRotationDegrees,
+            travelX,
+            travelY));
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransformOrigin = RelativePoint.Center;
+        _slideCanvas.RenderTransform = incoming;
+        _slideCanvas.ZIndex = 1;
+        _slideCanvas.Refresh();
+
+        MatrixTransform? outgoing = null;
+        if (snapshot is not null)
+        {
+            outgoing = new MatrixTransform(Matrix.Identity);
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.RenderTransformOrigin = RelativePoint.Center;
+            _transitionBackImage.RenderTransform = outgoing;
+            _transitionBackImage.Opacity = 1;
+            _transitionBackImage.IsVisible = true;
+            _transitionBackImage.ZIndex = 0;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, plan.DurationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var eased = EaseInOut(t);
+            var incomingScaleX = perspective.HorizontalAxis ?
+                perspective.StartScale + (1 - perspective.StartScale) * eased : 1;
+            var incomingScaleY = perspective.HorizontalAxis ? 1 :
+                perspective.StartScale + (1 - perspective.StartScale) * eased;
+            if (!perspective.IsAxisCollapsed)
+            {
+                incomingScaleX = perspective.StartScale + (1 - perspective.StartScale) * eased;
+                incomingScaleY = incomingScaleX;
+            }
+
+            incoming.Matrix = BuildPerspectiveMatrix(
+                incomingScaleX,
+                incomingScaleY,
+                perspective.StartRotationDegrees * (1 - eased),
+                travelX * (1 - eased),
+                travelY * (1 - eased));
+
+            if (outgoing is not null)
+            {
+                var outgoingScaleX = perspective.HorizontalAxis && perspective.IsAxisCollapsed
+                    ? 1 + (perspective.StartScale - 1) * eased
+                    : 1 + (incomingScaleX - 1) * eased;
+                var outgoingScaleY = !perspective.HorizontalAxis && perspective.IsAxisCollapsed
+                    ? 1 + (perspective.StartScale - 1) * eased
+                    : 1 + (incomingScaleY - 1) * eased;
+                if (!perspective.IsAxisCollapsed)
+                {
+                    outgoingScaleX = outgoingScaleY =
+                        1 + (perspective.StartScale - 1) * eased;
+                }
+
+                outgoing.Matrix = BuildPerspectiveMatrix(
+                    outgoingScaleX,
+                    outgoingScaleY,
+                    -perspective.StartRotationDegrees * eased,
+                    -travelX * eased,
+                    -travelY * eased);
+                _transitionBackImage.Opacity = 1 - eased;
+            }
+
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                _slideCanvas.RenderTransform = null;
+                _slideCanvas.ZIndex = 0;
+                _transitionBackImage.RenderTransform = null;
+                _transitionBackImage.Opacity = 1;
+                _transitionBackImage.IsVisible = false;
+                _transitionBackImage.ZIndex = 0;
+            }
+        };
+        timer.Start();
+    }
+
+    private static Matrix BuildPerspectiveMatrix(
+        double scaleX,
+        double scaleY,
+        double rotationDegrees,
+        double translateX,
+        double translateY) =>
+        Matrix.CreateScale(scaleX, scaleY)
+            * Matrix.CreateRotation(rotationDegrees * Math.PI / 180)
+            * Matrix.CreateTranslation(translateX, translateY);
 
     private void AnimateGalleryTransition(
         MatrixTransform incoming,
