@@ -1347,16 +1347,18 @@ internal static class FreeWAvaloniaRibbonCommands
     private sealed class SelectedFloatingDialogCommand(
         DocumentView editor,
         string requiredKind,
-        Action? openDialog) : IRibbonStatefulCommand
+        Action? openDialog,
+        Action? fallbackAction = null) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             if (GetState().IsEnabled)
-                openDialog!.Invoke();
+                (openDialog ?? fallbackAction)!.Invoke();
         }
 
         public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedFloatingInfo?.Kind == requiredKind && openDialog is not null);
+            new(IsEnabled: editor.SelectedFloatingInfo?.Kind == requiredKind
+                && (openDialog is not null || fallbackAction is not null));
     }
 
     private sealed class EditingActionCommand(
@@ -1819,8 +1821,10 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         r.Register("freew.chart-toggle-legend", new ActionRibbonCommand(editor.ToggleChartLegend));
-        r.Register("freew.chart-title", new SelectedFloatingDialogCommand(editor, "Chart", callbacks.OpenChartTitleDialog));
-        r.Register("freew.chart-axis-titles", new SelectedFloatingDialogCommand(editor, "Chart", callbacks.OpenChartAxisTitlesDialog));
+        r.Register("freew.chart-title", new SelectedFloatingDialogCommand(
+            editor, "Chart", callbacks.OpenChartTitleDialog, editor.ToggleChartTitle));
+        r.Register("freew.chart-axis-titles", new SelectedFloatingDialogCommand(
+            editor, "Chart", callbacks.OpenChartAxisTitlesDialog, editor.ToggleChartAxisTitles));
         r.Register("freew.chart-edit-data", new ValueRibbonCommand(value =>
         {
             if (TryBuildChartDataPreset(value, out var chart))
@@ -2044,6 +2048,9 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterMailingsAlias(r, "freew.merge-preview-previous", new ActionRibbonCommand(engine.PreviousRecord),
             "freew.prev-record");
         r.Register("freew.merge-preview-last", new ActionRibbonCommand(engine.LastRecord));
+        // MainWindow replaces these with owner-modal dialogs; keep definition parity for headless hosts.
+        r.Register("freew.merge-find-recipient", new ActionRibbonCommand(() => { }));
+        r.Register("freew.merge-check-errors", new ActionRibbonCommand(() => { }));
         RegisterMailingsAlias(r, "freew.merge-finish", new ActionRibbonCommand(() => engine.FinishMerge()),
             "freew.finish-merge");
         r.Register("freew.merge-email", new ActionRibbonCommand(() => engine.PlanEmailMerge()));
