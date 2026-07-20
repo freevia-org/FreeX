@@ -179,6 +179,10 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Drape => SlideShowTransitionPlaybackKind.Drape,
 
+            // Airplane is a motion-through-space transition; use the
+            // direction-aware Flythrough projection rather than a fade.
+            TransitionKind.Airplane => SlideShowTransitionPlaybackKind.Flythrough,
+
             TransitionKind.PageCurlSingle or
             TransitionKind.PageCurlDouble => SlideShowTransitionPlaybackKind.PageCurl,
 
