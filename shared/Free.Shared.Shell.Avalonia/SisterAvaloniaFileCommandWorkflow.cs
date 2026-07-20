@@ -29,20 +29,28 @@ public sealed class SisterAvaloniaFileCommandWorkflow
     private readonly SisterAvaloniaFileTitleSpec _titleSpec;
     private readonly Action _onChanged;
     private readonly FileCommandWorkflow _workflow;
+    private readonly Func<string, Task<SaveChangesPrompt>> _promptSaveChangesAsync;
+    private readonly Func<Task<bool>> _saveAsync;
+    private readonly Func<string, Exception, Task> _showFileCommandErrorAsync;
+    private readonly SemaphoreSlim _destructiveActionGate = new(1, 1);
 
     public SisterAvaloniaFileCommandWorkflow(
         Window owner,
         SisterAvaloniaFileTitleSpec titleSpec,
         Func<int> maxRecentEntries,
         Action onChanged,
-        Func<bool> save,
-        Func<RecentFilesStore>? loadRecentFilesStore = null)
+        Func<bool>? save = null,
+        Func<RecentFilesStore>? loadRecentFilesStore = null,
+        Func<Task<bool>>? saveAsync = null,
+        Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
+        Func<string, Exception, Task>? showFileCommandErrorAsync = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(titleSpec);
         ArgumentNullException.ThrowIfNull(maxRecentEntries);
         ArgumentNullException.ThrowIfNull(onChanged);
-        ArgumentNullException.ThrowIfNull(save);
+        if (save is null && saveAsync is null)
+            throw new ArgumentException("A synchronous or asynchronous save callback is required.");
         ArgumentException.ThrowIfNullOrWhiteSpace(titleSpec.ApplicationName);
         ArgumentException.ThrowIfNullOrWhiteSpace(titleSpec.Separator);
         ArgumentException.ThrowIfNullOrWhiteSpace(titleSpec.UntitledDisplayName);
@@ -50,11 +58,14 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         _owner = owner;
         _titleSpec = titleSpec;
         _onChanged = onChanged;
+        _promptSaveChangesAsync = promptSaveChangesAsync ?? PromptSaveChangesAsync;
+        _saveAsync = saveAsync ?? (() => Task.FromResult(save!()));
+        _showFileCommandErrorAsync = showFileCommandErrorAsync ?? ShowFileCommandErrorCoreAsync;
         _workflow = new FileCommandWorkflow(
             maxRecentEntries,
             OnWorkflowChanged,
             PromptSaveChangesSync,
-            save,
+            save ?? ThrowSynchronousSaveUnavailable,
             titleSpec.UntitledDisplayName,
             loadRecentFilesStore);
 
@@ -86,14 +97,42 @@ public sealed class SisterAvaloniaFileCommandWorkflow
     public bool New(string action, Action loadNewDocument, Action? beforeChanged = null) =>
         _workflow.New(action, loadNewDocument, beforeChanged);
 
+    public Task<bool> NewAsync(
+        string action,
+        Func<Task> loadNewDocumentAsync,
+        Action? beforeChanged = null)
+    {
+        ArgumentNullException.ThrowIfNull(loadNewDocumentAsync);
+
+        return RunDestructiveActionAsync(
+            action,
+            async () =>
+            {
+                await loadNewDocumentAsync();
+                MarkSavedWithoutPath(beforeChanged);
+                return true;
+            });
+    }
+
     public bool Open(string action, Func<string?> promptPath, Func<string, bool> openPath) =>
         _workflow.Open(action, promptPath, openPath);
 
     public Task<bool> OpenAsync(
         string action,
         Func<Task<string?>> promptPathAsync,
-        Func<string, Task<bool>> openPathAsync) =>
-        _workflow.OpenAsync(action, promptPathAsync, openPathAsync);
+        Func<string, Task<bool>> openPathAsync)
+    {
+        ArgumentNullException.ThrowIfNull(promptPathAsync);
+        ArgumentNullException.ThrowIfNull(openPathAsync);
+
+        return RunDestructiveActionAsync(
+            action,
+            async () =>
+            {
+                var path = await promptPathAsync();
+                return !string.IsNullOrWhiteSpace(path) && await openPathAsync(path);
+            });
+    }
 
     public Task<bool> SaveAsync(
         Func<string, Task<bool>> saveToCurrentPathAsync,
@@ -102,6 +141,16 @@ public sealed class SisterAvaloniaFileCommandWorkflow
 
     public bool ConfirmCloseAllowed(string action = "closing") =>
         _workflow.ConfirmCloseAllowed(action);
+
+    public Task<bool> ConfirmCloseAllowedAsync(string action = "closing") =>
+        RunDestructiveActionAsync(action, static () => Task.FromResult(true));
+
+    public Task ShowFileCommandErrorAsync(string summary, Exception exception)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(summary);
+        ArgumentNullException.ThrowIfNull(exception);
+        return _showFileCommandErrorAsync(summary, exception);
+    }
 
     public void MarkSavedWithoutPath(Action? beforeChanged = null) =>
         _workflow.MarkSavedWithoutPath(beforeChanged);
@@ -133,6 +182,54 @@ public sealed class SisterAvaloniaFileCommandWorkflow
                     _workflow.DisplayName,
                     action))
             .GetAwaiter().GetResult();
+
+    private Task<SaveChangesPrompt> PromptSaveChangesAsync(string action) =>
+        AvaloniaSaveChangesDialog.ShowAsync(
+            _owner,
+            AvaloniaSaveChangesPromptText.ForDocumentAction(
+                _titleSpec.ApplicationName,
+                _workflow.DisplayName,
+                action));
+
+    private Task ShowFileCommandErrorCoreAsync(string summary, Exception exception) =>
+        AvaloniaUserMessageDialog.ShowErrorAsync(
+            _owner,
+            $"{summary}:\n{exception.Message}",
+            _titleSpec.ApplicationName);
+
+    private async Task<bool> RunDestructiveActionAsync(
+        string action,
+        Func<Task<bool>> destructiveActionAsync)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
+        ArgumentNullException.ThrowIfNull(destructiveActionAsync);
+
+        if (!await _destructiveActionGate.WaitAsync(0))
+            return false;
+
+        try
+        {
+            var result = await AsyncFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(
+                _workflow.IsDirty,
+                () => _promptSaveChangesAsync(action),
+                _saveAsync);
+            if (result == DirtyGateResult.Cancel)
+            {
+                _owner.Activate();
+                _owner.Focus();
+                return false;
+            }
+
+            return await destructiveActionAsync();
+        }
+        finally
+        {
+            _destructiveActionGate.Release();
+        }
+    }
+
+    private static bool ThrowSynchronousSaveUnavailable() =>
+        throw new InvalidOperationException("This file workflow is configured for asynchronous save operations.");
 
     private string ResolveDocumentDisplayName()
     {
