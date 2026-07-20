@@ -195,6 +195,15 @@ public sealed class SlideShowPlaybackPlannerTests
         origami.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.PageCurl);
         origami.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.PageCurl);
 
+        var vortex = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Vortex,
+            Direction = TransitionDirection.Left
+        });
+
+        vortex.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Vortex);
+        vortex.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Vortex);
+
         var pageCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
             Kind = TransitionKind.PageCurlSingle,
@@ -407,6 +416,79 @@ public sealed class SlideShowPlaybackPlannerTests
         closed.Should().BeEmpty();
         partial.Should().NotBeEmpty();
         partial.Should().OnlyContain(segment => segment.Points.Count == 4);
+        open.Should().HaveCount(1);
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+    }
+
+    [Fact]
+    public void VortexPlanner_BuildsDeterministicSpiralSectors()
+    {
+        var plan = SlideShowVortexTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Vortex,
+            Direction = TransitionDirection.Left
+        });
+
+        plan.Reverse.Should().BeTrue();
+
+        var closed = SlideShowVortexTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowVortexTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowVortexTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowVortexTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().HaveCount(plan.SectorCount + 1);
+        partial.Should().OnlyContain(sector => sector.Points.Count == 4);
+        open.Should().HaveCount(1);
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+    }
+
+    [Fact]
+    public void WarpPlanner_BuildsDeterministicElasticFront()
+    {
+        var plan = SlideShowWarpTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Warp,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.HorizontalAxis.Should().BeTrue();
+        plan.Reverse.Should().BeFalse();
+
+        var closed = SlideShowWarpTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowWarpTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowWarpTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowWarpTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().HaveCount(plan.SegmentCount);
+        partial.Should().OnlyContain(segment => segment.Points.Count == 4);
+        open.Should().HaveCount(1);
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+    }
+
+    [Fact]
+    public void FracturePlanner_BuildsDeterministicCenterFirstShards()
+    {
+        var plan = SlideShowFractureTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Fracture,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.Reverse.Should().BeFalse();
+
+        var closed = SlideShowFractureTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowFractureTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowFractureTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowFractureTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().NotBeEmpty();
+        partial.Should().OnlyContain(shard => shard.Points.Count == 4);
         open.Should().HaveCount(1);
         open[0].Points.Should().HaveCount(4);
         partial.Should().BeEquivalentTo(repeat);

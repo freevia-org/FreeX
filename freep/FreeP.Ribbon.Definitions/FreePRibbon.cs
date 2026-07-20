@@ -14,7 +14,7 @@ public static class FreePRibbon
     {
         var profile = (capabilities ?? FreePRibbonCapabilities.Wpf).Profile;
 
-        return new RibbonDefinitionBuilder()
+        var definition = new RibbonDefinitionBuilder()
             .Tab("home", FreePRibbonText.HomeTabLabel, FreePRibbonText.HomeTabKeyTip,
                 tab => AddHomeGroups(tab, profile))
             .Tab("insert", FreePRibbonText.InsertTabLabel, FreePRibbonText.InsertTabKeyTip,
@@ -28,6 +28,81 @@ public static class FreePRibbon
             .Tab("view", FreePRibbonText.ViewTab.Label, FreePRibbonText.ViewTab.KeyTip,
                 AddViewGroups)
             .Build();
+
+        return EnsureUnambiguousKeyTips(definition);
+    }
+
+    private static RibbonDefinition EnsureUnambiguousKeyTips(RibbonDefinition definition)
+    {
+        var tabKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var tabs = definition.Tabs.Select(tab =>
+        {
+            var tabKeyTip = MakeUniqueKeyTip(tab.KeyTip, tabKeyTips);
+            var groupKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var groups = tab.Groups.Select(group =>
+            {
+                var groupKeyTip = MakeUniqueKeyTip(group.KeyTip, groupKeyTips);
+                var controlKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var controls = group.Controls.Select(control =>
+                {
+                    var normalized = control switch
+                    {
+                        RibbonSplitButton split => split with { Menu = NormalizeMenuKeyTips(split.Menu) },
+                        RibbonDropdown dropdown => dropdown with { Menu = NormalizeMenuKeyTips(dropdown.Menu) },
+                        _ => control,
+                    };
+                    return normalized with
+                    {
+                        KeyTip = MakeUniqueKeyTip(normalized.KeyTip, controlKeyTips),
+                    };
+                }).ToArray();
+
+                return group with { KeyTip = groupKeyTip, Controls = controls };
+            }).ToArray();
+
+            return tab with { KeyTip = tabKeyTip, Groups = groups };
+        }).ToArray();
+
+        return definition with { Tabs = tabs };
+    }
+
+    private static RibbonMenu NormalizeMenuKeyTips(RibbonMenu menu)
+    {
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var items = menu.Items.Select(item => item with
+        {
+            KeyTip = MakeUniqueKeyTip(item.KeyTip, used),
+            Children = NormalizeMenuItems(item.Children),
+        }).ToArray();
+        return menu with { Items = items };
+    }
+
+    private static IReadOnlyList<RibbonMenuItem> NormalizeMenuItems(
+        IReadOnlyList<RibbonMenuItem> source)
+    {
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return source.Select(item => item with
+        {
+            KeyTip = MakeUniqueKeyTip(item.KeyTip, used),
+            Children = NormalizeMenuItems(item.Children),
+        }).ToArray();
+    }
+
+    private static string? MakeUniqueKeyTip(string? keyTip, HashSet<string> used)
+    {
+        if (string.IsNullOrWhiteSpace(keyTip))
+            return keyTip;
+
+        var normalized = keyTip.Trim().ToUpperInvariant();
+        if (used.Add(normalized))
+            return normalized;
+
+        for (var suffix = 2; ; suffix++)
+        {
+            var candidate = $"{normalized}{suffix}";
+            if (used.Add(candidate))
+                return candidate;
+        }
     }
 
     private static void AddHomeGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
@@ -62,7 +137,10 @@ public static class FreePRibbon
                         AddEditControls);
                     break;
                 case FreePRibbonHomeGroupId.Editing:
-                    tab.Group("editing", FreePRibbonText.EditingGroupLabel, FreePRibbonText.EditingGroupKeyTip,
+                    tab.Group("editing", FreePRibbonText.EditingGroupLabel,
+                        profile.HomeGroups.Contains(FreePRibbonHomeGroupId.Edit)
+                            ? "FN"
+                            : FreePRibbonText.EditingGroupKeyTip,
                         priority, AddEditingControls);
                     break;
                 default:
@@ -259,12 +337,13 @@ public static class FreePRibbon
             group.Medium("freep.transition.zoom", FreePRibbonText.TransitionZoomCommand.Label, RibbonCommandIconKind.Zoom, FreePRibbonText.TransitionZoomCommand.KeyTip);
             group.Medium("freep.transition.wheel", FreePRibbonText.TransitionWheelCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.TransitionWheelCommand.KeyTip);
         });
-        tab.Group("transition-more", FreePRibbonText.TransitionMoreGroup.Label, null, 95, group =>
+        tab.Group("transition-more", FreePRibbonText.TransitionMoreGroup.Label, "M", 95, group =>
         {
             group.Medium(
                 "freep.transition.more",
                 FreePRibbonText.TransitionMoreCommand.Label,
                 RibbonCommandIconKind.Effects,
+                "M",
                 dropdown: true,
                 menu: BuildExtendedTransitionMenu);
         });
@@ -395,7 +474,10 @@ public static class FreePRibbon
     }
 
     internal static RibbonMenu BuildListGalleryMenu(PresentationListGalleryPlan plan) =>
-        new(plan.Items.Select(item => new RibbonMenuItem(item.PreviewText, new RibbonCommandId(item.CommandId))
+        new(plan.Items.Select((item, index) => new RibbonMenuItem(
+            item.PreviewText,
+            new RibbonCommandId(item.CommandId),
+            KeyTip: (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))
         {
             IsEnabled = item.IsEnabled
         }).ToArray());
@@ -428,32 +510,36 @@ public static class FreePRibbon
 
     private static void BuildExtendedTransitionMenu(RibbonMenuBuilder menu)
     {
-        menu.Item("freep.transition.fly", FreePRibbonText.TransitionFlyCommand.Label);
-        menu.Item("freep.transition.random", FreePRibbonText.TransitionRandomCommand.Label);
-        menu.Item("freep.transition.cube", FreePRibbonText.TransitionCubeCommand.Label);
-        menu.Item("freep.transition.rotate", FreePRibbonText.TransitionRotateCommand.Label);
-        menu.Item("freep.transition.flip", FreePRibbonText.TransitionFlipCommand.Label);
-        menu.Item("freep.transition.ferris", FreePRibbonText.TransitionFerrisCommand.Label);
-        menu.Item("freep.transition.flythrough", FreePRibbonText.TransitionFlythroughCommand.Label);
-        menu.Item("freep.transition.switch", FreePRibbonText.TransitionSwitchCommand.Label);
-        menu.Item("freep.transition.orbit", FreePRibbonText.TransitionOrbitCommand.Label);
-        menu.Item("freep.transition.honeycomb", FreePRibbonText.TransitionHoneycombCommand.Label);
-        menu.Item("freep.transition.glitter", FreePRibbonText.TransitionGlitterCommand.Label);
-        menu.Item("freep.transition.vortex", FreePRibbonText.TransitionVortexCommand.Label);
-        menu.Item("freep.transition.shred", FreePRibbonText.TransitionShredCommand.Label);
-        menu.Item("freep.transition.wind", FreePRibbonText.TransitionWindCommand.Label);
-        menu.Item("freep.transition.ripple", FreePRibbonText.TransitionRippleCommand.Label);
-        menu.Item("freep.transition.warp", FreePRibbonText.TransitionWarpCommand.Label);
-        menu.Item("freep.transition.fracture", FreePRibbonText.TransitionFractureCommand.Label);
-        menu.Item("freep.transition.crush", FreePRibbonText.TransitionCrushCommand.Label);
-        menu.Item("freep.transition.peel-off", FreePRibbonText.TransitionPeelOffCommand.Label);
-        menu.Item("freep.transition.page-curl-double", FreePRibbonText.TransitionPageCurlDoubleCommand.Label);
-        menu.Item("freep.transition.page-curl-single", FreePRibbonText.TransitionPageCurlSingleCommand.Label);
-        menu.Item("freep.transition.airplane", FreePRibbonText.TransitionAirplaneCommand.Label);
-        menu.Item("freep.transition.origami", FreePRibbonText.TransitionOrigamiCommand.Label);
-        menu.Item("freep.transition.prism", FreePRibbonText.TransitionPrismCommand.Label);
-        menu.Item("freep.transition.curtains", FreePRibbonText.TransitionCurtainsCommand.Label);
-        menu.Item("freep.transition.drape", FreePRibbonText.TransitionDrapeCommand.Label);
-        menu.Item("freep.transition.prestige", FreePRibbonText.TransitionPrestigeCommand.Label);
+        var index = 0;
+        void Item(string commandId, string label) =>
+            menu.Item(commandId, label, $"T{++index}");
+
+        Item("freep.transition.fly", FreePRibbonText.TransitionFlyCommand.Label);
+        Item("freep.transition.random", FreePRibbonText.TransitionRandomCommand.Label);
+        Item("freep.transition.cube", FreePRibbonText.TransitionCubeCommand.Label);
+        Item("freep.transition.rotate", FreePRibbonText.TransitionRotateCommand.Label);
+        Item("freep.transition.flip", FreePRibbonText.TransitionFlipCommand.Label);
+        Item("freep.transition.ferris", FreePRibbonText.TransitionFerrisCommand.Label);
+        Item("freep.transition.flythrough", FreePRibbonText.TransitionFlythroughCommand.Label);
+        Item("freep.transition.switch", FreePRibbonText.TransitionSwitchCommand.Label);
+        Item("freep.transition.orbit", FreePRibbonText.TransitionOrbitCommand.Label);
+        Item("freep.transition.honeycomb", FreePRibbonText.TransitionHoneycombCommand.Label);
+        Item("freep.transition.glitter", FreePRibbonText.TransitionGlitterCommand.Label);
+        Item("freep.transition.vortex", FreePRibbonText.TransitionVortexCommand.Label);
+        Item("freep.transition.shred", FreePRibbonText.TransitionShredCommand.Label);
+        Item("freep.transition.wind", FreePRibbonText.TransitionWindCommand.Label);
+        Item("freep.transition.ripple", FreePRibbonText.TransitionRippleCommand.Label);
+        Item("freep.transition.warp", FreePRibbonText.TransitionWarpCommand.Label);
+        Item("freep.transition.fracture", FreePRibbonText.TransitionFractureCommand.Label);
+        Item("freep.transition.crush", FreePRibbonText.TransitionCrushCommand.Label);
+        Item("freep.transition.peel-off", FreePRibbonText.TransitionPeelOffCommand.Label);
+        Item("freep.transition.page-curl-double", FreePRibbonText.TransitionPageCurlDoubleCommand.Label);
+        Item("freep.transition.page-curl-single", FreePRibbonText.TransitionPageCurlSingleCommand.Label);
+        Item("freep.transition.airplane", FreePRibbonText.TransitionAirplaneCommand.Label);
+        Item("freep.transition.origami", FreePRibbonText.TransitionOrigamiCommand.Label);
+        Item("freep.transition.prism", FreePRibbonText.TransitionPrismCommand.Label);
+        Item("freep.transition.curtains", FreePRibbonText.TransitionCurtainsCommand.Label);
+        Item("freep.transition.drape", FreePRibbonText.TransitionDrapeCommand.Label);
+        Item("freep.transition.prestige", FreePRibbonText.TransitionPrestigeCommand.Label);
     }
 }

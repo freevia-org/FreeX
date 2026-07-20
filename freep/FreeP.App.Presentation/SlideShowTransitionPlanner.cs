@@ -38,6 +38,9 @@ public enum SlideShowTransitionPlaybackKind
     Curtains,
     Shred,
     Drape,
+    Fracture,
+    Warp,
+    Vortex,
     PageCurl,
     PushLike,
     FadeFallback
@@ -186,6 +189,12 @@ public static class SlideShowTransitionPlanner
             // Origami is a multi-fold paper transition; use the shared
             // double-fold page projection instead of reducing it to fade.
             TransitionKind.Origami => SlideShowTransitionPlaybackKind.PageCurl,
+
+            TransitionKind.Vortex => SlideShowTransitionPlaybackKind.Vortex,
+
+            TransitionKind.Warp => SlideShowTransitionPlaybackKind.Warp,
+
+            TransitionKind.Fracture => SlideShowTransitionPlaybackKind.Fracture,
 
             TransitionKind.PageCurlSingle or
             TransitionKind.PageCurlDouble => SlideShowTransitionPlaybackKind.PageCurl,
