@@ -50,11 +50,10 @@ namespace FreeP.App.Avalonia;
 ///   File:   New, Open, Save, Save As
 ///   Slide:  New Slide, Duplicate, Delete
 ///   Insert: Text Box, Table, Chart, Link, Picture, Rectangle, Ellipse
-///   Edit:   Undo, Redo, Find, Replace
+///   Edit:   Undo, Redo, Copy, Cut, Paste, Find, Replace
 ///   Keyboard: Ctrl+N/O/S/Shift+S, Ctrl+Z/Y
 ///
-/// Deferred to later Avalonia parity: transitions, animations, full platform dialogs,
-///   clipboard (full).
+/// Deferred to later Avalonia parity: transitions, animations, and full platform dialogs.
 /// </summary>
 public sealed partial class MainWindow : Window
 {
