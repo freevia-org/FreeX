@@ -1346,8 +1346,9 @@ public static class PptxPackageWriter
     }
 
     /// <summary>
-    /// Builds a minimal ppt/notesMasters/notesMaster1.xml. Contains no shapes — PowerPoint
-    /// accepts a virtually empty master and derives defaults from the theme.
+    /// Builds the default notes master used by PowerPoint for a new presentation.  The
+    /// notes-slide part contains only placeholder identities; the master owns the visible
+    /// slide-image, notes, header/footer, and slide-number geometry.
     /// </summary>
     private static XDocument BuildNotesMasterXml() =>
         new XDocument(
@@ -1369,7 +1370,28 @@ public static class PptxPackageWriter
                                 new XElement(A + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
                                 new XElement(A + "ext", new XAttribute("cx", "0"), new XAttribute("cy", "0")),
                                 new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
-                                new XElement(A + "chExt", new XAttribute("cx", "0"), new XAttribute("cy", "0"))))),
+                                new XElement(A + "chExt", new XAttribute("cx", "0"), new XAttribute("cy", "0")))),
+                        BuildNotesMasterPlaceholder(
+                            id: 2, name: "Header Placeholder 1", type: "hdr", idx: null, size: "quarter",
+                            x: 0, y: 0, width: 2971800, height: 458788, paragraphAlignment: "l"),
+                        BuildNotesMasterPlaceholder(
+                            id: 3, name: "Date Placeholder 2", type: "dt", idx: 1, size: null,
+                            x: 3884613, y: 0, width: 2971800, height: 458788, paragraphAlignment: "r"),
+                        BuildNotesMasterPlaceholder(
+                            id: 4, name: "Slide Image Placeholder 3", type: "sldImg", idx: 2, size: null,
+                            x: 685800, y: 1143000, width: 5486400, height: 3086100,
+                            paragraphAlignment: null, noFill: true, outlined: true),
+                        BuildNotesMasterPlaceholder(
+                            id: 5, name: "Notes Placeholder 4", type: "body", idx: 3, size: "quarter",
+                            x: 685800, y: 4400550, width: 5486400, height: 3600450, paragraphAlignment: "l"),
+                        BuildNotesMasterPlaceholder(
+                            id: 6, name: "Footer Placeholder 5", type: "ftr", idx: 4, size: "quarter",
+                            x: 0, y: 8685213, width: 2971800, height: 458787, paragraphAlignment: "l",
+                            anchor: "b"),
+                        BuildNotesMasterPlaceholder(
+                            id: 7, name: "Slide Number Placeholder 6", type: "sldNum", idx: 5, size: "quarter",
+                            x: 3884613, y: 8685213, width: 2971800, height: 458787, paragraphAlignment: "r",
+                            anchor: "b")),
                     new XElement(P + "extLst",
                         new XElement(P + "ext",
                             new XAttribute("uri", "{BB962C8B-B14F-4D97-AF65-F5344CB8AC3E}"),
@@ -1384,6 +1406,73 @@ public static class PptxPackageWriter
                     new XAttribute("accent5", "accent5"), new XAttribute("accent6", "accent6"),
                     new XAttribute("hlink", "hlink"), new XAttribute("folHlink", "folHlink")),
                 BuildNotesStyleEl()));
+
+    private static XElement BuildNotesMasterPlaceholder(
+        uint id,
+        string name,
+        string type,
+        int? idx,
+        string? size,
+        long x,
+        long y,
+        long width,
+        long height,
+        string? paragraphAlignment,
+        bool noFill = false,
+        bool outlined = false,
+        string? anchor = null)
+    {
+        var placeholder = new XElement(P + "ph", new XAttribute("type", type));
+        if (size is not null)
+            placeholder.Add(new XAttribute("sz", size));
+        if (idx.HasValue)
+            placeholder.Add(new XAttribute("idx", idx.Value));
+
+        var bodyPr = new XElement(A + "bodyPr",
+            new XAttribute("vert", "horz"),
+            new XAttribute("lIns", "91440"),
+            new XAttribute("tIns", "45720"),
+            new XAttribute("rIns", "91440"),
+            new XAttribute("bIns", "45720"),
+            new XAttribute("rtlCol", "0"));
+        if (anchor is not null)
+            bodyPr.Add(new XAttribute("anchor", anchor));
+
+        var textBody = new XElement(P + "txBody",
+            bodyPr,
+            new XElement(A + "lstStyle"),
+            new XElement(A + "p",
+                paragraphAlignment is null
+                    ? null
+                    : new XElement(A + "pPr", new XAttribute("algn", paragraphAlignment)),
+                new XElement(A + "endParaRPr", new XAttribute("lang", "en-US"))));
+
+        var shapeProperties = new XElement(P + "spPr",
+            new XElement(A + "xfrm",
+                new XElement(A + "off", new XAttribute("x", x), new XAttribute("y", y)),
+                new XElement(A + "ext", new XAttribute("cx", width), new XAttribute("cy", height))),
+            new XElement(A + "prstGeom", new XAttribute("prst", "rect"), new XElement(A + "avLst")));
+        if (noFill)
+            shapeProperties.Add(new XElement(A + "noFill"));
+        if (outlined)
+        {
+            shapeProperties.Add(new XElement(A + "ln",
+                new XAttribute("w", "12700"),
+                new XElement(A + "solidFill", new XElement(A + "prstClr", new XAttribute("val", "black")))));
+        }
+
+        return new XElement(P + "sp",
+            new XElement(P + "nvSpPr",
+                new XElement(P + "cNvPr", new XAttribute("id", id), new XAttribute("name", name)),
+                new XElement(P + "cNvSpPr",
+                    new XElement(A + "spLocks",
+                        new XAttribute("noGrp", "1"),
+                        type == "sldImg" ? new XAttribute("noRot", "1") : null,
+                        type == "sldImg" ? new XAttribute("noChangeAspect", "1") : null)),
+                new XElement(P + "nvPr", placeholder)),
+            shapeProperties,
+            textBody);
+    }
 
     private static XElement BuildNotesStyleEl()
     {
