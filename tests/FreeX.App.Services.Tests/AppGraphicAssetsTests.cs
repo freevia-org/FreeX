@@ -31,12 +31,12 @@ public sealed class AppGraphicAssetsTests
                 "io.github.tony-xmelon.freew",
                 "W",
                 "#1b5fa6",
-                "freew/FreeW.App.Host/Resources/FreeW.ico",
+                "shared/Free.Shared.Shell/Resources/FreeW.ico",
                 "freew/FreeW.App.Host/FreeW.App.Host.csproj",
-                "freew/FreeW.App.Avalonia/Packaging/macos/FreeW.icns",
+                "shared/Free.Shared.Shell/Resources/FreeW.icns",
                 "freew/FreeW.App.Avalonia/Packaging/macos/Info.plist",
                 "freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj",
-                "freew/FreeW.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freew.svg",
+                "shared/Free.Shared.Shell/Resources/FreeW.svg",
                 "freew/FreeW.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freew.desktop")
         ];
     }
@@ -50,11 +50,12 @@ public sealed class AppGraphicAssetsTests
 
         var project = File.ReadAllText(RepoFile(app.WpfProjectPath));
         var iconFileName = Path.GetFileName(app.WindowsIconPath);
-        if (app.Name == "FreeX")
+        if (app.WindowsIconPath.StartsWith("shared/", StringComparison.Ordinal))
         {
-            project.Should().Contain("<Resource Include=\"..\\..\\shared\\Free.Shared.Shell\\Resources\\FreeX.ico\"");
-            project.Should().Contain("<Content Include=\"..\\..\\shared\\Free.Shared.Shell\\Resources\\FreeX.ico\"");
-            project.Should().Contain("<ApplicationIcon>..\\..\\shared\\Free.Shared.Shell\\Resources\\FreeX.ico</ApplicationIcon>");
+            var relativeSharedIcon = $"..\\..\\shared\\Free.Shared.Shell\\Resources\\{iconFileName}";
+            project.Should().Contain($"<Resource Include=\"{relativeSharedIcon}\"");
+            project.Should().Contain($"<Content Include=\"{relativeSharedIcon}\"");
+            project.Should().Contain($"<ApplicationIcon>{relativeSharedIcon}</ApplicationIcon>");
         }
         else
         {
@@ -101,7 +102,10 @@ public sealed class AppGraphicAssetsTests
         PlistArray(rootDict, "CFBundleDocumentTypes")!.Elements("dict").Should().NotBeEmpty();
 
         var project = File.ReadAllText(RepoFile(app.AvaloniaProjectPath));
-        project.Should().Contain($"<Content Include=\"Packaging\\macos\\{Path.GetFileName(app.MacOsIconPath)}\"");
+        var expectedInclude = app.MacOsIconPath.StartsWith("shared/", StringComparison.Ordinal)
+            ? $"..\\..\\shared\\Free.Shared.Shell\\Resources\\{Path.GetFileName(app.MacOsIconPath)}"
+            : $"Packaging\\macos\\{Path.GetFileName(app.MacOsIconPath)}";
+        project.Should().Contain($"<Content Include=\"{expectedInclude}\"");
         project.Should().Contain("CopyToPublishDirectory=\"PreserveNewest\"");
     }
 

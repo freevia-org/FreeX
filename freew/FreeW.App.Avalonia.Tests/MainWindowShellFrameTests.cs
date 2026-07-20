@@ -24,7 +24,7 @@ public sealed class MainWindowShellFrameTests
         var lastChildFill = false;
         var titleBarHeight = 0d;
 
-        var ran = await OnUiThread(() =>
+        await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
             var outer = window.Content.Should().BeOfType<Grid>().Subject;
@@ -36,9 +36,6 @@ public sealed class MainWindowShellFrameTests
             lastChildFill = root.LastChildFill;
             titleBarHeight = window.TitleBarForTests.Height;
         });
-
-        if (!ran)
-            return;
 
         outerChildCount.Should().Be(2, "the shared outer frame contains the titlebar and client body");
         clientChildCount.Should().Be(4, "FreeW contributes ribbon, status, find bar, and workarea to the shared client frame");
@@ -55,7 +52,7 @@ public sealed class MainWindowShellFrameTests
         string title = string.Empty;
         string[] qatIds = [];
 
-        var ran = await OnUiThread(() =>
+        await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
             hasIcon = window.HasWindowIconForTests;
@@ -65,12 +62,53 @@ public sealed class MainWindowShellFrameTests
                 .ToArray();
         });
 
-        if (!ran)
-            return;
-
         hasIcon.Should().BeTrue();
         title.Should().Be("Untitled \u2014 FreeW");
         qatIds.Should().Equal("Save", "Undo", "Redo");
+    }
+
+    [Fact]
+    public async Task MainWindow_status_matches_Wpf_content_controls_and_zoom_state()
+    {
+        string page = string.Empty;
+        string section = string.Empty;
+        string counts = string.Empty;
+        string dataFolder = string.Empty;
+        string[] controlNames = [];
+        bool printLayoutChecked = false;
+        double minimum = 0;
+        double maximum = 0;
+        double value = 0;
+        string zoomLabel = string.Empty;
+
+        await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            page = window.PageStatusForTests;
+            section = window.SectionStatusForTests;
+            counts = window.CountsStatusForTests;
+            dataFolder = window.DataFolderStatusForTests;
+            controlNames = window.StatusViewControlsForTests
+                .Select(control => global::Avalonia.Automation.AutomationProperties.GetName(control) ?? string.Empty)
+                .ToArray();
+            printLayoutChecked = ((global::Avalonia.Controls.Primitives.ToggleButton)window.StatusViewControlsForTests[1]).IsChecked == true;
+            minimum = window.ZoomSliderForTests.Minimum;
+            maximum = window.ZoomSliderForTests.Maximum;
+            value = window.ZoomSliderForTests.Value;
+            window.ApplyZoomForTests(1.4);
+            zoomLabel = window.ZoomLabelForTests;
+        });
+
+        page.Should().StartWith("Page ");
+        section.Should().StartWith("Section ");
+        counts.Should().Contain("Words");
+        dataFolder.Should().NotBeNullOrWhiteSpace();
+        controlNames.Should().Equal("Read Mode", "Print Layout", "Web Layout", "Draft", "Page Edit");
+        printLayoutChecked.Should().BeTrue();
+        minimum.Should().Be(FreeW.Core.Model.ZoomLevels.Min);
+        maximum.Should().Be(FreeW.Core.Model.ZoomLevels.Max);
+        value.Should().Be(FreeW.Core.Model.ZoomLevels.Default);
+        zoomLabel.Should().Be("140%");
     }
 
     [Fact]
@@ -87,13 +125,18 @@ public sealed class MainWindowShellFrameTests
         mainWindow.Should().Contain("ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication");
         mainWindow.Should().Contain("ApplyWindowIcon();");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
-        mainWindow.Should().Contain("SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0))");
-        mainWindow.Should().Contain("SisterAppStatusBarChrome.CreateInfoText(\"100%\", margin: new Thickness(8, 0))");
+        mainWindow.Should().Contain("private Border BuildStatusBar()");
+        mainWindow.Should().Contain("SisterAppStatusBarTextPlanner.FormatDataFolderStatus(ResolveDataFolderLabel())");
+        mainWindow.Should().Contain("BuildViewSwitchControl(white)");
+        mainWindow.Should().Contain("BuildZoomControl(white)");
+        mainWindow.Should().Contain("RibbonCommandIconKind.ReadMode");
+        mainWindow.Should().Contain("Minimum = ZoomLevels.Min");
+        mainWindow.Should().Contain("Maximum = ZoomLevels.Max");
         mainWindow.Should().Contain("chrome: ribbon,");
         mainWindow.Should().Contain("workArea: workArea,");
         mainWindow.Should().Contain("statusBar: statusBar,");
         mainWindow.Should().Contain("bottomPanelsAboveStatus: [findBar]");
-        mainWindow.Should().Contain("RightItems: BuildStatusRightItems()");
+        mainWindow.Should().Contain("RightItems: [BuildViewSwitchControl(white), BuildZoomControl(white)]");
         mainWindow.Should().Contain("Content = windowFrame.Root;");
         AssertBefore(mainWindow, "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
         AssertBefore(mainWindow, "SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(", "Content = windowFrame.Root;");
@@ -185,18 +228,8 @@ public sealed class MainWindowShellFrameTests
             .Which.Color.Should().Be(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
     }
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    private static Task OnUiThread(Action action) =>
+        Session.Dispatch(action, CancellationToken.None);
 
     private static string FindRepoFile(params string[] parts) =>
         Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), Path.Combine(parts));

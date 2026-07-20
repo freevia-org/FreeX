@@ -86,11 +86,11 @@
              CopyToPublishDirectory="PreserveNewest" />
     <!-- Insert > Icons content library: curated monochrome SVGs for document insertion (W20). -->
     <Content Include="Resources\ContentIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
-    <!-- Reuse FreeX's actual Office-quality icons wherever a command has a FreeX equivalent, so e.g.
-         Paste is byte-identical to FreeX. Linked (single source of truth), not copied; FreeW's folder
-         above holds only the Word-specific icons and must not contain any filename that also exists in
-         FreeX's set (that would double-emit to the same output path). -->
+    <!-- Reuse FreeX's actual Office-quality icons wherever a command has a FreeX equivalent. A small
+         reviewed set has intentional FreeW-specific variants with the same slug; exclude those FreeX
+         items so publish has one deterministic source path and the FreeW artwork wins. -->
     <Content Include="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
+             Exclude="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\arrange-all.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\breaks.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\eraser.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\new-window.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\paste-special.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\show-comments.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\show-notes.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\sort.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\strikethrough.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-colors.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-effects.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-fonts.svg"
              Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />

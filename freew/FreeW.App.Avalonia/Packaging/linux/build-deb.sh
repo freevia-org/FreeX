@@ -7,4 +7,5 @@ exec "$repo_root/tools/packaging/linux/package-linux.sh" \
   --operation deb \
   --config "$repo_root/tools/packaging/linux/freew.conf" \
   --asset-dir "$script_dir" \
+  --icon-file "$repo_root/shared/Free.Shared.Shell/Resources/FreeW.svg" \
   "$@"
