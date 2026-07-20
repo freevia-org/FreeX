@@ -17,10 +17,11 @@ public sealed class LinuxRecordingProcessAdapterTests
         var process = new FakeChildProcess();
         var factory = new FakeChildProcessFactory(process);
         var adapter = new LinuxRecordingProcessAdapter(factory);
+        var command = Command;
 
-        adapter.Start(Command).Should().BeSameAs(process);
+        adapter.Start(command).Should().BeSameAs(process);
 
-        factory.Commands.Should().Equal(Command);
+        factory.Commands.Should().ContainSingle().Which.Should().BeSameAs(command);
     }
 
     [Fact]
