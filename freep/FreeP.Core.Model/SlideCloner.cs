@@ -271,6 +271,8 @@ public static class SlideCloner
         CrossBetween      = a.CrossBetween,
         AutoCrossing      = a.AutoCrossing,
         LabelAlignment    = a.LabelAlignment,
+        Crosses           = a.Crosses,
+        CrossesAt         = a.CrossesAt,
         Delete            = a.Delete,
     };
 

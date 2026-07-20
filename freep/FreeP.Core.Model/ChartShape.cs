@@ -79,6 +79,9 @@ public enum ChartCrossBetween { Between, MidCat }
 /// <summary>Authored category-axis label alignment.</summary>
 public enum ChartLabelAlignment { Left, Center, Right }
 
+/// <summary>Authored axis crossing mode from <c>c:crosses/@val</c>.</summary>
+public enum ChartAxisCrossing { AutoZero, Min, Max }
+
 /// <summary>Authored classic 3-D chart family read from OOXML chart-type elements.</summary>
 public enum ChartThreeDStyle { None, Pie, Line, Area, Column, Bar }
 
@@ -449,6 +452,12 @@ public sealed class ChartAxis
 
     /// <summary>Authored category-axis label alignment from <c>c:lblAlgn/@val</c>.</summary>
     public ChartLabelAlignment? LabelAlignment { get; set; }
+
+    /// <summary>Authored axis crossing mode. Null preserves the writer's existing chart-role default.</summary>
+    public ChartAxisCrossing? Crosses { get; set; }
+
+    /// <summary>Authored numeric axis crossing value from <c>c:crossesAt/@val</c>.</summary>
+    public double? CrossesAt { get; set; }
 
     /// <summary>True if the axis is deleted (hidden) in the chart XML.</summary>
     public bool Delete { get; set; }

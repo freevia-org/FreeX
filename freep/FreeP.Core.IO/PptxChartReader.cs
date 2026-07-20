@@ -1104,6 +1104,8 @@ internal static class PptxChartReader
         axis.CrossBetween = ParseCrossBetween(axEl.Element(C + "crossBetween"));
         axis.AutoCrossing = ParseNullableBoolElement(axEl.Element(C + "auto"));
         axis.LabelAlignment = ParseLabelAlignment(axEl.Element(C + "lblAlgn"));
+        axis.Crosses = ParseAxisCrossing(axEl.Element(C + "crosses"));
+        axis.CrossesAt = ParseDouble(axEl.Element(C + "crossesAt")?.Attribute("val")?.Value);
         axis.Title = ReadTitle(axEl.Element(C + "title"));
 
         var numFmt = axEl.Element(C + "numFmt");
@@ -1164,6 +1166,15 @@ internal static class PptxChartReader
             "ctr" => ChartLabelAlignment.Center,
             "r"   => ChartLabelAlignment.Right,
             _     => null
+        };
+
+    private static ChartAxisCrossing? ParseAxisCrossing(XElement? element) =>
+        element?.Attribute("val")?.Value switch
+        {
+            "autoZero" => ChartAxisCrossing.AutoZero,
+            "min"      => ChartAxisCrossing.Min,
+            "max"      => ChartAxisCrossing.Max,
+            _          => null
         };
 
     // ── Data-label parsing ─────────────────────────────────────────────────────

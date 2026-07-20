@@ -1197,6 +1197,7 @@ internal static class PptxChartWriter
                 : null,
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
             BuildAxisNumFmtEl(axis),
+            BuildAxisCrossingElement(axis, null),
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
 
     // BV2: axPos parameter — scatter/bubble X value axis must use "b" (bottom), Y stays "l" (left).
@@ -1225,9 +1226,7 @@ internal static class PptxChartWriter
                 : null,
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
             BuildAxisNumFmtEl(axis),
-            crosses is not null
-                ? new XElement(C + "crosses", new XAttribute("val", crosses))
-                : null,
+            BuildAxisCrossingElement(axis, crosses),
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
     }
 
@@ -1249,6 +1248,19 @@ internal static class PptxChartWriter
             yield return new XElement(C + "auto", new XAttribute("val", BoolValue(autoCrossing)));
         if (axis.LabelAlignment is { } labelAlignment)
             yield return new XElement(C + "lblAlgn", new XAttribute("val", LabelAlignmentValue(labelAlignment)));
+    }
+
+    private static XElement? BuildAxisCrossingElement(ChartAxis axis, string? fallback)
+    {
+        if (axis.CrossesAt is { } crossesAt)
+            return new XElement(C + "crossesAt", new XAttribute("val", crossesAt.ToString("G", CultureInfo.InvariantCulture)));
+
+        var crossing = axis.Crosses is { } authored
+            ? AxisCrossingValue(authored)
+            : fallback;
+        return crossing is null
+            ? null
+            : new XElement(C + "crosses", new XAttribute("val", crossing));
     }
 
     private static string TickMarkValue(ChartTickMark value) => value switch
@@ -1282,6 +1294,14 @@ internal static class PptxChartWriter
         ChartLabelAlignment.Center => "ctr",
         ChartLabelAlignment.Right  => "r",
         _                          => "ctr"
+    };
+
+    private static string AxisCrossingValue(ChartAxisCrossing value) => value switch
+    {
+        ChartAxisCrossing.AutoZero => "autoZero",
+        ChartAxisCrossing.Min      => "min",
+        ChartAxisCrossing.Max      => "max",
+        _                          => "autoZero"
     };
 
     private static XElement? BuildAxisNumFmtEl(ChartAxis axis)

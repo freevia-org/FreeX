@@ -33,6 +33,8 @@ public sealed class ChartBaselineCorpusTests
         chart.ValueAxis.CrossBetween.Should().Be(ChartCrossBetween.Between);
         chart.CategoryAxis.AutoCrossing.Should().BeTrue();
         chart.CategoryAxis.LabelAlignment.Should().Be(ChartLabelAlignment.Center);
+        chart.CategoryAxis.Crosses.Should().Be(ChartAxisCrossing.AutoZero);
+        chart.ValueAxis.Crosses.Should().Be(ChartAxisCrossing.AutoZero);
     }
 
     [Fact]
