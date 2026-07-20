@@ -12,6 +12,7 @@ using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Proofing;
+using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -3327,15 +3328,14 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Table Design > Draw Borders > Eraser: click a cell to merge it with its right neighbor.
-    // Full pixel-accurate border-erase is beyond scope; this backed version merges the selected
-    // cell's column-span with the one to its right (scope: merge-right at caret, not mouse-erase).
+    // Table Design > Draw Borders > Eraser: remove the caret cell's right border by merging right.
+    // An explicit multi-cell selection retains the normal merge-selection behavior.
     private sealed class EraserCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            editor.MergeSelectedCells();
+            editor.EraseTableBorderAtCaret();
         }
     }
 
@@ -3363,9 +3363,7 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                if (!int.TryParse(rowsBox.Text.Trim(), out var r) || r < 1) r = 3;
-                if (!int.TryParse(colsBox.Text.Trim(), out var c) || c < 1) c = 3;
-                result = (Math.Min(r, 63), Math.Min(c, 63));
+                result = DrawTableCommandPlanner.Normalize(rowsBox.Text, colsBox.Text);
                 dialog.DialogResult = true;
             };
 
@@ -5421,7 +5419,9 @@ internal static class FreeWRibbonCommands
             if (string.IsNullOrWhiteSpace(name))
                 return; // cancelled or blank — nothing to store under
 
-            library.Save(QuickPart.FromText(name.Trim(), text));
+            var part = QuickPartCommandPlanner.CreateSelection(text, name);
+            if (part is not null)
+                library.Save(part);
             editor.Focus();
         }
     }

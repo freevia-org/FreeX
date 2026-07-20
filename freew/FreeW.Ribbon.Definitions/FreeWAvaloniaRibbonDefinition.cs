@@ -325,6 +325,10 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Field — Date",                new RibbonCommandId("freew.quick-parts.date")),
             RibbonMenuItem.Separator(),
             new("Insert Snippet…",             new RibbonCommandId("freew.quick-parts.snippet")),
+            new("Field…",                      new RibbonCommandId("freew.field")),
+            RibbonMenuItem.Separator(),
+            new("Save Selection to Quick Part Gallery…", new RibbonCommandId("freew.save-quickpart")),
+            new("Building Blocks Organizer…",  new RibbonCommandId("freew.building-blocks-organizer")),
         });
 
     /// <summary>
@@ -643,9 +647,24 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.insert-file", "Text from File");
                     g.Button("freew.wordart", "WordArt");
                     g.Button("freew.datetime", "Date & Time");
+                    g.Button("freew.field", "Field", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.Field)
+                    });
                     g.Button("freew.update-fields", "Update Fields");
                     g.Button("freew.toggle-field-codes", "Toggle Field Codes");
                     g.Button("freew.object", "Object");
+                    g.Button("freew.save-quickpart", "Save Selection", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.QuickParts)
+                    });
+                    g.Button("freew.building-blocks-organizer", "Building Blocks Organizer", b => b with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Small,
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.QuickParts)
+                    });
                 });
                 tab.Group("symbols", FreeWRibbonText.SymbolsGroup.Label, null, 92, g =>
                 {
@@ -958,6 +977,19 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         g.Button("freew.table-shading", "Shading");
                         g.Dropdown("freew.table-borders", "Borders", BuildTableBordersMenu());
+                    });
+                    tab.Group("draw-borders", "Draw Borders", null, 80, g =>
+                    {
+                        g.Button("freew.draw-table", "Draw Table", b => b with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Medium,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Border)
+                        });
+                        g.Button("freew.eraser", "Eraser", b => b with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Medium,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Clear)
+                        });
                     });
                 })
             .ContextualTab("table-layout", "Table Layout",

@@ -21,6 +21,7 @@ using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
@@ -45,6 +46,7 @@ public sealed class MainWindow : Window
 
     private readonly DocumentPersistenceWorkflow _documentPersistence = new();
     private readonly DocumentView _editor = new();
+    private readonly QuickPartLibrary _quickParts = QuickPartLibrary.Load();
     private readonly TextBlock _status = SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0));
     // AV-MAIL: the Mailings engine (recipients / merge fields / preview / finish-merge) shared with the ribbon.
     private MailMergeEngine? _mailMerge;
@@ -1270,6 +1272,10 @@ public sealed class MainWindow : Window
             OpenBookmarkDialog:  () => _ = OpenBookmarkDialogAsync(),
             OpenLinkBookmarkDialog: () => _ = OpenLinkBookmarkDialogAsync(),
             OpenQuickPartDialog: () => _ = OpenQuickPartDialogAsync(),
+            SaveQuickPartSelection: () => _ = SaveQuickPartSelectionAsync(),
+            OpenBuildingBlocksOrganizer: () => _ = OpenBuildingBlocksOrganizerAsync(),
+            OpenFieldDialog: () => _ = OpenFieldDialogAsync(),
+            OpenDrawTableDialog: () => _ = OpenDrawTableDialogAsync(),
             InsertTextFromFile:  () => _ = InsertTextFromFileAsync(),
             // AV-MAIL: surface mail-merge info messages in the status bar.
             ShowMailMergeInfo: msg => _status.Text = msg,
@@ -2176,6 +2182,48 @@ public sealed class MainWindow : Window
             _editor.InsertQuickPartText(text);
             _editor.Focus();
         }
+    }
+
+    private async Task SaveQuickPartSelectionAsync()
+    {
+        var selectedText = _editor.SelectedText;
+        if (string.IsNullOrEmpty(selectedText))
+        {
+            await FreeWInfoDialog.ShowAsync(this, QuickPartCommandPlanner.EmptySelectionMessage);
+            _editor.Focus();
+            return;
+        }
+
+        var name = await QuickPartNameDialog.AskAsync(this);
+        var part = QuickPartCommandPlanner.CreateSelection(selectedText, name);
+        if (part is not null)
+            _quickParts.Save(part);
+        _editor.Focus();
+    }
+
+    private async Task OpenBuildingBlocksOrganizerAsync()
+    {
+        var action = await BuildingBlocksOrganizerDialog.ShowAsync(this, _quickParts);
+        if (action is { Kind: BuildingBlockActionKind.Insert }
+            && _quickParts.Get(action.Name) is { } part)
+            _editor.InsertQuickPartText(part.Text);
+        _editor.Focus();
+    }
+
+    private async Task OpenFieldDialogAsync()
+    {
+        var instruction = await FieldPickerDialog.AskAsync(this);
+        if (instruction is not null)
+            _editor.InsertComplexField(instruction);
+        _editor.Focus();
+    }
+
+    private async Task OpenDrawTableDialogAsync()
+    {
+        var dimensions = await DrawTableDimensionDialog.AskAsync(this);
+        if (dimensions is { } value)
+            _editor.InsertTable(value.Rows, value.Columns);
+        _editor.Focus();
     }
 
     /// <summary>

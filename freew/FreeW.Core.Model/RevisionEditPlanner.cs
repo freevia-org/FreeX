@@ -272,7 +272,7 @@ public static class RevisionEditPlanner
         return paragraph.Runs.LastOrDefault();
     }
 
-    private static void InsertRunAtOffset(Paragraph paragraph, int offset, Run insertedRun)
+    public static void InsertRunAtOffset(Paragraph paragraph, int offset, Run insertedRun)
     {
         var targetOffset = Math.Clamp(offset, 0, paragraph.PlainText.Length);
         var consumed = 0;

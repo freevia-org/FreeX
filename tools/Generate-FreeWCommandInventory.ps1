@@ -174,6 +174,21 @@ internal static class FreeWCommandInventory
             "ImageAndTableConversionParityTests.PictureCoreHostRoutes_MutateSelectedImageAndUndoRestoreIt",
             "PictureCoreCommandParityTests.ImageSizeRegistryRoute_MatchesSelectionMutationCancelAndUndo",
             "freew/FreeW.App.Avalonia.Tests/PictureCoreCommandParityTests.cs"),
+        ["freew.field"] = FinalFiveEvidence(
+            "The shared field catalog drives both pickers and both editors insert a structural complex-field run at the caret through undoable document mutation.",
+            "InsertTextCommands_UseSharedQuickPartAndFieldBehavior"),
+        ["freew.save-quickpart"] = FinalFiveEvidence(
+            "Both shells capture selected text through the shared Quick Part planner and persist paragraph lines through the same cross-platform library.",
+            "InsertTextCommands_UseSharedQuickPartAndFieldBehavior"),
+        ["freew.building-blocks-organizer"] = FinalFiveEvidence(
+            "Both shells use the shared Quick Part library and insert the selected building block through their undoable text-edit path.",
+            "InsertTextCommands_UseSharedQuickPartAndFieldBehavior"),
+        ["freew.draw-table"] = FinalFiveEvidence(
+            "Both shells normalize the dimension dialog through one planner and insert the resulting table through the undoable block command path.",
+            "TableDrawingCommands_MutateAndUndo"),
+        ["freew.eraser"] = FinalFiveEvidence(
+            "Both shells use the shared eraser plan to remove the caret cell's right border by an undoable horizontal merge, while preserving explicit selection merges.",
+            "TableDrawingCommands_MutateAndUndo"),
         ["freew.image-style-1"] = PictureStyleEvidence("Simple Frame, White"),
         ["freew.image-style-2"] = PictureStyleEvidence("Simple Frame, Black"),
         ["freew.image-style-3"] = PictureStyleEvidence("Thick Matte, Black"),
@@ -469,6 +484,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: avaloniaPath,
                 Test: avaloniaTest));
+
+    private static CommandBehaviorEvidence FinalFiveEvidence(string summary, string test) =>
+        new(
+            EvidenceId: "freew.final-five-command-parity.shared-behavior",
+            Slice: "Final command parity",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/FinalFiveCommandParityTests.cs",
+                Test: $"FinalFiveCommandParityTests.{test}"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/FinalFiveCommandParityTests.cs",
+                Test: $"FinalFiveCommandParityTests.{test}"));
 
     private static CommandBehaviorEvidence PictureStyleEvidence(string presetName) =>
         HostParityEvidence(

@@ -1470,6 +1470,35 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Removes the right border of the caret cell by merging it with its right neighbor. An explicit
+    /// multi-cell selection keeps the normal merge-selection behavior. Both paths are undoable.
+    /// </summary>
+    public void EraseTableBorderAtCaret()
+    {
+        if (IsEditingLocked)
+            return;
+        if (SelectedCellRange is not null)
+        {
+            MergeSelectedCells();
+            return;
+        }
+        if (_cellCaret is not { } caret
+            || caret.TableBlock < 0
+            || caret.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[caret.TableBlock] is not Table table
+            || TableEraserCommandPlanner.PlanByGridColumn(table, caret.Row, caret.Col) is not { } plan)
+            return;
+
+        _bus.Execute(new MergeCellsHorizontalCommand(
+            caret.TableBlock,
+            plan.RowIndex,
+            plan.FirstCellIndex,
+            plan.LastCellIndex));
+        PlaceCaretInCell(caret.TableBlock, caret.Row, caret.Col, 0, 0);
+        InvalidateLayoutAndVisual();
+    }
+
+    /// <summary>
     /// Split the merged cell at the current caret position back into individual cells via
     /// <see cref="SplitCellCommand"/>. Handles both horizontal merges (GridSpan &gt; 1) and vertical
     /// merges (VerticalMerge = Restart). No-op when the caret is not in a table or the cell is not
@@ -12297,6 +12326,80 @@ public sealed class DocumentView : Control
         var run = new Run(ResolveDocumentField(kind), RunFormatting.Default) { FieldKind = kind };
         InsertObjectRun(run);
         Focus();
+    }
+
+    /// <summary>
+    /// Inserts a generic complex field at the active body or table-cell caret through one undo group.
+    /// Any active selection is replaced before the field run is inserted.
+    /// </summary>
+    public void InsertComplexField(string instruction)
+    {
+        if (IsEditingLocked || string.IsNullOrWhiteSpace(instruction))
+            return;
+
+        var field = new ComplexField(instruction);
+        var run = Run.ComplexFieldRun(
+            field.Instruction,
+            ResolveComplexField(field, string.Empty),
+            showCode: false,
+            formatting: RunFormatting.Default);
+
+        _bus.BeginUndoGroup();
+        try
+        {
+            if (_cellCaret is { } cellCaret)
+            {
+                DeleteCellSelection(cellCaret);
+                cellCaret = _cellCaret!.Value;
+                var paragraph = GetCellParagraph(
+                    cellCaret.TableBlock,
+                    cellCaret.Row,
+                    cellCaret.Col,
+                    cellCaret.ParaIdx);
+                if (paragraph is null || !IsEditable(paragraph))
+                {
+                    _bus.AbortUndoGroup();
+                    return;
+                }
+
+                var offset = cellCaret.Offset;
+                _bus.Execute(new ReplaceCellParagraphRunsCommand(
+                    cellCaret.TableBlock,
+                    cellCaret.Row,
+                    cellCaret.Col,
+                    cellCaret.ParaIdx,
+                    p => RevisionEditPlanner.InsertRunAtOffset(p, offset, run)));
+                _cellCaret = cellCaret with { Offset = offset + run.Text.Length };
+                _cellAnchor = _cellCaret;
+            }
+            else
+            {
+                if (NormalizedSelection() is not null)
+                    DeleteSelection();
+                if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+                {
+                    _bus.AbortUndoGroup();
+                    return;
+                }
+
+                var block = _caret.Block;
+                var offset = _caret.Offset;
+                _bus.Execute(new ReplaceParagraphRunsCommand(
+                    block,
+                    p => RevisionEditPlanner.InsertRunAtOffset(p, offset, run)));
+                _caret = new DocPosition(block, offset + run.Text.Length);
+                _selectionAnchor = _caret;
+            }
+
+            _bus.CommitUndoGroup("Insert Field");
+            InvalidateVisual();
+            Focus();
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
     }
 
     /// <summary>

@@ -502,6 +502,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.image-reset", "shared-profile");
         AssertGapClassification(commands, "freew.image-size", "shared-profile");
         AssertGapClassification(commands, "freew.table-to-text", "shared-profile");
+        AssertGapClassification(commands, "freew.field", "shared-profile");
+        AssertGapClassification(commands, "freew.save-quickpart", "shared-profile");
+        AssertGapClassification(commands, "freew.building-blocks-organizer", "shared-profile");
+        AssertGapClassification(commands, "freew.draw-table", "shared-profile");
+        AssertGapClassification(commands, "freew.eraser", "shared-profile");
         AssertGapClassification(commands, "freew.bookmark", "shared-profile");
         AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");
         AssertGapClassification(commands, "freew.about", "platform-only");

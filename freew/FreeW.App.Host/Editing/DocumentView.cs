@@ -1819,6 +1819,36 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Removes the caret cell's right border by merging it with its right neighbor. If the user already
+    /// selected multiple cells, the selection is merged instead. The command bus supplies undo/redo.
+    /// </summary>
+    public void EraseTableBorderAtCaret()
+    {
+        var start = TableLocationOf(Selection.Start.Parent as TextElement);
+        var end = TableLocationOf(Selection.End.Parent as TextElement);
+        var caret = CaretTableLocation();
+        CommitToModel();
+        if (start.BlockIndex >= 0 && end.BlockIndex == start.BlockIndex
+            && (start.RowIndex != end.RowIndex || start.ColumnIndex != end.ColumnIndex))
+        {
+            MergeSelectedCells();
+            return;
+        }
+
+        var (blockIndex, rowIndex, columnIndex) = caret;
+        if (blockIndex < 0
+            || _model.Blocks[blockIndex] is not ModelTable table
+            || TableEraserCommandPlanner.PlanByCellIndex(table, rowIndex, columnIndex) is not { } plan)
+            return;
+
+        _commands.Execute(new MergeCellsHorizontalCommand(
+            blockIndex,
+            plan.RowIndex,
+            plan.FirstCellIndex,
+            plan.LastCellIndex));
+    }
+
+    /// <summary>
     /// Split the merged cell at the caret back into single cells: a horizontal merge resets the cell's
     /// <c>GridSpan</c> to 1 (re-adding empty cells), and a vertical merge clears the head and its
     /// continuations. Routes through the undo/redo bus. No-op outside a table or on an unmerged cell.

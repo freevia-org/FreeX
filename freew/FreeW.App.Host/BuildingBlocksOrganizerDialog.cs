@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.QuickParts;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;

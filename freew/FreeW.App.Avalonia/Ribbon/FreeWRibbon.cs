@@ -141,6 +141,14 @@ internal sealed record RibbonHostCallbacks(
     /// Optional (default null); the registry no-ops when null.
     /// </summary>
     Action? OpenQuickPartDialog = null,
+    /// <summary>Insert &gt; Quick Parts &gt; Save Selection. Optional shell dialog route.</summary>
+    Action? SaveQuickPartSelection = null,
+    /// <summary>Insert &gt; Quick Parts &gt; Building Blocks Organizer. Optional shell dialog route.</summary>
+    Action? OpenBuildingBlocksOrganizer = null,
+    /// <summary>Insert &gt; Quick Parts &gt; Field. Optional shell dialog route.</summary>
+    Action? OpenFieldDialog = null,
+    /// <summary>Table Design &gt; Draw Table. Optional shell dimension-dialog route.</summary>
+    Action? OpenDrawTableDialog = null,
     /// <summary>
     /// AV-INSERT2: Insert Text from File — opens a file picker, loads a .docx/.txt, and inserts its text at
     /// the caret. Optional (default null); the registry no-ops when null.

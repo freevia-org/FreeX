@@ -250,6 +250,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.page-number-format", new ContextRibbonCommand(
             context => ExecutePageNumberFormat(editor, callbacks, context)));
         r.Register("freew.datetime", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
+        r.Register("freew.field", new ActionRibbonCommand(callbacks.OpenFieldDialog ?? (() => { })));
+        r.Register("freew.save-quickpart", new ActionRibbonCommand(callbacks.SaveQuickPartSelection ?? (() => { })));
+        r.Register("freew.building-blocks-organizer", new ActionRibbonCommand(callbacks.OpenBuildingBlocksOrganizer ?? (() => { })));
         RegisterHeaderFooterCommands(r, editor);
 
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
@@ -273,6 +276,8 @@ internal static class FreeWAvaloniaRibbonCommands
         // Borders dropdown — opener no-op; sub-commands apply specific edges.
         r.Register("freew.table-borders", new ActionRibbonCommand(() => { /* flyout opener */ }));
         RegisterTableBorderCommands(r, editor);
+        r.Register("freew.draw-table", new ActionRibbonCommand(callbacks.OpenDrawTableDialog ?? (() => { })));
+        r.Register("freew.eraser", new ActionRibbonCommand(editor.EraseTableBorderAtCaret));
 
         // ── Table Layout contextual tab ───────────────────────────────────────
         // Selection helpers.

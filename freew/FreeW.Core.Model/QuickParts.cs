@@ -90,8 +90,8 @@ public sealed class QuickPart
 
 /// <summary>
 /// A pure, in-memory store of <see cref="QuickPart"/> snippets keyed by name (case-insensitive). This is
-/// the testable core; the WPF/IO layer (see FreeW.App.Host's QuickPartLibrary) wraps it to persist the
-/// snippets as JSON under FreeW's data folder. Adding a snippet whose name already exists overwrites the
+/// the testable core; the shared presentation layer's QuickPartLibrary wraps it to persist the snippets
+/// as JSON under FreeW's data folder. Adding a snippet whose name already exists overwrites the
 /// previous one (matching Word, where saving an AutoText entry under an existing name replaces it), and
 /// the most-recently-added wins. <see cref="Names"/> returns entries in case-insensitive name order so
 /// the UI list is stable.
