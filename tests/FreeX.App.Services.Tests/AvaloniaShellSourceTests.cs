@@ -3867,7 +3867,9 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly ToggleButton _underlineButton = new();");
         source.Should().Contain("_underlineButton.Content = new TextBlock");
-        source.Should().Contain("TextDecorations = TextDecorations.Underline,");
+        source.Should().Contain("TextDecorations = CreateTextDecorations(TextDecorationLocation.Underline),");
+        source.Should().Contain("private static TextDecorationCollection CreateTextDecorations(TextDecorationLocation location)");
+        source.Should().Contain("[new TextDecoration { Location = location }]");
         source.Should().Contain("_underlineButton.Click += UnderlineButton_Click;");
         source.Should().Contain("_underlineButton.IsChecked = _session.IsSelectedRangeStartUnderline;");
         source.Should().Contain("_underlineButton.IsEnabled = isIdle;");
@@ -3927,7 +3929,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly ToggleButton _strikethroughButton = new();");
         source.Should().Contain("_strikethroughButton.Content = new TextBlock");
-        source.Should().Contain("TextDecorations = TextDecorations.Strikethrough,");
+        source.Should().Contain("TextDecorations = CreateTextDecorations(TextDecorationLocation.Strikethrough),");
         source.Should().Contain("_strikethroughButton.Click += StrikethroughButton_Click;");
         source.Should().Contain("_strikethroughButton.IsChecked = _session.IsSelectedRangeStartStrikethrough;");
         source.Should().Contain("_strikethroughButton.IsEnabled = isIdle;");
@@ -3941,7 +3943,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"{(enabled ? \"Struck through\" : \"Removed strikethrough from\")} {rangeReference}\");");
         source.Should().Contain("private static TextDecorationCollection? BuildTextDecorations(CellStyle? style)");
         source.Should().Contain("if (style.Strikethrough)");
-        source.Should().Contain("foreach (var decoration in TextDecorations.Strikethrough)");
+        source.Should().Contain("decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });");
         AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleStrikethrough", "WorkbookShortcutKey.D5", "WorkbookShortcutModifiers.Control");
         AssertWorkbookShortcutRouteHandled(source, "ToggleStrikethrough", "ToggleSelectedRangeStrikethrough();");
     }
