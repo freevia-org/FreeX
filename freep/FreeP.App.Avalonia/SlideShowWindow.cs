@@ -219,6 +219,7 @@ public sealed class SlideShowWindow : Window
         stage.Children.Add(_inkOverlay);
 
         _mediaController = new AvaloniaSlideShowMediaController(_mediaOverlay);
+        SizeChanged += (_, _) => SyncMediaOverlayBounds();
 
         _transitionFlashOverlay = new Rectangle
         {
@@ -759,6 +760,13 @@ public sealed class SlideShowWindow : Window
     }
 
     private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
+
+    private void SyncMediaOverlayBounds()
+    {
+        var width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW;
+        var height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
+        _mediaController.SetCanvasBounds(width, height);
+    }
 
     private void ShowSlideInstant(Slide slide)
     {

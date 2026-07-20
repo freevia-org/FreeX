@@ -41,6 +41,12 @@ internal sealed class AvaloniaSlideShowMediaController
     public MediaPlaybackFailure? LastFailure { get; private set; }
     public SlideShowMediaClickPlan LastClick { get; private set; } = SlideShowMediaClickPlan.NotMedia;
 
+    public void SetCanvasBounds(double canvasW, double canvasH)
+    {
+        _overlay.Width = Math.Max(1, canvasW);
+        _overlay.Height = Math.Max(1, canvasH);
+    }
+
     public void EnterSlide(
         Slide slide,
         double slideDipW,
@@ -49,6 +55,7 @@ internal sealed class AvaloniaSlideShowMediaController
         double canvasH)
     {
         ArgumentNullException.ThrowIfNull(slide);
+        SetCanvasBounds(canvasW, canvasH);
         TeardownPlayback();
         _active = SlideShowMediaInteractionPlanner.BuildSlidePlan(
             slide, slideDipW, slideDipH, canvasW, canvasH);

@@ -121,10 +121,10 @@ static string RenderMarkdown(ParityReport report)
     var builder = new StringBuilder();
     builder.AppendLine("# FreeP Renderer, Slideshow, Media, Presenter, and Export Parity Evidence");
     builder.AppendLine();
-    builder.AppendLine($"Generated: `{report.GeneratedAtUtc:O}`  ");
-    builder.AppendLine($"Commit: `{report.Commit}`  ");
-    builder.AppendLine($"Branch: `{report.Branch}`  ");
-    builder.AppendLine($"Freshness check: **PASS**  ");
+    builder.AppendLine($"Generated: `{report.GeneratedAtUtc:O}`");
+    builder.AppendLine($"Commit: `{report.Commit}`");
+    builder.AppendLine($"Branch: `{report.Branch}`");
+    builder.AppendLine($"Freshness check: **PASS**");
     builder.AppendLine($"Source snapshot SHA-256: `{report.SourceSnapshotSha256}`");
     builder.AppendLine();
     builder.AppendLine("## Counts");

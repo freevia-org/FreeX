@@ -74,6 +74,8 @@ public sealed class MediaPlaybackBackendTests
             root, "freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"));
         var mediaProject = File.ReadAllText(Path.Combine(
             root, "freep", "FreeP.App.Media", "FreeP.App.Media.csproj"));
+        var wpfProject = File.ReadAllText(Path.Combine(
+            root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj"));
 
         avaloniaController.Should().Contain("LibVlcMediaPlaybackBackendFactory");
         avaloniaController.Should().Contain("LibVlcMediaPlaybackSession");
@@ -81,12 +83,22 @@ public sealed class MediaPlaybackBackendTests
         avaloniaController.Should().Contain("PlayTransitionSound");
         avaloniaController.Should().Contain("TrySeek");
         avaloniaController.Should().Contain("TrySetVolume");
+        avaloniaController.Should().Contain("SetCanvasBounds");
+        avaloniaController.Should().Contain("Canvas.SetLeft(view, bounds.X)");
+        avaloniaController.Should().Contain("Canvas.SetTop(view, bounds.Y)");
+        avaloniaController.Should().Contain("Width = Math.Max(1, bounds.Width)");
+        avaloniaController.Should().Contain("Height = Math.Max(1, bounds.Height)");
         avaloniaController.Should().NotContain("playback is deferred");
         avaloniaWindow.Should().Contain("_mediaController.PlayTransitionSound");
+        avaloniaWindow.Should().Contain("SyncMediaOverlayBounds");
+        avaloniaWindow.Should().Contain("SizeChanged +=");
         avaloniaWindow.Should().NotContain("Sound playback on the Avalonia host is deferred");
         avaloniaProject.Should().Contain("LibVLCSharp.Avalonia");
         avaloniaProject.Should().Contain("VideoLAN.LibVLC.Windows");
         mediaProject.Should().Contain("LibVLCSharp");
+        wpfProject.Should().NotContain("FreeP.App.Media");
+        wpfProject.Should().NotContain("LibVLCSharp");
+        wpfProject.Should().NotContain("VideoLAN.LibVLC.Windows");
     }
 
     private static string FindWorkspaceRoot()

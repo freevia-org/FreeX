@@ -14,8 +14,23 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         var availability = new LibVlcMediaPlaybackBackendFactory().Probe();
 
         availability.Capabilities.BackendName.Should().Be("LibVLC");
-        if (!availability.IsAvailable)
+        if (availability.IsAvailable)
+        {
+            availability.Capabilities.Audio.Should().BeTrue();
+            availability.Capabilities.Video.Should().BeTrue();
+            availability.Capabilities.VideoSurface.Should().BeTrue();
+            availability.Capabilities.Seek.Should().BeTrue();
+            availability.Capabilities.Volume.Should().BeTrue();
+        }
+        else
+        {
+            availability.Capabilities.Audio.Should().BeFalse();
+            availability.Capabilities.Video.Should().BeFalse();
+            availability.Capabilities.VideoSurface.Should().BeFalse();
+            availability.Capabilities.Seek.Should().BeFalse();
+            availability.Capabilities.Volume.Should().BeFalse();
             availability.FailureReason.Should().NotBeNullOrWhiteSpace();
+        }
     }
 
     [Fact]
@@ -40,6 +55,11 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         });
 
         controller.EnterSlide(slide, 960, 720, 960, 720);
+        overlay.Width.Should().Be(960);
+        overlay.Height.Should().Be(720);
+        controller.SetCanvasBounds(1280, 720);
+        overlay.Width.Should().Be(1280);
+        overlay.Height.Should().Be(720);
 
         var mediaSession = factory.Backend.Sessions[0];
         mediaSession.OpenCount.Should().Be(1);
