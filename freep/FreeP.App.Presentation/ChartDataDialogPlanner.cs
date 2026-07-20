@@ -132,6 +132,7 @@ public sealed class ChartDataDialogPlanner
     public const string RemoveCategoryLabel = "- Category";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
+    public const string InvalidNumericValueMessage = "Enter a valid number or leave the value blank.";
 
     public const double DefaultDialogWidth = 640;
     public const double DefaultDialogHeight = 440;

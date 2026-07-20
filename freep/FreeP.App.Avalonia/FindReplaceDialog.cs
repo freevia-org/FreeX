@@ -44,17 +44,16 @@ internal sealed class FindReplaceDialog : Window
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _onNavigationOrMutation = onNavigationOrMutation;
 
-        Width = 440;
-        SizeToContent = SizeToContent.Height;
+        Width = 425.3333333333333;
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = Brushes.White;
 
-        _findBox = new TextBox { MinWidth = 260 };
+        _findBox = new TextBox { MinWidth = 260, Margin = new Thickness(6, 4, 0, 4) };
         _replaceLabel = BuildLabel("Replace with:");
-        _replaceBox = new TextBox { MinWidth = 260 };
-        _matchCaseCheck = new CheckBox { Content = "Match case" };
+        _replaceBox = new TextBox { MinWidth = 260, Margin = new Thickness(6, 4, 0, 4) };
+        _matchCaseCheck = new CheckBox { Content = "Match case", Margin = new Thickness(0, 0, 12, 0) };
         _wholeWordCheck = new CheckBox { Content = "Whole word" };
         _findNextButton = BuildButton("Find Next", () => Navigate(+1), isDefault: true);
         _findPreviousButton = BuildButton("Find Previous", () => Navigate(-1));
@@ -65,7 +64,7 @@ internal sealed class FindReplaceDialog : Window
         {
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 6, 0, 0),
         };
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
@@ -89,11 +88,12 @@ internal sealed class FindReplaceDialog : Window
         _replaceInputRow = BuildInputRow(_replaceLabel, _replaceBox);
         _replaceButtonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [_replaceButton, _replaceAllButton],
-            new Thickness(0, 8, 0, 0));
+            new Thickness(0, 4, 0, 0));
+        _replaceButtonRow.Spacing = 4;
 
         Content = new StackPanel
         {
-            Margin = new Thickness(14),
+            Margin = new Thickness(12),
             Children =
             {
                 BuildInputRow(BuildLabel("Find what:"), _findBox),
@@ -101,14 +101,13 @@ internal sealed class FindReplaceDialog : Window
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Spacing = 12,
-                    Margin = new Thickness(96, 4, 0, 0),
+                    Margin = new Thickness(0, 4, 0, 4),
                     Children = { _matchCaseCheck, _wholeWordCheck },
                 },
                 _replaceButtonRow,
                 AvaloniaCompactDialogChrome.CreateActionRow(
                     [_findNextButton, _findPreviousButton, closeButton],
-                    new Thickness(0, 8, 0, 0)),
+                    new Thickness(0, 4, 0, 0)),
                 _statusText,
             },
         };
@@ -132,6 +131,7 @@ internal sealed class FindReplaceDialog : Window
     internal void ShowReplaceMode(bool show)
     {
         _showReplace = show;
+        Height = show ? 198.66666666666666 : 134;
         Title = FindReplaceDialogPlanner.TitleForMode(show);
         _replaceInputRow.IsVisible = show;
         _replaceButtonRow.IsVisible = show;
@@ -270,7 +270,7 @@ internal sealed class FindReplaceDialog : Window
             Margin = new Thickness(0, 0, 0, 6),
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = new GridLength(96) },
+                new ColumnDefinition { Width = new GridLength(90) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
         };
@@ -284,7 +284,8 @@ internal sealed class FindReplaceDialog : Window
     {
         Text = text,
         VerticalAlignment = VerticalAlignment.Center,
-        Margin = new Thickness(0, 0, 8, 0),
+        Margin = new Thickness(0, 4, 6, 4),
+        MinWidth = 90,
     };
 
     private static Button BuildButton(
@@ -294,7 +295,7 @@ internal sealed class FindReplaceDialog : Window
         bool isCancel = false)
     {
         var button = new Button { Content = text, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 84, isDefault: isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
         button.Click += (_, _) => action();
         return button;
     }

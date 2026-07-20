@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
@@ -35,7 +36,7 @@ namespace FreeP.App.Host;
 ///   │  Status bar                              │
 ///   └──────────────────────────────────────────┘
 /// </summary>
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     // Identity/palette for the shared window shell (PowerPoint-style brick title bar; "P" badge).
     private static ShellChromeOptions BuildChromeOptions() => new()
@@ -3479,6 +3480,7 @@ public sealed class MainWindow : Window
                     ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF2, 0xEC))
                     : Brushes.White,
             };
+            AutomationProperties.SetAutomationId(button, $"table-{choice.Rows}x{choice.Columns}");
             button.Click += (_, _) =>
             {
                 if (button.Tag is TableInsertionPickerChoice tableChoice)
@@ -3531,6 +3533,8 @@ public sealed class MainWindow : Window
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     IsEnabled = choice.Chrome.IsEnabled,
                 };
+                AutomationProperties.SetName(button, BuildLayoutChoiceLabel(choice));
+                AutomationProperties.SetAutomationId(button, $"layout-{choice.LayoutId}");
                 button.Click += (_, _) =>
                 {
                     if (button.Tag is string layoutId)
