@@ -31,6 +31,7 @@ public sealed class CommonDialogChromeParityTests
         dialogTypes.Should().Contain(type => type.Name == "OptionsDialog");
         dialogTypes.Should().Contain(type => type.Name == "ParagraphDialog");
         dialogTypes.Should().Contain(type => type.Name == "ImageAdjustDialog");
+        dialogTypes.Should().Contain(type => type.Name == "AboutDialog");
         dialogTypes.Should().Contain(type => type.Name == "FreeWInfoDialog");
     }
 
@@ -52,7 +53,7 @@ public sealed class CommonDialogChromeParityTests
     }
 
     [Fact]
-    public void Shared_controls_use_24px_metrics_and_common_action_spacing()
+    public void Shared_controls_use_WPF_metrics_and_common_action_spacing()
     {
         var style = AvaloniaCompactDialogChrome.WindowsStyle;
         var button = new Button();
@@ -64,12 +65,14 @@ public sealed class CommonDialogChromeParityTests
         AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, style);
         var row = AvaloniaCompactDialogChrome.CreateActionRow([button], style: style);
 
-        button.Height.Should().Be(24);
+        button.Height.Should().Be(26);
         textBox.Height.Should().Be(24);
         comboBox.Height.Should().Be(24);
         button.FontSize.Should().Be(12);
         textBox.FontSize.Should().Be(12);
         comboBox.FontSize.Should().Be(12);
+        ((ISolidColorBrush)button.Background!).Color.Should().Be(Color.FromRgb(221, 221, 221));
+        ((ISolidColorBrush)button.BorderBrush!).Color.Should().Be(Color.FromRgb(200, 200, 200));
         row.Spacing.Should().Be(style.ActionSpacing);
     }
 

@@ -556,7 +556,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.eraser", "shared-profile");
         AssertGapClassification(commands, "freew.bookmark", "shared-profile");
         AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");
-        AssertGapClassification(commands, "freew.about", "platform-only");
+        AssertGapClassification(commands, "freew.about", "shared-profile");
         AssertGapClassification(commands, "freew.cc-text", "shared-profile");
         AssertGapClassification(commands, "freew.cc-richtext", "shared-profile");
         AssertGapClassification(commands, "freew.cc-checkbox", "shared-profile");
@@ -610,7 +610,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
             .Should()
             .BeEquivalentTo(new[]
             {
-                "freew.about",
                 "freew.arrange-all",
                 "freew.backstage",
                 "freew.check-updates",
@@ -628,7 +627,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
                 .Should()
                 .BeTrue("platform-only FreeW rows must carry command-specific evidence so they are not ambiguous parity blockers");
         }
-        AssertPlatformOnlyNote(commands, "freew.about", "WPF desktop Help/Product command");
         AssertPlatformOnlyNote(commands, "freew.arrange-all", "WPF desktop multi-window tiling command");
         AssertPlatformOnlyNote(commands, "freew.backstage", "Avalonia compact File entry");
         AssertPlatformOnlyNote(commands, "freew.check-updates", "WPF desktop Help/Product update command");
@@ -639,16 +637,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertPlatformOnlyNote(commands, "freew.new", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.open", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.save", "Avalonia compact File command");
-        AssertBehaviorEvidence(
-            commands,
-            "freew.about",
-            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
-            "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
-            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
-            "freew.platform-only.wpf-help-shell",
-            "WPF Help shell variance",
-            "platform-only");
         AssertBehaviorEvidence(
             commands,
             "freew.check-updates",

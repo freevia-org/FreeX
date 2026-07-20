@@ -19,6 +19,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         new("[^A-Za-z0-9]+", RegexOptions.Compiled);
 
     private readonly TabControl _tabControl = new();
+    private readonly List<TextBox> _noticeTextBoxes = [];
 
     public AvaloniaLegalNoticesDialog(
         string windowTitle,
@@ -44,7 +45,12 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         AutomationProperties.SetHelpText(this, helpText);
 
         Content = CreateContent(notices, introText, closeButtonContent, helpText);
-        Opened += (_, _) => FocusInitialKeyboardTarget();
+        Opened += (_, _) =>
+        {
+            foreach (var textBox in _noticeTextBoxes)
+                textBox.Padding = new Thickness(8);
+            FocusInitialKeyboardTarget();
+        };
     }
 
     internal TabControl SectionTabsForTest => _tabControl;
@@ -102,7 +108,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         return root;
     }
 
-    private static TabItem CreateTabItem((string Title, string Text) notice)
+    private TabItem CreateTabItem((string Title, string Text) notice)
     {
         var automationIdSegment = CreateAutomationIdSegment(notice.Title);
         var textBox = new TextBox
@@ -125,13 +131,14 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             textBox,
             "Read-only legal notice text. Use Ctrl+C to copy selected text.");
 
-        var scroll = new ScrollViewer
-        {
-            Content = textBox,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        };
-        var tabItem = new TabItem { Header = notice.Title, Content = scroll };
+        textBox.SetValue(
+            ScrollViewer.VerticalScrollBarVisibilityProperty,
+            ScrollBarVisibility.Auto);
+        textBox.SetValue(
+            ScrollViewer.HorizontalScrollBarVisibilityProperty,
+            ScrollBarVisibility.Disabled);
+        _noticeTextBoxes.Add(textBox);
+        var tabItem = new TabItem { Header = notice.Title, Content = textBox };
         AutomationProperties.SetName(tabItem, notice.Title);
         AutomationProperties.SetAutomationId(
             tabItem,
@@ -150,10 +157,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
 
     private void FocusInitialKeyboardTarget()
     {
-        if (_tabControl.SelectedItem is not TabItem
-            {
-                Content: ScrollViewer { Content: TextBox textBox },
-            })
+        if (_tabControl.SelectedItem is not TabItem { Content: TextBox textBox })
         {
             return;
         }

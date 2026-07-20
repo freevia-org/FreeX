@@ -45,7 +45,7 @@ internal static class AvaloniaDialogRouteFactory
         ["find-replace"] = "FindReplaceDialog",
         ["font"] = "FontDialog",
         ["footnote-endnote-options"] = "FootnoteEndnoteOptionsDialog",
-        ["about"] = "FreeWInfoDialog",
+        ["about"] = "AboutDialog",
         ["hyperlink"] = "HyperlinkDialog",
         ["icon-picker"] = "IconPickerDialog",
         ["image-adjust"] = "ImageAdjustDialog",

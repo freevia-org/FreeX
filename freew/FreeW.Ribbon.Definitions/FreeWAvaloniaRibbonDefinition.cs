@@ -1042,6 +1042,12 @@ internal static class FreeWAvaloniaRibbonDefinition
             {
                 tab.Group("product", "Product", null, 90, g =>
                 {
+                    g.Button("freew.about", "About FreeW", button => button with
+                    {
+                        Icon = new RibbonCommandIcon(
+                            RibbonCommandIconKind.Info,
+                            RibbonCommandIconAccent.Help),
+                    });
                     g.Button("freew.legal-notices", "Legal Notices", button => button with
                     {
                         Icon = new RibbonCommandIcon(
