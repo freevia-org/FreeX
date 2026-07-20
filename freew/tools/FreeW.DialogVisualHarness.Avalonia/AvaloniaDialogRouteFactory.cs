@@ -96,7 +96,7 @@ internal static class AvaloniaDialogRouteFactory
             return CreateBackstage(routeId);
 
         if (routeId == "notes-pane")
-            return CreateType("NotesPane", state);
+            return CreateNotesPane();
         if (routeId == "cups-print")
             return CreateCupsPrint();
         if (routeId == "compare-documents")
@@ -163,6 +163,18 @@ internal static class AvaloniaDialogRouteFactory
             _ => "Home",
         });
         return (Window)constructor.Invoke([callbacks, pane]);
+    }
+
+    private static Window CreateNotesPane()
+    {
+        var assembly = typeof(MainWindow).Assembly;
+        var type = assembly.GetType("FreeW.App.Avalonia.NotesPane", true)!;
+        var editor = new DocumentView();
+        editor.LoadDocument(TextDocument.CreateEmpty());
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
+        var pane = (Control)constructor.Invoke([editor]);
+        type.GetMethod("Toggle", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.Invoke(pane, null);
+        return WrapControl(pane);
     }
 
     private static Window CreateType(string typeName, string state)

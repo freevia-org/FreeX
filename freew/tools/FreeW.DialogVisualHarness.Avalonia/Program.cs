@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Automation;
@@ -7,8 +6,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
-using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Skia;
 using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
 using Avalonia.LogicalTree;
@@ -49,10 +48,10 @@ static async Task<int> Main(string[] args)
         captures.Add(result ?? Unsupported(scenario, "The Avalonia adapter requires an app-owned route constructor or a temporary capture hook for this family."));
         File.AppendAllText(progressPath, $"complete {scenario.Id}{Environment.NewLine}");
     }
-    var manifest = new CaptureManifest("freew.dialog-capture-manifest.v1", 1, "avalonia", output, captures);
+    var manifest = new CaptureManifest("freew.dialog-capture-manifest.v1", 2, "avalonia", output, captures);
     File.WriteAllText(Path.Combine(output, "avalonia_dialog_capture_manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions()));
     Console.WriteLine($"avalonia scenarios: {captures.Count}; captured: {captures.Count(c => c.Status == "captured")}; unsupported: {captures.Count(c => c.Status != "captured")}");
-    return 0;
+    return captures.All(c => c.Status == "captured" && c.FullPixelContent?.PassesContentGate == true && c.TargetPixelContent?.PassesContentGate == true) ? 0 : 2;
 }
 
 static Capture? CaptureOne(Scenario scenario, string output)
@@ -68,15 +67,23 @@ static Capture? CaptureOne(Scenario scenario, string output)
     dialog.UpdateLayout();
     Populate(dialog, scenario.State);
     Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
-    using var bitmap = new RenderTargetBitmap(new PixelSize(560, 600), new Vector(96, 96));
-    bitmap.Render(dialog);
-    var bytes = RenderTargetBitmapToPng(bitmap);
+    using var frame = dialog.CaptureRenderedFrame();
     var semantics = ReadSemantics(dialog);
-    if (bytes.Length == 0)
+    if (frame is null)
     {
-        Console.Error.WriteLine($"avalonia {scenario.Id}: RenderTargetBitmap produced zero bytes");
+        Console.Error.WriteLine($"avalonia {scenario.Id}: headless compositor returned no frame");
         dialog.Close();
-        return Unsupported(scenario, "Avalonia headless renderer returned zero-byte PNG output on this machine; no placeholder image was substituted.", "avalonia-headless-render-unavailable", semantics);
+        return Unsupported(scenario, "Avalonia headless compositor returned no frame; no placeholder image was substituted.", "avalonia-headless-render-unavailable", semantics);
+    }
+    var rendered = ReadFrame(frame);
+    var bytes = rendered.Png;
+    var fullContent = PixelContentMetrics.Compute(rendered.Pixels, rendered.Width, rendered.Height);
+    var targetContent = fullContent;
+    if (bytes.Length == 0 || !fullContent.PassesContentGate)
+    {
+        Console.Error.WriteLine($"avalonia {scenario.Id}: invalid rendered content: {fullContent.Failure ?? "zero-byte PNG"}");
+        dialog.Close();
+        return Unsupported(scenario, $"Avalonia compositor output failed the visual-content gate: {fullContent.Failure ?? "zero-byte PNG"}.", "avalonia-invalid-rendered-content", semantics, fullContent, targetContent);
     }
     var path = Path.Combine(output, "full", "avalonia", Safe(scenario.Id) + ".png");
     var cropPath = Path.Combine(output, "crops", "avalonia", Safe(scenario.Id) + ".png");
@@ -85,7 +92,7 @@ static Capture? CaptureOne(Scenario scenario, string output)
     File.WriteAllBytes(path, bytes);
     File.WriteAllBytes(cropPath, bytes);
     dialog.Close();
-    return new Capture(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "captured", Relative(output, path), 560, 600, 560, 600, 96, 96, new Rect(0, 0, 560, 600), semantics, null, "Real app-owned Avalonia dialog rendered through the headless compositor.", Relative(output, cropPath));
+    return new Capture(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "captured", Relative(output, path), 560, 600, 560, 600, 96, 96, new Rect(0, 0, 560, 600), semantics, null, "Real app-owned Avalonia dialog rendered through CaptureRenderedFrame; full and target images passed pixel-content validation.", Relative(output, cropPath), fullContent, targetContent);
 }
 
 static void Populate(Window dialog, string state)
@@ -113,48 +120,36 @@ static Semantics ReadSemantics(Window dialog)
         buttons.Select(b => b.Content?.ToString() ?? b.GetType().Name).ToArray(), controls);
 }
 
-static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)
+static RenderedFrame ReadFrame(Avalonia.Media.Imaging.WriteableBitmap bitmap)
 {
     using var locked = bitmap.Lock();
     var colorType = locked.Format == PixelFormat.Bgra8888 ? SKColorType.Bgra8888 : SKColorType.Rgba8888;
     var info = new SKImageInfo(locked.Size.Width, locked.Size.Height, colorType, SKAlphaType.Premul);
-    using var skBitmap = new SKBitmap();
-    if (!skBitmap.InstallPixels(info, locked.Address, locked.RowBytes)) return [];
+    var pixels = new byte[checked(locked.Size.Width * locked.Size.Height * 4)];
+    for (var y = 0; y < locked.Size.Height; y++)
+        System.Runtime.InteropServices.Marshal.Copy(locked.Address + y * locked.RowBytes, pixels, y * locked.Size.Width * 4, locked.Size.Width * 4);
+    using var skBitmap = new SKBitmap(info);
+    System.Runtime.InteropServices.Marshal.Copy(pixels, 0, skBitmap.GetPixels(), pixels.Length);
     using var image = SKImage.FromBitmap(skBitmap);
     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-    return data?.ToArray() ?? [];
+    var bgraPixels = pixels;
+    if (locked.Format != PixelFormat.Bgra8888)
+    {
+        bgraPixels = (byte[])pixels.Clone();
+        for (var i = 0; i < bgraPixels.Length; i += 4)
+            (bgraPixels[i], bgraPixels[i + 2]) = (bgraPixels[i + 2], bgraPixels[i]);
+    }
+    return new RenderedFrame(data?.ToArray() ?? [], bgraPixels, locked.Size.Width, locked.Size.Height);
 }
 
-static byte[] RenderTargetBitmapToPng(RenderTargetBitmap bitmap)
-{
-    var width = bitmap.PixelSize.Width;
-    var height = bitmap.PixelSize.Height;
-    var stride = checked(width * 4);
-    var byteCount = checked(stride * height);
-    var pointer = Marshal.AllocHGlobal(byteCount);
-    try
-    {
-        bitmap.CopyPixels(new PixelRect(0, 0, width, height), pointer, byteCount, stride);
-        var pixels = new byte[byteCount];
-        Marshal.Copy(pointer, pixels, 0, byteCount);
-        using var skBitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
-        Marshal.Copy(pixels, 0, skBitmap.GetPixels(), byteCount);
-        using var image = SKImage.FromBitmap(skBitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        return data?.ToArray() ?? [];
-    }
-    finally
-    {
-        Marshal.FreeHGlobal(pointer);
-    }
-}
-
-static Capture Unsupported(Scenario scenario, string note, string? limitation = null, Semantics? semantics = null) => new(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "unsupported", "", 0, 0, 0, 0, 96, 96, new Rect(0, 0, 0, 0), semantics ?? new Semantics(null, null, null, [], []), limitation ?? scenario.Limitation, note);
+static Capture Unsupported(Scenario scenario, string note, string? limitation = null, Semantics? semantics = null, PixelContent? fullContent = null, PixelContent? targetContent = null) => new(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "unsupported", "", 0, 0, 0, 0, 96, 96, new Rect(0, 0, 0, 0), semantics ?? new Semantics(null, null, null, [], []), limitation ?? scenario.Limitation, note, null, fullContent, targetContent);
 static IEnumerable<T> FindVisualChildren<T>(Visual root) where T : Visual
 {
     if (root is T value) yield return value;
     foreach (var child in root.GetLogicalDescendants().OfType<T>()) yield return child;
 }
+
+sealed record RenderedFrame(byte[] Png, byte[] Pixels, int Width, int Height);
 static string Required(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : throw new ArgumentException($"Missing {option}."); }
 static string? Optional(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
 static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
@@ -165,5 +160,7 @@ static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = Jso
 sealed class HarnessApp : Application
 {
     public override void Initialize() => Styles.Add(new FluentTheme());
-    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<HarnessApp>().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true });
+    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<HarnessApp>()
+        .UseSkia()
+        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }
