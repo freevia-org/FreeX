@@ -1,0 +1,54 @@
+using System.Globalization;
+using FreeW.App.Presentation.Dialogs;
+using FreeW.Core.Model;
+
+namespace FreeW.App.Presentation.Tests.Dialogs;
+
+public sealed class MultilevelListDialogPlannerTests
+{
+    [Fact]
+    public void InitialStateAndResult_PreserveChoicesStartsAndFormats()
+    {
+        var initial = MultilevelListDialogPlanner.BuildInitialState(
+            [ListNumberFormat.UpperRoman, ListNumberFormat.LowerLetter, ListNumberFormat.LowerRoman],
+            CultureInfo.InvariantCulture);
+        initial.LevelsIndex.Should().Be(8);
+        initial.Level0FormatIndex.Should().Be(4);
+        initial.Level1FormatIndex.Should().Be(1);
+        initial.Level2FormatIndex.Should().Be(3);
+
+        MultilevelListDialogPlanner.TryBuildResult(
+            new MultilevelListDialogInput(2, "4", "7", 4, 1, 3),
+            CultureInfo.InvariantCulture,
+            out var result,
+            out var validation).Should().BeTrue();
+        validation.Should().BeNull();
+        result!.Levels.Should().Be(3);
+        result.Level0StartAt.Should().Be(4);
+        result.Level1StartAt.Should().Be(7);
+        result.NumberFormats.Take(3).Should().Equal(
+            ListNumberFormat.UpperRoman,
+            ListNumberFormat.LowerLetter,
+            ListNumberFormat.LowerRoman);
+    }
+
+    [Fact]
+    public void BlankStartsMeanContinueAndInvalidStartsIdentifyField()
+    {
+        var input = new MultilevelListDialogInput(8, "", "  ", 0, 0, 0);
+        MultilevelListDialogPlanner.TryBuildResult(
+            input,
+            CultureInfo.InvariantCulture,
+            out var result,
+            out _).Should().BeTrue();
+        result!.Level0StartAt.Should().BeNull();
+        result.Level1StartAt.Should().BeNull();
+
+        MultilevelListDialogPlanner.TryBuildResult(
+            input with { Level1StartAtText = "0" },
+            CultureInfo.InvariantCulture,
+            out _,
+            out var validation).Should().BeFalse();
+        validation!.Field.Should().Be(MultilevelListDialogField.Level1StartAt);
+    }
+}
