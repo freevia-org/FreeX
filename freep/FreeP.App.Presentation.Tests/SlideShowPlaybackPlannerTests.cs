@@ -168,6 +168,15 @@ public sealed class SlideShowPlaybackPlannerTests
         peelOff.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.PageCurl);
         peelOff.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.PageCurl);
 
+        var drape = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Drape,
+            Direction = TransitionDirection.Down
+        });
+
+        drape.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Drape);
+        drape.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Drape);
+
         var pageCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
             Kind = TransitionKind.PageCurlSingle,
@@ -354,6 +363,31 @@ public sealed class SlideShowPlaybackPlannerTests
         closed.Should().BeEmpty();
         partial.Should().NotBeEmpty();
         partial.Should().OnlyContain(fragment => fragment.Points.Count == 4);
+        open.Should().HaveCount(1);
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+    }
+
+    [Fact]
+    public void DrapePlanner_BuildsDeterministicWavyFront()
+    {
+        var plan = SlideShowDrapeTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Drape,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.HorizontalAxis.Should().BeTrue();
+        plan.Reverse.Should().BeFalse();
+
+        var closed = SlideShowDrapeTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowDrapeTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowDrapeTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowDrapeTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().NotBeEmpty();
+        partial.Should().OnlyContain(segment => segment.Points.Count == 4);
         open.Should().HaveCount(1);
         open[0].Points.Should().HaveCount(4);
         partial.Should().BeEquivalentTo(repeat);
