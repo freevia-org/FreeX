@@ -98,7 +98,7 @@ public static class PresentationNotesPagePreviewPlanner
             ResolveNotesPageWidthPoints(presentation, pageWidth),
             ResolveNotesPageHeightPoints(presentation, pageHeight));
         var slideBounds = BuildSlideBounds(pageBounds, presentation.SlideSizeCxEmu, presentation.SlideSizeCyEmu);
-        var notesBounds = BuildNotesBounds(pageBounds, slideBounds);
+        var notesBounds = BuildNotesBounds(pageBounds, slideBounds, presentation);
 
         if (slideCount == 0)
         {
@@ -150,7 +150,7 @@ public static class PresentationNotesPagePreviewPlanner
             slideBounds,
             notesBounds,
             notesPlaceholder,
-            BuildHeaderFooterPlaceholders(slide, normalizedIndex + 1, pageBounds),
+            BuildHeaderFooterPlaceholders(presentation, slide, normalizedIndex + 1, pageBounds),
             noteLines,
             styledNoteLines,
             linesPerPage,
@@ -206,8 +206,21 @@ public static class PresentationNotesPagePreviewPlanner
         return Math.Clamp((double)slideWidthEmu / slideHeightEmu, 0.1, 10d);
     }
 
-    private static LayoutRect BuildNotesBounds(LayoutRect pageBounds, LayoutRect slideBounds)
+    private static LayoutRect BuildNotesBounds(
+        LayoutRect pageBounds,
+        LayoutRect slideBounds,
+        Presentation presentation)
     {
+        var nativeBody = FindPlaceholderShape(presentation.NotesMasterPlaceholders, PlaceholderType.Body);
+        if (nativeBody is { ExtentCxEmu: > 0, ExtentCyEmu: > 0 })
+        {
+            return new LayoutRect(
+                nativeBody.OffsetXEmu / EmuPerPoint,
+                nativeBody.OffsetYEmu / EmuPerPoint,
+                nativeBody.ExtentCxEmu / EmuPerPoint,
+                nativeBody.ExtentCyEmu / EmuPerPoint);
+        }
+
         var margin = Math.Min(48, pageBounds.Width / 6);
         var top = slideBounds.Bottom + 36;
         return new LayoutRect(
@@ -232,6 +245,7 @@ public static class PresentationNotesPagePreviewPlanner
     }
 
     private static IReadOnlyList<PresentationNotesPagePlaceholder> BuildHeaderFooterPlaceholders(
+        Presentation presentation,
         Slide slide,
         int slideNumber,
         LayoutRect pageBounds)
@@ -240,6 +254,10 @@ public static class PresentationNotesPagePreviewPlanner
         var dateTime = FindPlaceholderShape(slide, PlaceholderType.DateTime);
         var footer = FindPlaceholderShape(slide, PlaceholderType.Footer);
         var slideNumberShape = FindPlaceholderShape(slide, PlaceholderType.SlideNumber);
+        var notesHeader = FindPlaceholderShape(presentation.NotesMasterPlaceholders, PlaceholderType.Header);
+        var notesDateTime = FindPlaceholderShape(presentation.NotesMasterPlaceholders, PlaceholderType.DateTime);
+        var notesFooter = FindPlaceholderShape(presentation.NotesMasterPlaceholders, PlaceholderType.Footer);
+        var notesSlideNumber = FindPlaceholderShape(presentation.NotesMasterPlaceholders, PlaceholderType.SlideNumber);
         var flags = slide.HfVisibility;
 
         var result = new List<PresentationNotesPagePlaceholder>(4);
@@ -247,32 +265,36 @@ public static class PresentationNotesPagePreviewPlanner
             result,
             PresentationNotesPagePlaceholderKind.Header,
             PlaceholderType.Header,
-            header,
-            ResolveHeaderFooterVisibility(flags?.ShowHeader, header),
+            header ?? notesHeader,
+            notesHeader,
+            ResolveHeaderFooterVisibility(flags?.ShowHeader, header ?? notesHeader),
             pageBounds,
             slideNumber);
         AddIfPresent(
             result,
             PresentationNotesPagePlaceholderKind.DateTime,
             PlaceholderType.DateTime,
-            dateTime,
-            ResolveHeaderFooterVisibility(flags?.ShowDate, dateTime),
+            dateTime ?? notesDateTime,
+            notesDateTime,
+            ResolveHeaderFooterVisibility(flags?.ShowDate, dateTime ?? notesDateTime),
             pageBounds,
             slideNumber);
         AddIfPresent(
             result,
             PresentationNotesPagePlaceholderKind.Footer,
             PlaceholderType.Footer,
-            footer,
-            ResolveHeaderFooterVisibility(flags?.ShowFooter, footer),
+            footer ?? notesFooter,
+            notesFooter,
+            ResolveHeaderFooterVisibility(flags?.ShowFooter, footer ?? notesFooter),
             pageBounds,
             slideNumber);
         AddIfPresent(
             result,
             PresentationNotesPagePlaceholderKind.SlideNumber,
             PlaceholderType.SlideNumber,
-            slideNumberShape,
-            ResolveHeaderFooterVisibility(flags?.ShowSlideNum, slideNumberShape),
+            slideNumberShape ?? notesSlideNumber,
+            notesSlideNumber,
+            ResolveHeaderFooterVisibility(flags?.ShowSlideNum, slideNumberShape ?? notesSlideNumber),
             pageBounds,
             slideNumber);
 
@@ -283,19 +305,20 @@ public static class PresentationNotesPagePreviewPlanner
         List<PresentationNotesPagePlaceholder> result,
         PresentationNotesPagePlaceholderKind kind,
         PlaceholderType sourceType,
-        SlideShape? shape,
+        SlideShape? textShape,
+        SlideShape? geometryShape,
         bool isVisible,
         LayoutRect pageBounds,
         int slideNumber)
     {
-        if (shape is null && !isVisible)
+        if (textShape is null && !isVisible)
             return;
 
         result.Add(new PresentationNotesPagePlaceholder(
             kind,
             sourceType,
-            ResolveHeaderFooterText(kind, shape, slideNumber),
-            BuildHeaderFooterBounds(kind, pageBounds),
+            ResolveHeaderFooterText(kind, textShape, slideNumber),
+            BuildHeaderFooterBounds(kind, pageBounds, geometryShape),
             isVisible));
     }
 
@@ -304,8 +327,18 @@ public static class PresentationNotesPagePreviewPlanner
 
     private static LayoutRect BuildHeaderFooterBounds(
         PresentationNotesPagePlaceholderKind kind,
-        LayoutRect pageBounds)
+        LayoutRect pageBounds,
+        SlideShape? nativeShape)
     {
+        if (nativeShape is { ExtentCxEmu: > 0, ExtentCyEmu: > 0 })
+        {
+            return new LayoutRect(
+                nativeShape.OffsetXEmu / EmuPerPoint,
+                nativeShape.OffsetYEmu / EmuPerPoint,
+                nativeShape.ExtentCxEmu / EmuPerPoint,
+                nativeShape.ExtentCyEmu / EmuPerPoint);
+        }
+
         const double height = 18;
         var margin = Math.Min(36, pageBounds.Width / 8);
         var width = Math.Max(1, (pageBounds.Width - (margin * 2)) * 0.34);
@@ -368,6 +401,11 @@ public static class PresentationNotesPagePreviewPlanner
     private static SlideShape? FindPlaceholderShape(Slide slide, PlaceholderType placeholderType) =>
         Flatten(slide.Shapes)
             .FirstOrDefault(shape => shape.Placeholder?.Type == placeholderType);
+
+    private static SlideShape? FindPlaceholderShape(
+        IEnumerable<SlideShape> shapes,
+        PlaceholderType placeholderType) =>
+        Flatten(shapes).FirstOrDefault(shape => shape.Placeholder?.Type == placeholderType);
 
     private static IEnumerable<SlideShape> Flatten(IEnumerable<SlideShape> shapes)
     {

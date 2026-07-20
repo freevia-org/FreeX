@@ -495,11 +495,18 @@ public static class PptxPackageWriter
         // Emit a single minimal notesMaster if any slide has notes.
         if (hasSomeNotes)
         {
-            WriteEntry(archive, "ppt/notesMasters/notesMaster1.xml", BuildNotesMasterXml());
+            if (presentation.NotesMasterXml is { Length: > 0 } notesMasterXml)
+                WriteRawEntry(archive, "ppt/notesMasters/notesMaster1.xml", notesMasterXml);
+            else
+                WriteEntry(archive, "ppt/notesMasters/notesMaster1.xml", BuildNotesMasterXml());
+
             // PowerPoint gives the notes master its own theme part.
             var nmRels = new OpcRelationshipDocument();
             nmRels.Add("rId1", ThemeRelType, "../theme/theme2.xml");
-            WriteRels(archive, "ppt/notesMasters/notesMaster1.xml", nmRels, packageSnapshot);
+            if (presentation.NotesMasterRelsXml is { Length: > 0 } notesMasterRelsXml)
+                WriteRawEntry(archive, "ppt/notesMasters/_rels/notesMaster1.xml.rels", notesMasterRelsXml);
+            else
+                WriteRels(archive, "ppt/notesMasters/notesMaster1.xml", nmRels, packageSnapshot);
         }
 
         int globalChartIndex = 1; // monotonically increasing across all slides
