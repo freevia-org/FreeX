@@ -753,11 +753,18 @@ public static partial class ChartRenderPlanner
         chart.Series.Count > 1;
 
     private static bool UsesImportedSurfaceBoundaryFaces(ChartShape chart) =>
-        chart.ChartType == ChartType.Surface3D &&
-        UsesImportedTextMetrics(chart) &&
+        UsesImportedSurfaceGeometry(chart) &&
         chart.VaryColors &&
         chart.Categories.Count == 3 &&
         chart.Series.Count == 3;
+
+    // The imported 3x3 surface fixture has a measured PowerPoint frame and
+    // facet registration. Authored view3D settings must use the general
+    // projection path instead of inheriting those fixture-specific offsets.
+    private static bool UsesImportedSurfaceGeometry(ChartShape chart) =>
+        chart.ChartType == ChartType.Surface3D &&
+        UsesImportedTextMetrics(chart) &&
+        chart.View3D is null;
 
     private static bool UsesImportedSingleScatterDefaults(ChartShape chart) =>
         chart.ChartType == ChartType.Scatter &&
@@ -3123,7 +3130,7 @@ public static partial class ChartRenderPlanner
                     cell.CategoryIndex,
                     heightNormalized,
                     chart.ChartType == ChartType.Surface3D,
-                    UsesImportedTextMetrics(chart),
+                    UsesImportedSurfaceGeometry(chart),
                     chart.View3D),
                 cell.Value,
                 cell.NormalizedValue);
@@ -3150,7 +3157,7 @@ public static partial class ChartRenderPlanner
         var wireframe = BuildSurfaceWireframeSegments(renderPointsByKey, seriesCount, categoryCount);
         var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
         bool rebuildFacetsForRenderPoints = ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Span ||
-            chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart);
+            chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart);
         var renderFacets = rebuildFacetsForRenderPoints
             ? BuildSurfaceFacetPrimitives(
                 chart,
@@ -3159,10 +3166,10 @@ public static partial class ChartRenderPlanner
                 categoryCount,
                 seriesColors,
                 triangulateCompleteCells:
-                    chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart))
+                    chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart))
                 .ToArray()
             : facets;
-        if (chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart))
+        if (chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart))
         {
             // PowerPoint paints the rear surface rows first so the nearer
             // row owns shared projected pixels at the fold between cells.
@@ -3177,11 +3184,11 @@ public static partial class ChartRenderPlanner
                 .Concat(BuildImportedSurfaceBoundaryFacets(plot))
                 .ToArray();
         }
-        var contours = chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
+        var contours = chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart)
             ? Array.Empty<ChartLineSegmentPrimitive>()
             : BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
         var frameSegments = chart.ChartType == ChartType.Surface3D
-            ? BuildSurfaceFrameSegments(plot, UsesImportedTextMetrics(chart))
+            ? BuildSurfaceFrameSegments(plot, UsesImportedSurfaceGeometry(chart))
             : Array.Empty<ChartLineSegmentPrimitive>();
 
         return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours)
@@ -3357,7 +3364,7 @@ public static partial class ChartRenderPlanner
                             categoryIndex,
                             normalized: ImportedSurfaceBlankVertexNormalized,
                             isThreeD: true,
-                            usesImportedTextMetrics: true,
+                            usesImportedSurfaceGeometry: UsesImportedSurfaceGeometry(chart),
                             view3D: view3D),
                         valueAxisMin,
                         ImportedSurfaceBlankVertexNormalized);
@@ -3423,7 +3430,7 @@ public static partial class ChartRenderPlanner
         int categoryIndex,
         double normalized,
         bool isThreeD,
-        bool usesImportedTextMetrics,
+        bool usesImportedSurfaceGeometry,
         Chart3DView? view3D)
     {
         double categoryT = categoryCount <= 1 ? 0 : categoryIndex / (double)(categoryCount - 1);
@@ -3436,14 +3443,14 @@ public static partial class ChartRenderPlanner
                 Math.Round(plot.Bottom - seriesT * plot.Height, 4));
         }
 
-        double depthX = usesImportedTextMetrics
+        double depthX = usesImportedSurfaceGeometry
             ? plot.Width * (ImportedSurfaceDepthWallX / ImportedSurfaceReferencePlotWidth)
             : Math.Min(plot.Width * 0.18, 72.0);
         double depthY = Math.Min(plot.Height * 0.26, 52.0);
         double categorySlopeY = Math.Min(plot.Height * 0.20, 40.0);
         double lift = Math.Min(
-            plot.Height * (usesImportedTextMetrics ? 0.90 : 0.50),
-            usesImportedTextMetrics ? 170.0 : 88.0);
+            plot.Height * (usesImportedSurfaceGeometry ? 0.90 : 0.50),
+            usesImportedSurfaceGeometry ? 170.0 : 88.0);
         ApplySurfaceView3DScales(
             view3D,
             ref depthX,
@@ -3451,7 +3458,7 @@ public static partial class ChartRenderPlanner
             ref categorySlopeY,
             ref lift);
         double drawableWidth = Math.Max(1, plot.Width - depthX);
-        double categoryWidth = usesImportedTextMetrics
+        double categoryWidth = usesImportedSurfaceGeometry
             ? plot.Width * (ImportedSurfaceFrontCategoryWidth / ImportedSurfaceReferencePlotWidth) -
                 seriesT * (plot.Width * (ImportedSurfaceFrontCategoryWidth / ImportedSurfaceReferencePlotWidth) - drawableWidth)
             : drawableWidth;
@@ -3459,10 +3466,10 @@ public static partial class ChartRenderPlanner
         double y = plot.Bottom + categoryT * categorySlopeY - seriesT * depthY - normalized * lift;
         // The imported blank low-band vertex is horizontally registered to
         // the COM raster rather than the shared projected category edge.
-        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+        if (usesImportedSurfaceGeometry && seriesCount == 3 && categoryCount == 3 &&
             seriesIndex == 0 && categoryIndex == 1)
             x += ImportedSurfaceBlankVertexXOffset;
-        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+        if (usesImportedSurfaceGeometry && seriesCount == 3 && categoryCount == 3 &&
             seriesIndex == 0 && categoryIndex == 2)
         {
             x += ImportedSurfaceSouthFrontVertexXOffset;
@@ -3470,15 +3477,15 @@ public static partial class ChartRenderPlanner
         }
         // The imported 3x3 COM mesh registers its middle-row North vertex
         // below the shared projection; keep the correction fixture-scoped.
-        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+        if (usesImportedSurfaceGeometry && seriesCount == 3 && categoryCount == 3 &&
             seriesIndex == 1 && categoryIndex == 0)
             y += ImportedSurfaceMiddleNorthVertexYOffset;
-        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+        if (usesImportedSurfaceGeometry && seriesCount == 3 && categoryCount == 3 &&
             seriesIndex == 2 && categoryIndex == 0)
             y += ImportedSurfaceRearNorthVertexYOffset;
         return new ChartPlanPoint(
-            Math.Round(x + (usesImportedTextMetrics ? ImportedSurfacePointOffsetX : 0.0), 4),
-            Math.Round(y + (usesImportedTextMetrics ? ImportedSurfacePointOffsetY : 0.0), 4));
+            Math.Round(x + (usesImportedSurfaceGeometry ? ImportedSurfacePointOffsetX : 0.0), 4),
+            Math.Round(y + (usesImportedSurfaceGeometry ? ImportedSurfacePointOffsetY : 0.0), 4));
     }
 
     private static void ApplySurfaceView3DScales(
@@ -3522,14 +3529,14 @@ public static partial class ChartRenderPlanner
 
     private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceFrameSegments(
         ChartPlanRect plot,
-        bool usesImportedTextMetrics)
+        bool usesImportedSurfaceGeometry)
     {
         double scaleX = plot.Width / 360.0;
         double scaleY = plot.Height / 189.0;
-        double frontLeftX = usesImportedTextMetrics
+        double frontLeftX = usesImportedSurfaceGeometry
             ? ImportedSurfaceFrameFrontLeftX
             : -7.0;
-        double frontRightX = usesImportedTextMetrics
+        double frontRightX = usesImportedSurfaceGeometry
             ? ImportedSurfaceFrameFrontRightX
             : 308.0;
         var frontLeft = new ChartPlanPoint(
@@ -3540,13 +3547,13 @@ public static partial class ChartRenderPlanner
             plot.Bottom + 2.0 * scaleY);
         var valueTop = new ChartPlanPoint(
             frontLeft.X,
-            plot.Y + (usesImportedTextMetrics ? 42.0 : 45.0) * scaleY);
+            plot.Y + (usesImportedSurfaceGeometry ? 42.0 : 45.0) * scaleY);
         var backTopLeft = new ChartPlanPoint(plot.X + 124.0 * scaleX, plot.Y + 1.0 * scaleY);
         var backTopRight = new ChartPlanPoint(plot.Right, plot.Y + 15.0 * scaleY);
         var stroke = new ChartStrokePlan(
             new SrgbColor(0x00, 0x00, 0x00),
-            Alpha: usesImportedTextMetrics ? (byte)255 : (byte)220,
-            Thickness: usesImportedTextMetrics ? 0.5 : 0.7);
+            Alpha: usesImportedSurfaceGeometry ? (byte)255 : (byte)220,
+            Thickness: usesImportedSurfaceGeometry ? 0.5 : 0.7);
         var segments = new List<ChartLineSegmentPrimitive>(45);
 
         AddSurfaceFrameSegment(segments, frontLeft, frontRight, stroke);
@@ -3566,7 +3573,7 @@ public static partial class ChartRenderPlanner
             AddSurfaceFrameSegment(segments, depthWall, backWall, stroke);
         }
 
-        if (usesImportedTextMetrics)
+        if (usesImportedSurfaceGeometry)
             AddImportedSurfaceAxisTicks(segments, plot, stroke);
 
         return segments;
@@ -3724,7 +3731,7 @@ public static partial class ChartRenderPlanner
         bool triangulateCompleteCells = false)
     {
         var facets = new List<ChartSurfaceFacetPrimitive>();
-        var stroke = chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
+        var stroke = chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart)
             ? new ChartStrokePlan(
                 new SrgbColor(0x00, 0x00, 0x00),
                 Alpha: 0,
@@ -3759,7 +3766,7 @@ public static partial class ChartRenderPlanner
                 {
                     var renderPoints = renderPointSets[renderIndex];
                     if (chart.ChartType == ChartType.Surface3D &&
-                        UsesImportedTextMetrics(chart) &&
+                        UsesImportedSurfaceGeometry(chart) &&
                         chart.VaryColors &&
                         seriesIndex == 0 &&
                         categoryIndex == 1 &&
@@ -3779,7 +3786,7 @@ public static partial class ChartRenderPlanner
                         };
                     }
                     if (chart.ChartType == ChartType.Surface3D &&
-                        UsesImportedTextMetrics(chart) &&
+                        UsesImportedSurfaceGeometry(chart) &&
                         chart.VaryColors &&
                         seriesIndex == 0 &&
                         categoryIndex == 0 &&
@@ -3810,7 +3817,7 @@ public static partial class ChartRenderPlanner
                         averageNormalized,
                         renderIndex);
                     byte facetAlpha = chart.ChartType == ChartType.Surface3D
-                        ? UsesImportedTextMetrics(chart) ? (byte)255 : (byte)220
+                        ? UsesImportedSurfaceGeometry(chart) ? (byte)255 : (byte)220
                         : (byte)185;
 
                     facets.Add(new ChartSurfaceFacetPrimitive(
@@ -3872,7 +3879,7 @@ public static partial class ChartRenderPlanner
                 ResolveSeriesColor(seriesIndex, seriesColors),
                 normalized);
 
-        return chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
+        return chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart)
             ? ApplyImportedSurfaceLighting(color, seriesIndex, categoryIndex, seriesCount, categoryCount, triangleIndex)
             : color;
     }

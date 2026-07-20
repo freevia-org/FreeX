@@ -889,6 +889,35 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceGeometryPlan_AuthoredViewDoesNotUseImportedSurfaceRegistration()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.VaryColors = true;
+        chart.View3D = new Chart3DView
+        {
+            RotationX = 25,
+            RotationY = 35,
+            Perspective = 54,
+            DepthPercent = 125,
+            HeightPercent = 100
+        };
+
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 360, 189));
+
+        plan.RenderFacets.Should().HaveCount(2,
+            "authored view3D should use the general surface mesh without imported boundary facets");
+        plan.FrameSegments.Select(segment => segment.Stroke.Thickness)
+            .Should().OnlyContain(thickness => thickness == 0.7,
+                "authored view3D should retain the general projected-frame stroke");
+        plan.FrameSegments.Select(segment => segment.Stroke.Alpha)
+            .Should().OnlyContain(alpha => alpha == 220,
+                "authored view3D should retain the general projected-frame opacity");
+    }
+
+    [Fact]
     public void BuildSurfaceGeometryPlan_RightAngleAxesSuppressesPerspectiveLift()
     {
         var chart = MakeSurfaceChart(ChartType.Surface3D);

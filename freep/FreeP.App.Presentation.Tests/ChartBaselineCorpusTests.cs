@@ -711,6 +711,32 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void Surface3DExplicitViewCorpus_PreservesAuthoredCameraAndUsesGeneralGeometry()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "25-chart-surface3d-view3d.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var surface = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .Single(chart => chart.ChartType == ChartType.Surface3D);
+
+        surface.View3D.Should().NotBeNull();
+        surface.View3D!.RotationX.Should().Be(25);
+        surface.View3D.RotationY.Should().Be(35);
+        surface.View3D.Perspective.Should().Be(54);
+        surface.View3D.DepthPercent.Should().Be(125);
+
+        var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            surface,
+            new ChartPlanRect(0, 0, 360, 189));
+        geometry.RenderFacets.Should().HaveCount(4,
+            "an authored camera should use the general complete-cell surface mesh");
+        geometry.FrameSegments.Select(segment => segment.Stroke.Thickness)
+            .Should().OnlyContain(thickness => thickness == 0.7);
+    }
+
+    [Fact]
     public void ChartLabelsCorpusDeck_InfersPowerPointPieValueAndPercentDefaults()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
