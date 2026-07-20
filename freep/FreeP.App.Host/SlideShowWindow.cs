@@ -907,6 +907,18 @@ public sealed class SlideShowWindow : Window
                 PlayHoneycombTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Switch:
+                PlaySwitchTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Orbit:
+                PlayOrbitTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Ferris:
+                PlayFerrisTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -2331,6 +2343,24 @@ public sealed class SlideShowWindow : Window
         PlayPerspectiveTransition(slide, transition, plan);
 
     private void PlayRotateTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlaySwitchTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlayOrbitTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlayFerrisTransition(
         Slide slide,
         SlideTransition transition,
         SlideShowTransitionPlaybackPlan plan) =>
