@@ -3538,14 +3538,16 @@ public static partial class ChartRenderPlanner
         var frontRight = new ChartPlanPoint(
             plot.X + frontRightX * scaleX,
             plot.Bottom + 2.0 * scaleY);
-        var valueTop = new ChartPlanPoint(frontLeft.X, plot.Y + 45.0 * scaleY);
+        var valueTop = new ChartPlanPoint(
+            frontLeft.X,
+            plot.Y + (usesImportedTextMetrics ? 42.0 : 45.0) * scaleY);
         var backTopLeft = new ChartPlanPoint(plot.X + 124.0 * scaleX, plot.Y + 1.0 * scaleY);
         var backTopRight = new ChartPlanPoint(plot.Right, plot.Y + 15.0 * scaleY);
         var stroke = new ChartStrokePlan(
             new SrgbColor(0x00, 0x00, 0x00),
             Alpha: usesImportedTextMetrics ? (byte)255 : (byte)220,
-            Thickness: 0.7);
-        var segments = new List<ChartLineSegmentPrimitive>(16);
+            Thickness: usesImportedTextMetrics ? 0.5 : 0.7);
+        var segments = new List<ChartLineSegmentPrimitive>(45);
 
         AddSurfaceFrameSegment(segments, frontLeft, frontRight, stroke);
         AddSurfaceFrameSegment(segments, frontLeft, valueTop, stroke);
