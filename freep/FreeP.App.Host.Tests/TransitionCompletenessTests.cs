@@ -96,6 +96,7 @@ public class TransitionCompletenessTests
     [InlineData(TransitionKind.Vortex,       "vortex")]
     [InlineData(TransitionKind.PageCurlDouble, "pageCurlDouble")]
     [InlineData(TransitionKind.Flash,        "flash")]
+    [InlineData(TransitionKind.Random,       "random")]
     public void TransitionKindToElementName_KnownKinds(TransitionKind kind, string expected)
     {
         var name = PptxAnimationMap_Accessor.TransitionKindToElementName(kind);
@@ -123,6 +124,7 @@ public class TransitionCompletenessTests
     [InlineData(TransitionKind.Glitter)]
     [InlineData(TransitionKind.PageCurlDouble)]
     [InlineData(TransitionKind.PageCurlSingle)]
+    [InlineData(TransitionKind.Random)]
     public void RoundTrip_KnownNewKinds_KindPreserved(TransitionKind kind)
     {
         var pres = Presentation.CreateEmpty();
@@ -140,6 +142,43 @@ public class TransitionCompletenessTests
         var t = loaded.Slides[0].Transition;
         Assert.NotNull(t);
         Assert.Equal(kind, t!.Kind);
+    }
+
+    [Fact]
+    public void RoundTrip_Random_RemainsApplicationChosenAndPreservesTiming()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind = TransitionKind.Random,
+            DurationMs = 875,
+            AdvanceOnClick = false,
+            AdvanceAfterMs = 2_400,
+        };
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var slideEntry = zip.GetEntry("ppt/slides/slide1.xml");
+            Assert.NotNull(slideEntry);
+            using var stream = slideEntry!.Open();
+            var slideXml = XDocument.Load(stream);
+            var randomElements = slideXml.Descendants(P + "random").ToArray();
+            Assert.Equal(2, randomElements.Length);
+            Assert.All(randomElements, random => Assert.Empty(random.Attributes()));
+        }
+
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+        var transition = loaded.Slides[0].Transition;
+        Assert.NotNull(transition);
+        Assert.Equal(TransitionKind.Random, transition!.Kind);
+        Assert.Equal(875, transition.DurationMs);
+        Assert.False(transition.AdvanceOnClick);
+        Assert.Equal(2_400, transition.AdvanceAfterMs);
     }
 
     // ── Round-trip: Morph option ──────────────────────────────────────────────────
@@ -615,6 +654,7 @@ public class TransitionCompletenessTests
     [InlineData(TransitionKind.Prestige)]
     [InlineData(TransitionKind.PageCurlDouble)]
     [InlineData(TransitionKind.Origami)]
+    [InlineData(TransitionKind.Random)]
     [InlineData(TransitionKind.Other)]
     public void SlideTransitionKind_IsDefinedInEnum(TransitionKind kind)
     {
@@ -632,6 +672,21 @@ public class TransitionCompletenessTests
 
         var plan = SlideShowTransitionPlanner.Plan(new SlideTransition { Kind = TransitionKind.Other });
         Assert.Equal(SlideShowTransitionPlaybackKind.FadeFallback, plan.PlaybackKind);
+        Assert.Equal(TransitionKind.Other, plan.ResolvedKind);
+        Assert.Null(plan.RandomSeed);
+    }
+
+    [Fact]
+    public void TransitionKind_Random_ResolvesToDedicatedPlaybackWithoutChangingAuthority()
+    {
+        var transition = new SlideTransition { Kind = TransitionKind.Random };
+
+        var plan = SlideShowTransitionPlanner.Plan(transition);
+
+        Assert.Contains(plan.ResolvedKind, SlideShowTransitionPlanner.RandomCandidateKinds);
+        Assert.NotEqual(TransitionKind.Random, plan.ResolvedKind);
+        Assert.NotEqual(SlideShowTransitionPlaybackKind.FadeFallback, plan.PlaybackKind);
+        Assert.Equal(TransitionKind.Random, transition.Kind);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

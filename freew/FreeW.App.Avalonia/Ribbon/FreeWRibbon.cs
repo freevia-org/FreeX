@@ -277,5 +277,15 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>Table Layout &gt; Convert to Text. Optional host callback that owns delimiter selection.</summary>
     Action? OpenTableToTextDialog = null,
     /// <summary>SmartArt Design &gt; Edit Text. Optional host callback that owns the modal editor.</summary>
-    Action? OpenSmartArtEditDialog = null);
+    Action? OpenSmartArtEditDialog = null,
+    Action? OpenDateTimeDialog = null,
+    Action? OpenTextToTableDialog = null,
+    Action? OpenMultilevelListDialog = null,
+    Action? OpenFootnoteDialog = null,
+    Action? OpenEndnoteDialog = null,
+    Action? ToggleNotesPane = null,
+    Func<bool>? IsNotesPaneVisible = null,
+    Action? OpenFootnoteEndnoteOptionsDialog = null,
+    Action? OpenBookmarkManagerDialog = null,
+    Action? ShowTableOfAuthoritiesDialog = null);
 

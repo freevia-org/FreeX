@@ -47,7 +47,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
         source.Should().Contain("SlideShowHostPlanner.HitTestTriggerShape(");
         source.Should().Contain("SlideShowHostPlanner.PlanPointerClick(");
-        source.Should().Contain("SlideShowPlaybackPlanner.PlanTransition(");
+        source.Should().Contain("SlideShowPlaybackPlanner.PlanTransition(_presentation, slide, t);");
+        source.Should().Contain("t = plan.EffectiveTransition;");
         source.Should().Contain("PlaySplitTransition(");
         source.Should().Contain("PlayBlindsTransition(");
         source.Should().Contain("SlideShowPlaybackPlanner.BlindsBandCount");
@@ -160,6 +161,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("case Key.Left");
         source.Should().NotContain("case TransitionKind.");
         source.Should().NotContain("SlideShowTransitionPlanner.Plan(");
+        source.Should().NotContain("SlideShowPlaybackPlanner.PlanTransition(t)");
+        source.Should().NotContain("TransitionKind.Random");
         source.Should().NotContain("_controller.GoToSlide(0)");
         source.Should().NotContain("_presentation.Slides.Count - 1");
         source.Should().NotContain("HitTestHyperlinkInShapes(");

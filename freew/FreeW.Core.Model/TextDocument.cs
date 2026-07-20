@@ -2374,6 +2374,25 @@ public sealed record WatermarkOptions(string Text)
     /// </summary>
     public double? NativeVmlPictureHeightPt { get; init; }
 
+    /// <summary>
+    /// Optional width recovered from Word's native VML text-watermark shape. Together with
+    /// <see cref="NativeVmlTextHeightPt"/>, this keeps an imported text-path footprint distinct
+    /// from FreeW's canonical 468 by 117 point watermark shape.
+    /// </summary>
+    public double? NativeVmlTextWidthPt { get; init; }
+
+    /// <summary>
+    /// Optional height recovered from Word's native VML text-watermark shape. Meaningful only
+    /// when <see cref="NativeVmlTextWidthPt"/> is also present.
+    /// </summary>
+    public double? NativeVmlTextHeightPt { get; init; }
+
+    /// <summary>
+    /// Optional <c>v:textpath/@fitshape</c> value recovered from a Word VML text watermark.
+    /// A null value retains FreeW's canonical fitshape output for newly authored watermarks.
+    /// </summary>
+    public bool? NativeVmlTextFitShape { get; init; }
+
     /// <summary>Whether this watermark is a picture watermark (<see cref="ImageBytes"/> is non-null).</summary>
     public bool IsPicture => ImageBytes is { Length: > 0 };
 

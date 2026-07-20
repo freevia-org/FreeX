@@ -84,6 +84,56 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithMutatedVmlTextSize(TextDocument document, double widthPt, double heightPt)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            var shape = xml.Descendants(vml + "shape")
+                .Single(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject");
+            var style = shape.Attribute("style")!.Value;
+            shape.SetAttributeValue("style", style.Replace(
+                "width:468pt;height:117pt",
+                $"width:{widthPt:0.##}pt;height:{heightPt:0.##}pt",
+                StringComparison.Ordinal));
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
+    private static TextDocument ReadWithMutatedVmlTextFitShape(TextDocument document, string fitShape)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            xml.Descendants(vml + "textpath").Last().SetAttributeValue("fitshape", fitShape);
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument ReadWithVmlPictureImageData(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -272,6 +322,41 @@ public class WatermarkOptionsRoundTripTests
         var loaded = ReadWithMutatedVmlText(doc, "STALE VML");
 
         loaded.Page.WatermarkOptions!.Text.Should().Be("AUTHORITATIVE");
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_SupplementsFreeWMetadataWithVisibleShapeGeometry()
+    {
+        var document = new TextDocument();
+        document.Page.WatermarkOptions = new WatermarkOptions("AUTHORITATIVE");
+        var loaded = ReadWithMutatedVmlTextSize(document, widthPt: 512.5, heightPt: 240.25);
+
+        var watermark = loaded.Page.WatermarkOptions;
+        watermark.Should().NotBeNull();
+        watermark!.Text.Should().Be("AUTHORITATIVE");
+        watermark.NativeVmlTextWidthPt.Should().BeApproximately(512.5, 0.001);
+        watermark.NativeVmlTextHeightPt.Should().BeApproximately(240.25, 0.001);
+
+        var rewritten = ReadHeaderXml(loaded);
+        var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+        rewritten.Descendants(vml + "shape")
+            .Single(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject")
+            .Attribute("style")!.Value.Should().Contain("width:512.5pt;height:240.25pt");
+    }
+
+    [Theory]
+    [InlineData("t", true)]
+    [InlineData("false", false)]
+    public void NativeVmlTextWatermark_PreservesTextPathFitShape(string token, bool expected)
+    {
+        var loaded = ReadWithMutatedVmlTextFitShape(new TextDocument
+        {
+            Page = { WatermarkOptions = new WatermarkOptions("AUTHORITATIVE") }
+        }, token);
+
+        loaded.Page.WatermarkOptions!.NativeVmlTextFitShape.Should().Be(expected);
+        ReadHeaderXml(loaded).Descendants(XNamespace.Get("urn:schemas-microsoft-com:vml") + "textpath")
+            .Last().Attribute("fitshape")!.Value.Should().Be(expected ? "t" : "f");
     }
 
     [Fact]

@@ -31,6 +31,9 @@ public static class WatermarkVisualPlanner
     // extent, rather than a tiled label, determines the visible text scale and placement.
     private const double WordTextWatermarkWidthDip = 624;
     private const double WordTextWatermarkHeightDip = 156;
+    // Word's VML fitshape text path resolves to a visibly smaller glyph run than WPF's direct
+    // width-fit FormattedText. Keep the VML shape dimensions intact and share the glyph calibration
+    // between the live WPF surface and the headless fidelity renderer.
     public const double TextPathGlyphScale = 0.50;
 
     public static TextWatermarkLayoutPlan? BuildTextLayout(
@@ -48,8 +51,14 @@ public static class WatermarkVisualPlanner
             return null;
         }
 
-        var width = Math.Min(pageWidthDip, WordTextWatermarkWidthDip);
-        var height = Math.Min(pageHeightDip, WordTextWatermarkHeightDip);
+        var hasNativeVmlSize = options.NativeVmlTextWidthPt is > 0
+            && options.NativeVmlTextHeightPt is > 0;
+        var width = Math.Min(
+            pageWidthDip,
+            hasNativeVmlSize ? options.NativeVmlTextWidthPt!.Value * 4d / 3d : WordTextWatermarkWidthDip);
+        var height = Math.Min(
+            pageHeightDip,
+            hasNativeVmlSize ? options.NativeVmlTextHeightPt!.Value * 4d / 3d : WordTextWatermarkHeightDip);
         return new TextWatermarkLayoutPlan(
             XDip: (pageWidthDip - width) / 2,
             YDip: (pageHeightDip - height) / 2,

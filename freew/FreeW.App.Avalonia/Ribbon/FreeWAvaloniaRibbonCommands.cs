@@ -143,11 +143,12 @@ internal static class FreeWAvaloniaRibbonCommands
             editor.ApplyMultiLevelHeadingPreset();
             editor.ApplyMultiLevelNumberFormats(MultiLevelListFormat.DecimalNumberFormats);
         }));
-        r.Register("freew.multilevel-define", new ActionRibbonCommand(() =>
-        {
-            editor.ApplyMultiLevelListToSelection();
-            editor.ApplyMultiLevelListStartOverrides(level0StartAt: 1, level1StartAt: 1);
-        }));
+        r.Register("freew.multilevel-define", new ActionRibbonCommand(
+            callbacks.OpenMultilevelListDialog ?? (() =>
+            {
+                editor.ApplyMultiLevelListToSelection();
+                editor.ApplyMultiLevelListStartOverrides(level0StartAt: 1, level1StartAt: 1);
+            })));
         r.Register("freew.indent-increase",  new ActionRibbonCommand(editor.IncreaseIndent));
         r.Register("freew.indent-decrease",  new ActionRibbonCommand(editor.DecreaseIndent));
         r.Register("freew.increase-indent",  new ActionRibbonCommand(editor.IncreaseIndent));
@@ -250,7 +251,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.page-number-current", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.PageNumber)));
         r.Register("freew.page-number-format", new ContextRibbonCommand(
             context => ExecutePageNumberFormat(editor, callbacks, context)));
-        r.Register("freew.datetime", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
+        r.Register("freew.datetime", new ActionRibbonCommand(
+            callbacks.OpenDateTimeDialog ?? (() => editor.InsertField(RunFieldKind.Date))));
         r.Register("freew.field", new ActionRibbonCommand(callbacks.OpenFieldDialog ?? (() => { })));
         r.Register("freew.save-quickpart", new ActionRibbonCommand(callbacks.SaveQuickPartSelection ?? (() => { })));
         r.Register("freew.building-blocks-organizer", new ActionRibbonCommand(callbacks.OpenBuildingBlocksOrganizer ?? (() => { })));
@@ -403,7 +405,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.section-break-odd-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.OddPage)));
         r.Register("freew.different-first-page", new ActionRibbonCommand(editor.ToggleDifferentFirstPage));
         r.Register("freew.page-valign", new ActionRibbonCommand(editor.CyclePageVerticalAlignment));
-        r.Register("freew.text-to-table", new ActionRibbonCommand(editor.ConvertCurrentParagraphToTable));
+        r.Register("freew.text-to-table", new ActionRibbonCommand(
+            callbacks.OpenTextToTableDialog ?? editor.ConvertCurrentParagraphToTable));
 
         // ── View ─────────────────────────────────────────────────────────────
         var printPreviewCommand = new ActionRibbonCommand(callbacks.OpenPrintPreview ?? (() => { }));
@@ -845,7 +848,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.bookmark",         new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
         r.Register("freew.insert-bookmark",  new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
         r.Register("freew.link-bookmark",    new ActionRibbonCommand(callbacks.OpenLinkBookmarkDialog ?? (() => LinkToFirstBookmark(editor))));
-        r.Register("freew.bookmark-manager", new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
+        r.Register("freew.bookmark-manager", new ActionRibbonCommand(
+            callbacks.OpenBookmarkManagerDialog ?? callbacks.OpenBookmarkDialog ?? (() => { })));
 
         // ── Cover Page ───────────────────────────────────────────────────────
         // The top-level dropdown opener is a no-op; each preset prepends a cover-page block layout.
@@ -1065,13 +1069,20 @@ internal static class FreeWAvaloniaRibbonCommands
         RibbonHostCallbacks callbacks)
     {
         // Footnotes & Endnotes — insert an empty note + reference marker at the caret.
-        var footnote = new ActionRibbonCommand(() => editor.InsertFootnote());
+        var footnote = new ActionRibbonCommand(
+            callbacks.OpenFootnoteDialog ?? (() => editor.InsertFootnote()));
         r.Register("freew.footnote", footnote);
         r.Register("freew.insert-footnote", footnote);
-        r.Register("freew.show-notes", new ActionRibbonCommand(editor.ShowNotes));
-        r.Register("freew.footnote-endnote-options", new ActionRibbonCommand(editor.ApplyDefaultFootnoteEndnoteOptions));
+        r.Register("freew.next-footnote", new ActionRibbonCommand(() => editor.MoveToNextFootnote()));
+        r.Register("freew.previous-footnote", new ActionRibbonCommand(() => editor.MoveToPreviousFootnote()));
+        r.Register("freew.next-endnote", new ActionRibbonCommand(() => editor.MoveToNextEndnote()));
+        r.Register("freew.previous-endnote", new ActionRibbonCommand(() => editor.MoveToPreviousEndnote()));
+        r.Register("freew.show-notes", new ActionRibbonCommand(callbacks.ToggleNotesPane ?? (() => { })));
+        r.Register("freew.footnote-endnote-options", new ActionRibbonCommand(
+            callbacks.OpenFootnoteEndnoteOptionsDialog ?? (() => { })));
 
-        var endnote = new ActionRibbonCommand(() => editor.InsertEndnote());
+        var endnote = new ActionRibbonCommand(
+            callbacks.OpenEndnoteDialog ?? (() => editor.InsertEndnote()));
         r.Register("freew.endnote", endnote);
         r.Register("freew.insert-endnote", endnote);
 
@@ -1115,14 +1126,14 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.index-insert", new ActionRibbonCommand(editor.InsertIndex));
         r.Register("freew.index-refresh", new ActionRibbonCommand(editor.RefreshIndex));
         r.Register("freew.mark-citation", new ActionRibbonCommand(callbacks.OpenMarkCitationDialog ?? (() => { })));
-        r.Register("freew.table-of-authorities", new ActionRibbonCommand(() =>
-        {
-            var options = callbacks.OpenTableOfAuthoritiesDialog?.Invoke();
-            if (options is null && callbacks.OpenTableOfAuthoritiesDialog is not null)
-                return;
-
-            editor.InsertTableOfAuthorities(options ?? ToaOptions.Default);
-        }));
+        r.Register("freew.table-of-authorities", new ActionRibbonCommand(
+            callbacks.ShowTableOfAuthoritiesDialog ?? (() =>
+            {
+                var options = callbacks.OpenTableOfAuthoritiesDialog?.Invoke();
+                if (options is null && callbacks.OpenTableOfAuthoritiesDialog is not null)
+                    return;
+                editor.InsertTableOfAuthorities(options ?? ToaOptions.Default);
+            })));
         r.Register("freew.table-of-authorities-refresh", new ActionRibbonCommand(editor.RefreshTableOfAuthorities));
     }
 

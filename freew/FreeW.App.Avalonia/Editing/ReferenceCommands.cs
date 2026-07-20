@@ -38,6 +38,200 @@ internal sealed class AddNoteCommand(int id, string text, bool footnote) : IDocu
     }
 }
 
+internal sealed class ReplaceNoteContentCommand(
+    int id,
+    bool footnote,
+    IReadOnlyList<Paragraph> replacement) : IDocumentCommand
+{
+    private Paragraph[]? _previous;
+
+    public string Label => footnote ? "Edit Footnote" : "Edit Endnote";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var content = Content(context.Document);
+        if (content is null)
+            return;
+
+        _previous = content.Select(CloneParagraph).ToArray();
+        content.Clear();
+        content.AddRange(replacement.Select(CloneParagraph));
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null || Content(context.Document) is not { } content)
+            return;
+
+        content.Clear();
+        content.AddRange(_previous.Select(CloneParagraph));
+        _previous = null;
+    }
+
+    private List<Paragraph>? Content(TextDocument document)
+    {
+        if (footnote)
+            return document.Footnotes.TryGetValue(id, out var footnoteValue) ? footnoteValue.Content : null;
+        return document.Endnotes.TryGetValue(id, out var endnoteValue) ? endnoteValue.Content : null;
+    }
+
+    internal static Paragraph CloneParagraph(Paragraph paragraph) =>
+        (Paragraph)DocumentMerge.CloneBlock(paragraph);
+}
+
+internal sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
+{
+    private Footnote? _footnote;
+    private Endnote? _endnote;
+    private List<(Paragraph Paragraph, Run[] Runs)>? _paragraphRuns;
+
+    public string Label => footnote ? "Delete Footnote" : "Delete Endnote";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var document = context.Document;
+        if (footnote)
+        {
+            if (!document.Footnotes.Remove(id, out _footnote))
+                return;
+        }
+        else if (!document.Endnotes.Remove(id, out _endnote))
+        {
+            return;
+        }
+
+        _paragraphRuns = [];
+        foreach (var paragraph in document.Blocks.OfType<Paragraph>())
+        {
+            if (!paragraph.Runs.Any(IsMarker))
+                continue;
+            _paragraphRuns.Add((paragraph, [.. paragraph.Runs]));
+            paragraph.Runs.RemoveAll(IsMarker);
+        }
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (footnote && _footnote is not null)
+            context.Document.Footnotes[id] = _footnote;
+        else if (!footnote && _endnote is not null)
+            context.Document.Endnotes[id] = _endnote;
+
+        if (_paragraphRuns is not null)
+        {
+            foreach (var (paragraph, runs) in _paragraphRuns)
+            {
+                paragraph.Runs.Clear();
+                paragraph.Runs.AddRange(runs);
+            }
+        }
+
+        _footnote = null;
+        _endnote = null;
+        _paragraphRuns = null;
+    }
+
+    private bool IsMarker(Run run) =>
+        footnote ? run.FootnoteId == id : run.EndnoteId == id;
+}
+
+internal sealed class SetNoteNumberingOptionsCommand(
+    NoteNumberFormat footnoteFormat,
+    int footnoteStartAt,
+    NoteNumberRestart footnoteRestart,
+    NoteNumberFormat endnoteFormat,
+    int endnoteStartAt,
+    NoteNumberRestart endnoteRestart) : IDocumentCommand
+{
+    private (NoteNumberFormat Format, int StartAt, NoteNumberRestart Restart) _previousFootnote;
+    private (NoteNumberFormat Format, int StartAt, NoteNumberRestart Restart) _previousEndnote;
+    private bool _applied;
+
+    public string Label => "Footnote and Endnote Options";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        _previousFootnote = Snapshot(context.Document.FootnoteNumbering);
+        _previousEndnote = Snapshot(context.Document.EndnoteNumbering);
+        Apply(context.Document.FootnoteNumbering, footnoteFormat, footnoteStartAt, footnoteRestart);
+        Apply(context.Document.EndnoteNumbering, endnoteFormat, endnoteStartAt, endnoteRestart);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied)
+            return;
+        Apply(context.Document.FootnoteNumbering, _previousFootnote.Format, _previousFootnote.StartAt, _previousFootnote.Restart);
+        Apply(context.Document.EndnoteNumbering, _previousEndnote.Format, _previousEndnote.StartAt, _previousEndnote.Restart);
+        _applied = false;
+    }
+
+    private static (NoteNumberFormat, int, NoteNumberRestart) Snapshot(NoteNumberingOptions options) =>
+        (options.NumberFormat, options.StartAt, options.NumberRestart);
+
+    private static void Apply(
+        NoteNumberingOptions options,
+        NoteNumberFormat format,
+        int startAt,
+        NoteNumberRestart restart)
+    {
+        options.NumberFormat = format;
+        options.StartAt = startAt;
+        options.NumberRestart = restart;
+    }
+}
+
+internal sealed class RemoveBookmarkCommand(string name) : IDocumentCommand
+{
+    private List<(Paragraph Paragraph, string[] Names)>? _previous;
+
+    public string Label => "Delete Bookmark";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        _previous = context.Document.Blocks
+            .OfType<Paragraph>()
+            .Where(paragraph => paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal))
+            .Select(paragraph => (paragraph, paragraph.BookmarkNames.ToArray()))
+            .ToList();
+        Bookmarks.RemoveBookmark(context.Document, name);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null)
+            return;
+        foreach (var (paragraph, names) in _previous)
+        {
+            paragraph.BookmarkNames.Clear();
+            paragraph.BookmarkNames.AddRange(names);
+        }
+        _previous = null;
+    }
+}
+
+internal sealed class SetMultiLevelNumberFormatsCommand(IReadOnlyList<ListNumberFormat> formats) : IDocumentCommand
+{
+    private ListNumberFormat[]? _previous;
+
+    public string Label => "Define Multilevel List";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        _previous = [.. context.Document.MultiLevelList.NumberFormats];
+        context.Document.MultiLevelList.SetNumberFormats(formats);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null)
+            return;
+        context.Document.MultiLevelList.SetNumberFormats(_previous);
+        _previous = null;
+    }
+}
+
 /// <summary>
 /// AV-REF: Assign a bookmark name to the body paragraph at <paramref name="paragraphIndex"/> (snapshotting
 /// the prior <see cref="Paragraph.BookmarkNames"/> for undo). Used to auto-anchor a cross-reference target

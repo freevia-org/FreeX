@@ -5108,9 +5108,6 @@ public static class DocxReader
             return;
         }
 
-        if (document.Page.EffectiveWatermark is not null)
-            return;
-
         foreach (var entry in archive.Entries
                      .Where(entry => entry.FullName.StartsWith("word/header", StringComparison.OrdinalIgnoreCase)
                          && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
@@ -5126,6 +5123,22 @@ public static class DocxReader
                 var fill = textShape!.Element(V + "fill");
                 var color = NormalizeVmlColor(fill?.Attribute("color")?.Value ?? textShape.Attribute("fillcolor")?.Value);
                 var rotation = ParseVmlStyleNumber(textShape.Attribute("style")?.Value, "rotation");
+                var (textWidthPt, textHeightPt) = ParseVmlShapeSize(textShape.Attribute("style")?.Value);
+                var fitShape = ParseVmlBoolean(textPath?.Attribute("fitshape")?.Value);
+                if (document.Page.WatermarkOptions is { IsPicture: false } existingTextWatermark)
+                {
+                    document.Page.WatermarkOptions = existingTextWatermark with
+                    {
+                        NativeVmlTextWidthPt = textWidthPt > 0 ? textWidthPt : null,
+                        NativeVmlTextHeightPt = textHeightPt > 0 ? textHeightPt : null,
+                        NativeVmlTextFitShape = fitShape
+                    };
+                    return;
+                }
+
+                if (document.Page.EffectiveWatermark is not null)
+                    return;
+
                 document.Page.WatermarkOptions = new WatermarkOptions(text)
                 {
                     FontFamily = ParseVmlStyleValue(textPath!.Attribute("style")?.Value, "font-family") ?? "Calibri",
@@ -5133,7 +5146,10 @@ public static class DocxReader
                     Layout = rotation is { } value && Math.Abs(value) < 0.01
                         ? WatermarkLayout.Horizontal
                         : WatermarkLayout.Diagonal,
-                    Opacity = ParseVmlOpacity(fill?.Attribute("opacity")?.Value)
+                    Opacity = ParseVmlOpacity(fill?.Attribute("opacity")?.Value),
+                    NativeVmlTextWidthPt = textWidthPt > 0 ? textWidthPt : null,
+                    NativeVmlTextHeightPt = textHeightPt > 0 ? textHeightPt : null,
+                    NativeVmlTextFitShape = fitShape
                 };
                 return;
             }
@@ -5248,6 +5264,13 @@ public static class DocxReader
                 ? Math.Clamp(isPercent ? opacity / 100 : opacity, 0, 1)
                 : 1;
     }
+
+    private static bool? ParseVmlBoolean(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "t" or "true" or "1" => true,
+        "f" or "false" or "0" => false,
+        _ => null
+    };
 
     private static string? NormalizeVmlColor(string? value)
     {
