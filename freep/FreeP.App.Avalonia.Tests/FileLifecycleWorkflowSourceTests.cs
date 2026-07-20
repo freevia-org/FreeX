@@ -27,9 +27,14 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().Contain("private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;");
         source.Should().Contain("new SisterAvaloniaFileCommandWorkflow(");
         source.Should().Contain("new SisterAvaloniaFileTitleSpec(");
-        source.Should().Contain("_fileWorkflow.New(");
+        source.Should().Contain("_fileWorkflow.NewAsync(");
         source.Should().Contain("_fileWorkflow.OpenAsync(");
         source.Should().Contain("_fileWorkflow.SaveAsync(");
+        source.Should().Contain("_fileWorkflow.ConfirmCloseAllowedAsync(");
+        source.Should().Contain("SisterAvaloniaAsyncWindowCloseCoordinator");
+        source.Should().Contain("Closing += (_, e) => e.Cancel = _closeCoordinator.ShouldCancelClosing();");
+        source.Should().Contain("_fileWorkflow.ShowFileCommandErrorAsync(\"Could not open the presentation\"");
+        source.Should().Contain("_fileWorkflow.ShowFileCommandErrorAsync(\"Could not save the presentation\"");
         source.Should().Contain("_fileWorkflow.MarkSavedWithoutPath()");
         source.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles)");
         source.Should().Contain("_fileWorkflow.MarkDirty();");
@@ -46,6 +51,7 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().NotContain("private bool _isDirty");
         source.Should().NotContain("private async Task<SaveChangesPrompt> ShowSaveChangesPromptAsync");
         source.Should().NotContain("PromptSaveChangesSync");
+        source.Should().NotContain("GetAwaiter().GetResult()");
         source.Should().NotContain("AvaloniaSaveChangesDialog.ShowAsync(");
         source.Should().NotContain("Do you want to save changes to");
         source.Should().NotContain("Content = \"Don't save\"");

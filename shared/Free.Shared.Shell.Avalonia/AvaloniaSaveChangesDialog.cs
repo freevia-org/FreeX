@@ -30,6 +30,8 @@ public sealed record AvaloniaSaveChangesPromptText(
 /// </summary>
 public sealed class AvaloniaSaveChangesDialog : Window
 {
+    private readonly Button _saveButton;
+
     private AvaloniaSaveChangesDialog(AvaloniaSaveChangesPromptText text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -47,6 +49,12 @@ public sealed class AvaloniaSaveChangesDialog : Window
             Margin = new Thickness(16, 16, 16, 20),
         };
 
+        _saveButton = CreateButton(
+            text.SaveButtonText,
+            SaveChangesPrompt.Save,
+            isDefault: true,
+            isCancel: false,
+            margin: default);
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -54,7 +62,7 @@ public sealed class AvaloniaSaveChangesDialog : Window
             Margin = new Thickness(16, 0, 16, 16),
             Children =
             {
-                CreateButton(text.SaveButtonText, SaveChangesPrompt.Save, isDefault: true, isCancel: false, margin: default),
+                _saveButton,
                 CreateButton(text.DontSaveButtonText, SaveChangesPrompt.DontSave, isDefault: false, isCancel: false, margin: new Thickness(8, 0, 0, 0)),
                 CreateButton(text.CancelButtonText, SaveChangesPrompt.Cancel, isDefault: false, isCancel: true, margin: new Thickness(8, 0, 0, 0)),
             },
@@ -64,6 +72,7 @@ public sealed class AvaloniaSaveChangesDialog : Window
         {
             Children = { message, buttons },
         };
+        Opened += (_, _) => _saveButton.Focus();
     }
 
     public static Task<SaveChangesPrompt> ShowAsync(
