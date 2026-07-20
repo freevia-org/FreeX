@@ -9,6 +9,12 @@ public readonly record struct GridCommentPreviewPlacement(
     double Width,
     double MaxHeight);
 
+/// <summary>
+/// The two endpoints of the connector line that anchors an always-shown (pinned) note box back to
+/// the cell corner it was raised from -- matching Excel's pinned-note leader line.
+/// </summary>
+public readonly record struct GridCommentConnectorLine(Point Start, Point End);
+
 public static class GridCommentPreviewPlacementPlanner
 {
     public const double EdgePadding = 8;
@@ -54,6 +60,31 @@ public static class GridCommentPreviewPlacementPlanner
             y = EdgePadding;
 
         return new GridCommentPreviewPlacement(x, y, width, height);
+    }
+
+    /// <summary>
+    /// Computes the connector line that bridges a pinned note box back to the corner of the cell it
+    /// was raised from, so two or more pinned boxes floating near each other remain unambiguous about
+    /// which cell each one belongs to (Excel draws this same leader line for a persistent note box
+    /// that isn't flush against its cell). The anchor corner is chosen to match whichever side
+    /// <see cref="Calculate(Rect, Size, Size)"/> placed the box on (left or right of the cell), using
+    /// the box's own placement result rather than re-deriving it, so the line always lands on the
+    /// actual rendered box edge even after edge-of-viewport clamping.
+    /// </summary>
+    public static GridCommentConnectorLine CalculateConnector(Rect cellRect, GridCommentPreviewPlacement placement)
+    {
+        var boxCenterX = placement.HorizontalOffset + placement.Width / 2;
+        var cellCenterX = cellRect.Left + cellRect.Width / 2;
+        var boxIsRight = boxCenterX >= cellCenterX;
+
+        var cellAnchor = boxIsRight
+            ? new Point(cellRect.Right, cellRect.Top)
+            : new Point(cellRect.Left, cellRect.Top);
+        var boxAnchor = boxIsRight
+            ? new Point(placement.HorizontalOffset, placement.VerticalOffset)
+            : new Point(placement.HorizontalOffset + placement.Width, placement.VerticalOffset);
+
+        return new GridCommentConnectorLine(cellAnchor, boxAnchor);
     }
 
     public static Size EstimatePreviewSize(CellCommentDisplay display)

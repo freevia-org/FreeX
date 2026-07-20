@@ -111,9 +111,10 @@ public static class HyperlinkNavigationPlanner
 
     /// <summary>
     /// If the cell at <paramref name="address"/> holds a formula whose top-level call is
-    /// HYPERLINK(link_location, ...) with a literal string link_location, returns that literal text.
-    /// Non-literal (e.g. cell-reference) link_location arguments are not evaluated here and are left
-    /// unresolved, matching the planner's existing "no dynamic evaluation" scope.
+    /// HYPERLINK(link_location, ...), returns the resolved link_location text: a literal string
+    /// argument is used as-is, and any other expression (a cell reference, concatenation, nested
+    /// function call, etc.) is evaluated against the sheet so the cell is click-navigable exactly
+    /// like Excel, which does not require link_location to be a literal.
     /// </summary>
     private static bool TryGetHyperlinkFormulaTarget(Sheet sheet, CellAddress address, out string target)
     {
@@ -138,11 +139,45 @@ public static class HyperlinkNavigationPlanner
             return false;
         }
 
-        if (call.Arguments[0] is not StringNode { Value: { Length: > 0 } linkText })
+        if (call.Arguments[0] is StringNode { Value: { Length: > 0 } linkText })
+        {
+            target = linkText;
+            return true;
+        }
+
+        var value = new FormulaEvaluator().Evaluate(call.Arguments[0], sheet, currentCell: address);
+        if (!TryScalarToHyperlinkText(value, out var computedTarget))
             return false;
 
-        target = linkText;
+        target = computedTarget;
         return true;
+    }
+
+    /// <summary>
+    /// Converts a HYPERLINK() link_location's computed scalar result to display/navigation text,
+    /// matching Excel's own coercion (numbers/dates use their plain numeric text, booleans use
+    /// TRUE/FALSE). Errors, blanks, and ranges are not valid link locations and are left unresolved.
+    /// </summary>
+    private static bool TryScalarToHyperlinkText(ScalarValue value, out string text)
+    {
+        switch (value)
+        {
+            case TextValue { Value.Length: > 0 } t:
+                text = t.Value;
+                return true;
+            case NumberValue n:
+                text = n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return true;
+            case DateTimeValue d:
+                text = d.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return true;
+            case BoolValue b:
+                text = b.Value ? "TRUE" : "FALSE";
+                return true;
+            default:
+                text = "";
+                return false;
+        }
     }
 
     private static bool TryResolveLocalFileTarget(
