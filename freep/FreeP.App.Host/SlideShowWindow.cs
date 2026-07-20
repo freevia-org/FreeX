@@ -919,6 +919,10 @@ public sealed class SlideShowWindow : Window
                 PlayFerrisTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.PageCurl:
+                PlayPageCurlTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -1281,6 +1285,85 @@ public sealed class SlideShowWindow : Window
     {
         var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
         foreach (var polygon in SlideShowHoneycombTransitionPlanner.BuildPolygons(
+                     width, height, progress, plan))
+        {
+            var points = polygon.Points.Select(ToPoint).ToArray();
+            if (points.Length == 0)
+                continue;
+
+            var cell = new StreamGeometry();
+            using (var context = cell.Open())
+            {
+                context.BeginFigure(points[0], isFilled: true, isClosed: true);
+                for (var index = 1; index < points.Length; index++)
+                    context.LineTo(points[index], isStroked: true, isSmoothJoin: false);
+            }
+
+            geometry.Children.Add(cell);
+        }
+
+        return geometry;
+    }
+
+    private void PlayPageCurlTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var curl = SlideShowPageCurlTransitionPlanner.Plan(transition);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = null;
+        _slideCanvas.Refresh();
+
+        if (snapshot is null)
+            return;
+
+        _transitionBackImage.Source = snapshot;
+        _transitionBackImage.Visibility = Visibility.Visible;
+        _transitionBackImage.Clip = BuildPageCurlGeometry(w, h, 0, curl);
+        Grid.SetZIndex(_transitionBackImage, 1);
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildPageCurlGeometry(w, h, progress, curl),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _transitionBackImage.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+            Grid.SetZIndex(_transitionBackImage, 0);
+        };
+        Storyboard.SetTarget(animation, _transitionBackImage);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildPageCurlGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowPageCurlTransitionPlan plan)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var polygon in SlideShowPageCurlTransitionPlanner.BuildPolygons(
                      width, height, progress, plan))
         {
             var points = polygon.Points.Select(ToPoint).ToArray();

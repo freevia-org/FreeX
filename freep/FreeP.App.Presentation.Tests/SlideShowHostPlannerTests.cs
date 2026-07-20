@@ -167,6 +167,8 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Switch, SlideShowTransitionPlaybackKind.Switch)]
     [InlineData(TransitionKind.Orbit, SlideShowTransitionPlaybackKind.Orbit)]
     [InlineData(TransitionKind.Ferris, SlideShowTransitionPlaybackKind.Ferris)]
+    [InlineData(TransitionKind.PageCurlSingle, SlideShowTransitionPlaybackKind.PageCurl)]
+    [InlineData(TransitionKind.PageCurlDouble, SlideShowTransitionPlaybackKind.FadeFallback)]
     [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]
     public void PlanTransition_GroupsKindsIntoRendererNeutralPlayback(
         TransitionKind kind,
