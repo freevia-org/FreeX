@@ -449,11 +449,11 @@ public class BackstageViewTests
         callbacks.GetCurrentOptions().Should().NotBeNull();
         callbacks.GetDataFolder().Should().NotBeNullOrWhiteSpace();
         callbacks.DirectPrintCapability.Should().NotBeNull();
-        callbacks.DirectPrintCapability!.IsAvailable.Should().BeFalse();
-        callbacks.Print.Should().BeNull();
+        callbacks.DirectPrintCapability!.IsAvailable.Should().BeTrue();
+        callbacks.Print.Should().NotBeNull();
         callbacks.GetDocument().Should().NotBeNull();
         callbacks.PrintPreview.Should().NotBeNull();
-        callbacks.ExportXps.Should().BeNull();
+        callbacks.ExportXps.Should().NotBeNull();
         callbacks.EditProperties.Should().NotBeNull();
         callbacks.Save.Should().NotBeNull();
         callbacks.SaveCopy.Should().NotBeNull();

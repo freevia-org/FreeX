@@ -7803,6 +7803,16 @@ public sealed class DocumentView : Control
             : null;
     }
 
+    /// <summary>The currently selected floating chart, or null when another object kind is active.</summary>
+    public Chart? SelectedFloatingChart()
+    {
+        if (_selectedFloating is not { Kind: "Chart" } selected)
+            return null;
+        return TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            ? run.Chart
+            : null;
+    }
+
     /// <summary>Current floating-object multi-selection as model coordinates.</summary>
     public IReadOnlyList<(int BlockIndex, int RunIndex, string Kind)> SelectedFloatingObjects =>
         _selectedFloatingObjects.AsReadOnly();
@@ -8175,6 +8185,32 @@ public sealed class DocumentView : Control
         RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
     }
 
+    /// <summary>Apply picture correction values through the shared undoable model command.</summary>
+    public void SetSelectedImageAdjust(
+        double brightnessPct,
+        double contrastPct,
+        double saturationPct,
+        double transparencyPct)
+    {
+        if (_selectedFloating is not { Kind: "Image" } selected)
+            return;
+        if (!TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Image is not { IsFloating: true })
+        {
+            return;
+        }
+
+        _bus.Execute(new SetImageAdjustCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            brightnessPct,
+            contrastPct,
+            saturationPct,
+            transparencyPct));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
     /// <summary>Apply a shared Picture Styles preset to the selected picture through one undoable command.</summary>
     public void ApplySelectedImageStyle(PictureStylePreset preset)
     {
@@ -8477,6 +8513,16 @@ public sealed class DocumentView : Control
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
     }
 
+    /// <summary>Set or clear the selected chart title through the shared undoable command.</summary>
+    public void SetChartTitle(string? title)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } selected)
+            return;
+        _bus.Execute(new SetChartTitleCommand(selected.BlockIndex, selected.RunIndex, title));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
     /// <summary>
     /// AV-CHARTTAB: Toggle default axis titles on the selected floating chart.
     /// Undoable + re-renders. No-op when the selected float is not an axis-capable chart.
@@ -8498,6 +8544,20 @@ public sealed class DocumentView : Control
         _bus.Execute(new SetChartAxisTitlesCommand(sel.BlockIndex, sel.RunIndex, categoryTitle, valueTitle));
         InvalidateLayoutAndVisual();
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>Set or clear the selected chart axis titles through the shared undoable command.</summary>
+    public void SetChartAxisTitles(string? categoryTitle, string? valueTitle)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } selected)
+            return;
+        _bus.Execute(new SetChartAxisTitlesCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            categoryTitle,
+            valueTitle));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
     }
 
     /// <summary>

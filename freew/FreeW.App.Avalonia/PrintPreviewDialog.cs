@@ -19,17 +19,20 @@ internal sealed class PrintPreviewDialog : Window
     private readonly DocumentView _preview = new();
     private readonly TextBlock _pageCount = new();
     private readonly Func<Task>? _createPdf;
+    private readonly Func<Task>? _directPrint;
     private readonly BackstageDirectPrintCapability _directPrintCapability;
 
     public PrintPreviewDialog(
         TextDocument document,
         string displayName,
         Func<Task>? createPdf = null,
-        BackstageDirectPrintCapability? directPrintCapability = null)
+        BackstageDirectPrintCapability? directPrintCapability = null,
+        Func<Task>? directPrint = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
         _createPdf = createPdf;
+        _directPrint = directPrint;
         _directPrintCapability = directPrintCapability ?? BackstageDirectPrintCapability.Deferred();
 
         var titleName = string.IsNullOrWhiteSpace(displayName) ? "Untitled" : displayName;
@@ -96,7 +99,7 @@ internal sealed class PrintPreviewDialog : Window
         var printButton = new Button
         {
             Content = _directPrintCapability.IsAvailable ? "Print" : BackstageViewTextResources.CreatePdfLabel,
-            IsEnabled = !_directPrintCapability.IsAvailable && _createPdf is not null,
+            IsEnabled = _directPrintCapability.IsAvailable ? _directPrint is not null : _createPdf is not null,
             Margin = new Thickness(12, 8, 6, 8),
             Padding = new Thickness(14, 6),
         };
@@ -106,7 +109,9 @@ internal sealed class PrintPreviewDialog : Window
             _directPrintCapability.IsAvailable
                 ? _directPrintCapability.ActionDescription
                 : _directPrintCapability.DeferredNote ?? _directPrintCapability.ActionDescription);
-        if (!_directPrintCapability.IsAvailable && _createPdf is not null)
+        if (_directPrintCapability.IsAvailable && _directPrint is not null)
+            printButton.Click += async (_, _) => await _directPrint();
+        else if (!_directPrintCapability.IsAvailable && _createPdf is not null)
             printButton.Click += async (_, _) => await _createPdf();
         DockPanel.SetDock(printButton, Dock.Left);
         toolbar.Children.Add(printButton);
