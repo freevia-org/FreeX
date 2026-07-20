@@ -3108,6 +3108,42 @@ public sealed class SetChartColorSchemeCommand(int paragraphIndex, int runIndex,
 }
 
 /// <summary>
+/// Apply a built-in <see cref="ChartQuickLayout"/> to the chart carried by the run at
+/// (paragraphIndex, runIndex). The layout id is an overlay interpreted by the shared chart planner;
+/// chart data, style, colours, titles, and explicit element defaults remain intact. Snaps the prior
+/// layout id for undo. No-op when the run carries no chart.
+/// </summary>
+public sealed class SetChartQuickLayoutCommand(
+    int paragraphIndex,
+    int runIndex,
+    ChartQuickLayout layout) : IDocumentCommand
+{
+    private int _previous;
+    private bool _applied;
+
+    public string Label => "Change Chart Layout";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart)
+            return;
+
+        _previous = chart.QuickLayoutId;
+        chart.QuickLayoutId = layout.Id;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart)
+            return;
+
+        chart.QuickLayoutId = _previous;
+        _applied = false;
+    }
+}
+
+/// <summary>
 /// Set whether the chart carried by the run at (paragraphIndex, runIndex) shows a legend.
 /// Snaps the prior legend flag and quick-layout id for undo. No-op when the run carries no chart.
 /// </summary>

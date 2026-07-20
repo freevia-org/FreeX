@@ -1496,6 +1496,58 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ChartDesign_QuickLayoutCatalogCommandsMatchSelectionMutationAndUndoBehavior()
+    {
+        foreach (var layout in ChartQuickLayout.Catalog)
+        {
+            var editor = new DocumentView();
+            editor.Model.Blocks.Clear();
+            editor.Model.Blocks.Add(new Paragraph("Before"));
+            editor.InsertChart(Chart.Create(
+                ChartKind.Column,
+                ["A", "B"],
+                [1.0, 2.0],
+                seriesName: "Sales",
+                title: "Revenue"));
+            var chart = editor.SelectedChart()!;
+            chart.ShowLegend = true;
+            chart.CategoryAxisTitle = "Quarter";
+            chart.ValueAxisTitle = "USD";
+            chart.StyleId = 7;
+            chart.ColorSchemeId = "mono-blue";
+            var categories = chart.Categories.ToArray();
+            var values = chart.Series[0].Values.ToArray();
+
+            var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+            registry.TryGet($"freew.chart-quick-layout-{layout.Id}", out var command).Should().BeTrue();
+            var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+            stateful.GetState().IsEnabled.Should().BeTrue();
+
+            command!.Execute(RibbonCommandContext.Empty);
+
+            chart.QuickLayoutId.Should().Be(layout.Id);
+            chart.StyleId.Should().Be(7);
+            chart.ColorSchemeId.Should().Be("mono-blue");
+            chart.Categories.Should().Equal(categories);
+            chart.Series[0].Values.Should().Equal(values);
+            editor.SelectedChart().Should().BeSameAs(chart);
+
+            editor.Commands.Undo().Should().BeTrue();
+            chart.QuickLayoutId.Should().Be(0);
+            editor.Commands.Redo().Should().BeTrue();
+            chart.QuickLayoutId.Should().Be(layout.Id);
+        }
+
+        var emptyRegistry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        foreach (var layout in ChartQuickLayout.Catalog)
+        {
+            emptyRegistry.TryGet($"freew.chart-quick-layout-{layout.Id}", out var command).Should().BeTrue();
+            command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject
+                .GetState().IsEnabled.Should().BeFalse();
+        }
+    }
+
+    [StaFact]
     public void ChartDesign_ColorSchemeRibbonCommandMutatesSelectedChartAndUndoRestoresIt()
     {
         var editor = new DocumentView();

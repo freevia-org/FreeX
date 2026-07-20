@@ -198,6 +198,15 @@ internal static class FreeWCommandInventory
             "Applies the selected chart style gallery item through the WPF and Avalonia ribbon command registries and keeps the style change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_StyleGalleryCommandMutatesSelectedChartAndUndoRestoresIt",
             "ChartSmartArtContextualTabTests.SetChartStyle_command_changes_style_id_and_reverts_on_undo"),
+        ["freew.chart-quick-layout-1"] = ChartQuickLayoutEvidence("Layout 1"),
+        ["freew.chart-quick-layout-2"] = ChartQuickLayoutEvidence("Layout 2"),
+        ["freew.chart-quick-layout-3"] = ChartQuickLayoutEvidence("Layout 3"),
+        ["freew.chart-quick-layout-4"] = ChartQuickLayoutEvidence("Layout 4"),
+        ["freew.chart-quick-layout-5"] = ChartQuickLayoutEvidence("Layout 5"),
+        ["freew.chart-quick-layout-6"] = ChartQuickLayoutEvidence("Layout 6"),
+        ["freew.chart-quick-layout-7"] = ChartQuickLayoutEvidence("Layout 7"),
+        ["freew.chart-quick-layout-8"] = ChartQuickLayoutEvidence("Layout 8"),
+        ["freew.chart-quick-layout-9"] = ChartQuickLayoutEvidence("Layout 9"),
         ["freew.chart-color-mono-blue"] = ChartCommandEvidence(
             "Applies the monochromatic blue chart color palette through the WPF chart-color command and the Avalonia chart-colors alias, keeping the change undoable in both shells.",
             "FreeWRibbonParityTests.ChartDesign_ColorSchemeRibbonCommandMutatesSelectedChartAndUndoRestoresIt",
@@ -639,6 +648,12 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
                 Test: avaloniaTest));
+
+    private static CommandBehaviorEvidence ChartQuickLayoutEvidence(string layoutName) =>
+        ChartCommandEvidence(
+            $"Applies {layoutName} from the shared nine-entry chart layout catalog in both shells, preserves chart data and style, follows selection enablement, and supports undo/redo.",
+            "FreeWRibbonParityTests.ChartDesign_QuickLayoutCatalogCommandsMatchSelectionMutationAndUndoBehavior",
+            "ChartSmartArtContextualTabTests.ChartQuickLayoutCatalog_commands_apply_preserve_selection_and_support_undo_redo");
 
     private static CommandBehaviorEvidence BackstagePrintEvidence(string summary) =>
         new(

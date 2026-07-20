@@ -2542,15 +2542,10 @@ public sealed class DocumentView : RichTextBox
     public void ApplySelectedChartQuickLayout(ChartQuickLayout layout)
     {
         CommitToModel();
-        var chart = SelectedChartLocation().Chart;
-        if (chart is null)
+        var location = SelectedChartLocation();
+        if (location.Chart is null)
             return;
-        chart.QuickLayoutId = layout.Id;
-        // Sync model toggle fields to match the layout's intent so that charts without
-        // QuickLayoutId still display consistently when the id is later cleared.
-        if (!string.IsNullOrEmpty(chart.Title))
-            chart.ShowLegend = layout.ShowLegend;
-        Render();
+        _commands.Execute(new SetChartQuickLayoutCommand(location.BlockIndex, location.RunIndex, layout));
     }
 
     // ── SmartArt selection (mirrors SelectedChart / SelectedChartLocation) ────────────────────────

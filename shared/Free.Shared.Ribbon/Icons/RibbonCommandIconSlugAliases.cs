@@ -66,6 +66,11 @@ public static class RibbonCommandIconSlugAliases
             ["multilevel-preset-1"] = "multilevel-define", ["multilevel-preset-2"] = "multilevel-define",
             ["printlayout"] = "print-layout", ["reset-style-set"] = "style-set", ["reviewingpane"] = "reviewing-pane",
             ["weblayout"] = "web-layout",
+            ["layout-1"] = "chart-quick-layout-1", ["layout-2"] = "chart-quick-layout-2",
+            ["layout-3"] = "chart-quick-layout-3", ["layout-4"] = "chart-quick-layout-4",
+            ["layout-5"] = "chart-quick-layout-5", ["layout-6"] = "chart-quick-layout-6",
+            ["layout-7"] = "chart-quick-layout-7", ["layout-8"] = "chart-quick-layout-8",
+            ["layout-9"] = "chart-quick-layout-9",
         };
 
     public static bool TryGetCanonicalSlug(string slug, out string canonicalSlug) =>

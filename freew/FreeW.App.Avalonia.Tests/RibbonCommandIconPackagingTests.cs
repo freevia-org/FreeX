@@ -69,19 +69,30 @@ public sealed class RibbonCommandIconPackagingTests
         var iconDirectory = Path.Combine(AppContext.BaseDirectory, "Resources", "CommandIconsSvg");
         Directory.Exists(iconDirectory).Should().BeTrue();
 
-        var candidateMethod = typeof(AvaloniaRibbonIcons).GetMethod(
-            "GetCommandIconSlugCandidates",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        candidateMethod.Should().NotBeNull();
-
         foreach (var alias in RemovedExactDuplicateSlugs)
         {
             var canonical = RibbonCommandIconSlugAliases.GetCandidates(alias).First();
-            var candidates = ((IEnumerable<string>)candidateMethod!.Invoke(null, [alias])!).ToArray();
+            var candidates = RibbonCommandIconPolicy.GetCommandIconSlugCandidates(alias).ToArray();
 
             candidates.First().Should().Be(canonical, alias);
             File.Exists(Path.Combine(iconDirectory, canonical + ".svg")).Should().BeTrue(alias);
             File.Exists(Path.Combine(iconDirectory, alias + ".svg")).Should().BeFalse(alias);
+        }
+    }
+
+    [Fact]
+    public void Chart_quick_layout_labels_resolve_to_packaged_Wpf_assets()
+    {
+        var iconDirectory = Path.Combine(AppContext.BaseDirectory, "Resources", "CommandIconsSvg");
+
+        for (var id = 1; id <= 9; id++)
+        {
+            var labelSlug = $"layout-{id}";
+            var canonical = $"chart-quick-layout-{id}";
+            RibbonCommandIconPolicy.GetCommandIconSlugCandidates(labelSlug)
+                .First().Should().Be(canonical);
+            File.Exists(Path.Combine(iconDirectory, canonical + ".svg"))
+                .Should().BeTrue($"Layout {id} must reuse WPF's chart quick-layout asset");
         }
     }
 
