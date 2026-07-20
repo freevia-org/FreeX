@@ -172,6 +172,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Ripple, SlideShowTransitionPlaybackKind.Ripple)]
     [InlineData(TransitionKind.Wind, SlideShowTransitionPlaybackKind.Wind)]
     [InlineData(TransitionKind.Curtains, SlideShowTransitionPlaybackKind.Curtains)]
+    [InlineData(TransitionKind.Shred, SlideShowTransitionPlaybackKind.Shred)]
     [InlineData(TransitionKind.PageCurlSingle, SlideShowTransitionPlaybackKind.PageCurl)]
     [InlineData(TransitionKind.PageCurlDouble, SlideShowTransitionPlaybackKind.PageCurl)]
     [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]
