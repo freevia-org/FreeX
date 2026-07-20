@@ -486,7 +486,7 @@ public static class FreeWRibbon
                     g.Icon("freew.different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
                 });
                 // Single-command group → Large.
-                tab.Group("paragraph", "Paragraph", "A", 76, g =>
+                tab.Group("paragraph", paragraphGroup.Label, "A", 76, g =>
                 {
                     // Indent-decrease/increase and line-spacing carry over from Home; the four numeric
                     // combos below are unique to the Layout tab and mirror Word's Layout > Paragraph group
