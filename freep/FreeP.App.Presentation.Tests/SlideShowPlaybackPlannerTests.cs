@@ -471,6 +471,30 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void FracturePlanner_BuildsDeterministicCenterFirstShards()
+    {
+        var plan = SlideShowFractureTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Fracture,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.Reverse.Should().BeFalse();
+
+        var closed = SlideShowFractureTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowFractureTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowFractureTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowFractureTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().NotBeEmpty();
+        partial.Should().OnlyContain(shard => shard.Points.Count == 4);
+        open.Should().HaveCount(1);
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+    }
+
+    [Fact]
     public void PageCurlPlanner_FoldsOutgoingPageToEmptyClip()
     {
         var plan = SlideShowPageCurlTransitionPlanner.Plan(new SlideTransition
