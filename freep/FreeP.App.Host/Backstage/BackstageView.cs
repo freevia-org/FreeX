@@ -35,6 +35,7 @@ internal sealed class BackstageView : UserControl
     private readonly FileCommands _file;
     private readonly BackstageActions _actions;
     private readonly SisterBackstageHostController _backstage;
+    private string? _evidencePaneLabel;
 
     public BackstageView(Func<Presentation> getModel, FileCommands file, BackstageActions actions)
     {
@@ -55,7 +56,13 @@ internal sealed class BackstageView : UserControl
 
     public void Show() => _backstage.Show();
 
-    internal void Show(string paneLabelOrAutomationId) => _backstage.Show(paneLabelOrAutomationId);
+    internal void Show(string paneLabelOrAutomationId)
+    {
+        _evidencePaneLabel = paneLabelOrAutomationId;
+        _backstage.Show(paneLabelOrAutomationId);
+    }
+
+    internal string? EvidencePaneLabel => _evidencePaneLabel;
 
     internal UIElement? CurrentPaneContent => _backstage.Frame.CurrentPaneContent;
 

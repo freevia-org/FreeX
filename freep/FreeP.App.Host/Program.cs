@@ -18,6 +18,9 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if (WpfWholeWindowVisualEvidenceCapture.TryRun(args, out var wholeWindowCaptureExitCode))
+            return wholeWindowCaptureExitCode;
+
         if (WpfDialogPaneVisualEvidenceCapture.TryRun(args, out var captureExitCode))
             return captureExitCode;
 
