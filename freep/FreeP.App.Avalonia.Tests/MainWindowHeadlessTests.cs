@@ -333,7 +333,7 @@ public sealed class MainWindowHeadlessTests
             if (!ran) return;
             beforeDirty.Should().BeFalse("a new presentation starts as saved through FileCommandWorkflow");
             afterDirty.Should().BeTrue("editing should mark the shared workflow dirty");
-            title.Should().EndWith(" *", "dirty state should still bind to the platform title");
+            title.Should().Be("Untitled * \u2014 FreeP", "Avalonia must use the WPF document-first title order");
         }
         finally
         {
@@ -370,7 +370,7 @@ public sealed class MainWindowHeadlessTests
             if (!ran) return;
             currentPath.Should().Be(deckPath);
             isDirty.Should().BeFalse("opened presentations should be marked saved through FileCommandWorkflow");
-            title.Should().Be($"FreeP \u2014 {Path.GetFileName(deckPath)}");
+            title.Should().Be($"{Path.GetFileName(deckPath)} \u2014 FreeP");
             recentEntries.Select(entry => entry.Path).Should().Contain(deckPath);
         }
         finally
