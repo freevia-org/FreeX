@@ -1817,17 +1817,12 @@ internal static class FreePCommandInventory
     }
 
     private static bool IsAvaloniaPlatformCommand(string commandId) =>
-        commandId.StartsWith("freep.file.", StringComparison.Ordinal) ||
         string.Equals(commandId, "freep.undo", StringComparison.Ordinal) ||
         string.Equals(commandId, "freep.redo", StringComparison.Ordinal);
 
     private static string AvaloniaPlatformCommandNote(string commandId) =>
         commandId switch
         {
-            "freep.file.new" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes New through ApplicationCommands.New, Backstage chrome, and FileCommands.New rather than a generated ribbon control.",
-            "freep.file.open" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Open through ApplicationCommands.Open, Backstage chrome, and FileCommands.Open rather than a generated ribbon control.",
-            "freep.file.save" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Save through ApplicationCommands.Save, Backstage chrome, and FileCommands.Save rather than a generated ribbon control.",
-            "freep.file.save-as" => "Intended shell/profile variance: Avalonia exposes document lifecycle in its generated Home/File ribbon group; WPF routes Save As through ApplicationCommands.SaveAs, Backstage chrome, and FileCommands.SaveAs rather than a generated ribbon control.",
             "freep.undo" => "Intended shell/profile variance: Avalonia exposes Undo in its generated Home/Edit ribbon group; WPF routes Undo through ApplicationCommands.Undo, keyboard bindings, and Editor.Undo rather than a generated ribbon control.",
             "freep.redo" => "Intended shell/profile variance: Avalonia exposes Redo in its generated Home/Edit ribbon group; WPF routes Redo through a routed command, keyboard bindings, and Editor.Redo rather than a generated ribbon control.",
             _ => "Command is present only in one generated platform profile."

@@ -24,6 +24,21 @@ public sealed class PresentationExportPlannerTests
         0x44, 0xAE, 0x42, 0x60, 0x82,
     ];
 
+    [Fact]
+    public void BackstageExportPlan_exposes_only_actions_with_real_export_routes()
+    {
+        var plan = PresentationExportPlanner.BuildBackstageExportPlan();
+        var actions = plan.FixedLayoutActions.Concat(plan.DeferredActions).ToArray();
+
+        actions.Select(action => action.CommandId).Should().BeEquivalentTo(
+            PresentationExportPlanner.PdfExportCommandId,
+            PresentationExportPlanner.NotesPagePdfExportCommandId,
+            PresentationExportPlanner.ImageExportCommandId,
+            PresentationExportPlanner.VideoExportCommandId);
+        actions.Should().NotContain(action => action.Format == PresentationExportFormat.Print,
+            "Print has its own Backstage pane and is not an export action");
+    }
+
     private static Presentation BuildHandoutDeck(int slideCount)
     {
         var presentation = Presentation.CreateEmpty();

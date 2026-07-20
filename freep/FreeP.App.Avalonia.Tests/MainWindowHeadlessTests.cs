@@ -7,10 +7,13 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.Themes.Fluent;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
+using Free.Shared.Shell;
 using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Avalonia.Smoke;
@@ -108,7 +111,9 @@ public sealed class MainWindowHeadlessTests
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
-            var root = window.Content.Should().BeOfType<DockPanel>().Subject;
+            var overlayRoot = window.Content.Should().BeOfType<Grid>().Subject;
+            overlayRoot.Children.Should().HaveCount(2, "the shared client frame and Backstage overlay share one layer root");
+            var root = overlayRoot.Children[0].Should().BeOfType<DockPanel>().Subject;
             childCount = root.Children.Count;
             bottomDockedCount = root.Children.Count(child => DockPanel.GetDock(child) == Dock.Bottom);
             topDockedCount = root.Children.Count(child => DockPanel.GetDock(child) == Dock.Top);
@@ -120,6 +125,87 @@ public sealed class MainWindowHeadlessTests
         topDockedCount.Should().Be(1, "the shared frame keeps the ribbon docked at the top");
         bottomDockedCount.Should().Be(1, "the shared frame keeps the status bar docked at the bottom");
         lastChildFill.Should().BeTrue("the workarea should fill the remaining client frame");
+    }
+
+    [Fact]
+    public async Task Backstage_entries_match_wpf_order_and_entry_kinds()
+    {
+        IReadOnlyList<SisterBackstageEntryPlan<Control>> entries = [];
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            entries = window.BackstageEntries;
+        });
+
+        if (!ran) return;
+        entries.Select(entry => entry.Kind == SisterBackstageEntryKind.Divider ? "|" : entry.Label)
+            .Should().Equal(
+                "Info", "New", "Open", "|", "Save", "Save As", "Print", "Export",
+                "Recent", "New from template", "Account", "Options", "Close");
+        entries.Should().HaveCount(13);
+        entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Pane).Should().Be(7);
+        entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Command).Should().Be(5);
+        entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Divider).Should().Be(1);
+        entries.Where(entry => entry.DockBottom).Select(entry => entry.Label)
+            .Should().Equal("Account", "Options", "Close");
+    }
+
+    [Fact]
+    public async Task Backstage_opens_info_refreshes_print_and_closes_by_escape_or_command()
+    {
+        var openedInfo = false;
+        var openedPrint = false;
+        var printPlanBuilt = false;
+        var escaped = false;
+        var closedByCommand = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.ShowBackstageForTests();
+            openedInfo = window.IsBackstageOpen && window.CurrentBackstagePaneLabel == "Info";
+
+            openedPrint = window.ActivateBackstageEntryForTests("Print") &&
+                window.IsBackstageOpen &&
+                window.CurrentBackstagePaneLabel == "Print";
+            printPlanBuilt = window.LastPrintBackstagePlan is not null;
+
+            escaped = window.HandleBackstageKeyForTests(Key.Escape) && !window.IsBackstageOpen;
+
+            window.ShowBackstageForTests();
+            closedByCommand = window.ActivateBackstageEntryForTests("Close") && !window.IsBackstageOpen;
+        });
+
+        if (!ran) return;
+        openedInfo.Should().BeTrue();
+        openedPrint.Should().BeTrue();
+        printPlanBuilt.Should().BeTrue("Print must use the live shared print workflow");
+        escaped.Should().BeTrue();
+        closedByCommand.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task File_tab_opens_backstage_and_restores_the_selected_content_tab()
+    {
+        var opened = false;
+        var restoredIndex = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var ribbon = window.GetLogicalDescendants().OfType<TabControl>().First();
+            var contentIndex = ribbon.SelectedIndex;
+
+            ribbon.SelectedIndex = 0;
+
+            opened = window.IsBackstageOpen && window.CurrentBackstagePaneLabel == "Info";
+            restoredIndex = ribbon.SelectedIndex;
+            restoredIndex.Should().Be(contentIndex);
+        });
+
+        if (!ran) return;
+        opened.Should().BeTrue();
+        restoredIndex.Should().BeGreaterThan(0, "File is an overlay trigger rather than a content tab");
     }
 
     [Fact]
@@ -136,9 +222,12 @@ public sealed class MainWindowHeadlessTests
         mainWindow.Should().Contain("chrome: ribbon,");
         mainWindow.Should().Contain("workArea: BuildBody(),");
         mainWindow.Should().Contain("statusBar: statusBar");
-        mainWindow.Should().Contain("Content = frame.Root;");
+        mainWindow.Should().Contain("root.Children.Add(frame.Root);");
+        mainWindow.Should().Contain("root.Children.Add(_backstage);");
+        mainWindow.Should().Contain("Content = root;");
+        mainWindow.Should().Contain("onFileTabSelected: ShowBackstage");
         AssertBefore(mainWindow, "SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(", "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
-        AssertBefore(mainWindow, "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "Content = frame.Root;");
+        AssertBefore(mainWindow, "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "Content = root;");
         mainWindow.Should().NotContain("_statusText = new TextBlock");
     }
 
@@ -338,11 +427,11 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public void RibbonDefinition_home_tab_has_file_slides_and_edit_groups()
+    public void RibbonDefinition_home_tab_has_content_and_edit_groups_without_lifecycle_commands()
     {
         var definition = FreePRibbonAvalonia.Build();
         var home = definition.Tabs.Single(t => t.Id == "home");
-        home.Groups.Should().Contain(g => g.Id == "file",   "File group required");
+        home.Groups.Should().NotContain(g => g.Id == "file", "document lifecycle belongs in Backstage");
         home.Groups.Should().Contain(g => g.Id == "slides", "Slides group required");
         home.Groups.Should().Contain(g => g.Id == "clipboard", "Clipboard group required");
         home.Groups.Should().Contain(g => g.Id == "arrange", "Arrange group required");
@@ -351,49 +440,24 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public void RibbonDefinition_file_group_has_new_open_save_commands()
+    public void RibbonDefinition_transitions_group_has_slideshow_commands()
     {
         var definition = FreePRibbonAvalonia.Build();
-        var home  = definition.Tabs.Single(t => t.Id == "home");
-        var file  = home.Groups.Single(g => g.Id == "file");
-        var ids   = file.Controls.Select(i => i.CommandId.Value).ToList();
-        ids.Should().Contain("freep.file.new",     "New command required");
-        ids.Should().Contain("freep.file.open",    "Open command required");
-        ids.Should().Contain("freep.file.save",    "Save command required");
-        ids.Should().Contain("freep.file.save-as", "Save As command required");
-        ids.Should().Contain(PresentationExportPlanner.NotesPagePdfExportCommandId, "notes-page PDF export command required");
-        ids.Should().Contain(PresentationExportPlanner.ImageExportCommandId, "image export command required");
-        ids.Should().Contain(PresentationExportPlanner.VideoExportCommandId, "video export command required");
+        var transitions = definition.Tabs.Single(t => t.Id == "transitions");
+        var slideShow = transitions.Groups.Single(g => g.Id == "slideshow-from-transitions");
+        slideShow.Controls.Select(i => i.CommandId.Value).Should().Equal(
+            "freep.slideshow.from-beginning",
+            "freep.slideshow.from-current-slide",
+            "freep.slideshow.custom-shows");
     }
 
     [Fact]
-    public void RibbonDefinition_avalonia_injections_preserve_order_metadata_and_duplicate_guards()
+    public void RibbonDefinition_avalonia_chart_injection_preserves_order_metadata_and_duplicate_guards()
     {
         var definition = FreePRibbonAvalonia.Build();
-        var home = definition.Tabs.Single(t => t.Id == "home");
-        var file = home.Groups.Single(g => g.Id == "file");
         var insert = definition.Tabs.Single(t => t.Id == "insert");
         var charts = insert.Groups.Single(g => g.Id == "charts");
 
-        var expectedFileSuffix = new[]
-        {
-            PresentationExportPlanner.ImageExportCommandId,
-            PresentationExportPlanner.NotesPagePdfExportCommandId,
-            PresentationExportPlanner.VideoExportCommandId,
-        };
-        file.Controls.Select(control => control.CommandId.Value)
-            .TakeLast(expectedFileSuffix.Length)
-            .Should()
-            .Equal(expectedFileSuffix);
-        file.Controls.Count(control =>
-            control.CommandId.Value == PresentationExportPlanner.NotesPagePdfExportCommandId)
-            .Should().Be(1);
-        file.Controls.Count(control =>
-            control.CommandId.Value == PresentationExportPlanner.ImageExportCommandId)
-            .Should().Be(1);
-        file.Controls.Count(control =>
-            control.CommandId.Value == PresentationExportPlanner.VideoExportCommandId)
-            .Should().Be(1);
         charts.Controls.Select(control => control.CommandId.Value)
             .Last()
             .Should().Be(ChartDataDialogPlanner.EditDataCommandId);
@@ -403,13 +467,10 @@ public sealed class MainWindowHeadlessTests
 
         var expectedMetadata = new Dictionary<string, (RibbonCommandIconKind Icon, string KeyTip)>
         {
-            [PresentationExportPlanner.NotesPagePdfExportCommandId] = (RibbonCommandIconKind.Print, "XN"),
-            [PresentationExportPlanner.ImageExportCommandId] = (RibbonCommandIconKind.Picture, "XI"),
-            [PresentationExportPlanner.VideoExportCommandId] = (RibbonCommandIconKind.Generic, "XV"),
             [ChartDataDialogPlanner.EditDataCommandId] = (RibbonCommandIconKind.ChartTitle, "E"),
         };
 
-        foreach (var control in file.Controls.Concat(charts.Controls))
+        foreach (var control in charts.Controls)
         {
             if (!expectedMetadata.TryGetValue(control.CommandId.Value, out var metadata))
                 continue;

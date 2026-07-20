@@ -1,8 +1,10 @@
 using Avalonia;
+using Free.Shared.AppServices;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Avalonia.Smoke;
+using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
@@ -22,12 +24,13 @@ public sealed class App : Application
             : BrandThemes.FreeP;
         ActiveTheme = theme;
         Resources.MergedDictionaries.Add(AvaloniaThemeApplier.BuildResources(theme, "FreeP"));
+        var options = ApplicationOptionsStore<FreePOptions>.Create().Load();
 
         SisterAvaloniaAppBootstrap.Initialize(
             this,
             new SisterAvaloniaAppBootstrapSpec<MainWindow>(
                 StartupArguments,
-                args => new MainWindow(args),
+                args => new MainWindow(args, loadRecentFilesStore: null, options: options),
                 mainWindow =>
                 {
                     if (LaunchSmokeOptions is { } options)
