@@ -7,9 +7,26 @@ public sealed partial class FormulaEvaluator
     /// <summary>
     /// Per-thread set of named formulas currently being evaluated.
     /// Used to detect and break circular name→name dependency chains.
+    /// Keyed by (name, defining-scope) rather than bare name — see <see cref="NamedFormulaVisitingKey"/> —
+    /// so two textually-distinct sheet-scoped formulas that happen to share a name (e.g.
+    /// Sheet1!Foo and Sheet2!Foo) don't collide with each other when one references the other
+    /// via an explicit sheet qualifier (R50-meta-2): only genuine re-entry into the SAME
+    /// (name, scope) definition is treated as a cycle.
     /// </summary>
     [ThreadStatic]
     private static HashSet<string>? _namedFormulaVisiting;
+
+    /// <summary>
+    /// Builds the cycle-detection key for a named formula, combining its bare name (matched
+    /// case-insensitively, like Excel names) with the id of the sheet it is actually DEFINED/
+    /// scoped in — or no scope suffix at all for a workbook-global definition. Two different
+    /// (name, scope) pairs never collide even when the bare names match, while every path that
+    /// resolves to the exact same underlying definition (whether reached via an unqualified
+    /// reference or an explicit sheet-qualified one) produces the identical key, so real
+    /// circular chains through that single definition are still caught.
+    /// </summary>
+    private static string NamedFormulaVisitingKey(string name, FreeX.Core.Model.SheetId? scopeSheetId) =>
+        scopeSheetId is { } id ? name + "\u0001" + id.Value.ToString("N") : name;
 
     /// <summary>
     /// True when <paramref name="name"/> has the shape of a linked-data-type field access — a
@@ -125,7 +142,17 @@ public sealed partial class FormulaEvaluator
             return false;
         }
 
-        result = EvaluateNamedFormulaText(name, formulaText, context);
+        // context.TryGetNamedFormulaText resolves sheet-scoped-on-the-current-sheet first, then
+        // falls back to the workbook-global definition (see Workbook.TryGetNamedFormulaText) — so
+        // re-derive which tier it actually came from here (via the same IsSheetScopedName check
+        // EvaluateNamedRange/EvaluateArrayOperand already used) so the cycle-detection key below
+        // reflects the formula's real defining scope, not just the calling cell's sheet.
+        FreeX.Core.Model.SheetId? scopeSheetId =
+            IsSheetScopedName(name, context, out var isScopedFormula) && isScopedFormula
+                ? context.CurrentSheet!.Id
+                : null;
+
+        result = EvaluateNamedFormulaText(name, formulaText, context, scopeSheetId);
         return true;
     }
 
@@ -137,12 +164,20 @@ public sealed partial class FormulaEvaluator
     /// context's own current sheet — see that method's summary) using the exact same
     /// cycle-guard/error-handling semantics as the ordinary unqualified path.
     /// </summary>
-    private static ScalarValue EvaluateNamedFormulaText(string name, string formulaText, IEvalContext context)
+    private static ScalarValue EvaluateNamedFormulaText(
+        string name,
+        string formulaText,
+        IEvalContext context,
+        FreeX.Core.Model.SheetId? scopeSheetId)
     {
-        // Cycle detection: if we're already evaluating this name (directly or transitively),
-        // return #REF! to match Excel's circular-reference behaviour.
+        // Cycle detection: if we're already evaluating this exact (name, defining-scope) pair
+        // (directly or transitively), return #REF! to match Excel's circular-reference behaviour.
+        // Keyed by scope (not bare name) so two distinct same-named scoped formulas — e.g.
+        // Sheet1!Foo and Sheet2!Foo — don't falsely collide when one references the other via an
+        // explicit sheet qualifier (R50-meta-2); see NamedFormulaVisitingKey.
         var visiting = _namedFormulaVisiting ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (!visiting.Add(name))
+        var key = NamedFormulaVisitingKey(name, scopeSheetId);
+        if (!visiting.Add(key))
             return ErrorValue.Ref;
 
         try
@@ -161,7 +196,7 @@ public sealed partial class FormulaEvaluator
         }
         finally
         {
-            visiting.Remove(name);
+            visiting.Remove(key);
         }
     }
 
@@ -200,7 +235,7 @@ public sealed partial class FormulaEvaluator
         // outranks a same-named workbook-global range, matching the unqualified precedence rule.
         if (workbook.ScopedNamedFormulas.TryGetValue((node.Name, qualifiedSheet.Id), out var scopedFormulaText))
         {
-            result = EvaluateNamedFormulaText(node.Name, scopedFormulaText, context);
+            result = EvaluateNamedFormulaText(node.Name, scopedFormulaText, context, qualifiedSheet.Id);
             return true;
         }
 
@@ -221,7 +256,11 @@ public sealed partial class FormulaEvaluator
         // this can only find a workbook-global formula, if any.
         if (workbook.TryGetNamedFormulaText(node.Name, qualifiedSheet.Id) is { } formulaText)
         {
-            result = EvaluateNamedFormulaText(node.Name, formulaText, context);
+            // Reached only after the scoped-formula tier above found nothing for
+            // qualifiedSheet.Id, so whatever this call resolves must be the workbook-global
+            // definition — key the cycle guard on the global scope (null), not qualifiedSheet.Id,
+            // so this matches the same global definition's key when reached unqualified too.
+            result = EvaluateNamedFormulaText(node.Name, formulaText, context, scopeSheetId: null);
             return true;
         }
 

@@ -289,7 +289,15 @@ public sealed class Workbook
         if (error is not null)
             throw new ArgumentException(error, nameof(name));
 
+        // NamedRanges/NamedRangeMetadataByName use a case-insensitive comparer. .NET's
+        // Dictionary<TKey,TValue> indexer-set, when an entry already exists under the comparer's
+        // equality, only overwrites the VALUE and leaves the previously-stored KEY text untouched.
+        // Without removing first, a case-only rename (e.g. "revenue" -> "Revenue") would silently
+        // keep enumerating/displaying the old casing even though the caller asked for a rename.
+        NamedRanges.Remove(name);
         NamedRanges[name] = range;
+
+        NamedRangeMetadataByName.Remove(name);
         NamedRangeMetadataByName[name] = metadata ?? NamedRangeMetadata.WorkbookScope;
     }
 
@@ -602,24 +610,38 @@ public sealed class Workbook
         foreach (var (name, range) in NamedRanges.ToList())
         {
             if (range.Start.Sheet == sheetId || range.End.Sheet == sheetId)
+            {
+                // Real Excel does not delete a defined name when the sheet it refers to is
+                // removed — it keeps the name in the Name Manager and rewrites RefersTo to
+                // "#REF!" so it remains visible/repairable (e.g. via the "Names with Errors"
+                // filter). Mirror the same #REF! conversion already used for row/column-shift
+                // deletions that fully consume a name's range (see
+                // RowColumnShiftHelpers.NamedRanges.ConvertNamedRangeToRefError) instead of
+                // dropping the dictionary entry outright.
                 RemoveNamedRange(name);
+                NamedFormulas[name] = "#REF!";
+            }
         }
 
-        // Remove all sheet-scoped names belonging to the deleted sheet (scope == deleted sheet),
-        // AND sheet-scoped names whose TARGET range points at the deleted sheet even though their
-        // scope is a different, surviving sheet (e.g. a Sheet1-scoped name that refers to
-        // Sheet2!$A$1, with Sheet2 being deleted). GridRange cannot represent "#REF!" the way a
-        // named-formula string can, so — mirroring the workbook-global-range branch above, which
-        // already drops (rather than #REF!-rewrites) any global range targeting the deleted sheet —
-        // the dangling scoped range is dropped too instead of surviving with a nonexistent target.
+        // Sheet-scoped names: a name whose SCOPE is the deleted sheet has no sheet left to be
+        // scoped to and is removed entirely (Excel drops a sheet-local name when its own sheet
+        // is deleted). A name scoped to a different, surviving sheet whose TARGET range points
+        // at the deleted sheet (e.g. a Sheet1-scoped name referring to Sheet2!$A$1, with Sheet2
+        // being deleted) keeps its Name Manager entry, converted to a "#REF!" formula the same
+        // way as the workbook-global case above.
         if (_scopedNamedRanges is not null)
         {
             foreach (var (key, scopedRange) in _scopedNamedRanges.ToList())
             {
-                if (key.Sheet == sheetId || scopedRange.Start.Sheet == sheetId || scopedRange.End.Sheet == sheetId)
+                if (key.Sheet == sheetId)
                 {
                     _scopedNamedRanges.Remove(key);
                     _scopedNamedRangeMetadata?.Remove(key);
+                }
+                else if (scopedRange.Start.Sheet == sheetId || scopedRange.End.Sheet == sheetId)
+                {
+                    RemoveScopedNamedRange(key.Name, key.Sheet);
+                    DefineNamedFormula(key.Name, "#REF!", key.Sheet);
                 }
             }
         }

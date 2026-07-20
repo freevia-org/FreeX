@@ -24,7 +24,10 @@ public static partial class BuiltInFunctions
         double nper = ToNumber(nperValue);
         if (!double.IsFinite(nper) || !double.IsFinite(pv) || !double.IsFinite(fv)) return ErrorValue.Num;
         if (nper <= 0 || pv == 0) return ErrorValue.Num;
-        if ((pv > 0 && fv < 0) || (pv < 0 && fv > 0)) return ErrorValue.Num;
+        // Excel only rejects a pv/fv sign mismatch when nper != 1 — at nper=1 the formula
+        // reduces to a plain division (fv/pv - 1), which is well-defined for any signs
+        // (R50-formula-financial-loan-3-2).
+        if (nper != 1 && ((pv > 0 && fv < 0) || (pv < 0 && fv > 0))) return ErrorValue.Num;
         double result = Math.Pow(fv / pv, 1.0 / nper) - 1;
         return NumberResult(result);
     }

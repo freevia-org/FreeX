@@ -121,7 +121,7 @@ public static class WorkbookPdfContentBuilder
         // ScaleTransform(scaleRatio, scaleRatio) once scaleRatio&lt;1, regardless of whether the
         // unscaled content already fits the page. Excel shrinks/grows every printed element in
         // direct proportion to the configured scale, not merely "when it would otherwise overflow".
-        var (colWidths, rowHeights) = ComputeActualGridSizes(
+        var (colWidths, rowHeights, effectiveScaleRatio) = ComputeActualGridSizes(
             sheet, contentPlan, contentWidth, contentHeight, scaleRatio);
 
         // Grid origin: top-left corner in PDF y-up (top = high y).
@@ -168,7 +168,14 @@ public static class WorkbookPdfContentBuilder
                 // first (matching the sheet's authored font sizes) and the result is then scaled, so a
                 // 50% scale on a 10pt font yields 5pt rather than re-clamping back up to the 7pt floor,
                 // and a 200% scale on a 10pt font yields 20pt.
-                var textScale = scaleRatio;
+                //
+                // Use effectiveScaleRatio (scaleRatio further adjusted by ComputeActualGridSizes'
+                // defensive fit-to-page correction), not the raw scaleRatio -- otherwise a fit-to-N-pages
+                // sheet whose already-resolved page count matches its target (so CalculateEffectiveScalePercent
+                // reports ~100%) shrinks the cell grid geometry via the defensive correction but leaves
+                // text rendered at the unscaled size, producing oversized text that overflows its
+                // now-smaller cell.
+                var textScale = effectiveScaleRatio;
                 var fontSize  = Math.Clamp(style.FontSize, 7, 10) * textScale;
                 var fontFace  = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
                 // B&W mode: force font colour to black regardless of style.
@@ -384,7 +391,7 @@ public static class WorkbookPdfContentBuilder
     /// direct proportion to the configured scale -- matching the WPF PrintRenderer path, which
     /// applies its ScaleTransform unconditionally once scaleRatio&lt;1, never only "on overflow".
     /// </summary>
-    private static (double[] ColWidths, double[] RowHeights) ComputeActualGridSizes(
+    private static (double[] ColWidths, double[] RowHeights, double EffectiveScaleRatio) ComputeActualGridSizes(
         Sheet sheet,
         PortablePdfPageContentPlan contentPlan,
         double availableWidth,
@@ -464,7 +471,10 @@ public static class WorkbookPdfContentBuilder
                 rowHeightsPt[i] *= uniformFitScale;
         }
 
-        return (colWidthsPt, rowHeightsPt);
+        // Surface the defensive correction to the caller so text rendered inside these cells can be
+        // scaled by the SAME ratio the grid geometry actually ended up using, not just the raw
+        // configured scaleRatio (see the R50 pagination-3-1 fix at the textScale call site).
+        return (colWidthsPt, rowHeightsPt, scaleRatio * uniformFitScale);
     }
 
     /// <summary>

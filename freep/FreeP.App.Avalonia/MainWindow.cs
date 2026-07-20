@@ -50,11 +50,10 @@ namespace FreeP.App.Avalonia;
 ///   File:   New, Open, Save, Save As
 ///   Slide:  New Slide, Duplicate, Delete
 ///   Insert: Text Box, Table, Chart, Link, Picture, Rectangle, Ellipse
-///   Edit:   Undo, Redo, Find, Replace
+///   Edit:   Undo, Redo, Copy, Cut, Paste, Find, Replace
 ///   Keyboard: Ctrl+N/O/S/Shift+S, Ctrl+Z/Y
 ///
-/// Deferred to later Avalonia parity: transitions, animations, full platform dialogs,
-///   clipboard (full).
+/// Deferred to later Avalonia parity: transitions, animations, and full platform dialogs.
 /// </summary>
 public sealed partial class MainWindow : Window
 {
@@ -99,6 +98,8 @@ public sealed partial class MainWindow : Window
     private Presentation _presentation = Presentation.CreateEmpty();
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
+    private readonly AvaloniaPresentationClipboardService _clipboardService;
+    private Task _clipboardOperation = Task.CompletedTask;
     private readonly FreePOptions _options;
 
     // ── Editing session ────────────────────────────────────────────────────────
@@ -240,6 +241,7 @@ public sealed partial class MainWindow : Window
     internal string StatusTextForTests => _statusText.Text ?? string.Empty;
     internal bool HasWindowIconForTests => Icon is not null;
     internal void RaiseKeyDownForTests(KeyEventArgs args) => MainWindow_KeyDown(this, args);
+    internal Task ClipboardOperationForTests => _clipboardOperation;
     internal int SlidePaneSlideItemCount => _slidePaneList.Items
         .OfType<ListBoxItem>()
         .Count(item => item.Tag is int);
@@ -481,7 +483,9 @@ public sealed partial class MainWindow : Window
         Func<RecentFilesStore>? loadRecentFilesStore,
         FreePOptions? options = null,
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
-        Func<string, Exception, Task>? showFileCommandErrorAsync = null)
+        Func<string, Exception, Task>? showFileCommandErrorAsync = null,
+        IPresentationSystemClipboard? systemClipboard = null,
+        IPresentationClipboardShapeRenderer? clipboardRenderer = null)
     {
         Title = DefaultTitle;
         Width = 1280;
@@ -492,6 +496,10 @@ public sealed partial class MainWindow : Window
         ApplyWindowIcon();
         _options = options ?? new FreePOptions();
         _options.Normalize();
+        _clipboardService = new AvaloniaPresentationClipboardService(
+            systemClipboard ?? new AvaloniaPresentationSystemClipboard(
+                () => TopLevel.GetTopLevel(this)?.Clipboard),
+            clipboardRenderer ?? new AvaloniaClipboardShapeRenderer());
 
         // Build editing session around the initial empty presentation.
         RebuildEditor();
@@ -1634,9 +1642,12 @@ public sealed partial class MainWindow : Window
                 OnDesignHostRequest)));
 
         // Clipboard
-        r.Register("freep.copy", new ActionRibbonCommand(() => Editor.CopySelectedShapes()));
-        r.Register("freep.cut", new ActionRibbonCommand(() => Editor.CutSelectedShapes()));
-        r.Register("freep.paste", new ActionRibbonCommand(() => Editor.Paste()));
+        r.Register("freep.copy", new ActionRibbonCommand(() =>
+            QueueClipboardOperation(() => _clipboardService.CopyAsync(Editor))));
+        r.Register("freep.cut", new ActionRibbonCommand(() =>
+            QueueClipboardOperation(() => _clipboardService.CutAsync(Editor))));
+        r.Register("freep.paste", new ActionRibbonCommand(() =>
+            QueueClipboardOperation(() => _clipboardService.PasteAsync(Editor))));
         r.Register("freep.format-painter", new ActionRibbonCommand(() =>
         {
             Editor.CopyFormatting();
@@ -6279,14 +6290,40 @@ public sealed partial class MainWindow : Window
             case FreePKeyboardCommand.DuplicateCurrentSlide: Editor.DuplicateCurrentSlide(); break;
             case FreePKeyboardCommand.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
             case FreePKeyboardCommand.StartSlideShowFromCurrentSlide: StartSlideShow(fromStart: false); break;
-            case FreePKeyboardCommand.Copy: Editor.CopySelectedShapes(); break;
-            case FreePKeyboardCommand.Cut: Editor.CutSelectedShapes(); break;
-            case FreePKeyboardCommand.Paste: Editor.Paste(); break;
+            case FreePKeyboardCommand.Copy:
+                QueueClipboardOperation(() => _clipboardService.CopyAsync(Editor));
+                break;
+            case FreePKeyboardCommand.Cut:
+                QueueClipboardOperation(() => _clipboardService.CutAsync(Editor));
+                break;
+            case FreePKeyboardCommand.Paste:
+                QueueClipboardOperation(() => _clipboardService.PasteAsync(Editor));
+                break;
             case FreePKeyboardCommand.Find: OpenFindDialog(); break;
             case FreePKeyboardCommand.Replace: OpenFindReplaceDialog(); break;
             case FreePKeyboardCommand.SelectAll: Editor.SelectAll(); break;
             default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
         }
+    }
+
+    private void QueueClipboardOperation(Func<Task> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        _clipboardOperation = RunClipboardOperationAsync(_clipboardOperation, operation);
+    }
+
+    private static async Task RunClipboardOperationAsync(Task preceding, Func<Task> operation)
+    {
+        try
+        {
+            await preceding;
+        }
+        catch
+        {
+            // A failed adapter operation must not prevent later clipboard commands.
+        }
+
+        await operation();
     }
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)

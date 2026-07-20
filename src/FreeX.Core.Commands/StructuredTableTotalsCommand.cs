@@ -217,13 +217,88 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
 
         var totalsRow = table.Range.End.Row;
         _previousTables = sheet.StructuredTables.ToList();
+
+        // Real Excel captures whatever is actually in the totals-row cell (a recognized SUBTOTAL
+        // aggregate, a custom formula, a label, or blank) back into the column's totals definition
+        // before hiding the row, so re-showing it later reproduces the user's last edit instead of
+        // reverting to a stale totalsRowFunction. Capture from the live sheet cells here, while the
+        // totals row still exists, and use the reconciled columns only for what re-appears after
+        // delete — _previousTables (used by Revert) stays the untouched pre-hide snapshot.
+        var reconciledColumns = CaptureManualTotalsEdits(sheet, table);
+        var tablesForDelete = _previousTables
+            .Select(t => t.Id == table.Id ? CopyWith(t, t.Range, columnsOverride: reconciledColumns) : t)
+            .ToList();
+
         _rowCommand = new DeleteRowsCommand(_sheetId, totalsRow);
         var deleteOutcome = _rowCommand.Apply(ctx);
         if (!deleteOutcome.Success)
             return deleteOutcome;
 
-        ReplaceStructuredTables(sheet, BuildTablesAfterDelete(_previousTables, table.Id, totalsRow));
+        ReplaceStructuredTables(sheet, BuildTablesAfterDelete(tablesForDelete, table.Id, totalsRow));
         return new CommandOutcome(true, AffectedCells: [new CellAddress(_sheetId, totalsRow, table.Range.Start.Col)]);
+    }
+
+    private static List<StructuredTableColumnModel> CaptureManualTotalsEdits(Sheet sheet, StructuredTableModel table)
+    {
+        var totalsRow = table.Range.End.Row;
+        var columns = new List<StructuredTableColumnModel>(table.Columns.Count);
+        for (var index = 0; index < table.Columns.Count; index++)
+        {
+            var column = table.Columns[index];
+            var cell = sheet.GetCell(totalsRow, table.Range.Start.Col + (uint)index);
+            columns.Add(ReconcileColumnFromTotalsCell(column, cell));
+        }
+        return columns;
+    }
+
+    private static readonly Dictionary<int, string> SubtotalNumberToTotalsRowFunction = new()
+    {
+        [101] = "average",
+        [102] = "countnums",
+        [103] = "count",
+        [104] = "max",
+        [105] = "min",
+        [107] = "stddev",
+        [109] = "sum",
+        [110] = "var",
+    };
+
+    private static readonly System.Text.RegularExpressions.Regex SubtotalTotalsFormulaPattern = new(
+        @"^SUBTOTAL\(\s*(\d+)\s*,\s*\[.*\]\s*\)$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Reconciles a column's persisted totals definition against what is actually sitting in the
+    /// totals-row cell right now: a recognized <c>SUBTOTAL(n,[Column])</c> aggregate maps back to the
+    /// matching <see cref="StructuredTableColumnModel.TotalsRowFunction"/>, any other formula becomes
+    /// a custom <see cref="StructuredTableColumnModel.TotalsRowFormula"/>, plain text becomes
+    /// <see cref="StructuredTableColumnModel.TotalsRowLabel"/>, and a blank cell clears all three —
+    /// matching Excel's behavior of updating the column's totals kind immediately when the totals
+    /// cell is edited directly.
+    /// </summary>
+    private static StructuredTableColumnModel ReconcileColumnFromTotalsCell(StructuredTableColumnModel column, Cell? cell)
+    {
+        if (cell is null || (!cell.HasFormula && cell.Value is BlankValue))
+            return column with { TotalsRowLabel = null, TotalsRowFunction = null, TotalsRowFormula = null };
+
+        if (cell.HasFormula)
+        {
+            var formulaText = cell.FormulaText!;
+            var match = SubtotalTotalsFormulaPattern.Match(formulaText.Trim());
+            if (match.Success
+                && int.TryParse(match.Groups[1].Value, out var subtotalNumber)
+                && SubtotalNumberToTotalsRowFunction.TryGetValue(subtotalNumber, out var functionName))
+            {
+                return column with { TotalsRowFunction = functionName, TotalsRowFormula = null, TotalsRowLabel = null };
+            }
+
+            return column with { TotalsRowFormula = formulaText, TotalsRowFunction = null, TotalsRowLabel = null };
+        }
+
+        if (cell.Value is TextValue text)
+            return column with { TotalsRowLabel = text.Value, TotalsRowFunction = null, TotalsRowFormula = null };
+
+        return column with { TotalsRowLabel = null, TotalsRowFunction = null, TotalsRowFormula = null };
     }
 
     private static IEnumerable<StructuredTableModel> BuildTablesAfterInsert(
@@ -319,7 +394,8 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
         GridRange range,
         bool? totalsRowShown = null,
         int? totalsRowCount = null,
-        bool updateTotalsRowCount = false)
+        bool updateTotalsRowCount = false,
+        IReadOnlyList<StructuredTableColumnModel>? columnsOverride = null)
     {
         var copy = new StructuredTableModel
         {
@@ -350,7 +426,7 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
             NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
         };
 
-        copy.Columns.AddRange(table.Columns);
+        copy.Columns.AddRange(columnsOverride ?? table.Columns);
         copy.FilterColumns.AddRange(table.FilterColumns);
         return copy;
     }
