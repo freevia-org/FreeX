@@ -42,7 +42,7 @@ public sealed class KeyboardContextParityTests
                 window.Editor.CurrentSlide.Shapes.Should().HaveCount(shapeCountBeforeCut);
 
                 Press(window, Key.F, KeyModifiers.Control).Handled.Should().BeTrue();
-                window.IsFindReplacePaneVisible.Should().BeTrue();
+                window.IsFindReplaceDialogVisible.Should().BeTrue();
                 window.IsFindReplaceReplaceInputVisible.Should().BeFalse();
                 Press(window, Key.H, KeyModifiers.Control).Handled.Should().BeTrue();
                 window.IsFindReplaceReplaceInputVisible.Should().BeTrue();

@@ -20,7 +20,7 @@ public sealed class HeaderFooterCommandRoutingTests
     }
 
     [Fact]
-    public async Task HeaderFooter_command_opens_testable_pane_with_current_state()
+    public async Task HeaderFooter_command_opens_modal_dialog_with_current_state()
     {
         HeaderFooterState? state = null;
         var visible = false;
@@ -36,7 +36,8 @@ public sealed class HeaderFooterCommandRoutingTests
 
             Execute(window.BuildCommandRegistry(), HeaderFooterCommandPlanner.HeaderFooterCommandId);
             state = window.LastHeaderFooterState;
-            visible = window.IsHeaderFooterPaneVisible;
+            visible = window.ActiveHeaderFooterDialog?.IsVisible == true;
+            window.ActiveHeaderFooterDialog?.Close(false);
         });
 
         if (!ran) return;
@@ -56,7 +57,7 @@ public sealed class HeaderFooterCommandRoutingTests
             var window = new MainWindow(Array.Empty<string>());
 
             Execute(window.BuildCommandRegistry(), HeaderFooterCommandPlanner.HeaderFooterCommandId);
-            window.ApplyHeaderFooterForTests(
+            window.ActiveHeaderFooterDialog!.ApplyForTests(
                 showDateTime: true,
                 showFooter: true,
                 showSlideNumber: true,
@@ -90,7 +91,8 @@ public sealed class HeaderFooterCommandRoutingTests
             var window = new MainWindow(Array.Empty<string>());
 
             Execute(window.BuildCommandRegistry(), HeaderFooterCommandPlanner.DateTimeCommandId);
-            window.ApplyHeaderFooterForTests(
+            var dialog = window.ActiveHeaderFooterDialog!;
+            dialog.ApplyForTests(
                 showDateTime: true,
                 showFooter: false,
                 showSlideNumber: false,
@@ -99,7 +101,7 @@ public sealed class HeaderFooterCommandRoutingTests
                 dateTimeMode: HeaderFooterDateTimeMode.Fixed,
                 fixedDateTimeText: "Issued");
 
-            plan = window.LastHeaderFooterApplyPlan;
+            plan = dialog.LastApplyPlan;
             dateRun = window.Editor.Presentation.Slides[0].Shapes
                 .Single(shape => shape.Placeholder?.Type == PlaceholderType.DateTime)
                 .TextBody!.Paragraphs.Single().Runs.Single();
@@ -129,7 +131,8 @@ public sealed class HeaderFooterCommandRoutingTests
             window.Editor.Presentation.Slides.Add(new Slide { LayoutId = "content" });
 
             Execute(window.BuildCommandRegistry(), HeaderFooterCommandPlanner.HeaderFooterCommandId);
-            window.ApplyHeaderFooterForTests(
+            var dialog = window.ActiveHeaderFooterDialog!;
+            dialog.ApplyForTests(
                 showDateTime: true,
                 showFooter: true,
                 showSlideNumber: true,
@@ -137,7 +140,7 @@ public sealed class HeaderFooterCommandRoutingTests
                 scope: HeaderFooterApplyScope.AllSlides,
                 suppressOnTitleSlide: true);
 
-            plan = window.LastHeaderFooterApplyPlan;
+            plan = dialog.LastApplyPlan;
             titleFlags = window.Editor.Presentation.Slides[0].HfVisibility;
             contentFlags = window.Editor.Presentation.Slides[1].HfVisibility;
         });
