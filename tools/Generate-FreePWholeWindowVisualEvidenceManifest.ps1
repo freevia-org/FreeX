@@ -140,10 +140,17 @@ $files = Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File |
 
 $inputPaths = @(
     "freep\FreeP.App.Presentation\WholeWindowVisualEvidenceContract.cs",
+    "freep\FreeP.App.Presentation\FreePShellVisualMetrics.cs",
     "freep\FreeP.App.Host\WpfWholeWindowVisualEvidenceCapture.cs",
+    "freep\FreeP.App.Host\MainWindow.cs",
     "freep\FreeP.App.Host\MainWindow.WholeWindowVisualEvidence.cs",
     "freep\FreeP.App.Avalonia\AvaloniaWholeWindowVisualEvidenceCapture.cs",
+    "freep\FreeP.App.Avalonia\MainWindow.cs",
     "freep\FreeP.App.Avalonia\MainWindow.WholeWindowVisualEvidence.cs",
+    "shared\Free.Shared.Ribbon\RibbonVisualMetrics.cs",
+    "shared\Free.Shared.Ribbon.Wpf\RibbonTabControlFactory.cs",
+    "shared\Free.Shared.Ribbon.Wpf\RibbonWpfRenderer.cs",
+    "shared\Free.Shared.Ribbon.Avalonia\AvaloniaRibbonRenderer.cs",
     "tools\FreeP.RenderCompare\WholeWindowVisualEvidence.cs",
     "tools\FreeP.RenderCompare\ImageDiff.cs"
 )
