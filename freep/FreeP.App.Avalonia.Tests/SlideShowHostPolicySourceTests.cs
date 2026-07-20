@@ -65,6 +65,11 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayWindowTransition(");
         source.Should().Contain("PlayMorphTransition(");
         source.Should().Contain("SlideShowMorphPlanner.Plan(");
+        source.Should().Contain("PlayFlipTransition(");
+        source.Should().Contain("PlayCubeTransition(");
+        source.Should().Contain("PlayRotateTransition(");
+        source.Should().Contain("SlideShowPerspectiveTransitionPlanner.Plan(");
+        source.Should().Contain("BuildPerspectiveMatrix(");
         source.Should().Contain("AnimateWindowTransition(");
         source.Should().Contain("BuildWindowTransitionGeometry(");
         source.Should().Contain("SlideShowPlaybackPlanner.WindowInitialOpenFactor");
