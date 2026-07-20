@@ -112,6 +112,28 @@ internal sealed class HeaderFooterDialog : Window
         string dateTimeFieldType = "datetime1",
         string fixedDateTimeText = "")
     {
+        PrepareForVisualEvidence(
+            showDateTime,
+            showFooter,
+            showSlideNumber,
+            footerText,
+            suppressOnTitleSlide,
+            dateTimeMode,
+            dateTimeFieldType,
+            fixedDateTimeText);
+        return Apply(scope);
+    }
+
+    internal void PrepareForVisualEvidence(
+        bool showDateTime,
+        bool showFooter,
+        bool showSlideNumber,
+        string footerText,
+        bool suppressOnTitleSlide = false,
+        HeaderFooterDateTimeMode dateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
+        string dateTimeFieldType = "datetime1",
+        string fixedDateTimeText = "")
+    {
         _dateTimeCheck.IsChecked = showDateTime;
         _dateFormatCombo.SelectedItem = HeaderFooterCommandPlanner.DateFormatOptions.FirstOrDefault(option =>
             StringComparer.Ordinal.Equals(option.FieldType, dateTimeFieldType)) ??
@@ -123,7 +145,6 @@ internal sealed class HeaderFooterDialog : Window
         _slideNumberCheck.IsChecked = showSlideNumber;
         _dontShowOnTitleSlideCheck.IsChecked = suppressOnTitleSlide;
         UpdateEnabledState();
-        return Apply(scope);
     }
 
     private Control BuildContent()

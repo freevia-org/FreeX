@@ -35,7 +35,7 @@ namespace FreeP.App.Host;
 ///   │  Status bar                              │
 ///   └──────────────────────────────────────────┘
 /// </summary>
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     // Identity/palette for the shared window shell (PowerPoint-style brick title bar; "P" badge).
     private static ShellChromeOptions BuildChromeOptions() => new()

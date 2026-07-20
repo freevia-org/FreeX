@@ -94,6 +94,12 @@ internal sealed class CustomShowDialog : Window
         int targetDropIndex) =>
         ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
 
+    internal void PrepareValidationForVisualEvidence()
+    {
+        _nameBox.Text = string.Empty;
+        OnCreate();
+    }
+
     private Control BuildContent()
     {
         var root = new Grid

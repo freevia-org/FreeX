@@ -18,6 +18,21 @@ internal sealed class HyperlinkDialog : Window
 
     internal Hyperlink? Result { get; private set; }
 
+    internal bool ApplyForVisualEvidence(
+        HyperlinkDialogTargetKind targetKind,
+        string url,
+        int selectedSlideIndex,
+        string tooltip)
+    {
+        _urlRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Url;
+        _slideRadio.IsChecked = targetKind == HyperlinkDialogTargetKind.Slide;
+        _urlBox.Text = url;
+        _slideCombo.SelectedIndex = selectedSlideIndex;
+        _tooltipBox.Text = tooltip;
+        UpdateEnabled();
+        return Apply();
+    }
+
     public HyperlinkDialog(IReadOnlyList<Slide> slides, Hyperlink? current = null)
         : this(HyperlinkDialogPlanner.BuildDialogRequest(slides, current))
     {
@@ -185,7 +200,9 @@ internal sealed class HyperlinkDialog : Window
         _slideCombo.IsEnabled = !isUrl;
     }
 
-    private void OnOk()
+    private void OnOk() => Apply();
+
+    private bool Apply()
     {
         var selectedSlideId = (_slideCombo.SelectedItem as HyperlinkDialogSlideOption)?.Id;
         var plan = HyperlinkDialogPlanner.BuildResult(
@@ -201,11 +218,13 @@ internal sealed class HyperlinkDialog : Window
             var validation = plan.Validation!;
             _validationText.Text = validation.Message;
             FocusField(validation.FocusField);
-            return;
+            return false;
         }
 
         Result = plan.Result;
-        Close(Result);
+        if (IsVisible)
+            Close(Result);
+        return true;
     }
 
     private void FocusField(HyperlinkDialogField field)

@@ -56,7 +56,7 @@ namespace FreeP.App.Avalonia;
 /// Deferred to later Avalonia parity: transitions, animations, full platform dialogs,
 ///   clipboard (full).
 /// </summary>
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     private const string DefaultTitle = "FreeP";
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
