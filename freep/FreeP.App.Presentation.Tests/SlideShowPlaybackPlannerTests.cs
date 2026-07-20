@@ -102,6 +102,17 @@ public sealed class SlideShowPlaybackPlannerTests
         orbit.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Orbit);
         orbit.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Orbit);
 
+        var flythrough = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Flythrough,
+            Direction = TransitionDirection.Right,
+            DurationMs = 640
+        });
+
+        flythrough.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Flythrough);
+        flythrough.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Flythrough);
+        flythrough.DurationMs.Should().Be(640);
+
         var pageCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
             Kind = TransitionKind.PageCurlSingle,
@@ -128,6 +139,7 @@ public sealed class SlideShowPlaybackPlannerTests
     [InlineData(TransitionKind.Switch, TransitionDirection.Right, true, 0.86, 90, 0.18)]
     [InlineData(TransitionKind.Orbit, TransitionDirection.Left, true, 0.64, -180, 0.25)]
     [InlineData(TransitionKind.Ferris, TransitionDirection.Down, false, 0.72, 75, 0.18)]
+    [InlineData(TransitionKind.Flythrough, TransitionDirection.Right, true, 0.48, 0, 0.30)]
     public void PerspectivePlanner_MapsAxisDirectionAndProjection(
         TransitionKind kind,
         TransitionDirection direction,
