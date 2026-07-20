@@ -6,35 +6,26 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.AppServices;
+using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Backstage;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
-using AvaloniaContentControl = global::Avalonia.Controls.ContentControl;
 using AvaloniaGrid = global::Avalonia.Controls.Grid;
-using AvaloniaHorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment;
 
 namespace FreeW.App.Avalonia.Backstage;
 
 /// <summary>
-/// The FreeW Avalonia backstage (File screen): a full-window modal dialog with a left rail of pane
-/// entries and a scrollable content area. The shared <see cref="BackstagePaneSurfacePlanner"/> owns
-/// pane text and row planning; this file keeps the Avalonia-specific layout and controls.
+/// The FreeW Avalonia backstage (File screen). The shared sister Backstage planner and Avalonia frame
+/// own rail order, grouping, docking, selection, command dismissal, and keyboard lifecycle. This class
+/// supplies FreeW's panes and routes actions into the host workflow.
 ///
 /// Opened via <see cref="BackstageView.ShowAsync"/>; dismissed by the Back button or Escape.
 /// </summary>
 internal sealed class BackstageView : Window
 {
-    // ── Brand colors (FreeW teal) ────────────────────────────────────────────
-    // Left rail: teal brand accent from the FreeW palette token set.
-    private static readonly IBrush RailBackground = new SolidColorBrush(Color.FromRgb(0x19, 0x6E, 0x6C));
-    private static readonly IBrush RailForeground = Brushes.White;
-    private static readonly IBrush RailSelectedBackground = new SolidColorBrush(Color.FromRgb(0x12, 0x54, 0x52));
-    private static readonly IBrush RailHoverBackground = new SolidColorBrush(Color.FromRgb(0x1B, 0x7D, 0x7B));
-
-    // Content area chrome
-    private static readonly IBrush ContentBackground = new SolidColorBrush(Color.FromRgb(0xF9, 0xF9, 0xF9));
     internal static readonly IBrush PrimaryInk = new SolidColorBrush(Color.FromRgb(0x19, 0x1F, 0x28));
     internal static readonly IBrush SecondaryInk = new SolidColorBrush(Color.FromRgb(0x5E, 0x67, 0x74));
     private static readonly IBrush SeparatorBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
@@ -43,31 +34,42 @@ internal sealed class BackstageView : Window
         SeparatorBrush = SeparatorBrush,
         DetailLabelVerticalAlignment = VerticalAlignment.Top,
     };
+    private static readonly SisterBackstagePalette Palette = SisterBackstagePalette.FreeW;
+    private static readonly SisterBackstagePaneTextDescriptor PaneText =
+        SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW);
 
     private readonly BackstageCallbacks _callbacks;
-    private readonly AvaloniaContentControl _contentHost = new();
-    private readonly List<Button> _navButtons = [];
-    private BackstagePane _currentPane = BackstagePane.Home;
+    private readonly AvaloniaBackstageFrame _frame;
 
     // ── Public factory ────────────────────────────────────────────────────────
 
     /// <summary>
     /// Build and show the backstage modal. <paramref name="owner"/> is the main window.
     /// </summary>
-    public static Task ShowAsync(Window owner, BackstageCallbacks callbacks, BackstagePane initialPane = BackstagePane.Home)
+    public static async Task ShowAsync(
+        Window owner,
+        BackstageCallbacks callbacks,
+        BackstagePane initialPane = BackstagePane.Home)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(callbacks);
 
+        var priorFocus = owner.FocusManager?.GetFocusedElement();
         var view = new BackstageView(callbacks, initialPane);
-        return view.ShowDialog(owner);
+        await view.ShowDialog(owner);
+
+        owner.Activate();
+        if (priorFocus is InputElement focus && focus.Focusable && focus.IsEffectivelyEnabled)
+            focus.Focus();
+        else
+            owner.Focus();
     }
 
     // ── Construction ─────────────────────────────────────────────────────────
 
     internal BackstageView(BackstageCallbacks callbacks, BackstagePane initialPane = BackstagePane.Home)
     {
-        _callbacks = callbacks;
+        _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
 
         Title = BackstageViewTextResources.WindowTitle;
         Width = 840;
@@ -78,163 +80,70 @@ internal sealed class BackstageView : Window
         ShowInTaskbar = false;
         AutomationProperties.SetAutomationId(this, "FreeWBackstageWindow");
 
-        var shell = BuildShell();
-        Content = shell;
-
-        KeyDown += (_, e) =>
+        var entries = SisterBackstageEntryPlanner.Build(new SisterBackstageEntryPlanSpec<Control>(
+            BuildInfoPane,
+            callbacks.NewDocument,
+            callbacks.Browse,
+            callbacks.Save,
+            callbacks.SaveAs,
+            BuildOpenPane,
+            BuildNewPane,
+            BuildOptionsPane)
         {
-            if (e.Key == Key.Escape)
-            {
-                Close();
-                e.Handled = true;
-            }
-        };
-
-        NavigateTo(initialPane);
-    }
-
-    // ── Layout ────────────────────────────────────────────────────────────────
-
-    private AvaloniaGrid BuildShell()
-    {
-        // Two columns: left rail (200 px) + content area (*)
-        var grid = new AvaloniaGrid
-        {
-            ColumnDefinitions = new ColumnDefinitions("200,*"),
-        };
-        // Build each child ONCE and set its column on the instance that is actually added — building
-        // twice (and setting the column on the discarded copy) left both children in column 0, so the
-        // content area overlapped the nav rail.
-        var leftRail = BuildLeftRail();
-        AvaloniaGrid.SetColumn(leftRail, 0);
-        grid.Children.Add(leftRail);
-        var contentArea = BuildContentArea();
-        AvaloniaGrid.SetColumn(contentArea, 1);
-        grid.Children.Add(contentArea);
-        return grid;
-    }
-
-    private Panel BuildLeftRail()
-    {
-        var panel = new StackPanel
-        {
-            Background = RailBackground,
-            Spacing = 0,
-        };
-        AutomationProperties.SetAutomationId(panel, "BackstageLeftRail");
-
-        // Back button
-        var backBtn = new Button
-        {
-            Content = BackstageViewTextResources.BackButton,
-            Background = Brushes.Transparent,
-            Foreground = RailForeground,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(16, 12),
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
-            FontSize = 13,
-        };
-        AutomationProperties.SetAutomationId(backBtn, "BackstageBackButton");
-        backBtn.Click += (_, _) => Close();
-        panel.Children.Add(backBtn);
-
-        // Separator
-        panel.Children.Add(new Border
-        {
-            Height = 1,
-            Background = RailSelectedBackground,
-            Margin = new Thickness(0, 4, 0, 4),
+            Print = callbacks.Print,
+            SaveCopy = callbacks.SaveCopy,
+            Close = callbacks.CloseDocument,
+            BuildHomePane = BuildHomePane,
+            UseNewPane = true,
+            BuildOpenPane = BuildOpenPane,
+            ImportPdfText = callbacks.ImportPdfText,
+            BuildSharePane = BuildSharePane,
+            BuildSaveAsPane = BuildSaveAsPane,
+            BuildPrintPane = BuildPrintPane,
+            BuildExportPane = BuildExportPane,
+            BuildAccountPane = BuildAccountPane,
+            HideRecentPane = true,
         });
 
-        // Nav entries
-        foreach (var entry in BackstageViewTextResources.RailEntries)
+        _frame = new AvaloniaBackstageFrame(
+            new AvaloniaBackstageAccent(
+                ToColor(Palette.Sidebar),
+                ToColor(Palette.Hover),
+                ToColor(Palette.Selected),
+                ToColor(Palette.Separator)),
+            entries,
+            new AvaloniaBackstageFrameChrome(CreateRailIcon));
+        _frame.Closed += () =>
         {
-            if (Enum.TryParse<BackstagePane>(entry.PaneKey, out var pane))
-                AddNavEntry(panel, pane, entry.Label);
-        }
-
-        // Spacer
-        panel.Children.Add(new Border { Height = 16 });
-
-        var optionsBtn = new Button
-        {
-            Content = BackstageViewTextResources.OptionsButton,
-            Background = Brushes.Transparent,
-            Foreground = RailForeground,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(16, 10),
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
-            FontSize = 13,
+            if (IsVisible)
+                Close();
         };
-        AutomationProperties.SetAutomationId(optionsBtn, "BackstageOptionsButton");
-        optionsBtn.Click += (_, _) =>
-        {
-            Close();
-            _callbacks.OpenOptions();
-        };
-        panel.Children.Add(optionsBtn);
-
-        return panel;
+        Content = _frame;
+        _frame.Show(PaneLabel(initialPane));
     }
 
-    private void AddNavEntry(Panel parent, BackstagePane pane, string label)
+    internal bool IsOpen => _frame.IsOpen;
+
+    internal string? CurrentPaneLabel => _frame.CurrentPaneLabel;
+
+    internal IReadOnlyList<SisterBackstageEntryPlan<Control>> Entries => _frame.Entries;
+
+    internal bool TryActivateEntry(string label) => _frame.TryActivateEntry(label);
+
+    internal bool HandleKey(Key key) => _frame.HandleKey(key);
+
+    private void Dismiss() => _frame.Hide();
+
+    private Action DismissThen(Action action) => () =>
     {
-        var btn = new Button
-        {
-            Content = label,
-            Background = Brushes.Transparent,
-            Foreground = RailForeground,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(16, 10),
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
-            FontSize = 13,
-            Tag = pane,
-        };
-        AutomationProperties.SetAutomationId(btn, $"BackstageNav_{pane}");
-        btn.Click += (_, _) => NavigateTo(pane);
-        _navButtons.Add(btn);
-        parent.Children.Add(btn);
-    }
+        Dismiss();
+        action();
+    };
 
-    private Border BuildContentArea()
+    private static string PaneLabel(BackstagePane pane) => pane switch
     {
-        var area = AvaloniaBackstageChrome.CreateContentArea(new AvaloniaBackstageContentAreaSpec(
-            _contentHost,
-            ContentBackground));
-        AvaloniaGrid.SetColumn(area, 1);
-        return area;
-    }
-
-    // ── Navigation ────────────────────────────────────────────────────────────
-
-    private void NavigateTo(BackstagePane pane)
-    {
-        _currentPane = pane;
-
-        // Update rail button selection highlight
-        foreach (var btn in _navButtons)
-        {
-            var isSelected = btn.Tag is BackstagePane p && p == pane;
-            btn.Background = isSelected ? RailSelectedBackground : Brushes.Transparent;
-        }
-
-        _contentHost.Content = BuildPane(pane);
-    }
-
-    private Control BuildPane(BackstagePane pane) => pane switch
-    {
-        BackstagePane.Home => BuildHomePane(),
-        BackstagePane.Open => BuildOpenPane(),
-        BackstagePane.SaveAs => BuildSaveAsPane(),
-        BackstagePane.Print => BuildPrintPane(),
-        BackstagePane.Share => BuildSharePane(),
-        BackstagePane.Export => BuildExportPane(),
-        BackstagePane.Info => BuildInfoPane(),
-        BackstagePane.Account => BuildAccountPane(),
-        _ => new TextBlock { Text = $"{pane} {BackstageViewTextResources.NotImplementedSuffix}", Foreground = SecondaryInk },
+        BackstagePane.SaveAs => "Save As",
+        _ => pane.ToString(),
     };
 
     // ── Home pane ─────────────────────────────────────────────────────────────
@@ -243,12 +152,28 @@ internal sealed class BackstageView : Window
     {
         var surface = BackstagePaneSurfacePlanner.BuildHomePane(
             _callbacks.GetRecentEntries(),
-            newDocument: () => { Close(); _callbacks.NewDocument(); },
-            openRecent: path => { Close(); _callbacks.OpenRecent(path); },
-            browse: () => { Close(); _callbacks.Browse(); },
-            openMore: () => NavigateTo(BackstagePane.Open));
+            newDocument: DismissThen(_callbacks.NewDocument),
+            openRecent: path => { Dismiss(); _callbacks.OpenRecent(path); },
+            browse: DismissThen(_callbacks.Browse),
+            openMore: _frame.ShowPane("Open"));
 
         return BuildActionGroupContent(surface);
+    }
+
+    private Control BuildNewPane()
+    {
+        var content = new StackPanel { Spacing = 16, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        content.Children.Add(AvaloniaBackstageChrome.CreateHeading(
+            PaneText.TemplateHeading.FallbackText,
+            BackstageChromeStyle));
+        content.Children.Add(AvaloniaBackstageChrome.CreateStackedActionButton(
+            new AvaloniaBackstageStackedActionButtonSpec(
+                PaneText.TemplateTileCaption.FallbackText,
+                PaneText.TemplateFooterText.FallbackText,
+                "BackstageNewBlankDocument",
+                DismissThen(_callbacks.NewDocument)),
+            BackstageChromeStyle));
+        return content;
     }
 
     // ── Open pane ─────────────────────────────────────────────────────────────
@@ -310,8 +235,8 @@ internal sealed class BackstageView : Window
             _callbacks.GetFileFormats(),
             _callbacks.DisplayName,
             _callbacks.CurrentPath,
-            saveAs: () => { Close(); _callbacks.SaveAs(); },
-            saveAsFormat: (ext, filterIndex) => { Close(); _callbacks.SaveAsFormat(ext, filterIndex); });
+            saveAs: DismissThen(_callbacks.SaveAs),
+            saveAsFormat: (ext, filterIndex) => { Dismiss(); _callbacks.SaveAsFormat(ext, filterIndex); });
 
         var content = new StackPanel { Spacing = 20 };
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
@@ -336,12 +261,12 @@ internal sealed class BackstageView : Window
         var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
             _callbacks.DisplayName,
             _callbacks.GetPageSettings(),
-            print: _callbacks.Print,
+            print: _callbacks.Print is { } print ? DismissThen(print) : null,
             printPreview: _callbacks.PrintPreview is null
                 ? null
                 : () =>
                 {
-                    Close();
+                    Dismiss();
                     _callbacks.PrintPreview();
                 },
             directPrintCapability: printCapability);
@@ -412,10 +337,10 @@ internal sealed class BackstageView : Window
         var surface = BackstagePaneSurfacePlanner.BuildSharePane(
             currentPath: _callbacks.CurrentPath,
             fileExists: File.Exists,
-            saveAs: () => { Close(); _callbacks.SaveAs(); },
-            openContainingFolder: path => { Close(); _callbacks.OpenContainingFolder(path); },
-            saveCopy: () => { Close(); _callbacks.SaveAs(); },   // saveCopy → SaveAs (no separate copy-save yet)
-            exportPdf: () => { Close(); _callbacks.ExportPdf(); });
+            saveAs: DismissThen(_callbacks.SaveAs),
+            openContainingFolder: path => { Dismiss(); _callbacks.OpenContainingFolder(path); },
+            saveCopy: DismissThen(_callbacks.SaveCopy),
+            exportPdf: DismissThen(_callbacks.ExportPdf));
 
         return BuildActionGroupContent(surface);
     }
@@ -426,9 +351,9 @@ internal sealed class BackstageView : Window
     {
         var surface = BackstagePaneSurfacePlanner.BuildExportPane(
             _callbacks.GetFileFormats(),
-            exportPdf: () => { Close(); _callbacks.ExportPdf(); },
-            exportXps: null,
-            saveAsFormat: (ext, filterIndex) => { Close(); _callbacks.SaveAsFormat(ext, filterIndex); });
+            exportPdf: DismissThen(_callbacks.ExportPdf),
+            exportXps: _callbacks.ExportXps is { } exportXps ? DismissThen(exportXps) : null,
+            saveAsFormat: (ext, filterIndex) => { Dismiss(); _callbacks.SaveAsFormat(ext, filterIndex); });
 
         return BuildActionGroupContent(surface);
 
@@ -445,7 +370,7 @@ internal sealed class BackstageView : Window
             DisplayName: string.IsNullOrWhiteSpace(_callbacks.DisplayName)
                 ? BackstageViewTextResources.UntitledValue
                 : _callbacks.DisplayName,
-            IsDirty: false,
+            IsDirty: _callbacks.GetIsDirty(),
             Location: _callbacks.CurrentPath,
             CoreProperties: new BackstageCoreProperties(
                 document.Properties.Title,
@@ -453,6 +378,8 @@ internal sealed class BackstageView : Window
                 document.Properties.Subject,
                 document.Properties.Keywords),
             Statistics: BuildInfoDocumentStatistics(),
+            EditPropertiesText: "Edit document properties\u2026",
+            EditProperties: DismissThen(_callbacks.EditProperties),
             ActionGroups: ToInfoActionGroups(safetyGroups)));
 
         return BuildInfoPane(plan);
@@ -471,7 +398,7 @@ internal sealed class BackstageView : Window
         AddDetailRow(
             documentGrid,
             plan.DocumentKindLabel,
-            plan.DisplayName,
+            plan.DisplayName + (plan.IsDirty ? "  (unsaved changes)" : string.Empty),
             "InfoDocumentName");
         AddDetailRow(
             documentGrid,
@@ -485,6 +412,19 @@ internal sealed class BackstageView : Window
         foreach (var field in plan.Properties)
             AddDetailRow(propsGrid, field.Label, field.Value, $"InfoProperty_{field.Label}");
         content.Children.Add(propsGrid);
+
+        if (!string.IsNullOrWhiteSpace(plan.EditPropertiesText) && plan.EditProperties is not null)
+        {
+            var editProperties = new Button
+            {
+                Content = plan.EditPropertiesText,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Padding = new Thickness(12, 6),
+            };
+            AutomationProperties.SetAutomationId(editProperties, "BackstageEditDocumentProperties");
+            editProperties.Click += (_, _) => plan.EditProperties();
+            content.Children.Add(editProperties);
+        }
 
         if (plan.Statistics.Count > 0)
         {
@@ -517,7 +457,7 @@ internal sealed class BackstageView : Window
                 SafeEnvironment(() => Environment.UserName),
                 SafeEnvironment(() => Environment.MachineName),
                 _callbacks.GetDataFolder()),
-            openOptions: () => { Close(); _callbacks.OpenOptions(); });
+            openOptions: DismissThen(_callbacks.OpenOptions));
 
         var content = new StackPanel { Spacing = 16 };
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
@@ -545,6 +485,24 @@ internal sealed class BackstageView : Window
             optionsBtn.Click += (_, _) => openOptions();
         content.Children.Add(optionsBtn);
 
+        return content;
+    }
+
+    private Control BuildOptionsPane()
+    {
+        var content = new StackPanel { Spacing = 16, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        content.Children.Add(BuildPaneHeader("Options", PaneText.OptionsDescription.FallbackText));
+        content.Children.Add(BuildOptionsSummaryGrid());
+
+        var edit = new Button
+        {
+            Content = PaneText.OptionsEditText?.FallbackText ?? "Edit options\u2026",
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(12, 6),
+        };
+        AutomationProperties.SetAutomationId(edit, "BackstageEditOptions");
+        edit.Click += (_, _) => DismissThen(_callbacks.OpenOptions)();
+        content.Children.Add(edit);
         return content;
     }
 
@@ -610,10 +568,10 @@ internal sealed class BackstageView : Window
         BackstagePaneSurfacePlanner.BuildOpenPane(
             _callbacks.GetRecentEntries(),
             filter,
-            openRecent: path => { Close(); _callbacks.OpenRecent(path); },
-            openFolder: folder => { Close(); _callbacks.OpenFolder(folder); },
-            browse: () => { Close(); _callbacks.Browse(); },
-            recoverUnsaved: () => { Close(); _callbacks.RecoverUnsaved(); });
+            openRecent: path => { Dismiss(); _callbacks.OpenRecent(path); },
+            openFolder: folder => { Dismiss(); _callbacks.OpenFolder(folder); },
+            browse: DismissThen(_callbacks.Browse),
+            recoverUnsaved: DismissThen(_callbacks.RecoverUnsaved));
 
     private static void PopulateOpenGroup(
         Panel panel,
@@ -692,12 +650,36 @@ internal sealed class BackstageView : Window
     private Action InfoSafetyAction(BackstageInfoSafetyActionKind kind) =>
         kind switch
         {
-            BackstageInfoSafetyActionKind.MarkAsFinal => () => { Close(); _callbacks.MarkAsFinal(); },
-            BackstageInfoSafetyActionKind.RestrictEditing => () => { Close(); _callbacks.RestrictEditing(); },
-            BackstageInfoSafetyActionKind.InspectDocument => () => { Close(); _callbacks.InspectDocument(); },
-            BackstageInfoSafetyActionKind.CheckAccessibility => () => { Close(); _callbacks.CheckAccessibility(); },
+            BackstageInfoSafetyActionKind.MarkAsFinal => DismissThen(_callbacks.MarkAsFinal),
+            BackstageInfoSafetyActionKind.RestrictEditing => DismissThen(_callbacks.RestrictEditing),
+            BackstageInfoSafetyActionKind.InspectDocument => DismissThen(_callbacks.InspectDocument),
+            BackstageInfoSafetyActionKind.CheckAccessibility => DismissThen(_callbacks.CheckAccessibility),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
         };
+
+    private static Control CreateRailIcon(
+        BackstageIconKind kind,
+        string? commandName,
+        double size,
+        IBrush foreground) =>
+        AvaloniaRibbonIcons.BuildMonochrome(ToRibbonIcon(kind), size, commandName, foreground);
+
+    private static RibbonCommandIconKind ToRibbonIcon(BackstageIconKind kind) => kind switch
+    {
+        BackstageIconKind.Previous => RibbonCommandIconKind.Previous,
+        BackstageIconKind.Grid => RibbonCommandIconKind.Grid,
+        BackstageIconKind.Info => RibbonCommandIconKind.Info,
+        BackstageIconKind.Insert => RibbonCommandIconKind.Insert,
+        BackstageIconKind.GetData => RibbonCommandIconKind.GetData,
+        BackstageIconKind.Share => RibbonCommandIconKind.Share,
+        BackstageIconKind.Save => RibbonCommandIconKind.Save,
+        BackstageIconKind.Print => RibbonCommandIconKind.Print,
+        BackstageIconKind.View => RibbonCommandIconKind.View,
+        BackstageIconKind.WindowClose => RibbonCommandIconKind.Delete,
+        _ => RibbonCommandIconKind.Generic,
+    };
+
+    private static Color ToColor(BackstageRgb color) => Color.FromRgb(color.R, color.G, color.B);
 
     private static Control BuildPaneHeader(string title, string description) =>
         AvaloniaBackstageChrome.CreatePaneHeader(title, description, BackstageChromeStyle);
