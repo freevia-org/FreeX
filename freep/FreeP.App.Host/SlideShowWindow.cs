@@ -891,6 +891,18 @@ public sealed class SlideShowWindow : Window
                 PlayMorphTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Flip:
+                PlayFlipTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Cube:
+                PlayCubeTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Rotate:
+                PlayRotateTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -2224,6 +2236,165 @@ public sealed class SlideShowWindow : Window
             topLeft.Y,
             transform.ScaleDipToScreen(SlideTransform.EmuToDip(shape.ExtentCxEmu)),
             transform.ScaleDipToScreen(SlideTransform.EmuToDip(shape.ExtentCyEmu)));
+    }
+
+    private void PlayFlipTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlayCubeTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlayRotateTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    /// <summary>
+    /// Projects Flip, Cube, and Rotate into a shared two-surface perspective
+    /// exchange. The scale collapse preserves the card/cube silhouette while
+    /// the host remains framework-neutral and does not pretend to have a 3-D
+    /// camera or face-lighting model.
+    /// </summary>
+    private void PlayPerspectiveTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var perspective = SlideShowPerspectiveTransitionPlanner.Plan(transition);
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var centerX = w / 2;
+        var centerY = h / 2;
+        var travelX = plan.IncomingOffsetX * w * perspective.TravelFactor;
+        var travelY = plan.IncomingOffsetY * h * perspective.TravelFactor;
+
+        var incomingScaleX = perspective.HorizontalAxis ? perspective.StartScale : 1;
+        var incomingScaleY = perspective.HorizontalAxis ? 1 : perspective.StartScale;
+        if (!perspective.IsAxisCollapsed)
+        {
+            incomingScaleX = perspective.StartScale;
+            incomingScaleY = perspective.StartScale;
+        }
+
+        var incomingScale = new ScaleTransform(incomingScaleX, incomingScaleY, centerX, centerY);
+        var incomingRotate = new RotateTransform(perspective.StartRotationDegrees, centerX, centerY);
+        var incomingTranslate = new TranslateTransform(travelX, travelY);
+        var incomingTransform = new TransformGroup
+        {
+            Children = { incomingScale, incomingRotate, incomingTranslate }
+        };
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = incomingTransform;
+        Grid.SetZIndex(_slideCanvas, 1);
+        _slideCanvas.Refresh();
+
+        TransformGroup? outgoingTransform = null;
+        if (snapshot is not null)
+        {
+            var outgoingScaleX = perspective.IsAxisCollapsed && perspective.HorizontalAxis
+                ? perspective.StartScale
+                : incomingScaleX;
+            var outgoingScaleY = perspective.IsAxisCollapsed && !perspective.HorizontalAxis
+                ? perspective.StartScale
+                : incomingScaleY;
+            var outgoingScale = new ScaleTransform(outgoingScaleX, outgoingScaleY, centerX, centerY);
+            var outgoingRotate = new RotateTransform(-perspective.StartRotationDegrees, centerX, centerY);
+            var outgoingTranslate = new TranslateTransform(-travelX, -travelY);
+            outgoingTransform = new TransformGroup
+            {
+                Children = { outgoingScale, outgoingRotate, outgoingTranslate }
+            };
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.RenderTransform = outgoingTransform;
+            _transitionBackImage.Opacity = 1;
+            _transitionBackImage.Visibility = Visibility.Visible;
+            Grid.SetZIndex(_transitionBackImage, 0);
+        }
+
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var storyboard = new Storyboard();
+        AddPerspectiveAnimation(storyboard, _slideCanvas, incomingScaleX, incomingScaleY,
+            perspective.StartRotationDegrees, travelX, travelY, duration, ease);
+
+        if (outgoingTransform is not null)
+        {
+            AddPerspectiveAnimation(storyboard, _transitionBackImage, 1, 1,
+                0, 0, 0, duration, ease,
+                endScaleX: incomingScaleX, endScaleY: incomingScaleY,
+                endRotation: -perspective.StartRotationDegrees,
+                endTranslateX: -travelX, endTranslateY: -travelY);
+            var opacity = new DoubleAnimation(1, 0, duration) { EasingFunction = ease };
+            Storyboard.SetTarget(opacity, _transitionBackImage);
+            Storyboard.SetTargetProperty(opacity, new PropertyPath(UIElement.OpacityProperty));
+            storyboard.Children.Add(opacity);
+        }
+
+        storyboard.Completed += (_, _) =>
+        {
+            _slideCanvas.RenderTransform = Transform.Identity;
+            _transitionBackImage.RenderTransform = Transform.Identity;
+            _transitionBackImage.Opacity = 1;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+            Grid.SetZIndex(_slideCanvas, 0);
+            Grid.SetZIndex(_transitionBackImage, 0);
+        };
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static void AddPerspectiveAnimation(
+        Storyboard storyboard,
+        UIElement target,
+        double startScaleX,
+        double startScaleY,
+        double startRotation,
+        double startTranslateX,
+        double startTranslateY,
+        Duration duration,
+        IEasingFunction ease,
+        double? endScaleX = null,
+        double? endScaleY = null,
+        double? endRotation = null,
+        double? endTranslateX = null,
+        double? endTranslateY = null)
+    {
+        var scaleX = new DoubleAnimation(startScaleX, endScaleX ?? 1, duration) { EasingFunction = ease };
+        var scaleY = new DoubleAnimation(startScaleY, endScaleY ?? 1, duration) { EasingFunction = ease };
+        var rotation = new DoubleAnimation(startRotation, endRotation ?? 0, duration) { EasingFunction = ease };
+        var translateX = new DoubleAnimation(startTranslateX, endTranslateX ?? 0, duration) { EasingFunction = ease };
+        var translateY = new DoubleAnimation(startTranslateY, endTranslateY ?? 0, duration) { EasingFunction = ease };
+
+        Storyboard.SetTarget(scaleX, target);
+        Storyboard.SetTarget(scaleY, target);
+        Storyboard.SetTarget(rotation, target);
+        Storyboard.SetTarget(translateX, target);
+        Storyboard.SetTarget(translateY, target);
+        var transformPrefix = "(UIElement.RenderTransform).(TransformGroup.Children)";
+        Storyboard.SetTargetProperty(scaleX,
+            new PropertyPath($"{transformPrefix}[0].(ScaleTransform.ScaleX)"));
+        Storyboard.SetTargetProperty(scaleY,
+            new PropertyPath($"{transformPrefix}[0].(ScaleTransform.ScaleY)"));
+        Storyboard.SetTargetProperty(rotation,
+            new PropertyPath($"{transformPrefix}[1].(RotateTransform.Angle)"));
+        Storyboard.SetTargetProperty(translateX,
+            new PropertyPath($"{transformPrefix}[2].(TranslateTransform.X)"));
+        Storyboard.SetTargetProperty(translateY,
+            new PropertyPath($"{transformPrefix}[2].(TranslateTransform.Y)"));
+        storyboard.Children.Add(scaleX);
+        storyboard.Children.Add(scaleY);
+        storyboard.Children.Add(rotation);
+        storyboard.Children.Add(translateX);
+        storyboard.Children.Add(translateY);
     }
 
     private void PrepareAnimationOverlay(Slide slide)

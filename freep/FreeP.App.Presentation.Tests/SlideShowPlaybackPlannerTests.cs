@@ -48,6 +48,63 @@ public sealed class SlideShowPlaybackPlannerTests
         morph.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Morph);
         morph.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Morph);
         morph.DurationMs.Should().Be(750);
+
+        var cube = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Cube,
+            Direction = TransitionDirection.Left,
+            DurationMs = 640
+        });
+
+        cube.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Cube);
+        cube.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Cube);
+        cube.IncomingOffsetX.Should().Be(1);
+        cube.IncomingOffsetY.Should().Be(0);
+        cube.DurationMs.Should().Be(640);
+
+        var flip = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Flip,
+            Direction = TransitionDirection.Up
+        });
+
+        flip.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Flip);
+        flip.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Flip);
+        flip.IncomingOffsetX.Should().Be(0);
+        flip.IncomingOffsetY.Should().Be(1);
+
+        var rotate = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Rotate,
+            Direction = TransitionDirection.Right
+        });
+
+        rotate.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Rotate);
+        rotate.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Rotate);
+    }
+
+    [Theory]
+    [InlineData(TransitionKind.Flip, TransitionDirection.Right, true, 0.02, 0, 0)]
+    [InlineData(TransitionKind.Cube, TransitionDirection.Left, true, 0.08, -90, 0.12)]
+    [InlineData(TransitionKind.Rotate, TransitionDirection.Down, false, 0.82, 90, 0.04)]
+    public void PerspectivePlanner_MapsAxisDirectionAndProjection(
+        TransitionKind kind,
+        TransitionDirection direction,
+        bool horizontal,
+        double startScale,
+        double rotation,
+        double travel)
+    {
+        var plan = SlideShowPerspectiveTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = kind,
+            Direction = direction
+        });
+
+        plan.HorizontalAxis.Should().Be(horizontal);
+        plan.StartScale.Should().Be(startScale);
+        plan.StartRotationDegrees.Should().Be(rotation);
+        plan.TravelFactor.Should().Be(travel);
     }
 
     [Fact]
