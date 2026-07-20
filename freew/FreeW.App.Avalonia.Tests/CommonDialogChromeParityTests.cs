@@ -74,11 +74,25 @@ public sealed class CommonDialogChromeParityTests
         textBox.FontSize.Should().Be(12);
         comboBox.FontSize.Should().Be(12);
         ((ISolidColorBrush)button.Background!).Color.Should().Be(Color.FromRgb(221, 221, 221));
-        ((ISolidColorBrush)button.BorderBrush!).Color.Should().Be(Color.FromRgb(200, 200, 200));
+        ((ISolidColorBrush)button.BorderBrush!).Color.Should().Be(Color.FromRgb(0, 120, 215));
         ((ISolidColorBrush)listBox.Background!).Color.Should().Be(Colors.White);
         ((ISolidColorBrush)listBox.BorderBrush!).Color.Should().Be(Color.FromRgb(130, 130, 130));
         listBox.BorderThickness.Should().Be(new Thickness(1));
+        ((ISolidColorBrush)comboBox.Background!).Color.Should().Be(Color.FromRgb(240, 240, 240));
         row.Spacing.Should().Be(style.ActionSpacing);
+    }
+
+    [Fact]
+    public void Compact_checkbox_uses_a_closed_thirteen_pixel_indicator_template()
+    {
+        var checkBox = new CheckBox { Content = "Bold" };
+
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(
+            checkBox,
+            AvaloniaCompactDialogChrome.WindowsStyle);
+
+        checkBox.Height.Should().Be(18);
+        checkBox.Template.Should().NotBeNull();
     }
 
     [Fact]

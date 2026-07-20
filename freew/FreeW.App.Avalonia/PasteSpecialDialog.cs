@@ -61,12 +61,13 @@ internal sealed class PasteSpecialDialog : FreeWDialogWindow
         panel.Children.Add(_list);
         panel.Children.Add(_description);
 
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateOkCancelRow(
+        var actionRow = AvaloniaCompactDialogChrome.CreateOkCancelRow(
             Accept,
             () => Close(null),
             buttonWidth: 72,
             margin: new Thickness(0, 4, 0, 0),
-            style: DialogChromeStyle));
+            style: DialogChromeStyle);
+        panel.Children.Add(actionRow);
 
         Content = panel;
         KeyDown += (_, e) =>
@@ -80,6 +81,8 @@ internal sealed class PasteSpecialDialog : FreeWDialogWindow
         Opened += (_, _) =>
         {
             AvaloniaCompactDialogChrome.ApplyListBox(_list, DialogChromeStyle);
+            foreach (var button in actionRow.Children.OfType<Button>())
+                AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 72, button.IsDefault);
             _list.Focus(NavigationMethod.Tab);
         };
     }

@@ -45,17 +45,27 @@ public sealed class PasteStyleDialogParityTests
                 RunFormatting.Default,
                 ParagraphFormatting.Default,
                 null);
+            dialog.Show();
             var labels = dialog.GetLogicalDescendants().OfType<TextBlock>().Select(block => block.Text).ToArray();
+            var name = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
+            var comboBoxes = dialog.GetLogicalDescendants().OfType<ComboBox>().ToArray();
+            var checkBoxes = dialog.GetLogicalDescendants().OfType<CheckBox>().ToArray();
             var buttons = Buttons(dialog);
 
             dialog.SizeToContent.Should().Be(SizeToContent.WidthAndHeight);
             labels.Should().Contain("Text colour:");
             labels.Should().NotContain(StyleDialogPlanner.ValidationMessageFor(StyleDialogValidationError.EmptyName));
+            comboBoxes.Should().HaveCount(5);
+            comboBoxes.Should().OnlyContain(comboBox => comboBox.MinWidth == 280);
+            name.IsFocused.Should().BeTrue();
+            comboBoxes.Should().NotContain(comboBox => comboBox.IsFocused);
+            checkBoxes.Should().OnlyContain(checkBox => checkBox.Height == 18 && checkBox.Template != null);
             buttons.Select(button => button.Content?.ToString()).Should().Equal(
                 ShellStrings.Current.Ok,
                 ShellStrings.Current.Cancel);
             buttons[0].IsDefault.Should().BeTrue();
             buttons[1].IsCancel.Should().BeTrue();
+            dialog.Close();
         }, CancellationToken.None);
     }
 

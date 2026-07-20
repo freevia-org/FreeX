@@ -29,9 +29,9 @@ internal sealed class StyleDialog : FreeWDialogWindow
     private readonly CheckBox _bold = new() { Content = "Bold", Margin = new Thickness(0, 0, 12, 0) };
     private readonly CheckBox _italic = new() { Content = "Italic", Margin = new Thickness(0, 0, 12, 0) };
     private readonly CheckBox _underline = new() { Content = "Underline" };
-    private readonly ComboBox _size = new() { MinWidth = 100 };
-    private readonly ComboBox _color = new() { MinWidth = 160 };
-    private readonly ComboBox _alignment = new() { MinWidth = 160 };
+    private readonly ComboBox _size = new() { MinWidth = 280 };
+    private readonly ComboBox _color = new() { MinWidth = 280 };
+    private readonly ComboBox _alignment = new() { MinWidth = 280 };
     private readonly RunFormatting _seedRun;
     private readonly ParagraphFormatting _seedParagraph;
 
@@ -70,6 +70,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
         _color.SelectedIndex = StyleDialogPlanner.IndexOfColor(seedRun.ColorHex);
         _alignment.ItemsSource = StyleDialogPlanner.AlignmentLabels.ToArray();
         _alignment.SelectedIndex = (int)seedParagraph.Alignment;
+        ApplyCompactChrome();
 
         var effects = new StackPanel { Orientation = Orientation.Horizontal };
         effects.Children.Add(_bold);
@@ -85,12 +86,13 @@ internal sealed class StyleDialog : FreeWDialogWindow
         AddRow(panel, "Text colour:", _color);
         AddRow(panel, "Alignment:", _alignment);
 
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateOkCancelRow(
+        var actionRow = AvaloniaCompactDialogChrome.CreateOkCancelRow(
             () => _ = AcceptAsync(),
             () => Close(null),
             buttonWidth: 72,
             margin: new Thickness(0, 12, 0, 0),
-            style: DialogChromeStyle));
+            style: DialogChromeStyle);
+        panel.Children.Add(actionRow);
         Content = panel;
 
         KeyDown += (_, e) =>
@@ -104,6 +106,8 @@ internal sealed class StyleDialog : FreeWDialogWindow
         Opened += (_, _) =>
         {
             ApplyCompactChrome();
+            foreach (var button in actionRow.Children.OfType<Button>())
+                AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 72, button.IsDefault);
             if (fixedName is null)
                 _name.Focus(NavigationMethod.Tab);
             else
@@ -210,11 +214,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyComboBox(_color, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_alignment, DialogChromeStyle);
         foreach (var checkBox in new[] { _bold, _italic, _underline })
-        {
-            AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
-            checkBox.Height = 18;
-            checkBox.MinHeight = 18;
-        }
+            AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);
     }
 }
 
@@ -252,7 +252,8 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
         _sortOrder.SelectionChanged += (_, _) => RebuildList(SelectedOrder(), SelectedRow()?.Id ?? preselectStyleId);
         _styles.SelectionChanged += (_, _) => SyncButtons();
 
-        var sortRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        _sortOrder.Margin = new Thickness(0, 0, 0, 8);
+        var sortRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
         sortRow.Children.Add(new TextBlock
         {
             Text = "Sort:",
@@ -307,6 +308,8 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
         {
             AvaloniaCompactDialogChrome.ApplyComboBox(_sortOrder, DialogChromeStyle);
             AvaloniaCompactDialogChrome.ApplyListBox(_styles, DialogChromeStyle);
+            foreach (var button in new[] { _apply, _modify, _delete, close })
+                AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 80, button.IsDefault);
             _styles.Focus(NavigationMethod.Tab);
         };
 
