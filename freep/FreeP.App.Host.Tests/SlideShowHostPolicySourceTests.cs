@@ -72,6 +72,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayHoneycombTransition(");
         source.Should().Contain("SlideShowHoneycombTransitionPlanner.Plan(");
         source.Should().Contain("BuildHoneycombTransitionGeometry(");
+        source.Should().Contain("PlayGlitterTransition(");
+        source.Should().Contain("SlideShowGlitterTransitionPlanner.Plan(");
+        source.Should().Contain("BuildGlitterTransitionGeometry(");
         source.Should().Contain("PlaySwitchTransition(");
         source.Should().Contain("PlayOrbitTransition(");
         source.Should().Contain("PlayFerrisTransition(");
