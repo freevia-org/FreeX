@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -58,18 +59,25 @@ public sealed class MainWindow : Window
     private readonly IScreenClipService _screenClipService;
     private readonly DocumentView _editor = new();
     private readonly QuickPartLibrary _quickParts = QuickPartLibrary.Load();
-    private readonly TextBlock _status = SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0));
+    private TextBlock _pageStatus = null!;
+    private TextBlock _sectionStatus = null!;
+    private TextBlock _status = null!;
+    private TextBlock _dataFolderStatus = null!;
     // AV-MAIL: the Mailings engine (recipients / merge fields / preview / finish-merge) shared with the ribbon.
     private MailMergeEngine? _mailMerge;
     private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock _zoomLabel = SisterAppStatusBarChrome.CreateInfoText("100%", margin: new Thickness(8, 0));
+    private TextBlock _zoomLabel = null!;
+    private Slider _zoomSlider = null!;
     private readonly ScaleTransform _zoom = new(1, 1);
-    // Status-bar view-mode buttons (Print / Web / Draft).
-    private readonly Button _btnPrintLayout  = MakeViewModeButton("Print");
-    private readonly Button _btnWebLayout    = MakeViewModeButton("Web");
-    private readonly Button _btnDraftView    = MakeViewModeButton("Draft");
+    private Button _readModeSwitch = null!;
+    private ToggleButton _printLayoutSwitch = null!;
+    private ToggleButton _webLayoutSwitch = null!;
+    private ToggleButton _draftSwitch = null!;
+    private ToggleButton _pagedEditSwitch = null!;
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
+    private readonly Border _titleBar;
+    private IReadOnlyList<Button> _quickAccessButtons = [];
     private readonly FreeWOptions _options;
     private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly AutosaveAdapter _autosave;
@@ -104,6 +112,13 @@ public sealed class MainWindow : Window
     private double _sideToSidePairScrollStrideDip;
     private double _sideToSidePlannedHorizontalOffsetDip;
     private double _zoomScale = 1.0;
+    private bool _updatingZoomSlider;
+    private bool _readMode;
+    private bool _pagedEditMode;
+    private DocumentViewMode _viewModeBeforeReadMode = DocumentViewMode.PrintLayout;
+    private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
+    private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
+    private Thickness _editorMarginBeforeReadMode;
     private bool _suppressEditorDirty;
     private bool _closingConfirmed;
 
@@ -137,12 +152,13 @@ public sealed class MainWindow : Window
         MinWidth = 720;
         MinHeight = 480;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        ApplyWindowIcon();
         _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
             owner: this,
             titleSpec: new SisterAvaloniaFileTitleSpec(
                 ApplicationName: DefaultTitle,
-                Separator: " - ",
-                CollapseCleanUntitledTitle: true),
+                Separator: " \u2014 ",
+                ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: UpdateStatus,
             save: () => SaveAsync().GetAwaiter().GetResult());
@@ -155,12 +171,7 @@ public sealed class MainWindow : Window
         _thesaurusPane = new ThesaurusPane(_editor);
 
         var ribbon = BuildRibbon();
-        var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
-            Background: Brushes.White,
-            LeftContent: _status,
-            RightItems: BuildStatusRightItems(),
-            BorderBrush: new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
-            BorderThickness: new Thickness(0, 1, 0, 0))).Root;
+        var statusBar = BuildStatusBar();
         var findBar = BuildFindBar();
 
         _scroller = new ScrollViewer
@@ -212,10 +223,6 @@ public sealed class MainWindow : Window
         _editor.HyperlinkActivated += OpenExternalUri;
         _editor.ContextMenuCommandRequested += OnEditorContextMenuCommandRequested;
 
-        // Wire view-mode buttons.
-        _btnPrintLayout.Click += (_, _) => SetViewMode(DocumentViewMode.PrintLayout);
-        _btnWebLayout.Click   += (_, _) => SetViewMode(DocumentViewMode.WebLayout);
-        _btnDraftView.Click   += (_, _) => SetViewMode(DocumentViewMode.Draft);
         UpdateViewModeButtons();
         _editor.CellEditRequested += async req =>
         {
@@ -249,8 +256,53 @@ public sealed class MainWindow : Window
             statusBar: statusBar,
             bottomPanelsAboveStatus: [findBar]));
 
-        Content = frame.Root;
+        var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
+            Window: this,
+            Body: frame.Root,
+            TitleBarBackground: ResolveThemeBrush(
+                "FreeWTitleBarBrush",
+                new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))),
+            TitleBarForeground: ResolveThemeBrush("FreeWWhiteBrush", Brushes.White)));
+        _titleBar = windowFrame.TitleBar;
+        _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
+            windowFrame.QatHost,
+            new SisterQuickAccessToolbarActions(
+                Save: () => _ = SaveAsync(),
+                Undo: _editor.Undo,
+                Redo: _editor.Redo),
+            ResolveThemeBrush("FreeWWhiteBrush", Brushes.White));
+
+        Content = windowFrame.Root;
         UpdateStatus();
+    }
+
+    private void ApplyWindowIcon()
+    {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "FreeW.ico");
+        if (!File.Exists(iconPath))
+            return;
+
+        try
+        {
+            using var stream = File.OpenRead(iconPath);
+            Icon = new WindowIcon(stream);
+        }
+        catch
+        {
+            // Unsupported desktop icon formats must not prevent the document from opening.
+        }
+    }
+
+    private static IBrush ResolveThemeBrush(string key, IBrush fallback)
+    {
+        if (Application.Current is { } app &&
+            app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
+            value is IBrush brush)
+        {
+            return brush;
+        }
+
+        return fallback;
     }
 
     public DocumentView Editor => _editor;
@@ -269,6 +321,18 @@ public sealed class MainWindow : Window
     internal ReviewBalloonsPane ReviewBalloonsPane => _reviewBalloonsPane;
     internal bool RibbonKeyTipsVisibleForTest => _ribbonKeyTipsVisible;
     internal Control? RibbonControlForTest => _ribbonControl;
+    internal bool HasWindowIconForTests => Icon is not null;
+    internal Border TitleBarForTests => _titleBar;
+    internal IReadOnlyList<Button> QuickAccessButtonsForTests => _quickAccessButtons;
+    internal IReadOnlyList<Control> StatusViewControlsForTests =>
+        [_readModeSwitch, _printLayoutSwitch, _webLayoutSwitch, _draftSwitch, _pagedEditSwitch];
+    internal string PageStatusForTests => _pageStatus.Text ?? string.Empty;
+    internal string SectionStatusForTests => _sectionStatus.Text ?? string.Empty;
+    internal string CountsStatusForTests => _status.Text ?? string.Empty;
+    internal string DataFolderStatusForTests => _dataFolderStatus.Text ?? string.Empty;
+    internal Slider ZoomSliderForTests => _zoomSlider;
+    internal string ZoomLabelForTests => _zoomLabel.Text ?? string.Empty;
+    internal void ApplyZoomForTests(double scale) => ApplyZoom(scale);
     internal void RaiseKeyDownForTest(KeyEventArgs args) => MainWindow_KeyDown(this, args);
 
     /// <summary>
@@ -1475,6 +1539,8 @@ public sealed class MainWindow : Window
             IsMultiplePagesActive: () => _viewDepthPlan.IsMultiplePagesActive,
             ToggleSideToSide: ToggleSideToSide,
             IsSideToSideActive: () => _viewDepthPlan.IsSideToSideActive,
+            TogglePagedEditView: TogglePagedEditView,
+            IsPagedEditViewActive: () => _pagedEditMode,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
             OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
             OpenEditHyperlinkDialog: () => _ = OpenEditHyperlinkDialogAsync(),
@@ -1870,45 +1936,295 @@ public sealed class MainWindow : Window
         return _findBar;
     }
 
-    private IReadOnlyList<Control> BuildStatusRightItems()
+    private Border BuildStatusBar()
     {
-        var viewModeRow = new StackPanel
+        var white = ResolveThemeBrush("FreeWWhiteBrush", Brushes.White);
+        _pageStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
+        _sectionStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
+        _status = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
+        _dataFolderStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
+        _dataFolderStatus.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(ResolveDataFolderLabel());
+        ToolTip.SetTip(_dataFolderStatus, _dataFolderStatus.Text);
+
+        var dataFolderItem = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                SisterAppStatusBarChrome.CreateSeparator(),
+                _dataFolderStatus,
+            },
+        };
+
+        var left = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            ClipToBounds = true,
+            Children =
+            {
+                _pageStatus,
+                SisterAppStatusBarChrome.CreateSeparator(),
+                _sectionStatus,
+                SisterAppStatusBarChrome.CreateSeparator(),
+                _status,
+                dataFolderItem,
+            },
+        };
+
+        return SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
+            Background: ResolveThemeBrush(
+                "FreeWStatusSurfaceBrush",
+                new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))),
+            LeftContent: left,
+            RightItems: [BuildViewSwitchControl(white), BuildZoomControl(white)])).Root;
+    }
+
+    private Control BuildViewSwitchControl(IBrush foreground)
+    {
+        var panel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4, 0),
-            Children = { _btnPrintLayout, _btnWebLayout, _btnDraftView },
         };
-        return [_zoomLabel, viewModeRow];
+
+        _readModeSwitch = BuildStatusButton(
+            "Read Mode",
+            "Toggle distraction-free Read Mode",
+            RibbonCommandIconKind.ReadMode,
+            foreground,
+            ToggleReadMode);
+        _printLayoutSwitch = BuildStatusToggle(
+            "Print Layout",
+            "Print Layout page view",
+            RibbonCommandIconKind.PrintLayout,
+            foreground,
+            () => SetViewMode(DocumentViewMode.PrintLayout));
+        _webLayoutSwitch = BuildStatusToggle(
+            "Web Layout",
+            "Web Layout: continuous, full-width view",
+            RibbonCommandIconKind.WebLayout,
+            foreground,
+            () => SetViewMode(DocumentViewMode.WebLayout));
+        _draftSwitch = BuildStatusToggle(
+            "Draft",
+            "Draft: simplified continuous view for fast editing",
+            RibbonCommandIconKind.Draft,
+            foreground,
+            () => SetViewMode(DocumentViewMode.Draft));
+        _pagedEditSwitch = BuildStatusToggle(
+            "Page Edit",
+            "Page Edit: editable paginated page boxes",
+            RibbonCommandIconKind.PrintLayout,
+            foreground,
+            TogglePagedEditView);
+
+        panel.Children.Add(_readModeSwitch);
+        panel.Children.Add(_printLayoutSwitch);
+        panel.Children.Add(_webLayoutSwitch);
+        panel.Children.Add(_draftSwitch);
+        panel.Children.Add(_pagedEditSwitch);
+        return panel;
     }
 
-    private static Button MakeViewModeButton(string label) => new()
+    private static Button BuildStatusButton(
+        string name,
+        string helpText,
+        RibbonCommandIconKind icon,
+        IBrush foreground,
+        Action onClick)
     {
-        Content = label,
-        Padding = new Thickness(6, 1),
-        Margin = new Thickness(1, 1),
-        Height = 20,
-        FontSize = 11,
-    };
+        var button = new Button
+        {
+            Content = AvaloniaRibbonIcons.BuildMonochrome(icon, 13, name, foreground),
+            Width = 24,
+            Height = 22,
+            Padding = new Thickness(4, 2),
+            Margin = new Thickness(1, 2),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+        };
+        AutomationProperties.SetName(button, name);
+        AutomationProperties.SetHelpText(button, helpText);
+        ToolTip.SetTip(button, helpText);
+        button.Click += (_, _) => onClick();
+        return button;
+    }
+
+    private static ToggleButton BuildStatusToggle(
+        string name,
+        string helpText,
+        RibbonCommandIconKind icon,
+        IBrush foreground,
+        Action onClick)
+    {
+        var button = new ToggleButton
+        {
+            Content = AvaloniaRibbonIcons.BuildMonochrome(icon, 13, name, foreground),
+            Width = 24,
+            Height = 22,
+            Padding = new Thickness(4, 2),
+            Margin = new Thickness(1, 2),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+        };
+        AutomationProperties.SetName(button, name);
+        AutomationProperties.SetHelpText(button, helpText);
+        ToolTip.SetTip(button, helpText);
+        button.Click += (_, _) => onClick();
+        return button;
+    }
+
+    private Control BuildZoomControl(IBrush foreground)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 10, 0),
+        };
+
+        _zoomSlider = new Slider
+        {
+            Minimum = ZoomLevels.Min,
+            Maximum = ZoomLevels.Max,
+            Value = ZoomLevels.Default,
+            Width = 120,
+            TickFrequency = ZoomLevels.Step,
+            IsSnapToTickEnabled = true,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        AutomationProperties.SetName(_zoomSlider, "Zoom");
+        ToolTip.SetTip(_zoomSlider, "Zoom");
+        _zoomSlider.PropertyChanged += (_, e) =>
+        {
+            if (!_updatingZoomSlider && e.Property == RangeBase.ValueProperty)
+                ApplyZoom(_zoomSlider.Value);
+        };
+
+        _zoomLabel = SisterAppStatusBarChrome.CreateInfoText(
+            "100%",
+            foreground,
+            new Thickness(6, 0, 2, 0));
+        _zoomLabel.MinWidth = 38;
+        _zoomLabel.TextAlignment = global::Avalonia.Media.TextAlignment.Right;
+
+        panel.Children.Add(BuildZoomButton("\u2212", "Zoom out", foreground, () => ApplyZoom(ZoomLevels.StepDown(_zoomScale))));
+        panel.Children.Add(_zoomSlider);
+        panel.Children.Add(BuildZoomButton("+", "Zoom in", foreground, () => ApplyZoom(ZoomLevels.StepUp(_zoomScale))));
+
+        var percentage = new Button
+        {
+            Content = _zoomLabel,
+            Padding = new Thickness(2, 0),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+        };
+        AutomationProperties.SetName(percentage, "Zoom");
+        ToolTip.SetTip(percentage, "Zoom");
+        percentage.Click += (_, _) => _ = OpenZoomDialogAsync();
+        panel.Children.Add(percentage);
+        return panel;
+    }
+
+    private static Button BuildZoomButton(string glyph, string name, IBrush foreground, Action onClick)
+    {
+        var button = new Button
+        {
+            Content = glyph,
+            Foreground = foreground,
+            Width = 24,
+            Height = 22,
+            Padding = new Thickness(0),
+            Margin = new Thickness(2, 3),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+        };
+        AutomationProperties.SetName(button, name);
+        ToolTip.SetTip(button, name);
+        button.Click += (_, _) => onClick();
+        return button;
+    }
 
     private void SetViewMode(DocumentViewMode mode)
     {
         if (_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive)
             ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
 
+        _pagedEditMode = false;
         _editor.ViewMode = mode;
         if (_viewDepthPlan.IsSplitActive)
             RefreshSplitPreviewSnapshot();
+        UpdateViewModeButtons();
         _editor.Focus();
     }
 
     private void UpdateViewModeButtons()
     {
         var mode = _editor.ViewMode;
-        // Highlight the active button by toggling opacity; a full toggle style is overkill here.
-        _btnPrintLayout.Opacity = mode == DocumentViewMode.PrintLayout ? 1.0 : 0.5;
-        _btnWebLayout.Opacity   = mode == DocumentViewMode.WebLayout    ? 1.0 : 0.5;
-        _btnDraftView.Opacity   = mode == DocumentViewMode.Draft        ? 1.0 : 0.5;
+        ApplyStatusToggleState(_printLayoutSwitch, !_pagedEditMode && mode == DocumentViewMode.PrintLayout);
+        ApplyStatusToggleState(_webLayoutSwitch, !_pagedEditMode && mode == DocumentViewMode.WebLayout);
+        ApplyStatusToggleState(_draftSwitch, !_pagedEditMode && mode == DocumentViewMode.Draft);
+        ApplyStatusToggleState(_pagedEditSwitch, _pagedEditMode);
+    }
+
+    private static void ApplyStatusToggleState(ToggleButton toggle, bool isChecked)
+    {
+        toggle.IsChecked = isChecked;
+        toggle.Background = isChecked
+            ? new SolidColorBrush(Color.FromArgb(0x45, 0x10, 0x25, 0x3A))
+            : Brushes.Transparent;
+        toggle.BorderBrush = isChecked
+            ? new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF))
+            : Brushes.Transparent;
+    }
+
+    private void TogglePagedEditView()
+    {
+        if (_pagedEditMode)
+        {
+            _pagedEditMode = false;
+        }
+        else
+        {
+            if (_viewDepthPlan.Mode != FreeWViewDepthMode.LiveEditor)
+                ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+            _editor.ViewMode = DocumentViewMode.PrintLayout;
+            _pagedEditMode = true;
+        }
+
+        UpdateViewModeButtons();
+        UpdateStatus();
+        _editor.Focus();
+    }
+
+    private void ToggleReadMode()
+    {
+        _readMode = !_readMode;
+        if (_readMode)
+        {
+            _viewModeBeforeReadMode = _editor.ViewMode;
+            _editorMaxWidthBeforeReadMode = _editor.MaxWidth;
+            _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
+            _editorMarginBeforeReadMode = _editor.Margin;
+            _editor.MaxWidth = 760;
+            _editor.HorizontalAlignment = HorizontalAlignment.Center;
+            _editor.Margin = new Thickness(40);
+            SetViewMode(DocumentViewMode.WebLayout);
+        }
+        else
+        {
+            _editor.MaxWidth = _editorMaxWidthBeforeReadMode;
+            _editor.HorizontalAlignment = _editorAlignmentBeforeReadMode;
+            _editor.Margin = _editorMarginBeforeReadMode;
+            SetViewMode(_viewModeBeforeReadMode);
+        }
     }
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
@@ -2081,10 +2397,23 @@ public sealed class MainWindow : Window
 
     private void ApplyZoom(double scale)
     {
-        _zoomScale = Math.Clamp(Math.Round(scale, 2), 0.5, 3.0);
+        _zoomScale = ZoomLevels.Clamp(Math.Round(scale, 2));
         _zoom.ScaleX = _zoomScale;
         _zoom.ScaleY = _zoomScale;
-        _zoomLabel.Text = $"{Math.Round(_zoomScale * 100)}%";
+        _zoomLabel.Text = $"{ZoomLevels.ToPercent(_zoomScale)}%";
+
+        if (Math.Abs(_zoomSlider.Value - _zoomScale) > 0.0001)
+        {
+            _updatingZoomSlider = true;
+            try
+            {
+                _zoomSlider.Value = _zoomScale;
+            }
+            finally
+            {
+                _updatingZoomSlider = false;
+            }
+        }
     }
 
     private void NewDocument()
@@ -2867,17 +3196,22 @@ public sealed class MainWindow : Window
     private void UpdateStatus()
     {
         var stats = _editor.ComputeStatistics();
+        var (currentSection, totalSections) = _editor.SectionInfo();
         var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
             stats.Words,
             stats.CharactersWithSpaces,
             stats.Paragraphs,
             CurrentPage: _editor.CaretPageIndex + 1,
             TotalPages: _editor.PageCount,
+            CurrentSection: currentSection,
+            TotalSections: totalSections,
             SelectionText: _editor.SelectedText,
             IncludePageStatus: _editor.ViewMode == DocumentViewMode.PrintLayout,
-            IncludeSectionStatus: false,
+            IncludeSectionStatus: true,
             IsEdited: _editor.CanUndo));
-        _status.Text = plan.SummaryStatus;
+        _pageStatus.Text = plan.PageStatus;
+        _sectionStatus.Text = plan.SectionStatus;
+        _status.Text = plan.CountsStatus;
     }
 
     // ── Backstage (File screen) ───────────────────────────────────────────────

@@ -129,7 +129,7 @@ jobs:
           # Validate desktop integration assets.
           packaging_dir="freew/FreeW.App.Avalonia/Packaging/linux"
           desktop_file="$packaging_dir/io.github.tony-xmelon.freew.desktop"
-          icon_file="$packaging_dir/io.github.tony-xmelon.freew.svg"
+          icon_file="shared/Free.Shared.Shell/Resources/FreeW.svg"
           metainfo_file="$packaging_dir/io.github.tony-xmelon.freew.metainfo.xml"
           desktop-file-validate "$desktop_file"
           test -f "$icon_file"

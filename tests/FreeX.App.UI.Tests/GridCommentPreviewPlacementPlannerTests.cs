@@ -55,6 +55,42 @@ public sealed class GridCommentPreviewPlacementPlannerTests
     }
 
     [Fact]
+    public void CalculateConnector_AnchorsTopRightCellCornerWhenBoxPlacedToTheRight()
+    {
+        // R50-render-comment-hover-card-3-3: a pinned note box placed to the right of its cell must
+        // get a leader line from the cell's top-right corner to the box's top-left corner, so the
+        // box doesn't float as an unconnected rectangle with a bare CellGap in between.
+        var cellRect = new Rect(50, 40, 64, 20);
+        var placement = GridCommentPreviewPlacementPlanner.Calculate(
+            cellRect,
+            new Size(800, 500),
+            new Size(120, 60));
+
+        var connector = GridCommentPreviewPlacementPlanner.CalculateConnector(cellRect, placement);
+
+        connector.Start.Should().Be(new Point(cellRect.Right, cellRect.Top));
+        connector.End.Should().Be(new Point(placement.HorizontalOffset, placement.VerticalOffset));
+    }
+
+    [Fact]
+    public void CalculateConnector_AnchorsTopLeftCellCornerWhenBoxPlacedToTheLeft()
+    {
+        // Sibling no-regression case: near the right viewport edge Calculate() flips the box to the
+        // left of the cell, so the connector must flip to the cell's top-left corner and the box's
+        // top-right corner instead of always assuming the "placed right" anchors.
+        var cellRect = new Rect(720, 40, 64, 20);
+        var placement = GridCommentPreviewPlacementPlanner.Calculate(
+            cellRect,
+            new Size(800, 500),
+            new Size(120, 60));
+
+        var connector = GridCommentPreviewPlacementPlanner.CalculateConnector(cellRect, placement);
+
+        connector.Start.Should().Be(new Point(cellRect.Left, cellRect.Top));
+        connector.End.Should().Be(new Point(placement.HorizontalOffset + placement.Width, placement.VerticalOffset));
+    }
+
+    [Fact]
     public void GridViewCommentPreviewSurface_UsesHoverSelectionScrollableInWindowPopupAndInlineEditing()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources(

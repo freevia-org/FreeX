@@ -132,7 +132,7 @@ public sealed class MainWindow : Window
         TitleBarColor = ResolveTokenColor("FreeWTitleBarBrush", Color.FromRgb(0x17, 0x32, 0x4D)),
         BadgeColor    = ResolveTokenColor("FreeWAccentBrush",   Color.FromRgb(0x0F, 0x6D, 0x8C)),
         CaptionHeight = 34,
-        IconUri = "pack://application:,,,/Resources/FreeW.ico"
+        IconUri = "pack://application:,,,/FreeW.App.Host;component/Resources/FreeW.ico"
     };
 
     /// <summary>
