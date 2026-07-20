@@ -244,9 +244,14 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.shape",    new ActionRibbonCommand(editor.InsertShape));
         r.Register("freew.text-box", new ActionRibbonCommand(editor.InsertTextBox));
 
-        // Symbol — palette dropdown; the opener is a no-op and each glyph is its own sub-command.
-        r.Register("freew.symbol", new ActionRibbonCommand(() => { /* flyout opener */ }));
+        if (callbacks.OpenSymbolPickerDialog is not null)
+            r.Register("freew.symbol", new ActionRibbonCommand(callbacks.OpenSymbolPickerDialog));
         RegisterSymbolPalette(r, editor);
+        if (callbacks.CaptureScreenClip is not null)
+        {
+            r.Register("freew.screenshot", new ActionRibbonCommand(callbacks.CaptureScreenClip));
+            r.Register("freew.screen-clipping", new ActionRibbonCommand(callbacks.CaptureScreenClip));
+        }
 
         // Header / Footer — enable the page-margin region (render-ready). Region caret editing deferred.
         r.Register("freew.header", new ActionRibbonCommand(editor.EnsureHeader));
@@ -301,7 +306,8 @@ internal static class FreeWAvaloniaRibbonCommands
         {
             editor.ViewTableGridlines = !editor.ViewTableGridlines;
         }));
-        r.Register("freew.table-properties", new TablePropertiesCommand(editor, callbacks));
+        if (callbacks.OpenTablePropertiesDialog is not null)
+            r.Register("freew.table-properties", new TablePropertiesCommand(editor, callbacks.OpenTablePropertiesDialog));
         r.Register("freew.table-select-table", new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
@@ -353,9 +359,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.split-table", new ActionRibbonCommand(editor.SplitTable));
 
         // Cell size.
-        var tablePropertiesCommand = new TablePropertiesCommand(editor, callbacks);
-        r.Register("freew.table-row-height", tablePropertiesCommand);
-        r.Register("freew.table-col-width", tablePropertiesCommand);
+        if (callbacks.OpenTablePropertiesDialog is not null)
+        {
+            var tablePropertiesCommand = new TablePropertiesCommand(editor, callbacks.OpenTablePropertiesDialog);
+            r.Register("freew.table-row-height", tablePropertiesCommand);
+            r.Register("freew.table-col-width", tablePropertiesCommand);
+        }
         r.Register("freew.table-distribute-rows", new ActionRibbonCommand(editor.DistributeTableRows));
         r.Register("freew.table-distribute-cols", new ActionRibbonCommand(editor.DistributeTableColumns));
         r.Register("freew.table-autofit-contents", new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Contents)));
@@ -365,14 +374,16 @@ internal static class FreeWAvaloniaRibbonCommands
         // Cell alignment — 9 = 3 vertical (Top/Center/Bottom) × 3 horizontal (Left/Center/Right).
         // BY2: parity with WPF's table-layout Alignment group (FreeWRibbon.cs ~1201-1219).
         RegisterCellAlignmentCommands(r, editor);
-        r.Register("freew.table-cell-margins", tablePropertiesCommand);
+        if (callbacks.OpenTablePropertiesDialog is not null)
+            r.Register("freew.table-cell-margins", new TablePropertiesCommand(editor, callbacks.OpenTablePropertiesDialog));
         r.Register("freew.cell-text-direction-horizontal", new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Horizontal)));
         r.Register("freew.cell-text-direction-rotate90", new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate90)));
         r.Register("freew.cell-text-direction-rotate270", new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate270)));
 
         // Data.
         r.Register("freew.table-repeat-header", new ActionRibbonCommand(editor.ToggleTableRepeatHeaderRow));
-        r.Register("freew.table-formula", new TableFormulaCommand(editor, callbacks));
+        if (callbacks.OpenTableFormulaDialog is not null)
+            r.Register("freew.table-formula", new TableFormulaCommand(editor, callbacks.OpenTableFormulaDialog));
         r.Register("freew.table-to-text", new TableToTextCommand(editor, callbacks));
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
@@ -542,8 +553,11 @@ internal static class FreeWAvaloniaRibbonCommands
             callbacks.IsReadAloudActive ?? (() => false)));
         r.Register("freew.check-accessibility", new ActionRibbonCommand(callbacks.CheckAccessibility ?? (() => { })));
         r.Register("freew.inspect-document", new ActionRibbonCommand(callbacks.InspectDocument ?? (() => { })));
-        r.Register("freew.compare", new ActionRibbonCommand(callbacks.CompareDocuments ?? (() => { })));
+        if (callbacks.CompareDocuments is not null)
+            r.Register("freew.compare", new ActionRibbonCommand(callbacks.CompareDocuments));
         r.Register("freew.combine", new ActionRibbonCommand(callbacks.CombineDocuments ?? (() => { })));
+        if (callbacks.OpenLegalNotices is not null)
+            r.Register("freew.legal-notices", new ActionRibbonCommand(callbacks.OpenLegalNotices));
         r.Register("freew.mark-as-final", new ToggleActionCommand(
             callbacks.MarkAsFinal ?? (() => editor.SetMarkedAsFinal(!editor.IsMarkedAsFinal)),
             () => ReviewProtectionStatePlanner.Build(editor.Document.Protection, editor.IsMarkedAsFinal)
@@ -1024,22 +1038,22 @@ internal static class FreeWAvaloniaRibbonCommands
             new(IsEnabled: true, IsChecked: callbacks.IsReviewBalloonsActive?.Invoke() ?? editor.ShowMarkupBalloons);
     }
 
-    private sealed class TablePropertiesCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand
+    private sealed class TablePropertiesCommand(
+        DocumentView editor,
+        Action<ModelTableContext> openDialog) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             if (editor.CaretTableContext() is not { } tableContext)
                 return;
 
-            var values = callbacks.OpenTablePropertiesDialog?.Invoke(tableContext);
-            if (values is null)
-                return;
-
-            editor.ApplyTableProperties(values);
+            openDialog(tableContext);
         }
     }
 
-    private sealed class TableFormulaCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand
+    private sealed class TableFormulaCommand(
+        DocumentView editor,
+        Action<TableFormulaDialogInitialState> openDialog) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -1050,25 +1064,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 caret.Table,
                 caret.RowIndex,
                 caret.ColumnIndex);
-            var formula = callbacks.OpenTableFormulaDialog?.Invoke(initialState);
-            if (formula is null)
-            {
-                var format = initialState.NumberFormatIndex >= 0
-                    && initialState.NumberFormatIndex < TableFormulaDialogPlanner.NumberFormats.Count
-                        ? TableFormulaDialogPlanner.NumberFormats[initialState.NumberFormatIndex]
-                        : string.Empty;
-                if (!TableFormulaDialogPlanner.TryBuildResult(
-                        new TableFormulaDialogInput(initialState.FormulaText, format),
-                        out formula,
-                        out _))
-                {
-                    return;
-                }
-            }
-
-            if (formula is null)
-                return;
-            editor.InsertTableFormula(formula);
+            openDialog(initialState);
         }
     }
 
