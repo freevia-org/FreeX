@@ -120,6 +120,7 @@ static RouteInventory BuildInventory(string root)
     var sourceFiles = Directory.EnumerateFiles(Path.Combine(root, "freew"), "*.cs", SearchOption.AllDirectories)
         .Where(p => p.Contains("FreeW.App.Host", StringComparison.OrdinalIgnoreCase)
                  || p.Contains("FreeW.App.Avalonia", StringComparison.OrdinalIgnoreCase))
+        .Where(p => !p.Contains("Tests", StringComparison.OrdinalIgnoreCase))
         .Where(p => !p.Contains("bin", StringComparison.OrdinalIgnoreCase) && !p.Contains("obj", StringComparison.OrdinalIgnoreCase))
         .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray();
     var routes = new List<Route>();
@@ -136,7 +137,8 @@ static RouteInventory BuildInventory(string root)
         {
             var typeName = match.Groups["name"].Value;
             var host = path.Contains("FreeW.App.Avalonia", StringComparison.OrdinalIgnoreCase) ? "avalonia" : "wpf";
-            var routeId = Kebab(typeName.EndsWith("Dialog", StringComparison.Ordinal) ? typeName[..^6] : typeName);
+            var sourceRouteId = Kebab(typeName.EndsWith("Dialog", StringComparison.Ordinal) ? typeName[..^6] : typeName);
+            var routeId = CanonicalRoute(host, sourceRouteId);
             if (routes.Any(r => r.Host == host && r.RouteId == routeId)) continue;
             var discoveredTabs = Regex.Matches(text, "(?:Header\\s*=\\s*|Label\\s*=\\s*)[\\\"'](?<tab>[^\\\"']+)[\\\"']")
                 .Select(m => m.Groups["tab"].Value);
@@ -146,7 +148,14 @@ static RouteInventory BuildInventory(string root)
                     ? "modeless" : "modal-or-modeless";
             var limitation = fileName.Contains("File", StringComparison.OrdinalIgnoreCase) || text.Contains("PrintDialog", StringComparison.Ordinal)
                 ? "native-picker-platform-limitation" : null;
-            routes.Add(new Route(host, routeId, typeName, Relative(root, path), modalMode, tabs, limitation));
+            var surfaceKind = typeName.Equals("BackstageView", StringComparison.Ordinal) || sourceRouteId.StartsWith("backstage-", StringComparison.Ordinal)
+                ? "backstage"
+                : typeName.EndsWith("Pane", StringComparison.Ordinal)
+                    ? "pane"
+                    : typeName.EndsWith("Overlay", StringComparison.Ordinal)
+                        ? "overlay"
+                        : "dialog";
+            routes.Add(new Route(host, routeId, typeName, Relative(root, path), modalMode, tabs, limitation, surfaceKind, StateIds(surfaceKind, tabs), sourceRouteId));
         }
     }
     AddBackstageRoutes(routes);
@@ -154,10 +163,14 @@ static RouteInventory BuildInventory(string root)
     var scenarios = new List<Scenario>();
     foreach (var route in routes)
     {
-        foreach (var state in new[] { "initial", "populated", "validation-error" })
-            scenarios.Add(new Scenario($"{route.Host}.{route.RouteId}.{state}", route.Host, route.RouteId, state, null, StateDescription(state), route.Limitation));
-        foreach (var tab in route.Tabs)
-            scenarios.Add(new Scenario($"{route.Host}.{route.RouteId}.tab-{Kebab(tab)}", route.Host, route.RouteId, "relevant-tab", tab, $"Selected tab: {tab}.", route.Limitation));
+        foreach (var state in route.States ?? StateIds(route.SurfaceKind ?? "dialog", route.Tabs))
+        {
+            var tab = state.StartsWith("tab-", StringComparison.Ordinal)
+                ? route.Tabs.FirstOrDefault(candidate => $"tab-{Kebab(candidate)}".Equals(state, StringComparison.OrdinalIgnoreCase))
+                : null;
+            var scenarioState = tab is null ? state : "relevant-tab";
+            scenarios.Add(new Scenario($"{route.Host}.{route.RouteId}.{state}", route.Host, route.RouteId, scenarioState, tab, tab is null ? StateDescription(state) : $"Selected tab: {tab}.", route.Limitation, route.SurfaceKind));
+        }
     }
     var inputHash = Sha256(string.Join("\n", sourceFiles.Select(File.ReadAllText)));
     return new RouteInventory(InventorySchema, 1, inputHash, routes, scenarios);
@@ -168,7 +181,7 @@ static void AddBackstageRoutes(List<Route> routes)
     var entries = new[] { "home", "new", "open", "info", "save", "save-a-copy", "close", "share", "save-as", "print", "export", "account", "options" };
     foreach (var host in new[] { "wpf", "avalonia" })
         foreach (var entry in entries)
-            routes.Add(new Route(host, $"backstage-{entry}", "BackstageView", host == "wpf" ? "freew/FreeW.App.Host/MainWindow.cs" : "freew/FreeW.App.Avalonia/Backstage/BackstageView.cs", "modeless", [], entry is "open" or "save-as" or "print" ? "native-picker-platform-limitation" : null));
+            routes.Add(new Route(host, $"backstage-{entry}", "BackstageView", host == "wpf" ? "freew/FreeW.App.Host/MainWindow.cs" : "freew/FreeW.App.Avalonia/Backstage/BackstageView.cs", "modeless", [], entry is "open" or "save-as" or "print" ? "native-picker-platform-limitation" : null, "backstage", ["open"], $"backstage-{entry}"));
 }
 
 static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureManifest wpf, CaptureManifest avalonia, string output)
@@ -267,7 +280,21 @@ static string Kebab(string value)
     var separated = Regex.Replace(value.Trim(), "([a-z0-9])([A-Z])", "$1-$2");
     return Regex.Replace(separated, "[^A-Za-z0-9]+", "-").Trim('-').ToLowerInvariant();
 }
-static string StateDescription(string state) => state switch { "initial" => "Default constructor state with initial keyboard focus.", "populated" => "Representative populated fields, selections, and checked options.", _ => "Representative validation or error state after invalid input." };
+static string StateDescription(string state) => state switch { "initial" => "Default constructor state with initial keyboard focus.", "populated" => "Representative populated fields, selections, and checked options.", "validation-error" => "Representative validation or error state after invalid input.", "seeded" => "Seeded app-owned pane state after the route is opened.", "open" => "Opened app-owned overlay or Backstage pane state.", _ => $"Explicit route state: {state}." };
+static IReadOnlyList<string> StateIds(string surfaceKind, IReadOnlyList<string> tabs) => surfaceKind switch
+{
+    "pane" => ["seeded"],
+    "overlay" or "backstage" => ["open"],
+    _ => new[] { "initial", "populated", "validation-error" }.Concat(tabs.Select(tab => $"tab-{Kebab(tab)}")).ToArray(),
+};
+static string CanonicalRoute(string host, string routeId) => (host, routeId) switch
+{
+    ("wpf", "paragraph-breaks") or ("wpf", "paragraph-indent") => "paragraph",
+    ("wpf", "watermark-options") or ("avalonia", "watermark") => "watermark",
+    ("wpf", "statistics") => "word-count",
+    ("wpf", "about") or ("avalonia", "free-winfo") => "about",
+    _ => routeId,
+};
 static IReadOnlyList<string> KnownTabs(string routeId) => routeId switch
 {
     "options" => ["General", "AutoCorrect", "AutoFormat As You Type"],
@@ -326,8 +353,8 @@ static string BuildComparisonHtml(ComparisonReport report)
 
 public record RouteInventory(string Schema, int SchemaVersion, string GeneratedFromSha256, IReadOnlyList<Route> Routes, IReadOnlyList<Scenario> Scenarios);
 public record EvidenceInventory(string Schema, string GeneratedFromSha256, IReadOnlyList<Scenario> Scenarios);
-public record Route(string Host, string RouteId, string TypeName, string SourcePath, string ModalMode, IReadOnlyList<string> Tabs, string? Limitation);
-public record Scenario(string Id, string Host, string RouteId, string State, string? Tab, string Description, string? Limitation);
+public record Route(string Host, string RouteId, string TypeName, string SourcePath, string ModalMode, IReadOnlyList<string> Tabs, string? Limitation, string SurfaceKind = "dialog", IReadOnlyList<string>? States = null, string? SourceRouteId = null);
+public record Scenario(string Id, string Host, string RouteId, string State, string? Tab, string Description, string? Limitation, string? SurfaceKind = null);
 public record CaptureManifest(string Schema, int SchemaVersion, string Host, string CaptureRoot, IReadOnlyList<Capture> Captures);
 public record Capture(string ScenarioId, string Host, string RouteId, string State, string Status, string FullPngPath, int LogicalWidth, int LogicalHeight, int ActualWidth, int ActualHeight, double DpiX, double DpiY, Rect TargetCrop, Semantics Semantics, string? Limitation, string? Note, string? TargetPngPath = null)
 {

@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Automation;
@@ -25,13 +26,17 @@ static async Task<int> Main(string[] args)
 {
     var inventoryPath = Required(args, "--inventory");
     var output = Path.GetFullPath(Required(args, "--output"));
+    var scenarioFilter = Optional(args, "--scenario");
     var inventory = JsonSerializer.Deserialize<RouteInventory>(File.ReadAllText(inventoryPath), JsonOptions())
         ?? throw new InvalidOperationException("Invalid inventory.");
     Directory.CreateDirectory(output);
+    var progressPath = Path.Combine(output, "capture-progress.log");
+    File.WriteAllText(progressPath, string.Empty);
     var session = HeadlessUnitTestSession.GetOrStartForAssembly(typeof(HarnessApp).Assembly);
     var captures = new List<Capture>();
-    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "avalonia"))
+    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "avalonia" && (scenarioFilter is null || s.Id.Equals(scenarioFilter, StringComparison.OrdinalIgnoreCase))))
     {
+        File.AppendAllText(progressPath, $"start {scenario.Id}{Environment.NewLine}");
         Capture? result = null;
         try
         {
@@ -42,6 +47,7 @@ static async Task<int> Main(string[] args)
             Console.Error.WriteLine($"avalonia {scenario.Id}: {ex.GetType().Name}: {ex.Message}");
         }
         captures.Add(result ?? Unsupported(scenario, "The Avalonia adapter requires an app-owned route constructor or a temporary capture hook for this family."));
+        File.AppendAllText(progressPath, $"complete {scenario.Id}{Environment.NewLine}");
     }
     var manifest = new CaptureManifest("freew.dialog-capture-manifest.v1", 1, "avalonia", output, captures);
     File.WriteAllText(Path.Combine(output, "avalonia_dialog_capture_manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions()));
@@ -51,9 +57,7 @@ static async Task<int> Main(string[] args)
 
 static Capture? CaptureOne(Scenario scenario, string output)
 {
-    if (scenario.RouteId is not ("page-setup" or "options" or "columns" or "custom-paragraph-spacing" or "drop-cap-options" or "hyphenation-options" or "line-number-options"))
-        return null;
-    var dialog = CreateDialog(scenario.RouteId);
+    var dialog = AvaloniaDialogRouteFactory.Create(scenario.RouteId, scenario.State);
     if (dialog is null) return null;
     dialog.Width = 560;
     dialog.Height = 600;
@@ -66,9 +70,7 @@ static Capture? CaptureOne(Scenario scenario, string output)
     Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
     using var bitmap = new RenderTargetBitmap(new PixelSize(560, 600), new Vector(96, 96));
     bitmap.Render(dialog);
-    using var stream = new MemoryStream();
-    bitmap.Save(stream);
-    var bytes = stream.ToArray();
+    var bytes = RenderTargetBitmapToPng(bitmap);
     var semantics = ReadSemantics(dialog);
     if (bytes.Length == 0)
     {
@@ -84,30 +86,6 @@ static Capture? CaptureOne(Scenario scenario, string output)
     File.WriteAllBytes(cropPath, bytes);
     dialog.Close();
     return new Capture(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "captured", Relative(output, path), 560, 600, 560, 600, 96, 96, new Rect(0, 0, 560, 600), semantics, null, "Real app-owned Avalonia dialog rendered through the headless compositor.", Relative(output, cropPath));
-}
-
-static Window? CreateDialog(string route)
-{
-    var assembly = typeof(MainWindow).Assembly;
-    if (route == "page-setup") return new PageSetupDialog(new PageSettings());
-    var typeName = route switch
-    {
-        "options" => "FreeW.App.Avalonia.OptionsDialog",
-        "columns" => "FreeW.App.Avalonia.ColumnsDialog",
-        "custom-paragraph-spacing" => "FreeW.App.Avalonia.CustomParagraphSpacingDialog",
-        "drop-cap-options" => "FreeW.App.Avalonia.DropCapOptionsDialog",
-        "hyphenation-options" => "FreeW.App.Avalonia.HyphenationOptionsDialog",
-        "line-number-options" => "FreeW.App.Avalonia.LineNumberOptionsDialog",
-        _ => throw new ArgumentOutOfRangeException(nameof(route))
-    };
-    var type = assembly.GetType(typeName, throwOnError: true)!;
-    var args = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-        .Single(c => c.GetParameters().Length == 0 || c.GetParameters().All(p => p.ParameterType == typeof(PageSettings) || p.ParameterType == typeof(FreeWOptions) || p.ParameterType == typeof(FreeW.Core.Model.DocumentParagraphSpacingSet)));
-    var values = args.GetParameters().Select(p =>
-        p.ParameterType == typeof(PageSettings) ? (object?)new PageSettings() :
-        p.ParameterType == typeof(FreeWOptions) ? new FreeWOptions() :
-        null).ToArray();
-    return (Window?)args.Invoke(values);
 }
 
 static void Populate(Window dialog, string state)
@@ -147,6 +125,30 @@ static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)
     return data?.ToArray() ?? [];
 }
 
+static byte[] RenderTargetBitmapToPng(RenderTargetBitmap bitmap)
+{
+    var width = bitmap.PixelSize.Width;
+    var height = bitmap.PixelSize.Height;
+    var stride = checked(width * 4);
+    var byteCount = checked(stride * height);
+    var pointer = Marshal.AllocHGlobal(byteCount);
+    try
+    {
+        bitmap.CopyPixels(new PixelRect(0, 0, width, height), pointer, byteCount, stride);
+        var pixels = new byte[byteCount];
+        Marshal.Copy(pointer, pixels, 0, byteCount);
+        using var skBitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        Marshal.Copy(pixels, 0, skBitmap.GetPixels(), byteCount);
+        using var image = SKImage.FromBitmap(skBitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data?.ToArray() ?? [];
+    }
+    finally
+    {
+        Marshal.FreeHGlobal(pointer);
+    }
+}
+
 static Capture Unsupported(Scenario scenario, string note, string? limitation = null, Semantics? semantics = null) => new(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "unsupported", "", 0, 0, 0, 0, 96, 96, new Rect(0, 0, 0, 0), semantics ?? new Semantics(null, null, null, [], []), limitation ?? scenario.Limitation, note);
 static IEnumerable<T> FindVisualChildren<T>(Visual root) where T : Visual
 {
@@ -154,6 +156,7 @@ static IEnumerable<T> FindVisualChildren<T>(Visual root) where T : Visual
     foreach (var child in root.GetLogicalDescendants().OfType<T>()) yield return child;
 }
 static string Required(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : throw new ArgumentException($"Missing {option}."); }
+static string? Optional(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
 static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
 static string Safe(string value) => System.Text.RegularExpressions.Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
 static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
