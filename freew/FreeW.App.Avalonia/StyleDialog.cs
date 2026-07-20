@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -12,6 +13,14 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class StyleDialog : FreeWDialogWindow
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ControlHeight = 22,
+            ButtonHeight = 21,
+            ButtonPadding = new Thickness(10, 1),
+        };
+
     private readonly IReadOnlyList<KeyValuePair<string, string>> _basedOnEntries;
     private readonly IReadOnlyList<KeyValuePair<string, string>> _nextEntries;
     private readonly TextBox _name = new() { MinWidth = 280 };
@@ -20,10 +29,9 @@ internal sealed class StyleDialog : FreeWDialogWindow
     private readonly CheckBox _bold = new() { Content = "Bold", Margin = new Thickness(0, 0, 12, 0) };
     private readonly CheckBox _italic = new() { Content = "Italic", Margin = new Thickness(0, 0, 12, 0) };
     private readonly CheckBox _underline = new() { Content = "Underline" };
-    private readonly ComboBox _size = new() { MinWidth = 100 };
-    private readonly ComboBox _color = new() { MinWidth = 160 };
-    private readonly ComboBox _alignment = new() { MinWidth = 160 };
-    private readonly TextBlock _status = new() { Foreground = Brushes.Red, IsVisible = false };
+    private readonly ComboBox _size = new() { MinWidth = 280 };
+    private readonly ComboBox _color = new() { MinWidth = 280 };
+    private readonly ComboBox _alignment = new() { MinWidth = 280 };
     private readonly RunFormatting _seedRun;
     private readonly ParagraphFormatting _seedParagraph;
 
@@ -37,8 +45,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
         string? defaultNextStyleId)
     {
         Title = title;
-        Width = 380;
-        SizeToContent = SizeToContent.Height;
+        SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
@@ -63,6 +70,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
         _color.SelectedIndex = StyleDialogPlanner.IndexOfColor(seedRun.ColorHex);
         _alignment.ItemsSource = StyleDialogPlanner.AlignmentLabels.ToArray();
         _alignment.SelectedIndex = (int)seedParagraph.Alignment;
+        ApplyCompactChrome();
 
         var effects = new StackPanel { Orientation = Orientation.Horizontal };
         effects.Children.Add(_bold);
@@ -75,15 +83,16 @@ internal sealed class StyleDialog : FreeWDialogWindow
         AddRow(panel, "Style for following paragraph:", _nextStyle);
         AddRow(panel, "Formatting:", effects);
         AddRow(panel, "Font size:", _size);
-        AddRow(panel, "Text color:", _color);
+        AddRow(panel, "Text colour:", _color);
         AddRow(panel, "Alignment:", _alignment);
-        panel.Children.Add(_status);
 
-        var ok = Button("OK", (_, _) => Accept());
-        ok.IsDefault = true;
-        var cancel = Button("Cancel", (_, _) => Close(null));
-        cancel.IsCancel = true;
-        panel.Children.Add(ButtonRow(ok, cancel));
+        var actionRow = AvaloniaCompactDialogChrome.CreateOkCancelRow(
+            () => _ = AcceptAsync(),
+            () => Close(null),
+            buttonWidth: 72,
+            margin: new Thickness(0, 12, 0, 0),
+            style: DialogChromeStyle);
+        panel.Children.Add(actionRow);
         Content = panel;
 
         KeyDown += (_, e) =>
@@ -93,6 +102,16 @@ internal sealed class StyleDialog : FreeWDialogWindow
                 Close(null);
                 e.Handled = true;
             }
+        };
+        Opened += (_, _) =>
+        {
+            ApplyCompactChrome();
+            foreach (var button in actionRow.Children.OfType<Button>())
+                AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 72, button.IsDefault);
+            if (fixedName is null)
+                _name.Focus(NavigationMethod.Tab);
+            else
+                _basedOn.Focus(NavigationMethod.Tab);
         };
     }
 
@@ -108,7 +127,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
         Window owner,
         IReadOnlyDictionary<string, string> styleNamesById,
         DocumentStyle existing) =>
-        new StyleDialog($"Modify Style - {existing.Name}", styleNamesById, fixedName: existing.Name,
+        new StyleDialog($"Modify Style \u2014 {existing.Name}", styleNamesById, fixedName: existing.Name,
             existing.BasedOnStyleId, existing.Run, existing.Paragraph, existing.NextStyleId)
             .ShowDialog<StyleDefinitionResult?>(owner);
 
@@ -130,7 +149,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
     internal static IReadOnlyDictionary<string, string> StyleNamesById(TextDocument document) =>
         document.Styles.ToDictionary(kv => kv.Key, kv => kv.Value.Name, StringComparer.Ordinal);
 
-    private void Accept()
+    private async Task AcceptAsync()
     {
         var input = new StyleDialogInput(
             _name.Text,
@@ -150,17 +169,15 @@ internal sealed class StyleDialog : FreeWDialogWindow
                 out var result,
                 out var validation))
         {
-            ShowStatus(StyleDialogPlanner.ValidationMessageFor(validation));
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                StyleDialogPlanner.ValidationMessageFor(validation),
+                "New Style");
+            _name.Focus(NavigationMethod.Tab);
             return;
         }
 
         Close(result);
-    }
-
-    private void ShowStatus(string message)
-    {
-        _status.Text = message;
-        _status.IsVisible = true;
     }
 
     private static string? SelectedId(IReadOnlyList<KeyValuePair<string, string>> entries, int index) =>
@@ -185,32 +202,37 @@ internal sealed class StyleDialog : FreeWDialogWindow
         panel.Children.Add(field);
     }
 
-    private static StackPanel ButtonRow(params Button[] buttons)
+    private void ApplyCompactChrome()
     {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-        };
-        foreach (var button in buttons)
-            row.Children.Add(button);
-        return row;
-    }
-
-    private static Button Button(string text, EventHandler<RoutedEventArgs> click)
-    {
-        var button = new Button { Content = text, MinWidth = 76, Margin = new Thickness(6, 0, 0, 0) };
-        button.Click += click;
-        return button;
+        AvaloniaCompactDialogChrome.ApplyTextBox(_name, DialogChromeStyle);
+        _name.Height = 18;
+        _name.MinHeight = 18;
+        _name.MaxHeight = 18;
+        AvaloniaCompactDialogChrome.ApplyComboBox(_basedOn, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_nextStyle, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_size, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_color, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_alignment, DialogChromeStyle);
+        foreach (var checkBox in new[] { _bold, _italic, _underline })
+            AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);
     }
 }
 
 internal sealed class ManageStylesDialog : FreeWDialogWindow
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ControlHeight = 22,
+            ButtonHeight = 21,
+            ButtonPadding = new Thickness(10, 1),
+            ListBoxItemMinHeight = 21,
+            ListBoxItemPadding = new Thickness(4, 0),
+        };
+
     private readonly TextDocument _document;
     private readonly ListBox _styles = new() { MinHeight = 220, MinWidth = 320 };
-    private readonly ComboBox _sortOrder = new() { MinWidth = 180 };
+    private readonly ComboBox _sortOrder = new() { MinWidth = 160 };
     private readonly Button _apply;
     private readonly Button _modify;
     private readonly Button _delete;
@@ -220,8 +242,7 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
     {
         _document = document;
         Title = "Manage Styles";
-        Width = 460;
-        SizeToContent = SizeToContent.Height;
+        SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
@@ -231,7 +252,8 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
         _sortOrder.SelectionChanged += (_, _) => RebuildList(SelectedOrder(), SelectedRow()?.Id ?? preselectStyleId);
         _styles.SelectionChanged += (_, _) => SyncButtons();
 
-        var sortRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        _sortOrder.Margin = new Thickness(0, 0, 0, 8);
+        var sortRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
         sortRow.Children.Add(new TextBlock
         {
             Text = "Sort:",
@@ -250,7 +272,7 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
                 Close(new ManageStyleAction.Apply(row.Id));
         });
         _apply.IsDefault = true;
-        _modify = Button("Modify...", (_, _) =>
+        _modify = Button("Modify\u2026", (_, _) =>
         {
             if (SelectedRow() is { } row)
                 Close(new ManageStyleAction.Modify(row.Id));
@@ -281,6 +303,14 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
                 Close(null);
                 e.Handled = true;
             }
+        };
+        Opened += (_, _) =>
+        {
+            AvaloniaCompactDialogChrome.ApplyComboBox(_sortOrder, DialogChromeStyle);
+            AvaloniaCompactDialogChrome.ApplyListBox(_styles, DialogChromeStyle);
+            foreach (var button in new[] { _apply, _modify, _delete, close })
+                AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 80, button.IsDefault);
+            _styles.Focus(NavigationMethod.Tab);
         };
 
         RebuildList(StyleDialogSortOrder.Alphabetical, preselectStyleId);
@@ -357,7 +387,8 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
 
     private static Button Button(string text, EventHandler<RoutedEventArgs> click)
     {
-        var button = new Button { Content = text, MinWidth = 86, Margin = new Thickness(0, 0, 0, 8) };
+        var button = new Button { Content = text, Margin = new Thickness(0, 0, 0, 8) };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80);
         button.Click += click;
         return button;
     }
