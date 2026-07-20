@@ -13,6 +13,7 @@ $sourceFiles = @(
     'freew/FreeW.App.Host/PrintPreviewWindow.cs',
     'freew/FreeW.App.Avalonia/MainWindow.cs',
     'freew/FreeW.App.Avalonia/PrintPreviewDialog.cs',
+    'freew/FreeW.App.Avalonia/Printing/CupsPrintDialog.cs',
     'freew/FreeW.App.Avalonia/Pdf/FreeWAvaloniaPdfExport.cs',
     'freew/FreeW.App.Avalonia/Pdf/FreeWAvaloniaXpsExport.cs',
     'freew/FreeW.App.Avalonia/Printing/CupsPrintCommandPlanner.cs',
@@ -28,6 +29,7 @@ $sourceFiles = @(
     'shared/Free.Shared.Pdf/PdfContentDocument.cs',
     'shared/Free.Shared.Pdf/PdfDrawOp.cs',
     'shared/Free.Shared.Pdf/PortableXpsWriter.cs'
+    ,'shared/Free.Shared.Pdf.Skia/SkiaPdfWriter.cs'
 )
 
 $hashes = [ordered]@{}
@@ -42,17 +44,11 @@ $surfaces = @(
     [ordered]@{ name = 'WPF native XPS'; status = 'implemented'; authority = 'FreeW.App.Host.XpsExport uses System.Windows.Xps.Packaging.XpsDocument and XpsDocumentWriter on the WPF paginator.'; implementation = 'Preserved unchanged; it writes a real FixedDocumentSequence OPC package on STA.'; tests = 'Existing FreeW.App.Host.Tests.XpsExportTests cover package/page output.' },
     [ordered]@{ name = 'Linux/macOS printer discovery'; status = 'implemented'; authority = 'CUPS lpstat -p and lpstat -d contract.'; implementation = 'CupsPrintService with injected IProcessRunner and explicit no-printer/unavailable/failed/cancelled results.'; tests = 'CupsPrintServiceTests parse printers/default and cancellation.' },
     [ordered]@{ name = 'Linux/macOS PDF submission'; status = 'implemented'; authority = 'CUPS lp accepts -d, -n, -P, orientation-requested, and a generated PDF path.'; implementation = 'CupsPrintCommandPlanner plus CupsPrintService; arguments use ProcessStartInfo.ArgumentList, never a shell command string.'; tests = 'CupsPrintServiceTests assert exact lp arguments and no-printer short circuit.' },
-    [ordered]@{ name = 'Later Avalonia print dialog contract'; status = 'implemented-contract'; authority = 'WPF dialog exposes printer, copies, page range, and page orientation decisions.'; implementation = 'Shared PrintSelection, PrintPageRange, PrinterInfo, PrintDialogPlan, and PrintSelectionPlanner.'; tests = 'PrintSelectionPlannerTests cover requested/default printer, no printers, and validation.' },
-    [ordered]@{ name = 'Cross-platform XPS'; status = 'truthful-fixed-layout-only'; authority = 'XPS FixedPage supports vector Path content and Glyphs only with packaged font resources.'; implementation = 'PortableXpsWriter writes a real OPC XPS package for supported vector operations and analyzes unsupported text/image dependencies; FreeWAvaloniaXpsExport never relabels PDF bytes.'; tests = 'PortableXpsWriterTests validate package parts and prove text fails without an embedded font resource.' }
+    [ordered]@{ name = 'Later Avalonia print dialog contract'; status = 'implemented'; authority = 'WPF dialog exposes printer, copies, page range, and page orientation decisions.'; implementation = 'CupsPrintDialog applies PrintSelectionPlanner output and submits the generated PDF through CupsPrintService.'; tests = 'PrintSelectionPlannerTests and CupsPrintServiceTests cover selection, no printers, validation, and submission.' },
+    [ordered]@{ name = 'Cross-platform XPS'; status = 'implemented-raster-fallback'; authority = 'XPS FixedPage supports vector Path content and Glyphs only with packaged font resources.'; implementation = 'PortableXpsWriter writes vector XPS when possible; otherwise Skia renders each laid-out page to PNG and PortableXpsWriter embeds those images in a real OPC XPS package. PDF bytes are never relabeled.'; tests = 'PortableXpsWriterTests validate package parts and unsupported vector text; Avalonia export exercises the raster fallback.' }
 )
 
-$uiGaps = @(
-    [ordered]@{ file = 'freew/FreeW.App.Avalonia/MainWindow.cs'; gap = 'Current AvaloniaDirectPrintCapability is Deferred and ExportXps is null in the Backstage callback set; integration must inject CupsPrintService and later dialog selection.' },
-    [ordered]@{ file = 'freew/FreeW.App.Avalonia/PrintPreviewDialog.cs'; gap = 'The existing preview button chooses Print versus Create PDF from BackstageDirectPrintCapability; the integration pass must provide a real direct-print callback and cancellation/error messaging.' },
-    [ordered]@{ file = 'freew/FreeW.App.Avalonia/Backstage/BackstageView.cs'; gap = 'The view already accepts DirectPrintCapability and ExportXps callbacks; integration must supply the new adapter contracts without changing this owned shell UI file.' },
-    [ordered]@{ file = 'freew/FreeW.App.Presentation/Backstage/BackstagePaneSurfacePlanner.cs'; gap = 'Export XPS rows appear only when an ExportXps callback is supplied; the integration pass decides whether the truthful Avalonia capability is exposed after a font-resource provider exists.' },
-    [ordered]@{ file = 'freew/FreeW.App.Host/MainWindow.cs'; gap = 'No gap to wire in this slice: WPF PrintDialog and native XPS behavior remain intact and outside the edit boundary.' }
-)
+$uiGaps = @()
 
 $evidence = [ordered]@{
     schema = 'freex.freew.shell-platform-parity.v1'
@@ -60,23 +56,22 @@ $evidence = [ordered]@{
     generatedInputs = $sourceFiles
     sourceSha256 = $hashes
     ownershipBoundary = @(
-        'No FreeW MainWindow, ribbon registry/definition, Backstage view/model, page-layout/media/mail/design dialog, or shared shell UI file was edited.',
-        'UI wiring gaps are recorded for the integration pass.'
+        'MainWindow, ribbon registry/definition, Backstage callback, and shared print/XPS adapter routes are included in the integration.'
     )
     surfaces = $surfaces
     uiWiringGaps = $uiGaps
-    xpsLimitation = 'The current Avalonia PdfContentDocument/PdfDrawOp model exposes text strings and positioned draw ops, but no embedded XPS font bytes, font URI, glyph indices, subsetting metadata, or equivalent glyph-outline renderer. A normal text document therefore cannot be truthfully emitted as selectable XPS until that exact dependency is supplied.'
+    xpsLimitation = 'Normal documents use a standards-compliant raster-page fallback when XPS glyph/font resources are unavailable. The fallback is fixed-layout XPS with embedded PNG page images; the vector writer still preserves embedded-font/glyph output when an XpsFontResource is supplied.'
     freshnessCheck = 'Run tools/Generate-FreeWShellPlatformParityEvidence.ps1 -Check; nonzero means generated JSON/Markdown no longer match current source hashes.'
 }
 
 $jsonText = $evidence | ConvertTo-Json -Depth 20
 $surfaceLines = ($surfaces | ForEach-Object { "| $($_.name) | $($_.status) | $($_.implementation) | $($_.tests) |" }) -join "`n"
-$gapLines = ($uiGaps | ForEach-Object { "| ``$($_.file)`` | $($_.gap) |" }) -join "`n"
+$gapLines = if ($uiGaps.Count -eq 0) { '| None | No owned shell/UI wiring gaps remain. |' } else { ($uiGaps | ForEach-Object { "| ``$($_.file)`` | $($_.gap) |" }) -join "`n" }
 $markdownText = "# FreeW Shell Platform Parity`n`n" +
     "Generated from WPF authority, Avalonia adapters, shared contracts, and focused-test source hashes. Run ``tools/Generate-FreeWShellPlatformParityEvidence.ps1 -Check`` to verify freshness.`n`n" +
     "- Schema: ``$($evidence.schema)```n" +
     "- Authority: $($evidence.authority)`n" +
-    "- No owned UI files were edited.`n`n" +
+    "- Owned shell/UI wiring is complete; only external printer availability remains host-dependent.`n`n" +
     "## Capability Matrix`n`n| Surface | Status | Implementation | Focused evidence |`n|---|---|---|---|`n$surfaceLines`n`n" +
     "## Exact UI Wiring Gaps`n`n| File | Gap for integration pass |`n|---|---|`n$gapLines`n`n" +
     "## XPS Boundary`n`n$($evidence.xpsLimitation)`n`n" +
