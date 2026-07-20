@@ -148,6 +148,12 @@ function Test-TarballProduct {
         return
     }
     $packageRoot = Join-Path $extract $rootName
+    if ($Entry.IconSource) {
+        $packagedIcon = Join-Path $packageRoot "share/icons/hicolor/scalable/apps/$($Entry.AppId).svg"
+        $packagedIconHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagedIcon).Hash
+        $sourceIconHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repoRoot $Entry.IconSource)).Hash
+        Assert-Packaging ($packagedIconHash -eq $sourceIconHash) "$($Entry.Product) package must contain the canonical icon bytes."
+    }
     Assert-BashExecutable (Join-Path (Join-Path $packageRoot 'bin') $Entry.LauncherName) "$($Entry.Product) relocatable launcher"
     Assert-BashExecutable (Join-Path $packageRoot 'install.sh') "$($Entry.Product) install script"
     Assert-BashExecutable (Join-Path $packageRoot 'uninstall.sh') "$($Entry.Product) uninstall script"
@@ -170,10 +176,10 @@ function Test-TarballProduct {
 $sharedRelative = "tools/packaging/linux/package-linux.sh"
 $sharedPath = Join-Path $repoRoot $sharedRelative
 $entrypoints = @(
-    @{ Relative = "src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh"; TarballEntrypoint = (Join-Path $repoRoot "src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh"); Product = "freex"; Operation = "tarball"; Config = "freex.conf"; AppId = "io.github.tony-xmelon.freex"; BinaryName = "FreeX"; LauncherName = "freex"; LibraryDir = "freex"; StagePrefix = "freex"; MimeAsset = "io.github.tony-xmelon.freex.xml" },
+    @{ Relative = "src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh"; TarballEntrypoint = (Join-Path $repoRoot "src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh"); Product = "freex"; Operation = "tarball"; Config = "freex.conf"; AppId = "io.github.tony-xmelon.freex"; BinaryName = "FreeX"; LauncherName = "freex"; LibraryDir = "freex"; StagePrefix = "freex"; MimeAsset = "io.github.tony-xmelon.freex.xml"; IconSource = "src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.svg" },
     @{ Relative = "src/FreeX.App.Avalonia/Packaging/linux/build-appimage.sh"; Product = "freex"; Operation = "appimage"; Config = "freex.conf"; AppId = "io.github.tony-xmelon.freex"; StagePrefix = "freex"; MimeAsset = "io.github.tony-xmelon.freex.xml" },
     @{ Relative = "src/FreeX.App.Avalonia/Packaging/linux/build-deb.sh"; Product = "freex"; Operation = "deb"; Config = "freex.conf"; AppId = "io.github.tony-xmelon.freex"; StagePrefix = "freex"; MimeAsset = "io.github.tony-xmelon.freex.xml" },
-    @{ Relative = "freew/FreeW.App.Avalonia/Packaging/linux/package-linux-app.sh"; TarballEntrypoint = (Join-Path $repoRoot "freew/FreeW.App.Avalonia/Packaging/linux/package-linux-app.sh"); Product = "freew"; Operation = "tarball"; Config = "freew.conf"; AppId = "io.github.tony-xmelon.freew"; BinaryName = "FreeW"; LauncherName = "freew"; LibraryDir = "freew"; StagePrefix = "freew"; MimeAsset = "" },
+    @{ Relative = "freew/FreeW.App.Avalonia/Packaging/linux/package-linux-app.sh"; TarballEntrypoint = (Join-Path $repoRoot "freew/FreeW.App.Avalonia/Packaging/linux/package-linux-app.sh"); Product = "freew"; Operation = "tarball"; Config = "freew.conf"; AppId = "io.github.tony-xmelon.freew"; BinaryName = "FreeW"; LauncherName = "freew"; LibraryDir = "freew"; StagePrefix = "freew"; MimeAsset = ""; IconSource = "shared/Free.Shared.Shell/Resources/FreeW.svg" },
     @{ Relative = "freew/FreeW.App.Avalonia/Packaging/linux/build-appimage.sh"; Product = "freew"; Operation = "appimage"; Config = "freew.conf"; AppId = "io.github.tony-xmelon.freew"; StagePrefix = "freew"; MimeAsset = "" },
     @{ Relative = "freew/FreeW.App.Avalonia/Packaging/linux/build-deb.sh"; Product = "freew"; Operation = "deb"; Config = "freew.conf"; AppId = "io.github.tony-xmelon.freew"; StagePrefix = "freew"; MimeAsset = "" }
 )
@@ -185,6 +191,7 @@ Assert-Packaging $shared.Contains("declare -A config_values") "Shared packaging 
 Assert-Packaging $shared.Contains('ARCH="$arch" "$appimagetool"') "Shared implementation must preserve direct AppImage tool invocation."
 Assert-Packaging $shared.Contains("dpkg-deb --root-owner-group --build") "Shared implementation must preserve direct dpkg-deb invocation."
 Assert-Packaging $shared.Contains("--dry-run") "Shared implementation must expose the offline test seam."
+Assert-Packaging $shared.Contains("--icon-file") "Shared implementation must accept an explicit canonical icon source."
 Assert-Packaging $shared.Contains("validate_component_argument") "Shared implementation must validate output-name components."
 Assert-Packaging $shared.Contains('printf ''mime_asset="%s"') "Generated scripts must retain the configured MIME filename."
 Assert-Packaging (-not $shared.Contains('share/mime/packages/$app_id.xml')) "Shared implementation must not hardcode app_id.xml for MIME installation."
@@ -209,6 +216,9 @@ foreach ($entrypoint in $entrypoints) {
     $expectedConfigArgument = '--config "$repo_root/tools/packaging/linux/' + $entrypoint.Config + '"'
     Assert-Packaging $text.Contains($expectedConfigArgument) "Entrypoint '$($entrypoint.Relative)' has no explicit product config."
     Assert-Packaging $text.Contains('--asset-dir "$script_dir"') "Entrypoint '$($entrypoint.Relative)' must preserve its product asset directory."
+    if ($entrypoint.Product -eq 'freew') {
+        Assert-Packaging $text.Contains('--icon-file "$repo_root/shared/Free.Shared.Shell/Resources/FreeW.svg"') "FreeW entrypoint '$($entrypoint.Relative)' must use the canonical shared icon."
+    }
     Assert-Packaging (-not [regex]::IsMatch($text, '(?im)^\s*(eval|bash\s+-c|sh\s+-c)')) "Entrypoint '$($entrypoint.Relative)' must not build shell command strings."
     foreach ($mechanic in @('rm -rf', 'dpkg-deb', 'appimagetool', 'while [[ $#', 'declare -A', 'cat >')) {
         Assert-Packaging (-not $text.Contains($mechanic)) "Entrypoint '$($entrypoint.Relative)' still contains shared mechanic '$mechanic'."

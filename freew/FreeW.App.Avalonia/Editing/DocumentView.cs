@@ -601,6 +601,23 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>Best-effort one-based section position for the shell status bar.</summary>
+    public (int Current, int Total) SectionInfo()
+    {
+        var total = Math.Max(1, _doc.Sections.Count);
+        if (total == 1)
+            return (1, 1);
+
+        var current = 1;
+        for (var i = 0; i < _doc.Blocks.Count && i < _caret.Block; i++)
+        {
+            if (_doc.Blocks[i] is Paragraph { SectionBreak: not null })
+                current++;
+        }
+
+        return (Math.Clamp(current, 1, total), total);
+    }
+
     /// <summary>Top of the current caret in control coordinates (0 when not resolvable).</summary>
     public double CaretTop => TryGetCaretRect(out var rect) ? rect.Y : 0;
 

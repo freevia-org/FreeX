@@ -1,8 +1,10 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.Ribbon.Wpf;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -10,6 +12,8 @@ namespace FreeP.App.Host;
 
 public sealed partial class MainWindow
 {
+    private bool _wholeWindowVisualEvidenceViewStateActivated;
+
     internal IReadOnlyList<DialogPaneVisualEvidenceAssertion> PrepareWholeWindowVisualEvidence(
         WholeWindowVisualEvidenceScenario scenario,
         DialogPaneVisualEvidenceFixture fixture)
@@ -34,6 +38,7 @@ public sealed partial class MainWindow
                 ? "home"
                 : scenario.ExpectedActiveRibbonTabId);
 
+        _wholeWindowVisualEvidenceViewStateActivated = scenario.Kind != WholeWindowVisualEvidenceScenarioKind.ViewState;
         switch (scenario.Kind)
         {
             case WholeWindowVisualEvidenceScenarioKind.Startup when scenario.ActivationId == "notes":
@@ -42,9 +47,6 @@ public sealed partial class MainWindow
                 break;
             case WholeWindowVisualEvidenceScenarioKind.BackstagePane:
                 _backstage.Show(scenario.ActivationId);
-                break;
-            case WholeWindowVisualEvidenceScenarioKind.ViewState:
-                PrepareViewStateForVisualEvidence(scenario.ActivationId);
                 break;
             case WholeWindowVisualEvidenceScenarioKind.AuxiliaryPane:
                 ShowAuxiliaryPaneForVisualEvidence(scenario.ActivationId);
@@ -77,6 +79,8 @@ public sealed partial class MainWindow
 
     internal void NormalizeWholeWindowVisualEvidenceShellState(WholeWindowVisualEvidenceScenario scenario)
     {
+        if (scenario.Kind == WholeWindowVisualEvidenceScenarioKind.ViewState)
+            _wholeWindowVisualEvidenceViewStateActivated = PrepareViewStateForVisualEvidence(scenario.ActivationId);
         Title = "Untitled — FreeP";
         _slideCountText.Text = $"Slide {Editor.CurrentSlideIndex + 1} / {Editor.Presentation.Slides.Count}";
     }
@@ -98,6 +102,14 @@ public sealed partial class MainWindow
         FrameworkElement ribbonRoot = (FrameworkElement?)Ancestors(_ribbonTabs).OfType<Border>().FirstOrDefault() ?? _ribbonTabs;
         var focus = DescribeWholeWindowFocus(Keyboard.FocusedElement);
         var assertions = preparationAssertions.ToList();
+
+        if (scenario.Kind == WholeWindowVisualEvidenceScenarioKind.ViewState)
+        {
+            assertions.Add(new(
+                "view-state-activated-via-command",
+                _wholeWindowVisualEvidenceViewStateActivated,
+                $"Activated view state '{scenario.ActivationId}' through the runtime ribbon command path."));
+        }
 
         if (!string.IsNullOrWhiteSpace(scenario.ExpectedActiveRibbonTabId) &&
             scenario.Kind != WholeWindowVisualEvidenceScenarioKind.BackstagePane)
@@ -162,23 +174,44 @@ public sealed partial class MainWindow
             assertions);
     }
 
-    private void PrepareViewStateForVisualEvidence(string activationId)
+    private bool PrepareViewStateForVisualEvidence(string activationId)
     {
         switch (activationId)
         {
             case "gridlines-guides":
-                ApplyPresentationViewShowState(new PresentationViewShowState(true, true));
-                break;
+                return EnsureViewShowStateForVisualEvidence(showGridlines: true, showGuides: true);
             case "clean-canvas":
-                ApplyPresentationViewShowState(new PresentationViewShowState(false, false));
-                break;
+                return EnsureViewShowStateForVisualEvidence(showGridlines: false, showGuides: false);
             case "zoom-fit":
                 ApplyPresentationViewZoomState(PresentationViewZoomState.FitToWindow);
-                break;
+                return true;
             case "zoom-200":
                 ApplyPresentationViewZoomState(new PresentationViewZoomState(PresentationViewZoomMode.Percent, 200));
-                break;
+                return true;
+            default:
+                return false;
         }
+    }
+
+    private bool EnsureViewShowStateForVisualEvidence(bool showGridlines, bool showGuides)
+    {
+        var activated = true;
+        if (_viewShowState.ShowGridlines != showGridlines)
+            activated &= ExecuteRibbonCommandForVisualEvidence(PresentationViewShowPlanner.GridlinesCommandId);
+        if (_viewShowState.ShowGuides != showGuides)
+            activated &= ExecuteRibbonCommandForVisualEvidence(PresentationViewShowPlanner.GuidesCommandId);
+        return activated && _viewShowState == new PresentationViewShowState(showGridlines, showGuides);
+    }
+
+    private bool ExecuteRibbonCommandForVisualEvidence(string commandId)
+    {
+        var button = VisualDescendants(_ribbonTabs)
+            .OfType<ButtonBase>()
+            .FirstOrDefault(candidate => StringComparer.Ordinal.Equals(RibbonMetadata.GetCommandName(candidate), commandId));
+        if (button is null)
+            return false;
+        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+        return true;
     }
 
     private void ShowAuxiliaryPaneForVisualEvidence(string activationId)

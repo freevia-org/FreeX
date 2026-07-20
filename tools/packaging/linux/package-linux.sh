@@ -4,7 +4,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: package-linux.sh --operation <tarball|appimage|deb> --config <file> --asset-dir <dir> --runtime <rid> --published <dir> --version <v> --output <dir> [--appimagetool <path>] [--dry-run]" >&2
+  echo "Usage: package-linux.sh --operation <tarball|appimage|deb> --config <file> --asset-dir <dir> --runtime <rid> --published <dir> --version <v> --output <dir> [--icon-file <path>] [--appimagetool <path>] [--dry-run]" >&2
 }
 
 die_usage() {
@@ -25,6 +25,7 @@ runtime=""
 published=""
 version="0.1.0"
 output=""
+icon_file=""
 appimagetool=""
 dry_run=false
 
@@ -65,6 +66,11 @@ while [[ $# -gt 0 ]]; do
       output="$2"
       shift 2
       ;;
+    --icon-file)
+      [[ $# -ge 2 ]] || die_usage "Missing value for --icon-file."
+      icon_file="$2"
+      shift 2
+      ;;
     --appimagetool)
       [[ $# -ge 2 ]] || die_usage "Missing value for --appimagetool."
       appimagetool="$2"
@@ -103,6 +109,7 @@ validate_path_argument "$config" "--config"
 validate_path_argument "$asset_dir" "--asset-dir"
 validate_path_argument "$published" "--published"
 validate_path_argument "$output" "--output"
+[[ -z "$icon_file" ]] || validate_path_argument "$icon_file" "--icon-file"
 [[ -z "$appimagetool" ]] || validate_path_argument "$appimagetool" "--appimagetool"
 validate_component_argument "$runtime" "--runtime"
 validate_component_argument "$version" "--version"
@@ -183,7 +190,7 @@ make_share_dirs() {
 copy_share_assets() {
   local share_root="$1"
   cp "$asset_dir/$app_id.desktop" "$share_root/applications/$app_id.desktop"
-  cp "$asset_dir/$app_id.svg" "$share_root/icons/hicolor/scalable/apps/$app_id.svg"
+  cp "$icon_file" "$share_root/icons/hicolor/scalable/apps/$app_id.svg"
   if [[ -n "$mime_asset" ]]; then
     cp "$asset_dir/$mime_asset" "$share_root/mime/packages/$mime_asset"
   fi
@@ -317,8 +324,8 @@ build_appimage() {
   write_relocatable_launcher "$appdir/usr/bin/$launcher_name"
   cp "$asset_dir/$app_id.desktop" "$appdir/usr/share/applications/$app_id.desktop"
   cp "$asset_dir/$app_id.desktop" "$appdir/$app_id.desktop"
-  cp "$asset_dir/$app_id.svg" "$appdir/usr/share/icons/hicolor/scalable/apps/$app_id.svg"
-  cp "$asset_dir/$app_id.svg" "$appdir/$app_id.svg"
+  cp "$icon_file" "$appdir/usr/share/icons/hicolor/scalable/apps/$app_id.svg"
+  cp "$icon_file" "$appdir/$app_id.svg"
   ln -sf "$app_id.svg" "$appdir/.DirIcon"
   if [[ -n "$mime_asset" ]]; then
     cp "$asset_dir/$mime_asset" "$appdir/usr/share/mime/packages/$mime_asset"
@@ -376,6 +383,8 @@ build_deb() {
 
 load_config
 validate_config
+[[ -n "$icon_file" ]] || icon_file="$asset_dir/$app_id.svg"
+[[ -f "$icon_file" ]] || die_config "icon file not found: $icon_file"
 
 validate_operation_runtime() {
   case "$operation:$runtime" in
