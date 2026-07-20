@@ -966,14 +966,6 @@ public sealed partial class MainWindow
 
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
-        dialog.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape)
-            {
-                dialog.Close();
-                e.Handled = true;
-            }
-        };
 
         DockPanel.SetDock(buttonRow, AvaloniaDock.Bottom);
         DockPanel.SetDock(validationText, AvaloniaDock.Bottom);
@@ -982,7 +974,7 @@ public sealed partial class MainWindow
             Margin = new Thickness(8),
             Children = { buttonRow, validationText, tabs },
         };
-        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        ConfigurePageSetupTabCycle(dialog, root, cancelButton);
         dialog.Content = root;
         AttachDialogRangePicker(dialog, printAreaPicker, printAreaBox, "range.page-setup.print-area");
         AttachDialogRangePicker(dialog, repeatRowsPicker, repeatRowsBox, "range.page-setup.rows-to-repeat");

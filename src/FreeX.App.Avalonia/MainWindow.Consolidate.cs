@@ -235,7 +235,7 @@ public sealed partial class MainWindow
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([applyButton, cancelButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
-        dialog.Content = new DockPanel
+        var root = new DockPanel
         {
             Margin = new Thickness(12),
             Children =
@@ -265,8 +265,15 @@ public sealed partial class MainWindow
                 },
             },
         };
+        dialog.Content = root;
         AttachDialogRangePicker(dialog, browseButton, referenceBox, "range.consolidate.reference");
         AttachDialogRangePicker(dialog, destinationBrowseButton, destinationBox, "range.consolidate.destination-cell");
+
+        // WPF opens Consolidate with the Function combo box focused. Use the shared native-dialog
+        // retry helper because the X11 window can finish realizing after ShowDialog starts, then
+        // give the authored controls the same closed Tab graph and Escape contract as WPF.
+        ConfigureDialogTabCycle(dialog, root);
+        ConfigureNativeDialogInitialFocus(dialog, root, functionBox);
 
         await dialog.ShowDialog(this);
     }

@@ -695,9 +695,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CreateFindReplaceFormatRow(`\"Replace format`\",");
         script.Should().Contain("CreateFindOptions(optionsControls, findFormat)");
         script.Should().Contain("RequiredFormat: requiredFormat);");
-        script.Should().Contain("replacement.ReplacementFormat");
+        script.Should().Contain("ShowFindReplaceTabbedDialogAsync(replaceMode: true)");
         script.Should().Contain("_session.ReplaceNextValue(");
-        script.Should().Contain("replacement.Options,");
         script.Should().Contain("public WorkbookReplaceResult ReplaceNextValue(");
         script.Should().Contain("public StyleDiff? CreateFormatDiffFromActiveCell()");
         script.Should().Contain("public StyleDiff? CreateFormatDiffFromCell(CellAddress address)");
@@ -901,8 +900,10 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain(
-            "RegisterCrashHandlers' in shared\\Free.Shared.AppServices\\LocalAppDiagnostics.cs must delegate to 'AppCrashHandlers.Register('");
+        var combinedOutput = result.Output + result.Error;
+        combinedOutput.Should().Contain(
+            "RegisterCrashHandlers' in shared\\Free.Shared.AppServices\\LocalAppDiagnostics.cs");
+        combinedOutput.Should().Contain("AppCrashHandlers.Register('");
     }
 
     [Fact]
@@ -2593,7 +2594,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
                     private void NavigateToFindAllMatch(WorkbookFindAllMatch match)
                     FindOptions? options = null,
-                    private async Task ShowReplaceDialogAsync()
+                    private Task ShowReplaceDialogAsync()
+                    {
+                        return ShowFindReplaceTabbedDialogAsync(replaceMode: true);
+                    }
                     private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
                     private async Task ShowGoToDialogAsync()
                     private async Task ShowGoToSpecialDialogAsync()
@@ -2649,11 +2653,6 @@ public sealed class MacOsAppReadinessPreflightTests
                     var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
                     resultsList.ItemsSource = result.Matches;
                     var result = _session.GoToCell(match.Address);
-                    replacement.Action == ReplaceDialogAction.ReplaceAll
-                    replacement.Options,
-                    replacement.MatchCase,
-                    replacement.MatchEntireCell
-                    replacement.ReplacementFormat
                     _session.ReplaceNextValue(
                     _session.ReplaceAllValues(
                     var result = _session.GoToReference(reference);
@@ -3098,7 +3097,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 }
                 private void ApplySelectedRangeBorderPreset(CellBorderPreset preset)
                 {
-                    var result = _session.SetSelectedRangeBorderPreset(preset);
+                    var result = _session.ApplySelectedRangeCompactFormat(
+                        new StyleDiff(),
+                        preset,
+                        _borderPickerStyle,
+                        _borderPickerColor);
                 }
                 private async Task MergeAndCenterSelectedRangeAsync()
                 {

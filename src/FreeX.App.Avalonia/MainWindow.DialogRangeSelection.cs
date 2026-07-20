@@ -458,17 +458,22 @@ public sealed partial class MainWindow
         if (!session.Dialog.IsVisible)
             return;
 
-        if (_isDialogRangeInteractionProbe)
+        if (!_isDialogRangeInteractionProbe)
+            session.Dialog.Position = session.DialogPosition;
+
+        void ActivateDialogAndRestoreTargetFocus()
         {
+            if (!session.Dialog.IsVisible || _dialogRangePickerSession is not null)
+                return;
+
+            session.Dialog.Activate();
             session.Target.Focus();
             session.Target.SelectAll();
-            return;
         }
 
-        session.Dialog.Position = session.DialogPosition;
-        session.Dialog.Activate();
-        session.Target.Focus();
-        session.Target.SelectAll();
+        ActivateDialogAndRestoreTargetFocus();
+        Dispatcher.UIThread.Post(ActivateDialogAndRestoreTargetFocus, DispatcherPriority.Input);
+        Dispatcher.UIThread.Post(ActivateDialogAndRestoreTargetFocus, DispatcherPriority.Background);
     }
 
     private void SetDialogRangePickerOwnerInputEnabled(bool isEnabled)

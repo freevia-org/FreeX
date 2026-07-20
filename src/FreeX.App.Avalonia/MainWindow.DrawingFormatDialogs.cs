@@ -615,6 +615,14 @@ public sealed partial class MainWindow
         content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
 
+        // Match the WPF dialog's Loaded focus contract: the first gradient-stop editor owns
+        // initial keyboard focus and its value is selected for immediate replacement.
+        dialog.Opened += (_, _) =>
+        {
+            startBox.Focus();
+            startBox.SelectAll();
+        };
+
         UpdatePreview();
 
         var confirmed = await dialog.ShowDialog<bool>(this);

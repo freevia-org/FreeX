@@ -236,6 +236,7 @@ public sealed partial class MainWindow
         var forward = await ExerciseTabCycleAsync(dialog, reverse: false, tabStops);
         var backward = await ExerciseTabCycleAsync(dialog, reverse: true, tabStops);
         await RecordDialogRangeInteractionContractsAsync(dialog);
+        await SettleDialogRangeInteractionBoundaryAsync(dialog);
 
         var defaultButton = FindDefaultButton(dialog);
         var defaultEnter = defaultButton is null
@@ -307,10 +308,11 @@ public sealed partial class MainWindow
 
     private static async Task<string> ExerciseTabCycleAsync(Window dialog, bool reverse, int tabStops)
     {
-        var initial = dialog.FocusManager?.GetFocusedElement();
-        if (!IsFocusInside(dialog, initial))
+        var initialFocus = dialog.FocusManager?.GetFocusedElement();
+        if (!IsFocusInside(dialog, initialFocus))
             return "failed:no-starting-focus";
 
+        var initial = NormalizeDialogTabStop(initialFocus);
         var visited = new List<IInputElement?> { initial };
         var maximumSteps = Math.Max(2, tabStops + 2);
         for (var step = 1; step <= maximumSteps; step++)
@@ -325,9 +327,11 @@ public sealed partial class MainWindow
             }
 
             await SettleDialogInteractionAsync();
-            var after = dialog.FocusManager?.GetFocusedElement();
-            if (!IsFocusInside(dialog, after))
+            var afterFocus = dialog.FocusManager?.GetFocusedElement();
+            if (!IsFocusInside(dialog, afterFocus))
                 return "failed:focus-left-dialog:step=" + step;
+
+            var after = NormalizeDialogTabStop(afterFocus);
 
             if (ReferenceEquals(initial, after))
             {
@@ -474,6 +478,17 @@ public sealed partial class MainWindow
 
     private static Task SettleDialogInteractionAsync() => Task.Delay(75);
 
+    private static async Task SettleDialogRangeInteractionBoundaryAsync(Window dialog)
+    {
+        const int maximumAttempts = 4;
+        for (var attempt = 0; attempt < maximumAttempts; attempt++)
+        {
+            await SettleDialogInteractionAsync();
+            if (!dialog.IsVisible || IsFocusInside(dialog, dialog.FocusManager?.GetFocusedElement()))
+                return;
+        }
+    }
+
     internal static bool SendDialogKeyForTest(
         Window dialog,
         Key key,
@@ -484,7 +499,18 @@ public sealed partial class MainWindow
     private static int CountDialogTabStops(Window dialog) =>
         dialog.GetVisualDescendants()
             .OfType<Control>()
-            .Count(control => control.Focusable && control.IsVisible && control.IsEffectivelyEnabled);
+            .Where(control => control.Focusable && control.IsVisible && control.IsEffectivelyEnabled)
+            .Select(NormalizeDialogTabStop)
+            .Distinct()
+            .Count();
+
+    private static IInputElement NormalizeDialogTabStop(IInputElement? element)
+    {
+        if (element is not Control control)
+            return element!;
+
+        return control.GetVisualAncestors().OfType<ListBox>().FirstOrDefault() ?? control;
+    }
 
     private static Button? FindDefaultButton(Window dialog) =>
         dialog.GetVisualDescendants()
