@@ -477,6 +477,7 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
         source.Should().Contain("ShowAnimationPane()");
         source.Should().Contain("BuildAnimationPaneItemCard(");
+        source.Should().Contain("item.EffectOptions.WheelSpokeOptions");
         source.Should().Contain("AnimationPanePlanner.BuildEffectOptionMutationPlan(");
         source.Should().Contain("AnimationPanePlanner.TryApplyEffectOptionMutation(");
         source.Should().Contain("AnimationPanePlanner.BuildTriggerMutationPlan(");

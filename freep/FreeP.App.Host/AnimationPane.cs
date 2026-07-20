@@ -317,6 +317,29 @@ public sealed class AnimationPane : Border
             }
         }
 
+        var wheelSpokeCombo = new ComboBox
+        {
+            FontSize          = 10,
+            Width             = 86,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin            = new Thickness(2, 2, 2, 2),
+            ToolTip           = "Wheel spokes",
+            IsEnabled         = item.EffectOptions.CanApply,
+            Visibility        = item.EffectOptions.WheelSpokeOptions.Count > 0
+                ? Visibility.Visible
+                : Visibility.Collapsed,
+        };
+        foreach (var option in item.EffectOptions.WheelSpokeOptions)
+            wheelSpokeCombo.Items.Add(option.DisplayText);
+        for (var i = 0; i < item.EffectOptions.WheelSpokeOptions.Count; i++)
+        {
+            if (item.EffectOptions.WheelSpokeOptions[i].IsSelected)
+            {
+                wheelSpokeCombo.SelectedIndex = i;
+                break;
+            }
+        }
+
         // ── Trigger dropdown ────────────────────────────────────────────────────
         var triggerCombo = new ComboBox
         {
@@ -341,6 +364,22 @@ public sealed class AnimationPane : Border
             }
 
             var option = item.EffectOptions.Options[effectOptionCombo.SelectedIndex];
+            var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+                _editor.CurrentSlideAnimations,
+                capturedIndex,
+                option.Id);
+            AnimationPanePlanner.TryApplyEffectOptionMutation(_editor, plan);
+        };
+
+        wheelSpokeCombo.SelectionChanged += (_, _) =>
+        {
+            if (wheelSpokeCombo.SelectedIndex < 0
+                || wheelSpokeCombo.SelectedIndex >= item.EffectOptions.WheelSpokeOptions.Count)
+            {
+                return;
+            }
+
+            var option = item.EffectOptions.WheelSpokeOptions[wheelSpokeCombo.SelectedIndex];
             var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
                 _editor.CurrentSlideAnimations,
                 capturedIndex,
@@ -476,6 +515,7 @@ public sealed class AnimationPane : Border
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) }); // name
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // effect
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // effect option
+        innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // wheel spokes
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // trigger
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // duration
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // delay
@@ -485,15 +525,17 @@ public sealed class AnimationPane : Border
         Grid.SetColumn(nameLabel,   1);
         Grid.SetColumn(effectLabel, 2);
         Grid.SetColumn(effectOptionCombo, 3);
-        Grid.SetColumn(triggerCombo, 4);
-        Grid.SetColumn(durationBox, 5);
-        Grid.SetColumn(delayBox,    6);
-        Grid.SetColumn(btnPanel,    7);
+        Grid.SetColumn(wheelSpokeCombo, 4);
+        Grid.SetColumn(triggerCombo, 5);
+        Grid.SetColumn(durationBox, 6);
+        Grid.SetColumn(delayBox,    7);
+        Grid.SetColumn(btnPanel,    8);
 
         innerGrid.Children.Add(orderLabel);
         innerGrid.Children.Add(nameLabel);
         innerGrid.Children.Add(effectLabel);
         innerGrid.Children.Add(effectOptionCombo);
+        innerGrid.Children.Add(wheelSpokeCombo);
         innerGrid.Children.Add(triggerCombo);
         innerGrid.Children.Add(durationBox);
         innerGrid.Children.Add(delayBox);
