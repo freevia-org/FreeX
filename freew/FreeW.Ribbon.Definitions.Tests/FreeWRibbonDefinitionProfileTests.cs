@@ -429,6 +429,10 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.accept-all", "shared-profile");
         AssertGapClassification(commands, "freew.font-color.black", "profile-shape-only");
         AssertGapClassification(commands, "freew.image-crop", "shared-profile");
+        AssertGapClassification(commands, "freew.image-alt-text", "shared-profile");
+        AssertGapClassification(commands, "freew.image-border", "shared-profile");
+        AssertGapClassification(commands, "freew.image-reset", "shared-profile");
+        AssertGapClassification(commands, "freew.image-size", "shared-profile");
         AssertGapClassification(commands, "freew.table-to-text", "shared-profile");
         AssertGapClassification(commands, "freew.bookmark", "shared-profile");
         AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");

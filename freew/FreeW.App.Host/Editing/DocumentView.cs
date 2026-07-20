@@ -2775,10 +2775,10 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedImageAltText(string? altText)
     {
         CommitToModel();
-        var image = SelectedImageLocation().Image;
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null)
             return;
-        image.AltText = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
+        _commands.Execute(new SetImageAltTextCommand(blockIndex, runIndex, altText));
         Render();
     }
 
@@ -2929,7 +2929,7 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Restore the currently selected image to its natural size (from OriginalPixelWidth/Height), clearing
-    /// any rotation, flip, and crop. Uses the current screen DPI for the pt→px conversion. Undoable.
+    /// any rotation, flip, and crop. Uses the shared 96-DPI bitmap-to-point policy. Undoable.
     /// No-op without an image selection, or when OriginalPixelWidth is 0 (not recorded at insert time).
     /// </summary>
     public void ResetSelectedImage()
@@ -2938,21 +2938,16 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
 
-        double naturalWidthPt, naturalHeightPt;
-        if (image.OriginalPixelWidth > 0 && image.OriginalPixelHeight > 0)
-        {
-            // Convert pixel dimensions to points at 96 dpi (WPF device-independent pixels).
-            naturalWidthPt  = image.OriginalPixelWidth  / 96.0 * 72.0;
-            naturalHeightPt = image.OriginalPixelHeight / 96.0 * 72.0;
-        }
-        else
-        {
-            // Fallback: restore current size (effectively just clears rotation/flip/crop).
-            naturalWidthPt  = image.WidthPt;
-            naturalHeightPt = image.HeightPt;
-        }
-
-        _commands.Execute(new ResetImageSizeCommand(blockIndex, runIndex, naturalWidthPt, naturalHeightPt));
+        var naturalSize = ImageResetCommandPlanner.BuildNaturalSize(
+            image.OriginalPixelWidth,
+            image.OriginalPixelHeight,
+            image.WidthPt,
+            image.HeightPt);
+        _commands.Execute(new ResetImageSizeCommand(
+            blockIndex,
+            runIndex,
+            naturalSize.WidthPt,
+            naturalSize.HeightPt));
         Render();
     }
 

@@ -260,6 +260,12 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenPageNumberFormatDialog = null,
     /// <summary>Picture Format &gt; Crop. Optional host callback that owns the modal crop workflow.</summary>
     Action? OpenImageCropDialog = null,
+    /// <summary>Picture Format &gt; Size. Optional host callback that owns the modal size workflow.</summary>
+    Action? OpenImageSizeDialog = null,
+    /// <summary>Picture Format &gt; Alt Text. Optional host callback that owns the text prompt.</summary>
+    Action? OpenImageAltTextDialog = null,
+    /// <summary>Picture Format &gt; Picture Border. Optional host callback that owns the modal border workflow.</summary>
+    Action? OpenImageBorderDialog = null,
     /// <summary>Table Layout &gt; Convert to Text. Optional host callback that owns delimiter selection.</summary>
     Action? OpenTableToTextDialog = null);
 

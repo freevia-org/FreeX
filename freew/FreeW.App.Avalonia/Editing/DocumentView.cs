@@ -7929,6 +7929,28 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Set the selected picture size through the same image-specific model command used by WPF.
+    /// </summary>
+    public void SetSelectedImageSize(double widthPt, double heightPt)
+    {
+        if (widthPt <= 0 || heightPt <= 0 || _selectedFloating is not { Kind: "Image" } selected)
+            return;
+        if (!TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Image is not { IsFloating: true })
+        {
+            return;
+        }
+
+        _bus.Execute(new SetImageSizeCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            widthPt,
+            heightPt));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
+    /// <summary>
     /// AV-PICTAB: Returns the selected floating object's model size in points (width, height),
     /// or null when nothing is selected (or the kind carries no editable size).
     /// </summary>
@@ -8010,6 +8032,54 @@ public sealed class DocumentView : Control
             right,
             top,
             bottom));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
+    /// <summary>Set or remove the selected picture border through the shared undoable command.</summary>
+    public void SetSelectedImageBorder(string? colorHex, double widthPt, string? dash = null)
+    {
+        if (_selectedFloating is not { Kind: "Image" } selected)
+            return;
+        if (!TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Image is not { IsFloating: true })
+        {
+            return;
+        }
+
+        _bus.Execute(new SetImageBorderCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            colorHex,
+            widthPt,
+            dash));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
+    /// <summary>
+    /// Restore natural size and clear picture adjustments through the shared WPF model command.
+    /// </summary>
+    public void ResetSelectedImage()
+    {
+        if (_selectedFloating is not { Kind: "Image" } selected)
+            return;
+        if (!TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Image is not { IsFloating: true } image)
+        {
+            return;
+        }
+
+        var naturalSize = ImageResetCommandPlanner.BuildNaturalSize(
+            image.OriginalPixelWidth,
+            image.OriginalPixelHeight,
+            image.WidthPt,
+            image.HeightPt);
+        _bus.Execute(new ResetImageSizeCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            naturalSize.WidthPt,
+            naturalSize.HeightPt));
         InvalidateLayoutAndVisual();
         RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
     }

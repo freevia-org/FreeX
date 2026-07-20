@@ -1181,6 +1181,16 @@ internal static class FreeWAvaloniaRibbonCommands
 
         RegisterFloatingPositionCommands(r, editor, "image", "Image");
         r.Register("freew.image-crop", new ImageCropCommand(editor, callbacks));
+        r.Register("freew.image-size", new SelectedImageDialogCommand(
+            editor,
+            callbacks.OpenImageSizeDialog));
+        r.Register("freew.image-alt-text", new SelectedImageDialogCommand(
+            editor,
+            callbacks.OpenImageAltTextDialog));
+        r.Register("freew.image-border", new SelectedImageDialogCommand(
+            editor,
+            callbacks.OpenImageBorderDialog));
+        r.Register("freew.image-reset", new ImageResetCommand(editor));
         r.Register("freew.image-align-left", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Left));
         r.Register("freew.image-align-center", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Center));
         r.Register("freew.image-align-right", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Right));
@@ -1262,6 +1272,32 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: editor.SelectedFloatingImage() is not null && callbacks.OpenImageCropDialog is not null);
+    }
+
+    private sealed class SelectedImageDialogCommand(
+        DocumentView editor,
+        Action? openDialog) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                openDialog!.Invoke();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingImage() is not null && openDialog is not null);
+    }
+
+    private sealed class ImageResetCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                editor.ResetSelectedImage();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingImage() is not null);
     }
 
     private sealed class TableToTextCommand(

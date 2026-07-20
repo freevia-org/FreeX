@@ -41,6 +41,42 @@ public sealed class ImageAndTableConversionParityTests
     }
 
     [StaFact]
+    public void PictureCoreHostRoutes_MutateSelectedImageAndUndoRestoreIt()
+    {
+        var (view, image) = SelectedImage();
+
+        view.SetSelectedImageAltText("  Updated description  ");
+        image.AltText.Should().Be("Updated description");
+        view.Commands.Undo();
+        image.AltText.Should().Be("Original description");
+
+        view.SetSelectedImageBorder("AABBCC", 2.25, "dot");
+        (image.BorderColorHex, image.BorderWidthPt, image.BorderDash)
+            .Should().Be(("AABBCC", 2.25, "dot"));
+        view.Commands.Undo();
+        (image.BorderColorHex, image.BorderWidthPt, image.BorderDash)
+            .Should().Be(("112233", 0.75, "dash"));
+
+        view.SetSelectedImageSize(210, 105);
+        (image.WidthPt, image.HeightPt).Should().Be((210, 105));
+        view.Commands.Undo();
+        (image.WidthPt, image.HeightPt).Should().Be((240, 120));
+
+        view.ResetSelectedImage();
+        (image.WidthPt, image.HeightPt).Should().Be((150, 75));
+        image.RotationAngle.Should().Be(0);
+        image.FlipH.Should().BeFalse();
+        image.HasCrop.Should().BeFalse();
+        image.BrightnessPct.Should().Be(0);
+        view.Commands.Undo();
+        (image.WidthPt, image.HeightPt).Should().Be((240, 120));
+        image.RotationAngle.Should().Be(45);
+        image.FlipH.Should().BeTrue();
+        image.CropLeft.Should().Be(0.1);
+        image.BrightnessPct.Should().Be(20);
+    }
+
+    [StaFact]
     public void TableToTextHostRoute_UsesSharedConverterAndUndoRestoresTable()
     {
         var table = new ModelTable();
@@ -71,5 +107,33 @@ public sealed class ImageAndTableConversionParityTests
         foreach (var value in values)
             row.Cells.Add(new ModelTableCell(value));
         return row;
+    }
+
+    private static (DocumentView View, InlineImage Image) SelectedImage()
+    {
+        var image = new InlineImage([0x89, 0x50, 0x4E, 0x47], 240, 120)
+        {
+            Wrapping = ImageWrapping.Square,
+            AltText = "Original description",
+            BorderColorHex = "112233",
+            BorderWidthPt = 0.75,
+            BorderDash = "dash",
+            RotationAngle = 45,
+            FlipH = true,
+            CropLeft = 0.1,
+            BrightnessPct = 20,
+            OriginalPixelWidth = 200,
+            OriginalPixelHeight = 100,
+        };
+        var paragraph = new ModelParagraph();
+        paragraph.Runs.Add(Run.FromImage(image));
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SelectFloatingImage(image);
+        return (view, image);
     }
 }

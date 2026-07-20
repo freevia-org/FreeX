@@ -369,6 +369,43 @@ public sealed class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task OpenImageSizeDialogAsync()
+    {
+        if (_editor.SelectedFloatingImage() is not { } image)
+            return;
+
+        var result = await ImageSizeDialog.ShowAsync(this, image.WidthPt, image.HeightPt);
+        if (result is not null)
+            _editor.SetSelectedImageSize(result.Width, result.Height);
+        _editor.Focus();
+    }
+
+    private async Task OpenImageAltTextDialogAsync()
+    {
+        if (_editor.SelectedFloatingImage() is not { } image)
+            return;
+
+        var result = await ImageAltTextDialog.ShowAsync(this, image.AltText ?? string.Empty);
+        if (result is not null)
+            _editor.SetSelectedFloatingAltText(result);
+        _editor.Focus();
+    }
+
+    private async Task OpenImageBorderDialogAsync()
+    {
+        if (_editor.SelectedFloatingImage() is not { } image)
+            return;
+
+        var result = await ImageBorderDialog.ShowAsync(
+            this,
+            image.BorderColorHex,
+            image.BorderWidthPt,
+            image.BorderDash);
+        if (result is not null)
+            _editor.SetSelectedImageBorder(result.Color, result.Width, result.Dash);
+        _editor.Focus();
+    }
+
     private async Task OpenTableToTextDialogAsync()
     {
         if (!_editor.CanConvertTableToText)
@@ -1182,6 +1219,9 @@ public sealed class MainWindow : Window
             OpenPageSetupDialog: () => _ = OpenPageSetupDialogAsync(),
             OpenPageNumberFormatDialog: () => _ = OpenPageNumberFormatDialogAsync(),
             OpenImageCropDialog: () => _ = OpenImageCropDialogAsync(),
+            OpenImageSizeDialog: () => _ = OpenImageSizeDialogAsync(),
+            OpenImageAltTextDialog: () => _ = OpenImageAltTextDialogAsync(),
+            OpenImageBorderDialog: () => _ = OpenImageBorderDialogAsync(),
             OpenTableToTextDialog: () => _ = OpenTableToTextDialogAsync(),
             ToggleOrientation:   ToggleOrientation,
             ApplyMarginPreset:   ApplyMarginPreset,

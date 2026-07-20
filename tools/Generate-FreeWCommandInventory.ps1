@@ -154,6 +154,26 @@ internal static class FreeWCommandInventory
             "Picture crop uses the shared dialog planner and SetImageCropCommand in both hosts, including selected-image enablement and undo restoration.",
             "ImageAndTableConversionParityTests.ImageCropHostRoute_MutatesSelectedImageAndUndoRestoresIt",
             "CommandParityCropTableToTextTests.ImageCropRegistryRoute_MatchesSelectionEnablementMutationAndUndo"),
+        ["freew.image-alt-text"] = HostParityEvidence(
+            "Picture Alt Text uses the current description as its prompt seed and SetImageAltTextCommand in both hosts, including selected-image enablement, cancel no-op, normalization, and undo restoration.",
+            "ImageAndTableConversionParityTests.PictureCoreHostRoutes_MutateSelectedImageAndUndoRestoreIt",
+            "PictureCoreCommandParityTests.ImageAltTextRegistryRoute_MatchesSelectionMutationCancelAndUndo",
+            "freew/FreeW.App.Avalonia.Tests/PictureCoreCommandParityTests.cs"),
+        ["freew.image-border"] = HostParityEvidence(
+            "Picture Border uses the shared ImageBorderDialogPlanner and SetImageBorderCommand in both hosts, including selected-image enablement, current-value defaults, cancel no-op, and undo restoration.",
+            "ImageAndTableConversionParityTests.PictureCoreHostRoutes_MutateSelectedImageAndUndoRestoreIt",
+            "PictureCoreCommandParityTests.ImageBorderRegistryRoute_MatchesSelectionMutationCancelAndUndo",
+            "freew/FreeW.App.Avalonia.Tests/PictureCoreCommandParityTests.cs"),
+        ["freew.image-reset"] = HostParityEvidence(
+            "Reset Picture uses one shared natural-size policy and ResetImageSizeCommand in both hosts, including selected-image enablement and complete undo restoration.",
+            "ImageAndTableConversionParityTests.PictureCoreHostRoutes_MutateSelectedImageAndUndoRestoreIt",
+            "PictureCoreCommandParityTests.ImageResetRegistryRoute_MatchesNaturalSizeMutationAndUndo",
+            "freew/FreeW.App.Avalonia.Tests/PictureCoreCommandParityTests.cs"),
+        ["freew.image-size"] = HostParityEvidence(
+            "Picture Size uses the shared ImageSizeDialogPlanner and SetImageSizeCommand in both hosts, including selected-image enablement, current-value defaults, cancel no-op, and undo restoration.",
+            "ImageAndTableConversionParityTests.PictureCoreHostRoutes_MutateSelectedImageAndUndoRestoreIt",
+            "PictureCoreCommandParityTests.ImageSizeRegistryRoute_MatchesSelectionMutationCancelAndUndo",
+            "freew/FreeW.App.Avalonia.Tests/PictureCoreCommandParityTests.cs"),
         ["freew.table-to-text"] = HostParityEvidence(
             "Table to Text uses the shared delimiter choices and TextTableConvert model route in both hosts, preserving contextual enablement and undo restoration.",
             "ImageAndTableConversionParityTests.TableToTextHostRoute_UsesSharedConverterAndUndoRestoresTable",
@@ -402,7 +422,8 @@ internal static class FreeWCommandInventory
     private static CommandBehaviorEvidence HostParityEvidence(
         string summary,
         string wpfTest,
-        string avaloniaTest) =>
+        string avaloniaTest,
+        string avaloniaPath = "freew/FreeW.App.Avalonia.Tests/CommandParityCropTableToTextTests.cs") =>
         new(
             EvidenceId: "freew.command-host-parity.shared-behavior",
             Slice: "Command host parity",
@@ -411,7 +432,7 @@ internal static class FreeWCommandInventory
                 Path: "freew/FreeW.App.Host.Tests/ImageAndTableConversionParityTests.cs",
                 Test: wpfTest),
             AvaloniaEvidence: new BehaviorEvidenceLink(
-                Path: "freew/FreeW.App.Avalonia.Tests/CommandParityCropTableToTextTests.cs",
+                Path: avaloniaPath,
                 Test: avaloniaTest));
 
     private static CommandBehaviorEvidence ProtectionHistoryEvidence(string summary) =>

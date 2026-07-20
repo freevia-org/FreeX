@@ -1089,6 +1089,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     tab.Group("picture-adjust", "Adjust", null, 90, g =>
                     {
+                        g.Button("freew.image-reset", "Reset Picture", b => b with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh)
+                        });
+                        g.Button("freew.image-border", "Picture Border", b => b with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border)
+                        });
                         g.Button("freew.image-crop", "Crop", b => b with
                         {
                             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale)
@@ -1117,6 +1125,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                     {
                         g.ComboBox("freew.image-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
                         g.ComboBox("freew.image-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
+                        g.Button("freew.image-size", "Size", b => b with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size)
+                        });
+                        g.Button("freew.image-alt-text", "Alt Text", b => b with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Info)
+                        });
                     });
                 })
             // ── AV-PICTAB: Drawing Format contextual tab (shown when a non-image float is selected) ──

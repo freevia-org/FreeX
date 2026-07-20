@@ -429,6 +429,55 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void PictureCoreCommands_AltTextBorderAndReset_AreUndoableAndRedoable()
+    {
+        var (doc, bus) = New();
+        var image = new InlineImage([1, 2, 3], widthPt: 240, heightPt: 120)
+        {
+            AltText = "Before",
+            BorderColorHex = "112233",
+            BorderWidthPt = 0.75,
+            BorderDash = "dash",
+            RotationAngle = 45,
+            FlipH = true,
+            CropLeft = 0.1,
+            BrightnessPct = 20,
+            OriginalPixelWidth = 200,
+            OriginalPixelHeight = 100,
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(image));
+        doc.Blocks.Add(paragraph);
+
+        bus.Execute(new SetImageAltTextCommand(0, 0, "  After  "));
+        image.AltText.Should().Be("After");
+        bus.Undo().Should().BeTrue();
+        image.AltText.Should().Be("Before");
+        bus.Redo().Should().BeTrue();
+        image.AltText.Should().Be("After");
+
+        bus.Execute(new SetImageBorderCommand(0, 0, "ABCDEF", 2.25, "dot"));
+        (image.BorderColorHex, image.BorderWidthPt, image.BorderDash)
+            .Should().Be(("ABCDEF", 2.25, "dot"));
+        bus.Undo().Should().BeTrue();
+        (image.BorderColorHex, image.BorderWidthPt, image.BorderDash)
+            .Should().Be(("112233", 0.75, "dash"));
+
+        bus.Execute(new ResetImageSizeCommand(0, 0, 150, 75));
+        (image.WidthPt, image.HeightPt).Should().Be((150, 75));
+        image.RotationAngle.Should().Be(0);
+        image.FlipH.Should().BeFalse();
+        image.HasCrop.Should().BeFalse();
+        image.BrightnessPct.Should().Be(0);
+        bus.Undo().Should().BeTrue();
+        (image.WidthPt, image.HeightPt).Should().Be((240, 120));
+        image.RotationAngle.Should().Be(45);
+        image.FlipH.Should().BeTrue();
+        image.CropLeft.Should().Be(0.1);
+        image.BrightnessPct.Should().Be(20);
+    }
+
+    [Fact]
     public void MergeCellsHorizontal_SetsGridSpan_DropsCells_AndReverts()
     {
         var (doc, bus) = New();
