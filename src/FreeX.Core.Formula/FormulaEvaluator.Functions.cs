@@ -264,6 +264,19 @@ public sealed partial class FormulaEvaluator
                 // the raw argument node for OmittedArgumentNode ahead of evaluating it.
                 expandedArgs.Add(TextSplitOmittedPadArgumentValue.Instance);
             }
+            else if (functionName == "TEXTSPLIT" && (argIndex == 1 || argIndex == 2) && arg is OmittedArgumentNode)
+            {
+                // TEXTSPLIT's col_delimiter/row_delimiter must be told apart from an explicit
+                // blank-cell-reference delimiter: TEXTSPLIT(A1,,";") (double-comma -- the argument
+                // slot itself omitted) means "don't split on that axis", but TEXTSPLIT(A1,B1,";")
+                // with B1 blank means "split on the empty-string delimiter", which Excel rejects
+                // with #VALUE! (mirroring the literal ="" case, since Excel coerces the blank
+                // reference to "" for this text argument). The generic EvaluateNode(OmittedArgumentNode)
+                // fallback below returns the same BlankValue.Instance singleton a blank-cell reference
+                // produces, so the two cases must be told apart here, before evaluation -- mirroring
+                // the TEXTSPLIT pad_with special case above.
+                expandedArgs.Add(TextSplitOmittedDelimiterArgumentValue.Instance);
+            }
             else if (arg is OmittedArgumentNode && IsOmittedOptionalOrdinalArgument(functionName, argIndex))
             {
                 // TEXTBEFORE/TEXTAFTER's instance_num, FIND/SEARCH's start_num, LEFT/RIGHT's
@@ -749,4 +762,20 @@ public sealed partial class FormulaEvaluator
 internal sealed record OmittedOptionalOrdinalArgumentValue : ScalarValue
 {
     public static readonly OmittedOptionalOrdinalArgumentValue Instance = new();
+}
+
+/// <summary>
+/// Sentinel substituted (by the OmittedArgumentNode branch in FormulaEvaluator.Functions.cs's
+/// argument-expansion loop) for TEXTSPLIT's genuinely-omitted col_delimiter/row_delimiter argument
+/// slot (e.g. the double-comma in TEXTSPLIT(A1,,";")), so BuiltInFunctions.TextSplit.cs's
+/// TryCollectTextDelimiters can tell "the argument slot itself was omitted" (don't split on that
+/// axis at all) apart from "an explicit argument evaluates to blank" (e.g. TEXTSPLIT(A1,B1,";")
+/// with B1 a blank cell reference, which Excel coerces to an empty-string delimiter and rejects
+/// with #VALUE!). Both cases would otherwise evaluate to the same BlankValue.Instance singleton.
+/// Mirrors TextSplitOmittedPadArgumentValue and OmittedOptionalOrdinalArgumentValue, which solve
+/// the identical problem for TEXTSPLIT's pad_with and TEXTBEFORE/TEXTAFTER's instance_num.
+/// </summary>
+internal sealed record TextSplitOmittedDelimiterArgumentValue : ScalarValue
+{
+    public static readonly TextSplitOmittedDelimiterArgumentValue Instance = new();
 }

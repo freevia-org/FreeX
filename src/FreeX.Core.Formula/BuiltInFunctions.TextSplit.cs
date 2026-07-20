@@ -133,7 +133,7 @@ public static partial class BuiltInFunctions
 
         if (!TryCollectTextDelimiters(args[1], allowBlankArgument: true, out var colDelimiters, out var error))
             return error;
-        if (!TryCollectTextDelimiters(args.Count > 2 ? args[2] : BlankValue.Instance, allowBlankArgument: true, out var rowDelimiters, out error))
+        if (!TryCollectTextDelimiters(args.Count > 2 ? args[2] : TextSplitOmittedDelimiterArgumentValue.Instance, allowBlankArgument: true, out var rowDelimiters, out error))
             return error;
         if (colDelimiters.Count == 0 && rowDelimiters.Count == 0)
             return ErrorValue.Value;
@@ -259,7 +259,15 @@ public static partial class BuiltInFunctions
         delimiters = [];
         error = ErrorValue.Value;
 
-        if (value is BlankValue && allowBlankArgument)
+        // TEXTSPLIT's col_delimiter/row_delimiter (the only callers that pass allowBlankArgument:
+        // true) must distinguish a genuinely-omitted argument slot -- the TextSplitOmittedDelimiterArgumentValue
+        // sentinel FormulaEvaluator.Functions.cs substitutes for an OmittedArgumentNode (e.g. the
+        // double-comma in TEXTSPLIT(A1,,";")), which means "don't split on that axis" -- from an
+        // explicit argument that merely evaluates to BlankValue (e.g. a reference to an empty cell),
+        // which Excel coerces to an empty-string delimiter and must fall through to the normal
+        // ToText(value) path below so the caller's Any(d => d.Length == 0) check rejects it with
+        // #VALUE!, exactly like a literal ="" delimiter already does.
+        if (value is TextSplitOmittedDelimiterArgumentValue && allowBlankArgument)
             return true;
         if (value is ErrorValue directError)
         {

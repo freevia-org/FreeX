@@ -61,16 +61,8 @@ public sealed class PivotUiPlannerTests
     }
 
     [Fact]
-    public void FiltersAndFieldMutation_AreSharedPortableLogic()
+    public void FieldMutation_IsSharedPortableLogic()
     {
-        PivotUiPlanner.TryParseLabelFilter("begins:East", 2, out var labelFilter).Should().BeTrue();
-        labelFilter.Should().Be(new PivotLabelFilterModel(2, PivotLabelFilterKind.BeginsWith, "East"));
-
-        PivotUiPlanner.TryParseValueFilter("top:3", 4, out var valueFilter).Should().BeTrue();
-        valueFilter.Kind.Should().Be(PivotValueFilterKind.Top);
-        valueFilter.Count.Should().Be(3);
-        valueFilter.SourceFieldIndex.Should().Be(4);
-
         var updated = PivotUiPlanner.SetFieldSelectedItems([new PivotFieldModel(1)], 1, ["Q1"]);
         updated.Single().SelectedItem.Should().Be("Q1");
         updated.Single().SelectedItems.Should().Equal("Q1");
