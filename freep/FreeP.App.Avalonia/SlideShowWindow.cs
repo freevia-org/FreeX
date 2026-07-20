@@ -47,7 +47,8 @@ namespace FreeP.App.Avalonia;
 /// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
 /// Push (bidirectional displacement), Pan (scaled directional exchange), Gallery
 /// (two-surface gallery exchange), Conveyor (belt-like panel exchange), and Flash
-/// (white-flash). Window uses a centered aperture. Others fall back to Fade.
+/// (white-flash). Window uses a centered aperture. Morph uses matched object
+/// overlays and falls back to Fade only when no object correspondence exists.
 ///
 /// Media
 /// ─────
@@ -829,6 +830,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Window:
                 PlayWindowTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Morph:
+                PlayMorphTransition(slide, t, plan);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Dissolve:
@@ -1795,6 +1800,161 @@ public sealed class SlideShowWindow : Window
             }
         };
         timer.Start();
+    }
+
+    /// <summary>
+    /// Plays a shape-aware Morph exchange. Matched incoming objects are rendered
+    /// as transparent full-stage overlays and begin at the outgoing object's
+    /// bounds before interpolating to their authored target bounds.
+    /// </summary>
+    private void PlayMorphTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var source = _slideCanvas.Slide;
+        if (source is null)
+        {
+            PlayFadeTransition(slide, plan.DurationMs);
+            return;
+        }
+
+        var morphPlan = SlideShowMorphPlanner.Plan(transition, source, slide);
+        if (!morphPlan.HasObjectMatches)
+        {
+            PlayFadeTransition(slide, plan.DurationMs);
+            return;
+        }
+
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var transform = SlideTransformCore.Compute(w, h, _slideDipW, _slideDipH);
+        var prepared = new List<(Image Image, MatrixTransform Transform, double ScaleX, double ScaleY, double TranslateX, double TranslateY, uint ShapeId)>();
+
+        foreach (var match in morphPlan.Matches)
+        {
+            if (match.Source.ExtentCxEmu <= 0 || match.Source.ExtentCyEmu <= 0
+                || match.Target.ExtentCxEmu <= 0 || match.Target.ExtentCyEmu <= 0)
+                continue;
+
+            var bitmap = RenderShapeToOverlayBitmap(slide, match.Target, w, h);
+            if (bitmap is null) continue;
+
+            var sourceRect = MorphShapeScreenRect(match.Source, transform);
+            var targetRect = MorphShapeScreenRect(match.Target, transform);
+            if (sourceRect.Width < 0.5 || sourceRect.Height < 0.5
+                || targetRect.Width < 0.5 || targetRect.Height < 0.5)
+                continue;
+
+            var scaleX = sourceRect.Width / targetRect.Width;
+            var scaleY = sourceRect.Height / targetRect.Height;
+            var translateX = sourceRect.Left + sourceRect.Width / 2 - (targetRect.Left + targetRect.Width / 2);
+            var translateY = sourceRect.Top + sourceRect.Height / 2 - (targetRect.Top + targetRect.Height / 2);
+            var matrix = new MatrixTransform(Matrix.CreateScale(scaleX, scaleY)
+                * Matrix.CreateTranslation(translateX, translateY));
+            var image = new Image
+            {
+                Source = bitmap,
+                Width = w,
+                Height = h,
+                Stretch = Stretch.None,
+                Opacity = 0,
+                IsHitTestVisible = false,
+                RenderTransformOrigin = new RelativePoint(
+                    (targetRect.Left + targetRect.Width / 2) / w,
+                    (targetRect.Top + targetRect.Height / 2) / h,
+                    RelativeUnit.Relative),
+                RenderTransform = matrix
+            };
+            Canvas.SetLeft(image, 0);
+            Canvas.SetTop(image, 0);
+            _animOverlay.Children.Add(image);
+            _slideCanvas.SuppressedShapeIds.Add(match.Target.Id);
+            prepared.Add((image, matrix, scaleX, scaleY, translateX, translateY, match.Target.Id));
+        }
+
+        if (prepared.Count == 0)
+        {
+            foreach (var item in prepared)
+            {
+                _animOverlay.Children.Remove(item.Image);
+                _slideCanvas.SuppressedShapeIds.Remove(item.ShapeId);
+            }
+            PlayFadeTransition(slide, plan.DurationMs);
+            return;
+        }
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.ZIndex = 1;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Opacity = 1;
+            _transitionBackImage.IsVisible = true;
+            _transitionBackImage.ZIndex = 0;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, plan.DurationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var eased = EaseInOut(t);
+            if (snapshot is not null)
+                _transitionBackImage.Opacity = 1 - eased;
+
+            foreach (var item in prepared)
+            {
+                item.Transform.Matrix = Matrix.CreateScale(
+                        item.ScaleX + (1 - item.ScaleX) * eased,
+                        item.ScaleY + (1 - item.ScaleY) * eased)
+                    * Matrix.CreateTranslation(
+                        item.TranslateX * (1 - eased),
+                        item.TranslateY * (1 - eased));
+                item.Image.Opacity = eased;
+            }
+
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                foreach (var item in prepared)
+                {
+                    _animOverlay.Children.Remove(item.Image);
+                    _slideCanvas.SuppressedShapeIds.Remove(item.ShapeId);
+                }
+
+                _transitionBackImage.Opacity = 1;
+                _transitionBackImage.IsVisible = false;
+                _transitionBackImage.ZIndex = 0;
+                _slideCanvas.ZIndex = 0;
+                _slideCanvas.Refresh();
+            }
+        };
+        timer.Start();
+    }
+
+    private static Rect MorphShapeScreenRect(SlideShape shape, SlideTransformCore transform)
+    {
+        var topLeft = transform.SlideToScreen(
+            SlideTransformCore.EmuToDip(shape.OffsetXEmu),
+            SlideTransformCore.EmuToDip(shape.OffsetYEmu));
+        return new Rect(
+            topLeft.X,
+            topLeft.Y,
+            transform.ScaleDipToScreen(SlideTransformCore.EmuToDip(shape.ExtentCxEmu)),
+            transform.ScaleDipToScreen(SlideTransformCore.EmuToDip(shape.ExtentCyEmu)));
     }
 
     private void AnimateGalleryTransition(

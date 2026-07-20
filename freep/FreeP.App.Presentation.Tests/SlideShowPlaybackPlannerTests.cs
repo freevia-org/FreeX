@@ -39,14 +39,55 @@ public sealed class SlideShowPlaybackPlannerTests
         cover.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Cover);
         cover.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Cover);
 
-        var fallback = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        var morph = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
             Kind = TransitionKind.Morph,
             DurationMs = 750
         });
 
-        fallback.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Fade);
-        fallback.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.FadeFallback);
+        morph.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Morph);
+        morph.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Morph);
+        morph.DurationMs.Should().Be(750);
+    }
+
+    [Fact]
+    public void MorphPlanner_PrefersStableIdsThenUniqueNames()
+    {
+        var source = new Slide();
+        source.Shapes.Add(new SlideShape { Id = 10, Name = "Title", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+        source.Shapes.Add(new SlideShape { Id = 11, Name = "Body", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+
+        var target = new Slide();
+        target.Shapes.Add(new SlideShape { Id = 10, Name = "Renamed title", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+        target.Shapes.Add(new SlideShape { Id = 99, Name = "Body", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+
+        var plan = SlideShowMorphPlanner.Plan(
+            new SlideTransition { Kind = TransitionKind.Morph, MorphOption = "byObject" },
+            source,
+            target);
+
+        plan.Matches.Should().HaveCount(2);
+        plan.Matches[0].MatchKey.Should().Be("id:10");
+        plan.Matches[1].MatchKey.Should().Be("name:body");
+        plan.UnmatchedSourceCount.Should().Be(0);
+        plan.UnmatchedTargetCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void MorphPlanner_LeavesAmbiguousNamesUnmatched()
+    {
+        var source = new Slide();
+        source.Shapes.Add(new SlideShape { Id = 1, Name = "Card", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+        source.Shapes.Add(new SlideShape { Id = 2, Name = "Card", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+        var target = new Slide();
+        target.Shapes.Add(new SlideShape { Id = 99, Name = "Card", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+
+        var plan = SlideShowMorphPlanner.Plan(
+            new SlideTransition { Kind = TransitionKind.Morph }, source, target);
+
+        plan.Matches.Should().BeEmpty();
+        plan.UnmatchedSourceCount.Should().Be(2);
+        plan.UnmatchedTargetCount.Should().Be(1);
     }
 
     [Fact]

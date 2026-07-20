@@ -23,6 +23,7 @@ public enum SlideShowTransitionPlaybackKind
     Gallery,
     Conveyor,
     Window,
+    Morph,
     PushLike,
     FadeFallback
 }
@@ -126,6 +127,10 @@ public static class SlideShowTransitionPlanner
             // Window opens the incoming slide through a centered aperture;
             // unlike Box it starts partially open and carries a subtle scale.
             TransitionKind.Window => SlideShowTransitionPlaybackKind.Window,
+
+            // Morph is object-aware when both slides expose stable ids or
+            // unique names; the host falls back only when no match exists.
+            TransitionKind.Morph => SlideShowTransitionPlaybackKind.Morph,
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback
         };
