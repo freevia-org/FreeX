@@ -2535,6 +2535,7 @@ public sealed class SlideCanvas : FrameworkElement
             Text = text,
             FontFamily = run.FontFamily,
             FontSizePt = run.FontSizePt,
+            BaselineOffset = run.BaselineOffset,
             Bold = run.Bold,
             Italic = run.Italic,
             Underline = run.Underline,

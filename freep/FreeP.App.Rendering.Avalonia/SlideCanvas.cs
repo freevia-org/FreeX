@@ -2458,6 +2458,7 @@ public sealed class SlideCanvas : Control
             Text = text,
             FontFamily = run.FontFamily,
             FontSizePt = run.FontSizePt,
+            BaselineOffset = run.BaselineOffset,
             Bold = run.Bold,
             Italic = run.Italic,
             Underline = run.Underline,
