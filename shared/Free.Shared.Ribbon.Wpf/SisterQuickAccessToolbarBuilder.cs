@@ -4,27 +4,23 @@ using Free.Shared.Ribbon;
 
 namespace Free.Shared.Ribbon.Wpf;
 
-public sealed record SisterQuickAccessToolbarActions(
-    Action Save,
-    Action Undo,
-    Action Redo);
-
 /// <summary>
 /// Builds and dispatches the shared Save/Undo/Redo title-bar Quick Access Toolbar used by the WPF sister apps.
 /// Hosts still own the actual commands; this helper owns only the common descriptors and command-id routing.
 /// </summary>
 public static class SisterQuickAccessToolbarBuilder
 {
-    public const string SaveCommandId = "Save";
-    public const string UndoCommandId = "Undo";
-    public const string RedoCommandId = "Redo";
+    public const string SaveCommandId = SisterQuickAccessToolbarCatalog.SaveCommandId;
+    public const string UndoCommandId = SisterQuickAccessToolbarCatalog.UndoCommandId;
+    public const string RedoCommandId = SisterQuickAccessToolbarCatalog.RedoCommandId;
 
     public static IReadOnlyList<QuickAccessToolbarItem> BuildDefaultItems() =>
-    [
-        new(SaveCommandId, "Save (Ctrl+S)", RibbonCommandIconKind.Save),
-        new(UndoCommandId, "Undo (Ctrl+Z)", RibbonCommandIconKind.Undo),
-        new(RedoCommandId, "Redo (Ctrl+Y)", RibbonCommandIconKind.Redo)
-    ];
+        SisterQuickAccessToolbarCatalog.DefaultCommands
+            .Select(command => new QuickAccessToolbarItem(
+                command.CommandId,
+                command.Tooltip,
+                command.IconKind))
+            .ToArray();
 
     public static QuickAccessToolbarHandle Render(
         Panel host,
@@ -42,23 +38,6 @@ public static class SisterQuickAccessToolbarBuilder
             options);
     }
 
-    public static bool Execute(SisterQuickAccessToolbarActions actions, string commandId)
-    {
-        ArgumentNullException.ThrowIfNull(actions);
-
-        switch (commandId)
-        {
-            case SaveCommandId:
-                actions.Save();
-                return true;
-            case UndoCommandId:
-                actions.Undo();
-                return true;
-            case RedoCommandId:
-                actions.Redo();
-                return true;
-            default:
-                return false;
-        }
-    }
+    public static bool Execute(SisterQuickAccessToolbarActions actions, string commandId) =>
+        SisterQuickAccessToolbarCatalog.Execute(actions, commandId);
 }

@@ -44,7 +44,8 @@ public sealed partial class MainWindow : Window
         BadgeLetter = "P",
         TitleBarColor = ResolveTokenColor("FreePTitleBarBrush",   Color.FromRgb(0xB7, 0x47, 0x2A)),
         BadgeColor    = ResolveTokenColor("FreePAccentDarkBrush", Color.FromRgb(0x8F, 0x37, 0x21)),
-        CaptionHeight = 34
+        CaptionHeight = 34,
+        IconUri = "pack://application:,,,/FreeP.App.Host;component/Resources/FreeP.ico"
     };
 
     private static Color ResolveTokenColor(string key, Color fallback)
