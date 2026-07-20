@@ -478,6 +478,46 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void PictureStyleCatalog_AllPresetsApplyAndUndoThroughSharedCommand()
+    {
+        foreach (var preset in PictureStyleCatalog.Catalog)
+        {
+            var (doc, bus) = New();
+            var image = new InlineImage([1, 2, 3], widthPt: 120, heightPt: 80)
+            {
+                BorderColorHex = "112233",
+                BorderWidthPt = 0.75,
+                BorderDash = "dash",
+                ShadowPreset = 5,
+                ReflectionPreset = 2,
+                SoftEdgePt = 1.25,
+                PictureStylePreset = 99,
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(image));
+            doc.Blocks.Add(paragraph);
+
+            bus.Execute(new SetImageStyleCommand(0, 0, preset));
+
+            PictureStyle(image).Should().Be(PictureStyle(preset));
+            bus.Undo().Should().BeTrue();
+            PictureStyle(image).Should().Be((99, "112233", 0.75, "dash", 5, 2, 1.25));
+            bus.Redo().Should().BeTrue();
+            PictureStyle(image).Should().Be(PictureStyle(preset));
+        }
+    }
+
+    private static (int Id, string? Border, double Width, string? Dash, int Shadow, int Reflection, double SoftEdge)
+        PictureStyle(InlineImage image) =>
+        (image.PictureStylePreset, image.BorderColorHex, image.BorderWidthPt, image.BorderDash,
+            image.ShadowPreset, image.ReflectionPreset, image.SoftEdgePt);
+
+    private static (int Id, string? Border, double Width, string? Dash, int Shadow, int Reflection, double SoftEdge)
+        PictureStyle(PictureStylePreset preset) =>
+        (preset.Id, preset.BorderColorHex, preset.BorderWidthPt, preset.BorderDash,
+            preset.ShadowPreset, preset.ReflectionPreset, preset.SoftEdgePt);
+
+    [Fact]
     public void MergeCellsHorizontal_SetsGridSpan_DropsCells_AndReverts()
     {
         var (doc, bus) = New();

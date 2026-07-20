@@ -174,6 +174,18 @@ internal static class FreeWCommandInventory
             "ImageAndTableConversionParityTests.PictureCoreHostRoutes_MutateSelectedImageAndUndoRestoreIt",
             "PictureCoreCommandParityTests.ImageSizeRegistryRoute_MatchesSelectionMutationCancelAndUndo",
             "freew/FreeW.App.Avalonia.Tests/PictureCoreCommandParityTests.cs"),
+        ["freew.image-style-1"] = PictureStyleEvidence("Simple Frame, White"),
+        ["freew.image-style-2"] = PictureStyleEvidence("Simple Frame, Black"),
+        ["freew.image-style-3"] = PictureStyleEvidence("Thick Matte, Black"),
+        ["freew.image-style-4"] = PictureStyleEvidence("Double Frame, Black"),
+        ["freew.image-style-5"] = PictureStyleEvidence("Soft Edge Rectangle"),
+        ["freew.image-style-6"] = PictureStyleEvidence("Soft Edge Oval"),
+        ["freew.image-style-7"] = PictureStyleEvidence("Drop Shadow Rectangle"),
+        ["freew.image-style-8"] = PictureStyleEvidence("Drop Shadow White"),
+        ["freew.image-style-9"] = PictureStyleEvidence("Perspective Shadow"),
+        ["freew.image-style-10"] = PictureStyleEvidence("Reflected Rounded Rectangle"),
+        ["freew.image-style-11"] = PictureStyleEvidence("Reflected Bevel, White"),
+        ["freew.image-style-12"] = PictureStyleEvidence("Metal Rounded Rectangle"),
         ["freew.table-to-text"] = HostParityEvidence(
             "Table to Text uses the shared delimiter choices and TextTableConvert model route in both hosts, preserving contextual enablement and undo restoration.",
             "ImageAndTableConversionParityTests.TableToTextHostRoute_UsesSharedConverterAndUndoRestoresTable",
@@ -434,6 +446,13 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: avaloniaPath,
                 Test: avaloniaTest));
+
+    private static CommandBehaviorEvidence PictureStyleEvidence(string presetName) =>
+        HostParityEvidence(
+            $"Picture Style '{presetName}' uses the shared PictureStyleCatalog and SetImageStyleCommand in both hosts, including selected-image enablement, complete bundled mutation, selection refresh, and undo restoration.",
+            "ImageAndTableConversionParityTests.PictureStyleRegistryRoutes_ApplySharedCatalogPresetAndUndo",
+            "PictureStyleCommandParityTests.PictureStyleRegistryRoutes_ApplySharedCatalogPresetAndUndo",
+            "freew/FreeW.App.Avalonia.Tests/PictureStyleCommandParityTests.cs");
 
     private static CommandBehaviorEvidence ProtectionHistoryEvidence(string summary) =>
         new(

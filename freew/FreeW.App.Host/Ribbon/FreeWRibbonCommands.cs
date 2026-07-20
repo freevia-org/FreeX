@@ -4058,21 +4058,19 @@ internal static class FreeWRibbonCommands
     }
 
     // Picture Format > Picture Styles: apply a bundled border + effect style preset.
-    private sealed class ImageStylePresetCommand(DocumentView editor, PictureStylePreset preset) : IRibbonCommand
+    private sealed class ImageStylePresetCommand(DocumentView editor, PictureStylePreset preset) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            editor.Focus();
-            if (editor.SelectedImage() is null)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Picture Styles");
+            if (!GetState().IsEnabled)
                 return;
-            }
-            editor.ApplySelectedImageStyle(
-                preset.Id,
-                preset.BorderColorHex, preset.BorderWidthPt, preset.BorderDash,
-                preset.ShadowPreset, preset.ReflectionPreset, preset.SoftEdgePt);
+
+            editor.Focus();
+            editor.ApplySelectedImageStyle(preset);
         }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedImage() is not null);
     }
 
     // Drawing Format / Picture Format > Arrange > Group: group ≥2 selected floating objects.

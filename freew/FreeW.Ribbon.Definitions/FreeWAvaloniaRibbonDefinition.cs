@@ -1087,21 +1087,6 @@ internal static class FreeWAvaloniaRibbonDefinition
                 new RibbonTabContext(capabilities.PictureContextKey, "Picture Tools", RibbonContextColor.Orange),
                 tab =>
                 {
-                    tab.Group("picture-adjust", "Adjust", null, 90, g =>
-                    {
-                        g.Button("freew.image-reset", "Reset Picture", b => b with
-                        {
-                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh)
-                        });
-                        g.Button("freew.image-border", "Picture Border", b => b with
-                        {
-                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border)
-                        });
-                        g.Button("freew.image-crop", "Crop", b => b with
-                        {
-                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale)
-                        });
-                    });
                     tab.Group("picture-arrange", "Arrange", null, 100, g =>
                     {
                         g.Dropdown("freew.image-position", "Position", BuildFloatingPositionMenu("image"));
@@ -1120,6 +1105,31 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Button("freew.image-distribute-v",   "Distribute Vertically");
                         g.Button("freew.object-group",         "Group");
                         g.Button("freew.object-ungroup",       "Ungroup");
+                    });
+                    tab.Group("picture-styles", "Picture Styles", null, 98, g =>
+                    {
+                        foreach (var preset in PictureStyleCatalog.Catalog)
+                        {
+                            g.Button($"freew.image-style-{preset.Id}", preset.Name, b => b with
+                            {
+                                Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border)
+                            });
+                        }
+                    });
+                    tab.Group("picture-adjust", "Adjust", null, 90, g =>
+                    {
+                        g.Button("freew.image-reset", "Reset Picture", b => b with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh)
+                        });
+                        g.Button("freew.image-border", "Picture Border", b => b with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border)
+                        });
+                        g.Button("freew.image-crop", "Crop", b => b with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale)
+                        });
                     });
                     tab.Group("picture-size", "Size", null, 90, g =>
                     {

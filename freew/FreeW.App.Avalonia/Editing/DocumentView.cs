@@ -8057,6 +8057,23 @@ public sealed class DocumentView : Control
         RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
     }
 
+    /// <summary>Apply a shared Picture Styles preset to the selected picture through one undoable command.</summary>
+    public void ApplySelectedImageStyle(PictureStylePreset preset)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+        if (_selectedFloating is not { Kind: "Image" } selected)
+            return;
+        if (!TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Image is not { IsFloating: true })
+        {
+            return;
+        }
+
+        _bus.Execute(new SetImageStyleCommand(selected.BlockIndex, selected.RunIndex, preset));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
+    }
+
     /// <summary>
     /// Restore natural size and clear picture adjustments through the shared WPF model command.
     /// </summary>

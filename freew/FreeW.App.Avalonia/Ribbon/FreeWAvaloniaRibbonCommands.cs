@@ -1191,6 +1191,13 @@ internal static class FreeWAvaloniaRibbonCommands
             editor,
             callbacks.OpenImageBorderDialog));
         r.Register("freew.image-reset", new ImageResetCommand(editor));
+        foreach (var preset in PictureStyleCatalog.Catalog)
+        {
+            var captured = preset;
+            r.Register(
+                $"freew.image-style-{captured.Id}",
+                new ImageStylePresetCommand(editor, captured));
+        }
         r.Register("freew.image-align-left", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Left));
         r.Register("freew.image-align-center", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Center));
         r.Register("freew.image-align-right", new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Right));
@@ -1294,6 +1301,20 @@ internal static class FreeWAvaloniaRibbonCommands
         {
             if (GetState().IsEnabled)
                 editor.ResetSelectedImage();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingImage() is not null);
+    }
+
+    private sealed class ImageStylePresetCommand(
+        DocumentView editor,
+        PictureStylePreset preset) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                editor.ApplySelectedImageStyle(preset);
         }
 
         public RibbonCommandState GetState() =>

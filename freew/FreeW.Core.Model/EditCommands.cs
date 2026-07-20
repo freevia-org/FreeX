@@ -1497,6 +1497,21 @@ public sealed class SetImageStyleCommand(
     int shadowPreset, int reflectionPreset, double softEdgePt)
     : IDocumentCommand
 {
+    public SetImageStyleCommand(int paragraphIndex, int runIndex, PictureStylePreset preset)
+        : this(
+            paragraphIndex,
+            runIndex,
+            preset.Id,
+            preset.BorderColorHex,
+            preset.BorderWidthPt,
+            preset.BorderDash,
+            preset.ShadowPreset,
+            preset.ReflectionPreset,
+            preset.SoftEdgePt)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+    }
+
     private string? _prevBorderColor;
     private double _prevBorderWidth;
     private string? _prevBorderDash;

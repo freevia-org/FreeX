@@ -1,3 +1,5 @@
+using Free.Shared.Ribbon;
+using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using ModelParagraph = FreeW.Core.Model.Paragraph;
 using ModelTable = FreeW.Core.Model.Table;
@@ -77,6 +79,38 @@ public sealed class ImageAndTableConversionParityTests
     }
 
     [StaFact]
+    public void PictureStyleRegistryRoutes_ApplySharedCatalogPresetAndUndo()
+    {
+        var (view, image) = SelectedImage();
+        image.ShadowPreset = 5;
+        image.ReflectionPreset = 2;
+        image.SoftEdgePt = 1.25;
+        image.PictureStylePreset = 99;
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+
+        foreach (var preset in PictureStyleCatalog.Catalog)
+        {
+            registry.TryGet($"freew.image-style-{preset.Id}", out var command).Should().BeTrue();
+            var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+            stateful.GetState().IsEnabled.Should().BeTrue();
+
+            command.Execute(RibbonCommandContext.Empty);
+
+            PictureStyle(image).Should().Be(PictureStyle(preset));
+            view.Commands.Undo().Should().BeTrue();
+            PictureStyle(image).Should().Be((99, "112233", 0.75, "dash", 5, 2, 1.25));
+        }
+
+        var emptyRegistry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        foreach (var preset in PictureStyleCatalog.Catalog)
+        {
+            emptyRegistry.TryGet($"freew.image-style-{preset.Id}", out var command).Should().BeTrue();
+            command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject
+                .GetState().IsEnabled.Should().BeFalse();
+        }
+    }
+
+    [StaFact]
     public void TableToTextHostRoute_UsesSharedConverterAndUndoRestoresTable()
     {
         var table = new ModelTable();
@@ -136,4 +170,14 @@ public sealed class ImageAndTableConversionParityTests
         view.SelectFloatingImage(image);
         return (view, image);
     }
+
+    private static (int Id, string? Border, double Width, string? Dash, int Shadow, int Reflection, double SoftEdge)
+        PictureStyle(InlineImage image) =>
+        (image.PictureStylePreset, image.BorderColorHex, image.BorderWidthPt, image.BorderDash,
+            image.ShadowPreset, image.ReflectionPreset, image.SoftEdgePt);
+
+    private static (int Id, string? Border, double Width, string? Dash, int Shadow, int Reflection, double SoftEdge)
+        PictureStyle(PictureStylePreset preset) =>
+        (preset.Id, preset.BorderColorHex, preset.BorderWidthPt, preset.BorderDash,
+            preset.ShadowPreset, preset.ReflectionPreset, preset.SoftEdgePt);
 }

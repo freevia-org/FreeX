@@ -58,7 +58,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "chart-style" or
             "picture-adjust" or
             "picture-size" or
-            "picture-styles" or
             "smartart-colors" or
             "smartart-create-graphic" or
             "smartart-edit" or
@@ -186,6 +185,27 @@ public sealed class FreeWRibbonDefinitionProfileTests
 
         unexpectedWpfOnly.Should().BeEmpty("every WPF-only ribbon id must have an explicit capability rule");
         unexpectedAvaloniaOnly.Should().BeEmpty("every Avalonia-only ribbon id must have an explicit capability rule");
+    }
+
+    [Fact]
+    public void Picture_style_catalog_has_identical_profile_placement_and_labels()
+    {
+        var expectedIds = FreeW.Core.Model.PictureStyleCatalog.Catalog
+            .Select(preset => $"freew.image-style-{preset.Id}")
+            .ToArray();
+        var expectedLabels = FreeW.Core.Model.PictureStyleCatalog.Catalog
+            .Select(preset => preset.Name)
+            .ToArray();
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var picture = FreeWRibbon.Build(capabilities).FindTab("picture-format")!;
+            picture.Groups.Select(group => group.Id)
+                .Should().Equal("picture-arrange", "picture-styles", "picture-adjust", "picture-size");
+            var controls = picture.FindGroup("picture-styles")!.Controls.Cast<RibbonButton>().ToArray();
+            controls.Select(control => control.CommandId.Value).Should().Equal(expectedIds);
+            controls.Select(control => control.Label).Should().Equal(expectedLabels);
+        }
     }
 
     [Fact]

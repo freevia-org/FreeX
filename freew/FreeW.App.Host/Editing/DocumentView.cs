@@ -2927,6 +2927,17 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>Apply a shared Picture Styles catalog preset to the selected picture.</summary>
+    public void ApplySelectedImageStyle(PictureStylePreset preset)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageStyleCommand(blockIndex, runIndex, preset));
+        Render();
+    }
+
     /// <summary>
     /// Restore the currently selected image to its natural size (from OriginalPixelWidth/Height), clearing
     /// any rotation, flip, and crop. Uses the shared 96-DPI bitmap-to-point policy. Undoable.
