@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -21,11 +22,6 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private Chart? _result;
 
     // ── Default seed data ────────────────────────────────────────────────────────────────────────
-    private static readonly string[] DefaultCategories = ["Q1", "Q2", "Q3", "Q4"];
-    private static readonly double[] DefaultValues = [8.0, 5.0, 11.0, 7.0];
-    private const string DefaultSeriesName = "Sales";
-    private const string DefaultTitle = "Quarterly Sales";
-
     // ── Constructor ──────────────────────────────────────────────────────────────────────────────
     private InsertChartDialog(Window? owner, Chart? seed)
     {
@@ -38,6 +34,8 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
+        var state = InsertChartDialogPlanner.BuildInitialState(seed, CultureInfo.CurrentCulture);
+
         var panel = new StackPanel { Margin = new Thickness(14) };
 
         // ── Chart type picker ────────────────────────────────────────────────────────────────────
@@ -45,14 +43,14 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _kindBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
         foreach (ChartKind kind in Enum.GetValues<ChartKind>())
             _kindBox.Items.Add(kind.ToString());
-        _kindBox.SelectedItem = (seed?.Kind ?? ChartKind.Column).ToString();
+        _kindBox.SelectedItem = state.Kind.ToString();
         panel.Children.Add(_kindBox);
 
         // ── Chart title ──────────────────────────────────────────────────────────────────────────
         panel.Children.Add(new TextBlock { Text = "Title (optional):", Margin = new Thickness(0, 0, 0, 4) });
         _titleBox = new TextBox
         {
-            Text = seed?.Title ?? DefaultTitle,
+            Text = state.Title,
             Margin = new Thickness(0, 0, 0, 10)
         };
         panel.Children.Add(_titleBox);
@@ -65,7 +63,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(0, 0, 0, 4)
         });
 
-        _dataGrid = BuildDataGrid(seed);
+        _dataGrid = BuildDataGrid(state);
         panel.Children.Add(_dataGrid);
 
         // ── OK / Cancel ──────────────────────────────────────────────────────────────────────────
@@ -77,9 +75,11 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     // ── Data grid construction ────────────────────────────────────────────────────────────────────
-    private DataGrid BuildDataGrid(Chart? seed)
+    private DataGrid BuildDataGrid(InsertChartDialogInitialState state)
     {
-        var rows = BuildRows(seed);
+        var rows = state.Rows
+            .Select(row => new ChartRowViewModel(row.Category, row.SeriesValues.ToArray()))
+            .ToList();
 
         var grid = new DataGrid
         {
@@ -102,12 +102,10 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         });
 
         // Series columns — derive from seed or provide one default
-        var seriesCount = seed?.Series.Count > 0 ? seed.Series.Count : 1;
+        var seriesCount = state.SeriesNames.Count;
         for (var s = 0; s < seriesCount; s++)
         {
-            var header = seed?.Series.Count > s && !string.IsNullOrEmpty(seed.Series[s].Name)
-                ? seed.Series[s].Name!
-                : (s == 0 ? DefaultSeriesName : $"Series {s + 1}");
+            var header = state.SeriesNames[s];
             grid.Columns.Add(new DataGridTextColumn
             {
                 Header = header,
@@ -119,64 +117,25 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return grid;
     }
 
-    private static List<ChartRowViewModel> BuildRows(Chart? seed)
-    {
-        var rows = new List<ChartRowViewModel>();
-        if (seed is null)
-        {
-            for (var i = 0; i < DefaultCategories.Length; i++)
-                rows.Add(new ChartRowViewModel(DefaultCategories[i], [DefaultValues[i].ToString("G", CultureInfo.CurrentCulture)]));
-        }
-        else
-        {
-            var n = Math.Max(seed.Categories.Count, seed.Series.Count > 0 ? seed.Series[0].Values.Count : 0);
-            for (var i = 0; i < n; i++)
-            {
-                var cat = i < seed.Categories.Count ? seed.Categories[i] : string.Empty;
-                var vals = seed.Series.Select(s => i < s.Values.Count ? s.Values[i].ToString("G", CultureInfo.CurrentCulture) : "0").ToArray();
-                rows.Add(new ChartRowViewModel(cat, vals));
-            }
-            if (rows.Count == 0)
-                rows.Add(new ChartRowViewModel(DefaultCategories[0], [DefaultValues[0].ToString("G", CultureInfo.CurrentCulture)]));
-        }
-        return rows;
-    }
-
     // ── Accept logic ─────────────────────────────────────────────────────────────────────────────
     private void Accept()
     {
         _dataGrid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
 
         var kind = Enum.Parse<ChartKind>(_kindBox.SelectedItem?.ToString() ?? nameof(ChartKind.Column));
-        var title = string.IsNullOrWhiteSpace(_titleBox.Text) ? null : _titleBox.Text.Trim();
-
         var rows = (_dataGrid.ItemsSource as IEnumerable<ChartRowViewModel>)?.ToList() ?? [];
-        rows = rows.Where(r => !string.IsNullOrWhiteSpace(r.Category) || r.SeriesValues.Any(v => !string.IsNullOrWhiteSpace(v))).ToList();
-
-        if (rows.Count == 0)
-        {
-            DialogMessageHelper.ShowWarning(this, "Enter at least one data row.");
-            return;
-        }
-
-        var seriesCount = _dataGrid.Columns.Count - 1; // first col = category
-        if (seriesCount < 1) seriesCount = 1;
-
         var seriesNames = _dataGrid.Columns.Skip(1).Select(c => c.Header?.ToString() ?? string.Empty).ToArray();
-
-        var chart = new Chart { Kind = kind, Title = title };
-        foreach (var row in rows)
-            chart.Categories.Add(row.Category);
-
-        for (var s = 0; s < seriesCount; s++)
+        if (!InsertChartDialogPlanner.TryBuildResult(
+                kind,
+                _titleBox.Text,
+                seriesNames,
+                rows.Select(row => new InsertChartDialogRow(row.Category, row.SeriesValues)),
+                CultureInfo.CurrentCulture,
+                out var chart,
+                out var errorMessage))
         {
-            var series = new ChartSeries { Name = s < seriesNames.Length ? seriesNames[s] : null };
-            foreach (var row in rows)
-            {
-                var text = s < row.SeriesValues.Length ? row.SeriesValues[s] : null;
-                series.Values.Add(double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var v) ? v : 0.0);
-            }
-            chart.Series.Add(series);
+            DialogMessageHelper.ShowWarning(this, errorMessage ?? InsertChartDialogPlanner.EmptyRowsValidationMessage);
+            return;
         }
 
         _result = chart;

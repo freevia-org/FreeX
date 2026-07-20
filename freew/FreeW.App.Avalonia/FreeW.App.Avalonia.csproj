@@ -52,6 +52,10 @@
              Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\FreeW.App.Host\Resources\ContentIconsSvg\**\*.svg"
+             Link="Resources\ContentIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

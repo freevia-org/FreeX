@@ -1,6 +1,6 @@
-using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -20,8 +20,6 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private SmartArt? _result;
 
     // ── Defaults ─────────────────────────────────────────────────────────────────────────────────
-    private static readonly string[] DefaultNodeTexts = ["First", "Second", "Third"];
-
     // ── Constructor ──────────────────────────────────────────────────────────────────────────────
     private InsertSmartArtDialog(Window? owner, SmartArt? seed)
     {
@@ -34,6 +32,8 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
+        var state = SmartArtDialogPlanner.BuildInitialState(seed);
+
         var panel = new StackPanel { Margin = new Thickness(14) };
 
         // ── Layout picker ────────────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _kindBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
         foreach (SmartArtKind kind in Enum.GetValues<SmartArtKind>())
             _kindBox.Items.Add(KindLabel(kind));
-        _kindBox.SelectedIndex = (int)(seed?.Kind ?? SmartArtKind.Process);
+        _kindBox.SelectedIndex = (int)state.Kind;
         panel.Children.Add(_kindBox);
 
         // ── Node list + editing ──────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(0, 0, 0, 6),
             SelectionMode = SelectionMode.Single
         };
-        foreach (var text in NodeTextsFrom(seed))
+        foreach (var text in state.NodeTexts)
             _nodeList.Items.Add(text);
         if (_nodeList.Items.Count > 0)
             _nodeList.SelectedIndex = 0;
@@ -141,23 +141,22 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (_nodeList.SelectedIndex >= 0)
             _nodeList.Items[_nodeList.SelectedIndex] = _nodeTextBox.Text;
 
-        var texts = _nodeList.Items.Cast<string>()
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Select(t => t.Trim())
-            .ToList();
-
-        if (texts.Count == 0)
-        {
-            DialogMessageHelper.ShowWarning(this, "Enter at least one node text.");
-            return;
-        }
-
         var kindIndex = _kindBox.SelectedIndex;
         var kind = kindIndex >= 0 && kindIndex < Enum.GetValues<SmartArtKind>().Length
             ? (SmartArtKind)kindIndex
             : SmartArtKind.Process;
 
-        _result = SmartArt.Create(kind, texts);
+        if (!SmartArtDialogPlanner.TryBuildResult(
+                kind,
+                _nodeList.Items.Cast<string>(),
+                out var result,
+                out var errorMessage))
+        {
+            DialogMessageHelper.ShowWarning(this, errorMessage ?? SmartArtDialogPlanner.EmptyNodesValidationMessage);
+            return;
+        }
+
+        _result = result;
         Close();
     }
 
@@ -169,21 +168,6 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         SmartArtKind.Hierarchy => "Hierarchy",
         _                      => kind.ToString()
     };
-
-    private static IEnumerable<string> NodeTextsFrom(SmartArt? seed)
-    {
-        if (seed is null)
-            return DefaultNodeTexts;
-        // For Hierarchy, flatten breadth-first so all node texts are visible
-        var texts = new List<string>();
-        foreach (var node in seed.Nodes)
-        {
-            texts.Add(node.Text);
-            foreach (var child in node.Children)
-                texts.Add(child.Text);
-        }
-        return texts.Count > 0 ? texts : DefaultNodeTexts;
-    }
 
     // ── Public API ───────────────────────────────────────────────────────────────────────────────
     /// <summary>
