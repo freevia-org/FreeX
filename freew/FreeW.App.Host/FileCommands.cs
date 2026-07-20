@@ -235,6 +235,25 @@ internal sealed class FileCommands
     {
         if (!TryPromptSaveTarget(preferredExtension: null, suggestedFileName: null, out var target))
             return false;
+
+        return SaveCopyTo(target);
+    }
+
+    internal bool SaveCopyToPath(string path, int filterIndex = 0)
+    {
+        if (!_persistence.TryResolveSaveTarget(path, filterIndex, out var target))
+        {
+            ShowError(
+                "Could not save a copy",
+                new InvalidOperationException($"FreeW has no writer for \u201c{Path.GetExtension(path)}\u201d files."));
+            return false;
+        }
+
+        return SaveCopyTo(target);
+    }
+
+    private bool SaveCopyTo(DocumentSaveTarget target)
+    {
         try
         {
             _editor.CommitToModel();

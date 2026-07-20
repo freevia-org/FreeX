@@ -5,6 +5,7 @@ using System.Threading;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Free.Shared.Shell;
@@ -66,6 +67,116 @@ public class BackstageViewTests
         });
     }
 
+    [Fact]
+    public async Task BackstageView_entries_match_WPF_authority_order_kind_and_docking()
+    {
+        SisterBackstageEntryPlan<Control>[] entries = [];
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+            entries = view.Entries.ToArray();
+        }, CancellationToken.None);
+
+        entries.Select(EntryLabel).Should().Equal(
+            "Home",
+            "New",
+            "Open",
+            "Import PDF (text only)",
+            "Share",
+            "Info",
+            "|",
+            "Save",
+            "Save As",
+            "Save a Copy",
+            "Print",
+            "Export",
+            "Close",
+            "Account",
+            "Options");
+        entries.Single(entry => entry.Label == "Account").DockBottom.Should().BeTrue();
+        entries.Single(entry => entry.Label == "Options").DockBottom.Should().BeTrue();
+        entries.Single(entry => entry.Label == "Close").DockBottom.Should().BeFalse();
+        entries.Where(entry => new[] { "Save", "Save a Copy", "Close", "Import PDF (text only)" }.Contains(entry.Label))
+            .Should().OnlyContain(entry => entry.Kind == SisterBackstageEntryKind.Command);
+        entries.Where(entry => new[] { "Home", "New", "Open", "Share", "Info", "Save As", "Print", "Export", "Account", "Options" }.Contains(entry.Label))
+            .Should().OnlyContain(entry => entry.Kind == SisterBackstageEntryKind.Pane);
+    }
+
+    [Fact]
+    public async Task BackstageView_commands_dismiss_before_distinct_Save_SaveCopy_and_Close_callbacks()
+    {
+        var events = new List<string>();
+
+        await Session.Dispatch(() =>
+        {
+            var saveView = new BackstageView(BuildTestCallbacks() with
+            {
+                Save = () => events.Add("save"),
+            });
+            saveView.TryActivateEntry("Save").Should().BeTrue();
+            saveView.IsOpen.Should().BeFalse();
+
+            var copyView = new BackstageView(BuildTestCallbacks() with
+            {
+                SaveCopy = () => events.Add("copy"),
+            });
+            copyView.TryActivateEntry("Save a Copy").Should().BeTrue();
+            copyView.IsOpen.Should().BeFalse();
+
+            var closeView = new BackstageView(BuildTestCallbacks() with
+            {
+                CloseDocument = () => events.Add("close-gate"),
+            });
+            closeView.TryActivateEntry("Close").Should().BeTrue();
+            closeView.IsOpen.Should().BeFalse();
+        }, CancellationToken.None);
+
+        events.Should().Equal("save", "copy", "close-gate");
+    }
+
+    [Fact]
+    public async Task BackstageView_pane_navigation_stays_open_and_Escape_closes()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+
+            view.TryActivateEntry("Options").Should().BeTrue();
+            view.IsOpen.Should().BeTrue();
+            view.CurrentPaneLabel.Should().Be("Options");
+
+            view.HandleKey(Key.Escape).Should().BeTrue();
+            view.IsOpen.Should().BeFalse();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task BackstageView_back_button_is_focusable_and_closes_through_shared_frame()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+            var back = FindControl<Button>(view, "BackstageBackButton");
+
+            back.Focusable.Should().BeTrue();
+            back.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            view.IsOpen.Should().BeFalse();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task BackstageView_Info_reflects_live_dirty_state_and_exposes_Properties_workflow()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks() with { GetIsDirty = () => true });
+            view.TryActivateEntry("Info").Should().BeTrue();
+
+            FindControl<TextBlock>(view, "InfoDocumentName").Text.Should().Contain("unsaved changes");
+            FindControl<Button>(view, "BackstageEditDocumentProperties").IsEnabled.Should().BeTrue();
+        }, CancellationToken.None);
+    }
+
     // ── Planner output assertions ──────────────────────────────────────────────
 
     [Fact]
@@ -98,11 +209,11 @@ public class BackstageViewTests
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
         source.Should().Contain("ApplicationOptionsSummaryPlanner.Build(");
         source.Should().Contain("var document = _callbacks.GetDocument()");
-        source.Should().Contain("_callbacks.MarkAsFinal()");
-        source.Should().Contain("_callbacks.RestrictEditing()");
-        source.Should().Contain("_callbacks.InspectDocument()");
-        source.Should().Contain("_callbacks.CheckAccessibility()");
-        source.Should().Contain("_callbacks.OpenOptions()");
+        source.Should().Contain("DismissThen(_callbacks.MarkAsFinal)");
+        source.Should().Contain("DismissThen(_callbacks.RestrictEditing)");
+        source.Should().Contain("DismissThen(_callbacks.InspectDocument)");
+        source.Should().Contain("DismissThen(_callbacks.CheckAccessibility)");
+        source.Should().Contain("DismissThen(_callbacks.OpenOptions)");
         source.Should().Contain("BuildOpenSurface(");
         source.Should().Contain("surface.Search.AutomationName");
         source.Should().Contain("surface.Tabs.DocumentsTabLabel");
@@ -118,7 +229,8 @@ public class BackstageViewTests
         source.Should().Contain("print: _callbacks.Print");
         source.Should().Contain("directPrintCapability: printCapability");
         source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
-        source.Should().Contain("AvaloniaBackstageChrome.CreateContentArea(");
+        source.Should().Contain("new AvaloniaBackstageFrame(");
+        source.Should().Contain("SisterBackstageEntryPlanner.Build(");
         source.Should().Contain("AvaloniaBackstageChrome.CreateDescribedActionRow(");
         source.Should().Contain("AvaloniaBackstageChrome.CreateStackedActionButton(");
         source.Should().Contain("AvaloniaBackstageChrome.CreatePaneHeader(");
@@ -338,8 +450,71 @@ public class BackstageViewTests
         callbacks.GetDataFolder().Should().NotBeNullOrWhiteSpace();
         callbacks.DirectPrintCapability.Should().NotBeNull();
         callbacks.DirectPrintCapability!.IsAvailable.Should().BeFalse();
+        callbacks.Print.Should().BeNull();
         callbacks.GetDocument().Should().NotBeNull();
         callbacks.PrintPreview.Should().NotBeNull();
+        callbacks.ExportXps.Should().BeNull();
+        callbacks.EditProperties.Should().NotBeNull();
+        callbacks.Save.Should().NotBeNull();
+        callbacks.SaveCopy.Should().NotBeNull();
+        callbacks.CloseDocument.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task MainWindow_SaveCopy_writes_document_without_changing_path_or_dirty_state()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.BackstageSaveCopyTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var copyPath = Path.Combine(directory, "Copy.docx");
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var optionsPath = Path.Combine(directory, "settings.json");
+                var window = new MainWindow(
+                    [],
+                    new FreeWOptions(),
+                    ApplicationOptionsStore<FreeWOptions>.ForPath(optionsPath));
+                window.Editor.InsertText("draft copy text");
+                window.BuildBackstageCallbacks().GetIsDirty().Should().BeTrue();
+
+                window.SaveCopyToPathAsync(copyPath).GetAwaiter().GetResult().Should().BeTrue();
+
+                var after = window.BuildBackstageCallbacks();
+                after.CurrentPath.Should().BeNull();
+                after.GetIsDirty().Should().BeTrue();
+                DocxReader.Read(copyPath).PlainText.Should().Contain("draft copy text");
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task DocumentPropertiesDialog_commits_all_WPF_authority_core_fields()
+    {
+        await Session.Dispatch(() =>
+        {
+            var properties = new Free.Shared.Opc.DocumentProperties();
+            var dialog = new PropertiesDialog(properties);
+            FindControl<TextBox>(dialog, "DocumentPropertiesTitle").Text = "  Report  ";
+            FindControl<TextBox>(dialog, "DocumentPropertiesAuthor").Text = "Ada";
+            FindControl<TextBox>(dialog, "DocumentPropertiesSubject").Text = "Parity";
+            FindControl<TextBox>(dialog, "DocumentPropertiesKeywords").Text = "freew backstage";
+            FindControl<TextBox>(dialog, "DocumentPropertiesComments").Text = "  ";
+
+            FindControl<Button>(dialog, "DocumentPropertiesOkButton")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            dialog.Accepted.Should().BeTrue();
+            properties.Title.Should().Be("Report");
+            properties.Author.Should().Be("Ada");
+            properties.Subject.Should().Be("Parity");
+            properties.Keywords.Should().Be("freew backstage");
+            properties.Comments.Should().BeNull();
+        }, CancellationToken.None);
     }
 
     [Fact]
@@ -443,20 +618,27 @@ public class BackstageViewTests
             GetCurrentOptions: () => new FreeWOptions(),
             GetDataFolder: () => @"C:\AppData\FreeW",
             GetDocument: () => new TextDocument(),
+            GetIsDirty: () => false,
             NewDocument: () => { },
             OpenRecent: _ => { },
             OpenFolder: _ => { },
             Browse: () => { },
             RecoverUnsaved: () => { },
+            ImportPdfText: () => { },
+            Save: () => { },
             SaveAs: () => { },
             SaveAsFormat: (_, _) => { },
+            SaveCopy: () => { },
             OpenContainingFolder: _ => { },
             ExportPdf: () => { },
+            ExportXps: null,
+            EditProperties: () => { },
             MarkAsFinal: () => { },
             RestrictEditing: () => { },
             InspectDocument: () => { },
             CheckAccessibility: () => { },
-            OpenOptions: () => { });
+            OpenOptions: () => { },
+            CloseDocument: () => { });
 
     private static T FindControl<T>(Control root, string automationId)
         where T : Control
@@ -473,6 +655,9 @@ public class BackstageViewTests
 
     private static string FindRepoFile(params string[] parts) =>
         Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), Path.Combine(parts));
+
+    private static string EntryLabel(SisterBackstageEntryPlan<Control> entry) =>
+        entry.Kind == SisterBackstageEntryKind.Divider ? "|" : entry.Label;
 
 }
 

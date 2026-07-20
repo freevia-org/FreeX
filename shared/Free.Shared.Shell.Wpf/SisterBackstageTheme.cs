@@ -1,4 +1,5 @@
 using System.Windows.Media;
+using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Wpf;
 
@@ -11,23 +12,19 @@ public sealed record SisterBackstageTheme(
     double TileWidth,
     double TileHeight)
 {
-    public static SisterBackstageTheme FreeW { get; } = new(
-        new BackstageAccent(
-            Sidebar: Color.FromRgb(0x17, 0x32, 0x4D),
-            Hover: Color.FromRgb(0x26, 0x4B, 0x6B),
-            Selected: Color.FromRgb(0x0F, 0x24, 0x38),
-            Separator: Color.FromRgb(0x36, 0x55, 0x73)),
-        LinkColor: Color.FromRgb(0x0F, 0x6D, 0x8C),
-        TileWidth: 150,
-        TileHeight: 190);
+    public static SisterBackstageTheme FreeW { get; } = FromPalette(SisterBackstagePalette.FreeW);
 
-    public static SisterBackstageTheme FreeP { get; } = new(
+    public static SisterBackstageTheme FreeP { get; } = FromPalette(SisterBackstagePalette.FreeP);
+
+    private static SisterBackstageTheme FromPalette(SisterBackstagePalette palette) => new(
         new BackstageAccent(
-            Sidebar: Color.FromRgb(0xB7, 0x47, 0x2A),
-            Hover: Color.FromRgb(0xC9, 0x5A, 0x3D),
-            Selected: Color.FromRgb(0x8F, 0x37, 0x21),
-            Separator: Color.FromRgb(0xCE, 0x6A, 0x4F)),
-        LinkColor: Color.FromRgb(0xB7, 0x47, 0x2A),
-        TileWidth: 190,
-        TileHeight: 150);
+            ToColor(palette.Sidebar),
+            ToColor(palette.Hover),
+            ToColor(palette.Selected),
+            ToColor(palette.Separator)),
+        ToColor(palette.Link),
+        palette.TileWidth,
+        palette.TileHeight);
+
+    private static Color ToColor(BackstageRgb color) => Color.FromRgb(color.R, color.G, color.B);
 }

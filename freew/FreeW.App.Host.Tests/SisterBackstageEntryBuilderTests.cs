@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 
 namespace FreeW.App.Host.Tests;
@@ -11,6 +12,8 @@ public sealed class SisterBackstageEntryBuilderTests
     [Fact]
     public void SisterBackstageTheme_ExposesFreeWAndFreePPresets()
     {
+        SisterBackstagePalette.FreeW.Sidebar.Should().Be(new BackstageRgb(0x17, 0x32, 0x4D));
+        SisterBackstagePalette.FreeW.Selected.Should().Be(new BackstageRgb(0x0F, 0x24, 0x38));
         SisterBackstageTheme.FreeW.Accent.Sidebar.Should().Be(Color.FromRgb(0x17, 0x32, 0x4D));
         SisterBackstageTheme.FreeW.Accent.Selected.Should().Be(Color.FromRgb(0x0F, 0x24, 0x38));
         SisterBackstageTheme.FreeW.LinkColor.Should().Be(Color.FromRgb(0x0F, 0x6D, 0x8C));
@@ -25,6 +28,45 @@ public sealed class SisterBackstageEntryBuilderTests
     }
 
     [Fact]
+    public void Build_WithCurrentFreeWPdfImport_InsertsDirectActionAfterOpen()
+    {
+        var entries = SisterBackstageEntryBuilder.Build(CreateSpec() with
+        {
+            BuildHomePane = Pane,
+            UseNewPane = true,
+            BuildOpenPane = Pane,
+            ImportPdfText = () => { },
+            BuildSharePane = Pane,
+            BuildSaveAsPane = Pane,
+            SaveCopy = () => { },
+            BuildPrintPane = Pane,
+            BuildExportPane = Pane,
+            Close = () => { },
+            BuildAccountPane = Pane,
+            HideRecentPane = true,
+        });
+
+        entries.Select(EntryLabel).Should().Equal(
+            "Home",
+            "New",
+            "Open",
+            "Import PDF (text only)",
+            "Share",
+            "Info",
+            "|",
+            "Save",
+            "Save As",
+            "Save a Copy",
+            "Print",
+            "Export",
+            "Close",
+            "Account",
+            "Options");
+        entries.Single(entry => entry.Label == "Import PDF (text only)").Action.Should().NotBeNull();
+        entries.Single(entry => entry.Label == "Import PDF (text only)").ContentFactory.Should().BeNull();
+    }
+
+    [Fact]
     public void Build_WithPrintAndExport_ProducesFreeWBackstageOrder()
     {
         var entries = SisterBackstageEntryBuilder.Build(CreateSpec() with
@@ -35,6 +77,7 @@ public sealed class SisterBackstageEntryBuilderTests
             BuildHomePane = Pane,
             UseNewPane = true,
             BuildOpenPane = Pane,
+            ImportPdfText = () => { },
             BuildSharePane = Pane,
             BuildSaveAsPane = Pane,
             BuildPrintPane = Pane,
@@ -47,6 +90,7 @@ public sealed class SisterBackstageEntryBuilderTests
             "Home",
             "New",
             "Open",
+            "Import PDF (text only)",
             "Share",
             "Info",
             "|",
@@ -73,6 +117,7 @@ public sealed class SisterBackstageEntryBuilderTests
         entries.Single(entry => entry.Label == "Account").ContentFactory.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Save a Copy").Action.Should().NotBeNull();
         entries.Single(entry => entry.Label == "Close").Action.Should().NotBeNull();
+        entries.Single(entry => entry.Label == "Import PDF (text only)").Action.Should().NotBeNull();
         entries.Should().NotContain(entry => entry.Label == "Recent");
     }
 
