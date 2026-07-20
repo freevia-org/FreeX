@@ -1,4 +1,5 @@
 using FreeW.Core.Model;
+using FreeW.App.Presentation.ContextMenus;
 using Free.Shared.Ribbon;
 
 namespace FreeW.Ribbon.Definitions;
@@ -384,6 +385,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                 new RibbonCommandId($"freew.para-spacing.{ParaSpacingId(s.Name)}")))
             .ToArray());
 
+    private static RibbonMenu BuildEffectsMenu() => FreeWContextMenuPlanner.BuildEffects();
+
+    private static RibbonMenu BuildTableStylesMenu() => FreeWContextMenuPlanner.BuildTableStyles();
+
     /// <summary>Normalises a spacing-set display name to a stable command-id suffix (e.g. "No Paragraph Space" → "no-paragraph-space").</summary>
     private static string ParaSpacingId(string name) => FreeWRibbonDefinitionData.ParaSpacingId(name);
 
@@ -719,6 +724,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     });
                     g.Dropdown("freew.theme-fonts",  "Fonts",  BuildThemeFontsMenu());
                     g.Dropdown("freew.para-spacing", "Paragraph Spacing", BuildParaSpacingMenu());
+                    g.Dropdown("freew.theme-effects", "Effects", BuildEffectsMenu());
                 });
                 // AV-DESIGN: Page Background — Watermark, Page Color, Page Borders.
                 tab.Group("page-background", FreeWRibbonText.PageBackgroundGroup.Label, null, 90, g =>
@@ -975,6 +981,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     });
                     tab.Group("table-style", "Table Style", null, 90, g =>
                     {
+                        g.Dropdown("freew.table-styles", "Table Styles", BuildTableStylesMenu());
                         g.Button("freew.table-shading", "Shading");
                         g.Dropdown("freew.table-borders", "Borders", BuildTableBordersMenu());
                     });

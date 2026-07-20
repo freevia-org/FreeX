@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
@@ -9288,12 +9289,21 @@ public sealed class DocumentView : RichTextBox
             return;
 
         var menu = new ContextMenu();
-        for (var itemIndex = 0; itemIndex < control.Items.Count; itemIndex++)
+        var plan = FreeWContextMenuPlanner.BuildContentControl(new ModelRun(wpf.Text) { Control = control });
+        foreach (var planned in plan.Items)
         {
-            var selectedIndex = itemIndex;
-            var item = control.Items[itemIndex];
-            var display = item.DisplayText;
-            var entry = new MenuItem { Header = display, IsChecked = display == wpf.Text };
+            if (planned.CommandId is not { } commandId
+                || !FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ContentChoicePrefix, out var selectedIndex)
+                || selectedIndex >= control.Items.Count)
+                continue;
+            var display = control.Items[selectedIndex].DisplayText;
+            var entry = new MenuItem
+            {
+                Header = planned.Header,
+                IsCheckable = planned.IsChecked.HasValue,
+                IsChecked = planned.IsChecked ?? false,
+                IsEnabled = planned.IsEnabled,
+            };
             entry.Click += (_, _) =>
             {
                 if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly
@@ -9330,11 +9340,21 @@ public sealed class DocumentView : RichTextBox
 
         var menu = new ContextMenu();
         var choices = ContentControlInteractionPlanner.RelativeDateChoices(marker.Control);
-        for (var choiceIndex = 0; choiceIndex < choices.Count; choiceIndex++)
+        var plan = FreeWContextMenuPlanner.BuildContentControl(new ModelRun(wpf.Text) { Control = marker.Control });
+        foreach (var planned in plan.Items)
         {
-            var selectedIndex = choiceIndex;
-            var choice = choices[choiceIndex];
-            var entry = new MenuItem { Header = $"{choice.Label} ({choice.DisplayText})" };
+            if (planned.CommandId is not { } commandId
+                || !FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ContentDatePrefix, out var selectedIndex)
+                || selectedIndex >= choices.Count)
+                continue;
+            var choice = choices[selectedIndex];
+            var entry = new MenuItem
+            {
+                Header = planned.Header,
+                IsCheckable = planned.IsChecked.HasValue,
+                IsChecked = planned.IsChecked ?? false,
+                IsEnabled = planned.IsEnabled,
+            };
             entry.Click += (_, _) =>
             {
                 if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly

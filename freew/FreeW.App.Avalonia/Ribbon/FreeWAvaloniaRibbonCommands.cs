@@ -1,6 +1,7 @@
 using System.Globalization;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -272,6 +273,13 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Table shading: apply a quick neutral fill. Full color picker is deferred.
         r.Register("freew.table-shading", new ActionRibbonCommand(() => editor.SetCellShading("#D9D9D9")));
+        r.Register("freew.table-styles", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
+        {
+            var style = DocumentTableStyle.Catalog[index];
+            r.Register(FreeWContextMenuPlanner.TableStylesPrefix + index,
+                new ActionRibbonCommand(() => editor.ApplyTableStyle(style)));
+        }
 
         // Borders dropdown — opener no-op; sub-commands apply specific edges.
         r.Register("freew.table-borders", new ActionRibbonCommand(() => { /* flyout opener */ }));
@@ -2021,6 +2029,14 @@ internal static class FreeWAvaloniaRibbonCommands
             var s = spacingSet;
             r.Register($"freew.para-spacing.{FreeWRibbon.ParaSpacingId(s.Name)}",
                 new ActionRibbonCommand(() => editor.ApplyParagraphSpacingSet(s)));
+        }
+
+        r.Register("freew.theme-effects", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        for (var index = 0; index < DocumentEffectSet.Catalog.Count; index++)
+        {
+            var effectSet = DocumentEffectSet.Catalog[index];
+            r.Register(FreeWContextMenuPlanner.EffectsPrefix + index,
+                new ActionRibbonCommand(() => editor.ApplyEffectSet(effectSet)));
         }
 
         // ── Page Color swatches (+ No Color) ─────────────────────────────────

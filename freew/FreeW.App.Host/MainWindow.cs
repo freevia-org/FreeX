@@ -16,6 +16,7 @@ using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
@@ -2763,32 +2764,60 @@ public sealed class MainWindow : Window
     private ContextMenu BuildOutlineContextMenu()
     {
         var menu = new ContextMenu();
-        menu.Items.Add(MoveHeadingMenuItem("Move Up", moveUp: true));
-        menu.Items.Add(MoveHeadingMenuItem("Move Down", moveUp: false));
-        menu.Items.Add(new Separator());
-        menu.Items.Add(OutlineMenuItem("Promote", entry => _editor.PromoteHeading(entry.BlockIndex)));
-        menu.Items.Add(OutlineMenuItem("Demote", entry => _editor.DemoteHeading(entry.BlockIndex)));
-        menu.Items.Add(new Separator());
-        menu.Items.Add(OutlineMenuItem("Collapse", entry => _editor.CollapseHeading(entry.BlockIndex)));
-        menu.Items.Add(OutlineMenuItem("Expand", entry => _editor.ExpandHeading(entry.BlockIndex)));
+        menu.Opened += (_, _) => PopulateOutlineContextMenu(menu);
         return menu;
     }
 
-    // A "Move Up / Move Down" context item: relocates the selected heading and its whole subtree by one
-    // sibling position via the editor's reversible MoveHeading (OutlineTools.MoveSubtree on the undo/redo
-    // bus), then refreshes the outline and re-selects the heading at its new index so it stays highlighted.
-    private MenuItem MoveHeadingMenuItem(string header, bool moveUp)
+    private void PopulateOutlineContextMenu(ContextMenu menu)
     {
-        var item = new MenuItem { Header = header };
-        item.Click += (_, _) =>
+        var blockIndex = _navList.SelectedItem is OutlineItem selected ? selected.Entry.BlockIndex : -1;
+        var plan = FreeWContextMenuPlanner.BuildOutline(
+            _editor.Model.Blocks,
+            blockIndex,
+            blockIndex >= 0 && _editor.IsHeadingCollapsed(blockIndex));
+
+        menu.Items.Clear();
+        foreach (var planned in plan.Items)
         {
-            if (_navList.SelectedItem is not OutlineItem selected)
-                return;
-            var newIndex = _editor.MoveHeading(selected.Entry.BlockIndex, moveUp);
-            RefreshOutline();
-            SelectOutlineEntry(newIndex);
-        };
-        return item;
+            if (planned.Kind == RibbonMenuItemKind.Separator)
+            {
+                menu.Items.Add(new Separator());
+                continue;
+            }
+
+            var item = new MenuItem { Header = planned.Header, IsEnabled = planned.IsEnabled };
+            if (planned.CommandId is { } commandId)
+                item.Click += (_, _) => ExecuteOutlineContextCommand(commandId.Value, blockIndex);
+            menu.Items.Add(item);
+        }
+    }
+
+    private void ExecuteOutlineContextCommand(string commandId, int blockIndex)
+    {
+        var newIndex = blockIndex;
+        switch (commandId)
+        {
+            case FreeWContextMenuPlanner.OutlineMoveUp:
+                newIndex = _editor.MoveHeading(blockIndex, moveUp: true);
+                break;
+            case FreeWContextMenuPlanner.OutlineMoveDown:
+                newIndex = _editor.MoveHeading(blockIndex, moveUp: false);
+                break;
+            case FreeWContextMenuPlanner.OutlinePromote:
+                _editor.PromoteHeading(blockIndex);
+                break;
+            case FreeWContextMenuPlanner.OutlineDemote:
+                _editor.DemoteHeading(blockIndex);
+                break;
+            case FreeWContextMenuPlanner.OutlineCollapse:
+                _editor.CollapseHeading(blockIndex);
+                break;
+            case FreeWContextMenuPlanner.OutlineExpand:
+                _editor.ExpandHeading(blockIndex);
+                break;
+        }
+        RefreshOutline();
+        SelectOutlineEntry(newIndex);
     }
 
     // Select the nav-list row whose entry maps to model block index `blockIndex` (no jump beyond the one
@@ -2803,21 +2832,6 @@ public sealed class MainWindow : Window
                 return;
             }
         }
-    }
-
-    // Build one outline context-menu item that runs `action` against the selected outline entry. A no-op
-    // when nothing is selected. The outline is refreshed afterwards so the nav list reflects the change.
-    private MenuItem OutlineMenuItem(string header, Action<OutlineEntry> action)
-    {
-        var item = new MenuItem { Header = header };
-        item.Click += (_, _) =>
-        {
-            if (_navList.SelectedItem is not OutlineItem selected)
-                return;
-            action(selected.Entry);
-            RefreshOutline();
-        };
-        return item;
     }
 
     // A nav-list row: indents the heading text by its outline level and remembers the source entry
