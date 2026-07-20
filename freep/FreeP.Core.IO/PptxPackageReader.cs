@@ -5054,6 +5054,9 @@ public static class PptxPackageReader
             "dgm" => PlaceholderType.Diagram,
             "media" => PlaceholderType.Media,
             "pic" => PlaceholderType.Picture,
+            // Notes masters use an explicit sldImg placeholder for the slide thumbnail.
+            // Keep it out of the Body lookup used for the notes text region.
+            "sldimg" => PlaceholderType.Picture,
             _ => PlaceholderType.Body
         };
 

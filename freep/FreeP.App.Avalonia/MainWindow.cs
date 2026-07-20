@@ -109,6 +109,7 @@ public sealed partial class MainWindow : Window
     // ── UI elements ────────────────────────────────────────────────────────────
 
     private readonly SlideCanvas _slideCanvas;
+    private Border _canvasHost = null!;
     private readonly ListBox _slidePaneList;
     private readonly Border _slidePaneInsertionIndicator;
     private readonly Button _slidePaneNewSlideButton;
@@ -509,12 +510,12 @@ public sealed partial class MainWindow : Window
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment   = VerticalAlignment.Stretch,
-            Margin              = new Thickness(24),
+            Margin              = new Thickness(FreePShellVisualMetrics.CanvasMargin),
         };
 
         _slidePaneList = new ListBox
         {
-            Width       = 180,
+            Width       = FreePShellVisualMetrics.SlidePaneWidth,
             MaxHeight   = 520,
             Padding     = new Thickness(4),
             Background  = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
@@ -537,7 +538,7 @@ public sealed partial class MainWindow : Window
             AcceptsReturn   = true,
             TextWrapping    = TextWrapping.Wrap,
             PlaceholderText = "Click to add notes",
-            MinHeight       = 64,
+            MinHeight       = FreePShellVisualMetrics.NotesPaneHeight,
             MaxHeight       = 120,
             Padding         = new Thickness(8, 4),
             FontSize        = 12,
@@ -604,7 +605,8 @@ public sealed partial class MainWindow : Window
             TitleBarBackground: ResolveThemeBrush(
                 "FreePTitleBarBrush",
                 new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))),
-            TitleBarForeground: ResolveThemeBrush("FreePWhiteBrush", Brushes.White)));
+            TitleBarForeground: ResolveThemeBrush("FreePWhiteBrush", Brushes.White),
+            TitleBarHeight: FreePShellVisualMetrics.TitleBarHeight));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
             windowFrame.QatHost,
@@ -764,9 +766,10 @@ public sealed partial class MainWindow : Window
         canvasStack.Children.Add(_adorner);
         canvasStack.Children.Add(textOverlay);
 
-        var canvasHost = new Border
+        _canvasHost = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
+            ClipToBounds = true,
             Child      = canvasStack,
         };
         _layoutPickerPanel = new StackPanel
@@ -843,12 +846,12 @@ public sealed partial class MainWindow : Window
         _smartArtTextPaneHost = BuildSmartArtTextPaneHost();
         _animationPaneHost = BuildAnimationPaneHost();
         _printOptionsPaneHost = BuildPrintOptionsPaneHost();
-        Grid.SetRow(canvasHost, 0);
+        Grid.SetRow(_canvasHost, 0);
         Grid.SetRow(_layoutPickerHost, 1);
         Grid.SetRow(_tablePickerHost, 2);
         Grid.SetRow(_reviewCommentsPaneHost, 3);
         Grid.SetRow(_notesBox,  4);
-        rightGrid.Children.Add(canvasHost);
+        rightGrid.Children.Add(_canvasHost);
         rightGrid.Children.Add(_layoutPickerHost);
         rightGrid.Children.Add(_tablePickerHost);
         rightGrid.Children.Add(_reviewCommentsPaneHost);
@@ -859,7 +862,7 @@ public sealed partial class MainWindow : Window
 
         var slidePaneHost = new Grid
         {
-            Width = 180,
+            Width = FreePShellVisualMetrics.SlidePaneWidth,
             Background = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
         };
         slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1609,6 +1612,7 @@ public sealed partial class MainWindow : Window
         HasToolbar = true;
         return new Border
         {
+            Height          = FreePShellVisualMetrics.RibbonHeight,
             Background      = Brushes.White,
             BorderBrush     = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
             BorderThickness = new Thickness(0, 0, 0, 1),

@@ -172,7 +172,7 @@ public sealed partial class MainWindow
             BoundsRelativeTo(root, _titleBar),
             BoundsRelativeTo(root, ribbonRoot),
             BoundsRelativeTo(root, slidePaneRoot),
-            BoundsRelativeTo(root, _slideCanvas),
+            BoundsRelativeTo(root, _canvasHost),
             BoundsRelativeTo(root, _notesBox),
             BoundsRelativeTo(root, statusRoot),
             VisibleAuxiliaryPanesForEvidence(),

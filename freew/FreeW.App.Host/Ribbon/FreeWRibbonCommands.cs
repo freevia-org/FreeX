@@ -622,7 +622,7 @@ internal static class FreeWRibbonCommands
                 editor.ReplaceSelectedChartData(replacement);
         }));
         // Chart Format contextual tab — Size dialog.
-        registry.Register("freew.chart-size", new ActionRibbonCommand(() =>
+        var chartSizeCommand = new ActionRibbonCommand(() =>
         {
             editor.Focus();
             var chart = editor.SelectedChart();
@@ -630,7 +630,9 @@ internal static class FreeWRibbonCommands
             var result = ChartSizeDialog.Prompt(Application.Current?.MainWindow, chart.WidthPt, chart.HeightPt);
             if (result is not null)
                 editor.SetSelectedChartSize(result.Value.WidthPt, result.Value.HeightPt);
-        }));
+        });
+        registry.Register("freew.chart-size", chartSizeCommand);
+        registry.Register("freew.chart-size-dialog", chartSizeCommand);
         // ── Chart Design galleries — Quick Layout, Chart Styles, Change Colors ──────────────────────
         // Each gallery command applies one catalog entry to the selected chart and re-renders.
         // The MainWindow replaces the rendered ribbon buttons with live-preview swatches (ChartDesignGallery),
@@ -1851,6 +1853,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-preview-previous", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous));
         registry.Register("freew.merge-preview-next", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Next));
         registry.Register("freew.merge-preview-last", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Last));
+        registry.Register("freew.merge-find-recipient", new FindMergeRecipientCommand(editor, mergeSession));
+        registry.Register("freew.merge-check-errors", new CheckMergeErrorsCommand(editor, mergeSession));
         registry.Register("freew.merge-finish", new FinishMergeCommand(editor, mergeSession));
         registry.Register("freew.merge-email", new EmailMergeCommand(editor, mergeSession));
         // Filter & Sort: refines the active session's MergeData (include/exclude rows, sort column/direction)
@@ -6162,7 +6166,7 @@ internal static class FreeWRibbonCommands
     // Mailings: the shared mail-merge state across the four Mailings commands. Holds the data source
     // and, while previewing, the original template document plus the current record index so previewing
     // can step through records and restore the template when the preview ends.
-    private sealed class MailMergeSession
+    internal sealed class MailMergeSession
     {
         public MergeData? Data { get; set; }
         public MailMergeOutputMode Mode { get; set; } = MailMergeOutputMode.Letters;
@@ -6773,6 +6777,131 @@ internal static class FreeWRibbonCommands
             session.CurrentIndex = index;
             editor.LoadModel(MailMerge.MergeRecord(template, session.AugmentRow(data.Rows[index])));
             editor.Focus();
+        }
+    }
+
+    internal sealed class FindMergeRecipientCommand(
+        DocumentView editor,
+        MailMergeSession session,
+        Func<Window?, string?>? ask = null,
+        Action<Window?, string>? showInfo = null) : IRibbonCommand
+    {
+        private readonly Func<Window?, string?> _ask = ask ??
+            (owner => TextPrompt.Ask(owner, "Find Recipient", "Find:", string.Empty));
+        private readonly Action<Window?, string> _showInfo = showInfo ??
+            ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+            if (session.Data is not { Count: > 0 } data)
+            {
+                _showInfo(owner, "Select recipients first (Mailings > Select Recipients), then find a recipient.");
+                return;
+            }
+
+            var query = _ask(owner);
+            if (query is null)
+                return;
+
+            var result = MailMergeFindRecipientPlanner.Find(data, query, session.CurrentIndex);
+            session.CurrentIndex = result.Index;
+            _showInfo(owner, result.Message);
+            editor.Focus();
+        }
+    }
+
+    internal sealed class CheckMergeErrorsCommand(
+        DocumentView editor,
+        MailMergeSession session,
+        Func<Window?, MailMergeCheckForErrorsMode?>? ask = null,
+        Action<Window?, string>? showInfo = null) : IRibbonCommand
+    {
+        private readonly Func<Window?, MailMergeCheckForErrorsMode?> _ask = ask ?? MailMergeCheckForErrorsDialog.Ask;
+        private readonly Action<Window?, string> _showInfo = showInfo ??
+            ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+            if (session.Data is not { Count: > 0 })
+            {
+                _showInfo(owner, "Select recipients first (Mailings > Select Recipients), then check for errors.");
+                return;
+            }
+
+            if (_ask(owner) is not { } selected)
+                return;
+
+            _showInfo(owner, $"Mail merge error check selected: {selected}.");
+            editor.Focus();
+        }
+    }
+
+    private static class MailMergeCheckForErrorsDialog
+    {
+        public static MailMergeCheckForErrorsMode? Ask(Window? owner)
+        {
+            var choices = MailMergeCheckForErrorsPlanner.GetChoices();
+            var combo = new System.Windows.Controls.ComboBox
+            {
+                MinWidth = 420,
+                SelectedIndex = 0,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            foreach (var choice in choices)
+                combo.Items.Add(choice.Label);
+
+            MailMergeCheckForErrorsMode? result = null;
+            var dialog = new Window
+            {
+                Title = "Check for Errors",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok = new System.Windows.Controls.Button
+            {
+                Content = "OK",
+                IsDefault = true,
+                MinWidth = 72,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            var cancel = new System.Windows.Controls.Button
+            {
+                Content = "Cancel",
+                IsCancel = true,
+                MinWidth = 72
+            };
+            ok.Click += (_, _) =>
+            {
+                result = MailMergeCheckForErrorsPlanner.GetMode(combo.SelectedIndex);
+                dialog.DialogResult = true;
+            };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = "How should errors be checked?",
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+            panel.Children.Add(combo);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+
+            combo.Focus();
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

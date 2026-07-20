@@ -34,8 +34,10 @@ public static class PresentationNotesPagePdfExporter
     internal const double NotesFontSize = 12;
     private const double PlaceholderFontSize = 12;
     private const double HeaderFooterFontSize = 9;
-    internal const double NotesInset = 10;
-    internal const double NotesLeading = 16;
+    // PowerPoint's default notes-master bodyPr uses 45720 EMU (3.6 pt) insets.
+    // Its 12 pt body text advances at roughly 15 pt, rather than the wider host fallback.
+    internal const double NotesInset = 3.6;
+    internal const double NotesLeading = 15;
     private const double AverageGlyphWidthPerFontSize = 0.55;
 
     public static byte[] ExportToBytes(

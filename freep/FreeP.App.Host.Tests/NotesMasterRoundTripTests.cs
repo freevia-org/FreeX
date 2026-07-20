@@ -62,6 +62,37 @@ public sealed class NotesMasterRoundTripTests : IDisposable
         plan.NotesBounds.Should().Be(new LayoutRect(100, 200, 300, 100));
     }
 
+    [Fact]
+    public void NewPresentation_WritesPowerPointNotesMasterPlaceholderGeometry()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Notes = new TextBody();
+        var output = Path.Combine(_tempDir, "new-notes-master.pptx");
+
+        PptxPackageWriter.Write(presentation, output);
+        var reloaded = PptxPackageReader.Read(output);
+
+        reloaded.NotesMasterPlaceholders.Should().HaveCount(6);
+        var slideImage = reloaded.NotesMasterPlaceholders
+            .Single(shape => shape.Name == "Slide Image Placeholder 3");
+        slideImage.Placeholder!.Type.Should().Be(PlaceholderType.Picture);
+        slideImage.OffsetXEmu.Should().Be(685800);
+        slideImage.OffsetYEmu.Should().Be(1143000);
+        slideImage.ExtentCxEmu.Should().Be(5486400);
+        slideImage.ExtentCyEmu.Should().Be(3086100);
+
+        var notesBody = reloaded.NotesMasterPlaceholders
+            .Single(shape => shape.Placeholder?.Type == PlaceholderType.Body);
+        notesBody.OffsetXEmu.Should().Be(685800);
+        notesBody.OffsetYEmu.Should().Be(4400550);
+        notesBody.ExtentCxEmu.Should().Be(5486400);
+        notesBody.ExtentCyEmu.Should().Be(3600450);
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(reloaded, 0);
+        plan.SlideBounds.Should().Be(new LayoutRect(54, 90, 432, 243));
+        plan.NotesBounds.Should().Be(new LayoutRect(54, 346.5, 432, 283.5));
+    }
+
     private static string CorpusPath(string filename)
     {
         var dir = AppContext.BaseDirectory;

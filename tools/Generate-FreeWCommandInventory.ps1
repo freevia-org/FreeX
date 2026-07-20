@@ -264,6 +264,11 @@ internal static class FreeWCommandInventory
             "Resizes the selected chart through the shared floating-object size route and keeps the size change undoable in Avalonia.",
             "FreeWRibbonParityTests.ChartDesign_SetSizeMutatesWidthAndHeight",
             "ChartSmartArtContextualTabTests.ChartSize_command_resizes_selected_chart_and_reverts_on_undo"),
+        ["freew.chart-size-dialog"] = FinalProfileRouteEvidence(
+            "Routes More Size Options to the existing owner-modal chart size behavior in WPF and the selected-chart dialog callback in Avalonia.",
+            "FreeWRibbonParityTests.FinalCommandProfileAsymmetries_RouteToBackedWpfCommands",
+            "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
+            "ChartSmartArtContextualTabTests.Chart_size_dialog_command_routes_selected_chart_to_owner_modal_callback"),
         ["freew.citation"] = ReferencesEvidence(
             "Inserts tagged Word-like CITATION complex-field runs and proves Update Fields renumbers source-order numeric citations in both shells.",
             "freew/FreeW.App.Host.Tests/CitationEditorTests.cs",
@@ -326,6 +331,16 @@ internal static class FreeWCommandInventory
             "Inserts the Word-style MERGE RECORD # mail-merge rule field through both ribbon registries so record numbering survives as a model placeholder."),
         ["freew.merge-sequence-number"] = MailingsEvidence(
             "Inserts the Word-style MERGE SEQUENCE # mail-merge rule field through both ribbon registries so merge sequence numbering survives as a model placeholder."),
+        ["freew.merge-find-recipient"] = FinalProfileRouteEvidence(
+            "Routes Find Recipient through the shared wraparound recipient planner in WPF and the owner-modal Avalonia mailings host route.",
+            "FreeWRibbonParityTests.MailingsFindRecipientAndCheckErrors_UseSharedPlannersThroughWpfCommands",
+            "freew/FreeW.App.Avalonia.Tests/MailMergeDialogSurfaceTests.cs",
+            "MailMergeDialogSurfaceTests.MailingsCommandHost_RoutesFindAndErrorChecksThroughDialogsAndSharedPlanners"),
+        ["freew.merge-check-errors"] = FinalProfileRouteEvidence(
+            "Routes Check for Errors through the shared Word-order mode planner in WPF and the owner-modal Avalonia mailings host route.",
+            "FreeWRibbonParityTests.MailingsFindRecipientAndCheckErrors_UseSharedPlannersThroughWpfCommands",
+            "freew/FreeW.App.Avalonia.Tests/MailMergeDialogSurfaceTests.cs",
+            "MailMergeDialogSurfaceTests.MailingsCommandHost_RoutesFindAndErrorChecksThroughDialogsAndSharedPlanners"),
         ["freew.print-layout"] = PrintFamilyViewEvidence(
             "Routes the shared Print Layout command through WPF stateful view-mode commands and the Avalonia host callback so the Word-style page surface can be restored from print-family view changes."),
         ["freew.print-preview"] = BackstagePrintEvidence(
@@ -682,6 +697,22 @@ internal static class FreeWCommandInventory
                 Test: wpfTest),
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
+                Test: avaloniaTest));
+
+    private static CommandBehaviorEvidence FinalProfileRouteEvidence(
+        string summary,
+        string wpfTest,
+        string avaloniaPath,
+        string avaloniaTest) =>
+        new(
+            EvidenceId: "freew.final-command-profile-routing.shared-behavior",
+            Slice: "Final command profile routing",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+                Test: wpfTest),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: avaloniaPath,
                 Test: avaloniaTest));
 
     private static CommandBehaviorEvidence ChartQuickLayoutEvidence(string layoutName) =>
