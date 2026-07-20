@@ -11,7 +11,13 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue oldTextError) return oldTextError;
         if (args[2] is ErrorValue newTextError) return newTextError;
-        var instanceArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        // A genuinely-omitted instance_num (args.Count <= 3, or the
+        // OmittedOptionalOrdinalArgumentValue sentinel substituted for a truly-omitted trailing
+        // argument) means "replace all" (instanceNum stays null below). An explicit argument that
+        // merely evaluates to BlankValue (e.g. a reference to an empty cell) must NOT be treated as
+        // omitted -- Excel coerces it to numeric 0, which the instanceNum<1 domain check below then
+        // correctly rejects as #VALUE!, exactly as an explicit literal 0 already does.
+        var instanceArg = args.Count > 3 ? args[3] : OmittedOptionalOrdinalArgumentValue.Instance;
         if (instanceArg is ErrorValue e3) return e3;
         return MapQuaternaryTextArgs(args[0], args[1], args[2], instanceArg, SubstituteScalarWithArgs);
     }
@@ -29,7 +35,7 @@ public static partial class BuiltInFunctions
         var oldText = ToText(oldTextValue);
         var newText = ToText(newTextValue);
         int? instanceNum = null;
-        if (instanceValue is not BlankValue)
+        if (instanceValue is not OmittedOptionalOrdinalArgumentValue)
         {
             double rawInstanceNum = ToNumber(instanceValue);
             if (!double.IsFinite(rawInstanceNum) || rawInstanceNum > int.MaxValue) return ErrorValue.Value;

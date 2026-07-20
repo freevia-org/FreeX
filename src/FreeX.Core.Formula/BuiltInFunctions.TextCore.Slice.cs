@@ -48,7 +48,12 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        // Only a genuinely-omitted num_chars (args.Count <= 1, or the
+        // OmittedOptionalOrdinalArgumentValue sentinel substituted for a truly-omitted trailing
+        // argument) defaults to 1. An explicit argument that merely evaluates to BlankValue (e.g. a
+        // reference to an empty cell) must NOT be treated as omitted -- Excel coerces it to numeric 0
+        // instead, which correctly yields "" (not the 1-char default).
+        var countArg = args.Count > 1 && args[1] is not OmittedOptionalOrdinalArgumentValue ? args[1] : new NumberValue(1);
         return MapBinaryMathArgs(args[0], countArg, LeftScalarWithCount);
     }
 
@@ -81,7 +86,9 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        // See the identical comment in Left above -- only a genuinely-omitted num_chars defaults to
+        // 1; an explicit blank-cell reference must coerce to 0, yielding "".
+        var countArg = args.Count > 1 && args[1] is not OmittedOptionalOrdinalArgumentValue ? args[1] : new NumberValue(1);
         return MapBinaryMathArgs(args[0], countArg, RightScalarWithCount);
     }
 

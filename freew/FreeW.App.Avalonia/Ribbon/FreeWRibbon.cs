@@ -236,6 +236,8 @@ internal sealed record RibbonHostCallbacks(
     Action<TableFormulaDialogInitialState>? OpenTableFormulaDialog = null,
     /// <summary>Help &gt; Legal Notices. The command is disabled when omitted.</summary>
     Action? OpenLegalNotices = null,
+    /// <summary>Help &gt; About FreeW. The command is disabled when omitted.</summary>
+    Action? OpenAbout = null,
     /// <summary>Home &gt; Clipboard &gt; Paste Text Only. Optional; registry no-ops when null.</summary>
     Action? PastePlainText = null,
     /// <summary>Home &gt; Clipboard &gt; Merge Formatting. Optional; registry no-ops when null.</summary>

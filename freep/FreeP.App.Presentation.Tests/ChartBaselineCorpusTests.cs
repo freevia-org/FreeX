@@ -584,9 +584,15 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.FrameSegments[0].End.X
             .Should().BeApproximately(312.0, 0.0001,
                 "the imported PowerPoint front frame edge uses the measured projected width");
+        surfaceGeometry.FrameSegments[1].End.Y
+            .Should().BeApproximately(42.0, 0.0001,
+                "the imported value axis meets the projected top wall at the PowerPoint registration");
         surfaceGeometry.FrameSegments.Select(segment => segment.Stroke.Alpha)
             .Should().OnlyContain(alpha => alpha == 255,
                 "imported PowerPoint Surface3D uses an opaque projected-frame stroke");
+        surfaceGeometry.FrameSegments.Select(segment => segment.Stroke.Thickness)
+            .Should().OnlyContain(thickness => thickness == 0.5,
+                "the imported projected frame uses PowerPoint's half-point wall and axis stroke");
         ChartRenderPlanner.BuildSurfaceSeriesAxisLabelPlans(surface, surfaceFrame)
             .Select(label => label.Text)
             .Should().Equal("Low band", "Mid band", "High band");

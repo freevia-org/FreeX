@@ -124,8 +124,12 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 continue;
             if (cf.RuleType is not (CfRuleType.CellValue or CfRuleType.Formula))
                 continue;
-            if (cf.FormatIfTrue is null && cf.RuleType != CfRuleType.ColorScale && cf.RuleType != CfRuleType.DataBar)
-                continue;
+            // NOTE: a classic (CellValue/Formula) rule with FormatIfTrue == null (e.g. loaded from a
+            // NativeJsonAdapter document that simply omitted the optional field) must still be written --
+            // dropping it here would silently lose the rule AND desynchronize RealignClassicRulePriorities
+            // in XlsxAdvancedConditionalFormatWriter.cs, which zips sheet.ConditionalFormats positionally
+            // against the classic cfRule elements ClosedXML actually wrote (R51-io-cf-priority-order-3-1).
+            // ApplyStyle below is already null-guarded, so writing with no dxf style is safe.
 
             // Apply the rule to every range (primary + additional) so multi-range basic CF
             // rules preserve all ranges instead of losing every range after the first.

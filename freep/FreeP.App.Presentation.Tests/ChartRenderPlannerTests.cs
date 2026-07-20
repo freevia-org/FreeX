@@ -823,6 +823,9 @@ public sealed class ChartRenderPlannerTests
         plan.FrameSegments.Select(segment => segment.Stroke.Alpha)
             .Should().OnlyContain(alpha => alpha == 220,
                 "authored Surface3D keeps its existing projected-frame opacity");
+        plan.FrameSegments.Select(segment => segment.Stroke.Thickness)
+            .Should().OnlyContain(thickness => thickness == 0.7,
+                "authored Surface3D keeps its existing projected-frame weight");
         plan.Facets.Should().OnlyContain(facet => facet.Points.Count == 4);
         plan.Facets.Select(facet => facet.AverageNormalizedValue)
             .Should()
@@ -838,6 +841,21 @@ public sealed class ChartRenderPlannerTests
         var south = plan.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 2);
         south.Point.Y.Should().BeGreaterThan(lowest.Point.Y,
             "the category axis should recede downwards to the right in PowerPoint's 3-D surface view");
+    }
+
+    [Fact]
+    public void BuildSurfaceGeometryPlan_ImportedFrameRegistrationScalesWithPlot()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(10, 20, 720, 378));
+
+        plan.FrameSegments[1].End.Should().Be(new ChartPlanPoint(26, 104));
+        plan.FrameSegments.Select(segment => segment.Stroke.Thickness)
+            .Should().OnlyContain(thickness => thickness == 0.5);
     }
 
     [Fact]

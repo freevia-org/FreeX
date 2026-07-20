@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
@@ -164,7 +166,8 @@ public static class PresentationMediaTranscriptPlanner
     {
         Unsupported,
         WebVtt,
-        Srt
+        Srt,
+        Ttml
     }
 
     private static readonly Regex TagPattern = new("<[^>]+>", RegexOptions.Compiled);
@@ -774,6 +777,7 @@ public static class PresentationMediaTranscriptPlanner
         {
             CaptionTrackFormat.WebVtt => ParseWebVtt(text),
             CaptionTrackFormat.Srt => ParseSrt(text),
+            CaptionTrackFormat.Ttml => ParseTtml(text),
             _ => []
         };
 
@@ -820,6 +824,11 @@ public static class PresentationMediaTranscriptPlanner
             return CaptionTrackFormat.Srt;
         }
 
+        if (IsTtml(track.ContentType, track.Source, text))
+        {
+            return CaptionTrackFormat.Ttml;
+        }
+
         return CaptionTrackFormat.Unsupported;
     }
 
@@ -833,6 +842,13 @@ public static class PresentationMediaTranscriptPlanner
             || ContainsIgnoreCase(contentType, "text/srt")
             || HasExtension(source, ".srt")
             || LooksLikeSrt(text);
+
+    private static bool IsTtml(string? contentType, string? source, string text)
+        => ContainsIgnoreCase(contentType, "ttml")
+            || ContainsIgnoreCase(contentType, "ttaf")
+            || HasExtension(source, ".ttml")
+            || HasExtension(source, ".dfxp")
+            || text.TrimStart().StartsWith("<tt", StringComparison.OrdinalIgnoreCase);
 
     private static bool LooksLikeSrt(string text)
         => EnumerateBlocks(text)
@@ -903,6 +919,90 @@ public static class PresentationMediaTranscriptPlanner
         }
 
         return cues;
+    }
+
+    private static IReadOnlyList<PresentationMediaTranscriptCueDescriptor> ParseTtml(string text)
+    {
+        var cues = new List<PresentationMediaTranscriptCueDescriptor>();
+
+        XDocument document;
+        try
+        {
+            document = XDocument.Parse(text, LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException)
+        {
+            return cues;
+        }
+
+        foreach (var paragraph in document.Descendants().Where(element =>
+                     string.Equals(element.Name.LocalName, "p", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!TryParseTtmlTime(paragraph.Attribute("begin")?.Value, out var start))
+            {
+                continue;
+            }
+
+            TimeSpan end;
+            if (TryParseTtmlTime(paragraph.Attribute("end")?.Value, out var parsedEnd))
+            {
+                end = parsedEnd;
+            }
+            else if (TryParseTtmlTime(paragraph.Attribute("dur")?.Value, out var duration))
+            {
+                end = start + duration;
+            }
+            else
+            {
+                continue;
+            }
+
+            var cueText = CollapseWhitespace(paragraph.Value);
+            if (cueText.Length == 0 || end < start)
+            {
+                continue;
+            }
+
+            cues.Add(new PresentationMediaTranscriptCueDescriptor(start, end, cueText));
+        }
+
+        return cues;
+    }
+
+    private static bool TryParseTtmlTime(string? token, out TimeSpan value)
+    {
+        value = default;
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return false;
+        }
+
+        var normalized = token.Trim();
+        foreach (var (suffix, multiplier) in new[]
+        {
+            ("ms", TimeSpan.TicksPerMillisecond / 1.0),
+            ("h", TimeSpan.TicksPerHour / 1.0),
+            ("m", TimeSpan.TicksPerMinute / 1.0),
+            ("s", TimeSpan.TicksPerSecond / 1.0)
+        })
+        {
+            if (!normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var number = normalized[..^suffix.Length];
+            if (!double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var amount)
+                || amount < 0)
+            {
+                return false;
+            }
+
+            value = new TimeSpan(checked((long)Math.Round(amount * multiplier)));
+            return true;
+        }
+
+        return TryParseCaptionTime(normalized, out value);
     }
 
     private static bool TryParseTimingLine(string line, out TimeSpan start, out TimeSpan end)

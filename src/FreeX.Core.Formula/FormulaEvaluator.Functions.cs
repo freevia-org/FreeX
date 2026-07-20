@@ -264,6 +264,19 @@ public sealed partial class FormulaEvaluator
                 // the raw argument node for OmittedArgumentNode ahead of evaluating it.
                 expandedArgs.Add(TextSplitOmittedPadArgumentValue.Instance);
             }
+            else if (arg is OmittedArgumentNode && IsOmittedOptionalOrdinalArgument(functionName, argIndex))
+            {
+                // TEXTBEFORE/TEXTAFTER's instance_num, FIND/SEARCH's start_num, LEFT/RIGHT's
+                // num_chars, and SUBSTITUTE's instance_num must each fall back to their normal
+                // default only when the argument slot itself is genuinely omitted -- not when an
+                // explicit argument merely evaluates to blank (e.g. a reference to an empty cell,
+                // which Excel coerces to numeric 0 for these arguments instead, per the same
+                // omitted-vs-blank-reference distinction VLOOKUP's range_lookup makes). The generic
+                // EvaluateNode(OmittedArgumentNode) fallback below returns the same BlankValue.Instance
+                // singleton a blank-cell reference produces, so the two cases must be told apart
+                // here, before evaluation -- mirroring the TEXTSPLIT pad_with special case above.
+                expandedArgs.Add(OmittedOptionalOrdinalArgumentValue.Instance);
+            }
             else if (arg is NamedRangeNode named)
             {
                 // Check LET/LAMBDA bindings first — these shadow workbook named ranges.
@@ -378,6 +391,22 @@ public sealed partial class FormulaEvaluator
             return ErrorValue.Ref;
         }
     }
+
+    /// <summary>
+    /// Identifies the specific (function, argument-index) slots whose optional numeric argument must
+    /// be distinguished from an explicit blank-cell reference: TEXTBEFORE/TEXTAFTER's instance_num
+    /// (index 2), FIND/SEARCH's start_num (index 2), LEFT/RIGHT's num_chars (index 1), and
+    /// SUBSTITUTE's instance_num (index 3). See the OmittedArgumentNode branch above for why.
+    /// </summary>
+    private static bool IsOmittedOptionalOrdinalArgument(string functionName, int argIndex) =>
+        (functionName, argIndex) switch
+        {
+            ("TEXTBEFORE", 2) or ("TEXTAFTER", 2) => true,
+            ("FIND", 2) or ("SEARCH", 2) => true,
+            ("LEFT", 1) or ("RIGHT", 1) => true,
+            ("SUBSTITUTE", 3) => true,
+            _ => false
+        };
 
     /// <summary>
     /// Expands a 3-D sheet-span aggregate argument (e.g. Sheet1:Sheet3!A1 or Sheet1:Sheet3!A1:B5)
@@ -651,7 +680,16 @@ public sealed partial class FormulaEvaluator
                     : context.GetCellValue(row, col);
             }
 
-        return new RangeValue(cells, startRow, startCol) { SheetName = anchorSheet };
+        // ANCHORARRAY's result (A1#) is a genuine worksheet reference, not a materialized literal
+        // array — SINGLE() and the `@` implicit-intersection operator must positionally intersect
+        // it against the formula cell's own row/column (like any other reference), and
+        // SUBTOTAL/AGGREGATE's hidden-row/nested-aggregate exclusion must recognize it as a
+        // reference too. Every other reference-materializing site in this codebase
+        // (BuildRangeValue, OFFSET, INDIRECT) sets IsSheetReference = true for the same reason;
+        // omitting it here made SINGLE(A1#) always return the anchor's own top-left value instead
+        // of intersecting by position, and made SUBTOTAL/AGGREGATE ignore-hidden/nested-exclusion
+        // silently no-op for an A1# argument.
+        return new RangeValue(cells, startRow, startCol) { SheetName = anchorSheet, IsSheetReference = true };
     }
 
     /// <summary>
@@ -696,4 +734,19 @@ public sealed partial class FormulaEvaluator
         }
     }
 
+}
+
+/// <summary>
+/// Sentinel substituted (by the OmittedArgumentNode branch in FormulaEvaluator.Functions.cs's
+/// argument-expansion loop) for a genuinely-omitted optional ordinal argument -- TEXTBEFORE/
+/// TEXTAFTER's instance_num, FIND/SEARCH's start_num, LEFT/RIGHT's num_chars, and SUBSTITUTE's
+/// instance_num -- so those functions' argument parsers can tell "the argument slot itself was
+/// omitted" (use the normal default) apart from "an explicit argument evaluates to blank" (e.g. a
+/// reference to an empty cell, which Excel coerces to numeric 0 instead). Both cases would otherwise
+/// evaluate to the same BlankValue.Instance singleton. Mirrors TextSplitOmittedPadArgumentValue,
+/// which solves the identical problem for TEXTSPLIT's pad_with.
+/// </summary>
+internal sealed record OmittedOptionalOrdinalArgumentValue : ScalarValue
+{
+    public static readonly OmittedOptionalOrdinalArgumentValue Instance = new();
 }

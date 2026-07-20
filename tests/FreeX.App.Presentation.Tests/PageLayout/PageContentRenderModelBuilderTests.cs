@@ -428,6 +428,36 @@ public sealed class PageContentRenderModelBuilderTests
     }
 
     [Fact]
+    public void Build_ShowZerosFalseBlanksZeroValuedCell()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        sheet.ShowZeros = false;
+        // Give the cell a fill so the (now-empty) cell block is still emitted by the
+        // "skip fully-blank cells" optimization, letting the test observe the blanked text.
+        var style = new CellStyle { FillColor = new CellColor(10, 20, 30) };
+        var styleId = workbook.RegisterStyle(style);
+        var cell = Cell.FromValue(new NumberValue(0));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        layout.Cells.Single(c => c.Row == 1 && c.Column == 1).Text.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Build_ShowZerosTrueStillPrintsZeroValuedCell()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        sheet.ShowZeros = true;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(0));
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        layout.Cells.Single(c => c.Row == 1 && c.Column == 1).Text.Should().Be("0");
+    }
+
+    [Fact]
     public void Build_NullArguments_Throw()
     {
         var (workbook, sheet) = CreateWorkbook();
