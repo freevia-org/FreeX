@@ -892,6 +892,14 @@ public sealed class SlideShowWindow : Window
                 PlayDrapeTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Vortex:
+                PlayVortexTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Warp:
+                PlayWarpTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.PageCurl:
                 PlayPageCurlTransition(slide, t, plan);
                 return;
@@ -2476,6 +2484,96 @@ public sealed class SlideShowWindow : Window
             frame++;
             var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
             _slideCanvas.Clip = BuildDrapeTransitionGeometry(w, h, progress, drape);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            }
+        };
+        timer.Start();
+    }
+
+    private void PlayVortexTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var vortex = SlideShowVortexTransitionPlanner.Plan(transition);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = BuildVortexTransitionGeometry(w, h, 0, vortex);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, plan.DurationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
+            _slideCanvas.Clip = BuildVortexTransitionGeometry(w, h, progress, vortex);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            }
+        };
+        timer.Start();
+    }
+
+    private void PlayWarpTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var warp = SlideShowWarpTransitionPlanner.Plan(transition);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = BuildWarpTransitionGeometry(w, h, 0, warp);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, plan.DurationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
+            _slideCanvas.Clip = BuildWarpTransitionGeometry(w, h, progress, warp);
             if (frame >= steps)
             {
                 timer.Stop();
@@ -4498,6 +4596,38 @@ public sealed class SlideShowWindow : Window
     {
         var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
         foreach (var polygon in SlideShowDrapeTransitionPlanner.BuildPolygons(
+                     width, height, progress, plan))
+        {
+            geometry.Children.Add(BuildStripGeometry(polygon.Points));
+        }
+
+        return geometry;
+    }
+
+    private static Geometry BuildVortexTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowVortexTransitionPlan plan)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
+        foreach (var polygon in SlideShowVortexTransitionPlanner.BuildPolygons(
+                     width, height, progress, plan))
+        {
+            geometry.Children.Add(BuildStripGeometry(polygon.Points));
+        }
+
+        return geometry;
+    }
+
+    private static Geometry BuildWarpTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowWarpTransitionPlan plan)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
+        foreach (var polygon in SlideShowWarpTransitionPlanner.BuildPolygons(
                      width, height, progress, plan))
         {
             geometry.Children.Add(BuildStripGeometry(polygon.Points));
