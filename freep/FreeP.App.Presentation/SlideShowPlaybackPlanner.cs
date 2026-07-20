@@ -34,6 +34,7 @@ public enum SlideShowTransitionPlaybackActionKind
     Glitter,
     Ripple,
     Wind,
+    Curtains,
     PageCurl,
     Push
 }
@@ -219,6 +220,7 @@ public static class SlideShowPlaybackPlanner
             SlideShowTransitionPlaybackKind.Glitter => SlideShowTransitionPlaybackActionKind.Glitter,
             SlideShowTransitionPlaybackKind.Ripple => SlideShowTransitionPlaybackActionKind.Ripple,
             SlideShowTransitionPlaybackKind.Wind => SlideShowTransitionPlaybackActionKind.Wind,
+            SlideShowTransitionPlaybackKind.Curtains => SlideShowTransitionPlaybackActionKind.Curtains,
             SlideShowTransitionPlaybackKind.PageCurl => SlideShowTransitionPlaybackActionKind.PageCurl,
             SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Cover,
             _ => SlideShowTransitionPlaybackActionKind.Fade
