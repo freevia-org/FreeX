@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
@@ -150,6 +151,287 @@ internal static class MailMergeDialogs
         grid.Children.Add(buttons);
         dialog.Content = grid;
 
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<MailMergeStartType?> AskStartMailMergeAsync(
+        Window owner,
+        MailMergeStartType selectedType = MailMergeStartType.Letters)
+    {
+        var dialog = CreateDialog("Start Mail Merge", 330, 175);
+        var plan = MailMergeStartDialogPlanner.GetChoices();
+        var typeCombo = CreateChoiceCombo(
+            plan.Select(choice => choice.Label),
+            MailMergeStartDialogPlanner.GetSelectedIndex(selectedType));
+        MailMergeStartType? result = null;
+        var content = CreateForm(("Document type:", (Control)typeCombo));
+        AddActions(dialog, content, () => result = MailMergeStartDialogPlanner.GetType(typeCombo.SelectedIndex));
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<FieldMapping?> AskMatchFieldsAsync(
+        Window owner,
+        IReadOnlyList<string> header,
+        FieldMapping current)
+    {
+        var dialog = CreateDialog("Match Fields", 455, 520);
+        var dialogPlan = MailMergeMatchFieldsDialogPlanner.GetRolePlans(header, current);
+        var columnChoices = MailMergeMatchFieldsDialogPlanner.GetColumnChoices(header);
+        var combos = new Dictionary<FieldRole, ComboBox>();
+        foreach (var rolePlan in dialogPlan)
+        {
+            var combo = CreateChoiceCombo(columnChoices, Array.IndexOf(columnChoices.ToArray(), rolePlan.SelectedChoice));
+            combos[rolePlan.Role] = combo;
+        }
+
+        var rows = dialogPlan
+            .Select(rolePlan => (rolePlan.Label, (Control)combos[rolePlan.Role]))
+            .ToArray();
+        FieldMapping? result = null;
+        var content = CreateForm(rows);
+        AddActions(dialog, content, () =>
+        {
+            result = MailMergeMatchFieldsDialogPlanner.CreateResult(
+                combos.ToDictionary(pair => pair.Key, pair => pair.Value.SelectedItem as string));
+        });
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<MergeData?> AskFilterSortRecipientsAsync(Window owner, MergeData data)
+    {
+        var dialog = CreateDialog("Filter and Sort Recipients", 560, 470);
+        var plan = MailMergeFilterSortDialogPlanner.CreatePlan(data);
+        var sortCombo = CreateChoiceCombo(plan.SortColumns, 0);
+        var ascending = new RadioButton { Content = "Ascending", IsChecked = true, GroupName = "sort" };
+        var descending = new RadioButton { Content = "Descending", GroupName = "sort" };
+        var sortRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Sort by:", VerticalAlignment = VerticalAlignment.Center },
+                sortCombo,
+                ascending,
+                descending,
+            },
+        };
+
+        var rowChecks = new List<CheckBox>();
+        var rowList = new StackPanel { Spacing = 2 };
+        rowList.Children.Add(new TextBlock { Text = plan.PreviewHeader, Foreground = Brushes.Gray });
+        for (var i = 0; i < plan.PreviewRows.Count; i++)
+        {
+            var check = new CheckBox { Content = plan.PreviewRows[i], IsChecked = true };
+            rowChecks.Add(check);
+            rowList.Children.Add(check);
+        }
+
+        var scroll = new ScrollViewer
+        {
+            Content = rowList,
+            MaxHeight = 285,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        var content = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(16, 16, 16, 0),
+            Children =
+            {
+                new TextBlock { Text = "Check recipients to include, then choose a sort order." },
+                sortRow,
+                scroll,
+            },
+        };
+        MergeData? result = null;
+        AddActions(dialog, content, () =>
+        {
+            var indexes = rowChecks
+                .Select((check, index) => (check, index))
+                .Where(item => item.check.IsChecked == true)
+                .Select(item => item.index);
+            result = MailMergeFilterSortDialogPlanner.Apply(data, indexes, sortCombo.SelectedItem as string, ascending.IsChecked == true);
+        });
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<EnvelopeSetupResult?> AskEnvelopeAsync(Window owner)
+    {
+        var plan = MailingsEnvelopeLabelPlanner.CreateEnvelopeDialogPlan();
+        var dialog = CreateDialog("Envelopes", 365, 230);
+        var combo = CreateChoiceCombo(plan.Sizes.Select(size => size.Name), plan.SelectedIndex);
+        var note = new TextBlock
+        {
+            Text = plan.Note,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brushes.Gray,
+        };
+        EnvelopeSetupResult? result = null;
+        var content = CreateForm(
+            ("Envelope size:", (Control)combo),
+            ("Note:", note));
+        AddActions(dialog, content, () => result = MailingsEnvelopeLabelPlanner.PlanEnvelope(combo.SelectedIndex));
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<LabelSetupResult?> AskLabelsAsync(Window owner)
+    {
+        var plan = MailingsEnvelopeLabelPlanner.CreateLabelDialogPlan();
+        var dialog = CreateDialog("Labels", 400, 270);
+        var combo = CreateChoiceCombo(plan.Presets.Select(preset => preset.Name), plan.SelectedIndex);
+        var rowsBox = CreateTextBox(plan.CustomRowsText, "Rows");
+        var columnsBox = CreateTextBox(plan.CustomColumnsText, "Columns");
+        var customPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            IsVisible = plan.ShowCustomGrid,
+            Children =
+            {
+                new TextBlock { Text = "Rows:", VerticalAlignment = VerticalAlignment.Center }, rowsBox,
+                new TextBlock { Text = "Columns:", VerticalAlignment = VerticalAlignment.Center }, columnsBox,
+            },
+        };
+        combo.SelectionChanged += (_, _) =>
+        {
+            var selected = MailingsEnvelopeLabelPlanner.CreateLabelDialogPlan(combo.SelectedIndex, rowsBox.Text, columnsBox.Text);
+            customPanel.IsVisible = selected.ShowCustomGrid;
+        };
+        LabelSetupResult? result = null;
+        var content = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(16, 16, 16, 0),
+            Children =
+            {
+                new TextBlock { Text = "Label product:" }, combo, customPanel,
+            },
+        };
+        AddActions(dialog, content, () =>
+        {
+            var selected = MailingsEnvelopeLabelPlanner.PlanLabel(combo.SelectedIndex, rowsBox.Text, columnsBox.Text);
+            result = selected.Result;
+        });
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<MailMergePreviewDialogAction?> AskPreviewNavigationAsync(
+        Window owner,
+        int currentIndex,
+        int recordCount)
+    {
+        var plan = MailMergePreviewDialogPlanner.CreatePlan(currentIndex, recordCount);
+        var dialog = CreateDialog("Preview Results", 350, 170);
+        var label = new TextBlock { Text = plan.RecordLabel, Margin = new Thickness(16, 16, 16, 8) };
+        var previous = new Button { Content = "Previous", IsEnabled = plan.CanGoPrevious };
+        var next = new Button { Content = "Next", IsEnabled = plan.CanGoNext };
+        var done = new Button { Content = "Done", IsDefault = true };
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        foreach (var button in new[] { previous, next, done, cancel })
+            AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 72, isDefault: button == done);
+
+        MailMergePreviewDialogAction? result = null;
+        previous.Click += (_, _) => { result = MailMergePreviewDialogAction.MovePrevious; dialog.Close(); };
+        next.Click += (_, _) => { result = MailMergePreviewDialogAction.MoveNext; dialog.Close(); };
+        done.Click += (_, _) => { result = MailMergePreviewDialogAction.Done; dialog.Close(); };
+        cancel.Click += (_, _) => { result = MailMergePreviewDialogAction.Cancel; dialog.Close(); };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [previous, next, done, cancel], new Thickness(16, 8, 16, 14));
+        var content = new StackPanel { Children = { label, buttons } };
+        dialog.Content = content;
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<string?> AskFindRecipientAsync(
+        Window owner,
+        string? initialQuery = null)
+    {
+        var dialog = CreateDialog("Find Recipient", 360, 155);
+        var queryBox = CreateTextBox(initialQuery ?? string.Empty, "Name, company, or other value");
+        string? result = null;
+        var content = CreateForm(("Find:", queryBox));
+        AddActions(dialog, content, () =>
+        {
+            var value = queryBox.Text?.Trim();
+            result = string.IsNullOrWhiteSpace(value) ? null : value;
+        });
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<MailMergeFinishPlan?> AskFinishMergeAsync(
+        Window owner,
+        int recordCount,
+        int currentRecordIndex)
+    {
+        var dialogPlan = MailMergeFinishPlanner.CreateDialogPlan(recordCount, currentRecordIndex);
+        var dialog = CreateDialog("Finish and Merge", 430, 275);
+        var destination = CreateChoiceCombo(dialogPlan.Destinations.Select(choice => choice.Label), dialogPlan.DestinationIndex);
+        var scope = CreateChoiceCombo(dialogPlan.Scopes.Select(choice => choice.Label), dialogPlan.ScopeIndex);
+        var from = CreateTextBox(dialogPlan.FromRecordText, "From record");
+        var to = CreateTextBox(dialogPlan.ToRecordText, "To record");
+        var range = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "From:", VerticalAlignment = VerticalAlignment.Center }, from,
+                new TextBlock { Text = "To:", VerticalAlignment = VerticalAlignment.Center }, to,
+            },
+        };
+        var validation = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.Gray };
+        Button? okButton = null;
+
+        MailMergeFinishPlan CurrentPlan() => MailMergeFinishPlanner.Plan(
+            dialogPlan.Destinations[Math.Clamp(destination.SelectedIndex, 0, dialogPlan.Destinations.Count - 1)].Destination,
+            dialogPlan.Scopes[Math.Clamp(scope.SelectedIndex, 0, dialogPlan.Scopes.Count - 1)].Scope,
+            recordCount,
+            currentRecordIndex,
+            from.Text,
+            to.Text);
+
+        void Refresh()
+        {
+            var current = CurrentPlan();
+            validation.Text = current.Success ? "Ready to finish the merge." : $"Finish and merge: {current.Issue}.";
+            if (okButton is not null)
+                okButton.IsEnabled = current.Success;
+        }
+
+        destination.SelectionChanged += (_, _) => Refresh();
+        scope.SelectionChanged += (_, _) => Refresh();
+        from.TextChanged += (_, _) => Refresh();
+        to.TextChanged += (_, _) => Refresh();
+        var content = CreateForm(
+            ("Destination:", (Control)destination),
+            ("Records:", (Control)scope),
+            ("Range:", range),
+            ("Validation:", validation));
+        MailMergeFinishPlan? result = null;
+        AddActions(dialog, content, () => result = CurrentPlan(), ok => okButton = ok);
+        Refresh();
+        await dialog.ShowDialog(owner);
+        return result;
+    }
+
+    public static async Task<MailMergeCheckForErrorsMode?> AskCheckForErrorsAsync(Window owner)
+    {
+        var dialog = CreateDialog("Check for Errors", 520, 220);
+        var choices = MailMergeCheckForErrorsPlanner.GetChoices();
+        var combo = CreateChoiceCombo(choices.Select(choice => choice.Label), 0);
+        MailMergeCheckForErrorsMode? result = null;
+        var content = CreateForm(("How should errors be checked?", (Control)combo));
+        AddActions(dialog, content, () => result = MailMergeCheckForErrorsPlanner.GetMode(combo.SelectedIndex));
         await dialog.ShowDialog(owner);
         return result;
     }
