@@ -450,7 +450,7 @@ static void RenderDocumentComposite(
             }
             else if (child is FrameworkElement fe)
             {
-                var stretch = fe.Tag is FreeW.Core.Model.Shape
+                var stretch = fe.Tag is FreeW.Core.Model.Shape or FreeW.Core.Model.InlineImage
                     ? Stretch.None
                     : Stretch.Fill;
                 dc.DrawRectangle(
