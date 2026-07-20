@@ -98,7 +98,11 @@ static int RunCompare(string[] args)
         Sha256(File.ReadAllText(avaloniaPath))), JsonOptions());
     if (check)
     {
-        var fresh = File.Exists(freshnessPath) && File.ReadAllText(freshnessPath) == freshness;
+        var fresh = File.Exists(jsonPath) && File.Exists(markdownPath) && File.Exists(htmlPath) && File.Exists(freshnessPath)
+            && File.ReadAllText(jsonPath) == json
+            && File.ReadAllText(markdownPath) == markdown
+            && File.ReadAllText(htmlPath) == html
+            && File.ReadAllText(freshnessPath) == freshness;
         Console.WriteLine(fresh ? $"comparison current: {output}" : $"comparison stale: {output}");
         return fresh ? 0 : 1;
     }
