@@ -6,6 +6,23 @@ public static partial class BuiltInFunctions
 {
     // ── B4: Discrete distributions ────────────────────────────────────────────
 
+    // A (int) cast on a double outside Int32's representable range SATURATES to Int32.MaxValue
+    // (or MinValue) in .NET rather than throwing — so a legitimately huge trials/population-size
+    // argument (e.g. 2.2 billion: an ordinary finite double, and BINOM.DIST/NEGBINOM.DIST/
+    // HYPGEOM.DIST document no upper bound on it) would otherwise be silently substituted with a
+    // wildly different, smaller value and produce a confidently wrong numeric result instead of
+    // erroring. Any magnitude that doesn't fit in an int falls outside what this int-based
+    // implementation can compute, so it must yield #NUM! rather than a corrupted answer.
+    private static bool TryTruncateToInt32(double value, out int result)
+    {
+        result = 0;
+        if (!double.IsFinite(value)) return false;
+        double truncated = Math.Truncate(value);
+        if (truncated < int.MinValue || truncated > int.MaxValue) return false;
+        result = (int)truncated;
+        return true;
+    }
+
     /// <summary>Log of binomial coefficient C(n,k).</summary>
     private static double LogBinom(int n, int k)
     {
@@ -43,7 +60,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue BinomDistScalar(ScalarValue kValue, ScalarValue nValue, ScalarValue probabilityValue, ScalarValue cumulativeValue)
     {
-        int n = (int)Math.Truncate(ToNumber(nValue));
+        if (!TryTruncateToInt32(ToNumber(nValue), out int n)) return ErrorValue.Num;
         double p = ToNumber(probabilityValue);
         bool cum = ToBool(cumulativeValue);
         return BinomDistScalar(kValue, n, p, cum);
@@ -85,7 +102,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue BinomInvScalar(ScalarValue nValue, ScalarValue probabilityValue, ScalarValue alphaValue)
     {
-        int n = (int)Math.Truncate(ToNumber(nValue));
+        if (!TryTruncateToInt32(ToNumber(nValue), out int n)) return ErrorValue.Num;
         double p = ToNumber(probabilityValue);
         return BinomInvScalar(n, p, alphaValue);
     }
@@ -122,7 +139,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue NegbinomDistScalar(ScalarValue failuresValue, ScalarValue successesValue, ScalarValue probabilityValue, ScalarValue cumulativeValue)
     {
-        int r = (int)Math.Truncate(ToNumber(successesValue));
+        if (!TryTruncateToInt32(ToNumber(successesValue), out int r)) return ErrorValue.Num;
         double p = ToNumber(probabilityValue);
         bool cum = ToBool(cumulativeValue);
         return NegbinomDistScalar(failuresValue, r, p, cum);
@@ -201,9 +218,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue HypergeomDistScalar(ScalarValue sampleSuccessesValue, ScalarValue sampleSizeValue, ScalarValue populationSuccessesValue, ScalarValue populationSizeValue, ScalarValue cumulativeValue)
     {
-        int n = (int)Math.Truncate(ToNumber(sampleSizeValue));
-        int M = (int)Math.Truncate(ToNumber(populationSuccessesValue));
-        int N = (int)Math.Truncate(ToNumber(populationSizeValue));
+        if (!TryTruncateToInt32(ToNumber(sampleSizeValue), out int n)) return ErrorValue.Num;
+        if (!TryTruncateToInt32(ToNumber(populationSuccessesValue), out int M)) return ErrorValue.Num;
+        if (!TryTruncateToInt32(ToNumber(populationSizeValue), out int N)) return ErrorValue.Num;
         bool cum = ToBool(cumulativeValue);
         return HypergeomDistScalar(sampleSuccessesValue, n, M, N, cum);
     }

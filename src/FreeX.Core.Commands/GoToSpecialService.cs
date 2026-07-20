@@ -17,7 +17,8 @@ public enum GoToSpecialKind
     ConditionalFormats,
     Objects,
     Precedents,
-    Dependents
+    Dependents,
+    CurrentArray
 }
 
 [Flags]
@@ -31,7 +32,13 @@ public enum GoToSpecialValueTypes
     All = Numbers | Text | Logicals | Errors
 }
 
-public sealed record GoToSpecialOptions(GoToSpecialValueTypes ValueTypes = GoToSpecialValueTypes.All);
+public sealed record GoToSpecialOptions(
+    GoToSpecialValueTypes ValueTypes = GoToSpecialValueTypes.All,
+    // Excel's Go To Special dialog offers "All" vs. "Same as active cell" sub-options for
+    // both Conditional Formats and Data Validation. When true, only cells governed by the
+    // SAME specific rule(s) as the active cell are matched, rather than every rule overlapping
+    // the search range.
+    bool MatchActiveCellRuleOnly = false);
 
 public static class GoToSpecialService
 {
@@ -66,6 +73,9 @@ public static class GoToSpecialService
         if (kind == GoToSpecialKind.LastCell)
             return sheet.GetUsedRange() is { } usedRange ? [usedRange.End] : [];
 
+        if (kind == GoToSpecialKind.CurrentArray)
+            return FindCurrentArray(sheet, activeCell ?? range.Start);
+
         if (kind == GoToSpecialKind.Objects)
             return FindObjects(sheet, range);
 
@@ -81,9 +91,9 @@ public static class GoToSpecialService
         if (kind == GoToSpecialKind.ColumnDifferences)
             return FindColumnDifferences(sheet, range, activeCell);
         if (kind == GoToSpecialKind.DataValidation)
-            return FindDataValidations(sheet.DataValidations, range);
+            return FindDataValidations(sheet.DataValidations, range, options.MatchActiveCellRuleOnly ? activeCell : null);
         if (kind == GoToSpecialKind.ConditionalFormats)
-            return FindConditionalFormats(sheet.ConditionalFormats, range);
+            return FindConditionalFormats(sheet.ConditionalFormats, range, options.MatchActiveCellRuleOnly ? activeCell : null);
 
         var scanRange = range;
         if (scanRange.CellCount > MaximumDirectScanCells)
@@ -186,10 +196,78 @@ public static class GoToSpecialService
         return false;
     }
 
-    private static IReadOnlyList<CellAddress> FindConditionalFormats(List<ConditionalFormat> rules, GridRange range)
+    /// <summary>
+    /// Excel's "Same as active cell" sub-option for Go To Special > Conditional Formats:
+    /// selects only cells governed by the SAME specific rule(s) that apply to
+    /// <paramref name="activeCell"/> -- not every rule intersecting <paramref name="range"/>
+    /// (that broader behavior is "All", the default).
+    /// </summary>
+    private static IReadOnlyList<CellAddress> FindConditionalFormatsMatchingActiveCell(
+        List<ConditionalFormat> rules,
+        GridRange range,
+        CellAddress activeCell)
+    {
+        List<ConditionalFormat>? matchingRules = null;
+        for (var i = 0; i < rules.Count; i++)
+        {
+            if (rules[i].AppliesTo.Contains(activeCell))
+                (matchingRules ??= []).Add(rules[i]);
+        }
+
+        if (matchingRules is null)
+            return [];
+
+        var result = new List<CellAddress>();
+        foreach (var address in range.AllCells())
+        {
+            if (HasConditionalFormatAt(matchingRules, address))
+                result.Add(address);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Excel's "Same as active cell" sub-option for Go To Special > Data Validation:
+    /// selects only cells governed by the SAME specific rule(s) that apply to
+    /// <paramref name="activeCell"/> -- not every rule intersecting <paramref name="range"/>
+    /// (that broader behavior is "All", the default).
+    /// </summary>
+    private static IReadOnlyList<CellAddress> FindDataValidationsMatchingActiveCell(
+        List<DataValidation> rules,
+        GridRange range,
+        CellAddress activeCell)
+    {
+        List<DataValidation>? matchingRules = null;
+        for (var i = 0; i < rules.Count; i++)
+        {
+            if (HasDataValidationAt([rules[i]], activeCell))
+                (matchingRules ??= []).Add(rules[i]);
+        }
+
+        if (matchingRules is null)
+            return [];
+
+        var result = new List<CellAddress>();
+        foreach (var address in range.AllCells())
+        {
+            if (HasDataValidationAt(matchingRules, address))
+                result.Add(address);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<CellAddress> FindConditionalFormats(
+        List<ConditionalFormat> rules,
+        GridRange range,
+        CellAddress? matchActiveCellOnly = null)
     {
         if (rules.Count == 0)
             return [];
+
+        if (matchActiveCellOnly is { } activeCell)
+            return FindConditionalFormatsMatchingActiveCell(rules, range, activeCell);
 
         var (coversRange, coveredCells, rangeCount) = AnalyzeConditionalFormatRanges(rules, range);
         if (coversRange)
@@ -211,10 +289,16 @@ public static class GoToSpecialService
         return result;
     }
 
-    private static IReadOnlyList<CellAddress> FindDataValidations(List<DataValidation> rules, GridRange range)
+    private static IReadOnlyList<CellAddress> FindDataValidations(
+        List<DataValidation> rules,
+        GridRange range,
+        CellAddress? matchActiveCellOnly = null)
     {
         if (rules.Count == 0)
             return [];
+
+        if (matchActiveCellOnly is { } activeCell)
+            return FindDataValidationsMatchingActiveCell(rules, range, activeCell);
 
         var (coversRange, coveredCells, rangeCount) = AnalyzeDataValidationRanges(rules, range);
         if (coversRange)
@@ -390,8 +474,27 @@ public static class GoToSpecialService
             AddIfInRange(result, range, picture.Anchor);
         foreach (var textBox in sheet.TextBoxes)
             AddIfInRange(result, range, textBox.Anchor);
+        foreach (var control in sheet.FormControls)
+        {
+            if (control.Anchor is { } controlAnchor)
+                AddIfInRange(result, range, controlAnchor.Start);
+        }
 
         return result;
+    }
+
+    /// <summary>
+    /// Excel's Go To Special > Current Array: from any member (or the anchor) of a legacy CSE
+    /// array formula or a dynamic-array spill, selects the whole array's extent.
+    /// </summary>
+    private static IReadOnlyList<CellAddress> FindCurrentArray(Sheet sheet, CellAddress activeCell)
+    {
+        if (!sheet.TryGetArrayExtent(activeCell, out var anchor, out var rows, out var cols))
+            return [];
+
+        return MaterializeCells(new GridRange(
+            anchor,
+            new CellAddress(anchor.Sheet, anchor.Row + rows - 1, anchor.Col + cols - 1)));
     }
 
     private static IReadOnlyList<CellAddress> FindPrecedents(Workbook workbook, Sheet sheet, GridRange range)

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -142,6 +143,9 @@ internal static partial class XlsxChartXmlWriter
             : null;
         var categoryIsNumeric = chart.FirstColIsCategories &&
             IsCategoryRangeNumeric(sheet, layout);
+        var categoryStripValues = chart.FirstColIsCategories
+            ? GetStripPointValues(sheet, layout, layout.CategoryStrip)
+            : null;
 
         foreach (var (strip, seriesIndex) in GetChartSeriesStripSequence(chart, layout))
         {
@@ -153,6 +157,14 @@ internal static partial class XlsxChartXmlWriter
                 ?? FormatStripRange(layout, sheet.Name, strip);
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
             var effectiveCategoryIsNumeric = verbatim?.CatFormula is null && categoryIsNumeric;
+            var valueCache = verbatim?.ValFormula is null
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), chartNs)
+                : null;
+            var categoryCache = verbatim?.CatFormula is null && categoryStripValues is not null
+                ? (effectiveCategoryIsNumeric
+                    ? BuildNumCacheXml(categoryStripValues, chartNs)
+                    : BuildStrCacheXml(categoryStripValues, chartNs))
+                : null;
 
             XElement? txElement = null;
             if (verbatim?.TxFormula is { } txFormula)
@@ -183,10 +195,11 @@ internal static partial class XlsxChartXmlWriter
                 ToAdditionalTrendlinesXml(chart, seriesIndex),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToAdditionalErrorBarsXml(chart, seriesIndex),
-                ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs),
+                ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs, categoryCache),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", valueRange))),
+                        new XElement(chartNs + "f", valueRange),
+                        valueCache)),
                 chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
                     ? ToSeriesSmoothXml(chart, seriesIndex, chartNs)
                     : null,
@@ -272,14 +285,91 @@ internal static partial class XlsxChartXmlWriter
     private static ChartSeriesVerbatimFormulas? GetVerbatimFormulas(ChartModel chart, int seriesIndex) =>
         chart.VerbatimSeriesFormulas?.FirstOrDefault(f => f.SeriesIndex == seriesIndex);
 
-    private static XElement? ToCategoryRangeXml(string? categoryRange, bool numericCategory, XNamespace chartNs)
+    /// <summary>
+    /// R53-io-chart-series-order-3-2: reads a strip's current worksheet values so numRef/strRef
+    /// elements can carry a real &lt;c:numCache&gt;/&lt;c:strCache&gt; (real Excel always pairs a
+    /// series formula with its cached values, so the chart still displays last-known data when the
+    /// referenced range/sheet is unavailable — external link broken, manual calc not yet
+    /// recalculated, or a non-recalculating OOXML consumer). Only meaningful for a strip whose range
+    /// is known positionally; verbatim (multi-area) formulas have no single strip and are left
+    /// without a cache, unchanged from prior behavior.
+    /// </summary>
+    private static ScalarValue[] GetStripPointValues(Sheet sheet, ChartSeriesStripLayout layout, uint strip)
+    {
+        var count = layout.LastPoint >= layout.FirstDataPoint
+            ? (int)(layout.LastPoint - layout.FirstDataPoint) + 1
+            : 0;
+        if (count <= 0)
+            return [];
+
+        var values = new ScalarValue[count];
+        for (var i = 0; i < count; i++)
+        {
+            var point = layout.FirstDataPoint + (uint)i;
+            values[i] = layout.SeriesInRows ? sheet.GetValue(strip, point) : sheet.GetValue(point, strip);
+        }
+
+        return values;
+    }
+
+    private static XElement BuildNumCacheXml(IReadOnlyList<ScalarValue> values, XNamespace chartNs)
+    {
+        var cache = new XElement(chartNs + "numCache",
+            new XElement(chartNs + "formatCode", "General"),
+            new XElement(chartNs + "ptCount", new XAttribute("val", values.Count)));
+        for (var i = 0; i < values.Count; i++)
+        {
+            var text = values[i] switch
+            {
+                NumberValue number => number.Value.ToString("G15", CultureInfo.InvariantCulture),
+                DateTimeValue dateTime => dateTime.Value.ToString("G15", CultureInfo.InvariantCulture),
+                BoolValue boolean => boolean.Value ? "1" : "0",
+                _ => null,
+            };
+            if (text is null)
+                continue;
+
+            cache.Add(new XElement(chartNs + "pt", new XAttribute("idx", i), new XElement(chartNs + "v", text)));
+        }
+
+        return cache;
+    }
+
+    private static XElement BuildStrCacheXml(IReadOnlyList<ScalarValue> values, XNamespace chartNs)
+    {
+        var cache = new XElement(chartNs + "strCache",
+            new XElement(chartNs + "ptCount", new XAttribute("val", values.Count)));
+        for (var i = 0; i < values.Count; i++)
+        {
+            var text = values[i] switch
+            {
+                NumberValue number => number.Value.ToString("G15", CultureInfo.InvariantCulture),
+                DateTimeValue dateTime => dateTime.Value.ToString("G15", CultureInfo.InvariantCulture),
+                TextValue textValue => textValue.Value,
+                BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+                _ => null,
+            };
+            if (text is null)
+                continue;
+
+            cache.Add(new XElement(chartNs + "pt", new XAttribute("idx", i), new XElement(chartNs + "v", text)));
+        }
+
+        return cache;
+    }
+
+    private static XElement? ToCategoryRangeXml(
+        string? categoryRange,
+        bool numericCategory,
+        XNamespace chartNs,
+        XElement? cacheElement = null)
     {
         if (string.IsNullOrWhiteSpace(categoryRange))
             return null;
 
         var refElement = numericCategory
-            ? new XElement(chartNs + "numRef", new XElement(chartNs + "f", categoryRange))
-            : new XElement(chartNs + "strRef", new XElement(chartNs + "f", categoryRange));
+            ? new XElement(chartNs + "numRef", new XElement(chartNs + "f", categoryRange), cacheElement)
+            : new XElement(chartNs + "strRef", new XElement(chartNs + "f", categoryRange), cacheElement);
 
         return new XElement(chartNs + "cat", refElement);
     }
@@ -324,6 +414,12 @@ internal static partial class XlsxChartXmlWriter
             var effectiveXValueRange = verbatim?.CatFormula ?? xValueRange;
             var yValueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, strip);
+            var xValueCache = verbatim?.CatFormula is null
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, xValueStrip), chartNs)
+                : null;
+            var yValueCache = verbatim?.ValFormula is null
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), chartNs)
+                : null;
 
             XElement? txElement = verbatim?.TxFormula is { } txFormula
                 ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
@@ -343,10 +439,12 @@ internal static partial class XlsxChartXmlWriter
                 ToAdditionalErrorBarsXml(chart, seriesIndex),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", effectiveXValueRange))),
+                        new XElement(chartNs + "f", effectiveXValueRange),
+                        xValueCache)),
                 new XElement(chartNs + "yVal",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", yValueRange))),
+                        new XElement(chartNs + "f", yValueRange),
+                        yValueCache)),
                 ToSeriesSmoothXml(chart, seriesIndex, chartNs),
                 ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
             seriesIndex++;
@@ -430,6 +528,13 @@ internal static partial class XlsxChartXmlWriter
             var yValueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, yValueStrip);
             var sizeRange = FormatStripRange(layout, sheet.Name, sizeStrip);
+            var xValueCache = verbatim?.CatFormula is null
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, xValueStrip), chartNs)
+                : null;
+            var yValueCache = verbatim?.ValFormula is null
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, yValueStrip), chartNs)
+                : null;
+            var sizeCache = BuildNumCacheXml(GetStripPointValues(sheet, layout, sizeStrip), chartNs);
 
             XElement? txElement = verbatim?.TxFormula is { } txFormula
                 ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
@@ -448,13 +553,16 @@ internal static partial class XlsxChartXmlWriter
                 ToAdditionalErrorBarsXml(chart, seriesIndex),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", effectiveXValueRange))),
+                        new XElement(chartNs + "f", effectiveXValueRange),
+                        xValueCache)),
                 new XElement(chartNs + "yVal",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", yValueRange))),
+                        new XElement(chartNs + "f", yValueRange),
+                        yValueCache)),
                 new XElement(chartNs + "bubbleSize",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", sizeRange))),
+                        new XElement(chartNs + "f", sizeRange),
+                        sizeCache)),
                 ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
             seriesIndex++;
         }
@@ -475,6 +583,9 @@ internal static partial class XlsxChartXmlWriter
             : null;
         var categoryIsNumeric = chart.FirstColIsCategories &&
             IsCategoryRangeNumeric(sheet, layout);
+        var categoryStripValues = chart.FirstColIsCategories
+            ? GetStripPointValues(sheet, layout, layout.CategoryStrip)
+            : null;
 
         var seriesIndex = 0;
         for (var valueStrip = layout.FirstValueStrip; valueStrip <= layout.LastStrip; valueStrip++)
@@ -484,6 +595,14 @@ internal static partial class XlsxChartXmlWriter
                 ?? FormatStripRange(layout, sheet.Name, valueStrip);
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
             var effectiveCategoryIsNumeric = verbatim?.CatFormula is null && categoryIsNumeric;
+            var valueCache = verbatim?.ValFormula is null
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, valueStrip), chartNs)
+                : null;
+            var categoryCache = verbatim?.CatFormula is null && categoryStripValues is not null
+                ? (effectiveCategoryIsNumeric
+                    ? BuildNumCacheXml(categoryStripValues, chartNs)
+                    : BuildStrCacheXml(categoryStripValues, chartNs))
+                : null;
 
             XElement? txElement = verbatim?.TxFormula is { } txFormula
                 ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
@@ -496,10 +615,11 @@ internal static partial class XlsxChartXmlWriter
                 ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
-                ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs),
+                ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs, categoryCache),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", valueRange))),
+                        new XElement(chartNs + "f", valueRange),
+                        valueCache)),
                 ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
             seriesIndex++;
         }

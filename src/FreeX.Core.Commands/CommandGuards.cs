@@ -3,7 +3,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
-internal static class CommandGuards
+public static class CommandGuards
 {
     private const string SheetProtectedMessage = "The sheet is protected.";
     private const string PivotTableNotFoundMessage = "PivotTable was not found.";
@@ -190,6 +190,31 @@ internal static class CommandGuards
             ?? StyleId.Default;
         var style = workbook.GetStyle(styleId);
         return !style.Locked;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="address"/> may be SELECTED while the sheet is protected, per the
+    /// sheet's <see cref="SheetProtectionPermission.SelectLockedCells"/> /
+    /// <see cref="SheetProtectionPermission.SelectUnlockedCells"/> permissions (the "Select
+    /// locked cells" / "Select unlocked cells" checkboxes in Excel's Protect Sheet dialog).
+    /// Distinct from <see cref="CanEditCell"/>, which governs whether an edit is allowed -- Excel
+    /// can (and by default does) allow selecting a locked cell without allowing it to be edited;
+    /// when "Select locked cells" is unchecked, locked cells cannot be navigated to at all.
+    /// </summary>
+    public static bool CanSelectCell(Workbook workbook, Sheet sheet, CellAddress address)
+    {
+        if (!sheet.IsProtected)
+            return true;
+
+        var current = sheet.GetCell(address);
+        var styleId = current?.StyleId
+            ?? sheet.GetStyleOnly(address.Row, address.Col)
+            ?? StyleId.Default;
+        var style = workbook.GetStyle(styleId);
+
+        return style.Locked
+            ? sheet.ProtectionPermissions.Contains(SheetProtectionPermission.SelectLockedCells)
+            : sheet.ProtectionPermissions.Contains(SheetProtectionPermission.SelectUnlockedCells);
     }
 
     /// <summary>True when <paramref name="range"/> has its own Allow-Edit-Range password set.</summary>

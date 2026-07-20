@@ -180,16 +180,53 @@ public static class WorkbookPdfContentBuilder
                 var fontFace  = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
                 // B&W mode: force font colour to black regardless of style.
                 var fontColor = bw ? PdfColor.Black : ToPdfColor(style.ResolveFontColor(workbook.Theme));
+                var displayText = PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, 64);
+
+                // Resolve the cell's effective horizontal alignment the same way the on-screen
+                // GridView viewport does (GridView.Rendering.cs + CellTextOrientationLayoutPlanner):
+                // General resolves to Right for numeric/date content (left in a right-to-left
+                // context) and Left otherwise; explicit Left/Center/Right/Justify/Distributed/Fill
+                // are honored as authored. Without this, every cell -- including right-aligned
+                // numbers and centered titles -- rendered flush-left in the exported PDF (R53
+                // fix-one-path-miss-twin-sweep-4).
+                var rawCell = sheet.GetCell(cell.Row, cell.Column);
+                var isNumeric = rawCell?.Value is NumberValue or DateTimeValue;
+                var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+                    style.ReadingOrder, sheet.IsRightToLeft);
+                var effectiveAlign = CellTextOrientationLayoutPlanner.ResolveEffectiveHorizontalAlignment(
+                    style.HorizontalAlignment, isNumeric, isEffectivelyRightToLeft);
+
+                // Format Cells > Alignment > Indent, converted from the same 8px-per-level unit the
+                // GridView viewport uses (GridView.Rendering.cs) into PDF points and scaled with the
+                // sheet's Scale%/Fit-to-pages ratio like everything else in this cell rect.
+                var indentPt = style.IndentLevel * 8.0 * (SheetPdfPageSetupResolver.PdfPointsPerInch / 96.0) * textScale;
+
+                var textWidth = PortablePdfTextMeasurer.Instance.Measure(
+                    displayText, null, fontSize, cell.IsTitle || style.Bold, italic: false).Width;
+
+                var textX = effectiveAlign switch
+                {
+                    // Right: anchor the text's right edge inside the cell (minus a matching pad and
+                    // the indent). Deliberately not clamped to the cell's left edge -- a too-wide
+                    // right-aligned value should overflow leftward, exactly like Excel and the
+                    // viewport (see CalculateLayout's identical comment).
+                    HorizontalAlignment.Right => x + w - textWidth - (2.0 * textScale) - indentPt,
+                    HorizontalAlignment.Center
+                        or HorizontalAlignment.Justify
+                        or HorizontalAlignment.Distributed => x + ((w - textWidth) / 2.0),
+                    _ => x + (2.0 * textScale) + indentPt
+                };
+
                 // Text inset/baseline scale with the grid so text stays proportionally placed
                 // within its (now possibly shrunk) cell rect.
                 var baseline = y + (3.0 * textScale);
                 ops.Add(new PdfText(
-                    x + (2.0 * textScale),
+                    textX,
                     baseline,
                     fontSize,
                     fontFace,
                     fontColor,
-                    PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, 64)));
+                    displayText));
             }
         }
 

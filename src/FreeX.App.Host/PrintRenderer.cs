@@ -58,10 +58,16 @@ public static partial class PrintRenderer
         var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
         var columnWidthsPixels = BuildColumnWidthsPixels(sheet);
 
-        IReadOnlyList<PrintCommentSummaryPagePlan> commentSummaryPages =
-            sheet.PrintComments == WorksheetPrintComments.AtEnd
-                ? PrintCommentSummaryPlanner.BuildPages(sheet.Comments, sheet.ThreadedComments, pageH, marginTop)
-                : [];
+        IReadOnlyList<PrintCommentSummaryPagePlan> commentSummaryPages;
+        if (sheet.PrintComments == WorksheetPrintComments.AtEnd)
+        {
+            var (printedComments, printedThreadedComments) = FilterCommentsToPrintedCells(sheet, printPlan);
+            commentSummaryPages = PrintCommentSummaryPlanner.BuildPages(printedComments, printedThreadedComments, pageH, marginTop);
+        }
+        else
+        {
+            commentSummaryPages = [];
+        }
         var totalPages = printPlan.GridPageCount + commentSummaryPages.Count;
         var printableHyperlinks = BuildPrintableHyperlinkLookup(workbook, sheet);
         var printableCellDestinations = BuildPrintableCellDestinationLookup(workbook, sheet);
@@ -287,6 +293,42 @@ public static partial class PrintRenderer
             pixels[col] = ColumnWidthPixelMapper.ColumnWidthToPixels(width);
 
         return pixels;
+    }
+
+    /// <summary>
+    /// Restricts the "Comments: At end of sheet" appendix (and the equivalent portable/PDF path) to
+    /// notes/threaded comments whose cell is actually printed on at least one page of this render
+    /// plan -- Excel never lists a note on a hidden row/column or a cell outside the print area in
+    /// that appendix, matching the same rows/columns-actually-printed restriction the "As displayed"
+    /// overlay path already applies via PageLayout.GetDisplayedCommentOverlays' rowIndexes/columnIndexes
+    /// filtering. A cell counts as printed when its row and column both appear together on some page
+    /// of the SAME configured print area (areas are evaluated independently so a row from one disjoint
+    /// print area can never combine with a column from another to falsely mark a cell as printed).
+    /// </summary>
+    private static (IReadOnlyDictionary<CellAddress, string> Comments, IReadOnlyDictionary<CellAddress, ThreadedComment> ThreadedComments) FilterCommentsToPrintedCells(
+        Sheet sheet,
+        WorksheetPrintRenderPlan printPlan)
+    {
+        if (sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
+            return (sheet.Comments, sheet.ThreadedComments);
+
+        var areaCellSets = printPlan.AreaPlans
+            .Select(area => (
+                Rows: new HashSet<uint>(area.Pages.SelectMany(p => p.Rows)),
+                Columns: new HashSet<uint>(area.Pages.SelectMany(p => p.Columns))))
+            .ToList();
+
+        bool IsPrinted(CellAddress address) =>
+            areaCellSets.Any(area => area.Rows.Contains(address.Row) && area.Columns.Contains(address.Col));
+
+        var comments = sheet.Comments.Count == 0
+            ? sheet.Comments
+            : sheet.Comments.Where(pair => IsPrinted(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+        var threadedComments = sheet.ThreadedComments.Count == 0
+            ? sheet.ThreadedComments
+            : sheet.ThreadedComments.Where(pair => IsPrinted(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+
+        return (comments, threadedComments);
     }
 
     private sealed record PdfLinkTarget(

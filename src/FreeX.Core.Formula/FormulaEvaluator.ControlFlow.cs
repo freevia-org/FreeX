@@ -291,7 +291,7 @@ public sealed partial class FormulaEvaluator
         {
             var cond = EvaluateArrayOperand(node.Arguments[i], context);
             if (cond is ErrorValue e) return e;
-            if (cond is RangeValue conditionRange) return EvaluateIfsConditionRange(node, context, conditionRange);
+            if (cond is RangeValue conditionRange) return EvaluateIfsConditionRange(node, context, conditionRange, i);
             bool? taken = TryCoerceCondition(cond);
             if (taken is null) return ErrorValue.Value;
             if (taken.Value) return EvaluateArrayOperand(node.Arguments[i + 1], context);
@@ -299,9 +299,14 @@ public sealed partial class FormulaEvaluator
         return ErrorValue.NA;
     }
 
-    private ScalarValue EvaluateIfsConditionRange(FunctionCallNode node, IEvalContext context, RangeValue firstConditionRange)
+    private ScalarValue EvaluateIfsConditionRange(FunctionCallNode node, IEvalContext context, RangeValue firstConditionRange, int conditionArgIndex)
     {
-        var conditionCache = new Dictionary<int, ScalarValue> { [0] = firstConditionRange };
+        // Seed the cache at the argument index that actually produced this range (not always 0):
+        // EvaluateIfsElement's per-cell loop starts scanning from argument 0, and any earlier scalar
+        // condition pairs (already known FALSE — that's why the outer EvaluateIfs loop reached this
+        // later index at all) must still be genuinely re-evaluated at their OWN index rather than
+        // having this later range silently substituted in their place.
+        var conditionCache = new Dictionary<int, ScalarValue> { [conditionArgIndex] = firstConditionRange };
         var resultCache = new Dictionary<int, ScalarValue>();
         var cells = new ScalarValue[firstConditionRange.RowCount, firstConditionRange.ColCount];
 

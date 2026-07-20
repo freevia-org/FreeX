@@ -882,8 +882,19 @@ internal static class XlsxStylesheetMetadataPreserver
         var fillXml = ResolveIndexedRecordXml(xf, "fillId", fillsList, workbookNs + "fill");
         var borderXml = ResolveIndexedRecordXml(xf, "borderId", bordersList, workbookNs + "border");
         var numFmtKey = ResolveNumFmtSignatureKey(xf, numFmtsList, workbookNs);
-        return string.Join(SignatureSeparator, fontXml, fillXml, borderXml, numFmtKey);
+
+        // R53-io-cellstyle-named-3-2: include alignment/protection so two named cell styles that
+        // differ only by those (e.g. two report-header styles distinguished purely by horizontal
+        // alignment) don't collapse onto the same signature and get treated as an unresolvable
+        // cross-style collision (see ambiguousNamedStyleSignatures below) even though the rebuild
+        // legitimately produced two distinguishable target xfs for them.
+        var alignmentXml = ResolveDirectChildXml(xf, workbookNs + "alignment");
+        var protectionXml = ResolveDirectChildXml(xf, workbookNs + "protection");
+        return string.Join(SignatureSeparator, fontXml, fillXml, borderXml, numFmtKey, alignmentXml, protectionXml);
     }
+
+    private static string ResolveDirectChildXml(XElement xf, XName childName) =>
+        xf.Element(childName)?.ToString(SaveOptions.DisableFormatting) ?? string.Empty;
 
     private static string ResolveIndexedRecordXml(XElement xf, string attributeName, XElement? list, XName itemName)
     {
@@ -901,8 +912,20 @@ internal static class XlsxStylesheetMetadataPreserver
     {
         if (!TryGetIntAttribute(xf, "numFmtId", out var numFmtId))
             return string.Empty;
+
+        // R53-io-cellstyle-named-3-1: resolve BOTH builtin (<164) and custom (>=164) numFmtIds to
+        // their format-code text, instead of returning the raw builtin id for one side and the
+        // resolved code for the other. FreeX's own save path re-canonicalizes any format string that
+        // matches a builtin catalog entry to its builtin numFmtId (XlsxClosedXmlCellMapper.ApplyStyle),
+        // so a source file's custom numFmtId (>=164) for a code like "0%" and the rebuilt target's
+        // canonicalized builtin numFmtId (9) for the identical code must compare equal here, or a
+        // named cell style bound to that format silently loses its reconnect on save.
         if (numFmtId < 164)
-            return numFmtId.ToString(CultureInfo.InvariantCulture);
+        {
+            return FreeX.Core.Model.BuiltInNumberFormatCatalog.TryResolveFormatCode(numFmtId, out var builtinFormatCode)
+                ? builtinFormatCode
+                : numFmtId.ToString(CultureInfo.InvariantCulture);
+        }
 
         var formatCode = numFmtsList?
             .Elements(workbookNs + "numFmt")

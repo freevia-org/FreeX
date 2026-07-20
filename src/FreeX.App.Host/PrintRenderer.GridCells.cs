@@ -204,6 +204,11 @@ public static partial class PrintRenderer
             textBrush,
             1.0);
 
+        // Mirror GridView.Rendering.cs: Underline/Strikethrough are ordinary WPF TextDecorations;
+        // DoubleUnderline is drawn as two manual strokes below (adding it here too would triple it).
+        if (CellTextDecorationPlanner.Build(style) is { } decorations)
+            ft.SetTextDecorations(decorations);
+
         var canOverflow = !hasOrientation &&
             GridView.CanOverflowCellText(style, cell.RawValue, displayText, merge: null);
         if (canOverflow && ft.Width > maxTextWidth)
@@ -228,26 +233,45 @@ public static partial class PrintRenderer
             ft.Trimming = TextTrimming.CharacterEllipsis;
         }
 
+        // Mirror GridView.Rendering.cs's alignment resolution (hAlign/isNumeric/indentPx feeding
+        // CalculateCellTextRenderLayout) for BOTH the rotated and non-rotated branches, so a printed
+        // cell's Horizontal/VerticalAlignment and Indent match exactly what's on screen instead of
+        // the non-rotated branch hardcoding a flush-left, vertically-centered position regardless of
+        // style. (Reading-order/RTL mirroring is not threaded here: DrawPrintedGridCells's caller,
+        // PrintRenderer.HeaderFooter.cs, is owned by a different fix bucket and doesn't pass the
+        // sheet's IsRightToLeft flag down to this method.)
+        var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
+        var resolvedHAlign = ResolvePrintedGeneralAlignment(style?.HorizontalAlignment ?? CellHAlign.General, cell.RawValue);
+        var indentPx = (style?.IndentLevel ?? 0) * 8.0;
+
         Point textPoint;
         double rotationAngle = 0;
         if (hasOrientation)
         {
-            var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
             var layout = CellTextOrientationLayoutPlanner.CalculateLayout(
                 new CellTextLayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
                 ft.Width,
                 ft.Height,
-                style?.HorizontalAlignment ?? CellHAlign.General,
+                resolvedHAlign,
                 style?.VerticalAlignment,
                 isNumeric,
-                indentPixels: 0,
+                indentPx,
                 textRotation);
             textPoint = new Point(layout.TextPoint.X, layout.TextPoint.Y);
             rotationAngle = layout.TransformAngle;
         }
         else
         {
-            textPoint = new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2);
+            var layout = CellTextOrientationLayoutPlanner.CalculateLayout(
+                new CellTextLayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
+                ft.Width,
+                ft.Height,
+                resolvedHAlign,
+                style?.VerticalAlignment,
+                isNumeric,
+                indentPx,
+                textRotation: 0);
+            textPoint = new Point(layout.TextPoint.X, layout.TextPoint.Y);
         }
 
         // WrapText mirrors GridView.Rendering.cs, which never caps a wrapped cell to one line
@@ -265,6 +289,16 @@ public static partial class PrintRenderer
             dc.PushTransform(new RotateTransform(rotationAngle, textPoint.X, textPoint.Y));
 
         dc.DrawText(ft, textPoint);
+
+        if (style?.DoubleUnderline == true)
+        {
+            // Mirrors GridView.Rendering.cs's DrawCellText: DoubleUnderline is two manual strokes
+            // below the text baseline rather than a WPF TextDecoration (which only draws one line).
+            var underlinePen = new Pen(textBrush, 1.0);
+            var underlineY = textPoint.Y + ft.Height + 1;
+            dc.DrawLine(underlinePen, new Point(textPoint.X, underlineY), new Point(textPoint.X + ft.Width, underlineY));
+            dc.DrawLine(underlinePen, new Point(textPoint.X, underlineY + 2), new Point(textPoint.X + ft.Width, underlineY + 2));
+        }
 
         if (isRotated)
             dc.Pop();
@@ -320,6 +354,19 @@ public static partial class PrintRenderer
 
         return width;
     }
+
+    /// <summary>
+    /// Mirrors GridView.Rendering.cs's ResolveGeneralAlignmentHorizontalAlignment: Excel
+    /// General-aligns Boolean and Error cell values to the CENTER (unlike text, which General-aligns
+    /// left, and numbers/dates, which General-aligns right -- both already handled by
+    /// <see cref="CellTextOrientationLayoutPlanner.CalculateLayout"/>'s own isNumeric flag). Only
+    /// applies when the style's alignment actually IS General; an explicit Left/Right/Center/etc.
+    /// choice is never overridden by the cell's value type.
+    /// </summary>
+    private static CellHAlign ResolvePrintedGeneralAlignment(CellHAlign hAlign, ScalarValue? rawValue) =>
+        hAlign == CellHAlign.General && rawValue is BoolValue or ErrorValue
+            ? CellHAlign.Center
+            : hAlign;
 
     private static Brush ResolvePrintedTextBrush(CellStyle? style, out Color textColor)
     {

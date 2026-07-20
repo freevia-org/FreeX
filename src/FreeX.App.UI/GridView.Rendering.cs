@@ -310,7 +310,10 @@ public partial class GridView
         {
             var typefaceKey = CreateCellTypefaceKeyWithTheme(style);
             var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
-            var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
+            var shrinkIndentPx = DoesHorizontalAlignmentConsumeIndent(hAlign)
+                ? indentPx
+                : indentPx - (style?.IndentLevel ?? 0) * 8.0;
+            var availableWidth = Math.Max(1, rect.Width - 4 - shrinkIndentPx);
             fontSize = ResolveCachedShrinkFontSize(
                 renderText,
                 typefaceKey,
@@ -389,7 +392,7 @@ public partial class GridView
             rect,
             text.Width,
             text.Height,
-            hAlign,
+            ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue),
             style?.VerticalAlignment,
             isNumeric,
             indentPx,
@@ -776,7 +779,10 @@ public partial class GridView
             {
                 var typefaceKey = CreateCellTypefaceKeyWithTheme(style);
                 var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
-                var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
+                var shrinkIndentPx = DoesHorizontalAlignmentConsumeIndent(hAlign)
+                    ? indentPx
+                    : indentPx - (style?.IndentLevel ?? 0) * 8.0;
+                var availableWidth = Math.Max(1, rect.Width - 4 - shrinkIndentPx);
                 fontSize = ResolveCachedShrinkFontSize(
                     renderText,
                     typefaceKey,
@@ -862,7 +868,7 @@ public partial class GridView
                 rect,
                 text.Width,
                 text.Height,
-                hAlign,
+                ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue),
                 style?.VerticalAlignment,
                 isNumeric,
                 indentPx,
@@ -874,10 +880,20 @@ public partial class GridView
             {
                 occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
                 uint nextCol = colMetric.Col + 1;
-                while (colLookup.TryGetValue(nextCol, out var nextMetric)
-                       && !occupied.Contains((cell.Row, nextCol)))
+                // A plain hidden column has NO entry in colLookup at all (ViewportService.Metrics
+                // skips it entirely instead of giving it a zero-width entry), so a TryGetValue miss
+                // doesn't necessarily mean "end of the viewport" -- it can also mean "this column is
+                // hidden". Excel treats a hidden column as transparent to overflow (the text slides
+                // straight over it), so a miss only stops the scan once we're past the last column
+                // metric actually present in the viewport; otherwise skip over it and keep going.
+                uint maxViewportCol = viewport.ColMetrics.Count > 0 ? viewport.ColMetrics[^1].Col : colMetric.Col;
+                while (nextCol <= maxViewportCol)
                 {
-                    renderWidth += nextMetric.Width;
+                    var hasNextMetric = colLookup.TryGetValue(nextCol, out var nextMetric);
+                    if (hasNextMetric && !occupied.Contains((cell.Row, nextCol)))
+                        renderWidth += nextMetric!.Width;
+                    else if (hasNextMetric)
+                        break;
                     nextCol++;
                 }
             }
@@ -888,12 +904,22 @@ public partial class GridView
             {
                 occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
                 uint prevCol = colMetric.Col - 1;
-                while (colLookup.TryGetValue(prevCol, out var prevMetric)
-                       && !occupied.Contains((cell.Row, prevCol)))
+                // Same hidden-column transparency as the rightward scan above: a missing colLookup
+                // entry means "hidden", not "stop" -- only bail once we pass the leftmost column
+                // metric actually present in the viewport.
+                uint minViewportCol = viewport.ColMetrics.Count > 0 ? viewport.ColMetrics[0].Col : colMetric.Col;
+                while (prevCol >= minViewportCol)
                 {
-                    clipLeft -= prevMetric.Width;
-                    renderWidth += prevMetric.Width;
-                    if (prevCol == 1)
+                    var hasPrevMetric = colLookup.TryGetValue(prevCol, out var prevMetric);
+                    if (hasPrevMetric && !occupied.Contains((cell.Row, prevCol)))
+                    {
+                        clipLeft -= prevMetric!.Width;
+                        renderWidth += prevMetric.Width;
+                    }
+                    else if (hasPrevMetric)
+                        break;
+
+                    if (prevCol == minViewportCol)
                         break;
                     prevCol--;
                 }
@@ -1145,7 +1171,7 @@ public partial class GridView
             return cached.Occupied;
         }
 
-        var occupied = BuildOccupiedCellSet(viewport.Cells, editingCell);
+        var occupied = BuildOccupiedCellSet(viewport.Cells, editingCell, FindMerge);
         _occupiedCellLookupCache = new OccupiedCellLookupCache(viewport.Cells, editingCell, occupied);
         return occupied;
     }
@@ -1315,6 +1341,31 @@ public partial class GridView
 
     internal static string PrepareCellDisplayTextForRender(string text, int textRotation) =>
         CellTextOrientationLayoutPlanner.PrepareDisplayText(text, textRotation);
+
+    /// <summary>
+    /// Excel General-aligns Boolean and Error cell values to the CENTER — unlike text (left) and
+    /// numbers/dates (right), which <see cref="CellTextOrientationLayoutPlanner.ResolveEffectiveHorizontalAlignment"/>
+    /// already handles via its <c>isNumeric</c> flag. That flag only distinguishes numeric/date from
+    /// everything else, so it has no Center outcome; this resolves the Boolean/Error case locally by
+    /// asking for an explicit Center instead of General (any explicit, non-General alignment is
+    /// returned unchanged by the planner, so passing Center here bypasses its Left/Right-only General
+    /// resolution). Only applies when the style's alignment actually IS General — an explicit
+    /// Left/Right/Center/etc. choice is never overridden by the cell's value type.
+    /// </summary>
+    internal static CellHAlign ResolveGeneralAlignmentHorizontalAlignment(CellHAlign hAlign, ScalarValue? rawValue) =>
+        hAlign == CellHAlign.General && rawValue is BoolValue or ErrorValue
+            ? CellHAlign.Center
+            : hAlign;
+
+    /// <summary>
+    /// Format Cells &gt; Alignment &gt; Indent only pulls text away from the edge it anchors to
+    /// (Left/Right/General); Center/Justify/Distributed/Fill center or repeat the text instead of
+    /// anchoring it to a side, so Excel's Indent has no effect on them — mirrors
+    /// <see cref="CellTextOrientationLayoutPlanner.CalculateLayout"/>'s boundsX switch, whose
+    /// Center/Justify/Distributed/Fill branches never reference indentPixels.
+    /// </summary>
+    internal static bool DoesHorizontalAlignmentConsumeIndent(CellHAlign hAlign) =>
+        hAlign is CellHAlign.General or CellHAlign.Left or CellHAlign.Right;
 
     /// <summary>
     /// Resolves the per-line <see cref="TextAlignment"/> used inside a wrapped cell's text box.

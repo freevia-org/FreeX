@@ -4,6 +4,20 @@ namespace FreeX.Core.Formula;
 
 public static partial class BuiltInFunctions
 {
+    // Excel coerces a literal text "TRUE"/"FALSE" (case-insensitive) range_lookup argument to the
+    // corresponding logical value, the same way it coerces text conditions in IF/IFS (see
+    // FormulaEvaluator.ControlFlow.cs's TryCoerceCondition). Any other non-blank text is not a valid
+    // logical value here and yields #VALUE! (returning null tells the caller to do so).
+    private static bool? TryCoerceRangeLookupBool(ScalarValue v) => v switch
+    {
+        BoolValue b => b.Value,
+        NumberValue n => n.Value != 0.0,
+        DateTimeValue d => d.Value != 0.0,
+        TextValue t when string.Equals(t.Value, "TRUE", StringComparison.OrdinalIgnoreCase) => true,
+        TextValue t when string.Equals(t.Value, "FALSE", StringComparison.OrdinalIgnoreCase) => false,
+        _ => null
+    };
+
     private static ScalarValue Vlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[1] is ErrorValue e1) return e1;
@@ -23,7 +37,14 @@ public static partial class BuiltInFunctions
         double rawCol = ToNumber(columnIndexValue);
         if (!double.IsFinite(rawCol) || rawCol > int.MaxValue) return ErrorValue.Value;
         int colIndex = (int)rawCol;
-        bool rangeLookup = rangeLookupValue is BlankValue || ToBool(rangeLookupValue); // default TRUE
+        bool rangeLookup; // default TRUE
+        if (rangeLookupValue is BlankValue) rangeLookup = true;
+        else
+        {
+            var coercedRangeLookup = TryCoerceRangeLookupBool(rangeLookupValue);
+            if (coercedRangeLookup is null) return ErrorValue.Value;
+            rangeLookup = coercedRangeLookup.Value;
+        }
 
         if (colIndex < 1) return ErrorValue.Value;
         if (colIndex > (int)table.ColCount) return ErrorValue.Ref;
@@ -85,7 +106,14 @@ public static partial class BuiltInFunctions
         double rawRow = ToNumber(rowIndexValue);
         if (!double.IsFinite(rawRow) || rawRow > int.MaxValue) return ErrorValue.Value;
         int rowIndex = (int)rawRow;
-        bool rangeLookup = rangeLookupValue is BlankValue || ToBool(rangeLookupValue);
+        bool rangeLookup; // default TRUE
+        if (rangeLookupValue is BlankValue) rangeLookup = true;
+        else
+        {
+            var coercedRangeLookup = TryCoerceRangeLookupBool(rangeLookupValue);
+            if (coercedRangeLookup is null) return ErrorValue.Value;
+            rangeLookup = coercedRangeLookup.Value;
+        }
 
         if (rowIndex < 1) return ErrorValue.Value;
         if (rowIndex > (int)table.RowCount) return ErrorValue.Ref;
