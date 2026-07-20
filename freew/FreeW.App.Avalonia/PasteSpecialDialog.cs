@@ -3,12 +3,22 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
 internal sealed class PasteSpecialDialog : FreeWDialogWindow
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ButtonHeight = 21,
+            ButtonPadding = new Thickness(10, 1),
+            ListBoxItemMinHeight = 21,
+            ListBoxItemPadding = new Thickness(4, 0),
+        };
+
     private readonly ListBox _list = new()
     {
         MinWidth = 340,
@@ -51,17 +61,12 @@ internal sealed class PasteSpecialDialog : FreeWDialogWindow
         panel.Children.Add(_list);
         panel.Children.Add(_description);
 
-        var ok = Button("OK", isDefault: true);
-        ok.Click += (_, _) => Accept();
-        var cancel = Button("Cancel", isCancel: true);
-        cancel.Click += (_, _) => Close(null);
-        panel.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Children = { ok, cancel },
-        });
+        panel.Children.Add(AvaloniaCompactDialogChrome.CreateOkCancelRow(
+            Accept,
+            () => Close(null),
+            buttonWidth: 72,
+            margin: new Thickness(0, 4, 0, 0),
+            style: DialogChromeStyle));
 
         Content = panel;
         KeyDown += (_, e) =>
@@ -71,6 +76,11 @@ internal sealed class PasteSpecialDialog : FreeWDialogWindow
                 Close(null);
                 e.Handled = true;
             }
+        };
+        Opened += (_, _) =>
+        {
+            AvaloniaCompactDialogChrome.ApplyListBox(_list, DialogChromeStyle);
+            _list.Focus(NavigationMethod.Tab);
         };
     }
 
@@ -91,14 +101,5 @@ internal sealed class PasteSpecialDialog : FreeWDialogWindow
         if (_list.SelectedItem is PasteSpecialOptionChoice row)
             Close(row.Option);
     }
-
-    private static Button Button(string label, bool isDefault = false, bool isCancel = false) => new()
-    {
-        Content = label,
-        MinWidth = 72,
-        Padding = new Thickness(10, 4),
-        IsDefault = isDefault,
-        IsCancel = isCancel,
-    };
 
 }

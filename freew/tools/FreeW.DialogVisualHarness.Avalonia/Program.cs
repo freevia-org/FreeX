@@ -29,8 +29,14 @@ static async Task<int> Main(string[] args)
     var inventoryPath = Required(args, "--inventory");
     var output = Path.GetFullPath(Required(args, "--output"));
     var scenarioFilter = Optional(args, "--scenario");
+    var wpfAuthorityPath = Optional(args, "--wpf-authority");
     var inventory = JsonSerializer.Deserialize<RouteInventory>(File.ReadAllText(inventoryPath), JsonOptions())
         ?? throw new InvalidOperationException("Invalid inventory.");
+    var wpfAuthority = string.IsNullOrWhiteSpace(wpfAuthorityPath)
+        ? new Dictionary<string, Capture>(StringComparer.OrdinalIgnoreCase)
+        : (JsonSerializer.Deserialize<CaptureManifest>(File.ReadAllText(wpfAuthorityPath), JsonOptions())
+            ?? throw new InvalidOperationException("Invalid WPF authority manifest."))
+            .Captures.ToDictionary(capture => capture.ScenarioId, StringComparer.OrdinalIgnoreCase);
     Directory.CreateDirectory(output);
     var progressPath = Path.Combine(output, "capture-progress.log");
     File.WriteAllText(progressPath, string.Empty);
@@ -42,7 +48,13 @@ static async Task<int> Main(string[] args)
         Capture? result = null;
         try
         {
-            await session.Dispatch(() => result = CaptureOne(scenario, output), CancellationToken.None);
+            var authorityId = scenario.Id.StartsWith("avalonia.", StringComparison.OrdinalIgnoreCase)
+                ? "wpf." + scenario.Id["avalonia.".Length..]
+                : scenario.Id;
+            wpfAuthority.TryGetValue(authorityId, out var authorityCapture);
+            await session.Dispatch(
+                () => result = CaptureOne(scenario, output, authorityCapture),
+                CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -57,12 +69,18 @@ static async Task<int> Main(string[] args)
     return captures.All(c => c.Status == "captured" && c.FullPixelContent?.PassesContentGate == true && c.TargetPixelContent?.PassesContentGate == true) ? 0 : 2;
 }
 
-static Capture? CaptureOne(Scenario scenario, string output)
+static Capture? CaptureOne(Scenario scenario, string output, Capture? authorityCapture)
 {
     var dialog = AvaloniaDialogRouteFactory.Create(scenario.RouteId, scenario.State, scenario.Tab);
     if (dialog is null) return null;
-    var width = Math.Max(560, (int)Math.Ceiling(dialog.MinWidth));
-    var height = Math.Max(TargetHeight(scenario), (int)Math.Ceiling(dialog.MinHeight));
+    var useAuthoritySize = authorityCapture is { Status: "captured" }
+        && scenario.RouteId is "paste-special" or "style" or "manage-styles";
+    var width = useAuthoritySize
+        ? authorityCapture!.LogicalWidth
+        : Math.Max(560, (int)Math.Ceiling(dialog.MinWidth));
+    var height = useAuthoritySize
+        ? authorityCapture!.LogicalHeight
+        : Math.Max(TargetHeight(scenario), (int)Math.Ceiling(dialog.MinHeight));
     var hasNativeFrame = scenario.RouteId != "screen-clip-overlay";
     var clientWidth = hasNativeFrame ? width - WpfNonClientWidth : width;
     var clientHeight = hasNativeFrame ? height - WpfNonClientHeight : height;
@@ -152,7 +170,9 @@ static Semantics ReadSemantics(Window dialog)
         Avalonia.Automation.AutomationProperties.GetAutomationId(c), c.GetType().Name, Avalonia.Automation.AutomationProperties.GetName(c), c.IsEffectivelyEnabled,
         c is CheckBox check ? check.IsChecked : c is ToggleButton toggle ? toggle.IsChecked : null,
         c is SelectingItemsControl selector ? selector.SelectedIndex : null)).ToArray();
-    var buttons = FindVisualChildren<Button>(dialog).ToArray();
+    var buttons = FindVisualChildren<Button>(dialog)
+        .Where(button => button is not ToggleButton)
+        .ToArray();
     var focused = FindVisualChildren<Control>(dialog).FirstOrDefault(c => c.IsFocused);
     return new Semantics(
         focused is null ? null : Avalonia.Automation.AutomationProperties.GetAutomationId(focused),

@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
+using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -42,6 +43,8 @@ public static class AvaloniaCompactDialogChrome
     private static readonly IBrush ButtonBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(221, 221, 221));
     private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
     private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(130, 130, 130));
+    private static readonly IBrush SelectedItemBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 232, 255));
+    private static readonly IBrush SelectedItemBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(153, 209, 255));
     private static readonly IBrush DialogForegroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x1f, 0x1f, 0x1f));
     private static readonly IBrush ValidationStatusBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00));
     private static readonly IBrush DialogTabPaneBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(192, 192, 192));
@@ -217,6 +220,9 @@ public static class AvaloniaCompactDialogChrome
         ArgumentNullException.ThrowIfNull(style);
 
         listBox.FontSize = style.FontSize;
+        listBox.Background = Brushes.White;
+        listBox.BorderBrush = InputBorderBrush;
+        listBox.BorderThickness = new Thickness(1);
         listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
         {
             Setters =
@@ -224,6 +230,15 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(TemplatedControl.PaddingProperty, style.ListBoxItemPadding),
                 new Setter(Layoutable.MinHeightProperty, style.ListBoxItemMinHeight),
                 new Setter(TemplatedControl.FontSizeProperty, style.FontSize),
+            },
+        });
+        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>().Class(":selected"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, SelectedItemBackgroundBrush),
+                new Setter(TemplatedControl.BorderBrushProperty, SelectedItemBorderBrush),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
             },
         });
     }
@@ -326,5 +341,52 @@ public static class AvaloniaCompactDialogChrome
         }
 
         return row;
+    }
+
+    public static Button CreateActionButton(
+        string content,
+        Action action,
+        double minWidth,
+        bool isDefault = false,
+        bool isCancel = false,
+        AvaloniaCompactDialogChromeStyle? style = null)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(action);
+        style ??= WindowsStyle;
+
+        var button = new Button
+        {
+            Content = content,
+            IsDefault = isDefault,
+            IsCancel = isCancel,
+        };
+        ApplyButton(button, style, minWidth, isDefault);
+        global::Avalonia.Automation.AutomationProperties.SetName(button, ShellStrings.Current.CreateAutomationName(content));
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    public static StackPanel CreateOkCancelRow(
+        Action accept,
+        Action cancel,
+        double buttonWidth,
+        Thickness margin = default,
+        AvaloniaCompactDialogChromeStyle? style = null)
+    {
+        style ??= WindowsStyle;
+        var ok = CreateActionButton(
+            ShellStrings.Current.Ok,
+            accept,
+            buttonWidth,
+            isDefault: true,
+            style: style);
+        var cancelButton = CreateActionButton(
+            ShellStrings.Current.Cancel,
+            cancel,
+            buttonWidth,
+            isCancel: true,
+            style: style);
+        return CreateActionRow([ok, cancelButton], margin, style);
     }
 }

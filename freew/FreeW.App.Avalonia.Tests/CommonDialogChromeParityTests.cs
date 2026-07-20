@@ -59,10 +59,12 @@ public sealed class CommonDialogChromeParityTests
         var button = new Button();
         var textBox = new TextBox();
         var comboBox = new ComboBox();
+        var listBox = new ListBox();
 
         AvaloniaCompactDialogChrome.ApplyButton(button, style, minWidth: 84, isDefault: true);
         AvaloniaCompactDialogChrome.ApplyTextBox(textBox, style);
         AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, style);
+        AvaloniaCompactDialogChrome.ApplyListBox(listBox, style);
         var row = AvaloniaCompactDialogChrome.CreateActionRow([button], style: style);
 
         button.Height.Should().Be(26);
@@ -73,7 +75,38 @@ public sealed class CommonDialogChromeParityTests
         comboBox.FontSize.Should().Be(12);
         ((ISolidColorBrush)button.Background!).Color.Should().Be(Color.FromRgb(221, 221, 221));
         ((ISolidColorBrush)button.BorderBrush!).Color.Should().Be(Color.FromRgb(200, 200, 200));
+        ((ISolidColorBrush)listBox.Background!).Color.Should().Be(Colors.White);
+        ((ISolidColorBrush)listBox.BorderBrush!).Color.Should().Be(Color.FromRgb(130, 130, 130));
+        listBox.BorderThickness.Should().Be(new Thickness(1));
         row.Spacing.Should().Be(style.ActionSpacing);
+    }
+
+    [Fact]
+    public void Shared_ok_cancel_row_uses_shell_strings_and_WPF_action_semantics()
+    {
+        var accepted = false;
+        var cancelled = false;
+
+        var row = AvaloniaCompactDialogChrome.CreateOkCancelRow(
+            () => accepted = true,
+            () => cancelled = true,
+            buttonWidth: 72,
+            margin: new Thickness(0, 4, 0, 0));
+        var buttons = row.Children.OfType<Button>().ToArray();
+
+        buttons.Should().HaveCount(2);
+        buttons[0].Content.Should().Be(Free.Shared.Shell.ShellStrings.Current.Ok);
+        buttons[0].IsDefault.Should().BeTrue();
+        buttons[0].IsCancel.Should().BeFalse();
+        buttons[1].Content.Should().Be(Free.Shared.Shell.ShellStrings.Current.Cancel);
+        buttons[1].IsCancel.Should().BeTrue();
+        buttons[1].IsDefault.Should().BeFalse();
+        buttons.Should().OnlyContain(button => button.MinWidth == 72);
+        row.Spacing.Should().Be(AvaloniaCompactDialogChrome.WindowsStyle.ActionSpacing);
+
+        buttons[0].Command?.Execute(null);
+        accepted.Should().BeFalse("the runtime Click event, not a synthetic command, owns acceptance");
+        cancelled.Should().BeFalse();
     }
 
     [Fact]
