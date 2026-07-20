@@ -440,6 +440,17 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         var hasHeaderRow = table.HeaderRowCount is null or > 0;
         var targetColumnCount = checked((int)range.ColCount);
 
+        // ECMA-376 tableColumn ids increment monotonically and are never reused/renumbered when a
+        // column is removed, so a table can legitimately carry a non-contiguous id sequence (e.g.
+        // {1, 2, 4} after an earlier column deletion). Preserve every surviving column's original Id
+        // here — matching the id-preserving reconciliation RowColumnShiftHelpers.AddressState.cs
+        // already uses for plain column insert/delete — instead of renumbering by position, and only
+        // allocate a fresh id (one past the highest id ever seen on this table) for genuinely new
+        // columns.
+        var nextId = 1;
+        foreach (var existing in table.Columns)
+            nextId = Math.Max(nextId, existing.Id + 1);
+
         for (var index = 0; index < targetColumnCount; index++)
         {
             var ordinal = index + 1;
@@ -450,7 +461,9 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
                     ? MakeUniqueColumnName($"Column{ordinal.ToString(CultureInfo.InvariantCulture)}", usedNames)
                     : existing.Name;
                 usedNames.Add(name);
-                yield return existing with { Id = ordinal, Name = name };
+                yield return string.Equals(name, existing.Name, StringComparison.Ordinal)
+                    ? existing
+                    : existing with { Name = name };
                 continue;
             }
 
@@ -462,7 +475,7 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
                 : rawName.Trim();
             var columnName = MakeUniqueColumnName(baseName, usedNames);
             usedNames.Add(columnName);
-            yield return new StructuredTableColumnModel(ordinal, columnName);
+            yield return new StructuredTableColumnModel(nextId++, columnName);
         }
     }
 

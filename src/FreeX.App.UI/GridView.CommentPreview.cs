@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Shapes;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -62,6 +63,9 @@ public partial class GridView
 
     // Pinned ("Show Comment") boxes — keyed by (Row, Col), always-visible in CommentOverlayHost.
     private readonly Dictionary<(uint Row, uint Col), Border> _pinnedNoteBorders = [];
+
+    // Leader line bridging each pinned box back to its cell corner (Excel's pinned-note connector).
+    private readonly Dictionary<(uint Row, uint Col), Line> _pinnedNoteConnectors = [];
 
     public void HideCommentPreview() => DismissCommentPreview();
 
@@ -453,6 +457,11 @@ public partial class GridView
         {
             host.Children.Remove(_pinnedNoteBorders[key]);
             _pinnedNoteBorders.Remove(key);
+            if (_pinnedNoteConnectors.TryGetValue(key, out var removedConnector))
+            {
+                host.Children.Remove(removedConnector);
+                _pinnedNoteConnectors.Remove(key);
+            }
         }
 
         if (pinned is null || viewport is null)
@@ -486,6 +495,25 @@ public partial class GridView
                 scaledCellRect,
                 new Size(Math.Max(0, ActualWidth), Math.Max(0, ActualHeight)),
                 desiredSize);
+
+            // Draw/update the leader line bridging the pinned box back to its cell corner before the
+            // box itself, so the box's z-order stays above the line it connects to.
+            var connectorLine = GridCommentPreviewPlacementPlanner.CalculateConnector(scaledCellRect, placement);
+            if (!_pinnedNoteConnectors.TryGetValue((row, col), out var connector))
+            {
+                connector = new Line
+                {
+                    Stroke = new SolidColorBrush(Color.FromRgb(158, 151, 113)),
+                    StrokeThickness = 1
+                };
+                AutomationProperties.SetAutomationId(connector, $"GridPinnedNoteConnector_{row}_{col}");
+                host.Children.Add(connector);
+                _pinnedNoteConnectors[(row, col)] = connector;
+            }
+            connector.X1 = connectorLine.Start.X;
+            connector.Y1 = connectorLine.Start.Y;
+            connector.X2 = connectorLine.End.X;
+            connector.Y2 = connectorLine.End.Y;
 
             if (!_pinnedNoteBorders.TryGetValue((row, col), out var border))
             {

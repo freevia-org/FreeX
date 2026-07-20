@@ -47,10 +47,33 @@ public static class AutoSumFormulaPlanner
     private static uint FindTopNumericRow(Sheet sheet, CellAddress address)
     {
         var topRow = address.Row;
-        while (topRow > 1 && sheet.GetValue(topRow - 1, address.Col) is NumberValue)
+        while (topRow > 1)
+        {
+            var candidateRow = topRow - 1;
+            if (sheet.GetValue(candidateRow, address.Col) is not NumberValue)
+                break;
+
+            // Excel stops AutoSum's upward scan at a pre-existing subtotal row instead of walking
+            // through it and re-summing the same data twice: a cell whose own formula is itself an
+            // aggregate (SUM/SUBTOTAL) becomes the boundary, matching Excel's "use the total above as
+            // the edge" behavior rather than folding that total's source range into the new formula.
+            if (IsAggregateFormulaCell(sheet.GetCell(candidateRow, address.Col)))
+                break;
+
             topRow--;
+        }
 
         return topRow;
+    }
+
+    private static bool IsAggregateFormulaCell(Cell? cell)
+    {
+        if (cell?.FormulaText is not { } formulaText)
+            return false;
+
+        var trimmed = formulaText.TrimStart();
+        return trimmed.StartsWith("SUM(", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("SUBTOTAL(", StringComparison.OrdinalIgnoreCase);
     }
 
     private static uint FindLeftNumericColumn(Sheet sheet, CellAddress address)

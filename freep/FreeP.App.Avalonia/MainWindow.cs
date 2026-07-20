@@ -50,11 +50,10 @@ namespace FreeP.App.Avalonia;
 ///   File:   New, Open, Save, Save As
 ///   Slide:  New Slide, Duplicate, Delete
 ///   Insert: Text Box, Table, Chart, Link, Picture, Rectangle, Ellipse
-///   Edit:   Undo, Redo, Find, Replace
+///   Edit:   Undo, Redo, Copy, Cut, Paste, Find, Replace
 ///   Keyboard: Ctrl+N/O/S/Shift+S, Ctrl+Z/Y
 ///
-/// Deferred to later Avalonia parity: transitions, animations, full platform dialogs,
-///   clipboard (full).
+/// Deferred to later Avalonia parity: transitions, animations, and full platform dialogs.
 /// </summary>
 public sealed partial class MainWindow : Window
 {
@@ -98,6 +97,9 @@ public sealed partial class MainWindow : Window
 
     private Presentation _presentation = Presentation.CreateEmpty();
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
+    private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
+    private readonly AvaloniaPresentationClipboardService _clipboardService;
+    private Task _clipboardOperation = Task.CompletedTask;
     private readonly FreePOptions _options;
 
     // ── Editing session ────────────────────────────────────────────────────────
@@ -239,6 +241,7 @@ public sealed partial class MainWindow : Window
     internal string StatusTextForTests => _statusText.Text ?? string.Empty;
     internal bool HasWindowIconForTests => Icon is not null;
     internal void RaiseKeyDownForTests(KeyEventArgs args) => MainWindow_KeyDown(this, args);
+    internal Task ClipboardOperationForTests => _clipboardOperation;
     internal int SlidePaneSlideItemCount => _slidePaneList.Items
         .OfType<ListBoxItem>()
         .Count(item => item.Tag is int);
@@ -253,6 +256,7 @@ public sealed partial class MainWindow : Window
     internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans => _slidePaneRenderedSectionHeaderPlans;
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
+    internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
     internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
     internal PresentationViewZoomState ViewZoomStateForTests => _viewZoomState;
     internal PresentationViewZoomState SlideCanvasViewZoomStateForTests => _slideCanvas.ViewZoomState;
@@ -477,7 +481,11 @@ public sealed partial class MainWindow : Window
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
         Func<RecentFilesStore>? loadRecentFilesStore,
-        FreePOptions? options = null)
+        FreePOptions? options = null,
+        Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
+        Func<string, Exception, Task>? showFileCommandErrorAsync = null,
+        IPresentationSystemClipboard? systemClipboard = null,
+        IPresentationClipboardShapeRenderer? clipboardRenderer = null)
     {
         Title = DefaultTitle;
         Width = 1280;
@@ -488,6 +496,10 @@ public sealed partial class MainWindow : Window
         ApplyWindowIcon();
         _options = options ?? new FreePOptions();
         _options.Normalize();
+        _clipboardService = new AvaloniaPresentationClipboardService(
+            systemClipboard ?? new AvaloniaPresentationSystemClipboard(
+                () => TopLevel.GetTopLevel(this)?.Clipboard),
+            clipboardRenderer ?? new AvaloniaClipboardShapeRenderer());
 
         // Build editing session around the initial empty presentation.
         RebuildEditor();
@@ -546,8 +558,14 @@ public sealed partial class MainWindow : Window
                 ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: UpdateStatus,
-            save: () => FileSaveAsync().GetAwaiter().GetResult(),
-            loadRecentFilesStore: loadRecentFilesStore);
+            loadRecentFilesStore: loadRecentFilesStore,
+            saveAsync: FileSaveAsync,
+            promptSaveChangesAsync: promptSaveChangesAsync,
+            showFileCommandErrorAsync: showFileCommandErrorAsync);
+        _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
+            confirmCloseAllowedAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync("closing"),
+            requestClose: Close,
+            restoreOwnerFocus: RestoreOwnerFocus);
 
         _reviewWorkflowSession = new(
             () => Editor,
@@ -605,6 +623,7 @@ public sealed partial class MainWindow : Window
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
         Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
+        Closing += (_, e) => e.Cancel = _closeCoordinator.ShouldCancelClosing();
         Closed += (_, _) =>
         {
             _findReplaceDialog?.Close();
@@ -617,13 +636,44 @@ public sealed partial class MainWindow : Window
         var startupPresentation = startupArguments
             .FirstOrDefault(a => IsSupportedPresentationPath(a) && File.Exists(a));
 
+        Exception? startupOpenError = null;
         if (startupPresentation is not null)
-            TryLoadPresentationFile(startupPresentation);
+        {
+            try
+            {
+                var result = PresentationFilePersistenceWorkflow.Open(startupPresentation);
+                LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
+                _statusText.Text = SisterAppFileTextPlanner.FormatOpened(Path.GetFileName(startupPresentation));
+            }
+            catch (Exception ex)
+            {
+                startupOpenError = ex;
+                LoadPresentationAsSaved(_presentation, path: null);
+                _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                    SisterAppFileTextPlanner.OpenCommand,
+                    ex.Message);
+            }
+        }
         else
+        {
             LoadPresentationAsSaved(_presentation, path: null);
+        }
 
         Content = windowFrame.Root;
         UpdateStatus();
+        if (startupOpenError is not null)
+        {
+            var error = startupOpenError;
+            Opened += async (_, _) => await _fileWorkflow.ShowFileCommandErrorAsync(
+                "Could not open the presentation",
+                error);
+        }
+    }
+
+    private void RestoreOwnerFocus()
+    {
+        Activate();
+        Focus();
     }
 
     private void ApplyWindowIcon()
@@ -1592,9 +1642,12 @@ public sealed partial class MainWindow : Window
                 OnDesignHostRequest)));
 
         // Clipboard
-        r.Register("freep.copy", new ActionRibbonCommand(() => Editor.CopySelectedShapes()));
-        r.Register("freep.cut", new ActionRibbonCommand(() => Editor.CutSelectedShapes()));
-        r.Register("freep.paste", new ActionRibbonCommand(() => Editor.Paste()));
+        r.Register("freep.copy", new ActionRibbonCommand(() =>
+            QueueClipboardOperation(() => _clipboardService.CopyAsync(Editor))));
+        r.Register("freep.cut", new ActionRibbonCommand(() =>
+            QueueClipboardOperation(() => _clipboardService.CutAsync(Editor))));
+        r.Register("freep.paste", new ActionRibbonCommand(() =>
+            QueueClipboardOperation(() => _clipboardService.PasteAsync(Editor))));
         r.Register("freep.format-painter", new ActionRibbonCommand(() =>
         {
             Editor.CopyFormatting();
@@ -2459,12 +2512,18 @@ public sealed partial class MainWindow : Window
         return LastFindReplaceWorkflowPlan;
     }
 
-    private void FileNew()
-    {
-        _fileWorkflow.New(
+    private void FileNew() => _ = FileNewAsync();
+
+    internal Task<bool> FileNewAsyncForTests() => FileNewAsync();
+
+    private Task<bool> FileNewAsync() =>
+        _fileWorkflow.NewAsync(
             FileText.NewAction,
-            () => LoadPresentationContent(Presentation.CreateEmpty()));
-    }
+            () =>
+            {
+                LoadPresentationContent(Presentation.CreateEmpty());
+                return Task.CompletedTask;
+            });
 
     private BackstageCallbacks BuildBackstageCallbacks() => new(
         GetPresentation: () => _presentation,
@@ -2493,19 +2552,21 @@ public sealed partial class MainWindow : Window
 
     internal bool HandleBackstageKeyForTests(Key key) => _backstage.HandleKey(key);
 
-    private void OpenRecentPath(string path)
-    {
-        _fileWorkflow.Open(
+    private void OpenRecentPath(string path) => _ = OpenRecentPathAsync(path);
+
+    private Task<bool> OpenRecentPathAsync(string path) =>
+        _fileWorkflow.OpenAsync(
             FileText.OpenAction,
-            () => path,
-            TryLoadPresentationFile);
-    }
+            () => Task.FromResult<string?>(path),
+            TryLoadPresentationFileAsync);
 
     private Task<bool> FileOpenAsync() =>
         _fileWorkflow.OpenAsync(
             FileText.OpenAction,
             PromptOpenPathAsync,
-            path => Task.FromResult(TryLoadPresentationFile(path)));
+            TryLoadPresentationFileAsync);
+
+    internal Task<bool> FileOpenAsyncForTests() => FileOpenAsync();
 
     private static string ResolveDataFolderLabel() =>
         AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
@@ -2535,7 +2596,7 @@ public sealed partial class MainWindow : Window
 
     private Task<bool> FileSaveAsync() =>
         _fileWorkflow.SaveAsync(
-            path => Task.FromResult(TrySavePresentationFile(path)),
+            TrySavePresentationFileAsync,
             FileSaveAsAsync);
 
     private async Task<bool> FileSaveAsAsync()
@@ -2561,7 +2622,7 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        return TrySavePresentationFile(path);
+        return await TrySavePresentationFileAsync(path);
     }
 
     private async Task<bool> FileExportPdfAsync()
@@ -5261,7 +5322,7 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    private bool TryLoadPresentationFile(string path)
+    private async Task<bool> TryLoadPresentationFileAsync(string path)
     {
         try
         {
@@ -5273,11 +5334,12 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
+            await _fileWorkflow.ShowFileCommandErrorAsync("Could not open the presentation", ex);
             return false;
         }
     }
 
-    private bool TrySavePresentationFile(string path)
+    private async Task<bool> TrySavePresentationFileAsync(string path)
     {
         try
         {
@@ -5289,9 +5351,13 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
+            await _fileWorkflow.ShowFileCommandErrorAsync("Could not save the presentation", ex);
             return false;
         }
     }
+
+    internal Task<bool> TrySavePresentationFileAsyncForTests(string path) =>
+        TrySavePresentationFileAsync(path);
 
     private static bool IsSupportedPresentationPath(string path) =>
         PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path);
@@ -6224,14 +6290,40 @@ public sealed partial class MainWindow : Window
             case FreePKeyboardCommand.DuplicateCurrentSlide: Editor.DuplicateCurrentSlide(); break;
             case FreePKeyboardCommand.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
             case FreePKeyboardCommand.StartSlideShowFromCurrentSlide: StartSlideShow(fromStart: false); break;
-            case FreePKeyboardCommand.Copy: Editor.CopySelectedShapes(); break;
-            case FreePKeyboardCommand.Cut: Editor.CutSelectedShapes(); break;
-            case FreePKeyboardCommand.Paste: Editor.Paste(); break;
+            case FreePKeyboardCommand.Copy:
+                QueueClipboardOperation(() => _clipboardService.CopyAsync(Editor));
+                break;
+            case FreePKeyboardCommand.Cut:
+                QueueClipboardOperation(() => _clipboardService.CutAsync(Editor));
+                break;
+            case FreePKeyboardCommand.Paste:
+                QueueClipboardOperation(() => _clipboardService.PasteAsync(Editor));
+                break;
             case FreePKeyboardCommand.Find: OpenFindDialog(); break;
             case FreePKeyboardCommand.Replace: OpenFindReplaceDialog(); break;
             case FreePKeyboardCommand.SelectAll: Editor.SelectAll(); break;
             default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
         }
+    }
+
+    private void QueueClipboardOperation(Func<Task> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        _clipboardOperation = RunClipboardOperationAsync(_clipboardOperation, operation);
+    }
+
+    private static async Task RunClipboardOperationAsync(Task preceding, Func<Task> operation)
+    {
+        try
+        {
+            await preceding;
+        }
+        catch
+        {
+            // A failed adapter operation must not prevent later clipboard commands.
+        }
+
+        await operation();
     }
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)

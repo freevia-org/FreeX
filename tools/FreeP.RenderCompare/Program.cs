@@ -82,6 +82,8 @@ internal static class Program
                 "--export-backstage-evidence" => RunExportBackstageEvidence(args[1..]),
                 "--dialog-pane-visual-evidence" => RunDialogPaneVisualEvidence(args[1..]),
                 "--dialog-pane-visual-report" => RunDialogPaneVisualReport(args[1..]),
+                "--whole-window-visual-evidence" => RunWholeWindowVisualEvidence(args[1..]),
+                "--whole-window-visual-report" => RunWholeWindowVisualReport(args[1..]),
                 "--corpus-summary"    => RunCorpusSummary(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
                 "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
@@ -128,6 +130,36 @@ internal static class Program
         }
 
         return DialogPaneVisualEvidence.RegenerateReports(args[0]);
+    }
+
+    private static int RunWholeWindowVisualEvidence(string[] args)
+    {
+        if (args.Length < 1)
+        {
+            Console.Error.WriteLine("usage: --whole-window-visual-evidence <outDir> [--wpf-exe <path>] [--avalonia-exe <path>] [--timeout-seconds N]");
+            return 2;
+        }
+
+        var outputDirectory = Path.GetFullPath(args[0]);
+        var wpfExecutable = ReadOption(args, "--wpf-exe") ?? Path.GetFullPath(
+            Path.Combine("freep", "FreeP.App.Host", "bin", "Release", "net10.0-windows10.0.19041.0", "FreeP.App.Host.exe"));
+        var avaloniaExecutable = ReadOption(args, "--avalonia-exe") ?? Path.GetFullPath(
+            Path.Combine("freep", "FreeP.App.Avalonia", "bin", "Release", "net10.0", "FreeP.exe"));
+        var timeoutSeconds = int.TryParse(ReadOption(args, "--timeout-seconds"), out var parsedTimeout)
+            ? parsedTimeout
+            : 30;
+        return WholeWindowVisualEvidence.Run(outputDirectory, wpfExecutable, avaloniaExecutable, TimeSpan.FromSeconds(timeoutSeconds));
+    }
+
+    private static int RunWholeWindowVisualReport(string[] args)
+    {
+        if (args.Length != 1)
+        {
+            Console.Error.WriteLine("usage: --whole-window-visual-report <evidenceDir>");
+            return 2;
+        }
+
+        return WholeWindowVisualEvidence.RegenerateReports(args[0]);
     }
 
     // -----------------------------------------------------------------------
@@ -692,6 +724,10 @@ internal static class Program
         Console.WriteLine("  --dialog-pane-visual-evidence <outDir> [--wpf-exe <path>] [--avalonia-exe <path>] [--timeout-seconds N]");
         Console.WriteLine("  --dialog-pane-visual-report <evidenceDir>");
         Console.WriteLine("      Capture and compare paired WPF/Avalonia dialog, pane, and choice-overlay fixtures at 96 DPI.");
+        Console.WriteLine();
+        Console.WriteLine("  --whole-window-visual-evidence <outDir> [--wpf-exe <path>] [--avalonia-exe <path>] [--timeout-seconds N]");
+        Console.WriteLine("  --whole-window-visual-report <evidenceDir>");
+        Console.WriteLine("      Capture and compare independently activated WPF/Avalonia full application clients at 1280x760 and 96 DPI.");
         Console.WriteLine();
         Console.WriteLine("  --corpus-summary <corpusDir> [--refs <refsDir>] [--manifest <out.json>] [--require-complete-refs] [--allow-missing-powerpoint]");
         Console.WriteLine("      Print compact per-deck status and PowerPoint reference PNG availability.");

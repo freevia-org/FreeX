@@ -56,7 +56,7 @@ public sealed class R18_pagination_Tests
         method.Should().NotBeNull("WorkbookPdfContentBuilder.ComputeActualGridSizes must still exist under that name");
 
         var resultObj = method!.Invoke(null, [sheet, contentPlan, availableWidth, availableHeight, 1.0]);
-        var (colWidthsPt, rowHeightsPt) = ((double[] ColWidths, double[] RowHeights))resultObj!;
+        var (colWidthsPt, rowHeightsPt, _) = ((double[] ColWidths, double[] RowHeights, double EffectiveScaleRatio))resultObj!;
 
         const double ptPerPx = SheetPdfPageSetupResolver.PdfPointsPerInch / 96.0;
         var unscaledColWidthPt = Math.Max(4.0, ColumnWidthPixelMapper.ColumnWidthToPixels(wideColumnChars)) * ptPerPx;
