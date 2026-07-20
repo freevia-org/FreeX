@@ -50,6 +50,8 @@ public enum SlideShowTransitionPlaybackKind
 }
 
 public sealed record SlideShowTransitionPlan(
+    TransitionKind ResolvedKind,
+    ulong? RandomSeed,
     SlideShowTransitionPlaybackKind PlaybackKind,
     double IncomingOffsetX,
     double IncomingOffsetY,
@@ -65,28 +67,134 @@ public sealed record SlideShowTransitionPlan(
 
 public static class SlideShowTransitionPlanner
 {
+    private const string RandomSeedVersion = "FreeP.RandomTransition.v1";
+
+    private static readonly TransitionKind[] RandomCandidateKindArray =
+    [
+        TransitionKind.Cut,
+        TransitionKind.Fade,
+        TransitionKind.Flash,
+        TransitionKind.Dissolve,
+        TransitionKind.Box,
+        TransitionKind.Reveal,
+        TransitionKind.Uncover,
+        TransitionKind.Cover,
+        TransitionKind.Push,
+        TransitionKind.Split,
+        TransitionKind.Blinds,
+        TransitionKind.RandomBar,
+        TransitionKind.Strips,
+        TransitionKind.Wheel,
+        TransitionKind.Zoom,
+        TransitionKind.Pan,
+        TransitionKind.Gallery,
+        TransitionKind.Conveyor,
+        TransitionKind.Window,
+        TransitionKind.Morph,
+        TransitionKind.Flip,
+        TransitionKind.Cube,
+        TransitionKind.Rotate,
+        TransitionKind.Honeycomb,
+        TransitionKind.Switch,
+        TransitionKind.Orbit,
+        TransitionKind.Ferris,
+        TransitionKind.Flythrough,
+        TransitionKind.Glitter,
+        TransitionKind.Ripple,
+        TransitionKind.Wind,
+        TransitionKind.Curtains,
+        TransitionKind.Shred,
+        TransitionKind.Drape,
+        TransitionKind.Fracture,
+        TransitionKind.Crush,
+        TransitionKind.Prism,
+        TransitionKind.Prestige,
+        TransitionKind.Warp,
+        TransitionKind.Vortex,
+        TransitionKind.PageCurlSingle
+    ];
+
+    /// <summary>
+    /// One stable representative for each dedicated renderer-neutral transition family.
+    /// PowerPoint defines p:random as choosing from transitions available to the renderer;
+    /// aliases are omitted here so no playback family receives extra weight.
+    /// </summary>
+    public static IReadOnlyList<TransitionKind> RandomCandidateKinds { get; } =
+        Array.AsReadOnly(RandomCandidateKindArray);
+
     public static SlideShowTransitionPlan Plan(SlideTransition transition)
     {
         ArgumentNullException.ThrowIfNull(transition);
 
+        return PlanCore(presentation: null, slide: null, transition);
+    }
+
+    public static SlideShowTransitionPlan Plan(
+        Presentation presentation,
+        Slide slide,
+        SlideTransition transition)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(slide);
+        ArgumentNullException.ThrowIfNull(transition);
+
+        return PlanCore(presentation, slide, transition);
+    }
+
+    public static ulong ComputeRandomSeed(
+        Presentation presentation,
+        Slide slide,
+        SlideTransition transition)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(slide);
+        ArgumentNullException.ThrowIfNull(transition);
+
+        return BuildRandomSeed(presentation, slide, transition);
+    }
+
+    private static SlideShowTransitionPlan PlanCore(
+        Presentation? presentation,
+        Slide? slide,
+        SlideTransition transition)
+    {
+        ulong? randomSeed = transition.Kind == TransitionKind.Random
+            ? BuildRandomSeed(presentation, slide, transition)
+            : null;
+        var resolvedKind = randomSeed is ulong seed
+            ? RandomCandidateKindArray[(int)(seed % (ulong)RandomCandidateKindArray.Length)]
+            : transition.Kind;
+
         var (x, y) = ResolveIncomingOffset(transition.Direction);
         return new SlideShowTransitionPlan(
-            PlanPlaybackKind(transition.Kind),
+            resolvedKind,
+            randomSeed,
+            PlanPlaybackKind(resolvedKind),
             x,
             y,
-            ResolveSplitHorizontal(transition),
-            ResolveSplitOut(transition),
+            ResolveSplitHorizontal(transition, resolvedKind),
+            ResolveSplitOut(transition, resolvedKind),
             ResolveBlindsHorizontal(transition),
             ResolveRandomBarsHorizontal(transition),
             ResolveStripsSlopeDown(transition),
             ResolveWheelSpokeCount(transition),
-            transition.Kind == TransitionKind.WheelReverse,
+            resolvedKind == TransitionKind.WheelReverse,
             transition.Direction != TransitionDirection.Out,
             ResolveBoxExpandsFromCenter(transition));
     }
 
-    public static SlideShowTransitionPlaybackKind PlanPlaybackKind(TransitionKind kind) =>
-        kind switch
+    public static SlideShowTransitionPlaybackKind PlanPlaybackKind(TransitionKind kind)
+    {
+        if (kind == TransitionKind.Random)
+        {
+            var seed = BuildRandomSeed(
+                presentation: null,
+                slide: null,
+                new SlideTransition { Kind = TransitionKind.Random });
+            kind = RandomCandidateKindArray[(int)(seed % (ulong)RandomCandidateKindArray.Length)];
+        }
+
+        return kind switch
         {
             TransitionKind.None or
             TransitionKind.Cut => SlideShowTransitionPlaybackKind.Cut,
@@ -210,15 +318,20 @@ public static class SlideShowTransitionPlanner
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback
         };
+    }
 
-    private static bool ResolveSplitHorizontal(SlideTransition transition) =>
-        transition.Kind == TransitionKind.Doors
+    private static bool ResolveSplitHorizontal(
+        SlideTransition transition,
+        TransitionKind resolvedKind) =>
+        resolvedKind == TransitionKind.Doors
         || transition.SplitOrientation == TransitionDirection.Horizontal
         || (transition.SplitOrientation is null
             && transition.Direction != TransitionDirection.Vertical);
 
-    private static bool ResolveSplitOut(SlideTransition transition) =>
-        transition.Kind == TransitionKind.Doors
+    private static bool ResolveSplitOut(
+        SlideTransition transition,
+        TransitionKind resolvedKind) =>
+        resolvedKind == TransitionKind.Doors
         || transition.Direction != TransitionDirection.In;
 
     private static bool ResolveBlindsHorizontal(SlideTransition transition) =>
@@ -250,4 +363,107 @@ public static class SlideShowTransitionPlanner
             TransitionDirection.Up => (0, 1),
             _ => (1, 0)
         };
+
+    private static ulong BuildRandomSeed(
+        Presentation? presentation,
+        Slide? slide,
+        SlideTransition transition)
+    {
+        var hash = new StableHashBuilder();
+        hash.Add(RandomSeedVersion);
+
+        hash.Add(presentation is not null);
+        if (presentation is not null)
+        {
+            hash.Add(presentation.SlideSizeCxEmu);
+            hash.Add(presentation.SlideSizeCyEmu);
+            hash.Add(presentation.Properties.Title);
+            hash.Add(presentation.Properties.Author);
+            hash.Add(presentation.Slides.Count);
+            foreach (var presentationSlide in presentation.Slides)
+            {
+                hash.Add(presentationSlide.Id);
+                hash.Add(presentationSlide.NumericId);
+            }
+        }
+
+        hash.Add(slide is not null);
+        if (slide is not null)
+        {
+            hash.Add(presentation?.Slides.IndexOf(slide) ?? -1);
+            hash.Add(slide.Id);
+            hash.Add(slide.NumericId);
+            hash.Add(slide.Title);
+        }
+
+        hash.Add((int)transition.Kind);
+        hash.Add((int?)transition.Direction);
+        hash.Add((int?)transition.SplitOrientation);
+        hash.Add(transition.DurationMs);
+        hash.Add(transition.AdvanceOnClick);
+        hash.Add(transition.AdvanceAfterMs);
+        hash.Add(transition.MorphOption);
+        hash.Add(transition.WheelSpokeCount);
+        return hash.Value;
+    }
+
+    private sealed class StableHashBuilder
+    {
+        private const ulong OffsetBasis = 14695981039346656037UL;
+        private const ulong Prime = 1099511628211UL;
+        private ulong _value = OffsetBasis;
+
+        public ulong Value => _value;
+
+        public void Add(bool value) => AddByte(value ? (byte)1 : (byte)0);
+
+        public void Add(int value) => Add((long)value);
+
+        public void Add(int? value)
+        {
+            Add(value.HasValue);
+            if (value.HasValue)
+                Add(value.Value);
+        }
+
+        public void Add(uint? value)
+        {
+            Add(value.HasValue);
+            if (value.HasValue)
+                Add((long)value.Value);
+        }
+
+        public void Add(long value)
+        {
+            unchecked
+            {
+                var bits = (ulong)value;
+                for (var shift = 0; shift < 64; shift += 8)
+                    AddByte((byte)(bits >> shift));
+            }
+        }
+
+        public void Add(string? value)
+        {
+            Add(value is not null);
+            if (value is null)
+                return;
+
+            Add(value.Length);
+            foreach (var character in value)
+            {
+                AddByte((byte)character);
+                AddByte((byte)(character >> 8));
+            }
+        }
+
+        private void AddByte(byte value)
+        {
+            unchecked
+            {
+                _value ^= value;
+                _value *= Prime;
+            }
+        }
+    }
 }

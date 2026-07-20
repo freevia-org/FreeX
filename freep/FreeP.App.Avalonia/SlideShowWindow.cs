@@ -769,7 +769,8 @@ public sealed class SlideShowWindow : Window
         // Sound playback on the Avalonia host is deferred / no-op.
         // (The sound bytes are preserved on the model and will re-emit on save.)
 
-        var plan = SlideShowPlaybackPlanner.PlanTransition(t);
+        var plan = SlideShowPlaybackPlanner.PlanTransition(_presentation, slide, t);
+        t = plan.EffectiveTransition;
         _transitionBackImage.IsVisible = false;
         _transitionBackImage.Clip = null;
         _transitionBackImage.RenderTransform = null;
