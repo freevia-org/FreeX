@@ -175,6 +175,8 @@ public sealed class CustomParagraphSpacingDialog : Window
     private readonly TextBox _line;
     private readonly TextBlock _status = PageLayoutDialogChrome.Status();
 
+    public DocumentParagraphSpacingSet? Result { get; private set; }
+
     public CustomParagraphSpacingDialog(DocumentParagraphSpacingSet? current)
     {
         PageLayoutDialogChrome.Configure(this, CustomParagraphSpacingDialogPlanner.Title, 380);
@@ -203,7 +205,11 @@ public sealed class CustomParagraphSpacingDialog : Window
         PageLayoutDialogChrome.WireEscape<DocumentParagraphSpacingSet?>(this);
     }
 
-    private void Accept()
+    internal bool AcceptForTests() => TryAccept(closeOnSuccess: false);
+
+    private void Accept() => TryAccept(closeOnSuccess: true);
+
+    private bool TryAccept(bool closeOnSuccess)
     {
         if (!CustomParagraphSpacingDialogPlanner.TryBuildResult(
                 new CustomParagraphSpacingDialogInput(_before.Text, _after.Text, _line.Text),
@@ -219,9 +225,13 @@ public sealed class CustomParagraphSpacingDialog : Window
                 _ => _before
             };
             PageLayoutDialogChrome.FocusAndSelect(target);
-            return;
+            return false;
         }
-        Close(result);
+
+        Result = result;
+        if (closeOnSuccess)
+            Close(result);
+        return true;
     }
 
     public static async Task ShowAndApplyAsync(Window owner, DocumentView editor)
