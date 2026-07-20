@@ -81,12 +81,35 @@ public sealed class SlideShowPlaybackPlannerTests
 
         rotate.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Rotate);
         rotate.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Rotate);
+
+        var honeycomb = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Honeycomb,
+            Direction = TransitionDirection.Right,
+            DurationMs = 400
+        });
+
+        honeycomb.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Honeycomb);
+        honeycomb.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Honeycomb);
+        honeycomb.DurationMs.Should().Be(400);
+
+        var orbit = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Orbit,
+            Direction = TransitionDirection.Left
+        });
+
+        orbit.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Orbit);
+        orbit.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Orbit);
     }
 
     [Theory]
     [InlineData(TransitionKind.Flip, TransitionDirection.Right, true, 0.02, 0, 0)]
     [InlineData(TransitionKind.Cube, TransitionDirection.Left, true, 0.08, -90, 0.12)]
     [InlineData(TransitionKind.Rotate, TransitionDirection.Down, false, 0.82, 90, 0.04)]
+    [InlineData(TransitionKind.Switch, TransitionDirection.Right, true, 0.86, 90, 0.18)]
+    [InlineData(TransitionKind.Orbit, TransitionDirection.Left, true, 0.64, -180, 0.25)]
+    [InlineData(TransitionKind.Ferris, TransitionDirection.Down, false, 0.72, 75, 0.18)]
     public void PerspectivePlanner_MapsAxisDirectionAndProjection(
         TransitionKind kind,
         TransitionDirection direction,
@@ -105,6 +128,32 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.StartScale.Should().Be(startScale);
         plan.StartRotationDegrees.Should().Be(rotation);
         plan.TravelFactor.Should().Be(travel);
+    }
+
+    [Fact]
+    public void HoneycombPlanner_BuildsDeterministicHexagonalRevealCells()
+    {
+        var plan = SlideShowHoneycombTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Honeycomb,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.HorizontalAxis.Should().BeTrue();
+        plan.Reverse.Should().BeTrue();
+
+        var closed = SlideShowHoneycombTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowHoneycombTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowHoneycombTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowHoneycombTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().NotBeEmpty();
+        open.Count.Should().BeGreaterThanOrEqualTo(partial.Count);
+        partial.Should().HaveSameCount(repeat);
+        partial.All(cell => cell.Points.Count == 6).Should().BeTrue();
+        partial.SelectMany(cell => cell.Points)
+            .Should().BeEquivalentTo(repeat.SelectMany(cell => cell.Points));
     }
 
     [Fact]

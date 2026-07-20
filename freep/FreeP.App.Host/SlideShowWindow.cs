@@ -903,6 +903,22 @@ public sealed class SlideShowWindow : Window
                 PlayRotateTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Honeycomb:
+                PlayHoneycombTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Switch:
+                PlaySwitchTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Orbit:
+                PlayOrbitTransition(slide, t, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Ferris:
+                PlayFerrisTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -1204,6 +1220,82 @@ public sealed class SlideShowWindow : Window
                      progress))
         {
             geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        }
+
+        return geometry;
+    }
+
+    private void PlayHoneycombTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var honeycomb = SlideShowHoneycombTransitionPlanner.Plan(transition);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildHoneycombTransitionGeometry(w, h, 0, honeycomb);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildHoneycombTransitionGeometry(w, h, progress, honeycomb),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildHoneycombTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowHoneycombTransitionPlan plan)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var polygon in SlideShowHoneycombTransitionPlanner.BuildPolygons(
+                     width, height, progress, plan))
+        {
+            var points = polygon.Points.Select(ToPoint).ToArray();
+            if (points.Length == 0)
+                continue;
+
+            var cell = new StreamGeometry();
+            using (var context = cell.Open())
+            {
+                context.BeginFigure(points[0], isFilled: true, isClosed: true);
+                for (var index = 1; index < points.Length; index++)
+                    context.LineTo(points[index], isStroked: true, isSmoothJoin: false);
+            }
+
+            geometry.Children.Add(cell);
         }
 
         return geometry;
@@ -2251,6 +2343,24 @@ public sealed class SlideShowWindow : Window
         PlayPerspectiveTransition(slide, transition, plan);
 
     private void PlayRotateTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlaySwitchTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlayOrbitTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan) =>
+        PlayPerspectiveTransition(slide, transition, plan);
+
+    private void PlayFerrisTransition(
         Slide slide,
         SlideTransition transition,
         SlideShowTransitionPlaybackPlan plan) =>

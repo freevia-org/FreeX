@@ -27,6 +27,10 @@ public enum SlideShowTransitionPlaybackKind
     Flip,
     Cube,
     Rotate,
+    Honeycomb,
+    Switch,
+    Orbit,
+    Ferris,
     PushLike,
     FadeFallback
 }
@@ -140,6 +144,14 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Cube => SlideShowTransitionPlaybackKind.Cube,
 
             TransitionKind.Rotate => SlideShowTransitionPlaybackKind.Rotate,
+
+            TransitionKind.Honeycomb => SlideShowTransitionPlaybackKind.Honeycomb,
+
+            TransitionKind.Switch => SlideShowTransitionPlaybackKind.Switch,
+
+            TransitionKind.Orbit => SlideShowTransitionPlaybackKind.Orbit,
+
+            TransitionKind.Ferris => SlideShowTransitionPlaybackKind.Ferris,
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback
         };
