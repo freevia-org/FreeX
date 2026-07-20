@@ -239,8 +239,8 @@ public sealed class OsClipboardService
     /// (a) a PNG image rendered via <see cref="IShapeRenderer"/>, and
     /// (b) the concatenated plain text of all selected shapes (CF_TEXT).
     ///
-    /// Call AFTER <see cref="EditingSession.CopySelectedShapes"/> or
-    /// <see cref="EditingSession.CutSelectedShapes"/> so the internal clipboard is also updated.
+    /// Call after <see cref="EditingSession.CopySelectedShapes"/> so the internal clipboard is
+    /// also updated, and before deleting the selection when performing a cut.
     ///
     /// This method is a no-op when there is no selection or no current slide.
     ///

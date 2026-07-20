@@ -180,18 +180,10 @@ internal static class FreePRibbonCommands
         // content to the OS clipboard (PNG image + plain text); Paste checks OS first.
 
         registry.Register("freep.copy",
-            new ActionRibbonCommand(() =>
-            {
-                editor.CopySelectedShapes();
-                osClipboard?.PlaceSelectionOnOsClipboard(editor);
-            }));
+            new ActionRibbonCommand(() => WpfClipboardCommands.Copy(editor, osClipboard)));
 
         registry.Register("freep.cut",
-            new ActionRibbonCommand(() =>
-            {
-                editor.CutSelectedShapes();
-                osClipboard?.PlaceSelectionOnOsClipboard(editor);
-            }));
+            new ActionRibbonCommand(() => WpfClipboardCommands.Cut(editor, osClipboard)));
 
         registry.Register("freep.paste",
             new ActionRibbonCommand(() =>
