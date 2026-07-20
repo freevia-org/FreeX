@@ -22,6 +22,7 @@ public enum SlideShowTransitionPlaybackActionKind
     Gallery,
     Conveyor,
     Window,
+    Morph,
     Push
 }
 
@@ -194,6 +195,7 @@ public static class SlideShowPlaybackPlanner
             SlideShowTransitionPlaybackKind.Gallery => SlideShowTransitionPlaybackActionKind.Gallery,
             SlideShowTransitionPlaybackKind.Conveyor => SlideShowTransitionPlaybackActionKind.Conveyor,
             SlideShowTransitionPlaybackKind.Window => SlideShowTransitionPlaybackActionKind.Window,
+            SlideShowTransitionPlaybackKind.Morph => SlideShowTransitionPlaybackActionKind.Morph,
             SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Cover,
             _ => SlideShowTransitionPlaybackActionKind.Fade
         };

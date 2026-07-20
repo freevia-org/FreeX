@@ -47,7 +47,8 @@ namespace FreeP.App.Host;
 /// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
 /// Push (bidirectional displacement), Pan (scaled directional exchange), Gallery
 /// (two-surface gallery exchange), Conveyor (belt-like panel exchange), and Flash
-/// (white-flash). Window uses a centered aperture. Others fall back to Fade.
+/// (white-flash). Window uses a centered aperture. Morph uses matched object
+/// overlays and falls back to Fade only when no object correspondence exists.
 /// </summary>
 public sealed class SlideShowWindow : Window
 {
@@ -884,6 +885,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Window:
                 PlayWindowTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Morph:
+                PlayMorphTransition(slide, t, plan);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Push:
@@ -2052,6 +2057,173 @@ public sealed class SlideShowWindow : Window
         var opening = SlideShowPlaybackPlanner.WindowInitialOpenFactor
             + (1 - SlideShowPlaybackPlanner.WindowInitialOpenFactor) * Math.Clamp(progress, 0, 1);
         return BuildBoxTransitionGeometry(width, height, opening, expandsFromCenter: true);
+    }
+
+    /// <summary>
+    /// Plays a shape-aware Morph exchange. Matched incoming objects are rendered
+    /// as transparent full-stage overlays and begin at the outgoing object's
+    /// bounds before interpolating to their authored target bounds.
+    /// </summary>
+    private void PlayMorphTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var source = _slideCanvas.Slide;
+        if (source is null)
+        {
+            PlayFadeTransition(slide, plan.DurationMs);
+            return;
+        }
+
+        var morphPlan = SlideShowMorphPlanner.Plan(transition, source, slide);
+        if (!morphPlan.HasObjectMatches)
+        {
+            PlayFadeTransition(slide, plan.DurationMs);
+            return;
+        }
+
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var transform = SlideTransform.Compute(w, h, _slideDipW, _slideDipH);
+        var prepared = new List<(Image Image, ScaleTransform Scale, TranslateTransform Translate, uint ShapeId)>();
+
+        foreach (var match in morphPlan.Matches)
+        {
+            if (match.Source.ExtentCxEmu <= 0 || match.Source.ExtentCyEmu <= 0
+                || match.Target.ExtentCxEmu <= 0 || match.Target.ExtentCyEmu <= 0)
+                continue;
+
+            var bitmap = RenderShapeToOverlayBitmap(slide, match.Target, w, h);
+            if (bitmap is null) continue;
+
+            var sourceRect = MorphShapeScreenRect(match.Source, transform);
+            var targetRect = MorphShapeScreenRect(match.Target, transform);
+            if (sourceRect.Width < 0.5 || sourceRect.Height < 0.5
+                || targetRect.Width < 0.5 || targetRect.Height < 0.5)
+                continue;
+
+            var scale = new ScaleTransform(
+                sourceRect.Width / targetRect.Width,
+                sourceRect.Height / targetRect.Height,
+                targetRect.Left + targetRect.Width / 2,
+                targetRect.Top + targetRect.Height / 2);
+            var translate = new TranslateTransform(
+                sourceRect.Left + sourceRect.Width / 2 - (targetRect.Left + targetRect.Width / 2),
+                sourceRect.Top + sourceRect.Height / 2 - (targetRect.Top + targetRect.Height / 2));
+            var image = new Image
+            {
+                Source = bitmap,
+                Width = w,
+                Height = h,
+                Stretch = Stretch.None,
+                Opacity = 0,
+                IsHitTestVisible = false,
+                RenderTransform = new TransformGroup { Children = { scale, translate } }
+            };
+            Canvas.SetLeft(image, 0);
+            Canvas.SetTop(image, 0);
+            _animOverlay.Children.Add(image);
+            _slideCanvas.SuppressedShapeIds.Add(match.Target.Id);
+            prepared.Add((image, scale, translate, match.Target.Id));
+        }
+
+        if (prepared.Count == 0)
+        {
+            foreach (var item in prepared)
+            {
+                _animOverlay.Children.Remove(item.Image);
+                _slideCanvas.SuppressedShapeIds.Remove(item.ShapeId);
+            }
+            PlayFadeTransition(slide, plan.DurationMs);
+            return;
+        }
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        Grid.SetZIndex(_slideCanvas, 1);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Opacity = 1;
+            _transitionBackImage.Visibility = Visibility.Visible;
+            Grid.SetZIndex(_transitionBackImage, 0);
+        }
+
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var storyboard = new Storyboard();
+
+        if (snapshot is not null)
+        {
+            var backgroundFade = new DoubleAnimation(1, 0, duration) { EasingFunction = ease };
+            Storyboard.SetTarget(backgroundFade, _transitionBackImage);
+            Storyboard.SetTargetProperty(backgroundFade, new PropertyPath(UIElement.OpacityProperty));
+            storyboard.Children.Add(backgroundFade);
+        }
+
+        foreach (var item in prepared)
+        {
+            var scaleX = new DoubleAnimation(item.Scale.ScaleX, 1, duration) { EasingFunction = ease };
+            var scaleY = new DoubleAnimation(item.Scale.ScaleY, 1, duration) { EasingFunction = ease };
+            var translateX = new DoubleAnimation(item.Translate.X, 0, duration) { EasingFunction = ease };
+            var translateY = new DoubleAnimation(item.Translate.Y, 0, duration) { EasingFunction = ease };
+            var opacity = new DoubleAnimation(0, 1, duration) { EasingFunction = ease };
+
+            Storyboard.SetTarget(scaleX, item.Image);
+            Storyboard.SetTarget(scaleY, item.Image);
+            Storyboard.SetTarget(translateX, item.Image);
+            Storyboard.SetTarget(translateY, item.Image);
+            Storyboard.SetTarget(opacity, item.Image);
+            Storyboard.SetTargetProperty(scaleX,
+                new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"));
+            Storyboard.SetTargetProperty(scaleY,
+                new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"));
+            Storyboard.SetTargetProperty(translateX,
+                new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.X)"));
+            Storyboard.SetTargetProperty(translateY,
+                new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)"));
+            Storyboard.SetTargetProperty(opacity, new PropertyPath(UIElement.OpacityProperty));
+            storyboard.Children.Add(scaleX);
+            storyboard.Children.Add(scaleY);
+            storyboard.Children.Add(translateX);
+            storyboard.Children.Add(translateY);
+            storyboard.Children.Add(opacity);
+        }
+
+        storyboard.Completed += (_, _) =>
+        {
+            foreach (var item in prepared)
+            {
+                _animOverlay.Children.Remove(item.Image);
+                _slideCanvas.SuppressedShapeIds.Remove(item.ShapeId);
+            }
+
+            _transitionBackImage.Opacity = 1;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+            Grid.SetZIndex(_transitionBackImage, 0);
+            Grid.SetZIndex(_slideCanvas, 0);
+            _slideCanvas.Refresh();
+        };
+
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Rect MorphShapeScreenRect(SlideShape shape, SlideTransform transform)
+    {
+        var topLeft = transform.SlideToScreen(
+            SlideTransform.EmuToDip(shape.OffsetXEmu),
+            SlideTransform.EmuToDip(shape.OffsetYEmu));
+        return new Rect(
+            topLeft.X,
+            topLeft.Y,
+            transform.ScaleDipToScreen(SlideTransform.EmuToDip(shape.ExtentCxEmu)),
+            transform.ScaleDipToScreen(SlideTransform.EmuToDip(shape.ExtentCyEmu)));
     }
 
     private void PrepareAnimationOverlay(Slide slide)
