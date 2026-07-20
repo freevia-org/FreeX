@@ -17,6 +17,7 @@ using Free.Shared.Theme;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
+using FreeW.App.Avalonia.Printing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.ContextMenus;
@@ -42,11 +43,18 @@ public sealed class MainWindow : Window
             ["*.pdf"],
             ["application/pdf"]);
 
+    private static readonly FilePickerFileType XpsFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            "XPS document",
+            ["*.xps"],
+            ["application/oxps", "application/vnd.ms-xpsdocument"]);
+
     private static readonly BackstageDirectPrintCapability AvaloniaDirectPrintCapability =
-        BackstageDirectPrintCapability.Deferred(
-            "The current Avalonia target exposes no native PrintDialog or printer service; use Print Preview or Create PDF for OS printing.");
+        BackstageDirectPrintCapability.NativeDialogAvailable(
+            "CUPS printer discovery and submission are available on this Avalonia host.");
 
     private readonly DocumentPersistenceWorkflow _documentPersistence = new();
+    private readonly CupsPrintService _cupsPrintService = new();
     private readonly DocumentView _editor = new();
     private readonly QuickPartLibrary _quickParts = QuickPartLibrary.Load();
     private readonly TextBlock _status = SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0));
@@ -423,6 +431,124 @@ public sealed class MainWindow : Window
             image.BorderDash);
         if (result is not null)
             _editor.SetSelectedImageBorder(result.Color, result.Width, result.Dash);
+        _editor.Focus();
+    }
+
+    private async Task OpenImageAdjustDialogAsync()
+    {
+        if (_editor.SelectedFloatingImage() is not { } image)
+            return;
+        var result = await ImageAdjustDialog.ShowAsync(
+            this, image.BrightnessPct, image.ContrastPct, image.SaturationPct, image.TransparencyPct);
+        if (result is not null)
+            _editor.SetSelectedImageAdjust(result.Brightness, result.Contrast, result.Saturation, result.Transparency);
+        _editor.Focus();
+    }
+
+    private async Task OpenImagePositionDialogAsync()
+    {
+        if (_editor.SelectedFloatingImage() is not { } image)
+            return;
+        var result = await ImagePositionDialog.ShowAsync(
+            this,
+            image.HorizontalOffsetPt,
+            image.VerticalOffsetPt,
+            image.HorizontalAnchor,
+            image.VerticalAnchor);
+        if (result is not null)
+            _editor.SetFloatingPosition(result.HorizontalOffset, result.VerticalOffset, result.HorizontalAnchor, result.VerticalAnchor);
+        _editor.Focus();
+    }
+
+    private async Task OpenInsertChartDialogAsync()
+    {
+        var chart = await InsertChartDialog.ShowAsync(this);
+        if (chart is not null)
+            _editor.InsertChart(chart);
+        _editor.Focus();
+    }
+
+    private async Task OpenChartTitleDialogAsync()
+    {
+        if (_editor.SelectedFloatingChart() is not { } chart)
+            return;
+        var result = await ChartTitleDialog.ShowAsync(this, chart.Title);
+        if (result is not null)
+            _editor.SetChartTitle(result.NewTitle);
+        _editor.Focus();
+    }
+
+    private async Task OpenChartAxisTitlesDialogAsync()
+    {
+        if (_editor.SelectedFloatingChart() is not { } chart)
+            return;
+        var result = await ChartAxisTitlesDialog.ShowAsync(this, chart.CategoryAxisTitle, chart.ValueAxisTitle);
+        if (result is not null)
+            _editor.SetChartAxisTitles(result.CategoryTitle, result.ValueTitle);
+        _editor.Focus();
+    }
+
+    private async Task OpenChartSizeDialogAsync()
+    {
+        if (_editor.SelectedFloatingChart() is not { } chart)
+            return;
+        var result = await ChartSizeDialog.ShowAsync(this, chart.WidthPt, chart.HeightPt);
+        if (result is not null)
+            _editor.SetSelectedChartSize(result.WidthPt, result.HeightPt);
+        _editor.Focus();
+    }
+
+    private async Task OpenInsertSmartArtDialogAsync()
+    {
+        var smartArt = await InsertSmartArtDialog.ShowAsync(this);
+        if (smartArt is not null)
+            _editor.InsertSmartArt(smartArt);
+        _editor.Focus();
+    }
+
+    private async Task OpenIconPickerDialogAsync()
+    {
+        try
+        {
+            var selection = await IconPickerDialog.ShowAsync(this);
+            if (selection is null)
+                return;
+            var bytes = SvgIconRasterizer.RasterizeFileToPng(selection.Path);
+            _editor.InsertInlineImage(bytes, 72, 72, ImageFormat.Png);
+            _editor.Focus();
+        }
+        catch (Exception ex)
+        {
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Insert Icon", ex.Message);
+        }
+    }
+
+    private async Task OpenCustomizeThemeColorsDialogAsync()
+    {
+        var dialog = new CustomizeThemeColorsDialog(_editor.Document.Theme);
+        await dialog.ShowDialog(this);
+        if (dialog.Result is { } result)
+            _editor.ApplyThemeColors(result);
+        _editor.Focus();
+    }
+
+    private async Task OpenCustomizeThemeFontsDialogAsync()
+    {
+        var theme = _editor.Document.Theme;
+        var dialog = new CustomizeThemeFontsDialog(
+            new DocumentFontSet(theme.Name, theme.HeadingFont, theme.BodyFont));
+        await dialog.ShowDialog(this);
+        if (dialog.Result is { } result)
+            _editor.ApplyDocumentFontSet(result);
+        _editor.Focus();
+    }
+
+    private async Task OpenPageColorDialogAsync()
+    {
+        var dialog = new PageColorDialog(_editor.Document.Page.BackgroundColorHex);
+        await dialog.ShowDialog(this);
+        if (dialog.Accepted)
+            _editor.SetPageColor(dialog.Result);
         _editor.Focus();
     }
 
@@ -843,7 +969,8 @@ public sealed class MainWindow : Window
                 snapshot,
                 _fileWorkflow.DisplayName,
                 ExportPdfAsync,
-                AvaloniaDirectPrintCapability).ShowDialog(this);
+                AvaloniaDirectPrintCapability,
+                PrintAsync).ShowDialog(this);
         }
         catch (Exception ex)
         {
@@ -1294,6 +1421,14 @@ public sealed class MainWindow : Window
             OpenImageSizeDialog: () => _ = OpenImageSizeDialogAsync(),
             OpenImageAltTextDialog: () => _ = OpenImageAltTextDialogAsync(),
             OpenImageBorderDialog: () => _ = OpenImageBorderDialogAsync(),
+            OpenImageAdjustDialog: () => _ = OpenImageAdjustDialogAsync(),
+            OpenImagePositionDialog: () => _ = OpenImagePositionDialogAsync(),
+            OpenInsertChartDialog: () => _ = OpenInsertChartDialogAsync(),
+            OpenChartTitleDialog: () => _ = OpenChartTitleDialogAsync(),
+            OpenChartAxisTitlesDialog: () => _ = OpenChartAxisTitlesDialogAsync(),
+            OpenChartSizeDialog: () => _ = OpenChartSizeDialogAsync(),
+            OpenInsertSmartArtDialog: () => _ = OpenInsertSmartArtDialogAsync(),
+            OpenIconPickerDialog: () => _ = OpenIconPickerDialogAsync(),
             OpenTextToTableDialog: () => _ = OpenTextToTableDialogAsync(),
             OpenTableToTextDialog: () => _ = OpenTableToTextDialogAsync(),
             OpenSmartArtEditDialog: () => _ = OpenSmartArtEditDialogAsync(),
@@ -1351,6 +1486,9 @@ public sealed class MainWindow : Window
             // AV-DESIGN: Page Borders + Custom Watermark dialog launchers (optional callbacks).
             OpenPageBordersDialog: () => _ = OpenPageBordersDialogAsync(),
             OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync(),
+            OpenCustomizeThemeColorsDialog: () => _ = OpenCustomizeThemeColorsDialogAsync(),
+            OpenCustomizeThemeFontsDialog: () => _ = OpenCustomizeThemeFontsDialogAsync(),
+            OpenPageColorDialog: () => _ = OpenPageColorDialogAsync(),
             // AV-REVIEW: route ribbon safety/protect commands through the same Backstage flows.
             MarkAsFinal: ToggleMarkAsFinal,
             RestrictEditing: () => _ = OpenRestrictEditingAsync(),
@@ -1372,6 +1510,12 @@ public sealed class MainWindow : Window
         // Avalonia dialogs over the same session the ribbon commands share.
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks, out var mailMerge);
         _mailMerge = mailMerge;
+        registry.Register(new RibbonCommandId("freew.start-mail-merge"),
+            new ActionRibbonCommand(() => _ = OpenStartMailMergeAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-envelopes"),
+            new ActionRibbonCommand(() => _ = OpenEnvelopeAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-labels"),
+            new ActionRibbonCommand(() => _ = OpenLabelsAsync()));
         registry.Register(new RibbonCommandId("freew.merge-data"),
             new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
         registry.Register(new RibbonCommandId("freew.merge-edit-recipients"),
@@ -1380,6 +1524,18 @@ public sealed class MainWindow : Window
             new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
         registry.Register(new RibbonCommandId("freew.merge-field"),
             new ActionRibbonCommand(() => _ = InsertMergeFieldAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-match-fields"),
+            new ActionRibbonCommand(() => _ = OpenMatchFieldsAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-filter-sort"),
+            new ActionRibbonCommand(() => _ = OpenFilterSortAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-preview"),
+            new ActionRibbonCommand(() => _ = OpenPreviewNavigationAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-finish"),
+            new ActionRibbonCommand(() => _ = OpenFinishMergeAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-find-recipient"),
+            new ActionRibbonCommand(() => _ = OpenFindRecipientAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-check-errors"),
+            new ActionRibbonCommand(() => _ = OpenCheckForErrorsAsync()));
         registry.Register(new RibbonCommandId("freew.merge-email"),
             new ActionRibbonCommand(() => _ = PlanEmailMergeAsync()));
         registry.Register(new RibbonCommandId("freew.merge-rule-if"),
@@ -1437,6 +1593,133 @@ public sealed class MainWindow : Window
         _status.Text = data.Count > 0
             ? $"Loaded {data.Count} recipient(s): {string.Join(", ", data.Header)}"
             : "Recipient list is empty.";
+        _editor.Focus();
+    }
+
+    private async Task OpenStartMailMergeAsync()
+    {
+        if (_mailMerge is null)
+            return;
+        var type = await MailMergeDialogs.AskStartMailMergeAsync(this);
+        switch (type)
+        {
+            case MailMergeStartType.Letters: _mailMerge.StartMailMergeLetters(); break;
+            case MailMergeStartType.Directory: _mailMerge.StartMailMergeDirectory(); break;
+            case MailMergeStartType.NormalDocument: _mailMerge.ClearMergeSession(); break;
+        }
+        _editor.Focus();
+    }
+
+    private async Task OpenEnvelopeAsync()
+    {
+        var result = await MailMergeDialogs.AskEnvelopeAsync(this);
+        if (result is { } envelope)
+        {
+            _editor.ApplyPageSettings(page =>
+            {
+                page.WidthPt = envelope.WidthPt;
+                page.HeightPt = envelope.HeightPt;
+                page.MarginLeftPt = envelope.MarginPt;
+                page.MarginRightPt = envelope.MarginPt;
+                page.MarginTopPt = envelope.MarginPt;
+                page.MarginBottomPt = envelope.MarginPt;
+                page.Landscape = envelope.Landscape;
+            });
+        }
+        _editor.Focus();
+    }
+
+    private async Task OpenLabelsAsync()
+    {
+        var result = await MailMergeDialogs.AskLabelsAsync(this);
+        if (result is { } labels)
+        {
+            _editor.ApplyPageSettings(page =>
+            {
+                page.WidthPt = labels.PageWidthPt;
+                page.HeightPt = labels.PageHeightPt;
+                page.MarginLeftPt = labels.MarginPt;
+                page.MarginRightPt = labels.MarginPt;
+                page.MarginTopPt = labels.MarginPt;
+                page.MarginBottomPt = labels.MarginPt;
+                page.Landscape = labels.Landscape;
+            });
+        }
+        _editor.Focus();
+    }
+
+    private async Task OpenMatchFieldsAsync()
+    {
+        if (_mailMerge?.Session.Data is not { } data)
+            return;
+        var mapping = await MailMergeDialogs.AskMatchFieldsAsync(
+            this, data.Header, _mailMerge.Session.Mapping ?? new FieldMapping());
+        if (mapping is not null)
+            _mailMerge.Session.Mapping = mapping;
+        _editor.Focus();
+    }
+
+    private async Task OpenFilterSortAsync()
+    {
+        if (_mailMerge?.Session.Data is not { } data)
+            return;
+        var filtered = await MailMergeDialogs.AskFilterSortRecipientsAsync(this, data);
+        if (filtered is not null)
+        {
+            _mailMerge.Session.Data = filtered;
+            _mailMerge.Session.Template = null;
+            _mailMerge.Session.CurrentIndex = 0;
+        }
+        _editor.Focus();
+    }
+
+    private async Task OpenPreviewNavigationAsync()
+    {
+        if (_mailMerge?.Session.Data is not { Count: > 0 } data)
+        {
+            _mailMerge?.TogglePreview();
+            return;
+        }
+        var action = await MailMergeDialogs.AskPreviewNavigationAsync(
+            this, _mailMerge.Session.CurrentIndex, data.Count);
+        switch (action)
+        {
+            case MailMergePreviewDialogAction.MovePrevious: _mailMerge.PreviousRecord(); break;
+            case MailMergePreviewDialogAction.MoveNext: _mailMerge.NextRecord(); break;
+            case MailMergePreviewDialogAction.Done: _mailMerge.TogglePreview(); break;
+        }
+        _editor.Focus();
+    }
+
+    private async Task OpenFindRecipientAsync()
+    {
+        if (_mailMerge?.Session.Data is not { } data)
+            return;
+        var query = await MailMergeDialogs.AskFindRecipientAsync(this);
+        var result = MailMergeFindRecipientPlanner.Find(data, query, _mailMerge.Session.CurrentIndex);
+        _mailMerge.Session.CurrentIndex = result.Index;
+        _status.Text = result.Message;
+        _editor.Focus();
+    }
+
+    private async Task OpenCheckForErrorsAsync()
+    {
+        if (_mailMerge?.Session.Data is not { Count: > 0 })
+            return;
+        var mode = await MailMergeDialogs.AskCheckForErrorsAsync(this);
+        if (mode is { } selected)
+            _status.Text = $"Mail merge error check selected: {selected}.";
+        _editor.Focus();
+    }
+
+    private async Task OpenFinishMergeAsync()
+    {
+        if (_mailMerge?.Session.Data is not { Count: > 0 } data)
+            return;
+        var plan = await MailMergeDialogs.AskFinishMergeAsync(
+            this, data.Count, _mailMerge.Session.CurrentIndex);
+        if (plan is { Success: true, Destination: MailMergeFinishDestination.NewDocument })
+            _mailMerge.FinishMerge(plan);
         _editor.Focus();
     }
 
@@ -2110,6 +2393,59 @@ public sealed class MainWindow : Window
         }
     }
 
+    private async Task ExportXpsAsync()
+    {
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromFileTypes(
+                "Export XPS",
+                [XpsFileType],
+                _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName) + ".xps",
+                "xps"));
+        var path = file?.LocalPath;
+        if (path is null)
+            return;
+
+        try
+        {
+            FreeWAvaloniaXpsExport.Save(_editor, path);
+            _status.Text = $"Exported XPS: {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("XPS export", ex.Message);
+        }
+    }
+
+    private async Task PrintAsync()
+    {
+        try
+        {
+            var discovery = await _cupsPrintService.DiscoverAsync();
+            var selection = await CupsPrintDialog.ShowAsync(this, discovery);
+            if (selection is null)
+                return;
+
+            var tempPath = Path.Combine(Path.GetTempPath(), $"FreeW-print-{Guid.NewGuid():N}.pdf");
+            try
+            {
+                FreeWAvaloniaPdfExport.Save(_editor, tempPath);
+                var submission = await _cupsPrintService.SubmitAsync(tempPath, selection);
+                _status.Text = submission.Succeeded
+                    ? $"Sent to printer {submission.PrinterName}."
+                    : submission.Message ?? "Print submission failed.";
+            }
+            finally
+            {
+                try { File.Delete(tempPath); } catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Print", ex.Message);
+        }
+    }
+
     private static readonly FilePickerFileType ImageFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
             FreeWFileTextResources.PictureFileTypeName,
@@ -2495,7 +2831,7 @@ public sealed class MainWindow : Window
                     OpenFolderInShell(folder);
             },
             ExportPdf: () => _ = ExportPdfAsync(),
-            ExportXps: null,
+            ExportXps: () => _ = ExportXpsAsync(),
             EditProperties: () => _ = OpenPropertiesAsync(),
             MarkAsFinal: ToggleMarkAsFinal,
             RestrictEditing: () => _ = OpenRestrictEditingAsync(),
@@ -2504,6 +2840,7 @@ public sealed class MainWindow : Window
             OpenOptions: () => _ = OpenOptionsAsync(),
             CloseDocument: Close,
             DirectPrintCapability: AvaloniaDirectPrintCapability,
+            Print: () => _ = PrintAsync(),
             PrintPreview: () => _ = OpenPrintPreviewAsync());
 
     private async Task SaveCopyAsync()

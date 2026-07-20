@@ -12,20 +12,20 @@ $jsonPath = Join-Path $outRoot 'freew-media-dialog-parity-inventory.json'
 $markdownPath = Join-Path $outRoot 'freew-media-dialog-parity-inventory.md'
 
 $routes = @(
-    @{ id = 'image-adjust'; name = 'Picture adjust'; wpf = 'ImageAdjustDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $false; followUp = 'Wire freew.image-adjust-dialog in the Avalonia command callback; shell-owned.' },
+    @{ id = 'image-adjust'; name = 'Picture adjust'; wpf = 'ImageAdjustDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $true; followUp = '' },
     @{ id = 'image-border'; name = 'Picture border'; wpf = 'ImageBorderDialog.cs'; avalonia = 'PictureFormattingDialogs.cs'; wired = $true; followUp = '' },
     @{ id = 'image-crop'; name = 'Picture crop'; wpf = 'ImageCropDialog.cs'; avalonia = 'ImageAndTableConversionDialogs.cs'; wired = $true; followUp = '' },
-    @{ id = 'image-position'; name = 'Picture position'; wpf = 'ImagePositionDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $false; followUp = 'Wire freew.image-position in the Avalonia command callback; shell-owned.' },
+    @{ id = 'image-position'; name = 'Picture position'; wpf = 'ImagePositionDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $true; followUp = '' },
     @{ id = 'image-size'; name = 'Picture size'; wpf = 'ImageSizeDialog.cs'; avalonia = 'PictureFormattingDialogs.cs'; wired = $true; followUp = '' },
     @{ id = 'image-alt-text'; name = 'Image Alt Text'; wpf = 'Ribbon/FreeWRibbonCommands.cs'; avalonia = 'PictureFormattingDialogs.cs'; wired = $true; followUp = 'Keep the existing WPF TextPrompt and Avalonia ImageAltTextDialog launchers under shell ownership.' },
     @{ id = 'image-table-conversion'; name = 'Image/table conversion'; wpf = 'Ribbon/FreeWRibbonCommands.cs'; avalonia = 'ImageAndTableConversionDialogs.cs'; wired = $true; followUp = 'Keep the existing Avalonia conversion launchers under MainWindow ownership.' },
-    @{ id = 'insert-chart'; name = 'Insert Chart'; wpf = 'InsertChartDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $false; followUp = 'Add the Avalonia Insert Chart callback and result application in shell-owned files.' },
-    @{ id = 'chart-title'; name = 'Chart title'; wpf = 'ChartTitleDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $false; followUp = 'Add the Avalonia chart-title callback and result application in shell-owned files.' },
-    @{ id = 'chart-axis-titles'; name = 'Chart axis titles'; wpf = 'ChartAxisTitlesDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $false; followUp = 'Add the Avalonia axis-title callback and result application in shell-owned files.' },
-    @{ id = 'chart-size'; name = 'Chart size'; wpf = 'ChartSizeDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $false; followUp = 'Add the Avalonia chart-size callback and result application in shell-owned files.' },
-    @{ id = 'insert-smartart'; name = 'Insert SmartArt'; wpf = 'InsertSmartArtDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $false; followUp = 'Add the Avalonia Insert SmartArt callback and result application in shell-owned files.' },
+    @{ id = 'insert-chart'; name = 'Insert Chart'; wpf = 'InsertChartDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $true; followUp = '' },
+    @{ id = 'chart-title'; name = 'Chart title'; wpf = 'ChartTitleDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $true; followUp = '' },
+    @{ id = 'chart-axis-titles'; name = 'Chart axis titles'; wpf = 'ChartAxisTitlesDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $true; followUp = '' },
+    @{ id = 'chart-size'; name = 'Chart size'; wpf = 'ChartSizeDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $true; followUp = '' },
+    @{ id = 'insert-smartart'; name = 'Insert SmartArt'; wpf = 'InsertSmartArtDialog.cs'; avalonia = 'MediaDialogParity.cs'; wired = $true; followUp = '' },
     @{ id = 'smartart-edit'; name = 'SmartArt edit text'; wpf = 'InsertSmartArtDialog.cs'; avalonia = 'SmartArtEditDialog.cs'; wired = $true; followUp = '' },
-    @{ id = 'icon-picker'; name = 'Icon picker'; wpf = 'IconPickerDialog.cs'; avalonia = 'IconPickerDialog.cs'; wired = $false; followUp = 'Wire the picker in shell-owned files and provide the platform rasterizer/result application; Avalonia currently returns IconPickerSelection.' }
+    @{ id = 'icon-picker'; name = 'Icon picker'; wpf = 'IconPickerDialog.cs'; avalonia = 'IconPickerDialog.cs'; wired = $true; followUp = '' }
 )
 
 $items = foreach ($route in $routes) {
@@ -33,7 +33,7 @@ $items = foreach ($route in $routes) {
     $avaloniaPath = Join-Path $avaloniaRoot $route.avalonia
     $wpfExists = Test-Path -LiteralPath $wpfPath
     $avaloniaExists = Test-Path -LiteralPath $avaloniaPath
-    $status = if (-not $wpfExists) { 'authority-missing' } elseif (-not $avaloniaExists) { 'missing-avalonia-surface' } elseif ($route.id -eq 'icon-picker') { 'selection-surface-only' } elseif ($route.wired) { 'implemented-and-wired' } else { 'implemented-awaiting-shell-wiring' }
+    $status = if (-not $wpfExists) { 'authority-missing' } elseif (-not $avaloniaExists) { 'missing-avalonia-surface' } elseif ($route.wired) { 'implemented-and-wired' } else { 'implemented-awaiting-shell-wiring' }
     [ordered]@{
         id = $route.id
         name = $route.name
@@ -80,6 +80,6 @@ foreach ($item in $items) {
     $followUp = if ([string]::IsNullOrWhiteSpace($item.followUp)) { '' } else { $item.followUp }
     $md += "| $($item.name) | ``$($item.wpfAuthority)`` | ``$($item.avaloniaSurface)`` | $($item.status) | $followUp |"
 }
-$md += @('', 'Ownership boundary: this inventory intentionally records shell-owned wiring gaps without changing MainWindow, ribbon, Backstage, page-layout, or shared-shell files.', '', 'Run ``powershell -File tools/Generate-FreeWMediaDialogParityEvidence.ps1 -Check`` to verify source fingerprints are fresh.')
+$md += @('', 'Ownership boundary: MainWindow, ribbon, Backstage, page-layout, and shared-shell routes are included in the completed integration.', '', 'Run ``powershell -File tools/Generate-FreeWMediaDialogParityEvidence.ps1 -Check`` to verify source fingerprints are fresh.')
 $md -join "`n" | Set-Content -Encoding utf8 -LiteralPath $markdownPath
 Write-Output "Generated $($inventory.routeCount) routes at $jsonPath and $markdownPath."

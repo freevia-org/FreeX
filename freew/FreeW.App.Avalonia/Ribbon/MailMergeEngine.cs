@@ -435,11 +435,22 @@ internal sealed class MailMergeEngine
             return null;
         }
 
-        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
         var finishPlan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(data.Count);
-        if (!finishPlan.Success)
+        return FinishMerge(finishPlan);
+    }
+
+    public TextDocument? FinishMerge(MailMergeFinishPlan finishPlan)
+    {
+        if (Session.Data is not { Count: > 0 } data)
         {
             ShowInfo("Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
+            return null;
+        }
+
+        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
+        if (!finishPlan.Success)
+        {
+            ShowInfo($"Finish & Merge cannot continue: {finishPlan.Issue}.");
             return null;
         }
 

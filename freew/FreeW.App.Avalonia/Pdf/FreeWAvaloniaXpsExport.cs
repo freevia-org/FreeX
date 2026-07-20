@@ -1,14 +1,11 @@
 using Free.Shared.Xps;
+using Free.Shared.Pdf;
+using Free.Shared.Pdf.Skia;
 using FreeW.App.Avalonia.Editing;
 
 namespace FreeW.App.Avalonia.Pdf;
 
-/// <summary>
-/// Avalonia adapter for the shared fixed-layout XPS writer. It intentionally does not turn PDF bytes
-/// into an <c>.xps</c> file. The current editor model contains text strings but no embeddable XPS font
-/// resource, so normal text documents return a precise <see cref="XpsUnsupportedContentException"/>
-/// until the renderer supplies that dependency.
-/// </summary>
+/// <summary>Avalonia adapter for the shared fixed-layout XPS writer.</summary>
 public static class FreeWAvaloniaXpsExport
 {
     public static XpsExportabilityReport Analyze(DocumentView view, XpsWriterOptions? options = null)
@@ -24,7 +21,26 @@ public static class FreeWAvaloniaXpsExport
         if (!stream.CanWrite)
             throw new ArgumentException("XPS export requires a writable stream.", nameof(stream));
 
-        var bytes = PortableXpsWriter.WriteToBytes(view.BuildPdfContent(), options);
+        var document = view.BuildPdfContent();
+        byte[] bytes;
+        try
+        {
+            bytes = PortableXpsWriter.WriteToBytes(document, options);
+        }
+        catch (XpsUnsupportedContentException)
+        {
+            // XPS remains a real OPC package: raster pages are embedded as PNG resources when the
+            // portable vector writer cannot represent the document's text without an XPS font.
+            var pngPages = SkiaPdfWriter.RenderPagesToPng(document);
+            var rasterDocument = new PdfContentDocument(
+                document.Pages.Select((page, index) => new PdfContentPage(
+                    page.WidthPoints,
+                    page.HeightPoints,
+                    [new PdfImage(0, 0, page.WidthPoints, page.HeightPoints, pngPages[index], "image/png")]))
+                    .ToArray(),
+                document.Properties);
+            bytes = PortableXpsWriter.WriteToBytes(rasterDocument, options);
+        }
         stream.Write(bytes);
     }
 
