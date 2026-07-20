@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Numerics;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -186,6 +187,124 @@ internal static class ImageDiff
             "alpha-composited-over-white; corner-background-estimate; high-quality-scale-to-logical-96-dpi");
     }
 
+    internal static PerceptualDiffResult CompareDifferenceHash(string pathA, string pathB)
+    {
+        var hashA = DifferenceHash(WpfImageDiff.LoadBitmap(pathA));
+        var hashB = DifferenceHash(WpfImageDiff.LoadBitmap(pathB));
+        return new PerceptualDiffResult(
+            hashA.ToString("x16", System.Globalization.CultureInfo.InvariantCulture),
+            hashB.ToString("x16", System.Globalization.CultureInfo.InvariantCulture),
+            BitOperations.PopCount(hashA ^ hashB));
+    }
+
+    internal static ImageContentValidation ValidateContent(string path)
+    {
+        var bitmap = WpfImageDiff.LoadBitmap(path);
+        var width = bitmap.PixelWidth;
+        var height = bitmap.PixelHeight;
+        var pixels = WpfImageDiff.GetBgra32Pixels(bitmap, width, height);
+        var pixelCount = checked((long)width * height);
+        if (pixelCount == 0)
+            return new(width, height, 0, 0, 0, 0, 0, 0, 0, 0, false, ["decoded image has no pixels"]);
+
+        long alphaTotal = 0;
+        long opaquePixels = 0;
+        long nearTransparentPixels = 0;
+        long nearBlackPixels = 0;
+        double luminanceTotal = 0;
+        double luminanceSquaredTotal = 0;
+        var minimumLuminance = 255d;
+        var maximumLuminance = 0d;
+        var buckets = new bool[32];
+        long edgePixels = 0;
+
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var offset = (y * width + x) * 4;
+                var alpha = pixels[offset + 3];
+                var luminance = Luminance(pixels, offset);
+                alphaTotal += alpha;
+                if (alpha >= 224)
+                    opaquePixels++;
+                if (alpha <= 16)
+                    nearTransparentPixels++;
+                if (luminance <= 12 && alpha >= 224)
+                    nearBlackPixels++;
+                luminanceTotal += luminance;
+                luminanceSquaredTotal += luminance * luminance;
+                minimumLuminance = Math.Min(minimumLuminance, luminance);
+                maximumLuminance = Math.Max(maximumLuminance, luminance);
+                buckets[Math.Min(buckets.Length - 1, (int)luminance / 8)] = true;
+
+                if (x > 0 && Math.Abs(luminance - Luminance(pixels, offset - 4)) >= 12)
+                    edgePixels++;
+                else if (y > 0 && Math.Abs(luminance - Luminance(pixels, offset - width * 4)) >= 12)
+                    edgePixels++;
+            }
+        }
+
+        var meanLuminance = luminanceTotal / pixelCount;
+        var variance = Math.Max(0, luminanceSquaredTotal / pixelCount - meanLuminance * meanLuminance);
+        var standardDeviation = Math.Sqrt(variance);
+        var meanAlpha = alphaTotal / (pixelCount * 255d);
+        var opaqueRatio = opaquePixels / (double)pixelCount;
+        var nearTransparentRatio = nearTransparentPixels / (double)pixelCount;
+        var nearBlackRatio = nearBlackPixels / (double)pixelCount;
+        var edgeRatio = edgePixels / (double)pixelCount;
+        var populatedBucketCount = buckets.Count(populated => populated);
+        var failures = new List<string>();
+        if (nearTransparentRatio >= 0.95 || meanAlpha < 0.10)
+            failures.Add("capture is near-transparent/blank");
+        if (nearBlackRatio >= 0.98)
+            failures.Add("capture is uniformly or nearly uniformly black");
+        if (maximumLuminance - minimumLuminance < 12 || standardDeviation < 3)
+            failures.Add("capture has insufficient luminance variation");
+        if (populatedBucketCount < 6)
+            failures.Add("capture has insufficient tonal diversity");
+        if (edgeRatio < 0.0005)
+            failures.Add("capture has insufficient visual edge content");
+
+        return new(
+            width,
+            height,
+            meanAlpha,
+            opaqueRatio,
+            nearTransparentRatio,
+            nearBlackRatio,
+            meanLuminance,
+            maximumLuminance - minimumLuminance,
+            standardDeviation,
+            edgeRatio,
+            failures.Count == 0,
+            failures);
+    }
+
+    private static ulong DifferenceHash(BitmapSource source)
+    {
+        const int width = 9;
+        const int height = 8;
+        var pixels = NormalizeOverWhite(source, width, height);
+        ulong hash = 0;
+        var bit = 0;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width - 1; x++)
+            {
+                var left = Luminance(pixels, (y * width + x) * 4);
+                var right = Luminance(pixels, (y * width + x + 1) * 4);
+                if (left > right)
+                    hash |= 1UL << bit;
+                bit++;
+            }
+        }
+        return hash;
+    }
+
+    private static double Luminance(byte[] pixels, int offset) =>
+        pixels[offset + 2] * 0.299 + pixels[offset + 1] * 0.587 + pixels[offset] * 0.114;
+
     private static byte[] NormalizeOverWhite(BitmapSource source, int width, int height)
     {
         var visual = new DrawingVisual();
@@ -304,3 +423,22 @@ internal sealed record NormalizedDiffResult(
     int MaxChannelDelta,
     int ChangedChannelThreshold,
     string BackgroundHandling);
+
+internal sealed record PerceptualDiffResult(
+    string HashA,
+    string HashB,
+    int HammingDistance);
+
+internal sealed record ImageContentValidation(
+    int Width,
+    int Height,
+    double MeanAlpha,
+    double OpaquePixelRatio,
+    double NearTransparentPixelRatio,
+    double NearBlackPixelRatio,
+    double MeanLuminance,
+    double LuminanceRange,
+    double LuminanceStandardDeviation,
+    double EdgePixelRatio,
+    bool IsValid,
+    IReadOnlyList<string> Failures);
