@@ -76,6 +76,10 @@ public sealed class MediaPlaybackBackendTests
             root, "freep", "FreeP.App.Media", "FreeP.App.Media.csproj"));
         var wpfProject = File.ReadAllText(Path.Combine(
             root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj"));
+        var linuxDockerfile = File.ReadAllText(Path.Combine(
+            root, "tools", "LinuxInteractiveDocker", "Dockerfile"));
+        var linuxProbe = File.ReadAllText(Path.Combine(
+            root, "tools", "FreeP.MediaRuntimeProbe", "Program.cs"));
 
         avaloniaController.Should().Contain("LibVlcMediaPlaybackBackendFactory");
         avaloniaController.Should().Contain("LibVlcMediaPlaybackSession");
@@ -99,6 +103,15 @@ public sealed class MediaPlaybackBackendTests
         wpfProject.Should().NotContain("FreeP.App.Media");
         wpfProject.Should().NotContain("LibVLCSharp");
         wpfProject.Should().NotContain("VideoLAN.LibVLC.Windows");
+        linuxDockerfile.Should().Contain("libvlc5");
+        linuxDockerfile.Should().Contain("libvlccore9");
+        linuxDockerfile.Should().Contain("vlc-plugin-base");
+        linuxDockerfile.Should().Contain("vlc-plugin-video-output");
+        linuxProbe.Should().Contain("CreateWav");
+        linuxProbe.Should().Contain("session.Play()");
+        linuxProbe.Should().Contain("session.Seek");
+        linuxProbe.Should().Contain("session.Stop()");
+        linuxProbe.Should().Contain("sessionFailure");
     }
 
     private static string FindWorkspaceRoot()

@@ -54,6 +54,8 @@ static ParityReport BuildReport(string root)
         ["media/backend-contracts"] = "freep/FreeP.App.Media/MediaPlaybackContracts.cs",
         ["media/libvlc-backend"] = "freep/FreeP.App.Media/LibVlcMediaPlaybackBackend.cs",
         ["dependencies/media-packages"] = "Directory.Packages.props",
+        ["linux-harness/media-runtime"] = "tools/LinuxInteractiveDocker/Dockerfile",
+        ["linux-harness/media-runtime-probe"] = "tools/FreeP.MediaRuntimeProbe/Program.cs",
         ["avalonia-renderer/slide-canvas"] = "freep/FreeP.App.Rendering.Avalonia/SlideCanvas.cs",
         ["avalonia-renderer/offscreen-renderer"] = "freep/FreeP.App.Rendering.Avalonia/SlideRenderer.cs",
         ["shared/shape-material-planner"] = "freep/FreeP.App.Presentation/ShapeMaterialRenderPlanner.cs",
@@ -82,7 +84,7 @@ static ParityReport BuildReport(string root)
         new Area("media.caption-package-authoring", "Media/captions", "closed-platform-parity", "Caption/transcript package planning and visible authoring contracts are shared across WPF and Avalonia."),
         new Area("export.preview.fixed-layout", "Export/preview", "closed-platform-parity", "PDF, image, notes-page, print-preview, and video-frame-package policy is shared; hosts provide render/file adapters."),
         new Area("export.native-print-and-mp4", "Export/preview", "shared-product-limitation", "Native printer handoff and MP4 encoder execution are deferred by the shared product contract; both hosts report the same package-ready boundary."),
-        new Area("slideshow.media-playback-backend", "Slideshow/media", "closed-platform-parity", "WPF retains native playback and Avalonia now uses the shared LibVLCSharp engine with runtime capability detection, audio/video sessions, native VideoView surfaces, and transition-sound playback."),
+        new Area("slideshow.media-playback-backend", "Slideshow/media", "closed-platform-parity", "WPF retains native playback and Avalonia now uses the shared LibVLCSharp engine with runtime capability detection, audio/video sessions, native VideoView surfaces, transition-sound playback, and a real Ubuntu interactive-harness WAV lifecycle probe."),
     };
 
     var residuals = new[]
