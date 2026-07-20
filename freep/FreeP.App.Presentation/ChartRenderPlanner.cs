@@ -2208,6 +2208,35 @@ public static partial class ChartRenderPlanner
             }
         }
 
+        if (chart.ValueAxis.MinorUnit is > 0 && chart.ValueAxis.MinorTickMark != ChartTickMark.None)
+        {
+            double minorUnit = chart.ValueAxis.MinorUnit.Value;
+            int minorTickCount = (int)Math.Floor((maxValue - minValue) / minorUnit + 1e-9);
+            for (int minorTickIndex = 1; minorTickIndex < minorTickCount; minorTickIndex++)
+            {
+                double value = minValue + minorUnit * minorTickIndex;
+                double majorPosition = (value - minValue) / majorUnit;
+                if (Math.Abs(majorPosition - Math.Round(majorPosition)) < 0.0001)
+                    continue;
+
+                double fraction = (value - minValue) / (maxValue - minValue);
+                if (frame.IsBar)
+                {
+                    double x = plot.X + plot.Width * fraction;
+                    ticks.Add(new ChartGridLinePlan(
+                        new ChartPlanPoint(x, plot.Bottom),
+                        new ChartPlanPoint(x, plot.Bottom + AxisMinorTickLength)));
+                }
+                else
+                {
+                    double y = plot.Bottom - plot.Height * fraction;
+                    ticks.Add(new ChartGridLinePlan(
+                        new ChartPlanPoint(plot.X - AxisMinorTickLength, y),
+                        new ChartPlanPoint(plot.X, y)));
+                }
+            }
+        }
+
         return ticks;
     }
 
@@ -5404,6 +5433,8 @@ public static partial class ChartRenderPlanner
 
         double min = chart.ValueAxis.Min ?? (dataMin >= 0 ? 0 : dataMin);
         double max = chart.ValueAxis.Max ?? dataMax;
+        if (chart.ValueAxis.MajorUnit is > 0)
+            return ApplyAuthoredMajorUnit(chart.ValueAxis, min, max);
         if (UsesStockLineFallback(chart) && chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
             return ComputeStockFallbackValueAxisRange(min, max);
         if (UsesImportedThreeDColumnDefaults(chart) &&
@@ -5476,6 +5507,8 @@ public static partial class ChartRenderPlanner
 
         double min = chart.SecondaryValueAxis?.Min ?? (dataMin >= 0 ? 0 : dataMin);
         double max = chart.SecondaryValueAxis?.Max ?? dataMax;
+        if (chart.SecondaryValueAxis?.MajorUnit is > 0)
+            return ApplyAuthoredMajorUnit(chart.SecondaryValueAxis, min, max);
         if (UsesImportedTextMetrics(chart) &&
             chart.Series.Any(series => series.OnSecondaryAxis) &&
             chart.SecondaryValueAxis?.Min is null && chart.SecondaryValueAxis?.Max is null)
@@ -5485,6 +5518,21 @@ public static partial class ChartRenderPlanner
             return ComputeNiceRange(min, max, targetIntervals: 8);
         }
         return ComputeNiceRange(min, max);
+    }
+
+    private static (double min, double max, double majorUnit) ApplyAuthoredMajorUnit(
+        ChartAxis axis,
+        double dataMin,
+        double dataMax)
+    {
+        double majorUnit = axis.MajorUnit!.Value;
+        double min = axis.Min ?? (dataMin >= 0
+            ? 0
+            : Math.Floor(dataMin / majorUnit) * majorUnit);
+        double max = axis.Max ?? Math.Ceiling(dataMax / majorUnit) * majorUnit;
+        if (max <= min)
+            max = min + majorUnit;
+        return (min, max, majorUnit);
     }
 
     private static void AccumulateStackedCategoryTotals(

@@ -147,6 +147,36 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void ComputePrimaryValueAxisRange_HonorsAuthoredMajorUnit()
+    {
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 12, 48, 93 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(series);
+        chart.ValueAxis.MajorUnit = 25;
+
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart)
+            .Should().Be((0, 100, 25));
+    }
+
+    [Fact]
+    public void BuildMajorAxisTickPrimitivePlan_AddsAuthoredMinorTicks()
+    {
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 0, 100 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(series);
+        chart.ValueAxis.MajorUnit = 25;
+        chart.ValueAxis.MinorUnit = 5;
+        chart.ValueAxis.MinorTickMark = ChartTickMark.Out;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame);
+
+        plan.ValueTicks.Should().HaveCount(21);
+    }
+
+    [Fact]
     public void ComputePrimaryValueAxisRange_KeepsCeilingWhenItHasSufficientHeadroom()
     {
         var series = new ChartSeries { Name = "Revenue" };
