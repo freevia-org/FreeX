@@ -489,8 +489,8 @@ public sealed class ChartBaselineCorpusTests
             .Should().Equal(new[] { 3.5, 174.25, 65.5 },
                 "PowerPoint splits the imported blank low-band cell along the first 0-3 triangle");
         firstSurfaceCellFacets[1].Points.Select(point => point.X)
-            .Should().Equal(new[] { 174.25, 199.875, 65.5 },
-                "the paired imported blank-cell triangle closes the 1-3 split");
+            .Should().Equal(new[] { 174.25, 199.875, 29.5 },
+                "the paired imported blank-cell triangle owns the widened light-orange value-axis boundary");
         var darkOrangeFacet = surfaceGeometry.RenderFacets
             .Single(facet => facet.SeriesIndex == 0 && facet.CategoryIndex == 1 &&
                 facet.Fill.Color == new SrgbColor(0xB7, 0x60, 0x26));
@@ -911,6 +911,25 @@ public sealed class ChartBaselineCorpusTests
             "Scenario chart-baseline-depth: slide 1; charts 4",
             "Capture requests: 12; PowerPoint 4; WPF 4; Avalonia 4",
             "PowerPoint requests are readiness contracts and require desktop PowerPoint COM on the baseline machine");
+    }
+
+    [Fact]
+    public void ChartBaselineDepthCorpus_RegistersImportedLightOrangeFacetBoundary()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
+        var surfaceChart = PptxPackageReader.Read(deckPath).Slides[0].Shapes
+            .Single(shape => shape.Chart?.ChartType == ChartType.Surface3D).Chart!;
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            surfaceChart,
+            new ChartPlanRect(0, 0, 360, 189));
+
+        var lightOrange = plan.RenderFacets.Single(facet =>
+            facet.SeriesIndex == 0 &&
+            facet.CategoryIndex == 0 &&
+            facet.Fill.Color == new SrgbColor(0xF1, 0x80, 0x32));
+        lightOrange.Points.Should().Contain(
+            new ChartPlanPoint(29.5, 98.93),
+            "the imported PowerPoint light-orange face owns a wider value-axis boundary");
     }
 
     [Fact]
