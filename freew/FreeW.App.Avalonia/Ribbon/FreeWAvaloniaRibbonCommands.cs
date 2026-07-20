@@ -153,20 +153,26 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.indent-decrease",  new ActionRibbonCommand(editor.DecreaseIndent));
         r.Register("freew.increase-indent",  new ActionRibbonCommand(editor.IncreaseIndent));
         r.Register("freew.decrease-indent",  new ActionRibbonCommand(editor.DecreaseIndent));
+        r.Register("freew.indent-left", new ParagraphValueCommand(
+            editor,
+            pt => editor.SetIndents(leftPt: pt),
+            paragraph => paragraph.IndentLeftPt));
+        r.Register("freew.indent-right", new ParagraphValueCommand(
+            editor,
+            pt => editor.SetIndents(rightPt: pt),
+            paragraph => paragraph.IndentRightPt));
         var formattingMarks = new FormattingMarksCommand(editor);
         r.Register("freew.formatting-marks", formattingMarks);
         r.Register("freew.show-hide-para", formattingMarks);
         // Paragraph spacing commands (value = points as an invariant-culture decimal string).
-        r.Register("freew.space-before",     new ValueRibbonCommand(value =>
-        {
-            if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt))
-                editor.SetSpaceBefore(pt);
-        }));
-        r.Register("freew.space-after",      new ValueRibbonCommand(value =>
-        {
-            if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt))
-                editor.SetSpaceAfter(pt);
-        }));
+        r.Register("freew.space-before", new ParagraphValueCommand(
+            editor,
+            editor.SetSpaceBefore,
+            paragraph => paragraph.SpaceBeforePt));
+        r.Register("freew.space-after", new ParagraphValueCommand(
+            editor,
+            editor.SetSpaceAfter,
+            paragraph => paragraph.SpaceAfterPt));
         r.Register("freew.space-before-toggle", new ActionRibbonCommand(() => ToggleSpaceBefore(editor)));
         r.Register("freew.space-after-toggle", new ActionRibbonCommand(() => ToggleSpaceAfter(editor)));
         r.Register("freew.keep-with-next", new ActionRibbonCommand(editor.ToggleKeepWithNext));
@@ -373,29 +379,41 @@ internal static class FreeWAvaloniaRibbonCommands
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
         var pageSetupCommand = new ActionRibbonCommand(callbacks.OpenPageSetupDialog);
         r.Register("freew.page-setup", pageSetupCommand);
-        r.Register("freew.custom-margins", pageSetupCommand);
-        r.Register("freew.more-paper-sizes", pageSetupCommand);
+        r.Register("freew.custom-margins", new ActionRibbonCommand(callbacks.OpenCustomMarginsDialog ?? callbacks.OpenPageSetupDialog));
+        r.Register("freew.more-paper-sizes", new ActionRibbonCommand(callbacks.OpenMorePaperSizesDialog ?? callbacks.OpenPageSetupDialog));
         r.Register("freew.page-setup-dialog", pageSetupCommand);
         // Toggle orientation (portrait ↔ landscape).
-        var orientationCommand = new ActionRibbonCommand(callbacks.ToggleOrientation);
+        var orientationCommand = new HostPageSettingCommand(editor, callbacks.ToggleOrientation);
         r.Register("freew.orientation", orientationCommand);
         r.Register("freew.page-orientation", orientationCommand);
         // Margin presets.
-        r.Register("freew.margins", new ActionRibbonCommand(() => ToggleNormalNarrowMargins(editor, callbacks)));
-        r.Register("freew.page-margins-normal", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("normal")));
-        r.Register("freew.page-margins-narrow", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("narrow")));
-        r.Register("freew.page-margins-wide", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("wide")));
+        r.Register("freew.margins", new HostPageSettingCommand(editor, () => ToggleNormalNarrowMargins(editor, callbacks)));
+        r.Register("freew.page-margins-normal", new HostPageSettingCommand(editor, () => callbacks.ApplyMarginPreset("normal")));
+        r.Register("freew.page-margins-narrow", new HostPageSettingCommand(editor, () => callbacks.ApplyMarginPreset("narrow")));
+        r.Register("freew.page-margins-wide", new HostPageSettingCommand(editor, () => callbacks.ApplyMarginPreset("wide")));
         // Quick paper-size selectors.
-        r.Register("freew.size", new ActionRibbonCommand(() => ToggleLetterA4Paper(editor, callbacks)));
-        r.Register("freew.page-size-letter", new ActionRibbonCommand(() => callbacks.ApplyPaperSize("letter")));
-        r.Register("freew.page-size-a4", new ActionRibbonCommand(() => callbacks.ApplyPaperSize("a4")));
+        r.Register("freew.size", new HostPageSettingCommand(editor, () => ToggleLetterA4Paper(editor, callbacks)));
+        r.Register("freew.page-size-letter", new HostPageSettingCommand(editor, () => callbacks.ApplyPaperSize("letter")));
+        r.Register("freew.page-size-a4", new HostPageSettingCommand(editor, () => callbacks.ApplyPaperSize("a4")));
 
-        r.Register("freew.columns", EmptyRibbonCommand.Instance);
-        r.Register("freew.columns-one", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.One)));
-        r.Register("freew.columns-two", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Two)));
-        r.Register("freew.columns-three", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Three)));
-        r.Register("freew.columns-left", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Left)));
-        r.Register("freew.columns-right", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Right)));
+        var columnsDialogCommand = new ActionRibbonCommand(callbacks.OpenColumnsDialog ?? (() => { }));
+        r.Register("freew.columns", columnsDialogCommand);
+        r.Register("freew.columns-more", columnsDialogCommand);
+        r.Register("freew.columns-one", new PageSettingCommand(editor,
+            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.One),
+            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.One)));
+        r.Register("freew.columns-two", new PageSettingCommand(editor,
+            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Two),
+            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Two)));
+        r.Register("freew.columns-three", new PageSettingCommand(editor,
+            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Three),
+            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Three)));
+        r.Register("freew.columns-left", new PageSettingCommand(editor,
+            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Left),
+            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Left)));
+        r.Register("freew.columns-right", new PageSettingCommand(editor,
+            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Right),
+            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Right)));
 
         r.Register("freew.breaks", EmptyRibbonCommand.Instance);
         r.Register("freew.column-break", new ActionRibbonCommand(editor.InsertColumnBreak));
@@ -403,7 +421,17 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.section-break-continuous", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.Continuous)));
         r.Register("freew.section-break-even-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.EvenPage)));
         r.Register("freew.section-break-odd-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.OddPage)));
-        r.Register("freew.different-first-page", new ActionRibbonCommand(editor.ToggleDifferentFirstPage));
+        r.Register("freew.line-numbers", new PageSettingCommand(editor, PageLayoutCommandPlanner.CycleLineNumberMode));
+        r.Register("freew.line-numbers-none", new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.None, page => page.LineNumberMode == LineNumberMode.None));
+        r.Register("freew.line-numbers-continuous", new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.Continuous, page => page.LineNumberMode == LineNumberMode.Continuous));
+        r.Register("freew.line-numbers-restart-page", new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.RestartEachPage, page => page.LineNumberMode == LineNumberMode.RestartEachPage));
+        r.Register("freew.line-numbers-options", new ActionRibbonCommand(callbacks.OpenLineNumberOptionsDialog ?? (() => { })));
+        r.Register("freew.hyphenation", new PageSettingCommand(editor, PageLayoutCommandPlanner.ToggleHyphenation, page => page.AutoHyphenation));
+        r.Register("freew.hyphenation-none", new PageSettingCommand(editor, page => page.AutoHyphenation = false, page => !page.AutoHyphenation));
+        r.Register("freew.hyphenation-auto", new PageSettingCommand(editor, page => page.AutoHyphenation = true, page => page.AutoHyphenation));
+        r.Register("freew.hyphenation-manual", new ActionRibbonCommand(() => RunManualHyphenation(editor, callbacks)));
+        r.Register("freew.hyphenation-options", new ActionRibbonCommand(callbacks.OpenHyphenationOptionsDialog ?? (() => { })));
+        r.Register("freew.different-first-page", new PageSettingCommand(editor, page => page.DifferentFirstPage = !page.DifferentFirstPage, page => page.DifferentFirstPage));
         r.Register("freew.page-valign", new ActionRibbonCommand(editor.CyclePageVerticalAlignment));
         r.Register("freew.text-to-table", new ActionRibbonCommand(
             callbacks.OpenTextToTableDialog ?? editor.ConvertCurrentParagraphToTable));
@@ -590,19 +618,13 @@ internal static class FreeWAvaloniaRibbonCommands
     private static void ToggleNormalNarrowMargins(DocumentView editor, RibbonHostCallbacks callbacks)
     {
         var page = editor.Document.Page;
-        var isNormal =
-            Nearly(page.MarginTopPt, 72) &&
-            Nearly(page.MarginBottomPt, 72) &&
-            Nearly(page.MarginLeftPt, 72) &&
-            Nearly(page.MarginRightPt, 72);
-
-        callbacks.ApplyMarginPreset(isNormal ? "narrow" : "normal");
+        callbacks.ApplyMarginPreset(PageLayoutCommandPlanner.HasNormalMargins(page) ? "narrow" : "normal");
     }
 
     private static void ToggleLetterA4Paper(DocumentView editor, RibbonHostCallbacks callbacks)
     {
         var page = editor.Document.Page;
-        callbacks.ApplyPaperSize(IsPaper(page, 612.0, 792.0) ? "a4" : "letter");
+        callbacks.ApplyPaperSize(PageLayoutCommandPlanner.HasLetterPaperSize(page) ? "a4" : "letter");
     }
 
     private static void RegisterHeaderFooterCommands(RibbonCommandRegistry r, DocumentView editor)
@@ -660,61 +682,59 @@ internal static class FreeWAvaloniaRibbonCommands
         callbacks.OpenPageNumberFormatDialog?.Invoke();
     }
 
-    private enum ColumnsPreset
+    private static void RunManualHyphenation(DocumentView editor, RibbonHostCallbacks callbacks)
     {
-        One,
-        Two,
-        Three,
-        Left,
-        Right
+        var candidates = PageLayoutCommandPlanner.CountHyphenationCandidates(editor.Document);
+        editor.ApplyPageSettings(page => page.AutoHyphenation = true);
+        callbacks.ShowHyphenationInfo?.Invoke(
+            candidates == 0
+                ? "Manual hyphenation found no long words to hyphenate."
+                : $"Manual hyphenation proposed break points for {candidates} word(s). They will hyphenate at line ends.");
     }
 
-    private static void ApplyColumnPreset(DocumentView editor, ColumnsPreset preset) =>
-        editor.ApplyPageSettings(page =>
+    private sealed class PageSettingCommand(
+        DocumentView editor,
+        Action<PageSettings> apply,
+        Func<PageSettings, bool>? isChecked = null) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) => editor.ApplyPageSettings(apply);
+
+        public RibbonCommandState GetState() => new(
+            IsEnabled: !editor.IsEditingLocked,
+            IsChecked: isChecked?.Invoke(editor.Document.Page) == true);
+    }
+
+    private sealed class HostPageSettingCommand(DocumentView editor, Action execute) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
         {
-            var spacing = page.ColumnSpacingPt;
-            page.ColumnsLineBetween = false;
-            page.ColumnWidthsPt = null;
+            if (GetState().IsEnabled)
+                execute();
+        }
 
-            switch (preset)
+        public RibbonCommandState GetState() => new(IsEnabled: !editor.IsEditingLocked);
+    }
+
+    private sealed class ParagraphValueCommand(
+        DocumentView editor,
+        Action<double> apply,
+        Func<ParagraphFormatting, double> current) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (double.TryParse(context.SelectedValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var points)
+                && points >= 0)
             {
-                case ColumnsPreset.One:
-                    page.ColumnCount = 1;
-                    break;
-                case ColumnsPreset.Two:
-                    page.ColumnCount = 2;
-                    break;
-                case ColumnsPreset.Three:
-                    page.ColumnCount = 3;
-                    break;
-                case ColumnsPreset.Left:
-                    page.ColumnCount = 2;
-                    page.ColumnWidthsPt = UnequalColumnWidths(page, narrowFirst: true, spacing);
-                    break;
-                case ColumnsPreset.Right:
-                    page.ColumnCount = 2;
-                    page.ColumnWidthsPt = UnequalColumnWidths(page, narrowFirst: false, spacing);
-                    break;
+                apply(points);
             }
-        });
+        }
 
-    private static IReadOnlyList<double> UnequalColumnWidths(PageSettings page, bool narrowFirst, double spacing)
-    {
-        var contentWidthPt = Math.Max(72, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
-        const double narrowPt = 108;
-        var widePt = Math.Max(36, contentWidthPt - spacing - narrowPt);
-        return narrowFirst ? [narrowPt, widePt] : [widePt, narrowPt];
+        public RibbonCommandState GetState()
+        {
+            var paragraph = editor.GetCaretFormatting().Paragraph;
+            return new(Value: current(paragraph).ToString("0.##", CultureInfo.InvariantCulture));
+        }
     }
-
-    private static bool IsPaper(PageSettings page, double portraitWidthPt, double portraitHeightPt)
-    {
-        var width = Math.Min(page.WidthPt, page.HeightPt);
-        var height = Math.Max(page.WidthPt, page.HeightPt);
-        return Nearly(width, portraitWidthPt) && Nearly(height, portraitHeightPt);
-    }
-
-    private static bool Nearly(double actual, double expected) =>
-        Math.Abs(actual - expected) < 0.5;
 
     private sealed class ToggleActionCommand(Action toggle, Func<bool> isChecked) : IRibbonStatefulCommand
     {
@@ -861,13 +881,14 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Drop Cap ─────────────────────────────────────────────────────────
         // Dropped / In Margin both enlarge the leading letter (the in-margin float geometry is an
         // approximation — render-deferred); None clears the paragraph's run formatting.
-        r.Register("freew.drop-cap",           new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.drop-cap",           new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
         r.Register("freew.drop-cap.dropped",   new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
         r.Register("freew.drop-cap.in-margin", new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
         r.Register("freew.drop-cap.none",      new ActionRibbonCommand(editor.ClearDropCap));
         r.Register("freew.drop-cap-dropped",   new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
         r.Register("freew.drop-cap-in-margin", new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
         r.Register("freew.drop-cap-none",      new ActionRibbonCommand(editor.ClearDropCap));
+        r.Register("freew.drop-cap-options",   new ActionRibbonCommand(callbacks.OpenDropCapOptionsDialog ?? (() => { })));
 
         // ── Quick Parts ──────────────────────────────────────────────────────
         // Document-property / date fields insert directly; the snippet entry opens a dialog (shell callback).
@@ -2041,6 +2062,8 @@ internal static class FreeWAvaloniaRibbonCommands
             r.Register($"freew.para-spacing.{FreeWRibbon.ParaSpacingId(s.Name)}",
                 new ActionRibbonCommand(() => editor.ApplyParagraphSpacingSet(s)));
         }
+        r.Register("freew.custom-paragraph-spacing",
+            new ActionRibbonCommand(callbacks.OpenCustomParagraphSpacingDialog ?? (() => { })));
 
         r.Register("freew.theme-effects", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         for (var index = 0; index < DocumentEffectSet.Catalog.Count; index++)

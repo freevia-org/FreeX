@@ -1,0 +1,46 @@
+using System.IO;
+
+namespace FreeW.App.Host.Tests;
+
+public sealed class DesignDialogParitySourceTests
+{
+    [Fact]
+    public void WpfCustomThemeDialogs_UseSharedDesignPlanners()
+    {
+        var colors = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "CustomizeThemeColorsDialog.cs"));
+        colors.Should().Contain("CustomizeThemeColorsDialogPlanner.BuildInitialState(currentTheme)");
+        colors.Should().Contain("CustomizeThemeColorsDialogPlanner.TryBuildResult(");
+        colors.Should().Contain("CustomizeThemeColorsDialogPlanner.Slots");
+
+        var fonts = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "CustomizeThemeFontsDialog.cs"));
+        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.BuildInitialState(current)");
+        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.TryBuildResult(");
+        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.CommonFonts");
+    }
+
+    [Fact]
+    public void DesignShellWiringGaps_AreRecordedOutsideForbiddenRibbonFiles()
+    {
+        var avalonia = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogParity.cs"));
+        var sharedSpacing = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "PageLayoutDialogs.cs"));
+        avalonia.Should().Contain("public sealed class CustomizeThemeColorsDialog");
+        avalonia.Should().Contain("public sealed class CustomizeThemeFontsDialog");
+        sharedSpacing.Should().Contain("public sealed class CustomParagraphSpacingDialog");
+        avalonia.Should().Contain("public sealed class PageColorDialog");
+        avalonia.Should().Contain("public sealed class SetAsDefaultConfirmationDialog");
+    }
+
+    private static string RepositoryFile(params string[] parts)
+    {
+        var directory = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(directory))
+        {
+            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+
+        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
+    }
+}

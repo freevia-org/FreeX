@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -13,23 +14,6 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    // The 12 a:clrScheme slot labels in order (matching ThemeColorScheme's constructor).
-    private static readonly (string Label, string FieldName)[] Slots =
-    [
-        ("Dark 1 (Text/Background)",   "Dark1"),
-        ("Light 1 (Background/Text)",  "Light1"),
-        ("Dark 2 (Text/Background)",   "Dark2"),
-        ("Light 2 (Background/Text)",  "Light2"),
-        ("Accent 1",                   "Accent1"),
-        ("Accent 2",                   "Accent2"),
-        ("Accent 3",                   "Accent3"),
-        ("Accent 4",                   "Accent4"),
-        ("Accent 5",                   "Accent5"),
-        ("Accent 6",                   "Accent6"),
-        ("Hyperlink",                  "Hyperlink"),
-        ("Followed Hyperlink",         "FollowedHyperlink"),
-    ];
-
     private readonly TextBox[] _hexBoxes = new TextBox[12];
     private readonly TextBox _nameBox;
     private readonly DocumentTheme _currentTheme;
@@ -39,26 +23,18 @@ internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.Dialog
     {
         Owner = owner;
         _currentTheme = currentTheme;
-        Title = "Create New Theme Colors";
+        Title = CustomizeThemeColorsDialogPlanner.Title;
         Width = 440;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        // Seed the boxes from the current theme's color scheme.
-        var scheme = currentTheme.ColorScheme;
-        var schemeValues = new[] {
-            scheme.Dark1, scheme.Light1, scheme.Dark2, scheme.Light2,
-            scheme.Accent1, scheme.Accent2, scheme.Accent3,
-            scheme.Accent4, scheme.Accent5, scheme.Accent6,
-            scheme.Hyperlink, scheme.FollowedHyperlink
-        };
+        var state = CustomizeThemeColorsDialogPlanner.BuildInitialState(currentTheme);
+        for (var i = 0; i < _hexBoxes.Length; i++)
+            _hexBoxes[i] = new TextBox { Text = state.ColorHexTexts[i], MinWidth = 120 };
 
-        for (var i = 0; i < 12; i++)
-            _hexBoxes[i] = new TextBox { Text = "#" + schemeValues[i], MinWidth = 120 };
-
-        _nameBox = new TextBox { Text = "Custom", MinWidth = 200 };
+        _nameBox = new TextBox { Text = state.NameText, MinWidth = 200 };
 
         Content = BuildContent();
         Loaded += (_, _) => _nameBox.Focus();
@@ -70,7 +46,7 @@ internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.Dialog
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Enter RRGGBB hex values (with or without #) for each color slot.",
+            Text = CustomizeThemeColorsDialogPlanner.Hint,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
             FontSize = 10,
@@ -80,7 +56,7 @@ internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.Dialog
         // Color slot rows.
         for (var i = 0; i < 12; i++)
         {
-            var grid = SlotRow(Slots[i].Label, _hexBoxes[i]);
+            var grid = SlotRow(CustomizeThemeColorsDialogPlanner.Slots[i].Label, _hexBoxes[i]);
             panel.Children.Add(grid);
         }
 
@@ -111,58 +87,17 @@ internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.Dialog
         return grid;
     }
 
-    private static bool TryParseHex(string text, out string rrggbb)
-    {
-        var trimmed = text.Trim().TrimStart('#');
-        if (trimmed.Length == 6)
-        {
-            try
-            {
-                ColorConverter.ConvertFromString("#" + trimmed);
-                rrggbb = trimmed.ToUpperInvariant();
-                return true;
-            }
-            catch { }
-        }
-        rrggbb = string.Empty;
-        return false;
-    }
-
     private void Accept()
     {
-        var values = new string[12];
-        for (var i = 0; i < 12; i++)
+        if (!CustomizeThemeColorsDialogPlanner.TryBuildResult(
+                _currentTheme,
+                new CustomizeThemeColorsDialogInput(_hexBoxes.Select(box => box.Text).ToArray(), _nameBox.Text),
+                out _result,
+                out var validation))
         {
-            if (!TryParseHex(_hexBoxes[i].Text, out values[i]))
-            {
-                DialogMessageHelper.ShowWarning(this,
-                    $"Enter a valid 6-digit hex colour for '{Slots[i].Label}' (e.g. #2F5496 or 2F5496).", Title);
-                _hexBoxes[i].Focus();
-                return;
-            }
-        }
-
-        var name = _nameBox.Text.Trim();
-        if (string.IsNullOrEmpty(name))
-            name = "Custom";
-
-        var scheme = new ThemeColorScheme(
-            values[0], values[1], values[2], values[3],
-            values[4], values[5], values[6], values[7],
-            values[8], values[9], values[10], values[11]);
-
-        // Infer the best-matching preset; falls back to a Custom theme carrying the chosen colours.
-        _result = DocumentTheme.InferPreset(
-            scheme,
-            _currentTheme.HeadingFont,
-            _currentTheme.BodyFont,
-            _currentTheme.EffectSetName);
-
-        // If InferPreset returned a named preset but user typed a custom name, keep as Custom.
-        if (!string.Equals(_result.Name, name, System.StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(name, "Custom", System.StringComparison.OrdinalIgnoreCase))
-        {
-            _result = _result with { Name = name };
+            DialogMessageHelper.ShowWarning(this, validation?.Message ?? "Enter valid theme colors.", Title);
+            _hexBoxes.ElementAtOrDefault(validation?.SlotIndex ?? 0)?.Focus();
+            return;
         }
 
         Close();
