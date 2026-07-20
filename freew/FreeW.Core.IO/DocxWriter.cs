@@ -1284,7 +1284,10 @@ public static class DocxWriter
         var rotation = options.Layout == WatermarkLayout.Diagonal ? "315" : "0";
         var shapeId = watermarkImage is null ? "PowerPlusWaterMarkObject" : "PowerPlusPictureWaterMarkObject";
         var shapeSize = watermarkImage is null
-            ? "width:468pt;height:117pt"
+            ? options.NativeVmlTextWidthPt is > 0 and var textWidthPt
+                && options.NativeVmlTextHeightPt is > 0 and var textHeightPt
+                ? $"width:{FormatPt(textWidthPt)}pt;height:{FormatPt(textHeightPt)}pt"
+                : "width:468pt;height:117pt"
             : options.NativeVmlPictureWidthPt is > 0 and var pictureWidthPt
                 && options.NativeVmlPictureHeightPt is > 0 and var pictureHeightPt
                 ? $"width:{FormatPt(pictureWidthPt)}pt;height:{FormatPt(pictureHeightPt)}pt"

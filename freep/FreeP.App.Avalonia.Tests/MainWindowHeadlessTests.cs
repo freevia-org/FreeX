@@ -1696,6 +1696,7 @@ public sealed class MainWindowHeadlessTests
             slideHeight = window.Editor.Presentation.SlideSizeCyEmu;
             customPlan = window.LastCustomSlideSizeRequestPlan;
             customInitialState = window.LastCustomSlideSizeInitialState;
+            window.ActiveSlideSizeDialog?.Close(false);
         });
 
         if (!ran) return;
@@ -1712,7 +1713,7 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public async Task Ribbon_CustomSlideSize_opens_visible_pane_and_applies_shared_result()
+    public async Task Ribbon_CustomSlideSize_opens_modal_dialog_and_applies_shared_result()
     {
         var found = false;
         var opened = false;
@@ -1734,36 +1735,33 @@ public sealed class MainWindowHeadlessTests
             found = registry.TryGet("freep.slide-size-custom", out var customSlideSize);
 
             customSlideSize!.Execute(RibbonCommandContext.Empty);
-            opened = window.IsCustomSlideSizePaneVisible;
+            var dialog = window.ActiveSlideSizeDialog!;
+            opened = dialog.IsVisible;
             initialPreset = window.LastCustomSlideSizeInitialState!.Preset;
-            initialWidth = window.CustomSlideSizeWidthText;
-            initialHeight = window.CustomSlideSizeHeightText;
+            initialWidth = dialog.WidthText;
+            initialHeight = dialog.HeightText;
 
-            invalidApplied = window.ApplyCustomSlideSizeForTests(
-                "0.25",
-                "7.5",
-                SlideSizeDialogUnit.Inches);
-            validation = window.CustomSlideSizeValidationText;
-            visibleAfterInvalid = window.IsCustomSlideSizePaneVisible;
+            dialog.SetInputForTests("0.25", "7.5", SlideSizeDialogUnit.Inches);
+            invalidApplied = dialog.ApplyForTests();
+            validation = dialog.ValidationText;
+            visibleAfterInvalid = dialog.IsVisible;
 
-            validApplied = window.ApplyCustomSlideSizeForTests(
-                "11",
-                "6.25",
-                SlideSizeDialogUnit.Inches);
-            visibleAfterApply = window.IsCustomSlideSizePaneVisible;
+            dialog.SetInputForTests("11", "6.25", SlideSizeDialogUnit.Inches);
+            validApplied = dialog.ApplyForTests();
+            visibleAfterApply = dialog.IsVisible;
             slideWidth = window.Editor.Presentation.SlideSizeCxEmu;
             slideHeight = window.Editor.Presentation.SlideSizeCyEmu;
         });
 
         if (!ran) return;
         found.Should().BeTrue("custom slide-size must be registered through the Avalonia registry");
-        opened.Should().BeTrue("the custom command should open a visible Avalonia slide-size state");
+        opened.Should().BeTrue("the custom command should open a visible Avalonia dialog");
         initialPreset.Should().Be(SlideSizeDialogPreset.Widescreen169);
         initialWidth.Should().Be("13.333");
         initialHeight.Should().Be("7.500");
         invalidApplied.Should().BeFalse("shared planner validation should block invalid sizes");
         validation.Should().Be(SlideSizeDialogPlanner.MinimumSizeMessage);
-        visibleAfterInvalid.Should().BeTrue("invalid apply should keep the pane open for correction");
+        visibleAfterInvalid.Should().BeTrue("invalid apply should keep the dialog open for correction");
         validApplied.Should().BeTrue();
         visibleAfterApply.Should().BeFalse();
         slideWidth.Should().Be(10_058_400L);
@@ -4919,10 +4917,11 @@ public sealed class MainWindowHeadlessTests
             found.Should().BeTrue($"{commandId} must be registered");
 
             command!.Execute(RibbonCommandContext.Empty);
-            visible = window.IsFindReplacePaneVisible;
-            title = window.FindReplacePaneTitle;
+            visible = window.IsFindReplaceDialogVisible;
+            title = window.ActiveFindReplaceDialog!.Title;
             replaceVisible = window.IsFindReplaceReplaceInputVisible;
             plan = window.LastFindReplaceWorkflowPlan;
+            window.ActiveFindReplaceDialog.Close();
         });
 
         if (!ran) return;
@@ -4950,11 +4949,12 @@ public sealed class MainWindowHeadlessTests
             shapeId = shape.Id;
 
             window.OpenFindDialog();
-            window.SetFindReplacePaneInputForTests("needle");
-            plan = window.NavigateFindReplacePaneForTests(+1);
+            window.SetFindReplaceDialogInputForTests("needle");
+            plan = window.NavigateFindReplaceDialogForTests(+1);
 
             selectedShapeId = window.Editor.SelectedShapeIds.Single();
             currentSlideIndex = window.Editor.CurrentSlideIndex;
+            window.ActiveFindReplaceDialog?.Close();
         });
 
         if (!ran) return;
@@ -4979,10 +4979,11 @@ public sealed class MainWindowHeadlessTests
             var shape = window.Editor.InsertTextBox("cat cat");
 
             window.OpenFindReplaceDialog();
-            window.SetFindReplacePaneInputForTests("cat", "dog");
-            plan = window.ReplaceAllFindReplacePaneForTests();
+            window.SetFindReplaceDialogInputForTests("cat", "dog");
+            plan = window.ReplaceAllFindReplaceDialogForTests();
 
             replacedText = shape.TextBody!.Paragraphs[0].Runs[0].Text;
+            window.ActiveFindReplaceDialog?.Close();
         });
 
         if (!ran) return;

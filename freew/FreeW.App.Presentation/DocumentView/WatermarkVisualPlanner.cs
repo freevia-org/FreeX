@@ -48,8 +48,14 @@ public static class WatermarkVisualPlanner
             return null;
         }
 
-        var width = Math.Min(pageWidthDip, WordTextWatermarkWidthDip);
-        var height = Math.Min(pageHeightDip, WordTextWatermarkHeightDip);
+        var hasNativeVmlSize = options.NativeVmlTextWidthPt is > 0
+            && options.NativeVmlTextHeightPt is > 0;
+        var width = Math.Min(
+            pageWidthDip,
+            hasNativeVmlSize ? options.NativeVmlTextWidthPt!.Value * 4d / 3d : WordTextWatermarkWidthDip);
+        var height = Math.Min(
+            pageHeightDip,
+            hasNativeVmlSize ? options.NativeVmlTextHeightPt!.Value * 4d / 3d : WordTextWatermarkHeightDip);
         return new TextWatermarkLayoutPlan(
             XDip: (pageWidthDip - width) / 2,
             YDip: (pageHeightDip - height) / 2,

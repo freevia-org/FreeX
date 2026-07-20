@@ -3031,7 +3031,7 @@ public sealed partial class MainWindow : Window
         _underlineButton.Content = new TextBlock
         {
             Text = "U",
-            TextDecorations = TextDecorations.Underline,
+            TextDecorations = CreateTextDecorations(TextDecorationLocation.Underline),
         };
         _underlineButton.Padding = new Thickness(10, 4);
         _underlineButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -3068,7 +3068,7 @@ public sealed partial class MainWindow : Window
         _strikethroughButton.Content = new TextBlock
         {
             Text = "S",
-            TextDecorations = TextDecorations.Strikethrough,
+            TextDecorations = CreateTextDecorations(TextDecorationLocation.Strikethrough),
         };
         _strikethroughButton.Padding = new Thickness(10, 4);
         _strikethroughButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -5521,7 +5521,7 @@ public sealed partial class MainWindow : Window
         };
 
         var decorations = d.ShapeTextUnderline
-            ? TextDecorations.Underline
+            ? CreateTextDecorations(TextDecorationLocation.Underline)
             : null;
 
         var fillBlock = new TextBlock
@@ -10179,8 +10179,7 @@ public sealed partial class MainWindow : Window
         var decorations = new TextDecorationCollection();
         if (style.Underline || style.DoubleUnderline)
         {
-            foreach (var decoration in TextDecorations.Underline)
-                decorations.Add(decoration);
+            decorations.Add(new TextDecoration { Location = TextDecorationLocation.Underline });
 
             if (style.DoubleUnderline)
             {
@@ -10196,13 +10195,13 @@ public sealed partial class MainWindow : Window
         }
 
         if (style.Strikethrough)
-        {
-            foreach (var decoration in TextDecorations.Strikethrough)
-                decorations.Add(decoration);
-        }
+            decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });
 
         return decorations;
     }
+
+    private static TextDecorationCollection CreateTextDecorations(TextDecorationLocation location) =>
+        [new TextDecoration { Location = location }];
 
     /// <summary>
     /// Maps a cell's horizontal alignment to an Avalonia <see cref="TextAlignment"/>. General

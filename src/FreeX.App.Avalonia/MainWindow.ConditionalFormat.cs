@@ -1514,7 +1514,9 @@ public sealed partial class MainWindow
                     Foreground = format is null ? Brushes.Black : CellBrush(format.FontColor),
                     FontWeight = format?.Bold == true ? FontWeight.Bold : FontWeight.Normal,
                     FontStyle = format?.Italic == true ? global::Avalonia.Media.FontStyle.Italic : global::Avalonia.Media.FontStyle.Normal,
-                    TextDecorations = format?.Underline == true ? global::Avalonia.Media.TextDecorations.Underline : null,
+                    TextDecorations = format?.Underline == true
+                        ? CreateTextDecorations(global::Avalonia.Media.TextDecorationLocation.Underline)
+                        : null,
                 };
                 break;
         }

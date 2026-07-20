@@ -207,6 +207,7 @@ public sealed class CellRichTextInlinesBuilderTests
         var r = inlines.OfType<Run>().Single();
         r.TextDecorations.Should().NotBeNull();
         r.TextDecorations!.Should().Contain(td => td.Location == TextDecorationLocation.Underline);
+        r.TextDecorations[0].Should().NotBeSameAs(TextDecorations.Underline[0]);
     }
 
     [Fact]
