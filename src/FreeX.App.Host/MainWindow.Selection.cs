@@ -701,28 +701,39 @@ public partial class MainWindow
             current,
             colPageSize);
 
+        // Plain (non-data-boundary) single-step navigation off a merged cell must clear the whole
+        // merge's far edge, not just current+/-1 -- otherwise the raw +/-1 step still lands inside
+        // the same merge, SetActiveCell's own merge lookup re-snaps right back to it, and the key
+        // press is silently absorbed (R51-render-merged-cell-edit-nav-3-1/3-2). Wrap every plain
+        // step (including Tab/Enter, which never routed through this at all outside of in-edit
+        // navigation -- see MainWindow.Editing.cs's AdjustTargetPastMerge) so navigation always
+        // steps past a merge in the direction of travel, matching Excel.
         target ??= e.Key switch
         {
             Key.Up    => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
-                                  : new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
+                                  : AdjustTargetPastMerge(sheet, current,
+                                        new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col)),
             Key.Down  => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, +1)
-                                  : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, FreeX.Core.Model.CellAddress.MaxRow), current.Col),
+                                  : AdjustTargetPastMerge(sheet, current,
+                                        new CellAddress(_currentSheetId, Math.Min(current.Row + 1, FreeX.Core.Model.CellAddress.MaxRow), current.Col)),
             Key.Left  => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, -1)
-                                  : new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
+                                  : AdjustTargetPastMerge(sheet, current,
+                                        new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)),
             Key.Right => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, +1)
-                                  : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, FreeX.Core.Model.CellAddress.MaxCol)),
+                                  : AdjustTargetPastMerge(sheet, current,
+                                        new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, FreeX.Core.Model.CellAddress.MaxCol))),
 
             Key.Home     => new CellAddress(_currentSheetId, ctrlHeld ? 1u : current.Row, 1u),
             Key.End      => ctrlHeld ? ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, _currentSheetId) : null,
             Key.PageUp   => new CellAddress(_currentSheetId, (uint)Math.Max(1, (int)current.Row - pageSize), current.Col),
             Key.PageDown => new CellAddress(_currentSheetId, (uint)Math.Min(1_048_576, current.Row + (uint)pageSize), current.Col),
 
-            Key.Enter => shiftHeld
+            Key.Enter => AdjustTargetPastMerge(sheet, current, shiftHeld
                 ? new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col)
-                : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, FreeX.Core.Model.CellAddress.MaxRow), current.Col),
-            Key.Tab   => shiftHeld
+                : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, FreeX.Core.Model.CellAddress.MaxRow), current.Col)),
+            Key.Tab   => AdjustTargetPastMerge(sheet, current, shiftHeld
                 ? new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)
-                : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, FreeX.Core.Model.CellAddress.MaxCol)),
+                : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, FreeX.Core.Model.CellAddress.MaxCol))),
             _         => null
         };
 
@@ -738,11 +749,19 @@ public partial class MainWindow
         // areas, not in Add/Extend selection mode), Enter/Tab should move the active cell WITHIN
         // the range -- wrapping at its edges -- and keep the whole range highlighted, matching
         // Excel, instead of collapsing the selection down to one cell via SetActiveCell.
+        //
+        // A lone selected MERGED cell also satisfies Start != End (it spans multiple rows/cols)
+        // but is logically a single cell, not a real multi-cell selection -- Excel's Tab/Enter
+        // skips straight past it to the next unmerged cell instead of Tab-cycling through its
+        // (normally blank) interior sub-cells (R51-render-merged-cell-edit-nav-3-2). Exclude that
+        // case so it falls through to the plain SetActiveCell(target.Value) path below, whose
+        // target was already advanced past the merge's far edge above.
         if (moveOnly &&
             _selectionMode == ExcelSelectionMode.Normal &&
             SheetGrid.SelectedRanges is null &&
             SheetGrid.SelectedRange is { } activeMultiRange &&
-            activeMultiRange.Start != activeMultiRange.End)
+            activeMultiRange.Start != activeMultiRange.End &&
+            !IsSingleMergedCellRange(sheet, activeMultiRange))
         {
             var withinRangeCurrent = _selectionAnchor ?? activeMultiRange.Start;
             var withinRangeTarget = AdvanceActiveCellWithinRange(
@@ -762,6 +781,19 @@ public partial class MainWindow
 
         EnsureCellVisible(target.Value);
         e.Handled = true;
+    }
+
+    // True when `range` is exactly the merged region anchored at its own Start -- i.e. the
+    // "selection" is really just one logical merged cell, not a genuine multi-cell range
+    // (R51-render-merged-cell-edit-nav-3-2).
+    private static bool IsSingleMergedCellRange(Sheet? sheet, GridRange range)
+    {
+        if (sheet is not { MergedRegions.Count: > 0 })
+            return false;
+
+        return sheet.GetMergeRegion(range.Start) is { } merge &&
+               merge.Start == range.Start &&
+               merge.End == range.End;
     }
 
     // Advances the active cell within an already-selected multi-cell range for Enter/Tab
@@ -1114,26 +1146,75 @@ public partial class MainWindow
 
         _selectionCursor = to;
         SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = new GridRange(
+        var rawRange = new GridRange(
             new CellAddress(_currentSheetId,
                 Math.Min(anchor.Row, to.Row), Math.Min(anchor.Col, to.Col)),
             new CellAddress(_currentSheetId,
                 Math.Max(anchor.Row, to.Row), Math.Max(anchor.Col, to.Col)));
-        SetCellAddressBoxSelectionText(FormatRangeReference(anchor, to));
+        // Excel guarantees a selection rectangle never bisects a merged cell: grow the raw
+        // rectangle to fully absorb any merge it only partially overlaps
+        // (R51-render-merged-cell-edit-nav-3-4).
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var range = ExpandRangeToFullyContainMerges(sheet, rawRange);
+        SheetGrid.SelectedRange = range;
+        SetCellAddressBoxSelectionText(FormatRangeReference(range.Start, range.End));
         if (!_dragSelectActive)
             RefreshPivotFieldListPaneAfterSelectionChange();
         RefreshStatusBarAfterDragSelectionChange();
     }
 
+    // Grows `range` until it fully contains every merged region it partially overlaps, since
+    // absorbing one merge can bring a new merge into partial overlap
+    // (R51-render-merged-cell-edit-nav-3-4).
+    private static GridRange ExpandRangeToFullyContainMerges(Sheet? sheet, GridRange range)
+    {
+        if (sheet is not { MergedRegions.Count: > 0 })
+            return range;
+
+        bool expanded;
+        do
+        {
+            expanded = false;
+            foreach (var merge in sheet.MergedRegions)
+            {
+                if (merge.Start.Sheet != range.Start.Sheet)
+                    continue;
+                if (!range.Overlaps(merge) || range.Contains(merge))
+                    continue;
+
+                range = new GridRange(
+                    new CellAddress(range.Start.Sheet,
+                        Math.Min(range.Start.Row, merge.Start.Row), Math.Min(range.Start.Col, merge.Start.Col)),
+                    new CellAddress(range.Start.Sheet,
+                        Math.Max(range.End.Row, merge.End.Row), Math.Max(range.End.Col, merge.End.Col)));
+                expanded = true;
+            }
+        } while (expanded);
+
+        return range;
+    }
+
     private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
     {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+
+        // Ctrl+clicking anywhere inside a merged cell (not just its own anchor) must add the
+        // WHOLE merged block as the new selection area -- Excel has no independently-selectable
+        // sub-cell inside a merge (R51-render-merged-cell-edit-nav-3-3). Only applies to a fresh
+        // Ctrl+click (not a Ctrl+Shift extension of an already-started area).
+        var clickedMerge = !extendSelection && sheet is { MergedRegions.Count: > 0 }
+            ? sheet.GetMergeRegion(target)
+            : null;
+        if (clickedMerge is { } snapTo)
+            target = snapTo.End;
+
         if (IsAdditionalSelectionExtensionUnchanged(target, extendSelection))
             return;
 
         ClearSelectionTransientOverlays();
 
         if (!extendSelection)
-            _selectionAnchor = target;
+            _selectionAnchor = clickedMerge?.Start ?? target;
 
         var anchor = _selectionAnchor ?? target;
         if (anchor.Sheet != target.Sheet)
@@ -1153,8 +1234,8 @@ public partial class MainWindow
         SheetGrid.SelectedRange = activeRange;
         SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));
 
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(target), target));
+        var formulaBarCell = clickedMerge?.Start ?? target;
+        SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(formulaBarCell), formulaBarCell));
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterDragSelectionChange();
         RefreshStatusBarAfterDragSelectionChange();

@@ -19,6 +19,28 @@ public sealed class WpfAuthoritySurfaceParityTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
     [Fact]
+    public async Task About_uses_the_full_WPF_authority_content_and_modal_keyboard_shape()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new AboutDialog();
+
+            dialog.Title.Should().Be("About FreeW");
+            dialog.Width.Should().Be(560);
+            dialog.Height.Should().Be(420);
+            AutomationProperties.GetAutomationId(dialog).Should().Be("AboutFreeWDialog");
+            var text = dialog.GetLogicalDescendants().OfType<TextBox>()
+                .Single(textBox => AutomationProperties.GetAutomationId(textBox) == "AboutFreeWText");
+            text.IsReadOnly.Should().BeTrue();
+            text.Text.Should().Contain("A free word processor for DOCX editing and format-fidelity work.");
+            text.Text.Should().Contain("Built with .NET 10 and Avalonia.");
+            text.Text.Should().Contain("Help > Legal Notices");
+            text.Text.Should().NotContain("Microsoft 365");
+            AssertDefaultCancelButtons(dialog);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Compare_documents_preserves_defaults_validation_focus_and_explicit_result()
     {
         await Session.Dispatch(() =>
@@ -62,8 +84,12 @@ public sealed class WpfAuthoritySurfaceParityTests
             var dialog = new LegalNoticesDialog(documents);
             var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
             tabs.Items.Count.Should().Be(5);
+            tabs.Items.OfType<TabItem>()
+                .Should().OnlyContain(tab => tab.Content is TextBox,
+                    "the WPF authority puts each scrolling textbox directly in its tab pane");
             dialog.GetLogicalDescendants().OfType<TextBox>()
                 .Should().OnlyContain(textBox => textBox.IsReadOnly && textBox.Focusable);
+            dialog.MinWidth.Should().Be(620);
             AssertDefaultCancelButtons(dialog);
         }, CancellationToken.None);
     }
@@ -248,11 +274,13 @@ public sealed class WpfAuthoritySurfaceParityTests
             var symbol = 0;
             var clips = 0;
             var legal = 0;
+            var about = 0;
             var compare = 0;
             var callbacks = Callbacks() with
             {
                 OpenSymbolPickerDialog = () => symbol++,
                 CaptureScreenClip = () => clips++,
+                OpenAbout = () => about++,
                 OpenLegalNotices = () => legal++,
                 CompareDocuments = () => compare++,
             };
@@ -261,15 +289,16 @@ public sealed class WpfAuthoritySurfaceParityTests
             Execute(registry, "freew.symbol");
             Execute(registry, "freew.screenshot");
             Execute(registry, "freew.screen-clipping");
+            Execute(registry, "freew.about");
             Execute(registry, "freew.legal-notices");
             Execute(registry, "freew.compare");
-            (symbol, clips, legal, compare).Should().Be((1, 2, 1, 1));
+            (symbol, clips, about, legal, compare).Should().Be((1, 2, 1, 1, 1));
 
             var unavailable = FreeWRibbon.BuildRegistry(new DocumentView(), Callbacks());
             foreach (var id in new[]
                      {
                          "freew.symbol", "freew.screenshot", "freew.screen-clipping",
-                         "freew.legal-notices", "freew.compare", "freew.table-formula",
+                         "freew.about", "freew.legal-notices", "freew.compare", "freew.table-formula",
                          "freew.table-properties",
                      })
             {

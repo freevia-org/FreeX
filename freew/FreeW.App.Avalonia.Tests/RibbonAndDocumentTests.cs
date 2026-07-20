@@ -73,6 +73,7 @@ public class RibbonAndDocumentTests
                 .Should().BeTrue($"Avalonia compact File shell command '{id}' must be host-backed");
 
         definition.Tabs.Select(tab => tab.Id).Should().Contain("help");
+        commandIds.Should().Contain("freew.about");
         commandIds.Should().Contain("freew.legal-notices");
 
         commandIds.Should().NotContain(new[]
@@ -81,7 +82,6 @@ public class RibbonAndDocumentTests
             "freew.feedback",
             "freew.copy-diagnostics",
             "freew.check-updates",
-            "freew.about",
             "freew.arrange-all",
         });
     }

@@ -1299,14 +1299,41 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return DrawingShapeGradientDirection.DiagonalDown;
         }
 
-        return NormalizeDrawingAngle(angle) switch
+        return NearestCardinalGradientDirection(NormalizeDrawingAngle(angle));
+    }
+
+    /// <summary>
+    /// <see cref="DrawingShapeGradientDirection"/> can only represent the four cardinal angles
+    /// (0/90/180/270 degrees, matching <c>XlsxWorksheetDrawingObjectWriter.ToGradientFillAngle</c>'s
+    /// inverse mapping) — any other angle from the source file (e.g. a 33-degree gradient) must be
+    /// snapped to whichever of those four buckets is actually CLOSEST, not unconditionally forced to
+    /// DiagonalDown (90 degrees) regardless of how far away it really is (R51-io-picture-fill-shape-3-2).
+    /// </summary>
+    private static DrawingShapeGradientDirection NearestCardinalGradientDirection(long normalizedAngle)
+    {
+        const long fullTurn = 21600000;
+        ReadOnlySpan<(long Angle, DrawingShapeGradientDirection Direction)> cardinals =
+        [
+            (0L, DrawingShapeGradientDirection.Horizontal),
+            (5400000L, DrawingShapeGradientDirection.DiagonalDown),
+            (10800000L, DrawingShapeGradientDirection.DiagonalUp),
+            (16200000L, DrawingShapeGradientDirection.Vertical),
+        ];
+
+        var best = DrawingShapeGradientDirection.DiagonalDown;
+        var bestDistance = long.MaxValue;
+        foreach (var (candidateAngle, direction) in cardinals)
         {
-            0 => DrawingShapeGradientDirection.Horizontal,
-            5400000 => DrawingShapeGradientDirection.DiagonalDown,
-            10800000 => DrawingShapeGradientDirection.DiagonalUp,
-            16200000 => DrawingShapeGradientDirection.Vertical,
-            _ => DrawingShapeGradientDirection.DiagonalDown
-        };
+            var diff = Math.Abs(normalizedAngle - candidateAngle);
+            var circularDistance = Math.Min(diff, fullTurn - diff);
+            if (circularDistance < bestDistance)
+            {
+                bestDistance = circularDistance;
+                best = direction;
+            }
+        }
+
+        return best;
     }
 
     private static long NormalizeDrawingAngle(long angle)

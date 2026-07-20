@@ -15,8 +15,9 @@ namespace Free.Shared.Shell.Avalonia;
 public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
 {
     public double ControlHeight { get; init; } = 24;
+    public double ButtonHeight { get; init; } = 26;
     public double FontSize { get; init; } = 12;
-    public Thickness ButtonPadding { get; init; } = new(4, 1);
+    public Thickness ButtonPadding { get; init; } = new(12, 3);
     public Thickness TextBoxPadding { get; init; } = new(4, 1);
     public Thickness ComboBoxPadding { get; init; } = new(5, 0, 4, 0);
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
@@ -38,8 +39,8 @@ public static class AvaloniaCompactDialogChrome
 
     public static AvaloniaCompactDialogChromeStyle WindowsStyle { get; } = new(WindowsUiFontFamily);
 
-    private static readonly IBrush DefaultButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
-    private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112));
+    private static readonly IBrush ButtonBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(221, 221, 221));
+    private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
     private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(130, 130, 130));
     private static readonly IBrush DialogForegroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x1f, 0x1f, 0x1f));
     private static readonly IBrush ValidationStatusBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00));
@@ -126,12 +127,12 @@ public static class AvaloniaCompactDialogChrome
         ArgumentNullException.ThrowIfNull(style);
 
         button.MinWidth = minWidth;
-        button.Height = style.ControlHeight;
-        button.MinHeight = style.ControlHeight;
-        button.MaxHeight = style.ControlHeight;
+        button.Height = style.ButtonHeight;
+        button.MinHeight = style.ButtonHeight;
+        button.MaxHeight = style.ButtonHeight;
         button.Padding = style.ButtonPadding;
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? DefaultButtonBorderBrush : ButtonBorderBrush;
+        button.Background = ButtonBackgroundBrush;
+        button.BorderBrush = ButtonBorderBrush;
         button.BorderThickness = new Thickness(1);
         button.FontSize = style.FontSize;
         button.FontFamily = style.FontFamily;
@@ -257,6 +258,7 @@ public static class AvaloniaCompactDialogChrome
             .Name("PART_SelectedContentHost"));
         contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, DialogTabPaneBorderBrush));
         contentPaneStyle.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1)));
+        contentPaneStyle.Setters.Add(new Setter(Layoutable.MarginProperty, new Thickness(0)));
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.PaddingProperty, new Thickness(0)));
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
         tabControl.Styles.Add(contentPaneStyle);

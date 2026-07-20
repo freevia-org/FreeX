@@ -242,8 +242,11 @@ public static partial class BuiltInFunctions
     internal static bool ScalarEquals(ScalarValue a, ScalarValue b)
     {
         if (a is BlankValue && b is BlankValue) return true;
-        if (a is BlankValue) a = b is TextValue ? new TextValue("") : (ScalarValue)new NumberValue(0);
-        if (b is BlankValue) b = a is TextValue ? new TextValue("") : (ScalarValue)new NumberValue(0);
+        // Coerce blank to the zero/empty/false of the OTHER operand's type class -- including
+        // BoolValue, matching CompareScalar's CoerceBlankForCompare (a blank cell must equal
+        // FALSE for XLOOKUP/XMATCH exact-match purposes, same as it compares equal via CompareScalar).
+        if (a is BlankValue) a = CoerceBlankForCompare(b);
+        if (b is BlankValue) b = CoerceBlankForCompare(a);
         if (TryCellNumber(a, out double aNumber) && TryCellNumber(b, out double bNumber))
             return aNumber == bNumber;
         if (a is TextValue ta && b is TextValue tb)

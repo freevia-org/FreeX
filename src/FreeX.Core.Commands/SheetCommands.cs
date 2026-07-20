@@ -516,12 +516,13 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             if (sheets[i].Id == _sheetId) { _removedIndex = i; break; }
         _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
         _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
-        foreach (var (name, range) in ctx.Workbook.NamedRanges.ToList())
-        {
-            if (range.Start.Sheet == _sheetId)
-                ctx.Workbook.RemoveNamedRange(name);
-        }
-        // Capture scoped named formulas BEFORE RemoveSheet purges them.
+        // R51-meta-1 (r50 self-regression shadow): do NOT bare-remove global named ranges that
+        // target the deleted sheet here. ctx.Workbook.RemoveSheet below runs
+        // Workbook.RemoveNamedRangesForSheet, which keeps the name in the Name Manager and
+        // rewrites its RefersTo to "#REF!" (matching real Excel) instead of dropping it outright.
+        // A separate pre-loop that called the bare RemoveNamedRange first would remove the entry
+        // before that #REF!-converting pass ever saw it, silently dropping the name — exactly the
+        // bug the #REF! conversion was added to fix. Capture scoped named formulas BEFORE RemoveSheet purges them.
         _scopedNamedFormulaSnapshot = ctx.Workbook.ScopedNamedFormulas
             .ToDictionary(p => p.Key, p => p.Value);
         var deletedSheetName = sheet.Name;

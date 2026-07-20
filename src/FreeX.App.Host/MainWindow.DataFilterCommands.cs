@@ -54,17 +54,27 @@ public partial class MainWindow
         return SortDialog.ExcludeHeaderRow(range, hasHeaderRow);
     }
 
+    // Auto-detects whether `range` looks like it has a header row, using the same heuristic the
+    // quick ribbon Sort Asc/Desc buttons (ExcludeHeaderRowForQuickSort, above) and Quick Analysis
+    // already use, instead of always defaulting the Custom Sort dialog's "My data has headers"
+    // checkbox to checked (R51-commands-sort-custom-multilevel-3-1).
+    private bool DetectSortDialogHasHeaders(GridRange range) =>
+        _workbook.GetSheet(_currentSheetId) is { } sheet &&
+        QuickAnalysisSelectionReader.Describe(sheet, range).HasHeaderRow;
+
     private void SortCustomButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
+        var hasHeaders = DetectSortDialogHasHeaders(range);
         var dialog = new SortDialog(
             columnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true),
             genericColumnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false),
             rowChoices: SortDialog.BuildRowChoices(range),
             colorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range),
             cellColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range, SortOn.CellColor),
-            fontColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range, SortOn.FontColor))
+            fontColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range, SortOn.FontColor),
+            hasHeaders: hasHeaders)
         {
             Owner = this
         };

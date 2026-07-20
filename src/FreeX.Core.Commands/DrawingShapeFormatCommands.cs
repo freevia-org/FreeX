@@ -18,6 +18,7 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
     private WorkbookThemeColorReference? _previousFillThemeColor;
     private WorkbookThemeColorReference? _previousOutlineThemeColor;
     private bool _previousHasFill;
+    private bool _previousIsSourceLoaded;
     private bool _applied;
 
     public string Label => "Shape Colors";
@@ -56,6 +57,7 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         _previousFillThemeColor = shape.FillThemeColor;
         _previousOutlineThemeColor = shape.OutlineThemeColor;
         _previousHasFill = shape.HasFill;
+        _previousIsSourceLoaded = shape.IsSourceLoaded;
         if (_updateFill)
         {
             shape.HasFill = _hasFill ?? (_fillColor is not null);
@@ -70,6 +72,14 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
             shape.OutlineColor = _outlineColor;
             shape.OutlineThemeColor = null;
         }
+
+        // R51-io-picture-fill-shape-3-1: a shape loaded verbatim from an existing .xlsx is skipped
+        // by the drawing writer (IsSupportedShape requires !IsSourceLoaded) so its ORIGINAL fill
+        // XML is preserved on save via the source-package passthrough — silently discarding this
+        // fill edit. Clear the flag so the writer reconstructs the shape from the (now edited)
+        // model instead of round-tripping the stale source XML.
+        if (_updateFill || _updateOutline)
+            shape.IsSourceLoaded = false;
 
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
@@ -86,6 +96,7 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         shape.FillThemeColor = _previousFillThemeColor;
         shape.OutlineThemeColor = _previousOutlineThemeColor;
         shape.HasFill = _previousHasFill;
+        shape.IsSourceLoaded = _previousIsSourceLoaded;
         _applied = false;
     }
 }
@@ -97,7 +108,7 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
     private readonly CellColor _startColor;
     private readonly CellColor _endColor;
     private readonly DrawingShapeGradientDirection _direction;
-    private (CellColor? FillColor, CellColor? GradientEndColor, DrawingShapeGradientDirection Direction, WorkbookThemeColorReference? FillThemeColor, bool HasFill) _previous;
+    private (CellColor? FillColor, CellColor? GradientEndColor, DrawingShapeGradientDirection Direction, WorkbookThemeColorReference? FillThemeColor, bool HasFill, bool IsSourceLoaded) _previous;
     private bool _applied;
 
     public string Label => "Shape Gradient";
@@ -135,12 +146,16 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
         if (shape.Kind == DrawingShapeKind.Line)
             return new CommandOutcome(false, "Line shapes do not support gradient fills.");
 
-        _previous = (shape.FillColor, shape.GradientFillEndColor, shape.GradientFillDirection, shape.FillThemeColor, shape.HasFill);
+        _previous = (shape.FillColor, shape.GradientFillEndColor, shape.GradientFillDirection, shape.FillThemeColor, shape.HasFill, shape.IsSourceLoaded);
         shape.HasFill = true;
         shape.FillColor = _startColor;
         shape.GradientFillEndColor = _endColor;
         shape.GradientFillDirection = _direction;
         shape.FillThemeColor = null;
+        // R51-io-picture-fill-shape-3-1: see SetDrawingShapeColorsCommand — a gradient edit on a
+        // source-loaded shape must also clear IsSourceLoaded or the writer skips it and the
+        // ORIGINAL fill XML silently survives the save.
+        shape.IsSourceLoaded = false;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
     }
@@ -154,6 +169,7 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
         shape.GradientFillDirection = _previous.Direction;
         shape.FillThemeColor = _previous.FillThemeColor;
         shape.HasFill = _previous.HasFill;
+        shape.IsSourceLoaded = _previous.IsSourceLoaded;
         _applied = false;
     }
 }
@@ -165,6 +181,7 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
     private readonly DrawingShapeEffectPreset _effectPreset;
     private bool _previousHasShadowEffect;
     private DrawingShapeEffectPreset _previousEffectPreset;
+    private bool _previousIsSourceLoaded;
     private bool _applied;
 
     public string Label => "Shape Effects";
@@ -201,8 +218,13 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
 
         _previousHasShadowEffect = shape.HasShadowEffect;
         _previousEffectPreset = shape.EffectPreset;
+        _previousIsSourceLoaded = shape.IsSourceLoaded;
         shape.EffectPreset = _effectPreset;
         shape.HasShadowEffect = _effectPreset == DrawingShapeEffectPreset.Shadow;
+        // R51-io-picture-fill-shape-3-1: see SetDrawingShapeColorsCommand — an effect edit on a
+        // source-loaded shape must also clear IsSourceLoaded or the writer skips it and the
+        // ORIGINAL effect XML silently survives the save.
+        shape.IsSourceLoaded = false;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
     }
@@ -213,6 +235,7 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
         if (!DrawingShapeCommandGuards.TryFindShape(ctx.GetSheet(_sheetId), _shapeId, out var shape)) return;
         shape.HasShadowEffect = _previousHasShadowEffect;
         shape.EffectPreset = _previousEffectPreset;
+        shape.IsSourceLoaded = _previousIsSourceLoaded;
         _applied = false;
     }
 }
