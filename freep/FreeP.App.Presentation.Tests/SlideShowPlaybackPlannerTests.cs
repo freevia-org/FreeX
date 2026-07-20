@@ -101,6 +101,24 @@ public sealed class SlideShowPlaybackPlannerTests
 
         orbit.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Orbit);
         orbit.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Orbit);
+
+        var pageCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.PageCurlSingle,
+            Direction = TransitionDirection.Right
+        });
+
+        pageCurl.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.PageCurl);
+        pageCurl.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.PageCurl);
+
+        var doubleCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.PageCurlDouble,
+            Direction = TransitionDirection.Down
+        });
+
+        doubleCurl.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.PageCurl);
+        doubleCurl.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.PageCurl);
     }
 
     [Theory]
@@ -154,6 +172,41 @@ public sealed class SlideShowPlaybackPlannerTests
         partial.All(cell => cell.Points.Count == 6).Should().BeTrue();
         partial.SelectMany(cell => cell.Points)
             .Should().BeEquivalentTo(repeat.SelectMany(cell => cell.Points));
+    }
+
+    [Fact]
+    public void PageCurlPlanner_FoldsOutgoingPageToEmptyClip()
+    {
+        var plan = SlideShowPageCurlTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.PageCurlSingle,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.HorizontalAxis.Should().BeTrue();
+        plan.CurlFromEnd.Should().BeTrue();
+
+        var closed = SlideShowPageCurlTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowPageCurlTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowPageCurlTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+
+        closed.Should().HaveCount(1);
+        closed[0].Points.Should().HaveCount(4);
+        partial.Should().HaveCount(1);
+        partial[0].Points.Should().HaveCount(5);
+        open.Should().BeEmpty();
+
+        var doublePlan = SlideShowPageCurlTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.PageCurlDouble,
+            Direction = TransitionDirection.Down
+        });
+        var doublePartial = SlideShowPageCurlTransitionPlanner.BuildPolygons(
+            960, 540, 0.5, doublePlan);
+
+        doublePlan.DoubleFold.Should().BeTrue();
+        doublePartial.Should().HaveCount(2);
+        doublePartial.Should().OnlyContain(polygon => polygon.Points.Count == 5);
     }
 
     [Fact]
