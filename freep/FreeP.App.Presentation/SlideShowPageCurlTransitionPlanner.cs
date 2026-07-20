@@ -32,7 +32,7 @@ public static class SlideShowPageCurlTransitionPlanner
         return new(
             horizontal,
             curlFromEnd,
-            transition.Kind == TransitionKind.PageCurlDouble,
+            transition.Kind is TransitionKind.PageCurlDouble or TransitionKind.Origami,
             DefaultFoldDepthFactor);
     }
 
