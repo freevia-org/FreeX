@@ -186,6 +186,15 @@ public sealed class SlideShowPlaybackPlannerTests
         airplane.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Flythrough);
         airplane.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Flythrough);
 
+        var origami = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Origami,
+            Direction = TransitionDirection.Down
+        });
+
+        origami.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.PageCurl);
+        origami.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.PageCurl);
+
         var pageCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
             Kind = TransitionKind.PageCurlSingle,
@@ -436,6 +445,14 @@ public sealed class SlideShowPlaybackPlannerTests
         doublePlan.DoubleFold.Should().BeTrue();
         doublePartial.Should().HaveCount(2);
         doublePartial.Should().OnlyContain(polygon => polygon.Points.Count == 5);
+
+        var origamiPlan = SlideShowPageCurlTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Origami,
+            Direction = TransitionDirection.Down
+        });
+
+        origamiPlan.DoubleFold.Should().BeTrue();
     }
 
     [Fact]
