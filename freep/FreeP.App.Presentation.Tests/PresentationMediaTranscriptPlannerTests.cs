@@ -95,6 +95,52 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void BuildTranscriptPlan_ParsesTtmlClockAndUnitTiming()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 43,
+            Name = "TTML video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/training.ttml",
+                        ContentType = "application/ttml+xml",
+                        Language = "en-US",
+                        Label = "English TTML",
+                        Bytes = Encoding.UTF8.GetBytes("""
+                            <?xml version="1.0" encoding="utf-8"?>
+                            <tt xmlns="http://www.w3.org/ns/ttml">
+                              <body><div>
+                                <p begin="00:00:00.500" end="00:00:01.500">Hello <span>world</span>.</p>
+                                <p begin="2s" dur="750ms">Second
+                            cue.</p>
+                              </div></body>
+                            </tt>
+                            """)
+                    }
+                }
+            }
+        });
+
+        var track = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject;
+
+        track.Status.Should().Be(PresentationMediaTranscriptTrackStatus.Available);
+        track.Cues.Select(cue => cue.Text).Should().Equal("Hello world.", "Second cue.");
+        track.Cues[0].StartTime.Should().Be(TimeSpan.FromMilliseconds(500));
+        track.Cues[0].EndTime.Should().Be(TimeSpan.FromMilliseconds(1500));
+        track.Cues[1].StartTime.Should().Be(TimeSpan.FromSeconds(2));
+        track.Cues[1].EndTime.Should().Be(TimeSpan.FromMilliseconds(2750));
+    }
+
+    [Fact]
     public void BuildTranscriptPlan_ClassifiesExternalNoBytesAndUnsupportedTracks()
     {
         var presentation = Presentation.CreateEmpty();
@@ -122,10 +168,10 @@ public sealed class PresentationMediaTranscriptPlannerTests
                     },
                     new MediaCaptionTrackInfo
                     {
-                        Source = "ppt/media/captions.ttml",
-                        ContentType = "application/ttml+xml",
-                        Label = "TTML",
-                        Bytes = Encoding.UTF8.GetBytes("<tt><body /></tt>")
+                        Source = "ppt/media/captions.ass",
+                        ContentType = "text/x-ass",
+                        Label = "ASS",
+                        Bytes = Encoding.UTF8.GetBytes("[Events]\nDialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,Unsupported")
                     }
                 }
             }
