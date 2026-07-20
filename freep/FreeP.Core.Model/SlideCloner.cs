@@ -268,6 +268,7 @@ public static class SlideCloner
         TickLabelPosition = a.TickLabelPosition,
         LabelOffsetPercent = a.LabelOffsetPercent,
         NoMultiLevelLabels = a.NoMultiLevelLabels,
+        CrossBetween      = a.CrossBetween,
         Delete            = a.Delete,
     };
 

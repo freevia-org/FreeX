@@ -197,6 +197,7 @@ public sealed class ChartTests : IDisposable
         chart.ValueAxis.MajorTickMark = ChartTickMark.Cross;
         chart.ValueAxis.MinorTickMark = ChartTickMark.In;
         chart.ValueAxis.TickLabelPosition = ChartTickLabelPosition.High;
+        chart.ValueAxis.CrossBetween = ChartCrossBetween.MidCat;
 
         var reloaded = PptxPackageReader.Read(WriteToPptx(BuildPresWithChart(chart)));
         var roundTripped = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
@@ -209,6 +210,7 @@ public sealed class ChartTests : IDisposable
         roundTripped.ValueAxis.MajorTickMark.Should().Be(ChartTickMark.Cross);
         roundTripped.ValueAxis.MinorTickMark.Should().Be(ChartTickMark.In);
         roundTripped.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.High);
+        roundTripped.ValueAxis.CrossBetween.Should().Be(ChartCrossBetween.MidCat);
     }
 
     [Fact]

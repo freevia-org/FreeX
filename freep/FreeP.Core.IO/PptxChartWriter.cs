@@ -1243,6 +1243,8 @@ internal static class PptxChartWriter
             yield return new XElement(C + "lblOffset", new XAttribute("val", Math.Clamp(offset, 0, 100)));
         if (axis.NoMultiLevelLabels is { } noMultiLevelLabels)
             yield return new XElement(C + "noMultiLvlLbl", new XAttribute("val", BoolValue(noMultiLevelLabels)));
+        if (axis.CrossBetween is { } crossBetween)
+            yield return new XElement(C + "crossBetween", new XAttribute("val", CrossBetweenValue(crossBetween)));
     }
 
     private static string TickMarkValue(ChartTickMark value) => value switch
@@ -1261,6 +1263,13 @@ internal static class PptxChartWriter
         ChartTickLabelPosition.High   => "high",
         ChartTickLabelPosition.NextTo => "nextTo",
         _                            => "nextTo"
+    };
+
+    private static string CrossBetweenValue(ChartCrossBetween value) => value switch
+    {
+        ChartCrossBetween.Between => "between",
+        ChartCrossBetween.MidCat  => "midCat",
+        _                         => "between"
     };
 
     private static XElement? BuildAxisNumFmtEl(ChartAxis axis)

@@ -1101,6 +1101,7 @@ internal static class PptxChartReader
         axis.TickLabelPosition = ParseTickLabelPosition(axEl.Element(C + "tickLblPos"));
         axis.LabelOffsetPercent = ParseNullableInt(axEl.Element(C + "lblOffset")?.Attribute("val")?.Value);
         axis.NoMultiLevelLabels = ParseNullableBoolElement(axEl.Element(C + "noMultiLvlLbl"));
+        axis.CrossBetween = ParseCrossBetween(axEl.Element(C + "crossBetween"));
         axis.Title = ReadTitle(axEl.Element(C + "title"));
 
         var numFmt = axEl.Element(C + "numFmt");
@@ -1144,6 +1145,14 @@ internal static class PptxChartReader
             "high"   => ChartTickLabelPosition.High,
             "nextTo" => ChartTickLabelPosition.NextTo,
             _        => null
+        };
+
+    private static ChartCrossBetween? ParseCrossBetween(XElement? element) =>
+        element?.Attribute("val")?.Value switch
+        {
+            "between" => ChartCrossBetween.Between,
+            "midCat"  => ChartCrossBetween.MidCat,
+            _         => null
         };
 
     // ── Data-label parsing ─────────────────────────────────────────────────────

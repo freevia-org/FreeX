@@ -30,6 +30,7 @@ public sealed class ChartBaselineCorpusTests
         chart.ValueAxis.MajorTickMark.Should().Be(ChartTickMark.Out);
         chart.ValueAxis.MinorTickMark.Should().Be(ChartTickMark.None);
         chart.ValueAxis.TickLabelPosition.Should().Be(ChartTickLabelPosition.NextTo);
+        chart.ValueAxis.CrossBetween.Should().Be(ChartCrossBetween.Between);
     }
 
     [Fact]
