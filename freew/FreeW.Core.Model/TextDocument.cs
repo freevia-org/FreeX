@@ -2387,6 +2387,12 @@ public sealed record WatermarkOptions(string Text)
     /// </summary>
     public double? NativeVmlTextHeightPt { get; init; }
 
+    /// <summary>
+    /// Optional <c>v:textpath/@fitshape</c> value recovered from a Word VML text watermark.
+    /// A null value retains FreeW's canonical fitshape output for newly authored watermarks.
+    /// </summary>
+    public bool? NativeVmlTextFitShape { get; init; }
+
     /// <summary>Whether this watermark is a picture watermark (<see cref="ImageBytes"/> is non-null).</summary>
     public bool IsPicture => ImageBytes is { Length: > 0 };
 
