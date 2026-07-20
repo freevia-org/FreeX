@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 
 const string JsonName = "docs/parity/freep-render-slideshow-media-parity-20260720.json";
 const string MarkdownName = "docs/parity/freep-render-slideshow-media-parity-20260720.md";
+const string LinuxRuntimeArtifactName = "docs/parity/freep-libvlc-linux-runtime-20260720.json";
 
 var root = FindRoot();
 var checkOnly = args.Contains("--check", StringComparer.OrdinalIgnoreCase);
@@ -25,6 +26,7 @@ if (checkOnly)
         : null;
     var isFresh = existing is not null &&
         existing.SourceSnapshotSha256 == report.SourceSnapshotSha256 &&
+        existing.RuntimeArtifactSha256 == report.RuntimeArtifactSha256 &&
         existing.Sources.Count == report.Sources.Count &&
         existing.Areas.Count == report.Areas.Count &&
         existing.Residuals.Count == report.Residuals.Count;
@@ -44,6 +46,7 @@ static ParityReport BuildReport(string root)
 {
     var sourcePaths = new Dictionary<string, string>(StringComparer.Ordinal)
     {
+        ["linux-harness/runtime-artifact"] = LinuxRuntimeArtifactName,
         ["wpf-host/slideshow"] = "freep/FreeP.App.Host/SlideShowWindow.cs",
         ["wpf-host/media-adapter"] = "freep/FreeP.App.Host/SlideShowMediaController.cs",
         ["wpf-host/slide-image-renderer"] = "freep/FreeP.App.Host/WpfPresentationSlideImageRenderer.cs",
@@ -71,6 +74,9 @@ static ParityReport BuildReport(string root)
         ["shared/video-package-executor"] = "freep/FreeP.App.Presentation/PresentationVideoFramePackageExecutor.cs",
     };
 
+    var runtimeArtifactPath = Path.Combine(root, LinuxRuntimeArtifactName.Replace('/', Path.DirectorySeparatorChar));
+    var runtimeArtifactBytes = File.ReadAllBytes(runtimeArtifactPath);
+    ValidateLinuxRuntimeArtifact(runtimeArtifactBytes);
     var sources = sourcePaths.Select(pair => BuildSource(root, pair.Key, pair.Value)).ToArray();
     var snapshot = string.Join("\n", sources.Select(source =>
         $"{source.Id}|{source.RelativePath}|{source.Sha256}|{source.LengthBytes}|{source.LastWriteTimeUtc:O}"));
@@ -101,9 +107,35 @@ static ParityReport BuildReport(string root)
         Branch: Git(root, "branch --show-current"),
         FreshnessRule: "Fresh when every authoritative source id, relative path, byte length, UTC write time, and SHA-256 matches this report.",
         SourceSnapshotSha256: Sha256(snapshot),
+        RuntimeArtifactPath: LinuxRuntimeArtifactName,
+        RuntimeArtifactSha256: Sha256Bytes(runtimeArtifactBytes),
         Sources: sources,
         Areas: areas,
         Residuals: residuals);
+}
+
+static void ValidateLinuxRuntimeArtifact(byte[] bytes)
+{
+    using var document = JsonDocument.Parse(bytes);
+    var root = document.RootElement;
+    var probe = root.GetProperty("probe");
+    if (!string.Equals(root.GetProperty("result").GetString(), "PASS", StringComparison.Ordinal)
+        || !probe.GetProperty("isAvailable").GetBoolean()
+        || !probe.GetProperty("sessionCreated").GetBoolean()
+        || !probe.GetProperty("openSucceeded").GetBoolean()
+        || !probe.GetProperty("playObserved").GetBoolean()
+        || !probe.GetProperty("seekSucceeded").GetBoolean()
+        || !probe.GetProperty("stopSucceeded").GetBoolean()
+        || probe.GetProperty("sessionFailure").ValueKind != JsonValueKind.Null)
+    {
+        throw new InvalidDataException("The persisted Linux LibVLC runtime artifact does not prove a successful lifecycle.");
+    }
+
+    var states = probe.GetProperty("states").EnumerateArray()
+        .Select(state => state.GetString())
+        .ToHashSet(StringComparer.Ordinal);
+    if (!states.Contains("Opening") || !states.Contains("Playing") || !states.Contains("Stopped"))
+        throw new InvalidDataException("The persisted Linux LibVLC runtime artifact is missing required playback states.");
 }
 
 static SourceEntry BuildSource(string root, string id, string relativePath)
@@ -128,6 +160,12 @@ static string RenderMarkdown(ParityReport report)
     builder.AppendLine($"Branch: `{report.Branch}`");
     builder.AppendLine($"Freshness check: **PASS**");
     builder.AppendLine($"Source snapshot SHA-256: `{report.SourceSnapshotSha256}`");
+    builder.AppendLine();
+    builder.AppendLine("## Runtime Artifact");
+    builder.AppendLine();
+    builder.AppendLine($"- `path`: `{report.RuntimeArtifactPath}`");
+    builder.AppendLine($"- `sha256`: `{report.RuntimeArtifactSha256}`");
+    builder.AppendLine("- `validation`: **PASS** (the evidence generator validated native availability and the required WAV session lifecycle fields)");
     builder.AppendLine();
     builder.AppendLine("## Counts");
     builder.AppendLine();
@@ -202,6 +240,8 @@ record ParityReport(
     string Branch,
     string FreshnessRule,
     string SourceSnapshotSha256,
+    string RuntimeArtifactPath,
+    string RuntimeArtifactSha256,
     IReadOnlyList<SourceEntry> Sources,
     IReadOnlyList<Area> Areas,
     IReadOnlyList<Residual> Residuals);
