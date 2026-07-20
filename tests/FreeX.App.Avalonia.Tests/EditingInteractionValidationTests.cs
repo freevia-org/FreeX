@@ -19,16 +19,18 @@ public sealed class EditingInteractionValidationTests
             {
                 var results = await window.RunEditingInteractionValidationForTestAsync();
 
-                results.Should().HaveCount(3);
+                results.Should().HaveCount(4);
                 results.Select(result => result.Id).Should().Equal(
                     "cell-inline-edit",
                     "cell-inline-formula-edit-point-mode",
-                    "formula-bar-edit-point-mode");
+                    "formula-bar-edit-point-mode",
+                    "cell-inline-formula-point-range-drag");
                 foreach (var expectedId in new[]
                          {
                              "cell-inline-edit",
                              "cell-inline-formula-edit-point-mode",
                              "formula-bar-edit-point-mode",
+                             "cell-inline-formula-point-range-drag",
                          })
                 {
                     results.Should().ContainSingle(

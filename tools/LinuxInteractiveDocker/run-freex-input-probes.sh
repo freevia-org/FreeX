@@ -74,6 +74,7 @@ write_manifest() {
 on_error() {
     local exit_code=$?
     trap - ERR
+    xdotool mouseup 1 >/dev/null 2>&1 || true
     if ! $manifest_written; then
         local runtime_reason="Probe aborted unexpectedly at line ${BASH_LINENO[0]} (exit $exit_code)."
         if [[ "$calibration_status" != "passed" ]]; then
@@ -548,6 +549,37 @@ if select_cell 6 8 G9; then
     fi
 else
     record "inline-point-mode-click" "failed" "selection-G9.png" "Could not physically select calibrated cell G9."
+fi
+
+# G12: keep the inline formula editor active while a physical pointer drag extends B2 to D4.
+select_cell 0 0 A1
+capture "inline-point-drag-before.png"
+crop_cell "$output/inline-point-drag-before.png" "$output/inline-point-drag-before-cell.png" 6 11
+if select_cell 6 11 G12; then
+    send_key F2
+    type_text "="
+    capture "inline-point-drag-equals.png"
+    focus_app
+    xdotool mousemove --sync "$(cell_center_x 1)" "$(cell_center_y 1)"
+    xdotool mousedown 1
+    xdotool mousemove --sync "$(cell_center_x 3)" "$(cell_center_y 3)"
+    xdotool mouseup 1
+    sleep "$settle_seconds"
+    capture "inline-point-drag-address.png"
+    send_key Return
+    inline_drag_formula="$(copy_cell_formula 6 11 G12 || printf 'selection-failed')"
+    select_cell 0 0 A1 || true
+    capture "inline-point-drag-committed.png"
+    crop_cell "$output/inline-point-drag-committed.png" "$output/inline-point-drag-committed-cell.png" 6 11
+    if region_changed "$output/inline-point-drag-before-cell.png" "$output/inline-point-drag-committed-cell.png" 8 &&
+       [[ "$inline_drag_formula" == "=B2:D4" ]]; then
+        record "inline-point-mode-drag-range" "passed" "selection-G12.png; inline-point-drag-address.png; X11 clipboard formula='=B2:D4'"
+    else
+        record "inline-point-mode-drag-range" "failed" "selection-G12.png; inline-point-drag-address.png; inline-point-drag-committed-cell.png" "Physical B2-to-D4 point drag did not commit '=B2:D4' in G12 (clipboard='${inline_drag_formula}')."
+        dismiss_overlays
+    fi
+else
+    record "inline-point-mode-drag-range" "failed" "selection-G12.png" "Could not physically select calibrated cell G12."
 fi
 
 # G10: use the physical Ctrl+F2 formula-bar focus route, exercise F2 Edit/Point toggling,
