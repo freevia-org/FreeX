@@ -136,6 +136,7 @@ public sealed class ChartSmartArtContextualTabTests
             "freew.chart-type-pie", "freew.chart-type-scatter", "freew.chart-type-area", "freew.chart-type-doughnut",
             "freew.chart-style", "freew.chart-style-1", "freew.chart-colors", "freew.chart-colors-colorful1",
             "freew.chart-toggle-legend", "freew.chart-title", "freew.chart-axis-titles",
+            "freew.chart-size", "freew.chart-size-dialog",
             // SmartArt Design
             "freew.smartart-layout", "freew.smartart-layout-list", "freew.smartart-layout-process",
             "freew.smartart-layout-cycle", "freew.smartart-layout-hierarchy",
@@ -149,6 +150,31 @@ public sealed class ChartSmartArtContextualTabTests
         foreach (var layout in ChartQuickLayout.Catalog)
             registry.TryGet(new RibbonCommandId($"freew.chart-quick-layout-{layout.Id}"), out _)
                 .Should().BeTrue($"quick layout {layout.Id} must be registered");
+    }
+
+    [Fact]
+    public async Task Chart_size_dialog_command_routes_selected_chart_to_owner_modal_callback()
+    {
+        var ran = await OnUi(() =>
+        {
+            var (doc, blockIndex, runIndex) = DocWithFloatingChart();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(blockIndex, runIndex);
+            var dialogOpened = false;
+            var registry = FreeWAvaloniaRibbonCommands.Build(
+                view,
+                NoopCallbacks() with { OpenChartSizeDialog = () => dialogOpened = true });
+
+            registry.TryGet(new RibbonCommandId("freew.chart-size-dialog"), out var command)
+                .Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+
+            dialogOpened.Should().BeTrue();
+        });
+
+        ran.Should().BeTrue();
     }
 
     [Fact]

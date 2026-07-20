@@ -41,6 +41,8 @@ public static class RibbonCommandIconSlugAliases
             ["print-preview"] = "print", ["page-border"] = "borders", ["restrict-editing"] = "protect-sheet",
             ["merge-data"] = "mail-merge", ["merge-email"] = "mail-merge", ["merge-field"] = "mail-merge",
             ["merge-finish"] = "mail-merge", ["merge-preview"] = "mail-merge", ["merge-rules"] = "merge-rules",
+            ["merge-find-recipient"] = "find-replace-dialog", ["merge-check-errors"] = "inspect-document",
+            ["chart-size-dialog"] = "chart-size",
             ["merge-sequence-number"] = "merge-sequence-number",
             ["merge-rule-skip-record-if"] = "merge-rule-if", ["merge-rule-next-record-if"] = "merge-next-record",
             ["merge-rule-fill-in"] = "merge-rule-ask", ["merge-rule-set"] = "merge-rule-ask",
