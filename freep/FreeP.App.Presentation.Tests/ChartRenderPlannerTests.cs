@@ -3680,6 +3680,24 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildDataLabelPlans_ColumnLegendKeyOnlyKeepsSwatchesWithoutText()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.DataLabels = new ChartDataLabels { ShowLegendKey = true };
+
+        var planned = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        planned.Should().HaveCount(chart.Categories.Count * chart.Series.Count);
+        planned.Should().OnlyContain(label =>
+            label.Text == string.Empty &&
+            label.LegendKeyBounds.HasValue &&
+            label.LegendKeyFill.HasValue &&
+            label.TextBounds.HasValue);
+    }
+
+    [Fact]
     public void BuildDataLabelPlans_HundredPercentStackedColumnLabelsUseNormalizedBounds()
     {
         var chart = new ChartShape

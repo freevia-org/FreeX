@@ -6725,7 +6725,7 @@ public static partial class ChartRenderPlanner
                     ? FormatAxisValue(series.XValues[pointIndex]!.Value)
                     : string.Empty;
             string text = FormatDataLabel(labels, value.Value, total, categoryName, series.Name);
-            if (string.IsNullOrEmpty(text))
+            if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 
             plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
@@ -6889,7 +6889,7 @@ public static partial class ChartRenderPlanner
                 ? chart.Categories[categoryIndex]
                 : string.Empty;
             string text = FormatDataLabel(labels, value, total, categoryName, series.Name);
-            if (string.IsNullOrEmpty(text))
+            if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 
             double labelHeight = ResolveDataLabelHeight(chart);
@@ -6995,7 +6995,7 @@ public static partial class ChartRenderPlanner
                 ? chart.Categories[categoryIndex]
                 : string.Empty;
             string text = FormatDataLabel(labels, rawValue.Value, total, categoryName, series.Name);
-            if (string.IsNullOrEmpty(text))
+            if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 
             plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
@@ -7127,7 +7127,7 @@ public static partial class ChartRenderPlanner
                 ? chart.Categories[categoryIndex]
                 : string.Empty;
             string text = FormatDataLabel(labels, value, total, categoryName, series.Name);
-            if (string.IsNullOrEmpty(text))
+            if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 
             double labelHeight = ResolveDataLabelHeight(chart);
@@ -7188,7 +7188,7 @@ public static partial class ChartRenderPlanner
                 ? chart.Categories[visibleValue.PointIndex]
                 : string.Empty;
             string text = FormatDataLabel(labels, visibleValue.Value, total, categoryName, firstSeries.Name);
-            if (!string.IsNullOrEmpty(text))
+            if (!string.IsNullOrEmpty(text) || labels.ShowLegendKey)
             {
                 double labelX = centerX + labelRadius * Math.Cos(midAngle);
                 double labelY = centerY + labelRadius * Math.Sin(midAngle);

@@ -195,7 +195,7 @@ public sealed class ChartDataLabels
     public ChartTextStyle? TextStyle { get; set; }
 
     /// <summary>Returns true if any label component is enabled.</summary>
-    public bool HasAny => ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName;
+    public bool HasAny => ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName || ShowLegendKey;
 }
 
 /// <summary>Data table settings for charts that render source values below the plot.</summary>
