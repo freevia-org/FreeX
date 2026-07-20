@@ -174,6 +174,8 @@ public static class TextLayoutPlanner
     public const double DefaultTabStopDip = 96.0;
     public const double RuntimeAutoFitMinimumFontScale = 0.60;
     public const double RuntimeAutoFitMaximumLineSpacingReduction = 0.20;
+    /// <summary>PowerPoint's authored baseline runs use a compact script glyph.</summary>
+    public const double BaselineRunFontScale = 0.67;
 
     public static double PointsToDip(double points) => points * DipPerPoint;
 

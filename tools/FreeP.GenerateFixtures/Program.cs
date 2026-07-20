@@ -318,4 +318,71 @@ static ChartShape MakeHundredPercentStackedChart()
     Console.WriteLine($"Generated: {outPath}");
 }
 
+// 23-run-baseline.pptx
+// A deterministic run-level baseline fixture: plain text, a lowered subscript,
+// and a raised superscript in one line so host rasters can be compared to PowerPoint.
+{
+    var pres = Presentation.CreateEmpty();
+    var slide = pres.Slides[0];
+    slide.Title = "Run baseline offsets";
+    slide.Shapes.Clear();
+    slide.Shapes.Add(new SlideShape
+    {
+        Id = 2,
+        Name = "Baseline sample",
+        Kind = SlideShapeKind.AutoShape,
+        AutoShapeKind = DrawingShapeKind.Rectangle,
+        OffsetXEmu = 914400,
+        OffsetYEmu = 1371600,
+        ExtentCxEmu = 7315200,
+        ExtentCyEmu = 1828800,
+        Fill = new ShapeFill.Solid(new SrgbColor(0xF2, 0xF2, 0xF2)),
+        TextBody = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Align = TextAlign.Center,
+                    Runs =
+                    {
+                        new Run { Text = "H" },
+                        new Run { Text = "2", BaselineOffset = -25000 },
+                        new Run { Text = "O + x" },
+                        new Run { Text = "2", BaselineOffset = 30000 },
+                    }
+                }
+            }
+        }
+    });
+    slide.Shapes.Add(new SlideShape
+    {
+        Id = 3,
+        Name = "Baseline plain control",
+        Kind = SlideShapeKind.AutoShape,
+        AutoShapeKind = DrawingShapeKind.Rectangle,
+        OffsetXEmu = 914400,
+        OffsetYEmu = 3657600,
+        ExtentCxEmu = 7315200,
+        ExtentCyEmu = 1828800,
+        Fill = new ShapeFill.Solid(new SrgbColor(0xF2, 0xF2, 0xF2)),
+        TextBody = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Align = TextAlign.Center,
+                    Runs = { new Run { Text = "H2O + x2" } }
+                }
+            }
+        }
+    });
+
+    var outPath = Path.Combine(outDir, "23-run-baseline.pptx");
+    using var fs = File.Create(outPath);
+    PptxPackageWriter.Write(pres, fs);
+    Console.WriteLine($"Generated: {outPath}");
+}
+
 Console.WriteLine("Done.");

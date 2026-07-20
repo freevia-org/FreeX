@@ -2303,7 +2303,10 @@ public sealed class SlideCanvas : FrameworkElement
         double maxWidth)
     {
         var formatted = para.Runs
-            .Select(run => BuildSingleRunFormattedTextAt(run, run.Text))
+            .Select(run => BuildSingleRunFormattedTextAt(
+                run,
+                run.Text,
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0))
             .ToArray();
         double lineAscent = formatted.Length == 0 ? 0 : formatted.Max(ft => ft.Baseline);
         double baselineY = ComputeBaselineY(startY, lineAscent);
@@ -2521,13 +2524,16 @@ public sealed class SlideCanvas : FrameworkElement
     }
 
     /// <summary>Builds a single-run FormattedText for the given text segment (may be a tab-split piece).</summary>
-    private static FormattedText BuildSingleRunFormattedTextAt(ResolvedRun run, string text)
+    private static FormattedText BuildSingleRunFormattedTextAt(
+        ResolvedRun run,
+        string text,
+        double fontSizeScale = 1.0)
     {
         var typeface = new Typeface(new FontFamily(run.FontFamily),
             run.Italic ? FontStyles.Italic : FontStyles.Normal,
             run.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStretches.Normal);
-        double emSizePx = run.FontSizePt * (96.0 / 72.0);
+        double emSizePx = run.FontSizePt * fontSizeScale * (96.0 / 72.0);
         var brush = new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B));
         if (brush.CanFreeze) brush.Freeze();
         var ft = new FormattedText(

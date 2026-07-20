@@ -2266,7 +2266,10 @@ public sealed class SlideCanvas : Control
         double maxWidth)
     {
         var formatted = para.Runs
-            .Select(run => BuildSingleRunFormattedTextAt(run, run.Text))
+            .Select(run => BuildSingleRunFormattedTextAt(
+                run,
+                run.Text,
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0))
             .ToArray();
         double lineAscent = formatted.Length == 0 ? 0 : formatted.Max(ft => ft.Baseline);
         double baselineY = ComputeBaselineY(startY, lineAscent);
@@ -2455,7 +2458,10 @@ public sealed class SlideCanvas : Control
         }
     }
 
-    private static FormattedText BuildSingleRunFormattedTextAt(ResolvedRun run, string text)
+    private static FormattedText BuildSingleRunFormattedTextAt(
+        ResolvedRun run,
+        string text,
+        double fontSizeScale = 1.0)
     {
         string txt = text.Length == 0 ? " " : text;
         var typeface = new Typeface(
@@ -2463,7 +2469,7 @@ public sealed class SlideCanvas : Control
             run.Italic ? FontStyle.Italic : FontStyle.Normal,
             run.Bold   ? FontWeight.Bold  : FontWeight.Normal,
             FontStretch.Normal);
-        double emPx = run.FontSizePt * (96.0 / 72.0);
+        double emPx = run.FontSizePt * fontSizeScale * (96.0 / 72.0);
         var brush = new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B));
         var ft = new FormattedText(txt,
             System.Globalization.CultureInfo.CurrentUICulture,
