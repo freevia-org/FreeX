@@ -67,6 +67,21 @@ public enum ChartManualLayoutMode { Factor, Edge, Unsupported }
 /// <summary>How blank cells are displayed in a chart.</summary>
 public enum ChartDisplayBlanksAs { Span, Gap, Zero }
 
+/// <summary>Authored OOXML axis tick mark placement.</summary>
+public enum ChartTickMark { None, Cross, In, Out }
+
+/// <summary>Authored OOXML axis label placement.</summary>
+public enum ChartTickLabelPosition { None, Low, High, NextTo }
+
+/// <summary>Authored value-axis category-boundary placement.</summary>
+public enum ChartCrossBetween { Between, MidCat }
+
+/// <summary>Authored category-axis label alignment.</summary>
+public enum ChartLabelAlignment { Left, Center, Right }
+
+/// <summary>Authored axis crossing mode from <c>c:crosses/@val</c>.</summary>
+public enum ChartAxisCrossing { AutoZero, Min, Max }
+
 /// <summary>Authored classic 3-D chart family read from OOXML chart-type elements.</summary>
 public enum ChartThreeDStyle { None, Pie, Line, Area, Column, Bar }
 
@@ -180,7 +195,7 @@ public sealed class ChartDataLabels
     public ChartTextStyle? TextStyle { get; set; }
 
     /// <summary>Returns true if any label component is enabled.</summary>
-    public bool HasAny => ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName;
+    public bool HasAny => ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName || ShowLegendKey;
 }
 
 /// <summary>Data table settings for charts that render source values below the plot.</summary>
@@ -411,8 +426,44 @@ public sealed class ChartAxis
     /// <summary>Explicit maximum scale value. Null = auto.</summary>
     public double? Max { get; set; }
 
+    /// <summary>Authored major tick interval from <c>c:majorUnit/@val</c>.</summary>
+    public double? MajorUnit { get; set; }
+
+    /// <summary>Authored minor tick interval from <c>c:minorUnit/@val</c>.</summary>
+    public double? MinorUnit { get; set; }
+
     /// <summary>Whether major gridlines are shown on this axis.</summary>
     public bool HasMajorGridlines { get; set; } = true;
+
+    /// <summary>Authored <c>c:majorTickMark/@val</c>; null means unspecified.</summary>
+    public ChartTickMark? MajorTickMark { get; set; }
+
+    /// <summary>Authored <c>c:minorTickMark/@val</c>; null means unspecified.</summary>
+    public ChartTickMark? MinorTickMark { get; set; }
+
+    /// <summary>Authored <c>c:tickLblPos/@val</c>; null means unspecified.</summary>
+    public ChartTickLabelPosition? TickLabelPosition { get; set; }
+
+    /// <summary>Authored category-axis label offset percentage from <c>c:lblOffset/@val</c>.</summary>
+    public int? LabelOffsetPercent { get; set; }
+
+    /// <summary>Authored category-axis multi-level-label suppression token.</summary>
+    public bool? NoMultiLevelLabels { get; set; }
+
+    /// <summary>Authored value-axis category-boundary placement from <c>c:crossBetween/@val</c>.</summary>
+    public ChartCrossBetween? CrossBetween { get; set; }
+
+    /// <summary>Authored category-axis automatic crossing state from <c>c:auto/@val</c>.</summary>
+    public bool? AutoCrossing { get; set; }
+
+    /// <summary>Authored category-axis label alignment from <c>c:lblAlgn/@val</c>.</summary>
+    public ChartLabelAlignment? LabelAlignment { get; set; }
+
+    /// <summary>Authored axis crossing mode. Null preserves the writer's existing chart-role default.</summary>
+    public ChartAxisCrossing? Crosses { get; set; }
+
+    /// <summary>Authored numeric axis crossing value from <c>c:crossesAt/@val</c>.</summary>
+    public double? CrossesAt { get; set; }
 
     /// <summary>True if the axis is deleted (hidden) in the chart XML.</summary>
     public bool Delete { get; set; }

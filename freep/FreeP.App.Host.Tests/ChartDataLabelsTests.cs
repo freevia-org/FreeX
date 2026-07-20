@@ -53,6 +53,13 @@ public sealed class ChartDataLabelsTests : IDisposable
     }
 
     [Fact]
+    public void ChartDataLabels_HasAny_TrueWhenShowLegendKeySet()
+    {
+        var dl = new ChartDataLabels { ShowLegendKey = true };
+        dl.HasAny.Should().BeTrue();
+    }
+
+    [Fact]
     public void ChartSeries_OnSecondaryAxis_DefaultFalse()
     {
         new ChartSeries().OnSecondaryAxis.Should().BeFalse();
@@ -117,6 +124,18 @@ public sealed class ChartDataLabelsTests : IDisposable
         var rt    = DoRoundTrip(chart);
 
         rt.DataLabels!.NumberFormat.Should().Be("0.00");
+    }
+
+    [Fact]
+    public void RoundTrip_ChartLevelDataLabels_ShowLegendKeyOnly_Preserved()
+    {
+        var chart = BuildColumnChartWithLabels();
+        chart.DataLabels!.ShowLegendKey = true;
+        var rt = DoRoundTrip(chart);
+
+        rt.DataLabels.Should().NotBeNull("legend-key-only data labels survive round-trip");
+        rt.DataLabels!.ShowLegendKey.Should().BeTrue();
+        rt.DataLabels.HasAny.Should().BeTrue();
     }
 
     [Fact]

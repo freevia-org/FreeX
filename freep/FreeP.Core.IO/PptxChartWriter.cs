@@ -1191,11 +1191,13 @@ internal static class PptxChartWriter
             new XElement(C + "delete",
                 new XAttribute("val", axis.Delete ? "1" : "0")),
             new XElement(C + "axPos", new XAttribute("val", "b")),
+            BuildAxisDisplayElements(axis),
             axis.HasMajorGridlines
                 ? new XElement(C + "majorGridlines")
                 : null,
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
             BuildAxisNumFmtEl(axis),
+            BuildAxisCrossingElement(axis, null),
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
 
     // BV2: axPos parameter — scatter/bubble X value axis must use "b" (bottom), Y stays "l" (left).
@@ -1218,16 +1220,98 @@ internal static class PptxChartWriter
             new XElement(C + "delete",
                 new XAttribute("val", axis.Delete ? "1" : "0")),
             new XElement(C + "axPos", new XAttribute("val", axPos)),
+            BuildAxisDisplayElements(axis),
             axis.HasMajorGridlines
                 ? new XElement(C + "majorGridlines")
                 : null,
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
             BuildAxisNumFmtEl(axis),
-            crosses is not null
-                ? new XElement(C + "crosses", new XAttribute("val", crosses))
-                : null,
-            new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
+            BuildAxisCrossingElement(axis, crosses),
+            new XElement(C + "crossAx", new XAttribute("val", crossAxId)),
+            BuildAxisUnitElements(axis));
     }
+
+    private static IEnumerable<XElement> BuildAxisUnitElements(ChartAxis axis)
+    {
+        if (axis.MajorUnit is { } majorUnit)
+            yield return new XElement(C + "majorUnit", new XAttribute("val", majorUnit.ToString("G", CultureInfo.InvariantCulture)));
+        if (axis.MinorUnit is { } minorUnit)
+            yield return new XElement(C + "minorUnit", new XAttribute("val", minorUnit.ToString("G", CultureInfo.InvariantCulture)));
+    }
+
+    private static IEnumerable<XElement> BuildAxisDisplayElements(ChartAxis axis)
+    {
+        if (axis.MajorTickMark is { } major)
+            yield return new XElement(C + "majorTickMark", new XAttribute("val", TickMarkValue(major)));
+        if (axis.MinorTickMark is { } minor)
+            yield return new XElement(C + "minorTickMark", new XAttribute("val", TickMarkValue(minor)));
+        if (axis.TickLabelPosition is { } position)
+            yield return new XElement(C + "tickLblPos", new XAttribute("val", TickLabelPositionValue(position)));
+        if (axis.LabelOffsetPercent is { } offset)
+            yield return new XElement(C + "lblOffset", new XAttribute("val", Math.Clamp(offset, 0, 100)));
+        if (axis.NoMultiLevelLabels is { } noMultiLevelLabels)
+            yield return new XElement(C + "noMultiLvlLbl", new XAttribute("val", BoolValue(noMultiLevelLabels)));
+        if (axis.CrossBetween is { } crossBetween)
+            yield return new XElement(C + "crossBetween", new XAttribute("val", CrossBetweenValue(crossBetween)));
+        if (axis.AutoCrossing is { } autoCrossing)
+            yield return new XElement(C + "auto", new XAttribute("val", BoolValue(autoCrossing)));
+        if (axis.LabelAlignment is { } labelAlignment)
+            yield return new XElement(C + "lblAlgn", new XAttribute("val", LabelAlignmentValue(labelAlignment)));
+    }
+
+    private static XElement? BuildAxisCrossingElement(ChartAxis axis, string? fallback)
+    {
+        if (axis.CrossesAt is { } crossesAt)
+            return new XElement(C + "crossesAt", new XAttribute("val", crossesAt.ToString("G", CultureInfo.InvariantCulture)));
+
+        var crossing = axis.Crosses is { } authored
+            ? AxisCrossingValue(authored)
+            : fallback;
+        return crossing is null
+            ? null
+            : new XElement(C + "crosses", new XAttribute("val", crossing));
+    }
+
+    private static string TickMarkValue(ChartTickMark value) => value switch
+    {
+        ChartTickMark.None  => "none",
+        ChartTickMark.Cross => "cross",
+        ChartTickMark.In    => "in",
+        ChartTickMark.Out   => "out",
+        _                   => "none"
+    };
+
+    private static string TickLabelPositionValue(ChartTickLabelPosition value) => value switch
+    {
+        ChartTickLabelPosition.None   => "none",
+        ChartTickLabelPosition.Low    => "low",
+        ChartTickLabelPosition.High   => "high",
+        ChartTickLabelPosition.NextTo => "nextTo",
+        _                            => "nextTo"
+    };
+
+    private static string CrossBetweenValue(ChartCrossBetween value) => value switch
+    {
+        ChartCrossBetween.Between => "between",
+        ChartCrossBetween.MidCat  => "midCat",
+        _                         => "between"
+    };
+
+    private static string LabelAlignmentValue(ChartLabelAlignment value) => value switch
+    {
+        ChartLabelAlignment.Left   => "l",
+        ChartLabelAlignment.Center => "ctr",
+        ChartLabelAlignment.Right  => "r",
+        _                          => "ctr"
+    };
+
+    private static string AxisCrossingValue(ChartAxisCrossing value) => value switch
+    {
+        ChartAxisCrossing.AutoZero => "autoZero",
+        ChartAxisCrossing.Min      => "min",
+        ChartAxisCrossing.Max      => "max",
+        _                          => "autoZero"
+    };
 
     private static XElement? BuildAxisNumFmtEl(ChartAxis axis)
     {

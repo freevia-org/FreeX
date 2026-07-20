@@ -577,6 +577,7 @@ internal static class TextBodyRunMutationPlanner
         Text = text,
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
+        BaselineOffset = source.BaselineOffset,
         Bold = source.Bold,
         Italic = source.Italic,
         BoldSet = source.BoldSet,
@@ -599,6 +600,7 @@ internal static class TextBodyRunMutationPlanner
     private static bool RunFormatEquals(Run a, Run b) =>
         a.FontFamily == b.FontFamily
         && a.FontSizePt == b.FontSizePt
+        && a.BaselineOffset == b.BaselineOffset
         && a.Bold == b.Bold
         && a.Italic == b.Italic
         && a.BoldSet == b.BoldSet
@@ -888,6 +890,7 @@ internal static class TextBodyModelCloner
         Text = source.Text,
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
+        BaselineOffset = source.BaselineOffset,
         Bold = source.Bold,
         Italic = source.Italic,
         BoldSet = source.BoldSet,

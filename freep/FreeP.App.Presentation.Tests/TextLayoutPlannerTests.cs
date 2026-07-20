@@ -604,6 +604,45 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanParagraphRenderRoute_UsesBaselineRouteForAuthoredRunOffset()
+    {
+        var paragraph = new ResolvedParagraph
+        {
+            Runs = new[] { new ResolvedRun { Text = "P", BaselineOffset = 30000 } }
+        };
+
+        TextLayoutPlanner.PlanParagraphRenderRoute(paragraph, new ResolvedTextLayout())
+            .Should().Be(TextParagraphRenderRoute.Baseline);
+    }
+
+    [Fact]
+    public void BaselineOffsetToDip_UsesFontSizeAndSignedPercentageUnits()
+    {
+        TextLayoutPlanner.BaselineOffsetToDip(30000, 12).Should().BeApproximately(4.8, 0.0001);
+        TextLayoutPlanner.BaselineOffsetToDip(-25000, 12).Should().BeApproximately(-4.0, 0.0001);
+        TextLayoutPlanner.BaselineOffsetToDip(null, 12).Should().Be(0);
+    }
+
+    [Fact]
+    public void ApplyAutoFitPlan_RetainsAuthoredBaselineToken()
+    {
+        var text = new ResolvedTextLayout
+        {
+            Paragraphs = new[] { new ResolvedParagraph
+            {
+                Runs = new[] { new ResolvedRun { Text = "P", BaselineOffset = -25000 } }
+            } }
+        };
+        var plan = new TextAutoFitOverflowPlan(
+            TextAutoFitOverflowMode.RuntimeShrink,
+            FontScale: 0.8,
+            LineSpacingReduction: 0);
+
+        TextLayoutPlanner.ApplyAutoFitPlan(text, plan).Paragraphs[0].Runs[0].BaselineOffset
+            .Should().Be(-25000);
+    }
+
+    [Fact]
     public void PlanParagraphRenderRoute_UsesEffectsRouteForTextEffectsAndWarpBeforeTabs()
     {
         var effectParagraph = new ResolvedParagraph

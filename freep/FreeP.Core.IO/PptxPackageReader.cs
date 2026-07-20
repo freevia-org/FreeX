@@ -4167,6 +4167,8 @@ public static class PptxPackageReader
             };
             if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
                 run.FontSizePt = sz / 100.0;
+            if (int.TryParse(rPr.Attribute("baseline")?.Value, out var baseline))
+                run.BaselineOffset = baseline;
             run.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
 
             // Simple solid run color

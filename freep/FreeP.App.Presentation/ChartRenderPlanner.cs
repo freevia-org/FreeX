@@ -687,6 +687,7 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceSouthFrontVertexXOffset = 7.0;
     private const double ImportedSurfaceSouthFrontVertexYOffset = -2.0;
     private const double ImportedSurfaceDarkOrangeFacetLeftOffset = -13.0;
+    private const double ImportedSurfaceLightOrangeFacetLeftOffset = -36.0;
     private const double ImportedSurfaceMiddleNorthVertexYOffset = 20.0;
     private const double ImportedSurfaceRearNorthVertexYOffset = 14.0;
     private const double ImportedSurfaceLightBaseFactor = 1.02;
@@ -2208,6 +2209,35 @@ public static partial class ChartRenderPlanner
             }
         }
 
+        if (chart.ValueAxis.MinorUnit is > 0 && chart.ValueAxis.MinorTickMark != ChartTickMark.None)
+        {
+            double minorUnit = chart.ValueAxis.MinorUnit.Value;
+            int minorTickCount = (int)Math.Floor((maxValue - minValue) / minorUnit + 1e-9);
+            for (int minorTickIndex = 1; minorTickIndex < minorTickCount; minorTickIndex++)
+            {
+                double value = minValue + minorUnit * minorTickIndex;
+                double majorPosition = (value - minValue) / majorUnit;
+                if (Math.Abs(majorPosition - Math.Round(majorPosition)) < 0.0001)
+                    continue;
+
+                double fraction = (value - minValue) / (maxValue - minValue);
+                if (frame.IsBar)
+                {
+                    double x = plot.X + plot.Width * fraction;
+                    ticks.Add(new ChartGridLinePlan(
+                        new ChartPlanPoint(x, plot.Bottom),
+                        new ChartPlanPoint(x, plot.Bottom + AxisMinorTickLength)));
+                }
+                else
+                {
+                    double y = plot.Bottom - plot.Height * fraction;
+                    ticks.Add(new ChartGridLinePlan(
+                        new ChartPlanPoint(plot.X - AxisMinorTickLength, y),
+                        new ChartPlanPoint(plot.X, y)));
+                }
+            }
+        }
+
         return ticks;
     }
 
@@ -3105,8 +3135,10 @@ public static partial class ChartRenderPlanner
             .ThenBy(point => point.CategoryIndex)
             .ToArray();
 
-        var renderPointsByKey = UsesImportedSurfaceBoundaryFaces(chart)
-            ? AddImportedSurfaceBlankPointFallbacks(
+        var renderPointsByKey = (ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Span ||
+            UsesImportedSurfaceBoundaryFaces(chart))
+            ? AddSurfaceBlankPointFallbacks(
+                chart,
                 pointsByKey,
                 plot,
                 seriesCount,
@@ -3117,20 +3149,28 @@ public static partial class ChartRenderPlanner
             : pointsByKey;
         var wireframe = BuildSurfaceWireframeSegments(renderPointsByKey, seriesCount, categoryCount);
         var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
-        var renderFacets = chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
+        bool rebuildFacetsForRenderPoints = ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Span ||
+            chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart);
+        var renderFacets = rebuildFacetsForRenderPoints
             ? BuildSurfaceFacetPrimitives(
                 chart,
                 renderPointsByKey,
                 seriesCount,
                 categoryCount,
                 seriesColors,
-                triangulateCompleteCells: true)
-                // PowerPoint paints the rear surface rows first so the nearer
-                // row owns shared projected pixels at the fold between cells.
-                .OrderByDescending(facet => facet.SeriesIndex)
-                .ThenBy(facet => facet.CategoryIndex)
+                triangulateCompleteCells:
+                    chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart))
                 .ToArray()
             : facets;
+        if (chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart))
+        {
+            // PowerPoint paints the rear surface rows first so the nearer
+            // row owns shared projected pixels at the fold between cells.
+            renderFacets = renderFacets
+                .OrderByDescending(facet => facet.SeriesIndex)
+                .ThenBy(facet => facet.CategoryIndex)
+                .ToArray();
+        }
         if (UsesImportedSurfaceBoundaryFaces(chart))
         {
             renderFacets = renderFacets
@@ -3262,7 +3302,8 @@ public static partial class ChartRenderPlanner
     }
 
     private static IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive>
-        AddImportedSurfaceBlankPointFallbacks(
+        AddSurfaceBlankPointFallbacks(
+            ChartShape chart,
             IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
             ChartPlanRect plot,
         int seriesCount,
@@ -3279,6 +3320,26 @@ public static partial class ChartRenderPlanner
                 var key = (seriesIndex, categoryIndex);
                 if (renderPoints.ContainsKey(key))
                     continue;
+
+                // Surface charts honor the chart-level blank policy before
+                // applying the imported Office fallback for a gap. A span
+                // bridges a missing vertex from its same-row neighbors; the
+                // default gap path retains the measured low-band registration.
+                if (ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Span)
+                {
+                    if (categoryIndex > 0 && categoryIndex < categoryCount - 1 &&
+                        renderPoints.TryGetValue((seriesIndex, categoryIndex - 1), out var previousSpanCategory) &&
+                        renderPoints.TryGetValue((seriesIndex, categoryIndex + 1), out var nextSpanCategory))
+                    {
+                        renderPoints[key] = InterpolateSurfacePoint(
+                            previousSpanCategory,
+                            nextSpanCategory,
+                            seriesIndex,
+                            categoryIndex);
+                    }
+
+                    continue;
+                }
 
                 // PowerPoint keeps the blank semantic value at the axis
                 // minimum but registers its projected vertex below the
@@ -3712,6 +3773,26 @@ public static partial class ChartRenderPlanner
                             Point = renderPoints[0].Point with
                             {
                                 X = renderPoints[0].Point.X + ImportedSurfaceDarkOrangeFacetLeftOffset
+                            }
+                        };
+                    }
+                    if (chart.ChartType == ChartType.Surface3D &&
+                        UsesImportedTextMetrics(chart) &&
+                        chart.VaryColors &&
+                        seriesIndex == 0 &&
+                        categoryIndex == 0 &&
+                        renderIndex == 1)
+                    {
+                        // The imported light-orange first-cell face reaches
+                        // farther toward the value axis in the PowerPoint
+                        // raster than the shared low-left vertex. Keep this
+                        // correction local to that face and triangle.
+                        renderPoints = renderPoints.ToArray();
+                        renderPoints[2] = renderPoints[2] with
+                        {
+                            Point = renderPoints[2].Point with
+                            {
+                                X = renderPoints[2].Point.X + ImportedSurfaceLightOrangeFacetLeftOffset
                             }
                         };
                     }
@@ -4798,7 +4879,12 @@ public static partial class ChartRenderPlanner
                 previousPoint = point.Value;
             }
 
-            dataLabels.AddRange(BuildScatterDataLabelPlans(chart, seriesIndex, points));
+            dataLabels.AddRange(BuildScatterDataLabelPlans(
+                chart,
+                seriesIndex,
+                points,
+                seriesColors,
+                fillPlans));
             bool isSmoothed = drawLines &&
                 (series.SmoothLine ?? (chart.ScatterStyle is ScatterStyle.Smooth or ScatterStyle.SmoothMarker));
 
@@ -5294,7 +5380,7 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartDataLabelPlan>();
 
         if (family == ChartRenderFamily.Pie)
-            return BuildPieDataLabelPlans(chart, plot);
+            return BuildPieDataLabelPlans(chart, plot, seriesColors, fillPlans);
 
         var plans = new List<ChartDataLabelPlan>();
         bool isLineOrArea = IsLineOrArea(chart.ChartType);
@@ -5312,9 +5398,9 @@ public static partial class ChartRenderPlanner
                 : isBar;
 
             IReadOnlyList<ChartDataLabelPlan> seriesPlans = seriesIsLineOrArea
-                ? BuildLineDataLabelPlans(chart, seriesIndex, plot)
+                ? BuildLineDataLabelPlans(chart, seriesIndex, plot, seriesColors, fillPlans)
                 : seriesIsBar
-                    ? BuildBarDataLabelPlans(chart, seriesIndex, plot)
+                    ? BuildBarDataLabelPlans(chart, seriesIndex, plot, seriesColors, fillPlans)
                     : BuildColumnDataLabelPlans(chart, seriesIndex, plot, seriesColors, fillPlans);
 
             plans.AddRange(seriesPlans);
@@ -5338,6 +5424,39 @@ public static partial class ChartRenderPlanner
                 FontFamily = style.FontFamily ?? plan.FontFamily,
                 TextColor = style.Color?.Resolved ?? plan.TextColor
             };
+    }
+
+    private static ChartDataLabelPlan ApplyLegendKey(
+        ChartDataLabelPlan plan,
+        ChartDataLabels labels,
+        int seriesIndex,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
+    {
+        if (!labels.ShowLegendKey)
+            return plan;
+
+        const double keySize = 6.0;
+        const double keyGap = 3.0;
+        var bounds = plan.Bounds;
+        return plan with
+        {
+            TextBounds = new ChartPlanRect(
+                bounds.X + keySize + keyGap,
+                bounds.Y,
+                Math.Max(1.0, bounds.Width - keySize - keyGap),
+                bounds.Height),
+            LegendKeyBounds = new ChartPlanRect(
+                bounds.X,
+                bounds.Y + (bounds.Height - keySize) / 2.0,
+                keySize,
+                keySize),
+            LegendKeyFill = ResolveSeriesFill(
+                seriesIndex,
+                seriesColors,
+                RectSeriesFillAlpha,
+                fillPlans)
+        };
     }
 
     public static (double min, double max, double majorUnit) ComputePrimaryValueAxisRange(
@@ -5373,6 +5492,8 @@ public static partial class ChartRenderPlanner
 
         double min = chart.ValueAxis.Min ?? (dataMin >= 0 ? 0 : dataMin);
         double max = chart.ValueAxis.Max ?? dataMax;
+        if (chart.ValueAxis.MajorUnit is > 0)
+            return ApplyAuthoredMajorUnit(chart.ValueAxis, min, max);
         if (UsesStockLineFallback(chart) && chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
             return ComputeStockFallbackValueAxisRange(min, max);
         if (UsesImportedThreeDColumnDefaults(chart) &&
@@ -5445,6 +5566,8 @@ public static partial class ChartRenderPlanner
 
         double min = chart.SecondaryValueAxis?.Min ?? (dataMin >= 0 ? 0 : dataMin);
         double max = chart.SecondaryValueAxis?.Max ?? dataMax;
+        if (chart.SecondaryValueAxis?.MajorUnit is > 0)
+            return ApplyAuthoredMajorUnit(chart.SecondaryValueAxis, min, max);
         if (UsesImportedTextMetrics(chart) &&
             chart.Series.Any(series => series.OnSecondaryAxis) &&
             chart.SecondaryValueAxis?.Min is null && chart.SecondaryValueAxis?.Max is null)
@@ -5454,6 +5577,21 @@ public static partial class ChartRenderPlanner
             return ComputeNiceRange(min, max, targetIntervals: 8);
         }
         return ComputeNiceRange(min, max);
+    }
+
+    private static (double min, double max, double majorUnit) ApplyAuthoredMajorUnit(
+        ChartAxis axis,
+        double dataMin,
+        double dataMax)
+    {
+        double majorUnit = axis.MajorUnit!.Value;
+        double min = axis.Min ?? (dataMin >= 0
+            ? 0
+            : Math.Floor(dataMin / majorUnit) * majorUnit);
+        double max = axis.Max ?? Math.Ceiling(dataMax / majorUnit) * majorUnit;
+        if (max <= min)
+            max = min + majorUnit;
+        return (min, max, majorUnit);
     }
 
     private static void AccumulateStackedCategoryTotals(
@@ -6623,7 +6761,9 @@ public static partial class ChartRenderPlanner
     private static IReadOnlyList<ChartDataLabelPlan> BuildScatterDataLabelPlans(
         ChartShape chart,
         int seriesIndex,
-        IReadOnlyList<ChartPlanPoint?> points)
+        IReadOnlyList<ChartPlanPoint?> points,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
     {
         var labels = ResolveEffectiveLabels(chart, seriesIndex);
         if (labels is null || seriesIndex < 0 || seriesIndex >= chart.Series.Count)
@@ -6646,17 +6786,23 @@ public static partial class ChartRenderPlanner
                     ? FormatAxisValue(series.XValues[pointIndex]!.Value)
                     : string.Empty;
             string text = FormatDataLabel(labels, value.Value, total, categoryName, series.Name);
-            if (string.IsNullOrEmpty(text))
+            if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 
-            plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
+            var labelPlan = ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                 seriesIndex,
                 pointIndex,
                 text,
                 PlanScatterDataLabelBounds(point.Value, labels.Position ?? DataLabelPosition.Above),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels));
+                Alignment: ChartPlanTextAlignment.Center), labels);
+            plans.Add(ApplyLegendKey(
+                labelPlan,
+                labels,
+                seriesIndex,
+                seriesColors,
+                fillPlans));
         }
 
         return plans;
@@ -6810,7 +6956,7 @@ public static partial class ChartRenderPlanner
                 ? chart.Categories[categoryIndex]
                 : string.Empty;
             string text = FormatDataLabel(labels, value, total, categoryName, series.Name);
-            if (string.IsNullOrEmpty(text))
+            if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 
             double labelHeight = ResolveDataLabelHeight(chart);
@@ -6878,7 +7024,9 @@ public static partial class ChartRenderPlanner
     private static IReadOnlyList<ChartDataLabelPlan> BuildLineDataLabelPlans(
         ChartShape chart,
         int seriesIndex,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
     {
         var labels = ResolveEffectiveLabels(chart, seriesIndex);
         if (labels is null || seriesIndex < 0 || seriesIndex >= chart.Series.Count)
@@ -6916,17 +7064,23 @@ public static partial class ChartRenderPlanner
                 ? chart.Categories[categoryIndex]
                 : string.Empty;
             string text = FormatDataLabel(labels, rawValue.Value, total, categoryName, series.Name);
-            if (string.IsNullOrEmpty(text))
+            if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 
-            plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
+            var labelPlan = ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                 seriesIndex,
                 categoryIndex,
                 text,
                 new ChartPlanRect(x - 20, y - ResolveDataLabelHeight(chart) - 3, 40, ResolveDataLabelHeight(chart)),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels));
+                Alignment: ChartPlanTextAlignment.Center), labels);
+            plans.Add(ApplyLegendKey(
+                labelPlan,
+                labels,
+                seriesIndex,
+                seriesColors,
+                fillPlans));
         }
 
         return plans;
@@ -6935,7 +7089,9 @@ public static partial class ChartRenderPlanner
     private static IReadOnlyList<ChartDataLabelPlan> BuildBarDataLabelPlans(
         ChartShape chart,
         int seriesIndex,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
     {
         var labels = ResolveEffectiveLabels(chart, seriesIndex);
         if (labels is null || seriesIndex < 0 || seriesIndex >= chart.Series.Count)
@@ -7048,7 +7204,7 @@ public static partial class ChartRenderPlanner
                 ? chart.Categories[categoryIndex]
                 : string.Empty;
             string text = FormatDataLabel(labels, value, total, categoryName, series.Name);
-            if (string.IsNullOrEmpty(text))
+            if (string.IsNullOrEmpty(text) && !labels.ShowLegendKey)
                 continue;
 
             double labelHeight = ResolveDataLabelHeight(chart);
@@ -7061,14 +7217,20 @@ public static partial class ChartRenderPlanner
             };
             double labelY = barY + slot.SeriesSize / 2 - labelHeight / 2;
 
-            plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
+            var labelPlan = ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                 seriesIndex,
                 categoryIndex,
                 text,
                 new ChartPlanRect(labelX, labelY, 44, labelHeight),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center), labels));
+                Alignment: ChartPlanTextAlignment.Center), labels);
+            plans.Add(ApplyLegendKey(
+                labelPlan,
+                labels,
+                seriesIndex,
+                seriesColors,
+                fillPlans));
         }
 
         return plans;
@@ -7076,7 +7238,9 @@ public static partial class ChartRenderPlanner
 
     private static IReadOnlyList<ChartDataLabelPlan> BuildPieDataLabelPlans(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
     {
         var labels = ResolveEffectiveLabels(chart, 0);
         if (labels is null || chart.Series.Count == 0)
@@ -7109,12 +7273,12 @@ public static partial class ChartRenderPlanner
                 ? chart.Categories[visibleValue.PointIndex]
                 : string.Empty;
             string text = FormatDataLabel(labels, visibleValue.Value, total, categoryName, firstSeries.Name);
-            if (!string.IsNullOrEmpty(text))
+            if (!string.IsNullOrEmpty(text) || labels.ShowLegendKey)
             {
                 double labelX = centerX + labelRadius * Math.Cos(midAngle);
                 double labelY = centerY + labelRadius * Math.Sin(midAngle);
                 double labelWidth = Math.Max(64, text.Length * 12.0);
-                plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
+                var labelPlan = ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                     SeriesIndex: 0,
                     CategoryIndex: visibleValue.PointIndex,
                     Text: text,
@@ -7126,7 +7290,13 @@ public static partial class ChartRenderPlanner
                     TextColor = UsesImportedPieLegendDefaults(chart)
                         ? new SrgbColor(0x00, 0x00, 0x00)
                         : null
-                }, labels));
+                }, labels);
+                plans.Add(ApplyLegendKey(
+                    labelPlan,
+                    labels,
+                    seriesIndex: 0,
+                    seriesColors: seriesColors,
+                    fillPlans: fillPlans));
             }
 
             startAngle += sweepAngle;

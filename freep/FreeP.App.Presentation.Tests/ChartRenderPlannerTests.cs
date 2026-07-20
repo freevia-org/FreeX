@@ -147,6 +147,36 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void ComputePrimaryValueAxisRange_HonorsAuthoredMajorUnit()
+    {
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 12, 48, 93 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(series);
+        chart.ValueAxis.MajorUnit = 25;
+
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart)
+            .Should().Be((0, 100, 25));
+    }
+
+    [Fact]
+    public void BuildMajorAxisTickPrimitivePlan_AddsAuthoredMinorTicks()
+    {
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 0, 100 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(series);
+        chart.ValueAxis.MajorUnit = 25;
+        chart.ValueAxis.MinorUnit = 5;
+        chart.ValueAxis.MinorTickMark = ChartTickMark.Out;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame);
+
+        plan.ValueTicks.Should().HaveCount(21);
+    }
+
+    [Fact]
     public void ComputePrimaryValueAxisRange_KeepsCeilingWhenItHasSufficientHeadroom()
     {
         var series = new ChartSeries { Name = "Revenue" };
@@ -744,6 +774,34 @@ public sealed class ChartRenderPlannerTests
             .Value.Should().Be(0);
         cells.Single(cell => cell.SeriesIndex == 0 && cell.CategoryIndex == 1)
             .Bounds.Should().Be(new ChartPlanRect(100, 0, 100, 60));
+    }
+
+    [Theory]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Surface3D)]
+    public void BuildSurfaceGeometryPlan_DisplayBlanksAsSpan_InterpolatesSurfaceVertex(
+        ChartType chartType)
+    {
+        var chart = MakeSurfaceChart(chartType);
+        chart.Series[0].Values[1] = null;
+        chart.DisplayBlanksAs = ChartDisplayBlanksAs.Span;
+
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 360, 189));
+        var north = plan.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 0);
+        var south = plan.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 2);
+        var expectedSpanPoint = new ChartPlanPoint(
+            (north.Point.X + south.Point.X) / 2.0,
+            (north.Point.Y + south.Point.Y) / 2.0);
+
+        plan.RenderFacets
+            .Where(facet => facet.SeriesIndex == 0 && facet.CategoryIndex == 0)
+            .First()
+            .Points
+            .Should()
+            .Contain(expectedSpanPoint,
+                "surface span blanks should interpolate the missing same-row vertex");
     }
 
     [Fact]
@@ -2771,6 +2829,34 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScatterPrimitivePlan_LegendKeyOnlyKeepsSwatchesWithoutText()
+    {
+        var series = new ChartSeries { Name = "XY" };
+        series.XValues.AddRange(new double?[] { 0, 50 });
+        series.Values.AddRange(new double?[] { 10, 20 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Scatter,
+            ScatterStyle = ScatterStyle.Marker,
+            DataLabels = new ChartDataLabels { ShowLegendKey = true }
+        };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 100, 100),
+            new[] { new SrgbColor(0x20, 0x40, 0x60) });
+
+        plan.DataLabels.Should().HaveCount(2);
+        plan.DataLabels.Should().OnlyContain(label =>
+            label.Text == string.Empty &&
+            label.LegendKeyBounds.HasValue &&
+            label.LegendKeyFill.HasValue &&
+            label.TextBounds.HasValue);
+    }
+
+    [Fact]
     public void BuildScatterPrimitivePlan_SmoothStylePlansCubicPath()
     {
         var series = new ChartSeries { Name = "XY" };
@@ -3619,6 +3705,69 @@ public sealed class ChartRenderPlannerTests
         var label = planned.Single(p => p.SeriesIndex == 1 && p.CategoryIndex == 0);
         label.Bounds.X.Should().BeApproximately(33.3333, 0.0001);
         label.Bounds.Width.Should().BeApproximately(66.6667, 0.0001);
+    }
+
+    [Fact]
+    public void BuildDataLabelPlans_ColumnLegendKeyOnlyKeepsSwatchesWithoutText()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.DataLabels = new ChartDataLabels { ShowLegendKey = true };
+
+        var planned = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        planned.Should().HaveCount(chart.Categories.Count * chart.Series.Count);
+        planned.Should().OnlyContain(label =>
+            label.Text == string.Empty &&
+            label.LegendKeyBounds.HasValue &&
+            label.LegendKeyFill.HasValue &&
+            label.TextBounds.HasValue);
+    }
+
+    [Theory]
+    [InlineData(ChartType.LineMarkers)]
+    [InlineData(ChartType.BarClustered)]
+    public void BuildDataLabelPlans_NonColumnLegendKeyOnlyKeepsSwatches(ChartType chartType)
+    {
+        var chart = MakeTwoSeriesChart(chartType);
+        chart.DataLabels = new ChartDataLabels { ShowLegendKey = true };
+
+        var planned = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        planned.Should().HaveCount(chart.Categories.Count * chart.Series.Count);
+        planned.Should().OnlyContain(label =>
+            label.Text == string.Empty &&
+            label.LegendKeyBounds.HasValue &&
+            label.LegendKeyFill.HasValue &&
+            label.TextBounds.HasValue);
+    }
+
+    [Fact]
+    public void BuildDataLabelPlans_PieLegendKeyOnlyKeepsSwatchesWithoutText()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            DataLabels = new ChartDataLabels { ShowLegendKey = true }
+        };
+        chart.Categories.AddRange(new[] { "Alpha", "Beta", "Gamma" });
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 40, 35, 25 });
+        chart.Series.Add(series);
+
+        var planned = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 200, 200));
+
+        planned.Should().HaveCount(3);
+        planned.Should().OnlyContain(label =>
+            label.Text == string.Empty &&
+            label.LegendKeyBounds.HasValue &&
+            label.LegendKeyFill.HasValue &&
+            label.TextBounds.HasValue);
     }
 
     [Fact]
