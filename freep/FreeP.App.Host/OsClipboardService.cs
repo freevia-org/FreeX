@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using FreeP.App.Compositor;
@@ -7,68 +8,55 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
-// ══════════════════════════════════════════════════════════════════════════════════
-//  OS-Clipboard interop service (Wave 10B)
-//
-//  Design goals:
-//  1. Keep EditingSession completely framework-free — System.Windows.Clipboard is
-//     ONLY accessed here and in MainWindow (which injects an IOsClipboard).
-//  2. The service is testable: IOsClipboard is the seam; tests inject FakeOsClipboard
-//     so no real clipboard access happens during unit-test runs.
-//  3. Graceful degradation: all real-Clipboard calls are wrapped in try/catch so a
-//     clipboard-locked state (e.g. another process holds it) never crashes the app.
-// ══════════════════════════════════════════════════════════════════════════════════
-
-// ── Clipboard abstraction ──────────────────────────────────────────────────────────
-
-/// <summary>
-/// Abstraction over the OS clipboard.  The real implementation delegates to
-/// <see cref="System.Windows.Clipboard"/>; the test implementation uses in-memory fields.
-/// </summary>
+/// <summary>Testable boundary around the WPF system clipboard.</summary>
 public interface IOsClipboard
 {
-    /// <summary>Returns true when the clipboard contains image data.</summary>
     bool ContainsImage();
-
-    /// <summary>Returns true when the clipboard contains text data.</summary>
     bool ContainsText();
-
-    /// <summary>
-    /// Retrieves the clipboard image as a PNG byte array, or null if unavailable.
-    /// </summary>
     byte[]? GetImagePngBytes();
-
-    /// <summary>Returns the clipboard text, or null if unavailable.</summary>
     string? GetText();
-
-    /// <summary>
-    /// Places a <see cref="DataObject"/> onto the OS clipboard.
-    /// Implementations should be resilient to clipboard-locked errors.
-    /// </summary>
     void SetDataObject(DataObject data);
-
-    /// <summary>
-    /// Returns the OS clipboard sequence number — an integer that Windows increments every
-    /// time ANY application writes to the clipboard.  Used to detect external clipboard
-    /// changes (i.e. another app overwrote our copy).
-    ///
-    /// The real implementation returns <see cref="System.Windows.Clipboard.GetSequenceNumber()"/>.
-    /// The fake/test implementation returns a settable counter so tests can simulate an
-    /// external clipboard change without touching the real OS clipboard.
-    ///
-    /// Returns 0 on error (clipboard locked); callers must treat any change from the recorded
-    /// value as an external write.
-    /// </summary>
     long SequenceNumber { get; }
+
+    PresentationClipboardContent Read() => new(
+        PngBytes: ContainsImage() ? GetImagePngBytes() : null,
+        Text: ContainsText() ? GetText() : null);
+
+    void Write(PresentationClipboardContent content) =>
+        SetDataObject(WpfOsClipboard.BuildDataObject(content));
 }
 
 /// <summary>
-/// Real OS-clipboard implementation backed by <see cref="System.Windows.Clipboard"/>.
-/// All operations are wrapped in try/catch so a clipboard-locked state never throws.
-/// Must be called on the WPF dispatcher thread.
+/// WPF system-clipboard adapter. The service above this boundary only sees the shared,
+/// framework-neutral <see cref="PresentationClipboardContent"/> contract.
 /// </summary>
 public sealed class WpfOsClipboard : IOsClipboard
 {
+    internal const string SelectionFormat = PresentationClipboardFormats.Selection;
+    internal const string OwnerTokenFormat = PresentationClipboardFormats.OwnerToken;
+
+    // Backward-read aliases for Avalonia application formats. This value is proven
+    // against pinned Avalonia 12.0.4 tag a8dd6417fd8918570edefdbecd92d16ac7620069,
+    // src/Windows/Avalonia.Win32/ClipboardFormatRegistry.cs. Current interop does not
+    // depend on it: both hosts also publish the public platform names above.
+    internal const string AvaloniaApplicationFormatPrefix = "avn-app-fmt:";
+    internal const string LegacyAvaloniaSelectionFormat =
+        AvaloniaApplicationFormatPrefix + PresentationClipboardFormats.Selection;
+    internal const string LegacyAvaloniaOwnerTokenFormat =
+        AvaloniaApplicationFormatPrefix + PresentationClipboardFormats.OwnerToken;
+
+    public PresentationClipboardContent Read()
+    {
+        var data = Clipboard.GetDataObject();
+        return ReadDataObject(data);
+    }
+
+    public void Write(PresentationClipboardContent content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        Clipboard.SetDataObject(BuildDataObject(content), copy: true);
+    }
+
     public bool ContainsImage()
     {
         try { return Clipboard.ContainsImage(); }
@@ -85,12 +73,13 @@ public sealed class WpfOsClipboard : IOsClipboard
     {
         try
         {
-            if (!Clipboard.ContainsImage()) return null;
-            var bmp = Clipboard.GetImage();
-            if (bmp is null) return null;
-            return BitmapSourceToPng(bmp);
+            var bitmap = Clipboard.GetImage();
+            return bitmap is null ? null : BitmapSourceToPng(bitmap);
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 
     public string? GetText()
@@ -102,7 +91,7 @@ public sealed class WpfOsClipboard : IOsClipboard
     public void SetDataObject(DataObject data)
     {
         try { Clipboard.SetDataObject(data, copy: true); }
-        catch { /* clipboard locked — degrade silently */ }
+        catch { }
     }
 
     public long SequenceNumber
@@ -114,335 +103,387 @@ public sealed class WpfOsClipboard : IOsClipboard
         }
     }
 
-    // Win32 interop for clipboard sequence number — not exposed by System.Windows.Clipboard.
-    private static class NativeMethods
+    internal static DataObject BuildDataObject(PresentationClipboardContent content)
     {
-        [DllImport("user32.dll")]
-        internal static extern uint GetClipboardSequenceNumber();
+        ArgumentNullException.ThrowIfNull(content);
+        var data = new DataObject();
+
+        if (content.SelectionBytes is { Length: > 0 })
+            SetRawBytes(data, SelectionFormat, content.SelectionBytes);
+
+        if (!string.IsNullOrEmpty(content.OwnerToken))
+        {
+            // Avalonia's Win32 clipboard backend serializes custom strings as a
+            // null-terminated UTF-16 HGLOBAL.
+            var bytes = Encoding.Unicode.GetBytes(content.OwnerToken + '\0');
+            SetRawBytes(data, OwnerTokenFormat, bytes);
+        }
+
+        if (content.PngBytes is { Length: > 0 })
+        {
+            try
+            {
+                using var stream = new MemoryStream(content.PngBytes, writable: false);
+                var bitmap = BitmapFrame.Create(
+                    stream,
+                    BitmapCreateOptions.PreservePixelFormat,
+                    BitmapCacheOption.OnLoad);
+                bitmap.Freeze();
+                data.SetImage(bitmap);
+            }
+            catch
+            {
+                // Native selection and text remain useful when image decoding fails.
+            }
+        }
+
+        if (!string.IsNullOrEmpty(content.Text))
+            data.SetText(content.Text);
+
+        return data;
+    }
+
+    internal static PresentationClipboardContent ReadDataObject(IDataObject? data)
+    {
+        if (data is null)
+            return new PresentationClipboardContent();
+
+        var selection = TryReadBytes(data, SelectionFormat)
+            ?? TryReadBytes(data, LegacyAvaloniaSelectionFormat);
+        var ownerToken = TryReadCustomString(data, OwnerTokenFormat)
+            ?? TryReadCustomString(data, LegacyAvaloniaOwnerTokenFormat);
+
+        string? text = null;
+        try
+        {
+            if (data.GetDataPresent(DataFormats.UnicodeText, autoConvert: true))
+                text = data.GetData(DataFormats.UnicodeText, autoConvert: true) as string;
+        }
+        catch
+        {
+        }
+
+        byte[]? png = null;
+        try
+        {
+            if (data.GetDataPresent(DataFormats.Bitmap, autoConvert: true)
+                && data.GetData(DataFormats.Bitmap, autoConvert: true) is BitmapSource bitmap)
+            {
+                png = BitmapSourceToPng(bitmap);
+            }
+        }
+        catch
+        {
+        }
+
+        return new PresentationClipboardContent(selection, png, text, ownerToken);
+    }
+
+    private static void SetRawBytes(DataObject data, string format, byte[] bytes) =>
+        data.SetData(format, new MemoryStream(bytes, writable: false), autoConvert: false);
+
+    private static byte[]? TryReadBytes(IDataObject data, string format)
+    {
+        try
+        {
+            if (!data.GetDataPresent(format, autoConvert: false))
+                return null;
+
+            return data.GetData(format, autoConvert: false) switch
+            {
+                byte[] bytes when bytes.Length > 0 => bytes.ToArray(),
+                MemoryStream stream when stream.Length > 0 => stream.ToArray(),
+                Stream stream => ReadStream(stream),
+                _ => null,
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? TryReadCustomString(IDataObject data, string format)
+    {
+        try
+        {
+            if (!data.GetDataPresent(format, autoConvert: false))
+                return null;
+
+            var value = data.GetData(format, autoConvert: false);
+            if (value is string text)
+                return string.IsNullOrEmpty(text) ? null : text;
+
+            var bytes = value switch
+            {
+                byte[] array => array,
+                MemoryStream stream => stream.ToArray(),
+                Stream stream => ReadStream(stream),
+                _ => null,
+            };
+            if (bytes is not { Length: >= 2 })
+                return null;
+
+            var decoded = Encoding.Unicode.GetString(bytes).TrimEnd('\0');
+            return string.IsNullOrEmpty(decoded) ? null : decoded;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static byte[]? ReadStream(Stream stream)
+    {
+        try
+        {
+            if (stream.CanSeek)
+                stream.Position = 0;
+            using var copy = new MemoryStream();
+            stream.CopyTo(copy);
+            return copy.Length == 0 ? null : copy.ToArray();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static byte[] BitmapSourceToPng(BitmapSource source)
     {
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(source));
-        using var ms = new MemoryStream();
-        encoder.Save(ms);
-        return ms.ToArray();
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport("user32.dll")]
+        internal static extern uint GetClipboardSequenceNumber();
     }
 }
 
-// ── Shape renderer abstraction ─────────────────────────────────────────────────────
-
-/// <summary>
-/// Abstraction for rendering a set of shapes to a PNG byte array.
-/// Real implementation uses WPF RenderTargetBitmap; test stubs return fixed bytes.
-/// </summary>
 public interface IShapeRenderer
 {
-    /// <summary>
-    /// Renders <paramref name="shapes"/> from <paramref name="slide"/> in the context of
-    /// <paramref name="presentation"/> to a PNG.
-    /// Returns an empty array if rendering fails or nothing is selected.
-    /// </summary>
     byte[] RenderShapesToPng(
-        Presentation          presentation,
-        Slide                 slide,
+        Presentation presentation,
+        Slide slide,
         IReadOnlyList<SlideShape> shapes,
-        int                   widthPx,
-        int                   heightPx);
+        int widthPx,
+        int heightPx);
 }
 
-// ── Clipboard service ──────────────────────────────────────────────────────────────
-
-/// <summary>
-/// Orchestrates OS-clipboard interop for FreeP (Wave 10B).
-///
-/// Copy/Cut:
-///   Renders selected shapes to a PNG (via <see cref="IShapeRenderer"/>) and the shapes'
-///   text concatenated as plain text, then places both on the OS clipboard via
-///   <see cref="IOsClipboard"/>.  This lets FreeP content be pasted into other apps.
-///
-/// Paste (Y6 fix — in-app copy→paste prefers the internal editable clipboard):
-///   When the most-recent OS-clipboard write was produced by THIS service instance
-///   (i.e. the user pressed Ctrl+C/X inside FreeP), and the internal shape clipboard is
-///   still populated, <see cref="Paste"/> prefers the internal clipboard so the pasted
-///   result is an editable deep-copied shape rather than a flattened PNG.
-///   An image copied from ANOTHER app still inserts a picture (the generation token will
-///   not match, so the OS-image path is taken).
-///
-///   Priority when internal clipboard carries our own copy (ownCopyIsCurrentOnOs=true):
-///     internal > OS text > OS image > nothing
-///
-///   Priority when OS clipboard was set by an external app (ownCopyIsCurrentOnOs=false):
-///     OS image > OS text > internal > nothing
-///
-/// Strategy is documented at the call site.
-/// </summary>
+/// <summary>Coordinates shared FreeP clipboard content with the WPF IO boundary.</summary>
 public sealed class OsClipboardService
 {
-    private readonly IOsClipboard    _clipboard;
-    private readonly IShapeRenderer  _renderer;
+    private readonly IOsClipboard _clipboard;
+    private readonly IShapeRenderer _renderer;
+    private string? _lastOwnerToken;
+    private uint _ownCopyGeneration;
+    private uint _lastPlacedGeneration;
+    private long _lastPlacedSequence = -1;
 
-    // ── Own-copy tracking (Y6 + Z1 fix) ──────────────────────────────────────────
-    // We track both a monotonic generation counter (in-app only) AND the OS clipboard
-    // sequence number at the moment of our last PlaceSelection call.
-    //
-    // The generation counter alone is NOT sufficient (Z1 regression): it is only bumped
-    // by OUR own copy operations but is never cleared when another app overwrites the
-    // clipboard.  The OS clipboard SEQUENCE NUMBER (incremented by Windows on every
-    // clipboard write, by any app) is the authoritative signal that the clipboard content
-    // has changed since we placed it.
-    //
-    // OwnCopyIsCurrentOnOs is true only when BOTH conditions hold:
-    //   1. We have previously placed content (generation > 0, lastPlaced == generation).
-    //   2. The OS sequence number has not changed since our last write, confirming no
-    //      external (or other in-app) clipboard write has occurred.
-    private uint _ownCopyGeneration;        // monotonically increasing counter
-    private uint _lastPlacedGeneration;     // value written during the last PlaceSelection call
-    private long _lastPlacedSequence = -1; // OS sequence number at the time of our last write
-
-    /// <summary>
-    /// True when the OS clipboard currently holds content placed by THIS service instance
-    /// (i.e. since the last in-app Ctrl+C / Ctrl+X) AND no external application has
-    /// written to the clipboard since then.
-    ///
-    /// Paste uses this to prefer the internal editable clipboard over the rasterised OS image.
-    ///
-    /// The check combines the in-app generation token (unchanged by external apps) with the
-    /// OS clipboard sequence number (bumped by EVERY write, from any app).  If the sequence
-    /// number differs from what it was when we placed the data, another app overwrote the
-    /// clipboard and our copy is stale — own-copy is NOT current.
-    /// </summary>
     internal bool OwnCopyIsCurrentOnOs =>
         _ownCopyGeneration > 0
         && _ownCopyGeneration == _lastPlacedGeneration
-        && _lastPlacedSequence >= 0
+        && _lastPlacedSequence > 0
         && _clipboard.SequenceNumber == _lastPlacedSequence;
 
-    /// <summary>
-    /// Size (in pixels) used when rendering the selection to a PNG for the OS clipboard.
-    /// Defaults to 1280×720 (full HD equivalent at 96 DPI).
-    /// </summary>
-    public int RenderWidthPx  { get; set; } = 1280;
+    public int RenderWidthPx { get; set; } = 1280;
     public int RenderHeightPx { get; set; } = 720;
 
     public OsClipboardService(IOsClipboard clipboard, IShapeRenderer renderer)
     {
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
-        _renderer  = renderer  ?? throw new ArgumentNullException(nameof(renderer));
+        _renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
     }
 
-    // ── Copy / Cut ─────────────────────────────────────────────────────────────────
+    /// <summary>Exports the current selection without changing the editor's clipboard.</summary>
+    public void PlaceSelectionOnOsClipboard(EditingSession editor) =>
+        TryPlaceSelectionOnOsClipboard(editor);
 
-    /// <summary>
-    /// Places the currently selected shapes onto the OS clipboard as:
-    /// (a) a PNG image rendered via <see cref="IShapeRenderer"/>, and
-    /// (b) the concatenated plain text of all selected shapes (CF_TEXT).
-    ///
-    /// Call after <see cref="EditingSession.CopySelectedShapes"/> so the internal clipboard is
-    /// also updated, and before deleting the selection when performing a cut.
-    ///
-    /// This method is a no-op when there is no selection or no current slide.
-    ///
-    /// After a successful write the generation token is bumped so <see cref="Paste"/> knows
-    /// the OS clipboard content originates from this app and should yield to the internal
-    /// editable clipboard (Y6 fix).
-    /// </summary>
-    public void PlaceSelectionOnOsClipboard(EditingSession editor)
+    internal bool TryPlaceSelectionOnOsClipboard(EditingSession editor)
     {
-        var slide = editor.CurrentSlide;
-        if (slide is null || editor.SelectedShapeIds.Count == 0) return;
+        ArgumentNullException.ThrowIfNull(editor);
+        var ownerToken = Guid.NewGuid().ToString("N");
+        var content = PresentationClipboardContentFactory.CreateSelection(
+            editor,
+            (presentation, slide, shapes) => _renderer.RenderShapesToPng(
+                presentation,
+                slide,
+                shapes,
+                RenderWidthPx,
+                RenderHeightPx),
+            ownerToken);
+        if (content is null)
+            return false;
 
-        var selectedShapes = editor.SelectedShapeIds
-            .Select(id => slide.Shapes.FirstOrDefault(s => s.Id == id))
-            .Where(s => s is not null)
-            .Select(s => s!)
-            .ToList();
-
-        if (selectedShapes.Count == 0) return;
-
-        // Build the DataObject with both formats.
-        var dataObj = BuildDataObject(editor.Presentation, slide, selectedShapes);
-        _clipboard.SetDataObject(dataObj);
-
-        // Bump the own-copy generation token so Paste() can detect that the OS clipboard
-        // content was placed by THIS instance and should yield to the internal clipboard.
-        _ownCopyGeneration++;
-        _lastPlacedGeneration = _ownCopyGeneration;
-
-        // Z1 fix: record the OS clipboard sequence number AFTER our write so that
-        // OwnCopyIsCurrentOnOs can detect when another app has overwritten the clipboard.
-        // If the sequence number later differs from this value, the clipboard is stale.
-        _lastPlacedSequence = _clipboard.SequenceNumber;
-    }
-
-    /// <summary>
-    /// Builds the OS clipboard <see cref="DataObject"/>.
-    /// Exposed internally for unit-testing the payload without touching the real clipboard.
-    /// </summary>
-    internal DataObject BuildDataObject(
-        Presentation          presentation,
-        Slide                 slide,
-        IReadOnlyList<SlideShape> shapes)
-    {
-        var dataObj = new DataObject();
-
-        // (a) PNG image of the selection.
-        var pngBytes = _renderer.RenderShapesToPng(
-            presentation, slide, shapes, RenderWidthPx, RenderHeightPx);
-        if (pngBytes.Length > 0)
+        try
         {
-            // Place as both PNG (raw bytes) and a BitmapSource (CF_BITMAP / CF_DIB).
+            _clipboard.Write(content);
+            _lastOwnerToken = ownerToken;
+            _ownCopyGeneration++;
+            _lastPlacedGeneration = _ownCopyGeneration;
+            var sequence = _clipboard.SequenceNumber;
+            _lastPlacedSequence = sequence > 0 ? sequence : -1;
+            return true;
+        }
+        catch
+        {
+            InvalidateOwnCopy();
+            return false;
+        }
+    }
+
+    public void Paste(EditingSession editor, bool preferOsClipboard = true) =>
+        PasteWithResult(editor, preferOsClipboard);
+
+    internal PresentationClipboardPasteSource PasteWithResult(
+        EditingSession editor,
+        bool preferOsClipboard = true)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        PresentationClipboardContent content;
+        try
+        {
+            content = _clipboard.Read();
+        }
+        catch
+        {
+            content = new PresentationClipboardContent();
+        }
+
+        var ownCopy = preferOsClipboard
+            && editor.CanPaste
+            && OwnCopyIsCurrentOnOs
+            && !string.IsNullOrEmpty(_lastOwnerToken)
+            && string.Equals(content.OwnerToken, _lastOwnerToken, StringComparison.Ordinal);
+        var source = !preferOsClipboard && editor.CanPaste
+            ? PresentationClipboardPasteSource.Internal
+            : PresentationClipboardPastePlanner.Decide(
+                content.HasSelection,
+                content.HasImage,
+                content.HasText,
+                editor.CanPaste,
+                ownCopy);
+
+        if (source == PresentationClipboardPasteSource.NativeSelection)
+        {
             try
             {
-                using var ms = new MemoryStream(pngBytes);
-                var bmpSource = BitmapFrame.Create(
-                    ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-                bmpSource.Freeze();
-                dataObj.SetImage(bmpSource);
+                var shapes = PresentationClipboardSelectionCodec.Deserialize(content.SelectionBytes!);
+                if (shapes.Count > 0)
+                {
+                    editor.PasteExternalShapes(shapes);
+                    return source;
+                }
             }
-            catch { /* renderer produced invalid PNG; skip image format */ }
+            catch
+            {
+                // Continue through the shared image/text/internal fallback order.
+            }
+
+            source = PresentationClipboardPastePlanner.Decide(
+                hasNativeSelection: false,
+                content.HasImage,
+                content.HasText,
+                editor.CanPaste,
+                ownCopyIsCurrent: false);
         }
 
-        // (b) Plain text — concatenate all text runs from all shapes.
-        var text = ExtractText(shapes);
-        if (!string.IsNullOrEmpty(text))
-            dataObj.SetText(text);
-
-        return dataObj;
-    }
-
-    // ── Paste ──────────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Executes a paste operation.
-    ///
-    /// When the OS clipboard was populated by THIS app instance's last Ctrl+C/X
-    /// (<see cref="OwnCopyIsCurrentOnOs"/> is true) and the internal shape clipboard has
-    /// data, the internal editable clipboard is preferred so the pasted result is an
-    /// editable deep-copied shape (not a flattened PNG).  This is the Y6 fix.
-    ///
-    /// When the OS clipboard was populated by ANOTHER app, OS image or OS text wins as
-    /// before (external image paste still inserts a picture shape).
-    ///
-    /// See <see cref="DecidePasteAction"/> for the pure routing logic (testable).
-    /// </summary>
-    public void Paste(EditingSession editor, bool preferOsClipboard = true)
-    {
-        // Y6: detect whether the OS clipboard content came from our own last copy/cut.
-        // When it did, prefer the internal editable clipboard over the rasterised image.
-        bool ownCopy = OwnCopyIsCurrentOnOs && editor.CanPaste;
-
-        var action = DecidePasteAction(
-            osHasImage:          _clipboard.ContainsImage(),
-            osHasText:           _clipboard.ContainsText(),
-            internalHasData:     editor.CanPaste,
-            preferOsClipboard:   preferOsClipboard && !ownCopy,
-            ownCopyIsCurrentOnOs: ownCopy);
-
-        switch (action)
+        switch (source)
         {
-            case PasteAction.OsImage:
-                var pngBytes = _clipboard.GetImagePngBytes();
-                if (pngBytes is { Length: > 0 })
-                    editor.InsertPicture(pngBytes, "image/png");
+            case PresentationClipboardPasteSource.Image:
+                editor.InsertPicture(content.PngBytes!, "image/png");
                 break;
-
-            case PasteAction.OsText:
-                // Y8/Y9: delegate to InsertTextBox(text) so the shape is built with the
-                // clipboard text already in its run — a single undoable command, no
-                // out-of-band mutation, and multi-line text is split into paragraphs.
-                var text = _clipboard.GetText();
-                if (!string.IsNullOrEmpty(text))
-                    editor.InsertTextBox(text);
+            case PresentationClipboardPasteSource.Text:
+                editor.InsertTextBox(content.Text!);
                 break;
-
-            case PasteAction.Internal:
+            case PresentationClipboardPasteSource.Internal:
                 editor.Paste();
                 break;
-
-            case PasteAction.Nothing:
-                break;
         }
+
+        return source;
     }
 
-    /// <summary>
-    /// Pure paste-routing decision function — no side effects, fully testable.
-    ///
-    /// Routing priority:
-    /// <list type="bullet">
-    ///   <item>When <paramref name="ownCopyIsCurrentOnOs"/> is true (the OS clipboard
-    ///     content was placed by this app's last copy/cut) AND
-    ///     <paramref name="internalHasData"/> is true:
-    ///     internal > OS text > OS image > nothing  (Y6: editable shape preferred).</item>
-    ///   <item>When <paramref name="preferOsClipboard"/> is true (external content):
-    ///     OS image > OS text > internal > nothing.</item>
-    ///   <item>When <paramref name="preferOsClipboard"/> is false:
-    ///     internal > OS image > OS text > nothing.</item>
-    /// </list>
-    /// </summary>
+    internal DataObject BuildDataObject(
+        Presentation presentation,
+        Slide slide,
+        IReadOnlyList<SlideShape> shapes)
+    {
+        byte[]? selection = null;
+        byte[]? png = null;
+        try
+        {
+            selection = PresentationClipboardSelectionCodec.Serialize(presentation, slide, shapes);
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            png = _renderer.RenderShapesToPng(
+                presentation,
+                slide,
+                shapes,
+                RenderWidthPx,
+                RenderHeightPx);
+        }
+        catch
+        {
+        }
+
+        return WpfOsClipboard.BuildDataObject(new PresentationClipboardContent(
+            selection,
+            png,
+            PresentationClipboardContentFactory.ExtractText(shapes),
+            Guid.NewGuid().ToString("N")));
+    }
+
     public static PasteAction DecidePasteAction(
         bool osHasImage,
         bool osHasText,
         bool internalHasData,
-        bool preferOsClipboard   = true,
+        bool preferOsClipboard = true,
         bool ownCopyIsCurrentOnOs = false)
     {
-        // Y6: own-copy path — prefer editable internal clipboard over the rasterised
-        // OS image we placed ourselves.  OS text (e.g. plain-text description we also
-        // placed) still falls through after Internal; external OS image is deprioritised.
-        if (ownCopyIsCurrentOnOs && internalHasData)
+        var source = !preferOsClipboard && internalHasData
+            ? PresentationClipboardPasteSource.Internal
+            : PresentationClipboardPastePlanner.Decide(
+                hasNativeSelection: false,
+                osHasImage,
+                osHasText,
+                internalHasData,
+                ownCopyIsCurrentOnOs);
+        return source switch
         {
-            // internal wins; fall through to OS text then OS image only as last resort.
-            return PasteAction.Internal;
-        }
-
-        if (preferOsClipboard)
-        {
-            if (osHasImage)       return PasteAction.OsImage;
-            if (osHasText)        return PasteAction.OsText;
-            if (internalHasData)  return PasteAction.Internal;
-        }
-        else
-        {
-            if (internalHasData)  return PasteAction.Internal;
-            if (osHasImage)       return PasteAction.OsImage;
-            if (osHasText)        return PasteAction.OsText;
-        }
-        return PasteAction.Nothing;
+            PresentationClipboardPasteSource.Image => PasteAction.OsImage,
+            PresentationClipboardPasteSource.Text => PasteAction.OsText,
+            PresentationClipboardPasteSource.Internal => PasteAction.Internal,
+            _ => PasteAction.Nothing,
+        };
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────────
+    internal static string ExtractText(IEnumerable<SlideShape> shapes) =>
+        PresentationClipboardContentFactory.ExtractText(shapes) ?? string.Empty;
 
-    /// <summary>
-    /// Concatenates the plain text from all runs in all shapes, separated by newlines between shapes.
-    /// </summary>
-    internal static string ExtractText(IEnumerable<SlideShape> shapes)
+    private void InvalidateOwnCopy()
     {
-        var parts = new List<string>();
-        foreach (var shape in shapes)
-        {
-            if (shape.TextBody is null) continue;
-            var shapeText = string.Join(
-                Environment.NewLine,
-                shape.TextBody.Paragraphs.Select(p =>
-                    string.Concat(p.Runs.Select(r => r.Text ?? string.Empty))));
-            if (!string.IsNullOrEmpty(shapeText))
-                parts.Add(shapeText);
-        }
-        return string.Join(Environment.NewLine + Environment.NewLine, parts);
+        _lastOwnerToken = null;
+        _lastPlacedGeneration = 0;
+        _lastPlacedSequence = -1;
     }
 }
 
-/// <summary>The action chosen by <see cref="OsClipboardService.DecidePasteAction"/>.</summary>
 public enum PasteAction
 {
-    /// <summary>Insert an image from the OS clipboard.</summary>
     OsImage,
-    /// <summary>Insert a textbox with text from the OS clipboard.</summary>
     OsText,
-    /// <summary>Use the EditingSession internal clipboard.</summary>
     Internal,
-    /// <summary>No clipboard data available; do nothing.</summary>
     Nothing,
 }

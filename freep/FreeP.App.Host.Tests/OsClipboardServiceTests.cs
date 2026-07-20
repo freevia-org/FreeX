@@ -1,3 +1,7 @@
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
 using System.Windows;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
@@ -17,11 +21,11 @@ public sealed class OsClipboardServiceTests
     // ── Fake implementations ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// In-memory clipboard stub.  Tests set HasImage / HasText / ImageBytes / Text before
-    /// calling the service and inspect WasSetCalled / LastDataObject after.
+    /// In-memory clipboard stub. Tests configure the shared content contract and inspect
+    /// the last write without touching the WPF clipboard.
     ///
     /// Z1: <see cref="SequenceNumber"/> starts at 1 and is auto-incremented by
-    /// <see cref="SetDataObject"/> (mirroring Windows, which bumps the sequence on every write).
+    /// <see cref="Write"/> (mirroring Windows, which bumps the sequence on every write).
     /// Tests can also set <see cref="SequenceNumber"/> directly to simulate an external app
     /// overwriting the clipboard.
     /// </summary>
@@ -31,26 +35,51 @@ public sealed class OsClipboardServiceTests
         public bool HasText    { get; set; }
         public byte[]? ImageBytes { get; set; }
         public string? Text    { get; set; }
+        public byte[]? SelectionBytes { get; set; }
+        public string? OwnerToken { get; set; }
+        public bool ThrowOnRead { get; set; }
+        public bool ThrowOnWrite { get; set; }
 
         public bool       WasSetCalled { get; private set; }
-        public DataObject? LastDataObject { get; private set; }
+        public PresentationClipboardContent? LastContent { get; private set; }
 
         /// <summary>
         /// Simulates the Windows clipboard sequence number.
-        /// Auto-incremented by <see cref="SetDataObject"/>; may also be set directly
+        /// Auto-incremented by <see cref="Write"/>; may also be set directly
         /// by tests to simulate an external clipboard write (another app overwrote it).
         /// </summary>
         public long SequenceNumber { get; set; } = 1;
 
-        public bool     ContainsImage()   => HasImage;
-        public bool     ContainsText()    => HasText;
-        public byte[]?  GetImagePngBytes() => ImageBytes;
-        public string?  GetText()         => Text;
-
-        public void SetDataObject(DataObject data)
+        public PresentationClipboardContent Read()
         {
+            if (ThrowOnRead)
+                throw new InvalidOperationException("clipboard locked");
+            return new PresentationClipboardContent(
+                SelectionBytes,
+                HasImage ? ImageBytes : null,
+                HasText ? Text : null,
+                OwnerToken);
+        }
+
+        public bool ContainsImage() => HasImage;
+        public bool ContainsText() => HasText;
+        public byte[]? GetImagePngBytes() => ImageBytes;
+        public string? GetText() => Text;
+        public void SetDataObject(DataObject data) =>
+            Write(WpfOsClipboard.ReadDataObject(data));
+
+        public void Write(PresentationClipboardContent content)
+        {
+            if (ThrowOnWrite)
+                throw new InvalidOperationException("clipboard locked");
             WasSetCalled   = true;
-            LastDataObject = data;
+            LastContent = content;
+            SelectionBytes = content.SelectionBytes;
+            ImageBytes = content.PngBytes;
+            Text = content.Text;
+            OwnerToken = content.OwnerToken;
+            HasImage = content.HasImage;
+            HasText = content.HasText;
             // Mimic Windows: every clipboard write bumps the sequence number.
             SequenceNumber++;
         }
@@ -82,6 +111,7 @@ public sealed class OsClipboardServiceTests
     {
         var pres  = Presentation.CreateEmpty();
         var slide = pres.Slides[0];
+        slide.Shapes.Clear();
 
         shape = new SlideShape
         {
@@ -116,75 +146,55 @@ public sealed class OsClipboardServiceTests
     // ════════════════════════════════════════════════════════════════════════════════
 
     [Fact]
-    public void DecidePasteAction_OsImagePresent_ReturnsOsImage_WhenPreferOsTrue()
+    public void CompatibilityPlanner_OsImagePresent_ReturnsOsImage()
     {
         var action = OsClipboardService.DecidePasteAction(
-            osHasImage: true, osHasText: false, internalHasData: false,
-            preferOsClipboard: true);
+            osHasImage: true,
+            osHasText: false,
+            internalHasData: false);
 
         action.Should().Be(PasteAction.OsImage);
     }
 
     [Fact]
-    public void DecidePasteAction_OsTextOnly_ReturnsOsText_WhenPreferOsTrue()
+    public void SharedPlanner_OsTextOnly_ReturnsText()
     {
-        var action = OsClipboardService.DecidePasteAction(
-            osHasImage: false, osHasText: true, internalHasData: false,
-            preferOsClipboard: true);
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false, hasImage: false, hasText: true,
+            internalHasData: false, ownCopyIsCurrent: false);
 
-        action.Should().Be(PasteAction.OsText);
+        action.Should().Be(PresentationClipboardPasteSource.Text);
     }
 
     [Fact]
-    public void DecidePasteAction_InternalOnly_ReturnsInternal_WhenPreferOsTrue()
+    public void SharedPlanner_InternalOnly_ReturnsInternal()
     {
-        var action = OsClipboardService.DecidePasteAction(
-            osHasImage: false, osHasText: false, internalHasData: true,
-            preferOsClipboard: true);
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false, hasImage: false, hasText: false,
+            internalHasData: true, ownCopyIsCurrent: false);
 
-        action.Should().Be(PasteAction.Internal);
+        action.Should().Be(PresentationClipboardPasteSource.Internal);
     }
 
     [Fact]
     public void DecidePasteAction_NothingAvailable_ReturnsNothing()
     {
-        var action = OsClipboardService.DecidePasteAction(
-            osHasImage: false, osHasText: false, internalHasData: false,
-            preferOsClipboard: true);
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false, hasImage: false, hasText: false,
+            internalHasData: false, ownCopyIsCurrent: false);
 
-        action.Should().Be(PasteAction.Nothing);
+        action.Should().Be(PresentationClipboardPasteSource.Nothing);
     }
 
     [Fact]
-    public void DecidePasteAction_InternalHasData_PrefersInternal_WhenPreferOsFalse()
+    public void SharedPlanner_ImageAndText_ImageWins()
     {
-        var action = OsClipboardService.DecidePasteAction(
-            osHasImage: true, osHasText: true, internalHasData: true,
-            preferOsClipboard: false);
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false, hasImage: true, hasText: true,
+            internalHasData: false, ownCopyIsCurrent: false);
 
-        action.Should().Be(PasteAction.Internal,
-            "when preferOsClipboard=false, internal clipboard wins");
-    }
-
-    [Fact]
-    public void DecidePasteAction_OsImageAndText_ImageWins_WhenPreferOsTrue()
-    {
-        var action = OsClipboardService.DecidePasteAction(
-            osHasImage: true, osHasText: true, internalHasData: false,
-            preferOsClipboard: true);
-
-        action.Should().Be(PasteAction.OsImage,
+        action.Should().Be(PresentationClipboardPasteSource.Image,
             "image takes priority over text in OS-preferred mode");
-    }
-
-    [Fact]
-    public void DecidePasteAction_NothingOnOsButInternalHasData_PreferOsFalse_ReturnsInternal()
-    {
-        var action = OsClipboardService.DecidePasteAction(
-            osHasImage: false, osHasText: false, internalHasData: true,
-            preferOsClipboard: false);
-
-        action.Should().Be(PasteAction.Internal);
     }
 
     // ════════════════════════════════════════════════════════════════════════════════
@@ -194,12 +204,12 @@ public sealed class OsClipboardServiceTests
     [StaFact]
     public void BuildDataObject_WithTextShape_ContainsText()
     {
-        var sess    = MakeSessionWithShape(out _);
-        var svc     = MakeService();
-        var slide   = sess.CurrentSlide!;
-        var shapes  = slide.Shapes.AsReadOnly();
-
-        var dataObj = svc.BuildDataObject(sess.Presentation, slide, shapes);
+        var session = MakeSessionWithShape(out _);
+        var service = MakeService();
+        var dataObj = service.BuildDataObject(
+            session.Presentation,
+            session.CurrentSlide!,
+            session.CurrentSlide!.Shapes);
 
         // WPF DataObject.SetText stores under UnicodeText (CF_UNICODETEXT).
         dataObj.GetDataPresent(DataFormats.UnicodeText).Should().BeTrue(
@@ -211,12 +221,8 @@ public sealed class OsClipboardServiceTests
     [StaFact]
     public void BuildDataObject_WithStubRenderer_ContainsImage()
     {
-        var sess   = MakeSessionWithShape(out _);
-        var svc    = MakeService();
-        var slide  = sess.CurrentSlide!;
-        var shapes = slide.Shapes.AsReadOnly();
-
-        var dataObj = svc.BuildDataObject(sess.Presentation, slide, shapes);
+        var dataObj = WpfOsClipboard.BuildDataObject(
+            new PresentationClipboardContent(PngBytes: _minPng));
 
         dataObj.GetDataPresent(DataFormats.Bitmap).Should().BeTrue(
             "renderer produced a PNG that should be placed as bitmap on DataObject");
@@ -225,13 +231,8 @@ public sealed class OsClipboardServiceTests
     [StaFact]
     public void BuildDataObject_RendererReturnsEmpty_NoBitmapInDataObject()
     {
-        var renderer = new StubShapeRenderer { ReturnEmpty = true };
-        var sess     = MakeSessionWithShape(out _);
-        var svc      = new OsClipboardService(new FakeOsClipboard(), renderer);
-        var slide    = sess.CurrentSlide!;
-        var shapes   = slide.Shapes.AsReadOnly();
-
-        var dataObj = svc.BuildDataObject(sess.Presentation, slide, shapes);
+        var dataObj = WpfOsClipboard.BuildDataObject(
+            new PresentationClipboardContent(PngBytes: [], Text: "Hello"));
 
         // No image (renderer returned empty), but text still present.
         dataObj.GetDataPresent(DataFormats.UnicodeText).Should().BeTrue(
@@ -243,6 +244,157 @@ public sealed class OsClipboardServiceTests
     // ════════════════════════════════════════════════════════════════════════════════
     //  PlaceSelectionOnOsClipboard (no real clipboard via FakeOsClipboard)
     // ════════════════════════════════════════════════════════════════════════════════
+
+    [StaFact]
+    public void WpfDataObject_PublishesPublicFormats_AndRoundTripsSharedContent()
+    {
+        var sess = MakeSessionWithShape(out var shape);
+        var selection = PresentationClipboardSelectionCodec.Serialize(
+            sess.Presentation,
+            sess.CurrentSlide!,
+            [shape]);
+        var content = new PresentationClipboardContent(
+            selection,
+            _minPng,
+            "Hello",
+            "cross-host-owner");
+
+        var dataObject = WpfOsClipboard.BuildDataObject(content);
+
+        WpfOsClipboard.SelectionFormat.Should().Be(PresentationClipboardFormats.Selection);
+        WpfOsClipboard.OwnerTokenFormat.Should().Be(PresentationClipboardFormats.OwnerToken);
+        WpfOsClipboard.LegacyAvaloniaSelectionFormat.Should().Be(
+            "avn-app-fmt:" + PresentationClipboardFormats.Selection);
+        WpfOsClipboard.LegacyAvaloniaOwnerTokenFormat.Should().Be(
+            "avn-app-fmt:" + PresentationClipboardFormats.OwnerToken);
+        dataObject.GetDataPresent(WpfOsClipboard.SelectionFormat, false).Should().BeTrue();
+        dataObject.GetDataPresent(WpfOsClipboard.OwnerTokenFormat, false).Should().BeTrue();
+        dataObject.GetDataPresent(
+            WpfOsClipboard.LegacyAvaloniaSelectionFormat,
+            false).Should().BeFalse();
+        dataObject.GetDataPresent(
+            WpfOsClipboard.LegacyAvaloniaOwnerTokenFormat,
+            false).Should().BeFalse();
+        dataObject.GetFormats(autoConvert: false).Should().Contain(
+            WpfOsClipboard.SelectionFormat,
+            WpfOsClipboard.OwnerTokenFormat);
+        ((MemoryStream)dataObject.GetData(WpfOsClipboard.SelectionFormat, false)!)
+            .ToArray().Should().Equal(selection);
+        ((MemoryStream)dataObject.GetData(WpfOsClipboard.OwnerTokenFormat, false)!)
+            .ToArray().Should().Equal(
+                System.Text.Encoding.Unicode.GetBytes("cross-host-owner\0"));
+
+        var roundTrip = WpfOsClipboard.ReadDataObject(dataObject);
+        roundTrip.SelectionBytes.Should().Equal(selection);
+        roundTrip.OwnerToken.Should().Be("cross-host-owner");
+        roundTrip.Text.Should().Be("Hello");
+        roundTrip.HasImage.Should().BeTrue();
+        PresentationClipboardSelectionCodec.Deserialize(roundTrip.SelectionBytes!)
+            .Should().ContainSingle()
+            .Which.Name.Should().Be("TestShape");
+    }
+
+    [StaFact]
+    public void WpfDataObject_ComPayloadMatchesAvaloniaWin32HGlobalContract()
+    {
+        var selection = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x11, 0x22, 0x33 };
+        var ownerBytes = Encoding.Unicode.GetBytes("native-owner\0");
+        var dataObject = WpfOsClipboard.BuildDataObject(new PresentationClipboardContent(
+            SelectionBytes: selection,
+            OwnerToken: "native-owner"));
+
+        ReadComHGlobal(dataObject, WpfOsClipboard.SelectionFormat)
+            .Should().Equal(selection);
+        ReadComHGlobal(dataObject, WpfOsClipboard.OwnerTokenFormat)
+            .Should().Equal(ownerBytes);
+    }
+
+    [StaFact]
+    public void WpfDataObject_ReadsLegacyAvaloniaApplicationFormats()
+    {
+        var dataObject = new DataObject();
+        dataObject.SetData(
+            WpfOsClipboard.LegacyAvaloniaSelectionFormat,
+            new MemoryStream([5, 4, 3], writable: false),
+            false);
+        dataObject.SetData(
+            WpfOsClipboard.LegacyAvaloniaOwnerTokenFormat,
+            new MemoryStream(
+                System.Text.Encoding.Unicode.GetBytes("legacy-owner\0"),
+                writable: false),
+            false);
+
+        var content = WpfOsClipboard.ReadDataObject(dataObject);
+
+        content.SelectionBytes.Should().Equal(5, 4, 3);
+        content.OwnerToken.Should().Be("legacy-owner");
+    }
+
+    private static byte[] ReadComHGlobal(DataObject dataObject, string format)
+    {
+        var formatEtc = new FORMATETC
+        {
+            cfFormat = unchecked((short)DataFormats.GetDataFormat(format).Id),
+            dwAspect = DVASPECT.DVASPECT_CONTENT,
+            lindex = -1,
+            tymed = TYMED.TYMED_HGLOBAL,
+        };
+        ((System.Runtime.InteropServices.ComTypes.IDataObject)dataObject)
+            .GetData(ref formatEtc, out var medium);
+
+        try
+        {
+            medium.tymed.Should().Be(TYMED.TYMED_HGLOBAL);
+            var size = checked((int)NativeClipboardMemory.GlobalSize(medium.unionmember));
+            var source = NativeClipboardMemory.GlobalLock(medium.unionmember);
+            source.Should().NotBe(IntPtr.Zero);
+            try
+            {
+                var bytes = new byte[size];
+                Marshal.Copy(source, bytes, 0, size);
+                return bytes;
+            }
+            finally
+            {
+                NativeClipboardMemory.GlobalUnlock(medium.unionmember);
+            }
+        }
+        finally
+        {
+            NativeClipboardMemory.ReleaseStgMedium(ref medium);
+        }
+    }
+
+    private static class NativeClipboardMemory
+    {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern IntPtr GlobalLock(IntPtr memory);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool GlobalUnlock(IntPtr memory);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern nuint GlobalSize(IntPtr memory);
+
+        [DllImport("ole32.dll")]
+        internal static extern void ReleaseStgMedium(ref STGMEDIUM medium);
+    }
+
+    [StaFact]
+    public void WpfDataObject_MalformedCustomPayload_PreservesTextFallback()
+    {
+        var dataObject = new DataObject();
+        dataObject.SetData(WpfOsClipboard.SelectionFormat, "not binary data", false);
+        dataObject.SetData(WpfOsClipboard.OwnerTokenFormat, new byte[] { 1 }, false);
+        dataObject.SetText("surviving text");
+
+        var content = WpfOsClipboard.ReadDataObject(dataObject);
+
+        content.HasSelection.Should().BeFalse();
+        content.OwnerToken.Should().BeNull();
+        content.Text.Should().Be("surviving text");
+    }
 
     [StaFact]
     public void PlaceSelectionOnOsClipboard_WithSelection_CallsSetDataObject()
@@ -348,6 +500,77 @@ public sealed class OsClipboardServiceTests
     //  ExtractText helper
     // ════════════════════════════════════════════════════════════════════════════════
 
+    [StaFact]
+    public void Paste_ExternalNativeSelection_PrecedesImageAndText()
+    {
+        var source = MakeSessionWithShape(out var sourceShape);
+        var native = PresentationClipboardSelectionCodec.Serialize(
+            source.Presentation,
+            source.CurrentSlide!,
+            [sourceShape]);
+        var fake = new FakeOsClipboard
+        {
+            SelectionBytes = native,
+            HasImage = true,
+            ImageBytes = _minPng,
+            HasText = true,
+            Text = "fallback text",
+            OwnerToken = "external-owner",
+        };
+        var destination = Presentation.CreateEmpty();
+        destination.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(destination, new PresentationCommandBus(destination));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.NativeSelection);
+        editor.CurrentSlide!.Shapes.Should().ContainSingle();
+        editor.CurrentSlide.Shapes[0].Kind.Should().Be(SlideShapeKind.AutoShape);
+        editor.CurrentSlide.Shapes[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Hello");
+    }
+
+    [StaFact]
+    public void Paste_MalformedNativeSelection_FallsBackToImageThenText()
+    {
+        var fake = new FakeOsClipboard
+        {
+            SelectionBytes = [1, 2, 3],
+            HasImage = true,
+            ImageBytes = _minPng,
+            HasText = true,
+            Text = "fallback text",
+            OwnerToken = "external-owner",
+        };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.Image);
+        editor.CurrentSlide!.Shapes.Should().ContainSingle()
+            .Which.Kind.Should().Be(SlideShapeKind.Picture);
+    }
+
+    [StaFact]
+    public void LockedClipboard_ReadAndWrite_DegradesToInternalClipboard()
+    {
+        var fake = new FakeOsClipboard { ThrowOnRead = true, ThrowOnWrite = true };
+        var editor = MakeSessionWithShape(out _);
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+        editor.CopySelectedShapes();
+
+        service.TryPlaceSelectionOnOsClipboard(editor).Should().BeFalse();
+        editor.ClearSelection();
+        var result = service.PasteWithResult(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.Internal);
+        editor.CurrentSlide!.Shapes.Should().HaveCount(2);
+        service.OwnCopyIsCurrentOnOs.Should().BeFalse();
+    }
+
     [Fact]
     public void ExtractText_MultipleShapesWithText_JoinsWithDoubleNewline()
     {
@@ -442,14 +665,14 @@ public sealed class OsClipboardServiceTests
     [Fact]
     public void Y6_DecidePasteAction_OwnCopyOnOs_PrefersInternal()
     {
-        var action = OsClipboardService.DecidePasteAction(
-            osHasImage:          true,
-            osHasText:           true,
-            internalHasData:     true,
-            preferOsClipboard:   true,
-            ownCopyIsCurrentOnOs: true);
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: true,
+            hasImage: true,
+            hasText: true,
+            internalHasData: true,
+            ownCopyIsCurrent: true);
 
-        action.Should().Be(PasteAction.Internal,
+        action.Should().Be(PresentationClipboardPasteSource.Internal,
             "Y6: own-copy token + internal data → Internal wins over OS image");
     }
 
@@ -459,14 +682,14 @@ public sealed class OsClipboardServiceTests
     [Fact]
     public void Y6_DecidePasteAction_OwnCopyOnOs_NoInternal_FallsToOsImage()
     {
-        var action = OsClipboardService.DecidePasteAction(
-            osHasImage:          true,
-            osHasText:           false,
-            internalHasData:     false,
-            preferOsClipboard:   true,
-            ownCopyIsCurrentOnOs: true);
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false,
+            hasImage: true,
+            hasText: false,
+            internalHasData: false,
+            ownCopyIsCurrent: true);
 
-        action.Should().Be(PasteAction.OsImage,
+        action.Should().Be(PresentationClipboardPasteSource.Image,
             "Y6 boundary: own-copy but no internal data → OsImage (nothing to prefer)");
     }
 
@@ -639,6 +862,8 @@ public sealed class OsClipboardServiceTests
 
         // Simulate another app writing to the clipboard (bumps sequence number).
         fake.SequenceNumber++;
+        fake.SelectionBytes = null;
+        fake.OwnerToken = null;
         // The OS clipboard now contains an external image (already set via HasImage=true).
 
         // OwnCopyIsCurrentOnOs must now be false.

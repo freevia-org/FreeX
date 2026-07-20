@@ -14,9 +14,8 @@ public sealed class WpfClipboardCommandTests
         ExecuteRibbonCut(fixture.Editor, fixture.Service);
 
         fixture.Clipboard.WriteCount.Should().Be(1);
-        fixture.Clipboard.LastDataObject!
-            .GetData(DataFormats.UnicodeText)
-            .Should().Be("Clipboard parity");
+        fixture.Clipboard.LastContent!.Text.Should().Be("Clipboard parity");
+        fixture.Clipboard.LastContent.HasSelection.Should().BeTrue();
         fixture.Renderer.RenderedShapeNames.Should().Equal("Parity shape");
         fixture.Slide.Shapes.Should().BeEmpty();
         fixture.Editor.CanPaste.Should().BeTrue();
@@ -26,6 +25,52 @@ public sealed class WpfClipboardCommandTests
 
         fixture.Slide.Shapes.Should().ContainSingle();
         fixture.Editor.CanUndo.Should().BeFalse("cut should add exactly one delete to undo history");
+    }
+
+    [StaFact]
+    public void Cut_MultipleShapes_IsOneUndoableOperation()
+    {
+        var fixture = CreateFixture();
+        var second = new SlideShape
+        {
+            Id = 2u,
+            Name = "Second shape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu = 3_657_600,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 1_828_800,
+            ExtentCyEmu = 1_828_800,
+        };
+        fixture.Slide.Shapes.Add(second);
+        fixture.Editor.Select(second.Id, addToSelection: true);
+
+        WpfClipboardCommands.Cut(fixture.Editor, fixture.Service);
+
+        fixture.Slide.Shapes.Should().BeEmpty();
+        PresentationClipboardSelectionCodec.Deserialize(
+            fixture.Clipboard.LastContent!.SelectionBytes!).Should().HaveCount(2);
+
+        fixture.Editor.Undo();
+
+        fixture.Slide.Shapes.Select(shape => shape.Name)
+            .Should().Equal("Parity shape", "Second shape");
+        fixture.Editor.CanUndo.Should().BeFalse("multi-shape cut must be a single undo step");
+    }
+
+    [StaFact]
+    public void Cut_WhenClipboardIsLocked_StillCutsAndKeepsInternalPasteData()
+    {
+        var fixture = CreateFixture();
+        fixture.Clipboard.ThrowOnWrite = true;
+
+        WpfClipboardCommands.Cut(fixture.Editor, fixture.Service);
+
+        fixture.Slide.Shapes.Should().BeEmpty();
+        fixture.Editor.CanPaste.Should().BeTrue();
+        fixture.Clipboard.WriteCount.Should().Be(0);
+        fixture.Editor.Undo();
+        fixture.Slide.Shapes.Should().ContainSingle();
     }
 
     [StaFact]
@@ -55,8 +100,8 @@ public sealed class WpfClipboardCommandTests
         WpfClipboardCommands.Cut(keyboard.Editor, keyboard.Service);
 
         ribbon.Clipboard.WriteCount.Should().Be(keyboard.Clipboard.WriteCount);
-        ribbon.Clipboard.LastDataObject!.GetData(DataFormats.UnicodeText)
-            .Should().Be(keyboard.Clipboard.LastDataObject!.GetData(DataFormats.UnicodeText));
+        ribbon.Clipboard.LastContent!.Text
+            .Should().Be(keyboard.Clipboard.LastContent!.Text);
         ribbon.Renderer.RenderedShapeNames.Should().Equal(keyboard.Renderer.RenderedShapeNames);
         ribbon.Slide.Shapes.Count.Should().Be(keyboard.Slide.Shapes.Count);
         ribbon.Editor.CanPaste.Should().Be(keyboard.Editor.CanPaste);
@@ -117,18 +162,24 @@ public sealed class WpfClipboardCommandTests
     private sealed class RecordingClipboard : IOsClipboard
     {
         public int WriteCount { get; private set; }
-        public DataObject? LastDataObject { get; private set; }
+        public PresentationClipboardContent? LastContent { get; private set; }
         public long SequenceNumber { get; private set; } = 1;
+        public bool ThrowOnWrite { get; set; }
 
-        public bool ContainsImage() => false;
-        public bool ContainsText() => false;
-        public byte[]? GetImagePngBytes() => null;
-        public string? GetText() => null;
+        public PresentationClipboardContent Read() => LastContent ?? new();
+        public bool ContainsImage() => LastContent?.HasImage == true;
+        public bool ContainsText() => LastContent?.HasText == true;
+        public byte[]? GetImagePngBytes() => LastContent?.PngBytes;
+        public string? GetText() => LastContent?.Text;
+        public void SetDataObject(DataObject data) =>
+            Write(WpfOsClipboard.ReadDataObject(data));
 
-        public void SetDataObject(DataObject data)
+        public void Write(PresentationClipboardContent content)
         {
+            if (ThrowOnWrite)
+                throw new InvalidOperationException("clipboard locked");
             WriteCount++;
-            LastDataObject = data;
+            LastContent = content;
             SequenceNumber++;
         }
     }
