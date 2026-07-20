@@ -57,7 +57,7 @@ namespace FreeW.App.Avalonia;
 /// Deferred: Advanced typography (kerning, ligatures, number form/spacing, character spacing,
 /// position) — modelled in <see cref="RunFormatting"/> but low-priority for the dialog surface.
 /// </summary>
-public sealed class FontDialog : Window
+public sealed class FontDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

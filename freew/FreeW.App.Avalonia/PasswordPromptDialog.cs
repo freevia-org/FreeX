@@ -8,7 +8,7 @@ using Free.Shared.Shell.Avalonia;
 namespace FreeW.App.Avalonia;
 
 /// <summary>Single-field password prompt matching the FreeW WPF authority surface.</summary>
-internal sealed class PasswordPromptDialog : Window
+internal sealed class PasswordPromptDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         new(FontFamily.Default);

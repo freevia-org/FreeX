@@ -9,7 +9,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class FootnoteEndnoteOptionsDialog : Window
+internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
     private readonly ComboBox _footnoteFormat;

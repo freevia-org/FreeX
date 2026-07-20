@@ -9,7 +9,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class MultilevelListDialog : Window
+internal sealed class MultilevelListDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
     private readonly ComboBox _levels;

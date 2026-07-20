@@ -10,7 +10,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class TableFormulaDialog : Window
+internal sealed class TableFormulaDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         new(FontFamily.Default);
@@ -177,7 +177,7 @@ internal enum TablePropertiesDialogTab
     Cell,
 }
 
-internal sealed class TablePropertiesDialog : Window
+internal sealed class TablePropertiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         new(FontFamily.Default);

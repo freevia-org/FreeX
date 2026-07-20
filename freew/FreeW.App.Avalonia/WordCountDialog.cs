@@ -13,7 +13,7 @@ namespace FreeW.App.Avalonia;
 /// paragraphs and lines, computed from the model via <see cref="DocumentStatistics"/>. Mirrors Word's
 /// Review → Word Count dialog. Read-only; closes on OK.
 /// </summary>
-internal sealed class WordCountDialog : Window
+internal sealed class WordCountDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

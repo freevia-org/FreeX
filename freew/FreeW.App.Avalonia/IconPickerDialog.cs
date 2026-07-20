@@ -13,7 +13,7 @@ namespace FreeW.App.Avalonia;
 /// SVG is returned as a shared selection record; rasterization remains a host-owned follow-up because the
 /// WPF SharpVectors rasterizer is intentionally not a cross-platform dependency.
 /// </summary>
-internal sealed class IconPickerDialog : Window
+internal sealed class IconPickerDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = new(FontFamily.Default);
     private readonly IReadOnlyList<IconPickerEntry> _entries;

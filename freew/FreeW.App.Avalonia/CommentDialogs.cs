@@ -8,7 +8,7 @@ using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class CommentReplyDialog : Window
+internal sealed class CommentReplyDialog : FreeWDialogWindow
 {
     private readonly TextBox _text = new()
     {
@@ -99,7 +99,7 @@ internal sealed class CommentReplyDialog : Window
     }
 }
 
-internal sealed class CommentListDialog : Window
+internal sealed class CommentListDialog : FreeWDialogWindow
 {
     public CommentListDialog(IReadOnlyList<CommentListItem> items)
     {

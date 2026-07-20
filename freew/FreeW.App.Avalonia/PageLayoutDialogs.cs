@@ -102,7 +102,7 @@ internal static class PageLayoutDialogChrome
     }
 }
 
-public sealed class ColumnsDialog : Window
+public sealed class ColumnsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
     private readonly ComboBox _preset;
@@ -167,7 +167,7 @@ public sealed class ColumnsDialog : Window
     }
 }
 
-public sealed class CustomParagraphSpacingDialog : Window
+public sealed class CustomParagraphSpacingDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
     private readonly TextBox _before;
@@ -244,7 +244,7 @@ public sealed class CustomParagraphSpacingDialog : Window
     }
 }
 
-public sealed class DropCapOptionsDialog : Window
+public sealed class DropCapOptionsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
     private readonly RadioButton _none;
@@ -320,7 +320,7 @@ public sealed class DropCapOptionsDialog : Window
     }
 }
 
-public sealed class HyphenationOptionsDialog : Window
+public sealed class HyphenationOptionsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
     private readonly CheckBox _automatic;
@@ -386,7 +386,7 @@ public sealed class HyphenationOptionsDialog : Window
     }
 }
 
-public sealed class LineNumberOptionsDialog : Window
+public sealed class LineNumberOptionsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
     private readonly TextBox _startAt;

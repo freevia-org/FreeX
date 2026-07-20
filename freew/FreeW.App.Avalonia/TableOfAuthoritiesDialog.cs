@@ -8,7 +8,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class TableOfAuthoritiesDialog : Window
+internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
     private readonly IReadOnlyList<TableOfAuthoritiesCategoryChoice> _categories;

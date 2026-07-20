@@ -10,7 +10,7 @@ using FreeW.Core.Model;
 namespace FreeW.App.Avalonia;
 
 /// <summary>Avalonia counterpart of WPF's Create New Theme Colors dialog.</summary>
-public sealed class CustomizeThemeColorsDialog : Window
+public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
 {
     private readonly DocumentTheme _current;
     private readonly TextBox[] _colorBoxes;
@@ -101,7 +101,7 @@ public sealed class CustomizeThemeColorsDialog : Window
 }
 
 /// <summary>Avalonia counterpart of WPF's Create New Theme Fonts dialog.</summary>
-public sealed class CustomizeThemeFontsDialog : Window
+public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
 {
     private readonly ComboBox _heading;
     private readonly ComboBox _body;
@@ -185,7 +185,7 @@ public sealed class CustomizeThemeFontsDialog : Window
 }
 
 /// <summary>Avalonia page-color picker matching WPF's palette, No Color, and More Colors flow.</summary>
-public sealed class PageColorDialog : Window
+public sealed class PageColorDialog : FreeWDialogWindow
 {
     private readonly ComboBox _palette;
     private readonly TextBox _custom;
@@ -259,7 +259,7 @@ public sealed class PageColorDialog : Window
 }
 
 /// <summary>Small modal selector for the same Effects catalog exposed by WPF's Design gallery.</summary>
-public sealed class ThemeEffectsDialog : Window
+public sealed class ThemeEffectsDialog : FreeWDialogWindow
 {
     private readonly ComboBox _effects;
     public DocumentEffectSet? Result { get; private set; }
@@ -306,7 +306,7 @@ public sealed class ThemeEffectsDialog : Window
 }
 
 /// <summary>Small modal selector for WPF's Design Style Sets gallery.</summary>
-public sealed class StyleSetDialog : Window
+public sealed class StyleSetDialog : FreeWDialogWindow
 {
     private readonly ComboBox _styleSets;
     public DocumentStyleSet? Result { get; private set; }
@@ -353,7 +353,7 @@ public sealed class StyleSetDialog : Window
 }
 
 /// <summary>Lifecycle-only confirmation window for a future shell callback, matching the WPF default action wording.</summary>
-public sealed class SetAsDefaultConfirmationDialog : Window
+public sealed class SetAsDefaultConfirmationDialog : FreeWDialogWindow
 {
     public bool Confirmed { get; private set; }
 

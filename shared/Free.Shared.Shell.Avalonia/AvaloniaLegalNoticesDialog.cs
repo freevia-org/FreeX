@@ -13,7 +13,7 @@ namespace Free.Shared.Shell.Avalonia;
 /// Shared Avalonia Legal Notices dialog matching the WPF sister surface's structure,
 /// automation metadata, sizing, keyboard focus, and read/copy behavior.
 /// </summary>
-public class AvaloniaLegalNoticesDialog : Window
+public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
 {
     private static readonly Regex NonAutomationIdCharacter =
         new("[^A-Za-z0-9]+", RegexOptions.Compiled);

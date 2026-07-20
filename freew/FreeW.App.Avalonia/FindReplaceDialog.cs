@@ -29,7 +29,7 @@ namespace FreeW.App.Avalonia;
 /// The inline find bar in MainWindow continues to work; the dialog is opened via a separate
 /// <c>freew.find-replace-dialog</c> ribbon command (Home → Editing group) or Ctrl+H.
 /// </summary>
-public sealed class FindReplaceDialog : Window
+public sealed class FindReplaceDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

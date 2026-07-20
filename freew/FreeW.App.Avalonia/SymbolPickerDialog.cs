@@ -9,7 +9,7 @@ using FreeW.App.Presentation.Dialogs;
 namespace FreeW.App.Avalonia;
 
 /// <summary>Compact modal glyph picker matching FreeW's WPF Symbol dialog.</summary>
-internal sealed class SymbolPickerDialog : Window
+internal sealed class SymbolPickerDialog : FreeWDialogWindow
 {
     private readonly List<Button> _glyphButtons = [];
 

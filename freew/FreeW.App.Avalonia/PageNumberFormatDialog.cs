@@ -10,7 +10,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class PageNumberFormatDialog : Window
+internal sealed class PageNumberFormatDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

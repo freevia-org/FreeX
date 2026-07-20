@@ -8,7 +8,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class BookmarkManagerDialog : Window
+internal sealed class BookmarkManagerDialog : FreeWDialogWindow
 {
     private readonly DocumentView _editor;
     private readonly ListBox _list;

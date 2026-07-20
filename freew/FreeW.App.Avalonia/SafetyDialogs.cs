@@ -9,7 +9,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class RestrictEditingDialog : Window
+internal sealed class RestrictEditingDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly ProtectionSettings _currentProtection;
@@ -208,7 +208,7 @@ internal sealed class RestrictEditingDialog : Window
     }
 }
 
-internal sealed class DocumentInspectorDialog : Window
+internal sealed class DocumentInspectorDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly CheckBox _comments;
@@ -292,7 +292,7 @@ internal sealed class DocumentInspectorDialog : Window
     }
 }
 
-internal sealed class AccessibilityReportDialog : Window
+internal sealed class AccessibilityReportDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

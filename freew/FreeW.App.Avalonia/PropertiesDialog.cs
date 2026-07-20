@@ -9,7 +9,7 @@ using Free.Shared.Shell.Avalonia;
 namespace FreeW.App.Avalonia;
 
 /// <summary>Edits the DOCX core properties persisted by the shared OPC model.</summary>
-internal sealed class PropertiesDialog : Window
+internal sealed class PropertiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(global::Avalonia.Media.FontFamily.Default);
 

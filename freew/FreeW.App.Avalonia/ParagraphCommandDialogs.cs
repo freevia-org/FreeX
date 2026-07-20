@@ -11,7 +11,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-public sealed class TabsDialog : Window
+public sealed class TabsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
 
@@ -197,7 +197,7 @@ public sealed class TabsDialog : Window
     }
 }
 
-public sealed class BordersAndShadingDialog : Window
+public sealed class BordersAndShadingDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
 
@@ -422,7 +422,7 @@ public sealed class BordersAndShadingDialog : Window
     }
 }
 
-public sealed class SortDialog : Window
+public sealed class SortDialog : FreeWDialogWindow
 {
     private readonly ComboBox _type1 = Combo();
     private readonly ComboBox _type2 = Combo();

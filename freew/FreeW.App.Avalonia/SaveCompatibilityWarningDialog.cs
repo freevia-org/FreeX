@@ -7,7 +7,7 @@ using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class SaveCompatibilityWarningDialog : Window
+internal sealed class SaveCompatibilityWarningDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 

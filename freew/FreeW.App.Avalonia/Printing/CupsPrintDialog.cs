@@ -8,7 +8,7 @@ using FreeW.App.Presentation.Printing;
 
 namespace FreeW.App.Avalonia.Printing;
 
-internal sealed class CupsPrintDialog : Window
+internal sealed class CupsPrintDialog : FreeWDialogWindow
 {
     private readonly ComboBox _printer;
     private readonly TextBox _copies;
