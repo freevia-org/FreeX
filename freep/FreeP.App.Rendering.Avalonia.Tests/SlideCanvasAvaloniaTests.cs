@@ -414,7 +414,7 @@ public sealed class SlideCanvasAvaloniaTests
         startPlan.HasRichFormatting.Should().BeTrue();
         startPlan.HasMixedFormatting.Should().BeTrue();
         projectedFontFamily.Should().Contain("Aptos");
-        projectedFontSize.Should().Be(18);
+        projectedFontSize.Should().BeApproximately(24, 0.01, "18pt is 24 device-independent pixels");
         projectedBold.Should().BeFalse("the Avalonia shape editor starts from the first rich run's shared style");
         richClass.Should().BeTrue();
         mixedClass.Should().BeTrue();
@@ -715,7 +715,7 @@ public sealed class SlideCanvasAvaloniaTests
         startPlan.HasRichFormatting.Should().BeTrue();
         startPlan.HasMixedFormatting.Should().BeTrue();
         projectedFontFamily.Should().Contain("Aptos");
-        projectedFontSize.Should().Be(18);
+        projectedFontSize.Should().BeApproximately(24, 0.01, "18pt is 24 device-independent pixels");
         projectedBold.Should().BeFalse("the Avalonia editor starts from the first rich run's shared style");
         richClass.Should().BeTrue();
         mixedClass.Should().BeTrue();
@@ -835,16 +835,16 @@ public sealed class SlideCanvasAvaloniaTests
 
             overlayFontFamily = box.FontFamily.ToString();
             overlayFontSize = box.FontSize;
-            overlayColor = richEditor.RichTextView.Inlines!
-                .OfType<global::Avalonia.Controls.Documents.Run>()
-                .First()
-                .Foreground.Should().BeOfType<SolidColorBrush>().Subject.Color;
+            var visualColor = richEditor.RichTextView.VisualPlan.Paragraphs[0].Runs[0].Color;
+            visualColor.Should().NotBeNull();
+            var renderedColor = visualColor!.Resolved;
+            overlayColor = Color.FromRgb(renderedColor.R, renderedColor.G, renderedColor.B);
 
             textEditor.CommitCellEdit();
         });
 
         overlayFontFamily.Should().Contain("Consolas");
-        overlayFontSize.Should().Be(24);
+        overlayFontSize.Should().BeApproximately(32, 0.01, "24pt is 32 device-independent pixels");
         overlayColor.Should().Be(Color.FromRgb(0x22, 0x44, 0x66));
 
         var runs = shape!.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs;
