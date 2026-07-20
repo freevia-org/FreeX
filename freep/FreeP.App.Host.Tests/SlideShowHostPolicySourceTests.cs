@@ -78,6 +78,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayRippleTransition(");
         source.Should().Contain("SlideShowRippleTransitionPlanner.Plan(");
         source.Should().Contain("BuildRippleTransitionGeometry(");
+        source.Should().Contain("PlayWindTransition(");
+        source.Should().Contain("SlideShowWindTransitionPlanner.Plan(");
+        source.Should().Contain("BuildWindTransitionGeometry(");
         source.Should().Contain("PlaySwitchTransition(");
         source.Should().Contain("PlayOrbitTransition(");
         source.Should().Contain("PlayFerrisTransition(");

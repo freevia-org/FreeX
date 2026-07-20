@@ -132,6 +132,15 @@ public sealed class SlideShowPlaybackPlannerTests
         ripple.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Ripple);
         ripple.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Ripple);
 
+        var wind = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Wind,
+            Direction = TransitionDirection.Right
+        });
+
+        wind.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Wind);
+        wind.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Wind);
+
         var pageCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
             Kind = TransitionKind.PageCurlSingle,
@@ -243,6 +252,31 @@ public sealed class SlideShowPlaybackPlannerTests
         closed.Should().BeEmpty();
         partial.Should().HaveCount(1);
         partial[0].Points.Should().HaveCount(plan.SegmentCount);
+        open.Should().HaveCount(1);
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+    }
+
+    [Fact]
+    public void WindPlanner_BuildsDeterministicStaggeredBands()
+    {
+        var plan = SlideShowWindTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Wind,
+            Direction = TransitionDirection.Right
+        });
+
+        plan.HorizontalAxis.Should().BeTrue();
+        plan.Reverse.Should().BeFalse();
+
+        var closed = SlideShowWindTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowWindTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowWindTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowWindTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().NotBeEmpty();
+        partial.Should().OnlyContain(band => band.Points.Count == 4);
         open.Should().HaveCount(1);
         open[0].Points.Should().HaveCount(4);
         partial.Should().BeEquivalentTo(repeat);
