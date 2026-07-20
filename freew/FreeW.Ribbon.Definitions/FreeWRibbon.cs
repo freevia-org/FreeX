@@ -696,6 +696,9 @@ public static class FreeWRibbon
                     g.Icon("freew.merge-preview-previous", "Previous Record", RibbonCommandIconKind.Previous);
                     g.Icon("freew.merge-preview-next", "Next Record", RibbonCommandIconKind.Next);
                     g.Icon("freew.merge-preview-last", "Last Record", RibbonCommandIconKind.Next);
+                    g.Medium("freew.merge-find-recipient", "Find Recipient", RibbonCommandIconKind.Search);
+                    g.Medium("freew.merge-check-errors", "Check for Errors", RibbonCommandIconKind.Warning,
+                        accent: RibbonCommandIconAccent.Warning);
                 });
                 tab.Group("merge-finish", "Finish", "F", 110, g =>
                 {
@@ -1163,7 +1166,10 @@ public static class FreeWRibbon
                 new RibbonTabContext("chart", "Chart Tools", RibbonContextColor.Orange), tab =>
             {
                 tab.Group("chart-size", "Size", "S", 90, g =>
-                    g.Medium("freew.chart-size", "Size", RibbonCommandIconKind.Size));
+                {
+                    g.Medium("freew.chart-size", "Size", RibbonCommandIconKind.Size);
+                    g.Medium("freew.chart-size-dialog", "More Size Options...", RibbonCommandIconKind.Size);
+                });
             })
             // ── SmartArt contextual tab — SmartArt Tools (shown when a SmartArt is selected) ─────
             .ContextualTab("smartart-design", "SmartArt Design",
