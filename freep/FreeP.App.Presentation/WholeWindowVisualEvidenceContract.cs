@@ -46,7 +46,7 @@ public static class WholeWindowVisualEvidenceCatalog
 
         Backstage("Info"),
         Backstage("Recent"),
-        Backstage("New"),
+        Backstage("New from template"),
         Backstage("Print"),
         Backstage("Export"),
         Backstage("Options"),
@@ -112,7 +112,7 @@ public static class WholeWindowVisualEvidenceCatalog
 
     private static WholeWindowVisualEvidenceScenario Backstage(string paneLabel) =>
         Scenario(
-            $"backstage.{paneLabel.ToLowerInvariant()}",
+            $"backstage.{paneLabel.ToLowerInvariant().Replace(' ', '-')}",
             WholeWindowVisualEvidenceScenarioKind.BackstagePane,
             paneLabel,
             expectedActiveRibbonTabId: string.Empty,
@@ -154,6 +154,7 @@ public sealed record WholeWindowVisualEvidenceSemanticState(
     bool AppOwnedTitleBarVisible,
     int QuickAccessButtonCount,
     string AppIconIdentity,
+    string WindowTitle,
     int StatusViewModeControlCount,
     bool StatusZoomControlVisible,
     WholeWindowVisualEvidenceBounds TitleBarBounds,

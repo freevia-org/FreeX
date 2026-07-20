@@ -66,6 +66,41 @@ public sealed class WholeWindowVisualEvidenceTests
         }
     }
 
+    [Fact]
+    public void Titlebar_raster_gate_requires_shared_freep_accent_in_declared_bounds()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "freep-whole-window-titlebar-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var visible = Path.Combine(root, "visible.png");
+            var occluded = Path.Combine(root, "occluded.png");
+            var pixels = Enumerable.Repeat((byte)255, 128 * 76 * 4).ToArray();
+            for (var offset = 0; offset < pixels.Length; offset += 4)
+                pixels[offset + 3] = 255;
+            for (var y = 0; y < 10; y++)
+            {
+                for (var x = 0; x < 128; x++)
+                {
+                    var offset = (y * 128 + x) * 4;
+                    pixels[offset] = 42;
+                    pixels[offset + 1] = 71;
+                    pixels[offset + 2] = 183;
+                }
+            }
+            WritePng(visible, BitmapSource.Create(128, 76, 96, 96, PixelFormats.Bgra32, null, pixels, 128 * 4));
+            WriteSolidPng(occluded, 128, 76, 255, 255, 255, 255);
+            var bounds = new FreeP.App.Compositor.WholeWindowVisualEvidenceBounds(0, 0, 128, 10);
+
+            ImageDiff.ValidateFreePTitleBarRegion(visible, bounds).IsValid.Should().BeTrue();
+            ImageDiff.ValidateFreePTitleBarRegion(occluded, bounds).IsValid.Should().BeFalse();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static void WriteSolidPng(string path, int width, int height, byte red, byte green, byte blue, byte alpha)
     {
         var pixels = new byte[width * height * 4];

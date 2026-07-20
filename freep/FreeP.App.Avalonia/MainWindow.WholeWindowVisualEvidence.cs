@@ -21,6 +21,9 @@ public sealed partial class MainWindow
             Editor.ClearSelection();
         else
             Editor.Select(selection);
+        var selectionPrepared = selection == 0
+            ? Editor.SelectedShapeIds.Count == 0
+            : Editor.SelectedShapeIds.SequenceEqual([selection]);
 
         HideReviewCommentsPane();
         SelectRibbonTabForVisualEvidence(
@@ -62,9 +65,7 @@ public sealed partial class MainWindow
                 $"Activated slide index {Editor.CurrentSlideIndex}; expected {scenario.SlideIndex}."),
             new(
                 "selection-activated",
-                selection == 0
-                    ? Editor.SelectedShapeIds.Count == 0
-                    : Editor.SelectedShapeIds.SequenceEqual([selection]),
+                selectionPrepared,
                 $"Selected shape ids: {string.Join(",", Editor.SelectedShapeIds)}."),
         ];
     }
@@ -138,12 +139,13 @@ public sealed partial class MainWindow
             _viewShowState.ShowGuides,
             _viewZoomState.Mode.ToString(),
             _viewZoomState.ZoomPercent,
-            false,
+            _titleBar.IsVisible && _titleBar.Bounds.Height > 0,
+            _quickAccessButtons.Count,
+            Icon is null ? "missing" : "shared-shell:FreeP",
+            Title ?? string.Empty,
             0,
-            "native-toolkit-fallback",
-            0,
             false,
-            new(0, 0, 0, 0),
+            BoundsRelativeTo(root, _titleBar),
             BoundsRelativeTo(root, ribbonRoot),
             BoundsRelativeTo(root, slidePaneRoot),
             BoundsRelativeTo(root, _slideCanvas),

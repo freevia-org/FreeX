@@ -45,7 +45,9 @@ internal sealed record WholeWindowVisualEvidenceComparison(
     IReadOnlyList<string> Details,
     WholeWindowVisualEvidencePixelMetrics? PixelMetrics,
     ImageContentValidation? WpfContentValidation = null,
-    ImageContentValidation? AvaloniaContentValidation = null);
+    ImageContentValidation? AvaloniaContentValidation = null,
+    TitleBarRasterValidation? WpfTitleBarRasterValidation = null,
+    TitleBarRasterValidation? AvaloniaTitleBarRasterValidation = null);
 
 internal sealed record WholeWindowVisualEvidenceSummary(
     int SchemaVersion,
@@ -238,6 +240,8 @@ internal static class WholeWindowVisualEvidence
         var avaloniaClientPath = EvidencePath(evidenceRoot, avalonia.ClientImagePath);
         var wpfContent = TryValidateContent(wpfClientPath);
         var avaloniaContent = TryValidateContent(avaloniaClientPath);
+        var wpfTitleBarRaster = TryValidateTitleBarRaster(wpfClientPath, wpf.SemanticState.TitleBarBounds);
+        var avaloniaTitleBarRaster = TryValidateTitleBarRaster(avaloniaClientPath, avalonia.SemanticState.TitleBarBounds);
 
         if (!StringComparer.Ordinal.Equals(wpf.CaptureStatus, "complete") ||
             !StringComparer.Ordinal.Equals(avalonia.CaptureStatus, "complete") ||
@@ -256,6 +260,10 @@ internal static class WholeWindowVisualEvidence
                 reasons.Add("Avalonia: " + string.Join(", ", avaloniaContent.Failures));
             Mismatch("capture-pixel-content-invalid", string.Join("; ", reasons) + ".");
         }
+        if (wpf.SemanticState.AppOwnedTitleBarVisible && wpfTitleBarRaster?.IsValid != true)
+            Mismatch("app-owned-titlebar-raster", $"WPF titlebar accent is not visibly present in its declared raster bounds (accent ratio {wpfTitleBarRaster?.AccentPixelRatio ?? 0:P1}).");
+        if (avalonia.SemanticState.AppOwnedTitleBarVisible && avaloniaTitleBarRaster?.IsValid != true)
+            Mismatch("app-owned-titlebar-raster", $"Avalonia titlebar accent is not visibly present in its declared raster bounds (accent ratio {avaloniaTitleBarRaster?.AccentPixelRatio ?? 0:P1}).");
 
         if (wpf.PixelWidth != WholeWindowVisualEvidenceCatalog.LogicalClientWidth ||
             wpf.PixelHeight != WholeWindowVisualEvidenceCatalog.LogicalClientHeight ||
@@ -318,7 +326,9 @@ internal static class WholeWindowVisualEvidence
             details,
             pixelMetrics,
             wpfContent,
-            avaloniaContent);
+            avaloniaContent,
+            wpfTitleBarRaster,
+            avaloniaTitleBarRaster);
     }
 
     private static void CompareSemanticStates(
@@ -359,6 +369,8 @@ internal static class WholeWindowVisualEvidence
             mismatch("quick-access-toolbar", $"QAT button count differs: WPF {wpf.QuickAccessButtonCount}, Avalonia {avalonia.QuickAccessButtonCount}.");
         if (!StringComparer.Ordinal.Equals(wpf.AppIconIdentity, avalonia.AppIconIdentity))
             mismatch("app-icon", $"App icon identity differs: WPF '{wpf.AppIconIdentity}', Avalonia '{avalonia.AppIconIdentity}'.");
+        if (!StringComparer.Ordinal.Equals(wpf.WindowTitle, avalonia.WindowTitle))
+            mismatch("window-title", $"Window title differs: WPF '{wpf.WindowTitle}', Avalonia '{avalonia.WindowTitle}'.");
 
         if (!BoundsMatch(wpf.RibbonBounds, avalonia.RibbonBounds))
             mismatch("ribbon-geometry", BoundsDetail("Ribbon", wpf.RibbonBounds, avalonia.RibbonBounds));
@@ -726,6 +738,22 @@ internal static class WholeWindowVisualEvidence
         try
         {
             return ImageDiff.ValidateContent(path);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    private static TitleBarRasterValidation? TryValidateTitleBarRaster(
+        string path,
+        WholeWindowVisualEvidenceBounds bounds)
+    {
+        if (!IsNonzeroFile(path) || !bounds.IsVisible)
+            return null;
+        try
+        {
+            return ImageDiff.ValidateFreePTitleBarRegion(path, bounds);
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or NotSupportedException)
         {

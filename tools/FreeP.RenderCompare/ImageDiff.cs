@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeP.App.Compositor;
 using FreeX.ToolsShared.Wpf;
 
 namespace FreeP.RenderCompare;
@@ -281,6 +282,37 @@ internal static class ImageDiff
             failures);
     }
 
+    internal static TitleBarRasterValidation ValidateFreePTitleBarRegion(
+        string path,
+        WholeWindowVisualEvidenceBounds bounds)
+    {
+        var bitmap = WpfImageDiff.LoadBitmap(path);
+        var pixels = WpfImageDiff.GetBgra32Pixels(bitmap, bitmap.PixelWidth, bitmap.PixelHeight);
+        var left = Math.Clamp((int)Math.Floor(bounds.X), 0, bitmap.PixelWidth);
+        var top = Math.Clamp((int)Math.Floor(bounds.Y), 0, bitmap.PixelHeight);
+        var right = Math.Clamp((int)Math.Ceiling(bounds.X + bounds.Width), left, bitmap.PixelWidth);
+        var bottom = Math.Clamp((int)Math.Ceiling(bounds.Y + bounds.Height), top, bitmap.PixelHeight);
+        long sampledPixels = 0;
+        long accentPixels = 0;
+        for (var y = top; y < bottom; y++)
+        {
+            for (var x = left; x < right; x++)
+            {
+                var offset = (y * bitmap.PixelWidth + x) * 4;
+                var blue = pixels[offset];
+                var green = pixels[offset + 1];
+                var red = pixels[offset + 2];
+                var alpha = pixels[offset + 3];
+                sampledPixels++;
+                if (alpha >= 224 && red >= 130 && red >= green + 40 && red >= blue + 40 && green <= 135 && blue <= 125)
+                    accentPixels++;
+            }
+        }
+
+        var accentRatio = sampledPixels == 0 ? 0 : accentPixels / (double)sampledPixels;
+        return new(sampledPixels, accentPixels, accentRatio, sampledPixels > 0 && accentRatio >= 0.40);
+    }
+
     private static ulong DifferenceHash(BitmapSource source)
     {
         const int width = 9;
@@ -442,3 +474,9 @@ internal sealed record ImageContentValidation(
     double EdgePixelRatio,
     bool IsValid,
     IReadOnlyList<string> Failures);
+
+internal sealed record TitleBarRasterValidation(
+    long SampledPixelCount,
+    long AccentPixelCount,
+    double AccentPixelRatio,
+    bool IsValid);

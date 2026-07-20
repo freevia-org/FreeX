@@ -21,6 +21,9 @@ public sealed partial class MainWindow
             Editor.ClearSelection();
         else
             Editor.Select(selection);
+        var selectionPrepared = selection == 0
+            ? Editor.SelectedShapeIds.Count == 0
+            : Editor.SelectedShapeIds.SequenceEqual([selection]);
 
         HideReviewCommentsPane();
 
@@ -62,9 +65,7 @@ public sealed partial class MainWindow
                 $"Activated slide index {Editor.CurrentSlideIndex}; expected {scenario.SlideIndex}."),
             new(
                 "selection-activated",
-                selection == 0
-                    ? Editor.SelectedShapeIds.Count == 0
-                    : Editor.SelectedShapeIds.SequenceEqual([selection]),
+                selectionPrepared,
                 $"Selected shape ids: {string.Join(",", Editor.SelectedShapeIds)}."),
         ];
     }
@@ -136,7 +137,8 @@ public sealed partial class MainWindow
             _viewZoomState.ZoomPercent,
             _titleBar.IsVisible && _titleBar.ActualHeight > 0,
             CountQuickAccessButtons(),
-            "generated-badge:P",
+            Icon is null ? "missing" : "shared-shell:FreeP",
+            Title,
             0,
             false,
             BoundsRelativeTo(root, _titleBar),
