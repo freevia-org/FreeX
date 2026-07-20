@@ -113,6 +113,15 @@ public sealed class SlideShowPlaybackPlannerTests
         flythrough.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Flythrough);
         flythrough.DurationMs.Should().Be(640);
 
+        var glitter = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Glitter,
+            DurationMs = 640
+        });
+
+        glitter.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Glitter);
+        glitter.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Glitter);
+
         var pageCurl = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
             Kind = TransitionKind.PageCurlSingle,
@@ -184,6 +193,27 @@ public sealed class SlideShowPlaybackPlannerTests
         partial.All(cell => cell.Points.Count == 6).Should().BeTrue();
         partial.SelectMany(cell => cell.Points)
             .Should().BeEquivalentTo(repeat.SelectMany(cell => cell.Points));
+    }
+
+    [Fact]
+    public void GlitterPlanner_BuildsDeterministicSparkleCellReveal()
+    {
+        var plan = SlideShowGlitterTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Glitter
+        });
+
+        var closed = SlideShowGlitterTransitionPlanner.BuildPolygons(960, 540, 0, plan);
+        var partial = SlideShowGlitterTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+        var open = SlideShowGlitterTransitionPlanner.BuildPolygons(960, 540, 1, plan);
+        var repeat = SlideShowGlitterTransitionPlanner.BuildPolygons(960, 540, 0.5, plan);
+
+        closed.Should().BeEmpty();
+        partial.Should().NotBeEmpty();
+        partial.Should().OnlyContain(cell => cell.Points.Count == 8);
+        open.Should().HaveCount(1);
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
     }
 
     [Fact]
