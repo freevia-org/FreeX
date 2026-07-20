@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico" Link="Resources\FreeP.ico" />
     <!-- Tests construct the shell window + backstage directly. -->
     <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
   </ItemGroup>
@@ -46,11 +47,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico"
+             Link="Resources\FreeP.ico"
+             CopyToOutputDirectory="PreserveNewest" />
     <!-- Reuse FreeX's Office-quality command icons (single source of truth) so any FreeP command sharing a
          FreeX equivalent draws the identical glyph. Linked, not copied — mirrors FreeW. -->
     <Content Include="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
              Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeP.ico</ApplicationIcon>
+  </PropertyGroup>
 
 </Project>
