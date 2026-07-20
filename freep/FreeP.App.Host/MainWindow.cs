@@ -1393,9 +1393,20 @@ public sealed class MainWindow : Window
             : Visibility.Collapsed;
     }
 
-    private static void AddCommentPaneSummary(Panel host, PresentationCommentPanePlan plan)
+    private void AddCommentPaneSummary(Panel host, PresentationCommentPanePlan plan)
     {
-        host.Children.Add(new TextBlock
+        var summaryRow = new DockPanel();
+        var close = new Button
+        {
+            Content = "Close",
+            MinWidth = 64,
+            Margin = new Thickness(6, 0, 0, 6),
+            Tag = "comments-pane-close",
+        };
+        close.Click += (_, _) => HideReviewCommentsPane();
+        DockPanel.SetDock(close, Dock.Right);
+        summaryRow.Children.Add(close);
+        summaryRow.Children.Add(new TextBlock
         {
             Text = $"{plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
             FontSize = 11,
@@ -1403,6 +1414,7 @@ public sealed class MainWindow : Window
             Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
             Margin = new Thickness(0, 0, 0, 6),
         });
+        host.Children.Add(summaryRow);
         host.Children.Add(new TextBlock
         {
             Text = string.Join(" | ", plan.Filters.Select(filter => filter.Summary)),
@@ -1760,6 +1772,13 @@ public sealed class MainWindow : Window
     {
         _reviewCommentsPaneRequested = true;
         return _reviewWorkflowSession.ShowReviewCommentsPane();
+    }
+
+    internal void HideReviewCommentsPane()
+    {
+        _reviewCommentsPaneRequested = false;
+        if (_commentListHost is not null)
+            _commentListHost.Visibility = Visibility.Collapsed;
     }
 
     internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)

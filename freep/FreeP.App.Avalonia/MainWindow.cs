@@ -3022,27 +3022,51 @@ public sealed class MainWindow : Window
         _reviewCommentsPaneHost.IsVisible = true;
     }
 
-    private static Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
+    private Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
     {
-        var panel = new StackPanel
+        var labels = new StackPanel
         {
             Orientation = Orientation.Vertical,
             Spacing     = 2,
-            Margin      = new Thickness(12, 10, 12, 2),
         };
-        panel.Children.Add(new TextBlock
+        labels.Children.Add(new TextBlock
         {
             Text       = $"Comments - {plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D)),
         });
-        panel.Children.Add(new TextBlock
+        labels.Children.Add(new TextBlock
         {
             Text       = string.Join(" | ", plan.Filters.Select(filter => filter.Summary)),
             FontSize   = 11,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
         });
-        return panel;
+
+        var close = new Button
+        {
+            Content = "Close",
+            MinWidth = 64,
+            Tag = "comments-pane-close",
+        };
+        close.Click += (_, _) => HideReviewCommentsPane();
+
+        DockPanel.SetDock(close, Dock.Right);
+        return new DockPanel
+        {
+            LastChildFill = true,
+            Margin = new Thickness(12, 10, 12, 2),
+            Children =
+            {
+                close,
+                labels,
+            },
+        };
+    }
+
+    internal void HideReviewCommentsPane()
+    {
+        if (_reviewCommentsPaneHost is not null)
+            _reviewCommentsPaneHost.IsVisible = false;
     }
 
     private Control BuildReviewCommentActions(IReadOnlyList<PresentationReviewWorkflowActionPlan> actions)

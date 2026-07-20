@@ -117,6 +117,9 @@ public sealed class DialogLifecycleParityTests
 
             plan.Comments.Should().BeEmpty();
             window.IsReviewCommentsPaneVisible.Should().BeTrue();
+
+            window.HideReviewCommentsPane();
+            window.IsReviewCommentsPaneVisible.Should().BeFalse();
         }
         finally
         {

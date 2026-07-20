@@ -209,9 +209,9 @@ $routes = @(
         -ResultApplication "PresentationReviewWorkflowSession applies reply/delete/resolve/reopen/navigation and refreshes both hosts." `
         -SharedPolicy "PresentationReviewWorkflowSession; PresentationReviewWorkflowPlanner" `
         -WpfSources @("freep/FreeP.App.Host/MainWindow.cs") -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
-        -Tests @("freep/FreeP.App.Host.Tests/SectionsCommentsTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationReviewWorkflowSessionTests.cs") `
+        -Tests @("freep/FreeP.App.Host.Tests/SectionsCommentsTests.cs", "freep/FreeP.App.Host.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs", "freep/FreeP.App.Avalonia.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationReviewWorkflowSessionTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-comments-review-accessibility-evidence-inventory-2026-07-05.md", "docs/parity/freep-comments-review-navigation-2026-07-03.md") `
-        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("onReviewCommentsPane") -RequiredAvaloniaTokens @("CommentsPaneCommandId")
+        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("onReviewCommentsPane", "HideReviewCommentsPane") -RequiredAvaloniaTokens @("CommentsPaneCommandId", "HideReviewCommentsPane")
 
     New-Route -Id "review.accessibility-pane" -Area "Accessibility checker" `
         -Triggers @("freep.review.accessibility") `
