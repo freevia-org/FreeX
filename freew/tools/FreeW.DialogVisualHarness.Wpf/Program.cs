@@ -53,12 +53,12 @@ static bool TryCapture(Scenario scenario, string output, out Capture capture)
         dialog = WpfDialogRouteFactory.Create(scenario.RouteId, scenario.State, owner);
         if (dialog is null) return false;
         dialog.Width = 560;
-        dialog.Height = 600;
+        dialog.Height = TargetHeight(scenario);
         dialog.SizeToContent = SizeToContent.Manual;
         dialog.Show();
         dialog.UpdateLayout();
         if (dialog.ActualWidth < 1 || dialog.ActualHeight < 1) return false;
-        Populate(dialog, scenario.State);
+        Populate(dialog, scenario);
         dialog.UpdateLayout();
         var width = Math.Max(1, (int)Math.Ceiling(dialog.ActualWidth));
         var height = Math.Max(1, (int)Math.Ceiling(dialog.ActualHeight));
@@ -150,8 +150,9 @@ static bool CaptureRenderedWindow(Scenario scenario, string output, Window dialo
     }
 }
 
-static void Populate(Window dialog, string state)
+static void Populate(Window dialog, Scenario scenario)
 {
+    var state = scenario.State;
     var textBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
     if (state == "populated")
         foreach (var box in textBoxes) if (string.IsNullOrWhiteSpace(box.Text)) box.Text = "12";
@@ -160,8 +161,16 @@ static void Populate(Window dialog, string state)
     var tabs = FindVisualChildren<TabControl>(dialog).FirstOrDefault();
     if (tabs is not null)
     {
-        var index = state == "relevant-tab" ? Math.Min(1, Math.Max(0, tabs.Items.Count - 1)) : 0;
+        var index = scenario.Tab is null
+            ? 0
+            : tabs.Items.Cast<object?>().Select((item, itemIndex) => (item, itemIndex)).FirstOrDefault(pair =>
+                pair.item is TabItem tabItem && tabItem.Header?.ToString()?.Equals(scenario.Tab, StringComparison.OrdinalIgnoreCase) == true).itemIndex;
         tabs.SelectedIndex = index;
+    }
+    if (scenario.Tab?.Equals("More", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        var expander = FindVisualChildren<Expander>(dialog).FirstOrDefault(candidate => candidate.Header?.ToString() == "More");
+        if (expander is not null) expander.IsExpanded = true;
     }
     Keyboard.Focus(FindVisualChildren<Control>(dialog).FirstOrDefault(c => c.IsTabStop && c.IsEnabled));
 }
@@ -174,8 +183,9 @@ static Semantics ReadSemantics(Window dialog)
         e is Selector selector ? selector.SelectedIndex : null)).ToArray();
     var buttons = FindVisualChildren<Button>(dialog).ToArray();
     var focused = Keyboard.FocusedElement as FrameworkElement;
+    var focusedAutomationId = focused is null ? null : AutomationProperties.GetAutomationId(focused);
     return new Semantics(
-        focused is null ? null : AutomationProperties.GetAutomationId(focused),
+        string.IsNullOrWhiteSpace(focusedAutomationId) ? null : focusedAutomationId,
         buttons.FirstOrDefault(b => b.IsDefault) is { } d ? ButtonText(d) : null,
         buttons.FirstOrDefault(b => b.IsCancel) is { } c ? ButtonText(c) : null,
         buttons.Select(ButtonText).ToArray(), controls);
@@ -193,5 +203,6 @@ static string Required(string[] args, string option) { var i = Array.IndexOf(arg
 static string? Optional(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
 static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
 static string Safe(string value) => System.Text.RegularExpressions.Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
+static int TargetHeight(Scenario scenario) => scenario.RouteId == "compare-documents" && scenario.Tab == "More" ? 720 : 600;
 static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 }

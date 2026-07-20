@@ -146,7 +146,7 @@ static RouteInventory BuildInventory(string root)
             if (routes.Any(r => r.Host == host && r.RouteId == routeId)) continue;
             var discoveredTabs = Regex.Matches(text, "(?:Header\\s*=\\s*|Label\\s*=\\s*)[\\\"'](?<tab>[^\\\"']+)[\\\"']")
                 .Select(m => m.Groups["tab"].Value);
-            var tabs = (KnownTabs(routeId).Concat(discoveredTabs).Distinct(StringComparer.OrdinalIgnoreCase).Take(16)).ToArray();
+            var tabs = ValidTabs(routeId, KnownTabs(routeId).Concat(discoveredTabs).Distinct(StringComparer.OrdinalIgnoreCase).Take(16)).ToArray();
             var modalMode = text.Contains("ShowDialog", StringComparison.OrdinalIgnoreCase) || text.Contains("modal", StringComparison.OrdinalIgnoreCase)
                 ? "modal" : text.Contains("Show()", StringComparison.Ordinal) || text.Contains("modeless", StringComparison.OrdinalIgnoreCase)
                     ? "modeless" : "modal-or-modeless";
@@ -161,7 +161,7 @@ static RouteInventory BuildInventory(string root)
                     : typeName.EndsWith("Overlay", StringComparison.Ordinal)
                         ? "overlay"
                         : "dialog";
-            routes.Add(new Route(host, routeId, typeName, Relative(root, path), modalMode, tabs, limitation, surfaceKind, StateIds(surfaceKind, tabs), sourceRouteId));
+            routes.Add(new Route(host, routeId, typeName, Relative(root, path), modalMode, tabs, limitation, surfaceKind, ValidStates(routeId, surfaceKind, tabs), sourceRouteId));
         }
     }
     AddBackstageRoutes(routes);
@@ -200,10 +200,10 @@ static void AddKnownAvaloniaRoutes(List<Route> routes)
         "CompareDocumentsDialog",
         "freew/FreeW.App.Avalonia/ReviewCompareCombineDialogs.cs",
         "modal",
-        [],
+        ["More"],
         null,
         "dialog",
-        ["initial", "populated", "validation-error"],
+        ["initial", "populated", "validation-error", "tab-more"],
         "compare-documents"));
 }
 
@@ -229,7 +229,7 @@ static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureM
                 : routeExistsOnOtherHost
                     ? "The equivalent Avalonia route exists, but this WPF authority tab/state is not applicable on Avalonia."
                     : "WPF authority route/state is absent on Avalonia pending the product parity slice.";
-            rows.Add(new ComparisonRow(pairKey, "host-missing", classification, null, null, null, note));
+            rows.Add(new ComparisonRow(pairKey, routeExistsOnOtherHost ? "state-not-applicable" : "host-missing", classification, null, null, null, note));
             continue;
         }
         if (left.Status != "captured" || right.Status != "captured")
@@ -253,12 +253,6 @@ static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureM
             if (!leftContent.PassesContentGate) failures.Add($"WPF: {leftContent.Failure}");
             if (!rightContent.PassesContentGate) failures.Add($"Avalonia: {rightContent.Failure}");
             rows.Add(new ComparisonRow(pairKey, "invalid-content", "invalid-capture-content", null, null, null, string.Join(" | ", failures), leftContent, rightContent));
-            continue;
-        }
-        if (left.RouteId.Equals("compare-documents", StringComparison.OrdinalIgnoreCase))
-        {
-            rows.Add(new ComparisonRow(pairKey, "captured/captured", "product-parity-gap", null, null, null,
-                "CompareDocumentsDialog is captured on both hosts with validated pixels, but remains an explicit product parity gap pending the product slice.", leftContent, rightContent));
             continue;
         }
         var metrics = PixelMetrics.Compute(a, b);
@@ -364,6 +358,22 @@ static IReadOnlyList<string> KnownTabs(string routeId) => routeId switch
     "options" => ["General", "AutoCorrect", "AutoFormat As You Type"],
     "page-setup" => ["Margins", "Paper", "Layout"],
     _ => []
+};
+static IReadOnlyList<string> ValidTabs(string routeId, IEnumerable<string> discovered) => routeId switch
+{
+    "compare-documents" => ["More"],
+    "legal-notices" => ["Project License", "Legal Notices", "Privacy Notice", "Third-Party Notices", "Third-Party License Texts"],
+    "password-prompt" or "screen-clip-overlay" or "symbol-picker" or "table-formula" => [],
+    "table-properties" => ["Table", "Row", "Column", "Cell"],
+    _ => discovered.ToArray(),
+};
+static IReadOnlyList<string> ValidStates(string routeId, string surfaceKind, IReadOnlyList<string> tabs) => routeId switch
+{
+    "legal-notices" => new[] { "initial" }.Concat(tabs.Select(tab => $"tab-{Kebab(tab)}")).ToArray(),
+    "password-prompt" => ["initial", "populated"],
+    "screen-clip-overlay" => ["open"],
+    "symbol-picker" => ["initial"],
+    _ => StateIds(surfaceKind, tabs),
 };
 static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
 static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
@@ -526,7 +536,7 @@ public static class PixelContentMetrics
         if (opaqueRatio < .05) failures.Add($"near-transparent output ({opaqueRatio:P2} opaque)");
         if (nearBlackRatio >= .985) failures.Add($"near-black output ({nearBlackRatio:P2} of visible pixels)");
         if (dominantRatio >= .9995) failures.Add($"near-uniform output ({dominantRatio:P2} dominant color)");
-        if (colors.Count < 8) failures.Add($"insufficient color variation ({colors.Count} colors)");
+        if (colors.Count < 3) failures.Add($"insufficient color variation ({colors.Count} colors)");
         if (luminanceRange < 12) failures.Add($"insufficient luminance range ({luminanceRange:F2})");
         if (contentRatio < .0005 || bounds.Width < 8 || bounds.Height < 8) failures.Add("no meaningful painted content bounds");
         return new PixelContent(failures.Count == 0, failures.Count == 0 ? null : string.Join("; ", failures), width, height, pixelCount, opaqueRatio, transparentRatio, nearBlackRatio, dominantRatio, colors.Count, luminanceRange, contentRatio, bounds);

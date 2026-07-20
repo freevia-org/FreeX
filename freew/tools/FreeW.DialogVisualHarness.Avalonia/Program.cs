@@ -56,16 +56,18 @@ static async Task<int> Main(string[] args)
 
 static Capture? CaptureOne(Scenario scenario, string output)
 {
-    var dialog = AvaloniaDialogRouteFactory.Create(scenario.RouteId, scenario.State);
+    var dialog = AvaloniaDialogRouteFactory.Create(scenario.RouteId, scenario.State, scenario.Tab);
     if (dialog is null) return null;
-    dialog.Width = 560;
-    dialog.Height = 600;
+    var width = 560;
+    var height = TargetHeight(scenario);
+    dialog.Width = width;
+    dialog.Height = height;
     dialog.SizeToContent = SizeToContent.Manual;
     dialog.Show();
-    dialog.Measure(new Size(560, 600));
-    dialog.Arrange(new Avalonia.Rect(0, 0, 560, 600));
+    dialog.Measure(new Size(width, height));
+    dialog.Arrange(new Avalonia.Rect(0, 0, width, height));
     dialog.UpdateLayout();
-    Populate(dialog, scenario.State);
+    Populate(dialog, scenario);
     Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
     using var frame = dialog.CaptureRenderedFrame();
     var semantics = ReadSemantics(dialog);
@@ -92,16 +94,24 @@ static Capture? CaptureOne(Scenario scenario, string output)
     File.WriteAllBytes(path, bytes);
     File.WriteAllBytes(cropPath, bytes);
     dialog.Close();
-    return new Capture(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "captured", Relative(output, path), 560, 600, 560, 600, 96, 96, new Rect(0, 0, 560, 600), semantics, null, "Real app-owned Avalonia dialog rendered through CaptureRenderedFrame; full and target images passed pixel-content validation.", Relative(output, cropPath), fullContent, targetContent);
+    return new Capture(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, 96, 96, new Rect(0, 0, width, height), semantics, null, "Real app-owned Avalonia dialog rendered through CaptureRenderedFrame; full and target images passed pixel-content validation.", Relative(output, cropPath), fullContent, targetContent);
 }
 
-static void Populate(Window dialog, string state)
+static void Populate(Window dialog, Scenario scenario)
 {
+    var state = scenario.State;
     var textBoxes = FindVisualChildren<TextBox>(dialog).ToArray();
     if (state == "populated") foreach (var box in textBoxes) if (string.IsNullOrWhiteSpace(box.Text)) box.Text = "12";
     if (state == "validation-error" && textBoxes.Length > 0) textBoxes[0].Text = "not-a-number";
     var tabs = FindVisualChildren<TabControl>(dialog).FirstOrDefault();
-    if (tabs is not null) tabs.SelectedIndex = state == "relevant-tab" ? Math.Min(1, Math.Max(0, tabs.ItemCount - 1)) : 0;
+    if (tabs is not null)
+    {
+        var selectedIndex = scenario.Tab is null
+            ? 0
+            : tabs.Items.Cast<object?>().Select((item, index) => (item, index)).FirstOrDefault(pair =>
+                pair.item is TabItem tabItem && tabItem.Header?.ToString()?.Equals(scenario.Tab, StringComparison.OrdinalIgnoreCase) == true).index;
+        tabs.SelectedIndex = Math.Clamp(selectedIndex, 0, Math.Max(0, tabs.ItemCount - 1));
+    }
     FindVisualChildren<Control>(dialog).FirstOrDefault(c => c.IsTabStop && c.IsEffectivelyEnabled)?.Focus();
 }
 
@@ -154,6 +164,7 @@ static string Required(string[] args, string option) { var i = Array.IndexOf(arg
 static string? Optional(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
 static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
 static string Safe(string value) => System.Text.RegularExpressions.Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
+static int TargetHeight(Scenario scenario) => scenario.RouteId == "compare-documents" && scenario.Tab == "More" ? 720 : 600;
 static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 }
 

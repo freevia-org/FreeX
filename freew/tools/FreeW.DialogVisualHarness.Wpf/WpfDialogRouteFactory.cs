@@ -2,6 +2,9 @@ using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Options;
@@ -68,6 +71,8 @@ internal static class WpfDialogRouteFactory
     {
         if (routeId.StartsWith("backstage-", StringComparison.OrdinalIgnoreCase))
             return CreateBackstage(routeId);
+        if (routeId == "screen-clip-overlay")
+            return CreateScreenClipOverlay(owner);
         if (!DialogTypes.TryGetValue(routeId, out var typeName)) return null;
         var assembly = typeof(MainWindow).Assembly;
         var type = assembly.GetType($"FreeW.App.Host.{typeName}", false)
@@ -155,6 +160,35 @@ internal static class WpfDialogRouteFactory
             Width = 720,
             Height = 600,
             Content = content,
+            ShowInTaskbar = false,
+        };
+    }
+
+    private static Window CreateScreenClipOverlay(Window owner)
+    {
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Host.Editing.ScreenClipOverlay", true)!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic).Single();
+        var overlay = (Window)constructor.Invoke(null);
+        var canvas = (Canvas)overlay.Content;
+        overlay.Content = null;
+        var selection = (Rectangle)type.GetField("_selection", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(overlay)!;
+        Canvas.SetLeft(selection, 80);
+        Canvas.SetTop(selection, 90);
+        selection.Width = 280;
+        selection.Height = 210;
+        selection.Visibility = Visibility.Visible;
+        var surface = new Grid { Background = new SolidColorBrush(Color.FromRgb(0xE8, 0xEB, 0xF0)) };
+        surface.Children.Add(new Border { Background = overlay.Background });
+        surface.Children.Add(canvas);
+        return new Window
+        {
+            Owner = owner,
+            Width = 560,
+            Height = 600,
+            Content = surface,
+            Title = "Screen Clip Overlay Capture",
+            WindowStyle = WindowStyle.None,
+            ResizeMode = ResizeMode.NoResize,
             ShowInTaskbar = false,
         };
     }

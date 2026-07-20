@@ -2,9 +2,15 @@ using System.Collections;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
+using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
+using Avalonia.LogicalTree;
+using Avalonia.Media;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
@@ -50,6 +56,7 @@ internal static class AvaloniaDialogRouteFactory
         ["image-size"] = "ImageSizeDialog",
         ["insert-chart"] = "InsertChartDialog",
         ["insert-smart-art"] = "InsertSmartArtDialog",
+        ["legal-notices"] = "LegalNoticesDialog",
         ["link-bookmark"] = "LinkBookmarkDialog",
         ["manage-sources"] = "ManageSourcesDialog",
         ["manage-styles"] = "ManageStylesDialog",
@@ -77,7 +84,10 @@ internal static class AvaloniaDialogRouteFactory
         ["source-entry"] = "SourceEntryDialog",
         ["style"] = "StyleDialog",
         ["style-set"] = "StyleSetDialog",
+        ["symbol-picker"] = "SymbolPickerDialog",
+        ["table-formula"] = "TableFormulaDialog",
         ["table-of-authorities"] = "TableOfAuthoritiesDialog",
+        ["table-properties"] = "TablePropertiesDialog",
         ["table-text-conversion"] = "TableTextConversionDialog",
         ["tabs"] = "TabsDialog",
         ["theme-effects"] = "ThemeEffectsDialog",
@@ -87,7 +97,7 @@ internal static class AvaloniaDialogRouteFactory
         ["zoom"] = "ZoomDialog",
     };
 
-    public static Window? Create(string routeId, string state)
+    public static Window? Create(string routeId, string state, string? tab = null)
     {
         if (routeId is "options" or "page-setup" or "columns" or "custom-paragraph-spacing" or "drop-cap-options" or "hyphenation-options" or "line-number-options")
             return CreateKnown(routeId, state);
@@ -100,7 +110,15 @@ internal static class AvaloniaDialogRouteFactory
         if (routeId == "cups-print")
             return CreateCupsPrint();
         if (routeId == "compare-documents")
-            return CreateCompareDocuments(state);
+            return CreateCompareDocuments(state, tab);
+        if (routeId == "password-prompt")
+            return CreatePasswordPrompt();
+        if (routeId == "screen-clip-overlay")
+            return CreateScreenClipOverlay();
+        if (routeId == "table-formula")
+            return CreateTableFormula(state);
+        if (routeId == "table-properties")
+            return CreateTableProperties(state, tab);
 
         if (!DialogTypes.TryGetValue(routeId, out var typeName))
             return null;
@@ -221,18 +239,91 @@ internal static class AvaloniaDialogRouteFactory
         return (Window)constructor.Invoke([plan]);
     }
 
-    private static Window CreateCompareDocuments(string state)
+    private static Window CreateCompareDocuments(string state, string? tab)
     {
         var assembly = typeof(MainWindow).Assembly;
         var type = assembly.GetType("FreeW.App.Avalonia.CompareDocumentsDialog", true)!;
         var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
             .OrderBy(candidate => candidate.GetParameters().Length)
             .First();
-        var arguments = constructor.GetParameters().Select(parameter =>
-            parameter.ParameterType == typeof(string)
-                ? "C:\\Harness\\Original.docx"
-                : ValueFor(parameter.ParameterType, state)).ToArray();
-        return (Window)constructor.Invoke(arguments);
+        var promptState = new CompareDocumentsPromptState("Reviewer", "Revised.docx");
+        var dialog = (Window)constructor.Invoke(["C:\\Harness\\Original.docx", promptState]);
+        if (state == "validation-error")
+            type.GetMethod("AcceptForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dialog, [" "]);
+        if (tab?.Equals("More", StringComparison.OrdinalIgnoreCase) == true)
+            dialog.GetLogicalDescendants().OfType<Expander>().Single(expander => expander.Header?.ToString() == "More").IsExpanded = true;
+        return dialog;
+    }
+
+    private static Window CreatePasswordPrompt()
+    {
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.PasswordPromptDialog", true)!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic).Single();
+        return (Window)constructor.Invoke(["Unprotect Document", "Enter the password:"]);
+    }
+
+    private static Window CreateScreenClipOverlay()
+    {
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.Editing.ScreenClipOverlay", true)!;
+        var overlay = (Window)Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [new PixelRect(0, 0, 560, 600), 1d], null)!;
+        type.GetMethod("BeginSelectionForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(overlay, [new Point(80, 90)]);
+        type.GetMethod("CompleteSelectionForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(overlay, [new Point(360, 300), 1d]);
+        var canvas = (Control)overlay.Content!;
+        overlay.Content = null;
+        var selection = ((Canvas)canvas).Children.OfType<Rectangle>().Single();
+        Canvas.SetLeft(selection, 80);
+        Canvas.SetTop(selection, 90);
+        selection.Width = 280;
+        selection.Height = 210;
+        selection.IsVisible = true;
+        var surface = new Grid { Background = new SolidColorBrush(Color.FromRgb(0xE8, 0xEB, 0xF0)) };
+        surface.Children.Add(new Border { Background = overlay.Background });
+        surface.Children.Add(canvas);
+        return new Window
+        {
+            Width = 560,
+            Height = 600,
+            Content = surface,
+            Title = "Screen Clip Overlay Capture",
+        };
+    }
+
+    private static Window CreateTableFormula(string state)
+    {
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.TableFormulaDialog", true)!;
+        var initialState = state == "initial"
+            ? new TableFormulaDialogInitialState("=", 0)
+            : new TableFormulaDialogInitialState("=SUM(ABOVE)", 3);
+        var dialog = (Window)Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [initialState], null)!;
+        if (state == "validation-error")
+            type.GetMethod("AcceptForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dialog, [" ", "0"]);
+        return dialog;
+    }
+
+    private static Window CreateTableProperties(string state, string? tab)
+    {
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell("Harness cell");
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        var context = new ModelTableContext(table, row, cell);
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.TablePropertiesDialog", true)!;
+        var tabType = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.TablePropertiesDialogTab", true)!;
+        var initialTab = Enum.Parse(tabType, tab ?? "Table", true);
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
+        var dialog = (Window)constructor.Invoke([context, initialTab]);
+        if (state == "populated")
+        {
+            ((TextBox)type.GetField("_preferredWidth", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(dialog)!).Text = "300";
+            ((CheckBox)type.GetField("_preferredWidthOn", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(dialog)!).IsChecked = true;
+        }
+        if (state == "validation-error")
+        {
+            ((TextBox)type.GetField("_indent", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(dialog)!).Text = "-1";
+            type.GetMethod("AcceptForTest", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dialog, null);
+        }
+        return dialog;
     }
 
     private static Window WrapControl(Control control)
