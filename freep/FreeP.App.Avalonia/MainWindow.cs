@@ -98,6 +98,7 @@ public sealed partial class MainWindow : Window
 
     private Presentation _presentation = Presentation.CreateEmpty();
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
+    private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
     private readonly FreePOptions _options;
 
     // ── Editing session ────────────────────────────────────────────────────────
@@ -253,6 +254,7 @@ public sealed partial class MainWindow : Window
     internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans => _slidePaneRenderedSectionHeaderPlans;
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
+    internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
     internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
     internal PresentationViewZoomState ViewZoomStateForTests => _viewZoomState;
     internal PresentationViewZoomState SlideCanvasViewZoomStateForTests => _slideCanvas.ViewZoomState;
@@ -477,7 +479,9 @@ public sealed partial class MainWindow : Window
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
         Func<RecentFilesStore>? loadRecentFilesStore,
-        FreePOptions? options = null)
+        FreePOptions? options = null,
+        Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
+        Func<string, Exception, Task>? showFileCommandErrorAsync = null)
     {
         Title = DefaultTitle;
         Width = 1280;
@@ -546,8 +550,14 @@ public sealed partial class MainWindow : Window
                 ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: UpdateStatus,
-            save: () => FileSaveAsync().GetAwaiter().GetResult(),
-            loadRecentFilesStore: loadRecentFilesStore);
+            loadRecentFilesStore: loadRecentFilesStore,
+            saveAsync: FileSaveAsync,
+            promptSaveChangesAsync: promptSaveChangesAsync,
+            showFileCommandErrorAsync: showFileCommandErrorAsync);
+        _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
+            confirmCloseAllowedAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync("closing"),
+            requestClose: Close,
+            restoreOwnerFocus: RestoreOwnerFocus);
 
         _reviewWorkflowSession = new(
             () => Editor,
@@ -605,6 +615,7 @@ public sealed partial class MainWindow : Window
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
         Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
+        Closing += (_, e) => e.Cancel = _closeCoordinator.ShouldCancelClosing();
         Closed += (_, _) =>
         {
             _findReplaceDialog?.Close();
@@ -617,13 +628,44 @@ public sealed partial class MainWindow : Window
         var startupPresentation = startupArguments
             .FirstOrDefault(a => IsSupportedPresentationPath(a) && File.Exists(a));
 
+        Exception? startupOpenError = null;
         if (startupPresentation is not null)
-            TryLoadPresentationFile(startupPresentation);
+        {
+            try
+            {
+                var result = PresentationFilePersistenceWorkflow.Open(startupPresentation);
+                LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
+                _statusText.Text = SisterAppFileTextPlanner.FormatOpened(Path.GetFileName(startupPresentation));
+            }
+            catch (Exception ex)
+            {
+                startupOpenError = ex;
+                LoadPresentationAsSaved(_presentation, path: null);
+                _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                    SisterAppFileTextPlanner.OpenCommand,
+                    ex.Message);
+            }
+        }
         else
+        {
             LoadPresentationAsSaved(_presentation, path: null);
+        }
 
         Content = windowFrame.Root;
         UpdateStatus();
+        if (startupOpenError is not null)
+        {
+            var error = startupOpenError;
+            Opened += async (_, _) => await _fileWorkflow.ShowFileCommandErrorAsync(
+                "Could not open the presentation",
+                error);
+        }
+    }
+
+    private void RestoreOwnerFocus()
+    {
+        Activate();
+        Focus();
     }
 
     private void ApplyWindowIcon()
@@ -2459,12 +2501,18 @@ public sealed partial class MainWindow : Window
         return LastFindReplaceWorkflowPlan;
     }
 
-    private void FileNew()
-    {
-        _fileWorkflow.New(
+    private void FileNew() => _ = FileNewAsync();
+
+    internal Task<bool> FileNewAsyncForTests() => FileNewAsync();
+
+    private Task<bool> FileNewAsync() =>
+        _fileWorkflow.NewAsync(
             FileText.NewAction,
-            () => LoadPresentationContent(Presentation.CreateEmpty()));
-    }
+            () =>
+            {
+                LoadPresentationContent(Presentation.CreateEmpty());
+                return Task.CompletedTask;
+            });
 
     private BackstageCallbacks BuildBackstageCallbacks() => new(
         GetPresentation: () => _presentation,
@@ -2493,19 +2541,21 @@ public sealed partial class MainWindow : Window
 
     internal bool HandleBackstageKeyForTests(Key key) => _backstage.HandleKey(key);
 
-    private void OpenRecentPath(string path)
-    {
-        _fileWorkflow.Open(
+    private void OpenRecentPath(string path) => _ = OpenRecentPathAsync(path);
+
+    private Task<bool> OpenRecentPathAsync(string path) =>
+        _fileWorkflow.OpenAsync(
             FileText.OpenAction,
-            () => path,
-            TryLoadPresentationFile);
-    }
+            () => Task.FromResult<string?>(path),
+            TryLoadPresentationFileAsync);
 
     private Task<bool> FileOpenAsync() =>
         _fileWorkflow.OpenAsync(
             FileText.OpenAction,
             PromptOpenPathAsync,
-            path => Task.FromResult(TryLoadPresentationFile(path)));
+            TryLoadPresentationFileAsync);
+
+    internal Task<bool> FileOpenAsyncForTests() => FileOpenAsync();
 
     private static string ResolveDataFolderLabel() =>
         AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
@@ -2535,7 +2585,7 @@ public sealed partial class MainWindow : Window
 
     private Task<bool> FileSaveAsync() =>
         _fileWorkflow.SaveAsync(
-            path => Task.FromResult(TrySavePresentationFile(path)),
+            TrySavePresentationFileAsync,
             FileSaveAsAsync);
 
     private async Task<bool> FileSaveAsAsync()
@@ -2561,7 +2611,7 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        return TrySavePresentationFile(path);
+        return await TrySavePresentationFileAsync(path);
     }
 
     private async Task<bool> FileExportPdfAsync()
@@ -5261,7 +5311,7 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    private bool TryLoadPresentationFile(string path)
+    private async Task<bool> TryLoadPresentationFileAsync(string path)
     {
         try
         {
@@ -5273,11 +5323,12 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
+            await _fileWorkflow.ShowFileCommandErrorAsync("Could not open the presentation", ex);
             return false;
         }
     }
 
-    private bool TrySavePresentationFile(string path)
+    private async Task<bool> TrySavePresentationFileAsync(string path)
     {
         try
         {
@@ -5289,9 +5340,13 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
+            await _fileWorkflow.ShowFileCommandErrorAsync("Could not save the presentation", ex);
             return false;
         }
     }
+
+    internal Task<bool> TrySavePresentationFileAsyncForTests(string path) =>
+        TrySavePresentationFileAsync(path);
 
     private static bool IsSupportedPresentationPath(string path) =>
         PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path);
