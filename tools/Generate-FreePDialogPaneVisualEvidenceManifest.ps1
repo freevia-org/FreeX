@@ -82,12 +82,18 @@ if (-not (Test-Path -LiteralPath $nativeManifest -PathType Leaf)) {
     throw "FreeP native picker human-evidence manifest is missing: $nativeManifest"
 }
 
+function Get-EvidenceRelativePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    return $Path.Substring($resolvedRoot.Length).TrimStart('\', '/').Replace('\', '/')
+}
+
 $files = Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File |
     Where-Object { $_.FullName -ne $resolvedManifest } |
-    Sort-Object { [IO.Path]::GetRelativePath($resolvedRoot, $_.FullName).Replace('\', '/') } |
+    Sort-Object { Get-EvidenceRelativePath -Path $_.FullName } |
     ForEach-Object {
         [ordered]@{
-            path = [IO.Path]::GetRelativePath($resolvedRoot, $_.FullName).Replace('\', '/')
+            path = Get-EvidenceRelativePath -Path $_.FullName
             bytes = $_.Length
             sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         }
