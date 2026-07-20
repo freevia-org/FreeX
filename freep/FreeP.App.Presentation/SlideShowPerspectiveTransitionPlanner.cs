@@ -94,7 +94,8 @@ public static class SlideShowPerspectiveTransitionPlanner
                 FerrisStartScale,
                 sign * FerrisRotationDegrees,
                 FerrisTravelFactor),
-            TransitionKind.Flythrough => new(
+            TransitionKind.Flythrough or
+            TransitionKind.Airplane => new(
                 SlideShowPerspectiveTransitionKind.Flythrough,
                 horizontal,
                 FlythroughStartScale,

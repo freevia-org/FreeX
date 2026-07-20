@@ -5062,13 +5062,16 @@ public sealed class DocumentView : RichTextBox
             if (_model.Blocks[blockIndex] is not ModelParagraph paragraph)
                 continue;
 
-            // Paragraph-anchored drawings use the paragraph's real document position in Word. The overlay
-            // is painted outside the FlowDocument, so pass the same leading-content estimate used by the
-            // host's planned table composition instead of collapsing every anchor to page origin.
+            // Paragraph-anchored drawings use the laid-out paragraph position in Word. The overlay sits
+            // outside the FlowDocument, so derive that position from the live text geometry when it is
+            // available rather than reconstructing it from character counts. The estimate remains the
+            // startup fallback while WPF is still arranging the document.
+            var anchorContentYDip = TryGetLiveParagraphAnchorContentY(blockIndex)
+                ?? EstimateLeadingContentHeightDip(_model, blockIndex);
             snapshots.AddRange(DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
                 paragraph,
                 blockIndex,
-                EstimateLeadingContentHeightDip(_model, blockIndex),
+                anchorContentYDip,
                 surface,
                 columnCount: 1));
         }
@@ -5098,6 +5101,25 @@ public sealed class DocumentView : RichTextBox
             }
             Canvas.SetTop(visual, topDip);
             canvas.Children.Add(visual);
+        }
+    }
+
+    private double? TryGetLiveParagraphAnchorContentY(int blockIndex)
+    {
+        try
+        {
+            var documentStart = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+            var paragraphStart = TextPointerAtModelTextOffset(blockIndex, 0)?
+                .GetCharacterRect(LogicalDirection.Forward);
+            if (documentStart.IsEmpty || paragraphStart is not { } rect || rect.IsEmpty)
+                return null;
+
+            return Math.Max(0, rect.Top - documentStart.Top);
+        }
+        catch (InvalidOperationException)
+        {
+            // WPF can briefly reject geometry queries during an arrange pass.
+            return null;
         }
     }
 
