@@ -5,7 +5,9 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using Free.Shared.Ribbon.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
@@ -83,6 +85,8 @@ public sealed class FindReplaceDialog : Window
         Margin = new Thickness(0, 8, 0, 0),
     };
 
+    private TextBox _lastFocusedBox = null!;
+
     // ── Construction ──────────────────────────────────────────────────────────
 
     public FindReplaceDialog(DocumentView editor)
@@ -115,6 +119,10 @@ public sealed class FindReplaceDialog : Window
         // Row 1: Replace:
         AddLabeledRow(grid, 1, "Replace:", _replaceBox);
 
+        _lastFocusedBox = _findBox;
+        _findBox.GotFocus += (_, _) => _lastFocusedBox = _findBox;
+        _replaceBox.GotFocus += (_, _) => _lastFocusedBox = _replaceBox;
+
         // Row 2-4: checkboxes (span both columns)
         foreach (var (chk, row) in new[] { (_matchCase, 2), (_wholeWord, 3), (_useWildcards, 4) })
         {
@@ -123,6 +131,12 @@ public sealed class FindReplaceDialog : Window
             Grid.SetColumn(chk, 1);
             grid.Children.Add(chk);
         }
+
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var specialButton = BuildSpecialButton();
+        Grid.SetRow(specialButton, 5);
+        Grid.SetColumn(specialButton, 1);
+        grid.Children.Add(specialButton);
 
         // --- Action buttons ---------------------------------------------------
         var findNextButton = MakeButton("Find Next", (_, _) => FindNext());
@@ -162,6 +176,36 @@ public sealed class FindReplaceDialog : Window
         {
             if (e.Key == Key.Escape) { Close(); e.Handled = true; }
         };
+    }
+
+    private Button BuildSpecialButton()
+    {
+        var button = MakeButton("Special \u25be", (_, _) => { });
+        button.HorizontalAlignment = HorizontalAlignment.Left;
+        button.Margin = new Thickness(0, 6, 0, 0);
+
+        var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
+            FreeWContextMenuPlanner.BuildFindSpecial(),
+            commandId =>
+            {
+                if (FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.FindSpecialPrefix, out var index)
+                    && index < FreeWContextMenuPlanner.FindSpecialCharacters.Count)
+                {
+                    InsertSpecial(FreeWContextMenuPlanner.FindSpecialCharacters[index].Insert);
+                }
+            });
+        button.ContextMenu = menu;
+        button.Click += (_, _) => menu.Open(button);
+        return button;
+    }
+
+    private void InsertSpecial(string text)
+    {
+        var box = _lastFocusedBox ?? _findBox;
+        var caret = Math.Clamp(box.CaretIndex, 0, box.Text?.Length ?? 0);
+        box.Text = (box.Text ?? string.Empty).Insert(caret, text);
+        box.CaretIndex = caret + text.Length;
+        box.Focus();
     }
 
     // ── Go To section ─────────────────────────────────────────────────────────

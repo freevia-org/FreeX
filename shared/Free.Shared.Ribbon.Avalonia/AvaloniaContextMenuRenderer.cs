@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 
 namespace Free.Shared.Ribbon.Avalonia;
 
@@ -27,6 +29,17 @@ public static class AvaloniaContextMenuRenderer
         ArgumentNullException.ThrowIfNull(dispatch);
 
         var contextMenu = new ContextMenu();
+        contextMenu.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, args) =>
+            {
+                if (args.Key != Key.Escape)
+                    return;
+                contextMenu.Close();
+                args.Handled = true;
+            },
+            RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
+            handledEventsToo: true);
         foreach (var item in menu.Items)
             contextMenu.Items.Add(BuildItem(item, dispatch));
 
@@ -44,6 +57,11 @@ public static class AvaloniaContextMenuRenderer
             Tag = item.CommandId?.Value,
             IsEnabled = item.IsEnabled,
         };
+        if (item.IsChecked is { } isChecked)
+        {
+            menuItem.ToggleType = MenuItemToggleType.CheckBox;
+            menuItem.IsChecked = isChecked;
+        }
 
         if (item.Children.Count > 0)
         {

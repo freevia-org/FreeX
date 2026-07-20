@@ -357,35 +357,13 @@ public sealed class SlidePane : Border
     {
         var menu = new ContextMenu();
 
-        foreach (var action in SlideSectionPlanner.BuildSlideContextActions(
-                     _editor.Presentation.Slides,
-                     _editor.Presentation.Sections,
-                     index))
-        {
-            var item = new MenuItem
-            {
-                Header = action.Text,
-                IsEnabled = action.IsEnabled,
-            };
-            item.Click += (_, _) => ApplySectionAction(action);
-            menu.Items.Add(item);
-        }
-
-        menu.Items.Add(new Separator());
-
-        foreach (var action in SlidePanePlanner.BuildContextActions(_editor.Presentation.Slides.Count, index))
-        {
-            if (action.Kind == SlidePaneActionKind.DeleteSlide)
-                menu.Items.Add(new Separator());
-
-            var item = new MenuItem
-            {
-                Header = action.Text,
-                IsEnabled = action.IsEnabled,
-            };
-            item.Click += (_, _) => SlidePanePlanner.TryApplyAction(_editor, action);
-            menu.Items.Add(item);
-        }
+        AddContextMenuEntries(
+            menu,
+            FreePContextMenuCatalog.BuildSlideMenu(
+                _editor.Presentation.Slides,
+                _editor.Presentation.Sections,
+                index),
+            command => ApplyContextMenuCommand(command, index, sectionIndex: -1));
 
         return menu;
     }
@@ -394,24 +372,88 @@ public sealed class SlidePane : Border
     {
         var menu = new ContextMenu();
 
-        foreach (var action in SlideSectionPlanner.BuildSectionHeaderActions(
-                     _editor.Presentation.Sections,
-                     entry.SectionIndex,
-                     entry.SlideIndex))
+        AddContextMenuEntries(
+            menu,
+            FreePContextMenuCatalog.BuildSectionHeaderMenu(
+                _editor.Presentation.Sections,
+                entry.SectionIndex,
+                entry.SlideIndex),
+            command => ApplyContextMenuCommand(command, entry.SlideIndex, entry.SectionIndex));
+
+        return menu;
+    }
+
+    internal ContextMenu BuildSlideContextMenuForTests(int slideIndex) =>
+        BuildContextMenu(slideIndex);
+
+    internal ContextMenu BuildSectionContextMenuForTests(SlidePaneEntry entry) =>
+        BuildSectionContextMenu(entry);
+
+    private static void AddContextMenuEntries(
+        ContextMenu menu,
+        IReadOnlyList<FreePContextMenuEntryPlan> entries,
+        Action<FreePContextMenuCommand> execute)
+    {
+        foreach (var entry in entries)
         {
-            if (action.Kind == SlideSectionActionKind.RemoveSection)
+            if (entry.Kind == FreePContextMenuEntryKind.Separator)
+            {
                 menu.Items.Add(new Separator());
+                continue;
+            }
 
             var item = new MenuItem
             {
-                Header = action.Text,
-                IsEnabled = action.IsEnabled,
+                Header = entry.Text,
+                IsEnabled = entry.IsEnabled,
+                IsCheckable = entry.IsCheckable,
+                IsChecked = entry.IsChecked,
+                Tag = entry.Command,
             };
-            item.Click += (_, _) => ApplySectionAction(action);
+            item.Click += (_, _) => execute(entry.Command!.Value);
             menu.Items.Add(item);
         }
+    }
 
-        return menu;
+    private void ApplyContextMenuCommand(
+        FreePContextMenuCommand command,
+        int slideIndex,
+        int sectionIndex)
+    {
+        if (command is FreePContextMenuCommand.NewSlide or
+            FreePContextMenuCommand.DuplicateSlide or
+            FreePContextMenuCommand.DeleteSlide)
+        {
+            var kind = command switch
+            {
+                FreePContextMenuCommand.NewSlide => SlidePaneActionKind.InsertAfterSlide,
+                FreePContextMenuCommand.DuplicateSlide => SlidePaneActionKind.DuplicateSlide,
+                _ => SlidePaneActionKind.DeleteSlide,
+            };
+            var action = SlidePanePlanner.BuildContextActions(_editor.Presentation.Slides.Count, slideIndex)
+                .Single(candidate => candidate.Kind == kind);
+            SlidePanePlanner.TryApplyAction(_editor, action);
+            return;
+        }
+
+        var sectionActionKind = command switch
+        {
+            FreePContextMenuCommand.AddSection => SlideSectionActionKind.AddSection,
+            FreePContextMenuCommand.RenameSection => SlideSectionActionKind.RenameSection,
+            FreePContextMenuCommand.RemoveSection => SlideSectionActionKind.RemoveSection,
+            FreePContextMenuCommand.RemoveAllSections => SlideSectionActionKind.RemoveAllSections,
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
+        };
+        var actions = sectionActionKind == SlideSectionActionKind.AddSection
+            ? SlideSectionPlanner.BuildSlideContextActions(
+                _editor.Presentation.Slides,
+                _editor.Presentation.Sections,
+                slideIndex)
+            : SlideSectionPlanner.BuildSectionHeaderActions(
+                _editor.Presentation.Sections,
+                sectionIndex,
+                slideIndex);
+        ApplySectionAction(actions.Single(candidate => candidate.Kind == sectionActionKind));
     }
 
     private void ToggleSection(string sectionId)

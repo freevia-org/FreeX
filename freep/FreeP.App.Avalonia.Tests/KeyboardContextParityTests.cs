@@ -1,0 +1,173 @@
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
+using Avalonia.Threading;
+using FreeP.App.Compositor;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Avalonia.Tests;
+
+public sealed class KeyboardContextParityTests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreePHeadlessApp).Assembly);
+
+    [Fact]
+    public async Task AvaloniaMissingWpfRoutesExecuteRealCommandEffects()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var originalSlideCount = window.Editor.Presentation.Slides.Count;
+                Press(window, Key.D, KeyModifiers.Control).Handled.Should().BeTrue();
+                window.Editor.Presentation.Slides.Should().HaveCount(originalSlideCount + 1);
+
+                Press(window, Key.Z, KeyModifiers.Control).Handled.Should().BeTrue();
+                window.Editor.Presentation.Slides.Should().HaveCount(originalSlideCount);
+                Press(window, Key.Z, KeyModifiers.Control | KeyModifiers.Shift).Handled.Should().BeTrue();
+                window.Editor.Presentation.Slides.Should().HaveCount(originalSlideCount + 1);
+
+                var shape = new SlideShape { Id = 701, Name = "Clipboard shape" };
+                window.Editor.CurrentSlide!.Shapes.Add(shape);
+                var shapeCountBeforeCut = window.Editor.CurrentSlide.Shapes.Count;
+                window.Editor.Select(shape.Id);
+                Press(window, Key.C, KeyModifiers.Control).Handled.Should().BeTrue();
+                Press(window, Key.X, KeyModifiers.Control).Handled.Should().BeTrue();
+                window.Editor.CurrentSlide.Shapes.Should().NotContain(candidate => candidate.Id == shape.Id);
+                Press(window, Key.V, KeyModifiers.Control).Handled.Should().BeTrue();
+                window.Editor.CurrentSlide.Shapes.Should().HaveCount(shapeCountBeforeCut);
+
+                Press(window, Key.F, KeyModifiers.Control).Handled.Should().BeTrue();
+                window.IsFindReplacePaneVisible.Should().BeTrue();
+                window.IsFindReplaceReplaceInputVisible.Should().BeFalse();
+                Press(window, Key.H, KeyModifiers.Control).Handled.Should().BeTrue();
+                window.IsFindReplaceReplaceInputVisible.Should().BeTrue();
+                Press(window, Key.P, KeyModifiers.Control).Handled.Should().BeTrue();
+                window.IsPrintOptionsPaneVisible.Should().BeTrue();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaAltKeyTipsActivateTabsAndEscapeDismisses()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                Press(window, Key.LeftAlt).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeTrue();
+
+                Press(window, Key.Escape).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+
+                Press(window, Key.RightAlt);
+                Press(window, Key.N).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+                var tabs = window.RibbonControlForTests.Should().BeOfType<TabControl>().Subject;
+                ((TabItem)tabs.SelectedItem!).Tag.Should().Be("insert");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaMenusRenderSharedStateExecuteAndSupportKeyboardLifecycle()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Editor.InsertSlide();
+                var slideMenu = window.BuildSlidePaneContextMenuForTests(0);
+                AssertMenuMatches(
+                    slideMenu,
+                    FreePContextMenuCatalog.BuildSlideMenu(
+                        window.Editor.Presentation.Slides,
+                        window.Editor.Presentation.Sections,
+                        0));
+
+                var before = window.Editor.Presentation.Slides.Count;
+                slideMenu.Items.OfType<MenuItem>()
+                    .Single(item => Equals(item.Tag, FreePContextMenuCommand.DuplicateSlide))
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                window.Editor.Presentation.Slides.Should().HaveCount(before + 1);
+
+                window.Show();
+                var slideItem = window.GetLogicalDescendants()
+                    .OfType<ListBoxItem>()
+                    .First(item => item.Tag is int);
+                slideItem.ContextMenu.Should().NotBeNull();
+                var keyboardMenu = slideItem.ContextMenu!;
+
+                var open = RoutedKey(Key.F10, KeyModifiers.Shift, slideItem);
+                slideItem.RaiseEvent(open);
+                open.Handled.Should().BeTrue();
+                keyboardMenu.IsOpen.Should().BeTrue();
+
+                var escape = RoutedKey(Key.Escape, KeyModifiers.None, keyboardMenu);
+                keyboardMenu.RaiseEvent(escape);
+                escape.Handled.Should().BeTrue();
+                keyboardMenu.IsOpen.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    private static void AssertMenuMatches(
+        ContextMenu menu,
+        IReadOnlyList<FreePContextMenuEntryPlan> expected)
+    {
+        menu.Items.Should().HaveCount(expected.Count);
+        for (var index = 0; index < expected.Count; index++)
+        {
+            if (expected[index].Kind == FreePContextMenuEntryKind.Separator)
+            {
+                menu.Items[index].Should().BeOfType<Separator>();
+                continue;
+            }
+
+            var item = menu.Items[index].Should().BeOfType<MenuItem>().Subject;
+            item.Tag.Should().Be(expected[index].Command);
+            item.Header.Should().Be(expected[index].Text);
+            item.IsEnabled.Should().Be(expected[index].IsEnabled);
+            item.IsChecked.Should().Be(expected[index].IsChecked);
+            (item.ToggleType == MenuItemToggleType.CheckBox)
+                .Should().Be(expected[index].IsCheckable);
+        }
+    }
+
+    private static KeyEventArgs Press(
+        MainWindow window,
+        Key key,
+        KeyModifiers modifiers = KeyModifiers.None)
+    {
+        var args = new KeyEventArgs { Key = key, KeyModifiers = modifiers };
+        window.RaiseKeyDownForTests(args);
+        return args;
+    }
+
+    private static KeyEventArgs RoutedKey(Key key, KeyModifiers modifiers, object source) => new()
+    {
+        RoutedEvent = InputElement.KeyDownEvent,
+        Key = key,
+        KeyModifiers = modifiers,
+        Source = source,
+    };
+}
