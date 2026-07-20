@@ -3105,8 +3105,10 @@ public static partial class ChartRenderPlanner
             .ThenBy(point => point.CategoryIndex)
             .ToArray();
 
-        var renderPointsByKey = UsesImportedSurfaceBoundaryFaces(chart)
-            ? AddImportedSurfaceBlankPointFallbacks(
+        var renderPointsByKey = (ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Span ||
+            UsesImportedSurfaceBoundaryFaces(chart))
+            ? AddSurfaceBlankPointFallbacks(
+                chart,
                 pointsByKey,
                 plot,
                 seriesCount,
@@ -3117,20 +3119,28 @@ public static partial class ChartRenderPlanner
             : pointsByKey;
         var wireframe = BuildSurfaceWireframeSegments(renderPointsByKey, seriesCount, categoryCount);
         var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
-        var renderFacets = chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
+        bool rebuildFacetsForRenderPoints = ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Span ||
+            chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart);
+        var renderFacets = rebuildFacetsForRenderPoints
             ? BuildSurfaceFacetPrimitives(
                 chart,
                 renderPointsByKey,
                 seriesCount,
                 categoryCount,
                 seriesColors,
-                triangulateCompleteCells: true)
-                // PowerPoint paints the rear surface rows first so the nearer
-                // row owns shared projected pixels at the fold between cells.
-                .OrderByDescending(facet => facet.SeriesIndex)
-                .ThenBy(facet => facet.CategoryIndex)
+                triangulateCompleteCells:
+                    chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart))
                 .ToArray()
             : facets;
+        if (chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart))
+        {
+            // PowerPoint paints the rear surface rows first so the nearer
+            // row owns shared projected pixels at the fold between cells.
+            renderFacets = renderFacets
+                .OrderByDescending(facet => facet.SeriesIndex)
+                .ThenBy(facet => facet.CategoryIndex)
+                .ToArray();
+        }
         if (UsesImportedSurfaceBoundaryFaces(chart))
         {
             renderFacets = renderFacets
@@ -3262,7 +3272,8 @@ public static partial class ChartRenderPlanner
     }
 
     private static IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive>
-        AddImportedSurfaceBlankPointFallbacks(
+        AddSurfaceBlankPointFallbacks(
+            ChartShape chart,
             IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
             ChartPlanRect plot,
         int seriesCount,
@@ -3279,6 +3290,26 @@ public static partial class ChartRenderPlanner
                 var key = (seriesIndex, categoryIndex);
                 if (renderPoints.ContainsKey(key))
                     continue;
+
+                // Surface charts honor the chart-level blank policy before
+                // applying the imported Office fallback for a gap. A span
+                // bridges a missing vertex from its same-row neighbors; the
+                // default gap path retains the measured low-band registration.
+                if (ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Span)
+                {
+                    if (categoryIndex > 0 && categoryIndex < categoryCount - 1 &&
+                        renderPoints.TryGetValue((seriesIndex, categoryIndex - 1), out var previousSpanCategory) &&
+                        renderPoints.TryGetValue((seriesIndex, categoryIndex + 1), out var nextSpanCategory))
+                    {
+                        renderPoints[key] = InterpolateSurfacePoint(
+                            previousSpanCategory,
+                            nextSpanCategory,
+                            seriesIndex,
+                            categoryIndex);
+                    }
+
+                    continue;
+                }
 
                 // PowerPoint keeps the blank semantic value at the axis
                 // minimum but registers its projected vertex below the

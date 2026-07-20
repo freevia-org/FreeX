@@ -746,6 +746,34 @@ public sealed class ChartRenderPlannerTests
             .Bounds.Should().Be(new ChartPlanRect(100, 0, 100, 60));
     }
 
+    [Theory]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Surface3D)]
+    public void BuildSurfaceGeometryPlan_DisplayBlanksAsSpan_InterpolatesSurfaceVertex(
+        ChartType chartType)
+    {
+        var chart = MakeSurfaceChart(chartType);
+        chart.Series[0].Values[1] = null;
+        chart.DisplayBlanksAs = ChartDisplayBlanksAs.Span;
+
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 360, 189));
+        var north = plan.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 0);
+        var south = plan.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 2);
+        var expectedSpanPoint = new ChartPlanPoint(
+            (north.Point.X + south.Point.X) / 2.0,
+            (north.Point.Y + south.Point.Y) / 2.0);
+
+        plan.RenderFacets
+            .Where(facet => facet.SeriesIndex == 0 && facet.CategoryIndex == 0)
+            .First()
+            .Points
+            .Should()
+            .Contain(expectedSpanPoint,
+                "surface span blanks should interpolate the missing same-row vertex");
+    }
+
     [Fact]
     public void BuildSurfaceGeometryPlan_Surface3DPlansProjectedFacetsAndWireframe()
     {
