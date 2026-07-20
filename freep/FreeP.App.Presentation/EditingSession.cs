@@ -320,11 +320,16 @@ public sealed class EditingSession
     public void DeleteSelected()
     {
         if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
-        // Delete in reverse z-order to keep indices stable.
         var toDelete = _selectedShapeIds.ToList();
         ClearSelection();
-        foreach (var id in toDelete)
-            Bus.Execute(new DeleteShapeCommand(_currentSlideIndex, id));
+
+        var commands = toDelete
+            .Select(id => (IPresentationCommand)new DeleteShapeCommand(_currentSlideIndex, id))
+            .ToArray();
+        if (commands.Length == 1)
+            Bus.Execute(commands[0]);
+        else
+            Bus.Execute(new BatchCommand("Delete Shapes", commands));
     }
 
     /// <summary>Translates all selected shapes by (dx, dy) in EMU.</summary>

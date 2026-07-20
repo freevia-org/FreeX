@@ -1,5 +1,7 @@
 using Avalonia.Headless;
 using Avalonia.Input;
+using System.Diagnostics;
+using System.Reflection;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
@@ -14,6 +16,28 @@ public sealed class PresentationClipboardInteropTests
 
     private static readonly byte[] Png = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+
+    [Fact]
+    public void Avalonia12Win32Backend_ApplicationPrefixMatchesWpfContract()
+    {
+        var assembly = Assembly.Load("Avalonia.Win32");
+        var productVersion = FileVersionInfo.GetVersionInfo(assembly.Location).ProductVersion;
+        var registryType = assembly.GetType(
+            "Avalonia.Win32.ClipboardFormatRegistry",
+            throwOnError: true)!;
+        var prefix = registryType
+            .GetField("AppPrefix", BindingFlags.Static | BindingFlags.NonPublic)!
+            .GetRawConstantValue();
+
+        productVersion.Should().StartWith("12.0.4");
+        prefix.Should().Be("avn-app-fmt:");
+        AvaloniaPresentationSystemClipboard.SelectionFormat
+            .ToSystemName((string)prefix!)
+            .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.Selection);
+        AvaloniaPresentationSystemClipboard.OwnerTokenFormat
+            .ToSystemName((string)prefix!)
+            .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.OwnerToken);
+    }
 
     [Fact]
     public async Task Copy_exports_native_image_text_and_keeps_internal_fidelity()
@@ -58,6 +82,12 @@ public sealed class PresentationClipboardInteropTests
             {
                 transfer.Formats.Should().Contain(AvaloniaPresentationSystemClipboard.SelectionFormat);
                 transfer.Formats.Should().Contain(AvaloniaPresentationSystemClipboard.OwnerTokenFormat);
+                AvaloniaPresentationSystemClipboard.SelectionFormat
+                    .ToSystemName("avn-app-fmt:")
+                    .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.Selection);
+                AvaloniaPresentationSystemClipboard.OwnerTokenFormat
+                    .ToSystemName("avn-app-fmt:")
+                    .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.OwnerToken);
                 transfer.Formats.Should().Contain(DataFormat.Bitmap);
                 transfer.Formats.Should().Contain(DataFormat.Text);
 
