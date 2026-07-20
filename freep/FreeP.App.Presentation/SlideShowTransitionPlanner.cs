@@ -41,6 +41,7 @@ public enum SlideShowTransitionPlaybackKind
     Fracture,
     Crush,
     Prism,
+    Prestige,
     Warp,
     Vortex,
     PageCurl,
@@ -201,6 +202,8 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Crush => SlideShowTransitionPlaybackKind.Crush,
 
             TransitionKind.Prism => SlideShowTransitionPlaybackKind.Prism,
+
+            TransitionKind.Prestige => SlideShowTransitionPlaybackKind.Prestige,
 
             TransitionKind.PageCurlSingle or
             TransitionKind.PageCurlDouble => SlideShowTransitionPlaybackKind.PageCurl,

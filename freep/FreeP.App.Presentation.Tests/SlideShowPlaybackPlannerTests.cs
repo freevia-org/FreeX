@@ -561,6 +561,38 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PrestigePlanner_BuildsDeterministicExpandingDiamond()
+    {
+        var rightPlan = SlideShowPrestigeTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Prestige,
+            Direction = TransitionDirection.Right
+        });
+        var leftPlan = SlideShowPrestigeTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Prestige,
+            Direction = TransitionDirection.Left
+        });
+
+        rightPlan.Reverse.Should().BeFalse();
+        leftPlan.Reverse.Should().BeTrue();
+
+        var closed = SlideShowPrestigeTransitionPlanner.BuildPolygons(960, 540, 0, rightPlan);
+        var partial = SlideShowPrestigeTransitionPlanner.BuildPolygons(960, 540, 0.5, rightPlan);
+        var open = SlideShowPrestigeTransitionPlanner.BuildPolygons(960, 540, 1, rightPlan);
+        var repeat = SlideShowPrestigeTransitionPlanner.BuildPolygons(960, 540, 0.5, rightPlan);
+        var reversed = SlideShowPrestigeTransitionPlanner.BuildPolygons(960, 540, 0.5, leftPlan);
+
+        closed.Should().BeEmpty();
+        partial.Should().ContainSingle();
+        partial[0].Points.Should().HaveCount(4);
+        open.Should().ContainSingle();
+        open[0].Points.Should().HaveCount(4);
+        partial.Should().BeEquivalentTo(repeat);
+        reversed.Should().NotBeEquivalentTo(partial);
+    }
+
+    [Fact]
     public void PageCurlPlanner_FoldsOutgoingPageToEmptyClip()
     {
         var plan = SlideShowPageCurlTransitionPlanner.Plan(new SlideTransition

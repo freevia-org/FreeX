@@ -106,6 +106,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayPrismTransition(");
         source.Should().Contain("SlideShowPrismTransitionPlanner.Plan(");
         source.Should().Contain("BuildPrismTransitionGeometry(");
+        source.Should().Contain("PlayPrestigeTransition(");
+        source.Should().Contain("SlideShowPrestigeTransitionPlanner.Plan(");
+        source.Should().Contain("BuildPrestigeTransitionGeometry(");
         source.Should().Contain("PlaySwitchTransition(");
         source.Should().Contain("PlayOrbitTransition(");
         source.Should().Contain("PlayFerrisTransition(");

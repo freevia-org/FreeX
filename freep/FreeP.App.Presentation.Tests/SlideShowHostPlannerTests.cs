@@ -182,6 +182,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Fracture, SlideShowTransitionPlaybackKind.Fracture)]
     [InlineData(TransitionKind.Crush, SlideShowTransitionPlaybackKind.Crush)]
     [InlineData(TransitionKind.Prism, SlideShowTransitionPlaybackKind.Prism)]
+    [InlineData(TransitionKind.Prestige, SlideShowTransitionPlaybackKind.Prestige)]
     [InlineData(TransitionKind.PageCurlSingle, SlideShowTransitionPlaybackKind.PageCurl)]
     [InlineData(TransitionKind.PageCurlDouble, SlideShowTransitionPlaybackKind.PageCurl)]
     [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]
