@@ -122,6 +122,9 @@ internal static class SvgIconParser
             case "polygon":
                 AddGeometry(parent, BuildPolygon(element), element, inherited);
                 break;
+            case "line":
+                AddGeometry(parent, BuildLine(element), element, inherited);
+                break;
             case "text":
                 AddText(parent, element, inherited);
                 break;
@@ -352,6 +355,15 @@ internal static class SvgIconParser
             points.Add(new Point(nums[i], nums[i + 1]));
 
         return new PolylineGeometry(points, isFilled: true);
+    }
+
+    private static Geometry BuildLine(XElement element)
+    {
+        var x1 = ParseDouble(element.Attribute("x1")?.Value) ?? 0;
+        var y1 = ParseDouble(element.Attribute("y1")?.Value) ?? 0;
+        var x2 = ParseDouble(element.Attribute("x2")?.Value) ?? 0;
+        var y2 = ParseDouble(element.Attribute("y2")?.Value) ?? 0;
+        return new LineGeometry(new Point(x1, y1), new Point(x2, y2));
     }
 
     // ── Transform parsing ───────────────────────────────────────────────────────────────────────

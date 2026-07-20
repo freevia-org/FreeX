@@ -1,11 +1,18 @@
 using System.IO.Compression;
+using System.Threading;
+using Avalonia.Headless;
 using Free.Shared.Pdf;
 using Free.Shared.Xps;
+using FreeW.App.Avalonia.Editing;
+using FreeW.App.Avalonia.Pdf;
 
 namespace FreeW.App.Avalonia.Tests.Printing;
 
 public sealed class PortableXpsWriterTests
 {
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
     [Fact]
     public void WriteToBytes_VectorDocumentProducesRealXpsPackage()
     {
@@ -45,5 +52,22 @@ public sealed class PortableXpsWriterTests
             message.Contains("embedded XPS font resource", StringComparison.Ordinal));
         var action = () => PortableXpsWriter.WriteToBytes(document);
         action.Should().Throw<XpsUnsupportedContentException>();
+    }
+
+    [Fact]
+    public async Task AvaloniaExport_TextDocumentUsesRasterPageFallbackInsideXpsPackage()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new DocumentView();
+            view.InsertText("Cyrillic XPS fallback");
+
+            using var stream = new MemoryStream();
+            FreeWAvaloniaXpsExport.Save(view, stream);
+
+            using var archive = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+            archive.GetEntry("FixedDocSeq.fdseq").Should().NotBeNull();
+            archive.Entries.Should().Contain(entry => entry.FullName.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
+        }, CancellationToken.None);
     }
 }

@@ -115,6 +115,9 @@ internal static class FreeWAvaloniaRibbonDefinition
             .Select(preset => new RibbonMenuItem(
                 preset.Label,
                 new RibbonCommandId($"freew.{prefix}-position-{preset.Suffix}")))
+            .Concat(prefix == "image"
+                ? [RibbonMenuItem.Separator(), new RibbonMenuItem("More Layout Options...", new RibbonCommandId("freew.image-position"))]
+                : [])
             .ToArray());
 
     private static RibbonMenu BuildShapeSizeMenu() =>
@@ -372,6 +375,7 @@ internal static class FreeWAvaloniaRibbonDefinition
         new(DocumentTheme.Catalog
             .Select(t => new RibbonMenuItem(t.Name,
                 new RibbonCommandId($"freew.theme-colors.{t.Name.ToLowerInvariant()}")))
+            .Concat([RibbonMenuItem.Separator(), new RibbonMenuItem("Customize Colors...", new RibbonCommandId("freew.customize-colors"))])
             .ToArray());
 
     /// <summary>AV-DESIGN: Design &gt; Fonts dropdown — one item per <see cref="DocumentFontSet.Catalog"/> entry.</summary>
@@ -379,6 +383,7 @@ internal static class FreeWAvaloniaRibbonDefinition
         new(DocumentFontSet.Catalog
             .Select(f => new RibbonMenuItem($"{f.Name}  ({f.HeadingFont} / {f.BodyFont})",
                 new RibbonCommandId($"freew.theme-fonts.{f.Name.ToLowerInvariant()}")))
+            .Concat([RibbonMenuItem.Separator(), new RibbonMenuItem("Customize Fonts...", new RibbonCommandId("freew.customize-fonts"))])
             .ToArray());
 
     /// <summary>AV-DESIGN: Design &gt; Paragraph Spacing dropdown — one item per spacing preset.</summary>
@@ -427,6 +432,7 @@ internal static class FreeWAvaloniaRibbonDefinition
     private static RibbonMenu BuildPageColorMenu() =>
         new(FreeWRibbonDefinitionData.PageColors
             .Select(pc => new RibbonMenuItem(pc.Label, new RibbonCommandId(pc.CommandId)))
+            .Concat([RibbonMenuItem.Separator(), new RibbonMenuItem("More Colors...", new RibbonCommandId("freew.page-color.more"))])
             .ToArray());
 
     /// <summary>
@@ -1026,6 +1032,8 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.merge-preview-previous", "◀ Previous");
                     g.Button("freew.merge-preview-next",     "Next ▶");
                     g.Button("freew.merge-preview-last",     "Last Record");
+                    g.Button("freew.merge-find-recipient",   "Find Recipient");
+                    g.Button("freew.merge-check-errors",     "Check for Errors");
                 });
                 tab.Group("merge-finish", "Finish", null, 70, g =>
                 {
@@ -1352,6 +1360,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                         });
                         g.ComboBox("freew.shape-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
                         g.ComboBox("freew.shape-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
+                        g.Button("freew.chart-size-dialog", "More Size Options...");
                     });
                 })
             // ── AV-CHARTTAB: SmartArt Design contextual tab (shown when a floating SMARTART is selected) ──

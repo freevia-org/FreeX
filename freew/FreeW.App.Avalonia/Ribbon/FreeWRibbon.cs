@@ -274,6 +274,22 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenImageAltTextDialog = null,
     /// <summary>Picture Format &gt; Picture Border. Optional host callback that owns the modal border workflow.</summary>
     Action? OpenImageBorderDialog = null,
+    /// <summary>Picture Format &gt; Corrections &gt; Picture Corrections. Optional owner-modal route.</summary>
+    Action? OpenImageAdjustDialog = null,
+    /// <summary>Picture Format &gt; Position &gt; More Layout Options. Optional owner-modal route.</summary>
+    Action? OpenImagePositionDialog = null,
+    /// <summary>Insert &gt; Chart. Optional owner-modal chart-data route.</summary>
+    Action? OpenInsertChartDialog = null,
+    /// <summary>Chart Design &gt; Chart Title. Optional owner-modal title route.</summary>
+    Action? OpenChartTitleDialog = null,
+    /// <summary>Chart Design &gt; Axis Titles. Optional owner-modal title route.</summary>
+    Action? OpenChartAxisTitlesDialog = null,
+    /// <summary>Chart Format &gt; Size &gt; More Size Options. Optional owner-modal route.</summary>
+    Action? OpenChartSizeDialog = null,
+    /// <summary>Insert &gt; SmartArt. Optional owner-modal diagram route.</summary>
+    Action? OpenInsertSmartArtDialog = null,
+    /// <summary>Insert &gt; Icons. Optional picker/rasterization route.</summary>
+    Action? OpenIconPickerDialog = null,
     /// <summary>Table Layout &gt; Convert to Text. Optional host callback that owns delimiter selection.</summary>
     Action? OpenTableToTextDialog = null,
     /// <summary>SmartArt Design &gt; Edit Text. Optional host callback that owns the modal editor.</summary>
@@ -292,6 +308,12 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenColumnsDialog = null,
     /// <summary>Design &gt; Paragraph Spacing &gt; Custom Paragraph Spacing. Optional owner-modal shell route.</summary>
     Action? OpenCustomParagraphSpacingDialog = null,
+    /// <summary>Design &gt; Colors &gt; Customize Colors. Optional owner-modal route.</summary>
+    Action? OpenCustomizeThemeColorsDialog = null,
+    /// <summary>Design &gt; Fonts &gt; Customize Fonts. Optional owner-modal route.</summary>
+    Action? OpenCustomizeThemeFontsDialog = null,
+    /// <summary>Design &gt; Page Color &gt; More Colors. Optional owner-modal route.</summary>
+    Action? OpenPageColorDialog = null,
     /// <summary>Insert &gt; Drop Cap &gt; Options. Optional owner-modal shell route.</summary>
     Action? OpenDropCapOptionsDialog = null,
     /// <summary>Layout &gt; Hyphenation &gt; Options. Optional owner-modal shell route.</summary>

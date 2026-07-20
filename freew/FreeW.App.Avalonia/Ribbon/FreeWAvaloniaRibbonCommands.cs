@@ -914,9 +914,9 @@ internal static class FreeWAvaloniaRibbonCommands
         var textFromFileCommand = new ActionRibbonCommand(callbacks.InsertTextFromFile ?? (() => { }));
         r.Register("freew.insert-file", textFromFileCommand);
         r.Register("freew.text-from-file", textFromFileCommand);
-        r.Register("freew.chart", new ActionRibbonCommand(() => editor.InsertChart()));
-        r.Register("freew.smartart", new ActionRibbonCommand(() => editor.InsertSmartArt()));
-        r.Register("freew.insert-icon", new ActionRibbonCommand(editor.InsertIcon));
+        r.Register("freew.chart", new EditingActionCommand(editor, callbacks.OpenInsertChartDialog, () => editor.InsertChart()));
+        r.Register("freew.smartart", new EditingActionCommand(editor, callbacks.OpenInsertSmartArtDialog, () => editor.InsertSmartArt()));
+        r.Register("freew.insert-icon", new EditingActionCommand(editor, callbacks.OpenIconPickerDialog, editor.InsertIcon));
         r.Register("freew.wordart", new ActionRibbonCommand(() => editor.InsertWordArt()));
         r.Register("freew.object", new ActionRibbonCommand(() => editor.InsertEmbeddedObject()));
         r.Register("freew.update-fields", new ActionRibbonCommand(editor.UpdateFields));
@@ -1224,7 +1224,10 @@ internal static class FreeWAvaloniaRibbonCommands
             }
         }
 
-        RegisterFloatingPositionCommands(r, editor, "image", "Image");
+        RegisterFloatingPositionCommands(r, editor, "image", "Image", callbacks.OpenImagePositionDialog);
+        r.Register("freew.image-adjust-dialog", new SelectedImageDialogCommand(
+            editor,
+            callbacks.OpenImageAdjustDialog));
         r.Register("freew.image-crop", new ImageCropCommand(editor, callbacks));
         r.Register("freew.image-size", new SelectedImageDialogCommand(
             editor,
@@ -1286,9 +1289,10 @@ internal static class FreeWAvaloniaRibbonCommands
         RibbonCommandRegistry r,
         DocumentView editor,
         string prefix,
-        string requiredKind)
+        string requiredKind,
+        Action? openDialog = null)
     {
-        r.Register($"freew.{prefix}-position", new FloatingObjectPositionCommand(editor, requiredKind));
+        r.Register($"freew.{prefix}-position", new FloatingObjectPositionCommand(editor, requiredKind, openDialog));
         foreach (var preset in FreeWRibbonDefinitionData.FloatingPositionPresets)
         {
             var captured = preset;
@@ -1338,6 +1342,36 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: editor.SelectedFloatingImage() is not null && openDialog is not null);
+    }
+
+    private sealed class SelectedFloatingDialogCommand(
+        DocumentView editor,
+        string requiredKind,
+        Action? openDialog) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                openDialog!.Invoke();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingInfo?.Kind == requiredKind && openDialog is not null);
+    }
+
+    private sealed class EditingActionCommand(
+        DocumentView editor,
+        Action? hostAction,
+        Action fallbackAction) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!GetState().IsEnabled)
+                return;
+            (hostAction ?? fallbackAction)();
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: !editor.IsEditingLocked);
     }
 
     private sealed class ImageResetCommand(DocumentView editor) : IRibbonStatefulCommand
@@ -1403,13 +1437,19 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private sealed class FloatingObjectPositionCommand(
         DocumentView editor,
-        string requiredKind) : IRibbonStatefulCommand
+        string requiredKind,
+        Action? openDialog) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!IsEnabled()
-                || !TryParsePosition(context.SelectedValue, out var hOffset, out var vOffset, out var hAnchor, out var vAnchor))
+            if (!IsEnabled())
                 return;
+
+            if (!TryParsePosition(context.SelectedValue, out var hOffset, out var vOffset, out var hAnchor, out var vAnchor))
+            {
+                openDialog?.Invoke();
+                return;
+            }
 
             editor.SetFloatingPosition(hOffset, vOffset, hAnchor, vAnchor);
         }
@@ -1779,8 +1819,8 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         r.Register("freew.chart-toggle-legend", new ActionRibbonCommand(editor.ToggleChartLegend));
-        r.Register("freew.chart-title", new ActionRibbonCommand(editor.ToggleChartTitle));
-        r.Register("freew.chart-axis-titles", new ActionRibbonCommand(editor.ToggleChartAxisTitles));
+        r.Register("freew.chart-title", new SelectedFloatingDialogCommand(editor, "Chart", callbacks.OpenChartTitleDialog));
+        r.Register("freew.chart-axis-titles", new SelectedFloatingDialogCommand(editor, "Chart", callbacks.OpenChartAxisTitlesDialog));
         r.Register("freew.chart-edit-data", new ValueRibbonCommand(value =>
         {
             if (TryBuildChartDataPreset(value, out var chart))
@@ -1791,6 +1831,7 @@ internal static class FreeWAvaloniaRibbonCommands
             if (TryParseChartSize(value, out var widthPt, out var heightPt))
                 editor.SetSelectedChartSize(widthPt, heightPt);
         }));
+        r.Register("freew.chart-size-dialog", new SelectedFloatingDialogCommand(editor, "Chart", callbacks.OpenChartSizeDialog));
 
         // ── SmartArt Design ───────────────────────────────────────────────────
         // Layouts — the four Word families. Cycle maps to the model's Process kind (closest flat sequence).
@@ -2040,6 +2081,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Colors (palette only — preserves fonts) ──────────────────────────
         r.Register("freew.theme-colors", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.customize-colors", new ActionRibbonCommand(callbacks.OpenCustomizeThemeColorsDialog ?? (() => { })));
         foreach (var theme in DocumentTheme.Catalog)
         {
             var t = theme;
@@ -2048,6 +2090,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Fonts (heading/body pairing — preserves colours) ─────────────────
         r.Register("freew.theme-fonts", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.customize-fonts", new ActionRibbonCommand(callbacks.OpenCustomizeThemeFontsDialog ?? (() => { })));
         foreach (var fontSet in DocumentFontSet.Catalog)
         {
             var f = fontSet;
@@ -2082,6 +2125,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.reset-style-set", new ActionRibbonCommand(() => editor.ApplyStyleSet(DocumentStyleSet.Default)));
 
         r.Register("freew.page-color", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.page-color.more", new ActionRibbonCommand(callbacks.OpenPageColorDialog ?? (() => { })));
         RegisterPageColorPalette(r, editor);
 
         // ── Page Borders — dialog launcher (optional callback) ───────────────
