@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -48,7 +49,7 @@ internal sealed class ChartTitleDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void Accept()
     {
         _accepted = true;
-        _title = string.IsNullOrWhiteSpace(_titleBox.Text) ? null : _titleBox.Text.Trim();
+        _title = ChartTitleDialogPlanner.BuildResult(_titleBox.Text).NewTitle;
         Close();
     }
 
