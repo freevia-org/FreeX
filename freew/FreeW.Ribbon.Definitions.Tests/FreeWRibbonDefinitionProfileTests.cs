@@ -395,6 +395,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew.merge-preview",
             "freew.merge-preview-previous",
             "freew.merge-preview-next",
+            "freew.merge-find-recipient",
+            "freew.merge-check-errors",
             "freew.merge-finish",
             "freew.merge-email",
         });
@@ -409,6 +411,49 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew.next-record",
             "freew.finish-merge",
         });
+    }
+
+    [Fact]
+    public void Final_command_profile_asymmetries_use_shared_canonical_shape()
+    {
+        var expected = new[]
+        {
+            (CommandId: "freew.chart-size-dialog", TabId: "chart-format", GroupId: "chart-size", Label: "More Size Options..."),
+            (CommandId: "freew.merge-check-errors", TabId: "mailings", GroupId: "merge-preview", Label: "Check for Errors"),
+            (CommandId: "freew.merge-find-recipient", TabId: "mailings", GroupId: "merge-preview", Label: "Find Recipient"),
+        };
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var definition = FreeWRibbon.Build(capabilities);
+            foreach (var item in expected)
+            {
+                var control = definition.FindTab(item.TabId)!
+                    .FindGroup(item.GroupId)!
+                    .Controls
+                    .Single(candidate => candidate.CommandId.Value == item.CommandId);
+
+                control.Should().BeOfType<RibbonButton>();
+                control.Label.Should().Be(item.Label);
+                control.PreferredLayout.Should().Be(RibbonCommandLayoutKind.Medium);
+            }
+        }
+
+        var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf);
+        var chartSizeDialog = wpf.FindTab("chart-format")!.FindGroup("chart-size")!.Controls
+            .Single(control => control.CommandId.Value == "freew.chart-size-dialog");
+        var findRecipient = wpf.FindTab("mailings")!.FindGroup("merge-preview")!.Controls
+            .Single(control => control.CommandId.Value == "freew.merge-find-recipient");
+        var checkErrors = wpf.FindTab("mailings")!.FindGroup("merge-preview")!.Controls
+            .Single(control => control.CommandId.Value == "freew.merge-check-errors");
+
+        chartSizeDialog.Icon.Should().Be(new RibbonCommandIcon(RibbonCommandIconKind.Size));
+        findRecipient.Icon.Should().Be(new RibbonCommandIcon(RibbonCommandIconKind.Search));
+        checkErrors.Icon.Should().Be(new RibbonCommandIcon(
+            RibbonCommandIconKind.Warning,
+            RibbonCommandIconAccent.Warning));
+        new[] { chartSizeDialog.KeyTip, findRecipient.KeyTip, checkErrors.KeyTip }
+            .Should().OnlyContain(keyTip => keyTip == null);
     }
 
     [Fact]
@@ -472,6 +517,10 @@ public sealed class FreeWRibbonDefinitionProfileTests
         summary.GetProperty("actionableMissingAvalonia").GetInt32().Should().Be(commands.Count(command =>
             command.GetProperty("missingProfile").GetString() == "Avalonia" &&
             command.GetProperty("gapClassification").GetString() == "actionable-gap"));
+        summary.GetProperty("actionableGaps").GetInt32().Should().Be(0,
+            "the checked-in FreeW command profiles must not retain cross-platform command debt");
+        summary.GetProperty("actionableMissingWpf").GetInt32().Should().Be(0);
+        summary.GetProperty("actionableMissingAvalonia").GetInt32().Should().Be(0);
 
         foreach (var command in commands)
         {
@@ -520,6 +569,27 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.thesaurus", "shared-profile");
         AssertGapClassification(commands, "freew.set-proofing-language", "shared-profile");
         AssertGapClassification(commands, "freew.split", "command-id-alias");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.chart-size-dialog",
+            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+            "FreeWRibbonParityTests.FinalCommandProfileAsymmetries_RouteToBackedWpfCommands",
+            "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
+            "ChartSmartArtContextualTabTests.Chart_size_dialog_command_routes_selected_chart_to_owner_modal_callback",
+            "freew.final-command-profile-routing.shared-behavior",
+            "Final command profile routing");
+        foreach (var commandId in new[] { "freew.merge-find-recipient", "freew.merge-check-errors" })
+        {
+            AssertBehaviorEvidence(
+                commands,
+                commandId,
+                "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
+                "FreeWRibbonParityTests.MailingsFindRecipientAndCheckErrors_UseSharedPlannersThroughWpfCommands",
+                "freew/FreeW.App.Avalonia.Tests/MailMergeDialogSurfaceTests.cs",
+                "MailMergeDialogSurfaceTests.MailingsCommandHost_RoutesFindAndErrorChecksThroughDialogsAndSharedPlanners",
+                "freew.final-command-profile-routing.shared-behavior",
+                "Final command profile routing");
+        }
         var unsupportedDirectRows = commands
             .Where(command => command.GetProperty("profileSurface").GetString() != "both")
             .Where(command => !command.TryGetProperty("behaviorEvidence", out _))
