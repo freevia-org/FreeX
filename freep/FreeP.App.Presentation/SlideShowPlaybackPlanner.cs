@@ -37,6 +37,7 @@ public enum SlideShowTransitionPlaybackActionKind
     Curtains,
     Shred,
     Drape,
+    Vortex,
     PageCurl,
     Push
 }
@@ -225,6 +226,7 @@ public static class SlideShowPlaybackPlanner
             SlideShowTransitionPlaybackKind.Curtains => SlideShowTransitionPlaybackActionKind.Curtains,
             SlideShowTransitionPlaybackKind.Shred => SlideShowTransitionPlaybackActionKind.Shred,
             SlideShowTransitionPlaybackKind.Drape => SlideShowTransitionPlaybackActionKind.Drape,
+            SlideShowTransitionPlaybackKind.Vortex => SlideShowTransitionPlaybackActionKind.Vortex,
             SlideShowTransitionPlaybackKind.PageCurl => SlideShowTransitionPlaybackActionKind.PageCurl,
             SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Cover,
             _ => SlideShowTransitionPlaybackActionKind.Fade

@@ -177,6 +177,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Drape, SlideShowTransitionPlaybackKind.Drape)]
     [InlineData(TransitionKind.Airplane, SlideShowTransitionPlaybackKind.Flythrough)]
     [InlineData(TransitionKind.Origami, SlideShowTransitionPlaybackKind.PageCurl)]
+    [InlineData(TransitionKind.Vortex, SlideShowTransitionPlaybackKind.Vortex)]
     [InlineData(TransitionKind.PageCurlSingle, SlideShowTransitionPlaybackKind.PageCurl)]
     [InlineData(TransitionKind.PageCurlDouble, SlideShowTransitionPlaybackKind.PageCurl)]
     [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]

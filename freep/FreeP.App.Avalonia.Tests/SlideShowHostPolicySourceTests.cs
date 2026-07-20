@@ -91,6 +91,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayDrapeTransition(");
         source.Should().Contain("SlideShowDrapeTransitionPlanner.Plan(");
         source.Should().Contain("BuildDrapeTransitionGeometry(");
+        source.Should().Contain("PlayVortexTransition(");
+        source.Should().Contain("SlideShowVortexTransitionPlanner.Plan(");
+        source.Should().Contain("BuildVortexTransitionGeometry(");
         source.Should().Contain("PlaySwitchTransition(");
         source.Should().Contain("PlayOrbitTransition(");
         source.Should().Contain("PlayFerrisTransition(");
