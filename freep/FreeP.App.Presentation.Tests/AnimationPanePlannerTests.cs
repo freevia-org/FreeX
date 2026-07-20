@@ -694,6 +694,52 @@ public sealed class AnimationPanePlannerTests
             new AnimationPaneEffectOptionDescriptor("from-top", "From Top", AnimationDirection.FromTop, false));
     }
 
+    [Fact]
+    public void BuildEffectOptionsPlan_ProjectsWheelSpokeVariantsAndPreservesAuthoredCount()
+    {
+        var animations = new List<ShapeAnimation>
+        {
+            new()
+            {
+                Preset = AnimationPreset.Wheel,
+                WheelSpokeCount = 6,
+            }
+        };
+
+        var plan = AnimationPanePlanner.BuildEffectOptionsPlan(animations, 0);
+
+        plan.CanApply.Should().BeTrue();
+        plan.WheelSpokeOptions.Select(option => option.DisplayText)
+            .Should()
+            .Equal("1 spoke", "2 spokes", "3 spokes", "4 spokes", "6 spokes", "8 spokes");
+        plan.WheelSpokeOptions.Should().ContainSingle(option =>
+            option.IsSelected
+            && option.Id == "spokes-6"
+            && option.WheelSpokeCount == 6);
+    }
+
+    [Fact]
+    public void BuildEffectOptionMutationPlan_UpdatesWheelSpokeCount()
+    {
+        var animations = new List<ShapeAnimation>
+        {
+            new()
+            {
+                Preset = AnimationPreset.Wheel,
+                WheelSpokeCount = 4,
+            }
+        };
+
+        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            animations,
+            0,
+            "spokes-8");
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.WheelSpokeCount.Should().Be(8);
+        plan.DisplayText.Should().Be("8 spokes");
+    }
+
     [Theory]
     [InlineData(AnimationPreset.Blinds, AnimationDirection.Vertical, "Horizontal,Vertical", "Vertical")]
     [InlineData(AnimationPreset.Checkerboard, AnimationDirection.Horizontal, "Horizontal,Vertical", "Horizontal")]
@@ -819,6 +865,30 @@ public sealed class AnimationPanePlannerTests
         editor.CurrentSlideAnimations[0].Direction.Should().Be(AnimationDirection.FromLeft);
         editor.Undo();
         editor.CurrentSlideAnimations[0].Direction.Should().Be(AnimationDirection.FromBottom);
+    }
+
+    [Fact]
+    public void TryApplyEffectOptionMutation_UpdatesWheelSpokeCountAndSupportsUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Wheel,
+            WheelSpokeCount = 4,
+        });
+
+        var plan = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "spokes-8");
+
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, plan).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].WheelSpokeCount.Should().Be(8);
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].WheelSpokeCount.Should().Be(4);
     }
 
     [Fact]

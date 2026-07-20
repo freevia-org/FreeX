@@ -676,6 +676,70 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void MorphPlanner_ByWordMatchesUniqueTextOverlapAfterIdentityPasses()
+    {
+        var source = new Slide();
+        source.Shapes.Add(new SlideShape
+        {
+            Id = 10,
+            Name = string.Empty,
+            Text = "Revenue Q1",
+            ExtentCxEmu = 1,
+            ExtentCyEmu = 1
+        });
+        source.Shapes.Add(new SlideShape
+        {
+            Id = 11,
+            Name = string.Empty,
+            Text = "Expenses Q1",
+            ExtentCxEmu = 1,
+            ExtentCyEmu = 1
+        });
+
+        var target = new Slide();
+        target.Shapes.Add(new SlideShape
+        {
+            Id = 99,
+            Name = string.Empty,
+            Text = "Revenue Q2",
+            ExtentCxEmu = 1,
+            ExtentCyEmu = 1
+        });
+
+        var plan = SlideShowMorphPlanner.Plan(
+            new SlideTransition { Kind = TransitionKind.Morph, MorphOption = "byWord" },
+            source,
+            target);
+
+        plan.Matches.Should().ContainSingle();
+        plan.Matches[0].Source.Id.Should().Be(10);
+        plan.Matches[0].Target.Id.Should().Be(99);
+        plan.Matches[0].MatchKey.Should().Be("byWord:text:1");
+        plan.UnmatchedSourceCount.Should().Be(1);
+        plan.UnmatchedTargetCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void MorphPlanner_ByCharLeavesTiedTextCandidatesUnmatched()
+    {
+        var source = new Slide();
+        source.Shapes.Add(new SlideShape { Id = 10, Text = "ABCD", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+        source.Shapes.Add(new SlideShape { Id = 11, Text = "ABCE", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+
+        var target = new Slide();
+        target.Shapes.Add(new SlideShape { Id = 99, Text = "ABCF", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+
+        var plan = SlideShowMorphPlanner.Plan(
+            new SlideTransition { Kind = TransitionKind.Morph, MorphOption = "byChar" },
+            source,
+            target);
+
+        plan.Matches.Should().BeEmpty();
+        plan.UnmatchedSourceCount.Should().Be(2);
+        plan.UnmatchedTargetCount.Should().Be(1);
+    }
+
+    [Fact]
     public void PlanTransition_DissolveUsesDedicatedAction()
     {
         var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition

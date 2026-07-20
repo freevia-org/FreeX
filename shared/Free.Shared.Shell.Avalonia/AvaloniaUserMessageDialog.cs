@@ -60,6 +60,13 @@ public sealed class AvaloniaUserMessageDialog : Window
         await dialog.ShowDialog(owner);
     }
 
+    public static async Task ShowWarningAsync(Window owner, string message, string title = "Warning")
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        var dialog = new AvaloniaUserMessageDialog(message, title);
+        await dialog.ShowDialog(owner);
+    }
+
     public static AvaloniaUserMessageDialog CreateForTests(string message, string title = "Error") =>
         new(message, title);
 }
