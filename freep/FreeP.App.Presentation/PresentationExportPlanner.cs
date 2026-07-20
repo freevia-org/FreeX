@@ -663,7 +663,8 @@ public static class PresentationExportPlanner
             ],
             DeferredActions: formats
                 .Where(format => format.Format is not PresentationExportFormat.Pdf
-                    and not PresentationExportFormat.NotesPagePdf)
+                    and not PresentationExportFormat.NotesPagePdf
+                    and not PresentationExportFormat.Print)
                 .Select(format => ToActionPlan(format, format.DisplayName, format.Description))
                 .ToArray());
     }

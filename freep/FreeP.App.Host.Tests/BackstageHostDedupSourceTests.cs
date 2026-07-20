@@ -1,9 +1,33 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
 
 namespace FreeP.App.Host.Tests;
 
 public sealed class BackstageHostDedupSourceTests
 {
+    [Fact]
+    public void FreeP_wpf_entry_spec_uses_the_shared_thirteen_entry_order()
+    {
+        static UIElement Pane() => new Border();
+        var entries = SisterBackstageEntryBuilder.Build(new SisterBackstageEntrySpec(
+            Pane, static () => { }, static () => { }, static () => { }, static () => { },
+            Pane, Pane, Pane)
+        {
+            BuildPrintPane = Pane,
+            BuildExportPane = Pane,
+            BuildAccountPane = Pane,
+        });
+
+        entries.Select(entry => entry.Separator ? "|" : entry.Label)
+            .Should().Equal(
+                "Info", "New", "Open", "|", "Save", "Save As", "Print", "Export",
+                "Recent", "New from template", "Account", "Options", "Close");
+        entries.Should().HaveCount(13);
+    }
+
     [Fact]
     public void BackstageView_DelegatesHostLifecycleAndActionsToSharedController()
     {

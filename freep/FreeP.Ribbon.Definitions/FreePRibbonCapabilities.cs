@@ -28,7 +28,6 @@ public sealed record FreePRibbonCapabilities(
 
 internal enum FreePRibbonHomeGroupId
 {
-    File,
     Slides,
     Clipboard,
     Font,
@@ -36,7 +35,6 @@ internal enum FreePRibbonHomeGroupId
     Arrange,
     Edit,
     Editing,
-    SlideShow,
 }
 
 internal sealed record FreePRibbonProfile(
@@ -45,7 +43,6 @@ internal sealed record FreePRibbonProfile(
     string NewSlideKeyTip,
     string SlideShowGroupKeyTip,
     RibbonCommandIconKind SlideShowFromCurrentSlideIcon,
-    bool SlideShowOnHome,
     bool IncludeAnimationSeparators,
     int AnimationTriggerWidth)
 {
@@ -71,14 +68,12 @@ internal sealed record FreePRibbonProfile(
         NewSlideKeyTip: FreePRibbonText.NewSlideKeyTip,
         SlideShowGroupKeyTip: FreePRibbonText.SlideShowGroupWpfKeyTip,
         SlideShowFromCurrentSlideIcon: RibbonCommandIconKind.Previous,
-        SlideShowOnHome: false,
         IncludeAnimationSeparators: true,
         AnimationTriggerWidth: 130);
 
     internal static FreePRibbonProfile Avalonia { get; } = new(
         HomeGroups:
         [
-            FreePRibbonHomeGroupId.File,
             FreePRibbonHomeGroupId.Slides,
             FreePRibbonHomeGroupId.Clipboard,
             FreePRibbonHomeGroupId.Font,
@@ -86,11 +81,9 @@ internal sealed record FreePRibbonProfile(
             FreePRibbonHomeGroupId.Arrange,
             FreePRibbonHomeGroupId.Edit,
             FreePRibbonHomeGroupId.Editing,
-            FreePRibbonHomeGroupId.SlideShow,
         ],
         HomeGroupPriorities: new Dictionary<FreePRibbonHomeGroupId, int>
         {
-            [FreePRibbonHomeGroupId.File] = 100,
             [FreePRibbonHomeGroupId.Slides] = 90,
             [FreePRibbonHomeGroupId.Clipboard] = 88,
             [FreePRibbonHomeGroupId.Font] = 86,
@@ -98,12 +91,10 @@ internal sealed record FreePRibbonProfile(
             [FreePRibbonHomeGroupId.Arrange] = 85,
             [FreePRibbonHomeGroupId.Edit] = 80,
             [FreePRibbonHomeGroupId.Editing] = 75,
-            [FreePRibbonHomeGroupId.SlideShow] = 70,
         },
         NewSlideKeyTip: FreePRibbonText.NewSlideAvaloniaKeyTip,
-        SlideShowGroupKeyTip: FreePRibbonText.SlideShowGroupAvaloniaKeyTip,
-        SlideShowFromCurrentSlideIcon: RibbonCommandIconKind.Next,
-        SlideShowOnHome: true,
+        SlideShowGroupKeyTip: FreePRibbonText.SlideShowGroupWpfKeyTip,
+        SlideShowFromCurrentSlideIcon: RibbonCommandIconKind.Previous,
         IncludeAnimationSeparators: false,
         AnimationTriggerWidth: 120);
 }

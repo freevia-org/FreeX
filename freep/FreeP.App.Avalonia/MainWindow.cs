@@ -17,6 +17,7 @@ using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
+using FreeP.App.Avalonia.Backstage;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
@@ -57,7 +58,6 @@ namespace FreeP.App.Avalonia;
 public sealed class MainWindow : Window
 {
     private const string DefaultTitle = "FreeP";
-    private const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
     private static readonly PresentationNativePrintHandoffHostCapabilities NativePrintHostCapabilities =
         PresentationNativePrintHandoffHostCapabilities.Deferred(
@@ -97,6 +97,7 @@ public sealed class MainWindow : Window
 
     private Presentation _presentation = Presentation.CreateEmpty();
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
+    private readonly FreePOptions _options;
 
     // ── Editing session ────────────────────────────────────────────────────────
 
@@ -114,6 +115,7 @@ public sealed class MainWindow : Window
     private readonly List<SlidePaneSectionHeaderVisualPlan> _slidePaneRenderedSectionHeaderPlans = new();
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
+    private readonly BackstageView _backstage;
     private Border _layoutPickerHost = null!;
     private StackPanel _layoutPickerPanel = null!;
     private Border _tablePickerHost = null!;
@@ -478,6 +480,9 @@ public sealed class MainWindow : Window
     internal IReadOnlyList<string> PrintOptionsPaneRenderedPreviewRows => _printOptionsPaneRenderedPreviewRows;
     internal IReadOnlyList<string> PrintOptionsPaneRenderedLayoutRows => _printOptionsPaneRenderedLayoutRows;
     internal IReadOnlyList<string> PrintOptionsPaneRenderedRangeRows => _printOptionsPaneRenderedRangeRows;
+    internal bool IsBackstageOpen => _backstage.IsOpen;
+    internal string? CurrentBackstagePaneLabel => _backstage.CurrentPaneLabel;
+    internal IReadOnlyList<SisterBackstageEntryPlan<Control>> BackstageEntries => _backstage.Entries;
 
     // ── Constructors ───────────────────────────────────────────────────────────
 
@@ -493,7 +498,8 @@ public sealed class MainWindow : Window
 
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
-        Func<RecentFilesStore>? loadRecentFilesStore)
+        Func<RecentFilesStore>? loadRecentFilesStore,
+        FreePOptions? options = null)
     {
         Title = DefaultTitle;
         Width = 1280;
@@ -501,6 +507,8 @@ public sealed class MainWindow : Window
         MinWidth = 800;
         MinHeight = 500;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        _options = options ?? new FreePOptions();
+        _options.Normalize();
 
         // Build editing session around the initial empty presentation.
         RebuildEditor();
@@ -553,7 +561,7 @@ public sealed class MainWindow : Window
             titleSpec: new SisterAvaloniaFileTitleSpec(
                 ApplicationName: DefaultTitle,
                 Separator: " \u2014 "),
-            maxRecentEntries: () => DefaultRecentFilesCap,
+            maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: UpdateStatus,
             save: () => FileSaveAsync().GetAwaiter().GetResult(),
             loadRecentFilesStore: loadRecentFilesStore);
@@ -582,6 +590,10 @@ public sealed class MainWindow : Window
             chrome: ribbon,
             workArea: BuildBody(),
             statusBar: statusBar));
+        _backstage = new BackstageView(BuildBackstageCallbacks());
+        var root = new Grid();
+        root.Children.Add(frame.Root);
+        root.Children.Add(_backstage);
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
@@ -597,7 +609,7 @@ public sealed class MainWindow : Window
         else
             LoadPresentationAsSaved(_presentation, path: null);
 
-        Content = frame.Root;
+        Content = root;
         UpdateStatus();
     }
 
@@ -1880,7 +1892,8 @@ public sealed class MainWindow : Window
             FreePRibbonAvalonia.Build(),
             registry,
             afterExecute: null,
-            palette: RibbonVisualPalette.FromTheme(App.ActiveTheme));
+            palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
+            onFileTabSelected: ShowBackstage);
 
         HasToolbar = true;
         return new Border
@@ -3040,11 +3053,49 @@ public sealed class MainWindow : Window
             () => LoadPresentationContent(Presentation.CreateEmpty()));
     }
 
+    private BackstageCallbacks BuildBackstageCallbacks() => new(
+        GetPresentation: () => _presentation,
+        GetDisplayName: () => _fileWorkflow.DisplayName,
+        GetIsDirty: () => _fileWorkflow.IsDirty,
+        GetCurrentPath: () => _fileWorkflow.CurrentPath,
+        GetRecentEntries: () => _fileWorkflow.RecentEntries,
+        GetCurrentOptions: () => _options,
+        GetDataFolder: ResolveDataFolderLabel,
+        New: FileNew,
+        Open: () => _ = FileOpenAsync(),
+        OpenPath: OpenRecentPath,
+        Save: () => _ = FileSaveAsync(),
+        SaveAs: () => _ = FileSaveAsAsync(),
+        ExportPdf: () => _ = FileExportPdfAsync(),
+        ExportNotesPagePdf: () => _ = FileExportNotesPagePdfAsync(),
+        ExportImages: () => _ = FileExportImagesAsync(),
+        GetPrintPlan: () => RefreshPrintBackstagePlan(),
+        ExportVideo: () => RefreshVideoFramePackage());
+
+    private void ShowBackstage() => _backstage.Show();
+
+    internal void ShowBackstageForTests() => ShowBackstage();
+
+    internal bool ActivateBackstageEntryForTests(string label) => _backstage.TryActivateEntry(label);
+
+    internal bool HandleBackstageKeyForTests(Key key) => _backstage.HandleKey(key);
+
+    private void OpenRecentPath(string path)
+    {
+        _fileWorkflow.Open(
+            FileText.OpenAction,
+            () => path,
+            TryLoadPresentationFile);
+    }
+
     private Task<bool> FileOpenAsync() =>
         _fileWorkflow.OpenAsync(
             FileText.OpenAction,
             PromptOpenPathAsync,
             path => Task.FromResult(TryLoadPresentationFile(path)));
+
+    private static string ResolveDataFolderLabel() =>
+        AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
 
     private async Task<string?> PromptOpenPathAsync()
     {

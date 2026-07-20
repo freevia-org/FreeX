@@ -1166,17 +1166,17 @@ public sealed class SlideShowWindowHeadlessTests
     public void RibbonDefinition_has_slideshow_group()
     {
         var definition = FreePRibbonAvalonia.Build();
-        var home = definition.Tabs.Single(t => t.Id == "home");
-        home.Groups.Should().Contain(g => g.Id == "slideshow",
-            "a Slide Show group must be present in the Home tab");
+        var transitions = definition.Tabs.Single(t => t.Id == "transitions");
+        transitions.Groups.Should().Contain(g => g.Id == "slideshow-from-transitions",
+            "the Slide Show group must match the WPF Transitions placement");
     }
 
     [Fact]
     public void RibbonDefinition_slideshow_group_has_from_beginning_and_from_current()
     {
         var definition = FreePRibbonAvalonia.Build();
-        var home  = definition.Tabs.Single(t => t.Id == "home");
-        var sg    = home.Groups.Single(g => g.Id == "slideshow");
+        var transitions = definition.Tabs.Single(t => t.Id == "transitions");
+        var sg = transitions.Groups.Single(g => g.Id == "slideshow-from-transitions");
         var ids   = sg.Controls.Select(i => i.CommandId.Value).ToList();
         ids.Should().Contain("freep.slideshow.from-beginning");
         ids.Should().Contain("freep.slideshow.from-current-slide");
