@@ -3,7 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -57,6 +60,8 @@ public sealed class NavigationPane : SidePaneBase
             Background = Brushes.Transparent,
         };
         _headingList.SelectionChanged += OnHeadingSelected;
+        _headingList.KeyDown += OnHeadingListKeyDown;
+        RefreshHeadingContextMenu();
 
         // --- Search box -----------------------------------------------------
         _searchBox = new TextBox
@@ -156,6 +161,74 @@ public sealed class NavigationPane : SidePaneBase
     {
         if (_headingList.SelectedItem is OutlineItem item)
             ScrollEditorToBlock(item.Entry.BlockIndex);
+        RefreshHeadingContextMenu();
+    }
+
+    private void RefreshHeadingContextMenu()
+    {
+        var blockIndex = _headingList.SelectedItem is OutlineItem selected ? selected.Entry.BlockIndex : -1;
+        var plan = FreeWContextMenuPlanner.BuildOutline(
+            _editor.Document.Blocks,
+            blockIndex,
+            blockIndex >= 0 && _editor.IsHeadingCollapsed(blockIndex));
+        var menu = AvaloniaContextMenuRenderer.BuildContextMenu(plan, ExecuteOutlineContextCommand);
+        menu.Opened += (_, _) => menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)?.Focus();
+        _headingList.ContextMenu = menu;
+    }
+
+    private void OnHeadingListKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Apps && (e.Key != Key.F10 || e.KeyModifiers != KeyModifiers.Shift))
+            return;
+        e.Handled = true;
+        RefreshHeadingContextMenu();
+        _headingList.ContextMenu?.Open(_headingList);
+    }
+
+    private void ExecuteOutlineContextCommand(RibbonCommandId commandId)
+    {
+        if (_headingList.SelectedItem is not OutlineItem selected)
+            return;
+
+        var blockIndex = selected.Entry.BlockIndex;
+        var newIndex = blockIndex;
+        switch (commandId.Value)
+        {
+            case FreeWContextMenuPlanner.OutlineMoveUp:
+                newIndex = _editor.MoveHeading(blockIndex, moveUp: true);
+                break;
+            case FreeWContextMenuPlanner.OutlineMoveDown:
+                newIndex = _editor.MoveHeading(blockIndex, moveUp: false);
+                break;
+            case FreeWContextMenuPlanner.OutlinePromote:
+                _editor.PromoteHeading(blockIndex);
+                break;
+            case FreeWContextMenuPlanner.OutlineDemote:
+                _editor.DemoteHeading(blockIndex);
+                break;
+            case FreeWContextMenuPlanner.OutlineCollapse:
+                _editor.CollapseHeading(blockIndex);
+                break;
+            case FreeWContextMenuPlanner.OutlineExpand:
+                _editor.ExpandHeading(blockIndex);
+                break;
+        }
+
+        Refresh();
+        SelectHeading(newIndex);
+        RefreshHeadingContextMenu();
+    }
+
+    private void SelectHeading(int blockIndex)
+    {
+        foreach (var item in _headingList.Items)
+        {
+            if (item is OutlineItem outlineItem && outlineItem.Entry.BlockIndex == blockIndex)
+            {
+                _headingList.SelectedItem = item;
+                return;
+            }
+        }
     }
 
     // ── Search logic ──────────────────────────────────────────────────────────

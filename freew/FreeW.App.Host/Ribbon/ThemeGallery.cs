@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -133,9 +134,14 @@ internal static class ThemeGallery
         };
 
         var menu = new ContextMenu();
-        foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
+        foreach (var planned in FreeWContextMenuPlanner.BuildParagraphSpacing().Items)
         {
-            var item = new MenuItem { Header = spacingSet.Name, Tag = spacingSet };
+            if (planned.CommandId is not { } commandId
+                || !FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ParagraphSpacingPrefix, out var index)
+                || index >= DocumentParagraphSpacingSet.Catalog.Count)
+                continue;
+            var spacingSet = DocumentParagraphSpacingSet.Catalog[index];
+            var item = new MenuItem { Header = planned.Header, Tag = spacingSet, IsEnabled = planned.IsEnabled };
             item.MouseEnter += (_, _) => editor.PreviewParagraphSpacingSet(spacingSet);
             item.MouseLeave += (_, _) => editor.EndParagraphSpacingSetPreview();
             item.Click += (_, _) =>
@@ -226,9 +232,14 @@ internal static class ThemeGallery
         };
 
         var menu = new ContextMenu();
-        foreach (var effectSet in DocumentEffectSet.Catalog)
+        foreach (var planned in FreeWContextMenuPlanner.BuildEffects().Items)
         {
-            var item = new MenuItem { Header = effectSet.Name, Tag = effectSet };
+            if (planned.CommandId is not { } commandId
+                || !FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.EffectsPrefix, out var index)
+                || index >= DocumentEffectSet.Catalog.Count)
+                continue;
+            var effectSet = DocumentEffectSet.Catalog[index];
+            var item = new MenuItem { Header = planned.Header, Tag = effectSet, IsEnabled = planned.IsEnabled };
             item.MouseEnter += (_, _) => editor.PreviewEffectSet(effectSet);
             item.MouseLeave += (_, _) => editor.EndEffectSetPreview();
             item.Click += (_, _) =>

@@ -18,6 +18,7 @@ using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Backstage;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Options;
@@ -184,6 +185,7 @@ public sealed class MainWindow : Window
         _editor.ViewModeChanged += UpdateStatus;
         _editor.ViewModeChanged += UpdateViewModeButtons;
         _editor.HyperlinkActivated += OpenExternalUri;
+        _editor.ContextMenuCommandRequested += OnEditorContextMenuCommandRequested;
 
         // Wire view-mode buttons.
         _btnPrintLayout.Click += (_, _) => SetViewMode(DocumentViewMode.PrintLayout);
@@ -1786,6 +1788,34 @@ public sealed class MainWindow : Window
             return;
         if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
             await clipboard.SetTextAsync(text);
+    }
+
+    private async void OnEditorContextMenuCommandRequested(RibbonCommandId commandId)
+    {
+        switch (commandId.Value)
+        {
+            case FreeWContextMenuPlanner.EditorUndo:
+                _editor.Undo();
+                break;
+            case FreeWContextMenuPlanner.EditorRedo:
+                _editor.Redo();
+                break;
+            case FreeWContextMenuPlanner.EditorCut:
+                await CutAsync();
+                break;
+            case FreeWContextMenuPlanner.EditorCopy:
+                await CopyAsync();
+                break;
+            case FreeWContextMenuPlanner.EditorPaste:
+                await PasteAsync();
+                break;
+            case FreeWContextMenuPlanner.EditorDelete:
+                _editor.TryDeleteSelection();
+                break;
+            case FreeWContextMenuPlanner.EditorSelectAll:
+                _editor.SelectAllText();
+                break;
+        }
     }
 
     private async Task CutAsync()
