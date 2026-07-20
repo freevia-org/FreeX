@@ -1,4 +1,7 @@
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
 using System.Windows;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
@@ -243,7 +246,7 @@ public sealed class OsClipboardServiceTests
     // ════════════════════════════════════════════════════════════════════════════════
 
     [StaFact]
-    public void WpfDataObject_UsesAvaloniaWindowsFormats_AndRoundTripsSharedContent()
+    public void WpfDataObject_PublishesPublicFormats_AndRoundTripsSharedContent()
     {
         var sess = MakeSessionWithShape(out var shape);
         var selection = PresentationClipboardSelectionCodec.Serialize(
@@ -258,12 +261,20 @@ public sealed class OsClipboardServiceTests
 
         var dataObject = WpfOsClipboard.BuildDataObject(content);
 
-        WpfOsClipboard.SelectionFormat.Should().Be(
+        WpfOsClipboard.SelectionFormat.Should().Be(PresentationClipboardFormats.Selection);
+        WpfOsClipboard.OwnerTokenFormat.Should().Be(PresentationClipboardFormats.OwnerToken);
+        WpfOsClipboard.LegacyAvaloniaSelectionFormat.Should().Be(
             "avn-app-fmt:" + PresentationClipboardFormats.Selection);
-        WpfOsClipboard.OwnerTokenFormat.Should().Be(
+        WpfOsClipboard.LegacyAvaloniaOwnerTokenFormat.Should().Be(
             "avn-app-fmt:" + PresentationClipboardFormats.OwnerToken);
         dataObject.GetDataPresent(WpfOsClipboard.SelectionFormat, false).Should().BeTrue();
         dataObject.GetDataPresent(WpfOsClipboard.OwnerTokenFormat, false).Should().BeTrue();
+        dataObject.GetDataPresent(
+            WpfOsClipboard.LegacyAvaloniaSelectionFormat,
+            false).Should().BeFalse();
+        dataObject.GetDataPresent(
+            WpfOsClipboard.LegacyAvaloniaOwnerTokenFormat,
+            false).Should().BeFalse();
         dataObject.GetFormats(autoConvert: false).Should().Contain(
             WpfOsClipboard.SelectionFormat,
             WpfOsClipboard.OwnerTokenFormat);
@@ -281,6 +292,106 @@ public sealed class OsClipboardServiceTests
         PresentationClipboardSelectionCodec.Deserialize(roundTrip.SelectionBytes!)
             .Should().ContainSingle()
             .Which.Name.Should().Be("TestShape");
+    }
+
+    [StaFact]
+    public void WpfDataObject_ComPayloadMatchesAvaloniaWin32HGlobalContract()
+    {
+        var selection = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x11, 0x22, 0x33 };
+        var ownerBytes = Encoding.Unicode.GetBytes("native-owner\0");
+        var dataObject = WpfOsClipboard.BuildDataObject(new PresentationClipboardContent(
+            SelectionBytes: selection,
+            OwnerToken: "native-owner"));
+
+        foreach (var format in new[]
+                 {
+                     WpfOsClipboard.SelectionFormat,
+                     WpfOsClipboard.LegacyAvaloniaSelectionFormat,
+                 })
+        {
+            ReadComHGlobal(dataObject, format).Should().Equal(selection);
+        }
+
+        foreach (var format in new[]
+                 {
+                     WpfOsClipboard.OwnerTokenFormat,
+                     WpfOsClipboard.LegacyAvaloniaOwnerTokenFormat,
+                 })
+        {
+            ReadComHGlobal(dataObject, format).Should().Equal(ownerBytes);
+        }
+    }
+
+    [StaFact]
+    public void WpfDataObject_ReadsLegacyAvaloniaApplicationFormats()
+    {
+        var dataObject = new DataObject();
+        dataObject.SetData(
+            WpfOsClipboard.LegacyAvaloniaSelectionFormat,
+            new MemoryStream([5, 4, 3], writable: false),
+            false);
+        dataObject.SetData(
+            WpfOsClipboard.LegacyAvaloniaOwnerTokenFormat,
+            new MemoryStream(
+                System.Text.Encoding.Unicode.GetBytes("legacy-owner\0"),
+                writable: false),
+            false);
+
+        var content = WpfOsClipboard.ReadDataObject(dataObject);
+
+        content.SelectionBytes.Should().Equal(5, 4, 3);
+        content.OwnerToken.Should().Be("legacy-owner");
+    }
+
+    private static byte[] ReadComHGlobal(DataObject dataObject, string format)
+    {
+        var formatEtc = new FORMATETC
+        {
+            cfFormat = unchecked((short)DataFormats.GetDataFormat(format).Id),
+            dwAspect = DVASPECT.DVASPECT_CONTENT,
+            lindex = -1,
+            tymed = TYMED.TYMED_HGLOBAL,
+        };
+        ((System.Runtime.InteropServices.ComTypes.IDataObject)dataObject)
+            .GetData(ref formatEtc, out var medium);
+
+        try
+        {
+            medium.tymed.Should().Be(TYMED.TYMED_HGLOBAL);
+            var size = checked((int)NativeClipboardMemory.GlobalSize(medium.unionmember));
+            var source = NativeClipboardMemory.GlobalLock(medium.unionmember);
+            source.Should().NotBe(IntPtr.Zero);
+            try
+            {
+                var bytes = new byte[size];
+                Marshal.Copy(source, bytes, 0, size);
+                return bytes;
+            }
+            finally
+            {
+                NativeClipboardMemory.GlobalUnlock(medium.unionmember);
+            }
+        }
+        finally
+        {
+            NativeClipboardMemory.ReleaseStgMedium(ref medium);
+        }
+    }
+
+    private static class NativeClipboardMemory
+    {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern IntPtr GlobalLock(IntPtr memory);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool GlobalUnlock(IntPtr memory);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern nuint GlobalSize(IntPtr memory);
+
+        [DllImport("ole32.dll")]
+        internal static extern void ReleaseStgMedium(ref STGMEDIUM medium);
     }
 
     [StaFact]

@@ -31,6 +31,10 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         DataFormat.CreateBytesApplicationFormat(PresentationClipboardFormats.Selection);
     internal static readonly DataFormat<string> OwnerTokenFormat =
         DataFormat.CreateStringApplicationFormat(PresentationClipboardFormats.OwnerToken);
+    internal static readonly DataFormat<byte[]> SelectionPlatformFormat =
+        DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.Selection);
+    internal static readonly DataFormat<string> OwnerTokenPlatformFormat =
+        DataFormat.CreateStringPlatformFormat(PresentationClipboardFormats.OwnerToken);
 
     public async Task WriteAsync(PresentationClipboardContent content)
     {
@@ -66,8 +70,18 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         out Bitmap? bitmap)
     {
         var item = new DataTransferItem();
-        item.Set(SelectionFormat, content.SelectionBytes);
-        item.Set(OwnerTokenFormat, content.OwnerToken);
+        if (OperatingSystem.IsWindows())
+        {
+            // Public system names let WPF and Avalonia exchange raw clipboard payloads
+            // without depending on Avalonia's private application-format prefix.
+            item.Set(SelectionPlatformFormat, content.SelectionBytes);
+            item.Set(OwnerTokenPlatformFormat, content.OwnerToken);
+        }
+        else
+        {
+            item.Set(SelectionFormat, content.SelectionBytes);
+            item.Set(OwnerTokenFormat, content.OwnerToken);
+        }
         item.SetText(content.Text);
         bitmap = null;
         if (content.PngBytes is { Length: > 0 })
@@ -105,10 +119,10 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         byte[]? selection = null;
         string? ownerToken = null;
         string? text = null;
-        try { selection = await transfer.TryGetValueAsync(SelectionFormat); }
-        catch { }
-        try { ownerToken = await transfer.TryGetValueAsync(OwnerTokenFormat); }
-        catch { }
+        selection = await TryGetValueAsync(transfer, SelectionPlatformFormat)
+            ?? await TryGetValueAsync(transfer, SelectionFormat);
+        ownerToken = await TryGetValueAsync(transfer, OwnerTokenPlatformFormat)
+            ?? await TryGetValueAsync(transfer, OwnerTokenFormat);
         try { text = await transfer.TryGetTextAsync(); }
         catch { }
 
@@ -128,6 +142,21 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
         }
 
         return new PresentationClipboardContent(selection, png, text, ownerToken);
+    }
+
+    private static async Task<T?> TryGetValueAsync<T>(
+        IAsyncDataTransfer transfer,
+        DataFormat<T> format)
+        where T : class
+    {
+        try
+        {
+            return await transfer.TryGetValueAsync(format);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
 
@@ -222,12 +251,13 @@ internal sealed class AvaloniaPresentationClipboardService(
 
     public async Task<bool> CutAsync(EditingSession editor)
     {
-        // Capture before DeleteSelected clears the selection. The internal clipboard is
-        // populated even when the OS clipboard is unavailable, matching WPF semantics.
+        // Export while the source selection still exists, then perform one undoable delete.
+        // The internal clipboard remains populated even when the OS clipboard is unavailable.
         var content = Capture(editor);
         editor.CopySelectedShapes();
+        var written = content is not null && await TryWriteAsync(content);
         editor.DeleteSelected();
-        return content is not null && await TryWriteAsync(content);
+        return written;
     }
 
     public async Task<PresentationClipboardPasteSource> PasteAsync(EditingSession editor)

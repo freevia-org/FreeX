@@ -32,12 +32,17 @@ public interface IOsClipboard
 /// </summary>
 public sealed class WpfOsClipboard : IOsClipboard
 {
-    // Avalonia 12 prefixes application DataFormats with this value on Windows before
-    // registering the OLE clipboard format. WPF must use the resulting system name.
+    internal const string SelectionFormat = PresentationClipboardFormats.Selection;
+    internal const string OwnerTokenFormat = PresentationClipboardFormats.OwnerToken;
+
+    // Backward-read aliases for Avalonia application formats. This value is proven
+    // against pinned Avalonia 12.0.4 tag a8dd6417fd8918570edefdbecd92d16ac7620069,
+    // src/Windows/Avalonia.Win32/ClipboardFormatRegistry.cs. Current interop does not
+    // depend on it: both hosts also publish the public platform names above.
     internal const string AvaloniaApplicationFormatPrefix = "avn-app-fmt:";
-    internal static readonly string SelectionFormat =
+    internal const string LegacyAvaloniaSelectionFormat =
         AvaloniaApplicationFormatPrefix + PresentationClipboardFormats.Selection;
-    internal static readonly string OwnerTokenFormat =
+    internal const string LegacyAvaloniaOwnerTokenFormat =
         AvaloniaApplicationFormatPrefix + PresentationClipboardFormats.OwnerToken;
 
     public PresentationClipboardContent Read()
@@ -104,22 +109,14 @@ public sealed class WpfOsClipboard : IOsClipboard
         var data = new DataObject();
 
         if (content.SelectionBytes is { Length: > 0 })
-        {
-            data.SetData(
-                SelectionFormat,
-                new MemoryStream(content.SelectionBytes, writable: false),
-                autoConvert: false);
-        }
+            SetRawBytes(data, SelectionFormat, content.SelectionBytes);
 
         if (!string.IsNullOrEmpty(content.OwnerToken))
         {
             // Avalonia's Win32 clipboard backend serializes custom strings as a
             // null-terminated UTF-16 HGLOBAL.
             var bytes = Encoding.Unicode.GetBytes(content.OwnerToken + '\0');
-            data.SetData(
-                OwnerTokenFormat,
-                new MemoryStream(bytes, writable: false),
-                autoConvert: false);
+            SetRawBytes(data, OwnerTokenFormat, bytes);
         }
 
         if (content.PngBytes is { Length: > 0 })
@@ -151,8 +148,10 @@ public sealed class WpfOsClipboard : IOsClipboard
         if (data is null)
             return new PresentationClipboardContent();
 
-        var selection = TryReadBytes(data, SelectionFormat);
-        var ownerToken = TryReadCustomString(data, OwnerTokenFormat);
+        var selection = TryReadBytes(data, SelectionFormat)
+            ?? TryReadBytes(data, LegacyAvaloniaSelectionFormat);
+        var ownerToken = TryReadCustomString(data, OwnerTokenFormat)
+            ?? TryReadCustomString(data, LegacyAvaloniaOwnerTokenFormat);
 
         string? text = null;
         try
@@ -179,6 +178,9 @@ public sealed class WpfOsClipboard : IOsClipboard
 
         return new PresentationClipboardContent(selection, png, text, ownerToken);
     }
+
+    private static void SetRawBytes(DataObject data, string format, byte[] bytes) =>
+        data.SetData(format, new MemoryStream(bytes, writable: false), autoConvert: false);
 
     private static byte[]? TryReadBytes(IDataObject data, string format)
     {

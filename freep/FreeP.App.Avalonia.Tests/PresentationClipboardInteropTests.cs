@@ -2,6 +2,8 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
@@ -18,7 +20,7 @@ public sealed class PresentationClipboardInteropTests
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
 
     [Fact]
-    public void Avalonia12Win32Backend_ApplicationPrefixMatchesWpfContract()
+    public void Avalonia12Win32Backend_LegacyApplicationPrefixIsProvenButNotRequired()
     {
         var assembly = Assembly.Load("Avalonia.Win32");
         var productVersion = FileVersionInfo.GetVersionInfo(assembly.Location).ProductVersion;
@@ -37,6 +39,47 @@ public sealed class PresentationClipboardInteropTests
         AvaloniaPresentationSystemClipboard.OwnerTokenFormat
             .ToSystemName((string)prefix!)
             .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.OwnerToken);
+        AvaloniaPresentationSystemClipboard.SelectionPlatformFormat
+            .ToSystemName("ignored-prefix:")
+            .Should().Be(PresentationClipboardFormats.Selection);
+        AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat
+            .ToSystemName("ignored-prefix:")
+            .Should().Be(PresentationClipboardFormats.OwnerToken);
+    }
+
+    [Fact]
+    public void Avalonia12Win32Backend_WritesWpfCompatibleNativePayloads()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var content = new PresentationClipboardContent(
+            SelectionBytes: [0x50, 0x4B, 0x03, 0x04, 0x44, 0x55],
+            OwnerToken: "avalonia-owner");
+        using var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+            content,
+            out var bitmap);
+        bitmap.Should().BeNull();
+
+        foreach (var format in new[]
+                 {
+                     AvaloniaPresentationSystemClipboard.SelectionPlatformFormat,
+                     AvaloniaPresentationSystemClipboard.SelectionFormat,
+                 })
+        {
+            ReadAvaloniaWin32HGlobal(transfer, format)
+                .Should().Equal(content.SelectionBytes!);
+        }
+
+        var ownerBytes = Encoding.Unicode.GetBytes("avalonia-owner\0");
+        foreach (var format in new[]
+                 {
+                     AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat,
+                     AvaloniaPresentationSystemClipboard.OwnerTokenFormat,
+                 })
+        {
+            ReadAvaloniaWin32HGlobal(transfer, format).Should().Equal(ownerBytes);
+        }
     }
 
     [Fact]
@@ -80,8 +123,14 @@ public sealed class PresentationClipboardInteropTests
                 out var bitmap);
             try
             {
-                transfer.Formats.Should().Contain(AvaloniaPresentationSystemClipboard.SelectionFormat);
-                transfer.Formats.Should().Contain(AvaloniaPresentationSystemClipboard.OwnerTokenFormat);
+                var expectedSelectionFormat = OperatingSystem.IsWindows()
+                    ? AvaloniaPresentationSystemClipboard.SelectionPlatformFormat
+                    : AvaloniaPresentationSystemClipboard.SelectionFormat;
+                var expectedOwnerTokenFormat = OperatingSystem.IsWindows()
+                    ? AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat
+                    : AvaloniaPresentationSystemClipboard.OwnerTokenFormat;
+                transfer.Formats.Should().Contain(expectedSelectionFormat);
+                transfer.Formats.Should().Contain(expectedOwnerTokenFormat);
                 AvaloniaPresentationSystemClipboard.SelectionFormat
                     .ToSystemName("avn-app-fmt:")
                     .Should().Be("avn-app-fmt:" + PresentationClipboardFormats.Selection);
@@ -106,6 +155,37 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task Avalonia_data_transfer_reads_public_platform_formats_without_private_prefix()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var item = new DataTransferItem();
+            item.Set(AvaloniaPresentationSystemClipboard.SelectionPlatformFormat, [9, 8, 7]);
+            item.Set(AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat, "wpf-owner");
+            item.SetText("WPF fallback");
+            using var transfer = new DataTransfer();
+            transfer.Add(item);
+
+            var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+
+            content.SelectionBytes.Should().Equal(9, 8, 7);
+            content.OwnerToken.Should().Be("wpf-owner");
+            content.Text.Should().Be("WPF fallback");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Avalonia_data_transfer_falls_back_when_public_platform_format_cannot_be_read()
+    {
+        using var transfer = new ThrowingPlatformAliasTransfer();
+
+        var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+
+        content.SelectionBytes.Should().Equal(6, 5, 4);
+        content.OwnerToken.Should().Be("legacy-owner");
+    }
+
+    [Fact]
     public async Task Avalonia_data_transfer_keeps_other_formats_when_one_format_fails()
     {
         await Session.Dispatch(async () =>
@@ -123,7 +203,10 @@ public sealed class PresentationClipboardInteropTests
                 bitmap.Should().BeNull();
                 transfer.Formats.Should().NotContain(DataFormat.Bitmap);
                 transfer.Formats.Should().Contain(DataFormat.Text);
-                transfer.Formats.Should().Contain(AvaloniaPresentationSystemClipboard.SelectionFormat);
+                transfer.Formats.Should().Contain(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaPresentationSystemClipboard.SelectionPlatformFormat
+                        : AvaloniaPresentationSystemClipboard.SelectionFormat);
 
                 var roundTrip = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
                 roundTrip.SelectionBytes.Should().Equal(7, 8);
@@ -143,10 +226,17 @@ public sealed class PresentationClipboardInteropTests
         var clipboard = new FakeSystemClipboard();
         var editor = CreateEditorWithSelectedShape(out var source);
         var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        var sourceExistedDuringWrite = false;
+        clipboard.BeforeWrite = () =>
+        {
+            sourceExistedDuringWrite = editor.CurrentSlide!.Shapes.Any(shape => shape.Id == source.Id);
+            editor.SelectedShapeIds.Should().Contain(source.Id);
+        };
 
         var written = await service.CutAsync(editor);
 
         written.Should().BeTrue();
+        sourceExistedDuringWrite.Should().BeTrue();
         editor.CurrentSlide!.Shapes.Should().NotContain(shape => shape.Id == source.Id);
         editor.CanPaste.Should().BeTrue();
         clipboard.LastWritten!.Text.Should().Be("Clipboard text");
@@ -351,11 +441,13 @@ public sealed class PresentationClipboardInteropTests
         public int WriteCount { get; private set; }
         public bool ThrowOnWrite { get; set; }
         public bool ThrowOnRead { get; set; }
+        public Action? BeforeWrite { get; set; }
 
         public Task WriteAsync(PresentationClipboardContent content)
         {
             if (ThrowOnWrite)
                 throw new InvalidOperationException("clipboard locked");
+            BeforeWrite?.Invoke();
             LastWritten = content;
             Content = content;
             WriteCount++;
@@ -376,5 +468,88 @@ public sealed class PresentationClipboardInteropTests
             Presentation presentation,
             Slide slide,
             IReadOnlyList<SlideShape> shapes) => Png;
+    }
+
+    private sealed class ThrowingPlatformAliasTransfer : IAsyncDataTransfer, IAsyncDataTransferItem
+    {
+        public IReadOnlyList<DataFormat> Formats { get; } =
+        [
+            AvaloniaPresentationSystemClipboard.SelectionPlatformFormat,
+            AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat,
+            AvaloniaPresentationSystemClipboard.SelectionFormat,
+            AvaloniaPresentationSystemClipboard.OwnerTokenFormat,
+        ];
+
+        public IReadOnlyList<IAsyncDataTransferItem> Items => [this];
+
+        public Task<object?> TryGetRawAsync(DataFormat format)
+        {
+            if (format == AvaloniaPresentationSystemClipboard.SelectionPlatformFormat
+                || format == AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat)
+            {
+                throw new InvalidOperationException("public alias unavailable");
+            }
+
+            if (format == AvaloniaPresentationSystemClipboard.SelectionFormat)
+                return Task.FromResult<object?>(new byte[] { 6, 5, 4 });
+            if (format == AvaloniaPresentationSystemClipboard.OwnerTokenFormat)
+                return Task.FromResult<object?>("legacy-owner");
+            return Task.FromResult<object?>(null);
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private static byte[] ReadAvaloniaWin32HGlobal(IDataTransfer transfer, DataFormat format)
+    {
+        var helperType = Assembly.Load("Avalonia.Win32").GetType(
+            "Avalonia.Win32.OleDataObjectHelper",
+            throwOnError: true)!;
+        var writeMethod = helperType.GetMethod(
+            "WriteDataToHGlobal",
+            BindingFlags.Public | BindingFlags.Static)!;
+        object?[] arguments = [transfer, format, IntPtr.Zero];
+
+        ((uint)writeMethod.Invoke(null, arguments)!).Should().Be(0);
+        var memory = (IntPtr)arguments[2]!;
+        memory.Should().NotBe(IntPtr.Zero);
+        try
+        {
+            var size = checked((int)NativeClipboardMemory.GlobalSize(memory));
+            var source = NativeClipboardMemory.GlobalLock(memory);
+            source.Should().NotBe(IntPtr.Zero);
+            try
+            {
+                var bytes = new byte[size];
+                Marshal.Copy(source, bytes, 0, size);
+                return bytes;
+            }
+            finally
+            {
+                NativeClipboardMemory.GlobalUnlock(memory);
+            }
+        }
+        finally
+        {
+            NativeClipboardMemory.GlobalFree(memory);
+        }
+    }
+
+    private static class NativeClipboardMemory
+    {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern IntPtr GlobalLock(IntPtr memory);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool GlobalUnlock(IntPtr memory);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern nuint GlobalSize(IntPtr memory);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern IntPtr GlobalFree(IntPtr memory);
     }
 }
