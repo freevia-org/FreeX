@@ -130,6 +130,27 @@ public sealed class SlideShowPlaybackPlannerTests
         SlideShowPlaybackPlanner.GalleryTravelFactor.Should().BeApproximately(0.55, 0.0001);
     }
 
+    [Fact]
+    public void PlanTransition_ConveyorUsesBeltActionAndDirection()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Conveyor,
+            Direction = TransitionDirection.Down,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Conveyor);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Conveyor);
+        plan.IncomingOffsetX.Should().Be(0);
+        plan.IncomingOffsetY.Should().Be(-1);
+        SlideShowPlaybackPlanner.ConveyorStartScale.Should().BeApproximately(0.90, 0.0001);
+        SlideShowPlaybackPlanner.ConveyorOutgoingEndScale.Should().BeApproximately(0.90, 0.0001);
+        SlideShowPlaybackPlanner.ConveyorTravelFactor.Should().BeApproximately(1.0, 0.0001);
+        SlideShowPlaybackPlanner.ConveyorCrossAxisFactor.Should().BeApproximately(0.08, 0.0001);
+        SlideShowPlaybackPlanner.ConveyorTiltDegrees.Should().BeApproximately(3.0, 0.0001);
+    }
+
     [Theory]
     [InlineData(TransitionDirection.In, true)]
     [InlineData(TransitionDirection.Out, false)]

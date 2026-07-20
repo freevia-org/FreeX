@@ -21,6 +21,7 @@ public enum SlideShowTransitionPlaybackKind
     Zoom,
     Pan,
     Gallery,
+    Conveyor,
     PushLike,
     FadeFallback
 }
@@ -119,8 +120,9 @@ public static class SlideShowTransitionPlanner
             // as a centered, reduced panel.
             TransitionKind.Gallery => SlideShowTransitionPlaybackKind.Gallery,
 
-            TransitionKind.Conveyor or
             TransitionKind.Window => SlideShowTransitionPlaybackKind.PushLike,
+
+            TransitionKind.Conveyor => SlideShowTransitionPlaybackKind.Conveyor,
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback
         };
