@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Free.Shared.Drawing;
+using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
@@ -159,23 +160,13 @@ public sealed class SlideShowMediaController
         double slideDipW, double slideDipH,
         double canvasW,   double canvasH)
     {
-        // Uniform-fit scale (same as SlideCanvas.OnRender)
-        double scale   = (canvasW > 0 && canvasH > 0 && slideDipW > 0 && slideDipH > 0)
-            ? Math.Min(canvasW / slideDipW, canvasH / slideDipH)
-            : 1.0;
-        double offsetX = (canvasW - slideDipW * scale) / 2;
-        double offsetY = (canvasH - slideDipH * scale) / 2;
-
-        double shapeX  = shape.OffsetXEmu / 9525.0;
-        double shapeY  = shape.OffsetYEmu / 9525.0;
-        double shapeW  = shape.ExtentCxEmu / 9525.0;
-        double shapeH  = shape.ExtentCyEmu / 9525.0;
-
+        var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
+            shape, slideDipW, slideDipH, canvasW, canvasH);
         return new MediaShapeRect(
-            offsetX + shapeX * scale,
-            offsetY + shapeY * scale,
-            shapeW  * scale,
-            shapeH  * scale);
+            bounds.X,
+            bounds.Y,
+            bounds.Width,
+            bounds.Height);
     }
 
     /// <summary>
