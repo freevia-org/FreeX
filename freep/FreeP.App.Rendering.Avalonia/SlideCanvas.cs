@@ -1577,10 +1577,17 @@ public sealed class SlideCanvas : Control
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
         foreach (var label in plan.DataLabels)
         {
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+            if (label.LegendKeyBounds is { } keyBounds && label.LegendKeyFill is { } keyFill)
+                dc.FillRectangle(ToBrush(keyFill), ToRect(keyBounds));
+
+            DrawChartLabel(dc, label.Text, ToRect(label.TextBounds ?? label.Bounds),
                 label.IsBold,
                 label.FontSize,
-                ToTextAlignment(label.Alignment));
+                ToTextAlignment(label.Alignment),
+                isItalic: label.IsItalic,
+                textColor: label.TextColor,
+                fontFamily: label.FontFamily,
+                maxLineCount: label.WrapText ? 2 : 1);
         }
     }
 
