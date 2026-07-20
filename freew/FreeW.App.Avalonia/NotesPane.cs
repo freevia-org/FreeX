@@ -1,0 +1,235 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
+using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
+
+namespace FreeW.App.Avalonia;
+
+internal sealed class NotesPane : Border
+{
+    private readonly DocumentView _editor;
+    private readonly ListBox _list;
+    private readonly TextBlock _selectedLabel;
+    private readonly DocumentView _subEditor;
+    private readonly Button _apply;
+    private readonly Button _delete;
+    private NoteItem? _active;
+
+    internal NotesPane(DocumentView editor)
+    {
+        _editor = editor;
+        Width = double.NaN;
+        MinHeight = 190;
+        MaxHeight = 310;
+        Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA));
+        BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
+        BorderThickness = new Thickness(0, 1, 0, 0);
+        IsVisible = false;
+
+        _list = new ListBox { MinHeight = 58, MaxHeight = 92, Margin = new Thickness(8, 0, 8, 4) };
+        _list.SelectionChanged += (_, _) => LoadSelection();
+        _selectedLabel = new TextBlock
+        {
+            FontStyle = FontStyle.Italic,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
+            Margin = new Thickness(10, 0, 10, 2),
+            IsVisible = false,
+        };
+        _subEditor = new DocumentView { MinHeight = 76, MaxHeight = 145, Margin = new Thickness(8, 0, 8, 4), IsVisible = false };
+        _apply = MakeButton("Apply", ApplySelected);
+        _delete = MakeButton("Delete", DeleteSelected);
+        _apply.IsVisible = false;
+        _delete.IsVisible = false;
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(8, 0, 8, 6),
+            Spacing = 6,
+            Children = { _apply, _delete },
+        };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+
+        var layout = new DockPanel { LastChildFill = true };
+        var header = new TextBlock { Text = "Notes", FontWeight = FontWeight.SemiBold, Margin = new Thickness(10, 7, 10, 4) };
+        DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(_list, Dock.Top);
+        DockPanel.SetDock(_selectedLabel, Dock.Top);
+        layout.Children.Add(header);
+        layout.Children.Add(_list);
+        layout.Children.Add(_selectedLabel);
+        layout.Children.Add(buttons);
+        layout.Children.Add(_subEditor);
+        Child = layout;
+    }
+
+    internal int ItemCountForTest => _list.ItemCount;
+    internal DocumentView SubEditorForTest => _subEditor;
+
+    public void Toggle()
+    {
+        IsVisible = !IsVisible;
+        if (IsVisible)
+            Refresh();
+    }
+
+    public void ShowAndSelect(bool footnote, int id)
+    {
+        IsVisible = true;
+        Refresh(new NoteKey(footnote, id));
+    }
+
+    public void Refresh() => Refresh(_active is null ? null : new NoteKey(_active.IsFootnote, _active.Id));
+
+    internal void SelectForTest(bool footnote, int id) => ShowAndSelect(footnote, id);
+    internal void ApplyForTest() => ApplySelected();
+    internal void DeleteForTest() => DeleteSelected();
+
+    private void Refresh(NoteKey? requested)
+    {
+        if (!IsVisible)
+            return;
+        var selected = requested ?? (_list.SelectedItem is NoteItem item ? new NoteKey(item.IsFootnote, item.Id) : null);
+        var items = _editor.Document.Footnotes.Values.OrderBy(note => note.Id)
+            .Select(note => new NoteItem(true, note.Id, note.PlainText))
+            .Concat(_editor.Document.Endnotes.Values.OrderBy(note => note.Id)
+                .Select(note => new NoteItem(false, note.Id, note.PlainText)))
+            .ToArray();
+        _list.ItemsSource = items;
+        var index = selected is null
+            ? (items.Length > 0 ? 0 : -1)
+            : Array.FindIndex(items, item => item.IsFootnote == selected.Value.IsFootnote && item.Id == selected.Value.Id);
+        _list.SelectedIndex = index >= 0 ? index : (items.Length > 0 ? 0 : -1);
+        if (items.Length == 0)
+            ClearSelection();
+    }
+
+    private void LoadSelection()
+    {
+        if (_list.SelectedItem is not NoteItem item)
+        {
+            ClearSelection();
+            return;
+        }
+
+        _active = item;
+        _selectedLabel.Text = item.Label;
+        _selectedLabel.IsVisible = true;
+        _subEditor.IsVisible = true;
+        _apply.IsVisible = true;
+        _delete.IsVisible = true;
+
+        var wrapper = TextDocument.CreateEmpty();
+        wrapper.DefaultRun = _editor.Document.DefaultRun;
+        wrapper.DefaultParagraph = _editor.Document.DefaultParagraph;
+        wrapper.Blocks.Clear();
+        var content = item.IsFootnote
+            ? _editor.Document.Footnotes[item.Id].Content
+            : _editor.Document.Endnotes[item.Id].Content;
+        wrapper.Blocks.AddRange(content.Select(DocumentMerge.CloneBlock));
+        if (wrapper.Blocks.Count == 0)
+            wrapper.Blocks.Add(new Paragraph());
+        _subEditor.LoadDocument(wrapper);
+    }
+
+    private void ApplySelected()
+    {
+        if (_active is not { } active)
+            return;
+        var paragraphs = _subEditor.Document.Blocks.OfType<Paragraph>()
+            .Select(paragraph => (Paragraph)DocumentMerge.CloneBlock(paragraph))
+            .ToArray();
+        _editor.ReplaceNoteContent(active.Id, active.IsFootnote, paragraphs);
+        Refresh(new NoteKey(active.IsFootnote, active.Id));
+    }
+
+    private void DeleteSelected()
+    {
+        if (_active is not { } active)
+            return;
+        _editor.DeleteNote(active.Id, active.IsFootnote);
+        _active = null;
+        Refresh();
+    }
+
+    private void ClearSelection()
+    {
+        _active = null;
+        _selectedLabel.IsVisible = false;
+        _subEditor.IsVisible = false;
+        _apply.IsVisible = false;
+        _delete.IsVisible = false;
+    }
+
+    private static Button MakeButton(string text, Action click)
+    {
+        var button = new Button { Content = text, MinWidth = 72, Padding = new Thickness(8, 3) };
+        button.Click += (_, _) => click();
+        return button;
+    }
+
+    private readonly record struct NoteKey(bool IsFootnote, int Id);
+    private sealed record NoteItem(bool IsFootnote, int Id, string Preview)
+    {
+        public string Label => $"{(IsFootnote ? "Footnote" : "Endnote")} {Id}";
+        public override string ToString()
+        {
+            var preview = Preview.Replace('\n', ' ').Trim();
+            return preview.Length == 0 ? Label : $"{Label}: {(preview.Length > 60 ? preview[..57] + "..." : preview)}";
+        }
+    }
+}
+
+internal sealed class NoteTextDialog : Window
+{
+    private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
+    private readonly TextBox _text;
+
+    private NoteTextDialog(bool footnote)
+    {
+        Title = footnote ? "Insert Footnote" : "Insert Endnote";
+        Width = 390;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        CanResize = false;
+        ShowInTaskbar = false;
+        _text = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 90 };
+        AvaloniaCompactDialogChrome.ApplyTextBox(_text, Chrome);
+        var ok = new Button { Content = "OK", IsDefault = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, Chrome, 72, true);
+        ok.Click += (_, _) =>
+        {
+            var value = _text.Text?.Trim();
+            if (!string.IsNullOrWhiteSpace(value))
+                Close(value);
+        };
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, Chrome, 72);
+        cancel.Click += (_, _) => Close(null);
+        Content = new StackPanel
+        {
+            Margin = new Thickness(14),
+            Children =
+            {
+                new TextBlock { Text = footnote ? "Footnote text:" : "Endnote text:", Margin = new Thickness(0, 0, 0, 4) },
+                _text,
+                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
+            },
+        };
+        Opened += (_, _) => _text.Focus();
+        KeyDown += (_, args) =>
+        {
+            if (args.Key != Key.Escape) return;
+            Close(null);
+            args.Handled = true;
+        };
+    }
+
+    public static Task<string?> ShowAsync(Window owner, bool footnote) =>
+        new NoteTextDialog(footnote).ShowDialog<string?>(owner);
+}

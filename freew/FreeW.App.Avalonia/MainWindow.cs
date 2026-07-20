@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using System.Globalization;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
@@ -67,6 +68,8 @@ public sealed class MainWindow : Window
     private readonly ReviewingPane _reviewingPane;
     private readonly ReviewBalloonsPane _reviewBalloonsPane;
     private readonly RevealFormattingPane _revealPane;
+    private readonly NotesPane _notesPane;
+    private readonly ThesaurusPane _thesaurusPane;
     private Control? _ribbonControl;
     private bool _ribbonKeyTipsVisible;
     private Border? _findBar;
@@ -137,6 +140,8 @@ public sealed class MainWindow : Window
         _reviewingPane = new ReviewingPane(_editor);
         _reviewBalloonsPane = new ReviewBalloonsPane(_editor);
         _revealPane = new RevealFormattingPane(_editor);
+        _notesPane = new NotesPane(_editor);
+        _thesaurusPane = new ThesaurusPane(_editor);
 
         var ribbon = BuildRibbon();
         var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
@@ -171,6 +176,12 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(_revealPane, Dock.Right);
         workArea.Children.Add(_revealPane);
 
+        DockPanel.SetDock(_thesaurusPane, Dock.Right);
+        workArea.Children.Add(_thesaurusPane);
+
+        DockPanel.SetDock(_notesPane, Dock.Bottom);
+        workArea.Children.Add(_notesPane);
+
         _liveWorkspaceContent = _scroller;
         _workspace.Child = _scroller;
         workArea.Children.Add(_workspace);
@@ -180,8 +191,11 @@ public sealed class MainWindow : Window
         _editor.DocumentChanged += () => { if (_reviewingPane.IsVisible) _reviewingPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_reviewBalloonsPane.IsVisible) _reviewBalloonsPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_revealPane.IsVisible) _revealPane.Refresh(); };
+        _editor.DocumentChanged += () => { if (_notesPane.IsVisible) _notesPane.Refresh(); };
+        _editor.DocumentChanged += () => { if (_thesaurusPane.IsVisible) _thesaurusPane.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
         _editor.CaretMoved += UpdateStatus;
+        _editor.CaretMoved += () => { if (_thesaurusPane.IsVisible) _thesaurusPane.Refresh(); };
         _editor.ViewModeChanged += UpdateStatus;
         _editor.ViewModeChanged += UpdateViewModeButtons;
         _editor.HyperlinkActivated += OpenExternalUri;
@@ -250,6 +264,8 @@ public sealed class MainWindow : Window
     /// Exposes the reveal-formatting pane for tests that need to inspect its state headlessly.
     /// </summary>
     internal RevealFormattingPane RevealPane => _revealPane;
+    internal NotesPane NotesPaneForTest => _notesPane;
+    internal ThesaurusPane ThesaurusPaneForTest => _thesaurusPane;
 
     internal FreeWViewDepthMode ViewDepthMode => _viewDepthPlan.Mode;
     internal bool IsSplitPreviewActive => _viewDepthPlan.IsSplitActive;
@@ -421,6 +437,69 @@ public sealed class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task OpenTextToTableDialogAsync()
+    {
+        var delimiter = await TableTextConversionDialog.ShowAsync(this, "Convert Text to Table");
+        if (delimiter is { } value)
+            _editor.ConvertSelectedParagraphsToTable(value);
+        _editor.Focus();
+    }
+
+    private async Task OpenDateTimeDialogAsync()
+    {
+        var moment = DateTime.Now;
+        var culture = CultureInfo.CurrentCulture;
+        var result = await DateTimeDialog.ShowAsync(this, moment, culture);
+        if (result is null)
+            return;
+        if (result.IsField && result.FieldInstruction is { } instruction)
+            _editor.InsertComplexField(instruction, result.Text);
+        else
+            _editor.InsertText(result.Text);
+        _editor.Focus();
+    }
+
+    private async Task OpenNoteDialogAsync(bool footnote)
+    {
+        var text = await NoteTextDialog.ShowAsync(this, footnote);
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+        if (footnote)
+            _editor.InsertFootnote(text);
+        else
+            _editor.InsertEndnote(text);
+        var id = footnote ? _editor.Document.Footnotes.Keys.Max() : _editor.Document.Endnotes.Keys.Max();
+        _notesPane.ShowAndSelect(footnote, id);
+        _editor.Focus();
+    }
+
+    private async Task OpenFootnoteEndnoteOptionsDialogAsync()
+    {
+        var result = await FootnoteEndnoteOptionsDialog.ShowAsync(
+            this,
+            _editor.Document.FootnoteNumbering,
+            _editor.Document.EndnoteNumbering);
+        if (result is not null)
+            _editor.ApplyFootnoteEndnoteOptions(result);
+        _editor.Focus();
+    }
+
+    private async Task OpenMultilevelListDialogAsync()
+    {
+        var result = await MultilevelListDialog.ShowAsync(this, _editor.Document.MultiLevelList.NumberFormats);
+        if (result is not null)
+            _editor.ApplyMultiLevelListDefinition(result);
+        _editor.Focus();
+    }
+
+    private async Task OpenTableOfAuthoritiesDialogAsync()
+    {
+        var options = await TableOfAuthoritiesDialog.ShowAsync(this);
+        if (options is not null)
+            _editor.InsertTableOfAuthorities(options);
+        _editor.Focus();
+    }
+
     private async Task OpenSmartArtEditDialogAsync()
     {
         if (_editor.SelectedFloatingSmartArt() is not { } smartArt)
@@ -585,21 +664,7 @@ public sealed class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task OpenThesaurusAsync()
-    {
-        var word = _editor.CurrentProofingWord;
-        if (word is null)
-        {
-            _status.Text = "Select a word, or place the caret inside one, then choose Thesaurus.";
-            _editor.Focus();
-            return;
-        }
-
-        var replacement = await ThesaurusDialog.ShowAsync(this, word, ThesaurusLookup.Instance.Lookup(word));
-        if (!string.IsNullOrWhiteSpace(replacement) && _editor.ReplaceCurrentProofingWord(replacement))
-            _status.Text = $"Replaced '{word}' with '{replacement}'.";
-        _editor.Focus();
-    }
+    private void ToggleThesaurusPane() => _thesaurusPane.Toggle();
 
     private async Task OpenProofingLanguageDialogAsync()
     {
@@ -1237,8 +1302,11 @@ public sealed class MainWindow : Window
             OpenImageSizeDialog: () => _ = OpenImageSizeDialogAsync(),
             OpenImageAltTextDialog: () => _ = OpenImageAltTextDialogAsync(),
             OpenImageBorderDialog: () => _ = OpenImageBorderDialogAsync(),
+            OpenTextToTableDialog: () => _ = OpenTextToTableDialogAsync(),
             OpenTableToTextDialog: () => _ = OpenTableToTextDialogAsync(),
             OpenSmartArtEditDialog: () => _ = OpenSmartArtEditDialogAsync(),
+            OpenDateTimeDialog: () => _ = OpenDateTimeDialogAsync(),
+            OpenMultilevelListDialog: () => _ = OpenMultilevelListDialogAsync(),
             ToggleOrientation:   ToggleOrientation,
             ApplyMarginPreset:   ApplyMarginPreset,
             ApplyPaperSize:      ApplyPaperSize,
@@ -1248,6 +1316,12 @@ public sealed class MainWindow : Window
             OpenCitationDialog: () => _ = OpenCitationDialogAsync(),
             OpenManageSourcesDialog: () => _ = OpenManageSourcesDialogAsync(),
             OpenMarkCitationDialog: () => _ = OpenMarkCitationDialogAsync(),
+            OpenFootnoteDialog: () => _ = OpenNoteDialogAsync(footnote: true),
+            OpenEndnoteDialog: () => _ = OpenNoteDialogAsync(footnote: false),
+            ToggleNotesPane: _notesPane.Toggle,
+            IsNotesPaneVisible: () => _notesPane.IsVisible,
+            OpenFootnoteEndnoteOptionsDialog: () => _ = OpenFootnoteEndnoteOptionsDialogAsync(),
+            ShowTableOfAuthoritiesDialog: () => _ = OpenTableOfAuthoritiesDialogAsync(),
             ApplyZoom: (absolute, delta) =>
             {
                 var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;
@@ -1272,6 +1346,7 @@ public sealed class MainWindow : Window
             OpenEditHyperlinkDialog: () => _ = OpenEditHyperlinkDialogAsync(),
             OpenHyperlinkTooltipDialog: () => _ = OpenHyperlinkTooltipDialogAsync(),
             OpenBookmarkDialog:  () => _ = OpenBookmarkDialogAsync(),
+            OpenBookmarkManagerDialog: () => _ = OpenBookmarkManagerDialogAsync(),
             OpenLinkBookmarkDialog: () => _ = OpenLinkBookmarkDialogAsync(),
             OpenQuickPartDialog: () => _ = OpenQuickPartDialogAsync(),
             SaveQuickPartSelection: () => _ = SaveQuickPartSelectionAsync(),
@@ -1294,7 +1369,7 @@ public sealed class MainWindow : Window
             ToggleSpellcheck: ToggleSpellCheck,
             IsSpellcheckActive: () => _editor.SpellCheckEnabled,
             AddToDictionary: AddCurrentWordToDictionary,
-            OpenThesaurus: () => _ = OpenThesaurusAsync(),
+            OpenThesaurus: ToggleThesaurusPane,
             SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync(),
             CompareDocuments: () => _ = CompareDocumentsAsync(),
             CombineDocuments: () => _ = CombineDocumentsAsync(),
@@ -1648,7 +1723,7 @@ public sealed class MainWindow : Window
             case FreeWKeyboardCommand.Undo: _editor.Undo(); break;
             case FreeWKeyboardCommand.Redo: _editor.Redo(); break;
             case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
-            case FreeWKeyboardCommand.Thesaurus: _ = OpenThesaurusAsync(); break;
+            case FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane(); break;
             case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
             case FreeWKeyboardCommand.UpdateFields: _editor.UpdateFields(); break;
             default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
@@ -2180,6 +2255,12 @@ public sealed class MainWindow : Window
             _editor.InsertBookmark(add);
         else if (dialog.GoToName is { } go)
             _editor.GoToBookmark(go);
+        _editor.Focus();
+    }
+
+    private async Task OpenBookmarkManagerDialogAsync()
+    {
+        await BookmarkManagerDialog.ShowAsync(this, _editor);
         _editor.Focus();
     }
 

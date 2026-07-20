@@ -10978,6 +10978,46 @@ public sealed class DocumentView : Control
         InvalidateVisual();
     }
 
+    internal int CaretBlockForTest => _caret.Block;
+    internal int CaretOffsetForTest => _caret.Offset;
+
+    public void ApplyMultiLevelListDefinition(MultilevelListDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        _bus.BeginUndoGroup();
+        try
+        {
+            foreach (var index in indices)
+            {
+                var paragraph = (Paragraph)_doc.Blocks[index];
+                var level = Math.Clamp(paragraph.Formatting.ListLevel, 0, definition.Levels - 1);
+                var startAt = level switch
+                {
+                    0 => definition.Level0StartAt,
+                    1 => definition.Level1StartAt,
+                    _ => paragraph.Formatting.ListStartOverride,
+                };
+                _bus.Execute(new SetParagraphFormattingCommand(index, paragraph.Formatting with
+                {
+                    ListKind = ListKind.MultiLevel,
+                    ListLevel = level,
+                    ListStartOverride = startAt,
+                }));
+            }
+            _bus.Execute(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
+            _bus.CommitUndoGroup("Define Multilevel List");
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
+    }
+
     public void ApplyMultiLevelListStartOverrides(int? level0StartAt, int? level1StartAt)
     {
         FormatSelectedParagraphs(formatting =>
@@ -11346,6 +11386,30 @@ public sealed class DocumentView : Control
         CaretMoved?.Invoke();
     }
 
+    public void ConvertSelectedParagraphsToTable(char delimiter)
+    {
+        if (IsEditingLocked)
+            return;
+
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+        var first = indices[0];
+        var last = indices[^1];
+        if (indices.Count != last - first + 1)
+            return;
+
+        var paragraphs = indices.Select(index => (Paragraph)_doc.Blocks[index]).ToArray();
+        var table = TextTableConvert.TextToTable(paragraphs, delimiter);
+        table.Formatting = TableFormatting.Default with { Borders = true };
+        _bus.Execute(new ReplaceBlocksCommand(first, paragraphs.Length, [table]));
+        _cellCaret = (first, 0, 0, 0, 0);
+        _hfCaret = null;
+        _selectionAnchor = _caret = new DocPosition(first, 0);
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
+    }
+
     /// <summary>True when the current editable caret is inside a table that can be converted to text.</summary>
     public bool CanConvertTableToText =>
         !IsEditingLocked
@@ -11588,6 +11652,90 @@ public sealed class DocumentView : Control
     /// <see cref="Run.EndnoteId"/>.
     /// </summary>
     public void InsertEndnote(string text = "") => InsertNote(text, footnote: false);
+
+    public void ReplaceNoteContent(int id, bool footnote, IReadOnlyList<Paragraph> paragraphs)
+    {
+        ArgumentNullException.ThrowIfNull(paragraphs);
+        _bus.Execute(new ReplaceNoteContentCommand(id, footnote, paragraphs));
+    }
+
+    public void DeleteNote(int id, bool footnote) =>
+        _bus.Execute(new DeleteNoteCommand(id, footnote));
+
+    public void ApplyFootnoteEndnoteOptions(FootnoteEndnoteOptionsDialogResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        _bus.Execute(new SetNoteNumberingOptionsCommand(
+            result.FootnoteFormat,
+            result.FootnoteStartAt,
+            result.FootnoteRestart,
+            result.EndnoteFormat,
+            result.EndnoteStartAt,
+            result.EndnoteRestart));
+    }
+
+    public bool MoveToNextFootnote() => MoveToAdjacentNote(footnote: true, previous: false);
+    public bool MoveToPreviousFootnote() => MoveToAdjacentNote(footnote: true, previous: true);
+    public bool MoveToNextEndnote() => MoveToAdjacentNote(footnote: false, previous: false);
+    public bool MoveToPreviousEndnote() => MoveToAdjacentNote(footnote: false, previous: true);
+
+    private bool MoveToAdjacentNote(bool footnote, bool previous)
+    {
+        var positions = new List<DocPosition>();
+        for (var block = 0; block < _doc.Blocks.Count; block++)
+        {
+            if (_doc.Blocks[block] is not Paragraph paragraph)
+                continue;
+            var offset = 0;
+            foreach (var run in paragraph.Runs)
+            {
+                if (footnote ? run.FootnoteId.HasValue : run.EndnoteId.HasValue)
+                    positions.Add(new DocPosition(block, offset));
+                offset += run.Text.Length;
+            }
+        }
+
+        if (positions.Count == 0)
+            return false;
+
+        DocPosition? destination = null;
+        if (previous)
+        {
+            for (var index = positions.Count - 1; index >= 0; index--)
+            {
+                if (Compare(positions[index], _caret) < 0)
+                {
+                    destination = positions[index];
+                    break;
+                }
+            }
+            if (destination is null)
+                destination = positions[^1];
+        }
+        else
+        {
+            foreach (var position in positions)
+            {
+                if (Compare(position, _caret) > 0)
+                {
+                    destination = position;
+                    break;
+                }
+            }
+            if (destination is null)
+                destination = positions[0];
+        }
+
+        _cellCaret = null;
+        _hfCaret = null;
+        _caret = destination.Value;
+        _selectionAnchor = _caret;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        ScrollToCaretRequested?.Invoke();
+        Focus();
+        return true;
+    }
 
     // Shared footnote/endnote insert: create the note in the model store and append the matching
     // reference run to the caret's host paragraph, grouped for a single undo.
@@ -11859,6 +12007,12 @@ public sealed class DocumentView : Control
             return true;
         }
         return false;
+    }
+
+    public void DeleteBookmark(string name)
+    {
+        if (!string.IsNullOrWhiteSpace(name))
+            _bus.Execute(new RemoveBookmarkCommand(name.Trim()));
     }
 
     /// <summary>
@@ -12421,18 +12575,6 @@ public sealed class DocumentView : Control
         return true;
     }
 
-    public void ShowNotes()
-    {
-        Focus();
-        InvalidateVisual();
-    }
-
-    public void ApplyDefaultFootnoteEndnoteOptions()
-    {
-        Focus();
-        InvalidateVisual();
-    }
-
     private void InsertGeneratedReferenceBlocks(IReadOnlyList<Paragraph> paragraphs, string label, int insertAt)
     {
         ArgumentNullException.ThrowIfNull(paragraphs);
@@ -12603,7 +12745,10 @@ public sealed class DocumentView : Control
     /// Inserts a generic complex field at the active body or table-cell caret through one undo group.
     /// Any active selection is replaced before the field run is inserted.
     /// </summary>
-    public void InsertComplexField(string instruction)
+    public void InsertComplexField(string instruction) =>
+        InsertComplexField(instruction, cachedResult: null);
+
+    public void InsertComplexField(string instruction, string? cachedResult)
     {
         if (IsEditingLocked || string.IsNullOrWhiteSpace(instruction))
             return;
@@ -12611,7 +12756,7 @@ public sealed class DocumentView : Control
         var field = new ComplexField(instruction);
         var run = Run.ComplexFieldRun(
             field.Instruction,
-            ResolveComplexField(field, string.Empty),
+            cachedResult ?? ResolveComplexField(field, string.Empty),
             showCode: false,
             formatting: RunFormatting.Default);
 
