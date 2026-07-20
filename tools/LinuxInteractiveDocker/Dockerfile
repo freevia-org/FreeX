@@ -15,6 +15,9 @@ RUN apt-get update -qq \
         libgtk-3-0 \
         libice6 \
         libicu74 \
+        libvlc-dev \
+        libvlc5 \
+        libvlccore9 \
         libsm6 \
         libssl3 \
         libx11-6 \
@@ -28,6 +31,8 @@ RUN apt-get update -qq \
         shared-mime-info \
         websockify \
         wmctrl \
+        vlc-plugin-base \
+        vlc-plugin-video-output \
         xclip \
         x11vnc \
         x11-xserver-utils \

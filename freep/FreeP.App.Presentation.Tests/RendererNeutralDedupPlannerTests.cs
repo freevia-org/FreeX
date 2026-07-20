@@ -55,6 +55,83 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void ShapeMaterialRenderPlanner_ProjectsTheFourImportedShapeRoutes()
+    {
+        var bounds = new LayoutRect(100, 200, 300, 180);
+
+        ShapeMaterialRenderPlanner.Plan(Shape(6, bounds, "isometricTopUp", "softRound", 0))
+            .Should().Match<ShapeMaterialRenderPlan>(plan =>
+                plan.Kind == ImportedShapeMaterialKind.IsometricCrossDepth &&
+                plan.DepthOffsetDip == 6 &&
+                plan.ExtrusionColor == new SrgbColor(0x20, 0x10, 0x0A));
+
+        foreach (var (shapeId, bevel, depth, kind, edgeDip) in new[]
+        {
+            (3u, "", 0.0, ImportedShapeMaterialKind.Circle, 9.0),
+            (4u, "relaxedInset", 26.0, ImportedShapeMaterialKind.RelaxedInset, 13.0),
+            (5u, "cross", 54.0, ImportedShapeMaterialKind.Angle, 8.0),
+        })
+        {
+            var plan = ShapeMaterialRenderPlanner.Plan(Shape(
+                shapeId, bounds, "orthographicFront", bevel, depth));
+
+            plan.Kind.Should().Be(kind);
+            plan.Bands.Should().HaveCount(4);
+            plan.Bands[0].Bounds.X.Should().Be(101);
+            plan.Bands[0].Bounds.Y.Should().Be(201);
+            plan.Bands[0].Bounds.Width.Should().Be(298);
+            plan.Bands[0].Bounds.Height.Should().Be(edgeDip);
+            plan.Bands[2].Bounds.Y.Should().Be(bounds.Bottom - edgeDip - 1);
+            plan.Bands[3].Bounds.X.Should().Be(bounds.Right - edgeDip - 1);
+        }
+    }
+
+    [Fact]
+    public void ShapeMaterialRenderPlanner_RejectsNearMissesAndNonSolidFills()
+    {
+        var bounds = new LayoutRect(0, 0, 100, 60);
+        var nearMiss = Shape(4, bounds, "orthographicFront", "relaxedInset", 24.99);
+        var nonSolid = Shape(
+            4,
+            bounds,
+            "orthographicFront",
+            "relaxedInset",
+            26,
+            new ResolvedFill.Gradient(SrgbColor.Black, SrgbColor.White, 0));
+
+        ShapeMaterialRenderPlanner.Plan(nearMiss).Kind.Should().Be(ImportedShapeMaterialKind.None);
+        ShapeMaterialRenderPlanner.Plan(nonSolid).Kind.Should().Be(ImportedShapeMaterialKind.None);
+    }
+
+    [Fact]
+    public void SlideShowMediaInteractionPlanner_UsesLetterboxedBoundsAndTopmostMediaClick()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(MediaShape(10, 0, 0, 4, 4, embedded: true));
+        slide.Shapes.Add(MediaShape(20, 1, 1, 2, 2, embedded: false));
+
+        var plans = SlideShowMediaInteractionPlanner.BuildSlidePlan(
+            slide, 10, 10, 20, 10);
+
+        plans.Should().HaveCount(2);
+        plans[0].Bounds.Should().Be(new LayoutRect(5, 0, 4, 4));
+        plans[0].SourceKind.Should().Be("embedded");
+        plans[1].Bounds.Should().Be(new LayoutRect(6, 1, 2, 2));
+        plans[1].SourceKind.Should().Be("missing");
+
+        var click = SlideShowMediaInteractionPlanner.PlanClick(
+            slide, 10, 10, 20, 10, 6.5, 1.5);
+
+        click.IsHandled.Should().BeTrue();
+        click.ShouldTogglePlayback.Should().BeTrue();
+        click.Media!.ShapeId.Should().Be(20);
+        click.Media.PlaybackCapabilityNote.Should().Contain("LibVLC");
+
+        SlideShowMediaInteractionPlanner.PlanClick(
+            slide, 10, 10, 20, 10, 1, 1).IsHandled.Should().BeFalse();
+    }
+
+    [Fact]
     public void BevelGeometryHelper_MapsSurfaceDimensionsToVisibleFootprint()
     {
         var dimensions = BevelGeometryHelper.GetRenderDimensions(
@@ -291,6 +368,42 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_ConsumeOneSharedShapeMaterialPlan()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ShapeMaterialRenderPlanner.Plan(shape)");
+            source.Should().Contain("ImportedShapeMaterialKind.IsometricCrossDepth");
+            source.Should().Contain("ImportedShapeMaterialKind.Circle");
+            source.Should().Contain("ImportedShapeMaterialKind.RelaxedInset");
+            source.Should().Contain("ImportedShapeMaterialKind.Angle");
+            source.Should().NotContain("shape.ShapeId == 3");
+            source.Should().NotContain("shape.ShapeId == 4");
+            source.Should().NotContain("shape.ShapeId == 5");
+            source.Should().NotContain("shape.ShapeId == 6");
+        }
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaMediaAdapters_ConsumeOneSharedInteractionPlan()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowMediaController.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Avalonia",
+            "AvaloniaSlideShowMediaController.cs");
+
+        wpf.Should().Contain("SlideShowMediaInteractionPlanner.ComputeMediaBounds");
+        avalonia.Should().Contain("SlideShowMediaInteractionPlanner.BuildSlidePlan");
+        avalonia.Should().Contain("SlideShowMediaInteractionPlanner.PlanClick");
+        avalonia.Should().NotContain("MediaElement");
+        avalonia.Should().Contain("LibVlcMediaPlaybackBackendFactory");
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralPictureRenderPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -463,4 +576,46 @@ public sealed class RendererNeutralDedupPlannerTests
             "Could not locate workspace file.",
             Path.Combine(relativeParts));
     }
+
+    private static DrawOp.Shape Shape(
+        uint shapeId,
+        LayoutRect bounds,
+        string camera,
+        string bevel,
+        double depth,
+        ResolvedFill? fill = null) =>
+        new()
+        {
+            ShapeId = shapeId,
+            BoundsDip = bounds,
+            Fill = fill ?? new ResolvedFill.Solid(new SrgbColor(0x64, 0x32, 0x1E)),
+            Effects = new ResolvedShapeEffects
+            {
+                Scene3dCameraPreset = camera,
+                BevelTop = new ResolvedBevel { PresetName = bevel },
+                ExtrusionDepthDip = depth,
+            },
+        };
+
+    private static SlideShape MediaShape(
+        uint id,
+        long x,
+        long y,
+        long width,
+        long height,
+        bool embedded) =>
+        new()
+        {
+            Id = id,
+            Kind = SlideShapeKind.Media,
+            OffsetXEmu = x * 9525,
+            OffsetYEmu = y * 9525,
+            ExtentCxEmu = width * 9525,
+            ExtentCyEmu = height * 9525,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = embedded ? [1, 2, 3] : [],
+            },
+        };
 }
