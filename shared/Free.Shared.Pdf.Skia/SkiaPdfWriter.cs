@@ -17,6 +17,40 @@ namespace Free.Shared.Pdf.Skia;
 /// </summary>
 public static class SkiaPdfWriter
 {
+    public static IReadOnlyList<byte[]> RenderPagesToPng(PdfContentDocument document, int dpi = 96)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (document.Pages.Count == 0)
+            throw new InvalidOperationException("Raster rendering requires at least one page.");
+        if (dpi is < 36 or > 600)
+            throw new ArgumentOutOfRangeException(nameof(dpi));
+
+        using var regular = SKTypeface.FromFamilyName(
+            null, SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
+            ?? SKTypeface.Default;
+        using var bold = SKTypeface.FromFamilyName(
+            null, SKFontStyleWeight.Bold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
+            ?? regular;
+        using var textRenderer = new FallbackTextRenderer();
+        var scale = dpi / 72f;
+        var pages = new List<byte[]>(document.Pages.Count);
+        foreach (var page in document.Pages)
+        {
+            var width = Math.Max(1, (int)Math.Ceiling(page.WidthPoints * scale));
+            var height = Math.Max(1, (int)Math.Ceiling(page.HeightPoints * scale));
+            using var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            using var canvas = new SKCanvas(bitmap);
+            canvas.Clear(SKColors.White);
+            canvas.Scale(scale, scale);
+            RenderPage(canvas, page, regular, bold, textRenderer);
+            canvas.Flush();
+            using var image = SKImage.FromBitmap(bitmap);
+            using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
+            pages.Add(encoded.ToArray());
+        }
+        return pages;
+    }
+
     /// <summary>
     /// Renders <paramref name="document"/> to <paramref name="stream"/> via Skia's PDF backend.
     /// Draw ops are interpreted in PDF user space (origin bottom-left, y-up) and mapped to Skia's
