@@ -435,7 +435,7 @@ public sealed class TableContextualTabTests
                 view.PlaceCaretInCell(idx, row: 0, col: 1, paraIdx: 0, offset: 0);
                 var callbacks = NoopCallbacks() with
                 {
-                    OpenTablePropertiesDialog = _ => TablePropertyValues()
+                    OpenTablePropertiesDialog = _ => view.ApplyTableProperties(TablePropertyValues())
                 };
                 var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
 
@@ -454,7 +454,7 @@ public sealed class TableContextualTabTests
     }
 
     [Fact]
-    public async Task Table_formula_command_inserts_default_formula_field()
+    public async Task Table_formula_command_applies_the_dialog_callback_result()
     {
         Run? formulaRun = null;
         var ran = false;
@@ -474,7 +474,13 @@ public sealed class TableContextualTabTests
                 view.Measure(new Size(800, 4000));
                 view.PlaceCaretInCell(0, row: 2, col: 0, paraIdx: 0, offset: 0);
 
-                var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+                var registry = FreeWAvaloniaRibbonCommands.Build(
+                    view,
+                    NoopCallbacks() with
+                    {
+                        OpenTableFormulaDialog = state =>
+                            view.InsertTableFormula(new TableFormulaField(state.FormulaText)),
+                    });
                 Execute(registry, "freew.table-formula");
 
                 formulaRun = tbl.Rows[2].Cells[0].Paragraphs[0].Runs.SingleOrDefault(r => r.TableFormula is not null);

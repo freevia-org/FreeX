@@ -7,10 +7,7 @@ namespace FreeW.Ribbon.Definitions.Tests;
 
 public sealed class FreeWRibbonDefinitionProfileTests
 {
-    private static readonly string[] WpfOnlyTabIds =
-    [
-        "help",
-    ];
+    private static readonly string[] WpfOnlyTabIds = [];
 
     private static readonly string[] AvaloniaOnlyTabIds =
     [
@@ -76,6 +73,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "mailings" or
             "review" or
             "view" or
+            "help" or
             "picture-format" or
             "drawing-format" or
             "chart-design" or
@@ -550,7 +548,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
                 "freew.feedback",
                 "freew.help-online",
                 "freew.import-pdf-text",
-                "freew.legal-notices",
                 "freew.new",
                 "freew.open",
                 "freew.save",
@@ -569,7 +566,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertPlatformOnlyNote(commands, "freew.feedback", "WPF desktop support shortcut");
         AssertPlatformOnlyNote(commands, "freew.help-online", "WPF desktop Help shortcut");
         AssertPlatformOnlyNote(commands, "freew.import-pdf-text", "Avalonia compact File command makes PDF text import explicit");
-        AssertPlatformOnlyNote(commands, "freew.legal-notices", "WPF desktop Help/Product legal dialog");
         AssertPlatformOnlyNote(commands, "freew.new", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.open", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.save", "Avalonia compact File command");
@@ -579,7 +575,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.wpf-help-shell",
             "WPF Help shell variance",
             "platform-only");
@@ -589,7 +585,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.wpf-help-shell",
             "WPF Help shell variance",
             "platform-only");
@@ -599,7 +595,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.wpf-help-shell",
             "WPF Help shell variance",
             "platform-only");
@@ -609,7 +605,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.View_Window_NewWindowAndArrangeAll_AreBacked",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.window-shell",
             "Window-management shell variance",
             "platform-only");
@@ -619,7 +615,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.avalonia-file-shell",
             "Avalonia compact File shell variance",
             "platform-only");
@@ -639,7 +635,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.avalonia-file-shell",
             "Avalonia compact File shell variance",
             "platform-only");
@@ -649,7 +645,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip",
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_commands_are_backed_and_desktop_help_arrange_commands_are_absent",
+            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.avalonia-file-shell",
             "Avalonia compact File shell variance",
             "platform-only");
@@ -1185,7 +1181,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         WithUiCulture("en-US", () =>
         {
             AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Wpf), includesMenu: false);
-            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Avalonia), includesMenu: true);
+            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Avalonia), includesMenu: false);
             AssertPageBackgroundSurfaceUsesResources(PageBackgroundSurface(FreeWRibbonCapabilities.Wpf), includesPalette: false);
             AssertPageBackgroundSurfaceUsesResources(PageBackgroundSurface(FreeWRibbonCapabilities.Avalonia), includesPalette: true);
 
@@ -1197,9 +1193,9 @@ public sealed class FreeWRibbonDefinitionProfileTests
             var symbols = SymbolSurface(FreeWRibbonCapabilities.Avalonia);
             var pageBackground = PageBackgroundSurface(FreeWRibbonCapabilities.Avalonia);
 
-            AssertSymbolSurfaceUsesResources(symbols, includesMenu: true);
+            AssertSymbolSurfaceUsesResources(symbols, includesMenu: false);
             AssertPageBackgroundSurfaceUsesResources(pageBackground, includesPalette: true);
-            symbols.SymbolMenuHeaders![0].Should().Be($"€   {Loc.Get("Ribbon_Palette_Symbol_Euro_Label")}");
+            symbols.SymbolMenuHeaders.Should().BeNull();
             pageBackground.PageColorMenuHeaders![0].Should().Be(Loc.Get("Ribbon_Palette_PageColor_NoColor_Label"));
 
             return true;
@@ -1233,7 +1229,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
         avaloniaSource.Should().Contain("FreeWRibbonText.SymbolCommand");
         avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.PageColors");
-        avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.Symbols");
+        avaloniaSource.Should().NotContain("FreeWRibbonDefinitionData.Symbols");
 
         dataSource.Should().NotContain("(\"freew.page-color.none\", \"No Color\")");
         dataSource.Should().NotContain("\"Outline: 1. / 1.1. / 1.1.1.\"");

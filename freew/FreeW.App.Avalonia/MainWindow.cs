@@ -55,6 +55,7 @@ public sealed class MainWindow : Window
 
     private readonly DocumentPersistenceWorkflow _documentPersistence = new();
     private readonly CupsPrintService _cupsPrintService = new();
+    private readonly IScreenClipService _screenClipService;
     private readonly DocumentView _editor = new();
     private readonly QuickPartLibrary _quickParts = QuickPartLibrary.Load();
     private readonly TextBlock _status = SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0));
@@ -122,9 +123,11 @@ public sealed class MainWindow : Window
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
         FreeWOptions? options,
-        ApplicationOptionsStore<FreeWOptions> optionsStore)
+        ApplicationOptionsStore<FreeWOptions> optionsStore,
+        IScreenClipService? screenClipService = null)
     {
         _optionsStore = optionsStore;
+        _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
         _options = options ?? _optionsStore.Load();
         _options.Normalize();
 
@@ -1438,6 +1441,10 @@ public sealed class MainWindow : Window
             ApplyMarginPreset:   ApplyMarginPreset,
             ApplyPaperSize:      ApplyPaperSize,
             InsertPicture:       () => _ = InsertPictureAsync(),
+            OpenSymbolPickerDialog: () => _ = OpenSymbolPickerAsync(),
+            CaptureScreenClip: () => _ = InsertScreenClipAsync(),
+            OpenTablePropertiesDialog: context => _ = OpenTablePropertiesDialogAsync(context),
+            OpenTableFormulaDialog: state => _ = OpenTableFormulaDialogAsync(state),
             OpenWordCountDialog: () => _ = OpenWordCountDialogAsync(),
             OpenCrossReferenceDialog: () => _ = OpenCrossReferenceDialogAsync(),
             OpenCitationDialog: () => _ = OpenCitationDialogAsync(),
@@ -1503,6 +1510,7 @@ public sealed class MainWindow : Window
             SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync(),
             CompareDocuments: () => _ = CompareDocumentsAsync(),
             CombineDocuments: () => _ = CombineDocumentsAsync(),
+            OpenLegalNotices: () => _ = OpenLegalNoticesAsync(),
             ToggleReviewBalloons: ToggleReviewBalloons,
             IsReviewBalloonsActive: () => _reviewBalloonsPane.IsVisible);
 
@@ -2510,6 +2518,100 @@ public sealed class MainWindow : Window
         {
             return (200, 150); // undecodable (metafile) → default box; bytes still round-trip verbatim
         }
+    }
+
+    private async Task OpenSymbolPickerAsync()
+    {
+        var dialog = new SymbolPickerDialog();
+        await dialog.ShowDialog(this);
+        ApplySymbolPickerResult(_editor, dialog.Result);
+        _editor.Focus();
+    }
+
+    internal static void ApplySymbolPickerResult(DocumentView editor, string? symbol)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        if (!string.IsNullOrEmpty(symbol))
+            editor.InsertSymbol(symbol);
+    }
+
+    private async Task OpenLegalNoticesAsync()
+    {
+        var dialog = new LegalNoticesDialog();
+        await dialog.ShowDialog(this);
+        _editor.Focus();
+    }
+
+    private async Task OpenTableFormulaDialogAsync(TableFormulaDialogInitialState initialState)
+    {
+        var dialog = new TableFormulaDialog(initialState);
+        await dialog.ShowDialog(this);
+        ApplyTableFormulaResult(_editor, dialog.Result);
+        _editor.Focus();
+    }
+
+    internal static void ApplyTableFormulaResult(DocumentView editor, TableFormulaField? formula)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        if (formula is not null)
+            editor.InsertTableFormula(formula);
+    }
+
+    private async Task OpenTablePropertiesDialogAsync(ModelTableContext context)
+    {
+        var dialog = new TablePropertiesDialog(context);
+        await dialog.ShowDialog(this);
+        ApplyTablePropertiesResult(_editor, dialog.Result);
+        _editor.Focus();
+    }
+
+    internal static void ApplyTablePropertiesResult(DocumentView editor, TablePropertiesValues? values)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        if (values is not null)
+            editor.ApplyTableProperties(values);
+    }
+
+    private async Task InsertScreenClipAsync()
+    {
+        try
+        {
+            var capture = await _screenClipService.CaptureAsync(this);
+            if (capture is null)
+                return;
+
+            ApplyScreenClipCapture(_editor, capture);
+            _status.Text = $"Inserted screen clipping ({capture.PixelWidth} x {capture.PixelHeight}).";
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Could not capture the screen clip: {ex.Message}";
+        }
+        finally
+        {
+            _editor.Focus();
+        }
+    }
+
+    internal Task InsertScreenClipForTestAsync() => InsertScreenClipAsync();
+
+    internal static void ApplyScreenClipCapture(DocumentView editor, ScreenClipCapture capture)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(capture);
+        if (capture.PngBytes.Length == 0)
+            throw new ArgumentException("Screenshot bytes are empty.", nameof(capture));
+
+        var display = ScreenClipPlanner.BuildDisplaySize(
+            capture.PixelWidth,
+            capture.PixelHeight);
+        editor.InsertInlineImage(
+            capture.PngBytes,
+            display.WidthPt,
+            display.HeightPt,
+            ImageFormat.Png,
+            display.OriginalPixelWidth,
+            display.OriginalPixelHeight);
     }
 
     // ── AV-INSERT2: Insert depth 2 dialog launchers ─────────────────────────────

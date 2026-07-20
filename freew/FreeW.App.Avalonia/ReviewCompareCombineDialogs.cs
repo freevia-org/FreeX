@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -11,6 +12,9 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class CompareDocumentsDialog : Window
 {
+    private const string ReviewerValidationMessage =
+        "Enter a reviewer name to label the tracked changes.";
+
     private readonly string _originalPath;
     private readonly TextBox _authorBox = new()
     {
@@ -18,7 +22,7 @@ internal sealed class CompareDocumentsDialog : Window
         MaxWidth = 260,
     };
 
-    private readonly CheckBox _insertions = MakeCheckBox("Insertions", true);
+    private readonly CheckBox _insertions = MakeCheckBox("Insertions and deletions", true);
     private readonly CheckBox _deletions = MakeCheckBox("Deletions", true);
     private readonly CheckBox _moves = MakeCheckBox("Moves", true);
     private readonly CheckBox _comments = MakeCheckBox("Comments", true);
@@ -28,6 +32,13 @@ internal sealed class CompareDocumentsDialog : Window
     private readonly RadioButton _showNew = MakeRadio("New document", true);
     private readonly RadioButton _showOriginal = MakeRadio("Original document");
     private readonly RadioButton _showRevised = MakeRadio("Revised document");
+    private readonly TextBlock _validation = new()
+    {
+        Foreground = Brushes.Maroon,
+        FontSize = 11,
+        TextWrapping = TextWrapping.Wrap,
+        IsVisible = false,
+    };
 
     public CompareDocumentsDialogResult? Result { get; private set; }
 
@@ -50,7 +61,11 @@ internal sealed class CompareDocumentsDialog : Window
         ApplyCheckBoxChrome(_insertions, _deletions, _moves, _comments, _formatting, _caseChanges, _whitespace);
         ApplyRadioChrome(_showNew, _showOriginal, _showRevised);
 
-        var grid = DialogGrid(rows: 6);
+        AutomationProperties.SetAutomationId(this, "CompareDocumentsDialog");
+        AutomationProperties.SetAutomationId(_authorBox, "CompareDocumentsAuthorBox");
+        AutomationProperties.SetAutomationId(_validation, "CompareDocumentsValidationText");
+
+        var grid = DialogGrid(rows: 7);
         AddReadOnlyRow(grid, 0, "Original:", ReviewCompareCombineWorkflow.TruncatePathForDialog(originalPath));
         AddReadOnlyRow(grid, 1, "Revised:", string.IsNullOrWhiteSpace(state.RevisedTitle) ? "(current document)" : state.RevisedTitle);
 
@@ -72,13 +87,18 @@ internal sealed class CompareDocumentsDialog : Window
         Grid.SetColumnSpan(expander, 2);
         grid.Children.Add(expander);
 
+        Grid.SetRow(_validation, 5);
+        Grid.SetColumn(_validation, 1);
+        grid.Children.Add(_validation);
+
         var buttons = InsertDialogLayout.OkCancelRow(Accept, Close);
-        Grid.SetRow(buttons, 5);
+        Grid.SetRow(buttons, 6);
         Grid.SetColumn(buttons, 1);
         grid.Children.Add(buttons);
 
         Content = grid;
         _authorBox.KeyDown += (_, e) => InsertDialogLayout.HandleEnterEscape(e, buttons);
+        Opened += (_, _) => FocusAuthor();
     }
 
     public static async Task<CompareDocumentsDialogResult?> ShowAsync(
@@ -120,11 +140,35 @@ internal sealed class CompareDocumentsDialog : Window
         return panel;
     }
 
-    private void Accept()
+    internal static CompareDocumentsDialog CreateForTest(
+        string originalPath,
+        CompareDocumentsPromptState state) =>
+        new(originalPath, state);
+
+    internal TextBox AuthorBoxForTest => _authorBox;
+    internal TextBlock ValidationForTest => _validation;
+
+    internal CompareDocumentsDialogResult? AcceptForTest(string? author)
+    {
+        _authorBox.Text = author;
+        TryAccept(close: false);
+        return Result;
+    }
+
+    private void Accept() => TryAccept(close: true);
+
+    private void TryAccept(bool close)
     {
         var author = _authorBox.Text?.Trim();
         if (string.IsNullOrEmpty(author))
+        {
+            _validation.Text = ReviewerValidationMessage;
+            _validation.IsVisible = true;
+            FocusAuthor();
             return;
+        }
+
+        _validation.IsVisible = false;
 
         var showIn = _showOriginal.IsChecked == true ? CompareShowChangesIn.Original
             : _showRevised.IsChecked == true ? CompareShowChangesIn.Revised
@@ -144,7 +188,14 @@ internal sealed class CompareDocumentsDialog : Window
                 Whitespace = _whitespace.IsChecked == true,
                 ShowChangesIn = showIn,
             });
-        Close();
+        if (close)
+            Close();
+    }
+
+    private void FocusAuthor()
+    {
+        _authorBox.Focus();
+        _authorBox.SelectAll();
     }
 
     private static CheckBox MakeCheckBox(string content, bool isChecked) =>

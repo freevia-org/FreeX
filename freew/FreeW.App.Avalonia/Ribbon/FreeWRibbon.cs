@@ -82,6 +82,8 @@ internal sealed record RibbonHostCallbacks(
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.
     /// </summary>
     Action<double?, double> ApplyZoom,
+    Action? OpenSymbolPickerDialog = null,
+    Action? CaptureScreenClip = null,
     /// <summary>Home &gt; Paragraph &gt; Tabs. Optional; registry no-ops when null.</summary>
     Action? OpenTabsDialog = null,
     /// <summary>Home &gt; Paragraph &gt; Borders and Shading. Optional; registry no-ops when null.</summary>
@@ -228,10 +230,12 @@ internal sealed record RibbonHostCallbacks(
     Func<bool>? IsPagedEditViewActive = null,
     /// <summary>FreeW File &gt; Import PDF (text only). Optional; registry no-ops when null.</summary>
     Action? ImportPdfText = null,
-    /// <summary>Table Layout &gt; Properties / Cell Margins. Optional; registry no-ops when null.</summary>
-    Func<ModelTableContext, TablePropertiesValues?>? OpenTablePropertiesDialog = null,
-    /// <summary>Table Layout &gt; Formula. Optional; registry inserts the shared default formula when null.</summary>
-    Func<TableFormulaDialogInitialState, TableFormulaField?>? OpenTableFormulaDialog = null,
+    /// <summary>Table Layout &gt; Properties / Cell Margins. The command is disabled when omitted.</summary>
+    Action<ModelTableContext>? OpenTablePropertiesDialog = null,
+    /// <summary>Table Layout &gt; Formula. The command is disabled when omitted.</summary>
+    Action<TableFormulaDialogInitialState>? OpenTableFormulaDialog = null,
+    /// <summary>Help &gt; Legal Notices. The command is disabled when omitted.</summary>
+    Action? OpenLegalNotices = null,
     /// <summary>Home &gt; Clipboard &gt; Paste Text Only. Optional; registry no-ops when null.</summary>
     Action? PastePlainText = null,
     /// <summary>Home &gt; Clipboard &gt; Merge Formatting. Optional; registry no-ops when null.</summary>
