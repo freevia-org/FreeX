@@ -23,13 +23,14 @@ static int Main(string[] args)
     var output = Path.GetFullPath(Required(args, "--output"));
     var inventory = JsonSerializer.Deserialize<RouteInventory>(File.ReadAllText(inventoryPath), JsonOptions())
         ?? throw new InvalidOperationException("Invalid inventory.");
+    var scenarioFilter = Optional(args, "--scenario");
     Directory.CreateDirectory(output);
     var application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
     var captures = new List<Capture>();
-    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "wpf"))
+    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "wpf" && (scenarioFilter is null || s.Id.Equals(scenarioFilter, StringComparison.OrdinalIgnoreCase))))
     {
         if (!TryCapture(scenario, output, out var capture))
-            capture = Unsupported(scenario, "The WPF adapter currently captures the options, page-setup, and page-layout families; other families remain in the generated inventory until an app-owned route adapter is added.");
+            capture = Unsupported(scenario, "No constructible app-owned WPF route adapter was available for this source family.");
         captures.Add(capture);
     }
     var manifest = new CaptureManifest("freew.dialog-capture-manifest.v1", 1, "wpf", output, captures);
@@ -42,13 +43,14 @@ static int Main(string[] args)
 static bool TryCapture(Scenario scenario, string output, out Capture capture)
 {
     capture = default!;
-    if (scenario.RouteId is not ("page-setup" or "options" or "columns" or "custom-paragraph-spacing" or "drop-cap-options" or "hyphenation-options" or "line-number-options")) return false;
     var owner = new Window { Width = 960, Height = 720, ShowInTaskbar = false };
     Window? dialog = null;
     try
     {
         owner.Show();
-        dialog = CreateDialog(scenario.RouteId, owner);
+        if (WpfDialogRouteFactory.IsStaticPromptRoute(scenario.RouteId))
+            return TryCaptureStaticPrompt(scenario, output, owner, out capture);
+        dialog = WpfDialogRouteFactory.Create(scenario.RouteId, scenario.State, owner);
         if (dialog is null) return false;
         dialog.Width = 560;
         dialog.Height = 600;
@@ -90,41 +92,62 @@ static bool TryCapture(Scenario scenario, string output, out Capture capture)
     }
 }
 
-static Window? CreateDialog(string route, Window owner)
+static bool TryCaptureStaticPrompt(Scenario scenario, string output, Window owner, out Capture capture)
 {
-    if (route == "options")
+    capture = default!;
+    var frame = new System.Windows.Threading.DispatcherFrame();
+    var captured = false;
+    Capture? result = null;
+    owner.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
     {
-        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Host.OptionsDialog", throwOnError: true)!;
-        return (Window?)Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object?[] { owner, new FreeWOptions() }, null);
+        try { WpfDialogRouteFactory.InvokeStaticPrompt(scenario.RouteId, scenario.State, owner); }
+        catch (Exception ex) { Console.Error.WriteLine($"wpf {scenario.Id}: {ex}"); }
+        finally { frame.Continue = false; }
+    }));
+    owner.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+    {
+        var dialog = Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window != owner && window.IsVisible);
+        if (dialog is null) return;
+        dialog.UpdateLayout();
+        captured = CaptureRenderedWindow(scenario, output, dialog, out result);
+        dialog.Close();
+    }));
+    System.Windows.Threading.Dispatcher.PushFrame(frame);
+    capture = result!;
+    return captured;
+}
+
+static bool CaptureRenderedWindow(Scenario scenario, string output, Window dialog, out Capture capture)
+{
+    capture = default!;
+    try
+    {
+        var width = Math.Max(1, (int)Math.Ceiling(dialog.ActualWidth));
+        var height = Math.Max(1, (int)Math.Ceiling(dialog.ActualHeight));
+        var path = Path.Combine(output, "full", "wpf", Safe(scenario.Id) + ".png");
+        var cropPath = Path.Combine(output, "crops", "wpf", Safe(scenario.Id) + ".png");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(cropPath)!);
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(dialog);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        var png = stream.ToArray();
+        if (png.Length == 0) return false;
+        File.WriteAllBytes(path, png);
+        File.WriteAllBytes(cropPath, png);
+        var dpi = VisualTreeHelper.GetDpi(dialog);
+        var semantics = ReadSemantics(dialog);
+        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, "Real app-owned WPF static-prompt dialog captured before its cancel path returned.", Relative(output, cropPath));
+        return true;
     }
-    var typeName = route switch
+    catch (Exception ex)
     {
-        "page-setup" => "FreeW.App.Host.PageSetupDialog",
-        "columns" => "FreeW.App.Host.ColumnsDialog",
-        "custom-paragraph-spacing" => "FreeW.App.Host.CustomParagraphSpacingDialog",
-        "drop-cap-options" => "FreeW.App.Host.DropCapOptionsDialog",
-        "hyphenation-options" => "FreeW.App.Host.HyphenationOptionsDialog",
-        "line-number-options" => "FreeW.App.Host.LineNumberOptionsDialog",
-        _ => throw new ArgumentOutOfRangeException(nameof(route))
-    };
-    var pageType = typeof(MainWindow).Assembly.GetType(typeName, throwOnError: true)!;
-    var ctor = pageType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-        .Single(c => c.GetParameters().All(p => typeof(Window).IsAssignableFrom(p.ParameterType)
-            || p.ParameterType == typeof(PageSettings)
-            || p.ParameterType == typeof(int)
-            || p.ParameterType == typeof(FreeW.Core.Model.DocumentParagraphSpacingSet)
-            || p.ParameterType.IsEnum
-            || p.HasDefaultValue));
-    var args = ctor.GetParameters().Select(p =>
-    {
-        if (typeof(Window).IsAssignableFrom(p.ParameterType)) return (object?)owner;
-        if (p.ParameterType == typeof(PageSettings)) return (object?)new PageSettings();
-        if (p.ParameterType == typeof(int)) return 1;
-        if (p.ParameterType == typeof(FreeW.Core.Model.DocumentParagraphSpacingSet)) return null;
-        if (p.ParameterType.IsEnum) return Enum.GetValues(p.ParameterType).GetValue(0);
-        return p.HasDefaultValue ? p.DefaultValue : null;
-    }).ToArray();
-    return (Window?)ctor.Invoke(args);
+        Console.Error.WriteLine($"wpf {scenario.Id}: {ex}");
+        return false;
+    }
 }
 
 static void Populate(Window dialog, string state)
@@ -167,6 +190,7 @@ static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : Dep
         foreach (var child in FindVisualChildren<T>(VisualTreeHelper.GetChild(root, i))) yield return child;
 }
 static string Required(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : throw new ArgumentException($"Missing {option}."); }
+static string? Optional(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
 static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
 static string Safe(string value) => System.Text.RegularExpressions.Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
 static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };

@@ -146,7 +146,9 @@ static RouteInventory BuildInventory(string root)
             var modalMode = text.Contains("ShowDialog", StringComparison.OrdinalIgnoreCase) || text.Contains("modal", StringComparison.OrdinalIgnoreCase)
                 ? "modal" : text.Contains("Show()", StringComparison.Ordinal) || text.Contains("modeless", StringComparison.OrdinalIgnoreCase)
                     ? "modeless" : "modal-or-modeless";
-            var limitation = fileName.Contains("File", StringComparison.OrdinalIgnoreCase) || text.Contains("PrintDialog", StringComparison.Ordinal)
+            var limitation = typeName.Equals("CupsPrintDialog", StringComparison.Ordinal)
+                ? null
+                : fileName.Contains("File", StringComparison.OrdinalIgnoreCase) || text.Contains("PrintDialog", StringComparison.Ordinal)
                 ? "native-picker-platform-limitation" : null;
             var surfaceKind = typeName.Equals("BackstageView", StringComparison.Ordinal) || sourceRouteId.StartsWith("backstage-", StringComparison.Ordinal)
                 ? "backstage"
@@ -159,6 +161,7 @@ static RouteInventory BuildInventory(string root)
         }
     }
     AddBackstageRoutes(routes);
+    AddKnownAvaloniaRoutes(routes);
     routes = routes.OrderBy(r => r.Host).ThenBy(r => r.RouteId).ToList();
     var scenarios = new List<Scenario>();
     foreach (var route in routes)
@@ -178,10 +181,26 @@ static RouteInventory BuildInventory(string root)
 
 static void AddBackstageRoutes(List<Route> routes)
 {
-    var entries = new[] { "home", "new", "open", "info", "save", "save-a-copy", "close", "share", "save-as", "print", "export", "account", "options" };
+    var entries = new[] { "home", "new", "open", "info", "share", "save-as", "print", "export", "account", "options" };
     foreach (var host in new[] { "wpf", "avalonia" })
         foreach (var entry in entries)
-            routes.Add(new Route(host, $"backstage-{entry}", "BackstageView", host == "wpf" ? "freew/FreeW.App.Host/MainWindow.cs" : "freew/FreeW.App.Avalonia/Backstage/BackstageView.cs", "modeless", [], entry is "open" or "save-as" or "print" ? "native-picker-platform-limitation" : null, "backstage", ["open"], $"backstage-{entry}"));
+            routes.Add(new Route(host, $"backstage-{entry}", "BackstageView", host == "wpf" ? "freew/FreeW.App.Host/MainWindow.cs" : "freew/FreeW.App.Avalonia/Backstage/BackstageView.cs", "modeless", [], null, "backstage", ["open"], $"backstage-{entry}"));
+}
+
+static void AddKnownAvaloniaRoutes(List<Route> routes)
+{
+    if (routes.Any(route => route.Host == "avalonia" && route.RouteId == "compare-documents")) return;
+    routes.Add(new Route(
+        "avalonia",
+        "compare-documents",
+        "CompareDocumentsDialog",
+        "freew/FreeW.App.Avalonia/ReviewCompareCombineDialogs.cs",
+        "modal",
+        [],
+        null,
+        "dialog",
+        ["initial", "populated", "validation-error"],
+        "compare-documents"));
 }
 
 static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureManifest wpf, CaptureManifest avalonia, string output)
@@ -189,19 +208,31 @@ static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureM
     var rows = new List<ComparisonRow>();
     var wpfByKey = wpf.Captures.ToDictionary(c => c.Key, StringComparer.OrdinalIgnoreCase);
     var avaloniaByKey = avalonia.Captures.ToDictionary(c => c.Key, StringComparer.OrdinalIgnoreCase);
-    foreach (var pairKey in inventory.Scenarios.Select(PairKey).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+    var wpfKeys = inventory.Scenarios.Where(s => s.Host == "wpf").Select(PairKey).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var avaloniaKeys = inventory.Scenarios.Where(s => s.Host == "avalonia").Select(PairKey).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    foreach (var pairKey in wpfKeys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
     {
         wpfByKey.TryGetValue($"wpf.{pairKey}", out var left);
         avaloniaByKey.TryGetValue($"avalonia.{pairKey}", out var right);
         if (left is null || right is null)
         {
-            rows.Add(new ComparisonRow(pairKey, "host-missing", "not-implemented-on-host", null, null, null, left is null ? "No WPF route/state row was generated." : "No Avalonia route/state row was generated."));
+            var routeExistsOnOtherHost = left is not null
+                ? inventory.Scenarios.Any(s => s.Host == "avalonia" && s.RouteId.Equals(left.RouteId, StringComparison.OrdinalIgnoreCase))
+                : inventory.Scenarios.Any(s => s.Host == "wpf" && s.RouteId.Equals(right!.RouteId, StringComparison.OrdinalIgnoreCase));
+            var classification = routeExistsOnOtherHost ? "state-not-applicable" : "product-parity-gap";
+            var note = left is null
+                ? "No WPF route/state row was generated."
+                : routeExistsOnOtherHost
+                    ? "The equivalent Avalonia route exists, but this WPF authority tab/state is not applicable on Avalonia."
+                    : "WPF authority route/state is absent on Avalonia pending the product parity slice.";
+            rows.Add(new ComparisonRow(pairKey, "host-missing", classification, null, null, null, note));
             continue;
         }
         if (left.Status != "captured" || right.Status != "captured")
         {
-            var limitation = left.Limitation ?? right.Limitation ?? "capture-hook-required";
-            rows.Add(new ComparisonRow(pairKey, left.Status + "/" + right.Status, limitation, null, null, null, left.Note ?? right.Note));
+            var pendingClassification = left.Limitation ?? right.Limitation
+                ?? (left.Status != "captured" ? "pending-wpf-factory" : "pending-avalonia-factory");
+            rows.Add(new ComparisonRow(pairKey, left.Status + "/" + right.Status, pendingClassification, null, null, null, left.Note ?? right.Note));
             continue;
         }
         var leftPath = ResolveCapturePath(wpf, left.FullPngPath);
@@ -215,8 +246,13 @@ static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureM
         Directory.CreateDirectory(Path.GetDirectoryName(heatmap)!);
         PixelMetrics.WriteHeatmap(a, b, heatmap);
         var semantic = SemanticDiff(left.Semantics, right.Semantics);
-        var classification = metrics.ChangedRatio > 0.03 ? "genuine-visual-mismatch" : semantic is not null ? "semantic-mismatch" : "pass";
-        rows.Add(new ComparisonRow(pairKey, "captured/captured", classification, metrics, semantic, Relative(output, heatmap), null));
+        var visualClassification = metrics.ChangedRatio > 0.03 ? "genuine-visual-mismatch" : semantic is not null ? "semantic-mismatch" : "pass";
+        rows.Add(new ComparisonRow(pairKey, "captured/captured", visualClassification, metrics, semantic, Relative(output, heatmap), null));
+    }
+    foreach (var pairKey in avaloniaKeys.Except(wpfKeys, StringComparer.OrdinalIgnoreCase).OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+    {
+        rows.Add(new ComparisonRow(pairKey, "avalonia-extension", "avalonia-extension", null, null, null,
+            "Avalonia-owned route/state; outside the WPF-authority pairing set."));
     }
     return rows;
 }

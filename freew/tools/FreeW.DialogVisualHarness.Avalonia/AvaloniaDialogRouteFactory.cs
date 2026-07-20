@@ -7,6 +7,7 @@ using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Ribbon;
 
 internal static class AvaloniaDialogRouteFactory
 {
@@ -27,6 +28,7 @@ internal static class AvaloniaDialogRouteFactory
         ["citation-source-picker"] = "CitationSourcePickerDialog",
         ["comment-list"] = "CommentListDialog",
         ["comment-reply"] = "CommentReplyDialog",
+        ["compare-documents"] = "CompareDocumentsDialog",
         ["cross-reference"] = "CrossReferenceDialog",
         ["customize-theme-colors"] = "CustomizeThemeColorsDialog",
         ["customize-theme-fonts"] = "CustomizeThemeFontsDialog",
@@ -95,6 +97,10 @@ internal static class AvaloniaDialogRouteFactory
 
         if (routeId == "notes-pane")
             return CreateType("NotesPane", state);
+        if (routeId == "cups-print")
+            return CreateCupsPrint();
+        if (routeId == "compare-documents")
+            return CreateCompareDocuments(state);
 
         if (!DialogTypes.TryGetValue(routeId, out var typeName))
             return null;
@@ -126,11 +132,25 @@ internal static class AvaloniaDialogRouteFactory
         var assembly = typeof(MainWindow).Assembly;
         var type = assembly.GetType("FreeW.App.Avalonia.Backstage.BackstageView", true)!;
         var callbacksType = assembly.GetType("FreeW.App.Avalonia.Backstage.BackstageCallbacks", true)!;
-        var callbackValues = callbacksType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).OrderByDescending(constructor => constructor.GetParameters().Length).First().GetParameters()
-            .Select(parameter => ValueFor(parameter.ParameterType, "open"))
+        var callbackConstructor = callbacksType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).OrderByDescending(candidate => candidate.GetParameters().Length).First();
+        var callbackValues = callbackConstructor.GetParameters()
+            .Select(parameter => BackstageCallbackValue(parameter.ParameterType, parameter.Name))
             .ToArray();
-        var callbacks = Activator.CreateInstance(callbacksType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, callbackValues, null)!;
+        var callbacks = callbackConstructor.Invoke(callbackValues);
         var paneType = assembly.GetType("FreeW.App.Avalonia.Backstage.BackstagePane", true)!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).OrderByDescending(candidate => candidate.GetParameters().Length).First();
+        if (routeId.Equals("backstage-print", StringComparison.OrdinalIgnoreCase))
+        {
+            // Build the real app-owned pane without activating the action-bearing Backstage entry.
+            // The entry invokes host print plumbing when activated; the pane itself is safe to render.
+            var home = Enum.Parse(paneType, "Home");
+            var backstage = (Window)constructor.Invoke([callbacks, home]);
+            var buildPrintPane = type.GetMethod("BuildPrintPane", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(type.FullName, "BuildPrintPane");
+            var control = (Control)buildPrintPane.Invoke(backstage, null)!;
+            backstage.Close();
+            return WrapControl(control);
+        }
         var pane = Enum.Parse(paneType, routeId switch
         {
             "backstage-open" => "Open",
@@ -142,7 +162,6 @@ internal static class AvaloniaDialogRouteFactory
             "backstage-account" => "Account",
             _ => "Home",
         });
-        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).OrderByDescending(candidate => candidate.GetParameters().Length).First();
         return (Window)constructor.Invoke([callbacks, pane]);
     }
 
@@ -172,6 +191,38 @@ internal static class AvaloniaDialogRouteFactory
         throw new InvalidOperationException($"No constructible Avalonia adapter for {typeName}: {last?.GetType().Name}: {last?.Message}", last);
     }
 
+    private static Window CreateCupsPrint()
+    {
+        var assembly = typeof(MainWindow).Assembly;
+        var type = assembly.GetType("FreeW.App.Avalonia.Printing.CupsPrintDialog", true)!;
+        var planType = typeof(Free.Shared.AppServices.Printing.PrinterDiscoveryResult);
+        var discovery = Activator.CreateInstance(
+            planType,
+            Free.Shared.AppServices.Printing.PrinterDiscoveryStatus.NoPrinters,
+            Array.Empty<Free.Shared.AppServices.Printing.PrinterInfo>(),
+            null,
+            "No printers are installed or available.")!;
+        var planner = typeof(FreeW.App.Presentation.Printing.PrintSelectionPlanner);
+        var plan = planner.GetMethod("Build")!.Invoke(null, [discovery, null])!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            .Single(candidate => candidate.GetParameters().Length == 1);
+        return (Window)constructor.Invoke([plan]);
+    }
+
+    private static Window CreateCompareDocuments(string state)
+    {
+        var assembly = typeof(MainWindow).Assembly;
+        var type = assembly.GetType("FreeW.App.Avalonia.CompareDocumentsDialog", true)!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            .OrderBy(candidate => candidate.GetParameters().Length)
+            .First();
+        var arguments = constructor.GetParameters().Select(parameter =>
+            parameter.ParameterType == typeof(string)
+                ? "C:\\Harness\\Original.docx"
+                : ValueFor(parameter.ParameterType, state)).ToArray();
+        return (Window)constructor.Invoke(arguments);
+    }
+
     private static Window WrapControl(Control control)
     {
         return new Window { Width = 560, Height = 600, Content = control, Title = control.GetType().Name };
@@ -192,8 +243,21 @@ internal static class AvaloniaDialogRouteFactory
         if (type == typeof(PageSettings)) return new PageSettings();
         if (type == typeof(TextDocument)) return new TextDocument();
         if (type == typeof(DocumentView)) return new DocumentView();
+        if (type.FullName == "Free.Shared.Opc.DocumentProperties") return Activator.CreateInstance(type);
+        if (type.Name == "ThesaurusEntry") return ThesaurusLookup.Instance.Lookup("good");
         if (type == typeof(DateTime)) return new DateTime(2025, 1, 1);
         if (type == typeof(CultureInfo)) return CultureInfo.CurrentCulture;
+        if (type.Name == "BackstageDirectPrintCapability")
+        {
+            var deferred = type.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Where(method => method.Name == "Deferred")
+                .OrderBy(method => method.GetParameters().Length)
+                .First();
+            var deferredArguments = deferred.GetParameters()
+                .Select(parameter => parameter.HasDefaultValue ? parameter.DefaultValue : null)
+                .ToArray();
+            return deferred.Invoke(null, deferredArguments);
+        }
         if (type.Name == "QuickPartLibrary") return type.GetMethod("LoadFromPath", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, [null]);
         if (type.Name == "SourceManagementSourceEntry")
         {
@@ -247,5 +311,20 @@ internal static class AvaloniaDialogRouteFactory
             ? Expression.Empty()
             : Expression.Constant(ValueFor(invoke.ReturnType, "open"), invoke.ReturnType);
         return Expression.Lambda(delegateType, body, parameters).Compile();
+    }
+
+    private static object? BackstageCallbackValue(Type type, string? name)
+    {
+        if (type == typeof(string))
+            return name switch
+            {
+                "DisplayName" => "Harness document",
+                _ => string.Empty,
+            };
+        if (type.Name == "BackstageDirectPrintCapability")
+            return ValueFor(type, "open");
+        if (typeof(Delegate).IsAssignableFrom(type))
+            return EmptyDelegate(type);
+        return ValueFor(type, "open");
     }
 }
