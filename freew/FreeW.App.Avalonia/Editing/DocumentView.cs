@@ -7675,6 +7675,16 @@ public sealed class DocumentView : Control
     public (int BlockIndex, int RunIndex, string Kind, Rect Rect)? SelectedFloatingInfo
         => _selectedFloating;
 
+    /// <summary>The currently selected floating image, or null when the active object is not an image.</summary>
+    public InlineImage? SelectedFloatingImage()
+    {
+        if (_selectedFloating is not { Kind: "Image" } selected)
+            return null;
+        return TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            ? run.Image
+            : null;
+    }
+
     /// <summary>Current floating-object multi-selection as model coordinates.</summary>
     public IReadOnlyList<(int BlockIndex, int RunIndex, string Kind)> SelectedFloatingObjects =>
         _selectedFloatingObjects.AsReadOnly();
@@ -7978,6 +7988,30 @@ public sealed class DocumentView : Control
         _bus.Execute(command);
         InvalidateLayoutAndVisual();
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Set crop fractions on the selected floating image through the shared undoable model command.
+    /// </summary>
+    public void SetSelectedImageCrop(double left, double right, double top, double bottom)
+    {
+        if (_selectedFloating is not { Kind: "Image" } selected)
+            return;
+        if (!TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.Image is not { IsFloating: true })
+        {
+            return;
+        }
+
+        _bus.Execute(new SetImageCropCommand(
+            selected.BlockIndex,
+            selected.RunIndex,
+            left,
+            right,
+            top,
+            bottom));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
     }
 
     /// <summary>
@@ -10863,6 +10897,33 @@ public sealed class DocumentView : Control
         table.Formatting = TableFormatting.Default with { Borders = true };
         _bus.Execute(new ReplaceBlocksCommand(block, 1, [table]));
         _cellCaret = (block, 0, 0, 0, 0);
+        _hfCaret = null;
+        _selectionAnchor = _caret = new DocPosition(block, 0);
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>True when the current editable caret is inside a table that can be converted to text.</summary>
+    public bool CanConvertTableToText =>
+        !IsEditingLocked
+        && _cellCaret is { } cellCaret
+        && cellCaret.TableBlock >= 0
+        && cellCaret.TableBlock < _doc.Blocks.Count
+        && _doc.Blocks[cellCaret.TableBlock] is Table;
+
+    /// <summary>
+    /// Replace the caret's table with delimiter-joined paragraphs through one undoable block command.
+    /// </summary>
+    public void ConvertTableToText(char delimiter)
+    {
+        if (!CanConvertTableToText || _cellCaret is not { } cellCaret)
+            return;
+
+        var block = cellCaret.TableBlock;
+        var table = (Table)_doc.Blocks[block];
+        var paragraphs = TextTableConvert.TableToText(table, delimiter);
+        _bus.Execute(new ReplaceBlocksCommand(block, 1, [.. paragraphs]));
+        _cellCaret = null;
         _hfCaret = null;
         _selectionAnchor = _caret = new DocPosition(block, 0);
         InvalidateLayoutAndVisual();

@@ -8612,16 +8612,9 @@ internal static class FreeWRibbonCommands
     // Semicolon. Returns the chosen delimiter character, or null if cancelled.
     private static class DelimiterDialog
     {
-        private sealed record Choice(string Label, char Delimiter);
-
         public static char? Ask(Window? owner, string title)
         {
-            var choices = new[]
-            {
-                new Choice("Tab", '\t'),
-                new Choice("Comma  ,", ','),
-                new Choice("Semicolon  ;", ';'),
-            };
+            var choices = TableTextConversionDialogPlanner.Choices;
 
             var list = new System.Windows.Controls.ListBox
             {
@@ -8631,7 +8624,7 @@ internal static class FreeWRibbonCommands
             };
             foreach (var choice in choices)
                 list.Items.Add(choice.Label);
-            list.SelectedIndex = 0;
+            list.SelectedIndex = TableTextConversionDialogPlanner.DefaultChoiceIndex;
 
             char? result = null;
             var dialog = new Window
@@ -8649,9 +8642,9 @@ internal static class FreeWRibbonCommands
             void Commit()
             {
                 var index = list.SelectedIndex;
-                if (index >= 0 && index < choices.Length)
+                if (TableTextConversionDialogPlanner.DelimiterAt(index) is { } delimiter)
                 {
-                    result = choices[index].Delimiter;
+                    result = delimiter;
                     dialog.DialogResult = true;
                 }
             }
@@ -8667,7 +8660,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Separate cells at:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = TableTextConversionDialogPlanner.PromptLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(list);
             panel.Children.Add(buttons);
             dialog.Content = panel;

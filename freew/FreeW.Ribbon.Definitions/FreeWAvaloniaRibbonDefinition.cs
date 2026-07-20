@@ -671,6 +671,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                 tab.Group("data", "Data", null, 95, g =>
                 {
                     g.Button("freew.text-to-table", "Text to Table");
+                    g.Button("freew.table-to-text", "Table to Text");
                 });
                 tab.Group("preview", "Preview", null, 90, g =>
                 {
@@ -1021,6 +1022,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Toggle("freew.table-repeat-header", "Repeat Header Row");
                         g.Button("freew.table-formula", "Formula");
                         g.Button("freew.sort", "Sort");
+                        g.Button("freew.table-to-text", "Convert to Text");
                     });
                 })
             // ── AV-PICTAB: Picture Format contextual tab (shown when a floating IMAGE is selected) ──
@@ -1085,6 +1087,13 @@ internal static class FreeWAvaloniaRibbonDefinition
                 new RibbonTabContext(capabilities.PictureContextKey, "Picture Tools", RibbonContextColor.Orange),
                 tab =>
                 {
+                    tab.Group("picture-adjust", "Adjust", null, 90, g =>
+                    {
+                        g.Button("freew.image-crop", "Crop", b => b with
+                        {
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Scale)
+                        });
+                    });
                     tab.Group("picture-arrange", "Arrange", null, 100, g =>
                     {
                         g.Dropdown("freew.image-position", "Position", BuildFloatingPositionMenu("image"));

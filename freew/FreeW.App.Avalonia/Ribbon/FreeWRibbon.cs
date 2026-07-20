@@ -257,5 +257,9 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>AV-MAIL: Rules &gt; Ask / Set Bookmark name-value prompt. Optional; registry no-ops when null.</summary>
     Func<string, string, MailMergeRuleNameValueDialogResult?>? AskMergeRuleNameValue = null,
     /// <summary>Insert &gt; Page Number &gt; Format Page Numbers. Optional; selected values still apply through the editor.</summary>
-    Action? OpenPageNumberFormatDialog = null);
+    Action? OpenPageNumberFormatDialog = null,
+    /// <summary>Picture Format &gt; Crop. Optional host callback that owns the modal crop workflow.</summary>
+    Action? OpenImageCropDialog = null,
+    /// <summary>Table Layout &gt; Convert to Text. Optional host callback that owns delimiter selection.</summary>
+    Action? OpenTableToTextDialog = null);
 
