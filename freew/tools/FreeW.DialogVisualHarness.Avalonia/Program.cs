@@ -64,10 +64,17 @@ static Capture? CaptureOne(Scenario scenario, string output)
     dialog.UpdateLayout();
     Populate(dialog, scenario.State);
     Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
-    var frame = dialog.CaptureRenderedFrame();
-    if (frame is null) { dialog.Close(); return null; }
-    var bytes = WriteableBitmapToPng(frame);
-    if (bytes.Length == 0) { dialog.Close(); return null; }
+    using var bitmap = new RenderTargetBitmap(new PixelSize(560, 600), new Vector(96, 96));
+    bitmap.Render(dialog);
+    using var stream = new MemoryStream();
+    bitmap.Save(stream);
+    var bytes = stream.ToArray();
+    if (bytes.Length == 0)
+    {
+        Console.Error.WriteLine($"avalonia {scenario.Id}: RenderTargetBitmap produced zero bytes");
+        dialog.Close();
+        return Unsupported(scenario, "Avalonia headless renderer returned zero-byte PNG output on this machine; no placeholder image was substituted.", "avalonia-headless-render-unavailable");
+    }
     var path = Path.Combine(output, "full", "avalonia", Safe(scenario.Id) + ".png");
     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
     File.WriteAllBytes(path, bytes);
@@ -121,7 +128,7 @@ static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)
     return data?.ToArray() ?? [];
 }
 
-static Capture Unsupported(Scenario scenario, string note) => new(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "unsupported", "", 0, 0, 0, 0, 96, 96, new Rect(0, 0, 0, 0), new Semantics(null, null, null, [], []), scenario.Limitation, note);
+static Capture Unsupported(Scenario scenario, string note, string? limitation = null) => new(scenario.Id, "avalonia", scenario.RouteId, scenario.State, "unsupported", "", 0, 0, 0, 0, 96, 96, new Rect(0, 0, 0, 0), new Semantics(null, null, null, [], []), limitation ?? scenario.Limitation, note);
 static IEnumerable<T> FindVisualChildren<T>(Visual root) where T : Visual
 {
     if (root is T value) yield return value;

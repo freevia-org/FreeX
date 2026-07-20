@@ -47,9 +47,12 @@ static bool TryCapture(Scenario scenario, string output, out Capture capture)
     Window? dialog = null;
     try
     {
+        owner.Show();
         dialog = CreateDialog(scenario.RouteId, owner);
         if (dialog is null) return false;
-        owner.Show();
+        dialog.Width = 560;
+        dialog.Height = 600;
+        dialog.SizeToContent = SizeToContent.Manual;
         dialog.Show();
         dialog.UpdateLayout();
         if (dialog.ActualWidth < 1 || dialog.ActualHeight < 1) return false;
@@ -71,7 +74,7 @@ static bool TryCapture(Scenario scenario, string output, out Capture capture)
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"wpf {scenario.Id}: {ex.GetType().Name}: {ex.Message}");
+        Console.Error.WriteLine($"wpf {scenario.Id}: {ex}");
         return false;
     }
     finally

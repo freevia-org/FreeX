@@ -138,8 +138,9 @@ static RouteInventory BuildInventory(string root)
             var host = path.Contains("FreeW.App.Avalonia", StringComparison.OrdinalIgnoreCase) ? "avalonia" : "wpf";
             var routeId = Kebab(typeName.EndsWith("Dialog", StringComparison.Ordinal) ? typeName[..^6] : typeName);
             if (routes.Any(r => r.Host == host && r.RouteId == routeId)) continue;
-            var tabs = Regex.Matches(text, "(?:Header\\s*=\\s*|Label\\s*=\\s*)[\\\"'](?<tab>[^\\\"']+)[\\\"']")
-                .Select(m => m.Groups["tab"].Value).Distinct(StringComparer.OrdinalIgnoreCase).Take(16).ToArray();
+            var discoveredTabs = Regex.Matches(text, "(?:Header\\s*=\\s*|Label\\s*=\\s*)[\\\"'](?<tab>[^\\\"']+)[\\\"']")
+                .Select(m => m.Groups["tab"].Value);
+            var tabs = (KnownTabs(routeId).Concat(discoveredTabs).Distinct(StringComparer.OrdinalIgnoreCase).Take(16)).ToArray();
             var modalMode = text.Contains("ShowDialog", StringComparison.OrdinalIgnoreCase) || text.Contains("modal", StringComparison.OrdinalIgnoreCase)
                 ? "modal" : text.Contains("Show()", StringComparison.Ordinal) || text.Contains("modeless", StringComparison.OrdinalIgnoreCase)
                     ? "modeless" : "modal-or-modeless";
@@ -175,19 +176,19 @@ static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureM
     var rows = new List<ComparisonRow>();
     var wpfByKey = wpf.Captures.ToDictionary(c => c.Key, StringComparer.OrdinalIgnoreCase);
     var avaloniaByKey = avalonia.Captures.ToDictionary(c => c.Key, StringComparer.OrdinalIgnoreCase);
-    foreach (var scenario in inventory.Scenarios)
+    foreach (var pairKey in inventory.Scenarios.Select(PairKey).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
     {
-        wpfByKey.TryGetValue(scenario.Id, out var left);
-        avaloniaByKey.TryGetValue(scenario.Id, out var right);
+        wpfByKey.TryGetValue($"wpf.{pairKey}", out var left);
+        avaloniaByKey.TryGetValue($"avalonia.{pairKey}", out var right);
         if (left is null || right is null)
         {
-            rows.Add(new ComparisonRow(scenario.Id, "not-captured", "capture-hook-required", null, null, null, "Both host adapters must emit a row before visual comparison is claimed."));
+            rows.Add(new ComparisonRow(pairKey, "host-missing", "not-implemented-on-host", null, null, null, left is null ? "No WPF route/state row was generated." : "No Avalonia route/state row was generated."));
             continue;
         }
         if (left.Status != "captured" || right.Status != "captured")
         {
             var limitation = left.Limitation ?? right.Limitation ?? "capture-hook-required";
-            rows.Add(new ComparisonRow(scenario.Id, left.Status + "/" + right.Status, limitation, null, null, null, left.Note ?? right.Note));
+            rows.Add(new ComparisonRow(pairKey, left.Status + "/" + right.Status, limitation, null, null, null, left.Note ?? right.Note));
             continue;
         }
         var leftPath = ResolveCapturePath(wpf, left.FullPngPath);
@@ -197,18 +198,24 @@ static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureM
         using var a = DecodeAndScale(leftTarget, left.LogicalWidth, left.LogicalHeight);
         using var b = DecodeAndScale(rightTarget, right.LogicalWidth, right.LogicalHeight);
         var metrics = PixelMetrics.Compute(a, b);
-        var heatmap = Path.Combine(output, "heatmaps", Safe(scenario.Id) + ".png");
+        var heatmap = Path.Combine(output, "heatmaps", Safe(pairKey) + ".png");
         Directory.CreateDirectory(Path.GetDirectoryName(heatmap)!);
         PixelMetrics.WriteHeatmap(a, b, heatmap);
         var semantic = SemanticDiff(left.Semantics, right.Semantics);
         var classification = metrics.ChangedRatio > 0.03 ? "genuine-visual-mismatch" : semantic is not null ? "semantic-mismatch" : "pass";
-        rows.Add(new ComparisonRow(scenario.Id, "captured/captured", classification, metrics, semantic, Relative(output, heatmap), null));
+        rows.Add(new ComparisonRow(pairKey, "captured/captured", classification, metrics, semantic, Relative(output, heatmap), null));
     }
     return rows;
 }
 
 static string ResolveCapturePath(CaptureManifest manifest, string path) =>
     Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(manifest.CaptureRoot, path.Replace('/', Path.DirectorySeparatorChar)));
+
+static string PairKey(Scenario scenario)
+{
+    var separator = scenario.Id.IndexOf('.');
+    return separator >= 0 ? scenario.Id[(separator + 1)..] : scenario.Id;
+}
 
 static string? SemanticDiff(Semantics left, Semantics right)
 {
@@ -250,8 +257,18 @@ static T Read<T>(string path) => JsonSerializer.Deserialize<T>(File.ReadAllText(
 static string Required(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : throw new ArgumentException($"Missing {option}."); }
 static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
 static string Safe(string value) => Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
-static string Kebab(string value) => Regex.Replace(value.Trim(), "(?<!^)([A-Z])", "-$1").Replace(" ", "-").Replace("_", "-").ToLowerInvariant();
+static string Kebab(string value)
+{
+    var separated = Regex.Replace(value.Trim(), "([a-z0-9])([A-Z])", "$1-$2");
+    return Regex.Replace(separated, "[^A-Za-z0-9]+", "-").Trim('-').ToLowerInvariant();
+}
 static string StateDescription(string state) => state switch { "initial" => "Default constructor state with initial keyboard focus.", "populated" => "Representative populated fields, selections, and checked options.", _ => "Representative validation or error state after invalid input." };
+static IReadOnlyList<string> KnownTabs(string routeId) => routeId switch
+{
+    "options" => ["General", "AutoCorrect", "AutoFormat As You Type"],
+    "page-setup" => ["Margins", "Paper", "Layout"],
+    _ => []
+};
 static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
 static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 
