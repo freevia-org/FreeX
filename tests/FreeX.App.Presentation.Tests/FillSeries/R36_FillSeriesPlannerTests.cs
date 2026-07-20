@@ -230,13 +230,18 @@ public sealed class R36_FillSeriesPlannerTests
     [Fact]
     public void AutofillCommand_TryCreateAutoFillTextSeries_WrapsACustomListCaseInsensitively()
     {
+        // Matching stays case-insensitive: the all-lowercase seed "east" still matches the
+        // list's "East" and wraps West -> North. But Excel reproduces the seed's own case
+        // STYLE in the generated series (an all-lowercase seed continues in lowercase) rather
+        // than emitting the list's canonical Title Case verbatim -- the same uniform autofill
+        // case-reproduction Excel applies to built-in day/month lists (R55 fill-series-5-2 fix).
         var series = AutofillCommand.TryCreateAutoFillTextSeries(
             ["east"],
             [["North", "South", "East", "West"]]);
 
         series.Should().NotBeNull();
-        series!(1).Should().Be(new TextValue("West"));
-        series(2).Should().Be(new TextValue("North"));
+        series!(1).Should().Be(new TextValue("west"));
+        series(2).Should().Be(new TextValue("north"));
     }
 
     private sealed class TestCommandContext(Workbook workbook) : ICommandContext
