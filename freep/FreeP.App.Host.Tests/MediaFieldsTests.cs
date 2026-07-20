@@ -728,7 +728,7 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
-    public void Media_PowerPointNativeTtmlCaptionPackage_RoundTripsAsUnsupportedTranscriptMetadata()
+    public void Media_PowerPointNativeTtmlCaptionPackage_RoundTripsAndPlansTranscriptMetadata()
     {
         var pres = new Presentation();
         var slide = new Slide();
@@ -800,8 +800,11 @@ public sealed class MediaFieldsTests
             .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
                 descriptor.Source == fixture.PackagePath &&
                 descriptor.ContentType == captionContentType &&
-                descriptor.Status == PresentationMediaTranscriptTrackStatus.UnsupportedFormat &&
-                descriptor.CueCount == 0);
+                descriptor.Status == PresentationMediaTranscriptTrackStatus.Available &&
+                descriptor.CueCount == 1 &&
+                descriptor.Cues[0].Text == "TTML caption text" &&
+                descriptor.Cues[0].StartTime == TimeSpan.Zero &&
+                descriptor.Cues[0].EndTime == TimeSpan.FromSeconds(1));
 
         loaded.Slides[0].Shapes.Add(new SlideShape
         {
@@ -864,8 +867,11 @@ public sealed class MediaFieldsTests
         transcript.Tracks.Should().ContainSingle()
             .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
                 descriptor.Source == fixture.PackagePath &&
-                descriptor.Status == PresentationMediaTranscriptTrackStatus.UnsupportedFormat &&
-                descriptor.CueCount == 0);
+                descriptor.Status == PresentationMediaTranscriptTrackStatus.Available &&
+                descriptor.CueCount == 1 &&
+                descriptor.Cues[0].Text == "TTML caption text" &&
+                descriptor.Cues[0].StartTime == TimeSpan.Zero &&
+                descriptor.Cues[0].EndTime == TimeSpan.FromSeconds(1));
     }
 
     [Fact]
