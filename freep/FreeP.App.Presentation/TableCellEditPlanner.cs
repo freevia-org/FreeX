@@ -1136,6 +1136,7 @@ public static class TableCellEditPlanner
         Text = text,
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
+        BaselineOffset = source.BaselineOffset,
         Bold = source.Bold,
         Italic = source.Italic,
         BoldSet = source.BoldSet,
@@ -1156,6 +1157,7 @@ public static class TableCellEditPlanner
     private static bool RunFormatEquals(Run a, Run b) =>
         a.FontFamily == b.FontFamily
         && a.FontSizePt == b.FontSizePt
+        && a.BaselineOffset == b.BaselineOffset
         && a.Bold == b.Bold
         && a.Italic == b.Italic
         && a.BoldSet == b.BoldSet

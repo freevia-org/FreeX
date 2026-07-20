@@ -33,6 +33,8 @@ public sealed class PptxPackageRetentionTests
         "20-columns-gradoutline.pptx",
         "21-comments-notes.pptx",
         "22-chart-baseline-depth.pptx",
+        "23-run-baseline.pptx",
+        "24-run-baseline-wrap.pptx",
     ];
 
     private static readonly string[] WriterOwnedPackagePartPaths =

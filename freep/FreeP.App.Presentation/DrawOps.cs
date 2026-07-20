@@ -61,6 +61,7 @@ public sealed class ResolvedRun
     public string Text { get; init; } = string.Empty;
     public string FontFamily { get; init; } = "Calibri";
     public double FontSizePt { get; init; } = 18.0;
+    public int? BaselineOffset { get; init; }
     public bool Bold { get; init; }
     public bool Italic { get; init; }
     public bool Underline { get; init; }

@@ -1096,6 +1096,16 @@ internal static class PptxChartReader
     {
         axis.Delete = axEl.Element(C + "delete")?.Attribute("val")?.Value is "1" or "true";
         axis.HasMajorGridlines = axEl.Element(C + "majorGridlines") is not null;
+        axis.MajorTickMark = ParseTickMark(axEl.Element(C + "majorTickMark"));
+        axis.MinorTickMark = ParseTickMark(axEl.Element(C + "minorTickMark"));
+        axis.TickLabelPosition = ParseTickLabelPosition(axEl.Element(C + "tickLblPos"));
+        axis.LabelOffsetPercent = ParseNullableInt(axEl.Element(C + "lblOffset")?.Attribute("val")?.Value);
+        axis.NoMultiLevelLabels = ParseNullableBoolElement(axEl.Element(C + "noMultiLvlLbl"));
+        axis.CrossBetween = ParseCrossBetween(axEl.Element(C + "crossBetween"));
+        axis.AutoCrossing = ParseNullableBoolElement(axEl.Element(C + "auto"));
+        axis.LabelAlignment = ParseLabelAlignment(axEl.Element(C + "lblAlgn"));
+        axis.Crosses = ParseAxisCrossing(axEl.Element(C + "crosses"));
+        axis.CrossesAt = ParseDouble(axEl.Element(C + "crossesAt")?.Attribute("val")?.Value);
         axis.Title = ReadTitle(axEl.Element(C + "title"));
 
         var numFmt = axEl.Element(C + "numFmt");
@@ -1119,7 +1129,56 @@ internal static class PptxChartReader
                 double.TryParse(maxStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var maxV))
                 axis.Max = maxV;
         }
+
+        axis.MajorUnit = ParseDouble(axEl.Element(C + "majorUnit")?.Attribute("val")?.Value);
+        axis.MinorUnit = ParseDouble(axEl.Element(C + "minorUnit")?.Attribute("val")?.Value);
     }
+
+    private static ChartTickMark? ParseTickMark(XElement? element) =>
+        element?.Attribute("val")?.Value switch
+        {
+            "none"  => ChartTickMark.None,
+            "cross" => ChartTickMark.Cross,
+            "in"    => ChartTickMark.In,
+            "out"   => ChartTickMark.Out,
+            _       => null
+        };
+
+    private static ChartTickLabelPosition? ParseTickLabelPosition(XElement? element) =>
+        element?.Attribute("val")?.Value switch
+        {
+            "none"   => ChartTickLabelPosition.None,
+            "low"    => ChartTickLabelPosition.Low,
+            "high"   => ChartTickLabelPosition.High,
+            "nextTo" => ChartTickLabelPosition.NextTo,
+            _        => null
+        };
+
+    private static ChartCrossBetween? ParseCrossBetween(XElement? element) =>
+        element?.Attribute("val")?.Value switch
+        {
+            "between" => ChartCrossBetween.Between,
+            "midCat"  => ChartCrossBetween.MidCat,
+            _         => null
+        };
+
+    private static ChartLabelAlignment? ParseLabelAlignment(XElement? element) =>
+        element?.Attribute("val")?.Value switch
+        {
+            "l"   => ChartLabelAlignment.Left,
+            "ctr" => ChartLabelAlignment.Center,
+            "r"   => ChartLabelAlignment.Right,
+            _     => null
+        };
+
+    private static ChartAxisCrossing? ParseAxisCrossing(XElement? element) =>
+        element?.Attribute("val")?.Value switch
+        {
+            "autoZero" => ChartAxisCrossing.AutoZero,
+            "min"      => ChartAxisCrossing.Min,
+            "max"      => ChartAxisCrossing.Max,
+            _          => null
+        };
 
     // ── Data-label parsing ─────────────────────────────────────────────────────
 
