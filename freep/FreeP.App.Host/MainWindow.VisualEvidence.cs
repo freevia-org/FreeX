@@ -103,7 +103,7 @@ public sealed partial class MainWindow
             "accessibility.media-caption-pane" => _mediaCaptionPaneHost,
             "context.smartart-text-pane" => _smartArtTextPaneHost,
             "animations.animation-pane" => _animPaneHost,
-            "file.print-options" => _backstage,
+            "file.print-options" => _backstage.CurrentPaneContent ?? _backstage,
             "insert.table-picker" => _tablePickerHost,
             "design.layout-picker" => _layoutPickerHost,
             _ => this,

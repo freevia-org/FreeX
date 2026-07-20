@@ -16,6 +16,8 @@ public sealed record DialogPaneVisualEvidenceScenario(
     bool CompareButtons = true,
     bool CompareEnabledState = true);
 
+public sealed record DialogPaneVisualEvidencePixelTarget(double Width, double Height);
+
 public static class DialogPaneVisualEvidenceCatalog
 {
     public const int LogicalShellWidth = 1280;
@@ -59,6 +61,25 @@ public static class DialogPaneVisualEvidenceCatalog
 
     public static DialogPaneVisualEvidenceScenario Get(string id) =>
         All.Single(scenario => StringComparer.Ordinal.Equals(scenario.Id, id));
+
+    public static DialogPaneVisualEvidencePixelTarget? PixelTargetFor(DialogPaneVisualEvidenceScenario scenario) =>
+        scenario.RouteId switch
+        {
+            "startup.slide-pane" => new(180, 578),
+            "startup.notes-pane" => new(1100, 60),
+            "review.comments-pane" => new(1100, 100),
+            "review.accessibility-pane" => new(320, 578),
+            "review.alt-text-pane" => new(292, 578),
+            "review.reading-order-pane" => new(320, 578),
+            "review.proofing-pane" => new(320, 578),
+            "accessibility.media-caption-pane" => new(320, 578),
+            "context.smartart-text-pane" => new(320, 578),
+            "animations.animation-pane" => new(240, 578),
+            "file.print-options" => new(1010, 578),
+            "insert.table-picker" => new(1100, 192),
+            "design.layout-picker" => new(1100, 181),
+            _ => null,
+        };
 
     private static DialogPaneVisualEvidenceScenario Dialog(string routeId, string stateId) =>
         new($"{routeId}.{stateId}", routeId, stateId, DialogPaneVisualEvidenceSurfaceKind.Dialog);
@@ -108,7 +129,13 @@ public sealed record DialogPaneVisualEvidenceCapture(
     IReadOnlyList<DialogPaneVisualEvidenceButton> Buttons,
     IReadOnlyList<DialogPaneVisualEvidenceControlState> Controls,
     IReadOnlyList<DialogPaneVisualEvidenceAssertion> Assertions,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    double SourceDpiX = DialogPaneVisualEvidenceCatalog.TargetDpi,
+    double SourceDpiY = DialogPaneVisualEvidenceCatalog.TargetDpi,
+    string RasterNormalization = "logical-96-dpi",
+    string PixelComparisonImagePath = "",
+    double PixelComparisonLogicalWidth = 0,
+    double PixelComparisonLogicalHeight = 0);
 
 public sealed record DialogPaneVisualEvidenceHostManifest(
     int SchemaVersion,
@@ -128,6 +155,33 @@ public enum DialogPaneVisualEvidenceClassification
     Limitation,
 }
 
+public sealed record DialogPaneVisualEvidencePixelMetrics(
+    int WpfPixelWidth,
+    int WpfPixelHeight,
+    int AvaloniaPixelWidth,
+    int AvaloniaPixelHeight,
+    int NormalizedWidth,
+    int NormalizedHeight,
+    long ComparedPixelCount,
+    long ForegroundUnionPixelCount,
+    long ChangedPixelCount,
+    long ForegroundChangedPixelCount,
+    double ChangedPixelRatio,
+    double ForegroundChangedPixelRatio,
+    double MeanChannelDelta,
+    int MaxChannelDelta,
+    int ChangedChannelThreshold,
+    double MaximumChangedPixelRatio,
+    double MaximumForegroundChangedPixelRatio,
+    double MaximumMeanChannelDelta,
+    bool PixelDimensionsMatch,
+    bool ThresholdPassed,
+    string BackgroundHandling,
+    string HeatmapPath,
+    string WpfImageSha256,
+    string AvaloniaImageSha256,
+    string HeatmapSha256);
+
 public sealed record DialogPaneVisualEvidenceComparison(
     string ScenarioId,
     string RouteId,
@@ -141,7 +195,9 @@ public sealed record DialogPaneVisualEvidenceComparison(
     bool EnabledStateMatches,
     bool WpfNonblank,
     bool AvaloniaNonblank,
-    IReadOnlyList<string> Details);
+    IReadOnlyList<string> Details,
+    DialogPaneVisualEvidencePixelMetrics? PixelMetrics = null,
+    DialogPaneVisualEvidencePixelMetrics? ShellContextPixelMetrics = null);
 
 public static class DialogPaneVisualEvidenceComparer
 {

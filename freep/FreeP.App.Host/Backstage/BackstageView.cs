@@ -57,6 +57,8 @@ internal sealed class BackstageView : UserControl
 
     internal void Show(string paneLabelOrAutomationId) => _backstage.Show(paneLabelOrAutomationId);
 
+    internal UIElement? CurrentPaneContent => _backstage.Frame.CurrentPaneContent;
+
     public void Hide() => _backstage.Hide();
 
     private SisterBackstageEntrySpec BuildEntries(SisterBackstageHostController backstage)

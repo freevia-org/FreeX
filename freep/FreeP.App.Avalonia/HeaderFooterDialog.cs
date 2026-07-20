@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
@@ -39,7 +41,7 @@ internal sealed class HeaderFooterDialog : Window
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = Brushes.White;
 
         _dateTimeCheck = new CheckBox { Content = "Date and time", IsChecked = defaults.ShowDateTime };
         _dateFormatCombo = new ComboBox
@@ -49,32 +51,32 @@ internal sealed class HeaderFooterDialog : Window
                 StringComparer.Ordinal.Equals(option.FieldType, defaults.DateTimeFieldType)) ??
                 HeaderFooterCommandPlanner.DateFormatOptions[0],
             MinWidth = 260,
-            Margin = new Thickness(20, 2, 0, 2),
+            Margin = new Thickness(20, 0, 0, 4),
         };
         _fixedDateCheck = new CheckBox
         {
             Content = "Fixed",
             IsChecked = defaults.DateTimeMode == HeaderFooterDateTimeMode.Fixed,
-            Margin = new Thickness(20, 0, 0, 2),
+            Margin = new Thickness(20, 0, 0, 4),
         };
         _fixedDateBox = new TextBox
         {
             Text = defaults.FixedDateTimeText,
             MinWidth = 240,
-            Margin = new Thickness(40, 0, 0, 4),
+            Margin = new Thickness(40, 0, 0, 8),
         };
         _footerCheck = new CheckBox { Content = "Footer", IsChecked = defaults.ShowFooter };
         _footerBox = new TextBox
         {
             Text = defaults.FooterText,
             MinWidth = 260,
-            Margin = new Thickness(20, 2, 0, 4),
+            Margin = new Thickness(20, 0, 0, 8),
         };
         _slideNumberCheck = new CheckBox
         {
             Content = "Slide number",
             IsChecked = defaults.ShowSlideNumber,
-            Margin = new Thickness(0, 0, 0, 4),
+            Margin = new Thickness(0, 0, 0, 8),
         };
         _dontShowOnTitleSlideCheck = new CheckBox
         {
@@ -84,6 +86,7 @@ internal sealed class HeaderFooterDialog : Window
         };
 
         ApplyChrome();
+        ApplyDisabledChrome();
         _footerCheck.IsCheckedChanged += (_, _) => UpdateEnabledState();
         _dateTimeCheck.IsCheckedChanged += (_, _) => UpdateEnabledState();
         _fixedDateCheck.IsCheckedChanged += (_, _) => UpdateEnabledState();
@@ -168,9 +171,11 @@ internal sealed class HeaderFooterDialog : Window
         var apply = BuildButton("Apply", () => Apply(HeaderFooterApplyScope.CurrentSlide), isDefault: true);
         var applyAll = BuildButton("Apply to All", () => Apply(HeaderFooterApplyScope.AllSlides));
         var cancel = BuildButton("Cancel", () => Close(false), isCancel: true);
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
+        var actions = AvaloniaCompactDialogChrome.CreateActionRow(
             [apply, applyAll, cancel],
-            new Thickness(0, 2, 0, 0)));
+            new Thickness(0));
+        actions.Spacing = 6;
+        panel.Children.Add(actions);
         return panel;
     }
 
@@ -182,6 +187,8 @@ internal sealed class HeaderFooterDialog : Window
         AvaloniaCompactDialogChrome.ApplyTextBox(_fixedDateBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCheckBox(_footerCheck, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_footerBox, DialogChromeStyle);
+        _fixedDateBox.Background = Brushes.White;
+        _footerBox.Background = Brushes.White;
         AvaloniaCompactDialogChrome.ApplyCheckBox(_slideNumberCheck, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCheckBox(_dontShowOnTitleSlideCheck, DialogChromeStyle);
         foreach (var checkBox in new[]
@@ -200,6 +207,19 @@ internal sealed class HeaderFooterDialog : Window
         }
     }
 
+    private void ApplyDisabledChrome()
+    {
+        var disabledTextBox = new Style(x => x.OfType<TextBox>().Class(":disabled").Template().OfType<Border>())
+        {
+            Setters =
+            {
+                new Setter(Border.BackgroundProperty, Brushes.White),
+                new Setter(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8))),
+            },
+        };
+        Styles.Add(disabledTextBox);
+    }
+
     private static Button BuildButton(
         string text,
         Action action,
@@ -207,7 +227,7 @@ internal sealed class HeaderFooterDialog : Window
         bool isCancel = false)
     {
         var button = new Button { Content = text, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 82, isDefault: isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 76, isDefault: isDefault);
         button.Click += (_, _) => action();
         return button;
     }

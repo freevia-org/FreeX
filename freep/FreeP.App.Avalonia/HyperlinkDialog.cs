@@ -50,36 +50,36 @@ internal sealed class HyperlinkDialog : Window
         Height = 216;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF7));
+        Background = Brushes.White;
 
         _urlRadio = new RadioButton
         {
-            Content = "Web address",
+            Content = "Web address:",
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 4),
         };
         _slideRadio = new RadioButton
         {
-            Content = "Slide in this presentation",
+            Content = "Slide in this presentation:",
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 8),
         };
         _urlBox = new TextBox
         {
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, 4),
             MinWidth = 260,
             PlaceholderText = "https://example.com",
         };
         _slideCombo = new ComboBox
         {
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, 4),
             MinWidth = 260,
             ItemsSource = request.SlideOptions,
             SelectedIndex = request.SelectedSlideIndex,
         };
         _tooltipBox = new TextBox
         {
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, 8),
             MinWidth = 260,
         };
         _validationText = new TextBlock
@@ -90,6 +90,13 @@ internal sealed class HyperlinkDialog : Window
         };
         AvaloniaCompactDialogChrome.ApplyRadioButton(_urlRadio, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyRadioButton(_slideRadio, DialogChromeStyle);
+        foreach (var radio in new[] { _urlRadio, _slideRadio })
+        {
+            radio.Height = 20;
+            radio.MinHeight = 20;
+            radio.MaxHeight = 20;
+            radio.Padding = new Thickness(0);
+        }
         AvaloniaCompactDialogChrome.ApplyTextBox(_urlBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_slideCombo, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_tooltipBox, DialogChromeStyle);
@@ -115,7 +122,7 @@ internal sealed class HyperlinkDialog : Window
     {
         var grid = new Grid
         {
-            Margin = new Thickness(14),
+            Margin = new Thickness(12),
             RowDefinitions =
             {
                 new RowDefinition { Height = GridLength.Auto },
@@ -127,7 +134,7 @@ internal sealed class HyperlinkDialog : Window
             },
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = new GridLength(96) },
+                new ColumnDefinition { Width = new GridLength(90) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
         };
@@ -184,7 +191,7 @@ internal sealed class HyperlinkDialog : Window
         {
             Text = text,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 6),
+            Margin = new Thickness(0, 0, 6, 4),
         };
         Grid.SetRow(label, row);
         Grid.SetColumn(label, 0);

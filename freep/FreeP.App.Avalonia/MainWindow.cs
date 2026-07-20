@@ -120,10 +120,11 @@ public sealed partial class MainWindow : Window
     private Border _layoutPickerHost = null!;
     private StackPanel _layoutPickerPanel = null!;
     private Border _tablePickerHost = null!;
-    private WrapPanel _tablePickerPanel = null!;
+    private UniformGrid _tablePickerPanel = null!;
     private SlideSizeDialog? _slideSizeDialog;
     private HeaderFooterDialog? _headerFooterDialog;
     private Border _reviewCommentsPaneHost = null!;
+    private ScrollViewer _reviewCommentsPaneScrollViewer = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
     private readonly PresentationReviewWorkflowSession _reviewWorkflowSession;
     private Border _altTextPaneHost = null!;
@@ -495,6 +496,7 @@ public sealed partial class MainWindow : Window
         _slidePaneList = new ListBox
         {
             Width       = 180,
+            MaxHeight   = 520,
             Padding     = new Thickness(4),
             Background  = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
         };
@@ -678,9 +680,10 @@ public sealed partial class MainWindow : Window
                 Content                       = _layoutPickerPanel,
             },
         };
-        _tablePickerPanel = new WrapPanel
+        _tablePickerPanel = new UniformGrid
         {
-            Orientation = Orientation.Horizontal,
+            Rows = TableInsertionPickerPlanner.DefaultMaxRows,
+            Columns = TableInsertionPickerPlanner.DefaultMaxColumns,
             Margin = new Thickness(8),
         };
         _tablePickerHost = new Border
@@ -709,16 +712,16 @@ public sealed partial class MainWindow : Window
         _reviewCommentsPanePanel = new StackPanel
         {
             Orientation = Orientation.Vertical,
-            Spacing     = 6,
+            Spacing     = 0,
         };
         _reviewCommentsPaneHost = new Border
         {
-            Background      = Brushes.White,
+            Background      = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xE8)),
             BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
             BorderThickness = new Thickness(0, 1, 0, 0),
-            MaxHeight       = 180,
+            MaxHeight       = 100,
             IsVisible       = false,
-            Child           = new ScrollViewer
+            Child           = _reviewCommentsPaneScrollViewer = new ScrollViewer
             {
                 VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
@@ -750,8 +753,9 @@ public sealed partial class MainWindow : Window
         var slidePaneHost = new Grid
         {
             Width = 180,
+            Background = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
         };
-        slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var slidePaneListHost = new Grid();
@@ -805,51 +809,46 @@ public sealed partial class MainWindow : Window
         _printOptionsPaneHeading = new TextBlock
         {
             Text = "Print",
-            FontSize = 15,
-            FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(12, 12, 12, 4),
+            FontSize = 26,
+            FontWeight = FontWeight.Light,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Margin = new Thickness(0, 0, 0, 18),
         };
         _printOptionsPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
-            Margin = new Thickness(12, 0, 12, 8),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
+            Margin = new Thickness(0, 0, 0, 16),
         };
         _printOptionsPaneRowsPanel = new StackPanel
         {
             Orientation = Orientation.Vertical,
         };
 
-        var header = new StackPanel
+        var content = new StackPanel
         {
             Orientation = Orientation.Vertical,
+            MaxWidth = 760,
+            HorizontalAlignment = HorizontalAlignment.Left,
             Children =
             {
                 _printOptionsPaneHeading,
                 _printOptionsPaneMessage,
+                _printOptionsPaneRowsPanel,
             },
         };
-        DockPanel.SetDock(header, Dock.Top);
 
         return new Border
         {
-            Width = 320,
+            Width = 1010,
             IsVisible = false,
             Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
-            BorderThickness = new Thickness(1, 0, 0, 0),
-            Child = new DockPanel
+            BorderThickness = new Thickness(0),
+            Child = new ScrollViewer
             {
-                Children =
-                {
-                    header,
-                    new ScrollViewer
-                    {
-                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                        Content = _printOptionsPaneRowsPanel,
-                    },
-                },
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = content,
             },
         };
     }
@@ -1286,6 +1285,7 @@ public sealed partial class MainWindow : Window
         };
         _readingOrderPaneMessage = new TextBlock
         {
+            FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
             Margin = new Thickness(12, 0, 12, 8),
@@ -1293,12 +1293,14 @@ public sealed partial class MainWindow : Window
         _readingOrderMoveEarlierButton = new Button
         {
             MinWidth = 94,
+            FontSize = 12,
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _readingOrderMoveLaterButton = new Button
         {
             MinWidth = 84,
+            FontSize = 12,
             Padding = new Thickness(10, 4),
         };
         _readingOrderMoveEarlierButton.Click += (_, _) => ApplyReadingOrderMoveEarlier();
@@ -1357,27 +1359,25 @@ public sealed partial class MainWindow : Window
         _animationPaneHeading = new TextBlock
         {
             Text = "Animation Pane",
-            FontSize = 15,
+            FontSize = 12,
             FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(12, 12, 12, 4),
+            IsVisible = false,
         };
         _animationPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
-            Margin = new Thickness(12, 0, 12, 8),
+            IsVisible = false,
         };
         _animationPanePreviewButton = new Button
         {
             Content = "Preview",
-            MinWidth = 82,
-            Padding = new Thickness(10, 4),
-            Margin = new Thickness(0, 0, 8, 8),
+            Padding = new Thickness(6, 2),
+            Margin = new Thickness(0, 4, 6, 4),
         };
         _animationPanePlaybackControlsPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(12, 0, 12, 0),
             Children =
             {
                 _animationPanePreviewButton,
@@ -1389,15 +1389,11 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Vertical,
         };
 
-        var header = new StackPanel
+        var header = new Border
         {
-            Orientation = Orientation.Vertical,
-            Children =
-            {
-                _animationPaneHeading,
-                _animationPaneMessage,
-                _animationPanePlaybackControlsPanel,
-            }
+            Background = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Padding = new Thickness(0, 4, 4, 4),
+            Child = _animationPanePlaybackControlsPanel,
         };
         DockPanel.SetDock(header, Dock.Top);
 
@@ -1412,9 +1408,9 @@ public sealed partial class MainWindow : Window
 
         return new Border
         {
-            Width = 340,
+            Width = 240,
             IsVisible = false,
-            Background = Brushes.White,
+            Background = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = panel,
@@ -1934,6 +1930,8 @@ public sealed partial class MainWindow : Window
         if (_tablePickerHost is null || _tablePickerPanel is null)
             return;
 
+        _tablePickerPanel.Rows = plan.MaxRows;
+        _tablePickerPanel.Columns = plan.MaxColumns;
         _tablePickerPanel.Children.Clear();
         foreach (var choice in plan.Choices)
         {
@@ -2832,8 +2830,8 @@ public sealed partial class MainWindow : Window
             Text = plan.DisabledReason ?? plan.NativePrintHandoff.Reason,
             TextWrapping = TextWrapping.Wrap,
             FontStyle = FontStyle.Italic,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
-            Margin = new Thickness(12, 10, 12, 12),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
+            Margin = new Thickness(0, 8, 0, 0),
         });
     }
 
@@ -2842,33 +2840,41 @@ public sealed partial class MainWindow : Window
         _printOptionsPaneRowsPanel.Children.Add(new TextBlock
         {
             Text = text,
+            FontSize = 15,
             FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(12, 10, 12, 4),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Margin = new Thickness(0, 16, 0, 6),
         });
     }
 
     private void AddPrintOptionsPaneField(string label, string value)
     {
-        _printOptionsPaneRowsPanel.Children.Add(new StackPanel
+        var row = new Grid
         {
-            Orientation = Orientation.Vertical,
-            Margin = new Thickness(12, 3, 12, 5),
-            Children =
+            Margin = new Thickness(0, 2),
+            ColumnDefinitions =
             {
-                new TextBlock
-                {
-                    Text = label,
-                    FontWeight = FontWeight.SemiBold,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
-                },
-                new TextBlock
-                {
-                    Text = value,
-                    TextWrapping = TextWrapping.Wrap,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
-                },
+                new ColumnDefinition { Width = new GridLength(120) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
-        });
+        };
+        var name = new TextBlock
+        {
+            Text = label,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
+        };
+        var content = new TextBlock
+        {
+            Text = value,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+        };
+        Grid.SetColumn(content, 1);
+        row.Children.Add(name);
+        row.Children.Add(content);
+        _printOptionsPaneRowsPanel.Children.Add(row);
     }
 
     private void AddPrintOptionsPaneChoice(string row, bool isAvailable)
@@ -2877,9 +2883,9 @@ public sealed partial class MainWindow : Window
         {
             Text = row,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(20, 1, 12, 7),
+            Margin = new Thickness(0, 0, 0, 8),
             Foreground = isAvailable
-                ? new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33))
+                ? new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70))
                 : new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
         });
     }
@@ -2892,7 +2898,7 @@ public sealed partial class MainWindow : Window
     {
         var prefix = isSelected ? "Selected: " : string.Empty;
         var availability = isAvailable ? string.Empty : " (unavailable)";
-        return $"{prefix}{label}{availability}: {description}";
+        return $"{prefix}{label}{availability}\n{description}";
     }
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
@@ -3029,19 +3035,22 @@ public sealed partial class MainWindow : Window
         var labels = new StackPanel
         {
             Orientation = Orientation.Vertical,
-            Spacing     = 2,
+            Spacing     = 0,
         };
         labels.Children.Add(new TextBlock
         {
-            Text       = $"Comments - {plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
+            Text       = $"{plan.CurrentSlideSummaryLabel} | {plan.DeckSummaryLabel}",
+            FontSize   = 11,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D)),
+            Margin     = new Thickness(0, 0, 0, 6),
         });
         labels.Children.Add(new TextBlock
         {
             Text       = string.Join(" | ", plan.Filters.Select(filter => filter.Summary)),
-            FontSize   = 11,
+            FontSize   = 10,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Margin     = new Thickness(0, 0, 0, 6),
         });
 
         var close = new Button
@@ -3049,6 +3058,7 @@ public sealed partial class MainWindow : Window
             Content = "Close",
             MinWidth = 64,
             Tag = "comments-pane-close",
+            Margin = new Thickness(6, 0, 0, 6),
         };
         close.Click += (_, _) => HideReviewCommentsPane();
 
@@ -3056,7 +3066,7 @@ public sealed partial class MainWindow : Window
         return new DockPanel
         {
             LastChildFill = true,
-            Margin = new Thickness(12, 10, 12, 2),
+            Margin = new Thickness(0),
             Children =
             {
                 close,
@@ -3179,7 +3189,8 @@ public sealed partial class MainWindow : Window
         var input = new TextBox
         {
             PlaceholderText = "Comment",
-            MinWidth = 180,
+            MinWidth = 220,
+            Margin = new Thickness(0, 0, 6, 0),
         };
         var button = new Button
         {
@@ -3191,8 +3202,8 @@ public sealed partial class MainWindow : Window
         return new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Margin = new Thickness(12, 6, 12, 8),
+            Spacing = 0,
+            Margin = new Thickness(0, 0, 0, 8),
             Children =
             {
                 input,
@@ -3223,6 +3234,7 @@ public sealed partial class MainWindow : Window
         header.Children.Add(new TextBlock
         {
             Text              = comment.AuthorDisplayName,
+            FontSize          = 11,
             FontWeight        = FontWeight.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -3243,6 +3255,7 @@ public sealed partial class MainWindow : Window
         card.Children.Add(new TextBlock
         {
             Text         = comment.TextPreview,
+            FontSize     = 11,
             TextWrapping = TextWrapping.Wrap,
             Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
         });
@@ -3605,9 +3618,12 @@ public sealed partial class MainWindow : Window
             {
                 Content = control.Label,
                 IsEnabled = control.IsEnabled,
-                MinWidth = control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected ? 126 : 82,
-                Padding = new Thickness(10, 4),
-                Margin = new Thickness(0, 0, 8, 8),
+                Padding = new Thickness(6, 2),
+                Margin = new Thickness(0, 4, 6, 4),
+                Background = new SolidColorBrush(Color.FromRgb(0x8F, 0x37, 0x21)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(0),
+                FontSize = 12,
                 Tag = control.CommandId,
             };
             ToolTip.SetTip(button, control.DisabledReason ?? control.ToolTip);
@@ -3663,12 +3679,6 @@ public sealed partial class MainWindow : Window
 
     private Control BuildAnimationPaneItemCard(AnimationPaneTimelineItemPlan item)
     {
-        var timingLine =
-            $"{item.TriggerText}; duration {item.DurationText}s; delay {item.DelayText}s";
-        var timelineLine =
-            $"Timeline: starts {item.StartText}s, ends {AnimationPanePlanner.FormatDuration(item.EndMs)}s";
-        var actionLine =
-            $"Move earlier: {FormatAvailability(item.CanMoveEarlier)}; move later: {FormatAvailability(item.CanMoveLater)}";
         var effectOptionItems = item.EffectOptions.Options
             .Select(option => option.DisplayText)
             .ToArray();
@@ -3681,8 +3691,10 @@ public sealed partial class MainWindow : Window
         {
             ItemsSource = effectOptionItems,
             SelectedIndex = selectedEffectOptionIndex,
-            Width = 118,
-            Margin = new Thickness(0, 4, 8, 0),
+            Width = 104,
+            Height = 24,
+            FontSize = 10,
+            Margin = new Thickness(2),
             Tag = item.Index,
             IsEnabled = item.EffectOptions.CanApply,
             IsVisible = item.EffectOptions.Options.Count > 0,
@@ -3711,8 +3723,10 @@ public sealed partial class MainWindow : Window
         {
             ItemsSource = AnimationPanePlanner.TriggerLabels,
             SelectedIndex = item.TriggerIndex,
-            Width = 132,
-            Margin = new Thickness(0, 4, 8, 0),
+            Width = 110,
+            Height = 24,
+            FontSize = 10,
+            Margin = new Thickness(2),
             Tag = item.Index,
         };
         ToolTip.SetTip(triggerCombo, "Trigger");
@@ -3723,8 +3737,11 @@ public sealed partial class MainWindow : Window
         var durationBox = new TextBox
         {
             Text = item.DurationText,
-            Width = 58,
-            Margin = new Thickness(0, 4, 8, 0),
+            Width = 48,
+            Height = 24,
+            FontSize = 10,
+            Padding = new Thickness(2, 1),
+            Margin = new Thickness(2),
             Tag = item.Index,
         };
         ToolTip.SetTip(durationBox, "Duration (seconds)");
@@ -3739,8 +3756,11 @@ public sealed partial class MainWindow : Window
         var delayBox = new TextBox
         {
             Text = item.DelayText,
-            Width = 58,
-            Margin = new Thickness(0, 4, 8, 0),
+            Width = 48,
+            Height = 24,
+            FontSize = 10,
+            Padding = new Thickness(2, 1),
+            Margin = new Thickness(2),
             Tag = item.Index,
         };
         ToolTip.SetTip(delayBox, "Delay (seconds)");
@@ -3752,71 +3772,71 @@ public sealed partial class MainWindow : Window
         };
         _animationPaneDelayControlCount++;
 
-        var timingControls = new StackPanel
+        var innerGrid = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            Children =
+            VerticalAlignment = VerticalAlignment.Center,
+            ColumnDefinitions =
             {
-                effectOptionCombo,
-                triggerCombo,
-                durationBox,
-                delayBox,
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = new GridLength(80) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = GridLength.Auto },
             },
         };
-
-        var panel = new StackPanel
+        var orderLabel = new TextBlock
         {
-            Orientation = Orientation.Vertical,
-            Spacing = 2,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = $"{item.OrderText}. {item.ShapeName}",
-                    FontWeight = FontWeight.SemiBold,
-                    TextWrapping = TextWrapping.Wrap,
-                },
-                new TextBlock
-                {
-                    Text = item.EffectText,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
-                    TextWrapping = TextWrapping.Wrap,
-                },
-                new TextBlock
-                {
-                    Text = timingLine,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
-                    TextWrapping = TextWrapping.Wrap,
-                },
-                timingControls,
-                new TextBlock
-                {
-                    Text = timelineLine,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
-                    TextWrapping = TextWrapping.Wrap,
-                },
-                new TextBlock
-                {
-                    Text = actionLine,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
-                    TextWrapping = TextWrapping.Wrap,
-                },
-            }
+            Text = item.OrderText,
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            Width = 20,
+            TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(4, 0),
+            VerticalAlignment = VerticalAlignment.Center,
         };
+        var nameLabel = new TextBlock
+        {
+            Text = item.ShapeName,
+            FontSize = 11,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 80,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var effectLabel = new TextBlock
+        {
+            Text = item.EffectText,
+            FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(4, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        foreach (var placement in new (Control Control, int Column)[]
+                 {
+                     (orderLabel, 0),
+                     (nameLabel, 1),
+                     (effectLabel, 2),
+                     (effectOptionCombo, 3),
+                     (triggerCombo, 4),
+                     (durationBox, 5),
+                     (delayBox, 6),
+                 })
+        {
+            Grid.SetColumn(placement.Control, placement.Column);
+            innerGrid.Children.Add(placement.Control);
+        }
 
         var border = new Border
         {
             Background = item.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
+                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xE0, 0xD6))
                 : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
-            BorderBrush = item.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
-                : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(10),
-            Margin = new Thickness(12, 0, 12, 10),
-            Child = panel,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(4),
+            Child = innerGrid,
         };
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, _) => SelectAnimationPaneItem(item.Index);
@@ -4074,6 +4094,7 @@ public sealed partial class MainWindow : Window
         var action = new Button
         {
             Content = row.ActionLabel,
+            FontSize = 12,
             Tag = row.RowIndex,
             MinWidth = 96,
             HorizontalAlignment = HorizontalAlignment.Left,
@@ -4091,6 +4112,7 @@ public sealed partial class MainWindow : Window
                 new TextBlock
                 {
                     Text = $"{row.SlideDisplay} - {row.Title}",
+                    FontSize = 12,
                     FontWeight = FontWeight.SemiBold,
                     TextWrapping = TextWrapping.Wrap,
                 },
@@ -4099,12 +4121,14 @@ public sealed partial class MainWindow : Window
                     Text = string.IsNullOrWhiteSpace(row.ShapeName)
                         ? $"{row.Severity} - {row.Category}"
                         : $"{row.Severity} - {row.Category} - {row.ShapeName}",
+                    FontSize = 12,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
                     Text = row.Detail,
+                    FontSize = 12,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
                     TextWrapping = TextWrapping.Wrap,
                 },
@@ -4117,6 +4141,7 @@ public sealed partial class MainWindow : Window
             panel.Children.Insert(1, new TextBlock
             {
                 Text = "Selected issue",
+                FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
                 FontWeight = FontWeight.SemiBold,
             });
@@ -4866,24 +4891,28 @@ public sealed partial class MainWindow : Window
                 new TextBlock
                 {
                     Text = $"{item.ReadingOrderIndex + 1}. {item.ShapeName}",
+                    FontSize = 12,
                     FontWeight = FontWeight.SemiBold,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
                     Text = $"{item.ShapeTypeLabel} - depth {item.NestingDepth}",
+                    FontSize = 12,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
                     Text = item.AccessibilitySummary,
+                    FontSize = 12,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
                     Text = BuildReadingOrderAltTextLine(item),
+                    FontSize = 12,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
                     TextWrapping = TextWrapping.Wrap,
                 },
@@ -4895,6 +4924,7 @@ public sealed partial class MainWindow : Window
             panel.Children.Insert(1, new TextBlock
             {
                 Text = "Selected item",
+                FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
                 FontWeight = FontWeight.SemiBold,
             });
@@ -4902,6 +4932,7 @@ public sealed partial class MainWindow : Window
 
         var card = new Border
         {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             Background = item.IsSelected
                 ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
                 : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
@@ -4923,6 +4954,8 @@ public sealed partial class MainWindow : Window
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
             Cursor = new Cursor(StandardCursorType.Hand),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
         ToolTip.SetTip(button, $"Select {item.ShapeName}");
         button.Click += (_, _) => ApplyReadingOrderSelectItem(item.ShapeId);

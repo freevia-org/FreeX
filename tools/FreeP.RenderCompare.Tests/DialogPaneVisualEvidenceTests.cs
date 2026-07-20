@@ -1,4 +1,6 @@
 using FreeP.App.Compositor;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace FreeP.RenderCompare.Tests;
 
@@ -60,6 +62,74 @@ public sealed class DialogPaneVisualEvidenceTests
         }
     }
 
+    [Fact]
+    public void CompareNormalized_reports_scaled_pixel_delta_and_alpha_over_white()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "freep-dialog-pane-pixels-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var transparent = Path.Combine(root, "transparent.png");
+            var white = Path.Combine(root, "white.png");
+            var black = Path.Combine(root, "black.png");
+            WriteSolidPng(transparent, 2, 2, 0, 0, 0, 0);
+            WriteSolidPng(white, 4, 4, 255, 255, 255, 255);
+            WriteSolidPng(black, 4, 4, 0, 0, 0, 255);
+
+            var composited = ImageDiff.CompareNormalized(transparent, white, 8, 8);
+            var changed = ImageDiff.CompareNormalized(white, black, 8, 8, Path.Combine(root, "diff.png"));
+
+            composited.ChangedPixelRatio.Should().Be(0);
+            composited.MeanChannelDelta.Should().Be(0);
+            changed.WidthA.Should().Be(4);
+            changed.WidthB.Should().Be(4);
+            changed.NormalizedWidth.Should().Be(8);
+            changed.ChangedPixelRatio.Should().Be(1);
+            changed.MeanChannelDelta.Should().Be(255);
+            changed.MaxChannelDelta.Should().Be(255);
+            changed.BackgroundHandling.Should().Contain("alpha-composited-over-white");
+            File.Exists(Path.Combine(root, "diff.png")).Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildSummary_uses_target_crop_for_acceptance_and_shell_context_for_information()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "freep-dialog-pane-targets-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "wpf"));
+            Directory.CreateDirectory(Path.Combine(root, "avalonia"));
+            foreach (var host in new[] { "wpf", "avalonia" })
+            {
+                WriteSolidPng(Path.Combine(root, host, "context.png"), 8, 8, 240, 240, 240, 255);
+                WriteSolidPng(Path.Combine(root, host, "target.png"), 8, 8, 255, 255, 255, 255);
+            }
+
+            var summary = DialogPaneVisualEvidence.BuildSummary(
+                PixelManifest("wpf"),
+                PixelManifest("avalonia"),
+                evidenceRoot: root);
+
+            summary.PassCount.Should().Be(28);
+            summary.Comparisons.Should().OnlyContain(comparison =>
+                comparison.PixelMetrics != null && comparison.PixelMetrics.ThresholdPassed);
+            summary.Comparisons.Single(comparison => comparison.ScenarioId == "review.comments-pane.seeded")
+                .ShellContextPixelMetrics.Should().NotBeNull();
+            summary.Comparisons.Single(comparison => comparison.ScenarioId == "design.slide-size.initial")
+                .ShellContextPixelMetrics.Should().BeNull();
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static DialogPaneVisualEvidenceHostManifest Manifest(string host) => new(
         1,
         host,
@@ -70,6 +140,59 @@ public sealed class DialogPaneVisualEvidenceTests
         "2026-07-20T00:00:00Z",
         DialogPaneVisualEvidenceCatalog.All.Select(scenario => Capture(host, scenario)).ToArray(),
         []);
+
+    private static DialogPaneVisualEvidenceHostManifest PixelManifest(string host) => new(
+        1,
+        host,
+        "test",
+        96,
+        1280,
+        760,
+        "2026-07-20T00:00:00Z",
+        DialogPaneVisualEvidenceCatalog.All.Select(scenario => PixelCapture(host, scenario)).ToArray(),
+        []);
+
+    private static DialogPaneVisualEvidenceCapture PixelCapture(string host, DialogPaneVisualEvidenceScenario scenario)
+    {
+        var targetPath = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+            ? $"{host}/context.png"
+            : $"{host}/target.png";
+        return Capture(host, scenario) with
+        {
+            ImagePath = $"{host}/context.png",
+            LogicalWidth = 8,
+            LogicalHeight = 8,
+            PixelWidth = 8,
+            PixelHeight = 8,
+            PixelComparisonImagePath = targetPath,
+            PixelComparisonLogicalWidth = 8,
+            PixelComparisonLogicalHeight = 8,
+        };
+    }
+
+    private static void WriteSolidPng(
+        string path,
+        int width,
+        int height,
+        byte red,
+        byte green,
+        byte blue,
+        byte alpha)
+    {
+        var pixels = new byte[width * height * 4];
+        for (var offset = 0; offset < pixels.Length; offset += 4)
+        {
+            pixels[offset] = blue;
+            pixels[offset + 1] = green;
+            pixels[offset + 2] = red;
+            pixels[offset + 3] = alpha;
+        }
+        var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
 
     private static DialogPaneVisualEvidenceCapture Capture(string host, DialogPaneVisualEvidenceScenario scenario) => new(
         scenario.Id,

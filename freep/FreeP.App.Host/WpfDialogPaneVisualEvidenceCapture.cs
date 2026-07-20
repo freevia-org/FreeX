@@ -103,10 +103,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         var captures = new List<DialogPaneVisualEvidenceCapture>();
         var progressPath = Path.Combine(hostDirectory, "capture-progress.log");
         File.WriteAllText(progressPath, string.Empty);
-        var hostLimitations = new List<string>
-        {
-            "Visible WPF windows are captured from their app-owned render targets; native non-client title-bar pixels are excluded.",
-        };
+        var hostLimitations = new List<string>();
 
         var scenarios = scenarioId is null
             ? DialogPaneVisualEvidenceCatalog.All
@@ -157,12 +154,29 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                     ? AppOwnedClientRoot(target)
                     : target.Content as FrameworkElement ?? target;
                 var raster = Capture(captureRoot, imagePath);
-                assertions.AddRange(owner.CompleteDialogPaneVisualEvidence(scenario));
                 var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
                     ? target
                     : owner.DialogPaneVisualEvidenceMetadataRoot(scenario);
+                var comparisonRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                    ? captureRoot
+                    : metadataRoot as FrameworkElement ?? captureRoot;
+                var comparisonFileName = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                    ? fileName
+                    : Path.Combine("targets", fileName);
+                var comparisonPath = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                    ? imagePath
+                    : Path.Combine(hostDirectory, comparisonFileName);
+                if (scenario.SurfaceKind != DialogPaneVisualEvidenceSurfaceKind.Dialog)
+                    Directory.CreateDirectory(Path.GetDirectoryName(comparisonPath)!);
+                var pixelTarget = DialogPaneVisualEvidenceCatalog.PixelTargetFor(scenario);
+                var comparisonRaster = ReferenceEquals(comparisonRoot, captureRoot)
+                    ? raster
+                    : Capture(comparisonRoot, comparisonPath, pixelTarget?.Width, pixelTarget?.Height);
 
                 var focus = DescribeFocus(Keyboard.FocusedElement);
+                var buttons = Buttons(metadataRoot);
+                var controls = Controls(metadataRoot);
+                assertions.AddRange(owner.CompleteDialogPaneVisualEvidence(scenario));
                 captures.Add(new DialogPaneVisualEvidenceCapture(
                     scenario.Id,
                     scenario.RouteId,
@@ -179,10 +193,16 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                     raster.NonBackgroundPixelCount,
                     focus.Role,
                     focus.Label,
-                    Buttons(metadataRoot),
-                    Controls(metadataRoot),
+                    buttons,
+                    controls,
                     assertions,
-                    raster.Limitations));
+                    [],
+                    raster.SourceDpiX,
+                    raster.SourceDpiY,
+                    "logical-96-dpi",
+                    Path.Combine("wpf", comparisonFileName).Replace('\\', '/'),
+                    comparisonRaster.LogicalWidth,
+                    comparisonRaster.LogicalHeight));
                 File.AppendAllText(progressPath, $"complete {scenario.Id}{Environment.NewLine}");
             }
             catch (Exception ex)
@@ -316,23 +336,41 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             ?.Focus();
     }
 
-    private static CaptureRaster Capture(FrameworkElement target, string path)
+    private static CaptureRaster Capture(
+        FrameworkElement target,
+        string path,
+        double? requestedLogicalWidth = null,
+        double? requestedLogicalHeight = null)
     {
         var source = PresentationSource.FromVisual(target);
         var scaleX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1d;
         var scaleY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1d;
         var desktopDpiX = 96d * scaleX;
         var desktopDpiY = 96d * scaleY;
-        var nativeWidth = Math.Max(1, (int)Math.Ceiling(target.ActualWidth * scaleX));
-        var nativeHeight = Math.Max(1, (int)Math.Ceiling(target.ActualHeight * scaleY));
+        var logicalWidth = requestedLogicalWidth ?? target.ActualWidth;
+        var logicalHeight = requestedLogicalHeight ?? target.ActualHeight;
+        var nativeWidth = Math.Max(1, (int)Math.Ceiling(logicalWidth * scaleX));
+        var nativeHeight = Math.Max(1, (int)Math.Ceiling(logicalHeight * scaleY));
         var nativeBitmap = new RenderTargetBitmap(nativeWidth, nativeHeight, desktopDpiX, desktopDpiY, PixelFormats.Pbgra32);
-        nativeBitmap.Render(target);
+        var nativeVisual = new DrawingVisual();
+        using (var nativeDrawing = nativeVisual.RenderOpen())
+        {
+            nativeDrawing.DrawRectangle(Brushes.White, null, new Rect(0, 0, logicalWidth, logicalHeight));
+            var brush = new VisualBrush(target)
+            {
+                AlignmentX = AlignmentX.Left,
+                AlignmentY = AlignmentY.Top,
+                Stretch = Stretch.Fill,
+            };
+            nativeDrawing.DrawRectangle(brush, null, new Rect(0, 0, target.ActualWidth, target.ActualHeight));
+        }
+        nativeBitmap.Render(nativeVisual);
 
-        var width = Math.Max(1, (int)Math.Ceiling(target.ActualWidth));
-        var height = Math.Max(1, (int)Math.Ceiling(target.ActualHeight));
+        var width = Math.Max(1, (int)Math.Ceiling(logicalWidth));
+        var height = Math.Max(1, (int)Math.Ceiling(logicalHeight));
         var normalizedVisual = new DrawingVisual();
         using (var drawing = normalizedVisual.RenderOpen())
-            drawing.DrawImage(nativeBitmap, new Rect(0, 0, target.ActualWidth, target.ActualHeight));
+            drawing.DrawImage(nativeBitmap, new Rect(0, 0, logicalWidth, logicalHeight));
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(normalizedVisual);
 
@@ -345,11 +383,16 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         var pixels = new byte[stride * height];
         bitmap.CopyPixels(pixels, stride, 0);
         var nonBackground = CountNonBackgroundPixels(pixels);
-        var limitations = Math.Abs(desktopDpiX - DialogPaneVisualEvidenceCatalog.TargetDpi) <= 0.5 &&
-            Math.Abs(desktopDpiY - DialogPaneVisualEvidenceCatalog.TargetDpi) <= 0.5
-            ? Array.Empty<string>()
-            : [$"WPF app-owned content was rasterized at 96 DPI; the foreground desktop itself is {desktopDpiX:0.##}x{desktopDpiY:0.##} DPI."];
-        return new CaptureRaster(target.ActualWidth, target.ActualHeight, width, height, 96, 96, nonBackground, limitations);
+        return new CaptureRaster(
+            logicalWidth,
+            logicalHeight,
+            width,
+            height,
+            96,
+            96,
+            nonBackground,
+            desktopDpiX,
+            desktopDpiY);
     }
 
     private static FrameworkElement AppOwnedClientRoot(Window window) =>
@@ -479,7 +522,8 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         double DpiX,
         double DpiY,
         long NonBackgroundPixelCount,
-        IReadOnlyList<string> Limitations);
+        double SourceDpiX,
+        double SourceDpiY);
 
     private static DialogPaneVisualEvidenceCapture BlockedCapture(
         DialogPaneVisualEvidenceScenario scenario,

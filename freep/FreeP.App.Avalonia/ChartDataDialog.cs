@@ -4,12 +4,14 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
 internal sealed class ChartDataDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly EditingSession _editor;
     private readonly ChartDataDialogPlanner _planner;
     private readonly ChartDataDialogSurfacePlan _surface;
@@ -44,6 +46,8 @@ internal sealed class ChartDataDialog : Window
         CanResize = true;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        _tableGrid.MinWidth = 616;
+        _tableGrid.HorizontalAlignment = HorizontalAlignment.Stretch;
 
         Content = BuildContent();
         RebuildTable();
@@ -72,12 +76,13 @@ internal sealed class ChartDataDialog : Window
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(8, 8, 8, 4),
-            Spacing = 6,
+            Margin = new Thickness(4, 4, 4, 2),
+            Spacing = 4,
             Children =
             {
                 MakeToolbarButton(_surface.AddSeriesLabel, OnAddSeries),
                 MakeToolbarButton(_surface.RemoveSeriesLabel, OnRemoveSeries),
+                new Border { Width = 12 },
                 MakeToolbarButton(_surface.AddCategoryLabel, OnAddCategory),
                 MakeToolbarButton(_surface.RemoveCategoryLabel, OnRemoveCategory),
             },
@@ -87,15 +92,22 @@ internal sealed class ChartDataDialog : Window
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Margin = new Thickness(8, 4),
             Content = _tableGrid,
+        };
+        var tableBorder = new Border
+        {
+            Margin = new Thickness(4, 2, 4, 4),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x77, 0x77, 0x77)),
+            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3)),
+            Child = scroller,
         };
 
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 4, 12, 12),
+            Margin = new Thickness(4, 4, 8, 8),
             Spacing = 8,
             Children =
             {
@@ -108,11 +120,11 @@ internal sealed class ChartDataDialog : Window
         _validationText.TextWrapping = TextWrapping.Wrap;
 
         Grid.SetRow(toolbar, 0);
-        Grid.SetRow(scroller, 1);
+        Grid.SetRow(tableBorder, 1);
         Grid.SetRow(_validationText, 2);
         Grid.SetRow(buttons, 3);
         root.Children.Add(toolbar);
-        root.Children.Add(scroller);
+        root.Children.Add(tableBorder);
         root.Children.Add(_validationText);
         root.Children.Add(buttons);
         return root;
@@ -141,7 +153,7 @@ internal sealed class ChartDataDialog : Window
 
         var table = _planner.BuildTableProjection();
         _tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        _tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
 
         AddCell(MakeHeader(table.CategoryColumnHeader), row: 0, column: 0);
 
@@ -181,7 +193,15 @@ internal sealed class ChartDataDialog : Window
     {
         Grid.SetRow(control, row);
         Grid.SetColumn(control, column);
-        _tableGrid.Children.Add(control);
+        var cell = new Border
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x77, 0x77, 0x77)),
+            BorderThickness = new Thickness(0, 0, 1, 1),
+            Child = control,
+        };
+        Grid.SetRow(cell, row);
+        Grid.SetColumn(cell, column);
+        _tableGrid.Children.Add(cell);
     }
 
     private void OnAddSeries()
@@ -256,8 +276,8 @@ internal sealed class ChartDataDialog : Window
         {
             Text = text,
             FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(3),
-            Padding = new Thickness(6, 4),
+            Height = 22,
+            Padding = new Thickness(3, 1),
             VerticalAlignment = VerticalAlignment.Center,
         };
     }
@@ -268,8 +288,12 @@ internal sealed class ChartDataDialog : Window
         {
             Text = text,
             MinWidth = minWidth,
-            Margin = new Thickness(3),
-            Padding = new Thickness(6, 3),
+            Height = 20,
+            MinHeight = 20,
+            MaxHeight = 20,
+            Padding = new Thickness(3, 0),
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
         };
     }
 
@@ -278,8 +302,9 @@ internal sealed class ChartDataDialog : Window
         var button = new Button
         {
             Content = label,
-            Padding = new Thickness(9, 4),
+            Padding = new Thickness(8, 3),
         };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 0);
         button.Click += (_, _) => onClick();
         return button;
     }
@@ -289,11 +314,10 @@ internal sealed class ChartDataDialog : Window
         var button = new Button
         {
             Content = label,
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
             IsDefault = isDefault,
             IsCancel = !isDefault,
         };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault);
         button.Click += (_, _) => onClick();
         return button;
     }

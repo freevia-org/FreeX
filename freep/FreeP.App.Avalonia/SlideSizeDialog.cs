@@ -47,7 +47,8 @@ internal sealed class SlideSizeDialog : Window
         _presetCombo = new ComboBox
         {
             ItemsSource = new[] { "Standard (4:3)", "Widescreen (16:9)", "Custom" },
-            MinWidth = 220,
+            Margin = new Thickness(4),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         _presetCombo.SelectionChanged += OnPresetChanged;
 
@@ -56,18 +57,19 @@ internal sealed class SlideSizeDialog : Window
             Content = "Inches",
             GroupName = "SlideSizeUnit",
             IsChecked = true,
-            Margin = new Thickness(0, 0, 12, 0),
+            Margin = new Thickness(4, 0, 12, 0),
         };
         _centimetersRadio = new RadioButton
         {
             Content = "Centimeters",
             GroupName = "SlideSizeUnit",
+            Margin = new Thickness(4, 0, 4, 0),
         };
         _inchesRadio.IsCheckedChanged += OnUnitChanged;
         _centimetersRadio.IsCheckedChanged += OnUnitChanged;
 
-        _widthBox = new TextBox { MinWidth = 150 };
-        _heightBox = new TextBox { MinWidth = 150 };
+        _widthBox = new TextBox { Width = 120, Margin = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Left };
+        _heightBox = new TextBox { Width = 120, Margin = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Left };
         _widthUnitLabel = BuildUnitLabel();
         _heightUnitLabel = BuildUnitLabel();
         _validationText = new TextBlock();
@@ -128,16 +130,16 @@ internal sealed class SlideSizeDialog : Window
         }
     }
 
-    internal bool ApplyForTests() => Apply();
+    internal bool ApplyForTests() => Apply(showValidation: false);
 
     private Control BuildContent()
     {
         var grid = new Grid
         {
-            Margin = new Thickness(14),
+            Margin = new Thickness(12),
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = new GridLength(45) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto },
             },
@@ -148,16 +150,14 @@ internal sealed class SlideSizeDialog : Window
         var unitRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
+            Margin = new Thickness(4),
             Children = { _inchesRadio, _centimetersRadio },
         };
         AddLabeledRow(grid, 1, "Unit:", unitRow, span: 2);
         AddLabeledRow(grid, 2, "Width:", _widthBox, _widthUnitLabel);
         AddLabeledRow(grid, 3, "Height:", _heightBox, _heightUnitLabel);
 
-        Grid.SetRow(_validationText, 4);
-        Grid.SetColumnSpan(_validationText, 3);
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.Children.Add(_validationText);
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         var ok = new Button { Content = "OK" };
         ok.Click += (_, _) => Apply();
@@ -169,7 +169,7 @@ internal sealed class SlideSizeDialog : Window
 
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [ok, cancel],
-            new Thickness(0, 12, 0, 0));
+            new Thickness(4, 8, 8, 8));
         Grid.SetRow(buttons, 5);
         Grid.SetColumnSpan(buttons, 3);
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -223,7 +223,7 @@ internal sealed class SlideSizeDialog : Window
         ApplyDisplay(display);
     }
 
-    private bool Apply()
+    private bool Apply(bool showValidation = true)
     {
         LastResultPlan = SlideSizeDialogPlanner.BuildOkResult(
             _widthBox.Text ?? string.Empty,
@@ -233,7 +233,7 @@ internal sealed class SlideSizeDialog : Window
         {
             var validation = LastResultPlan.Validation!;
             _validationText.Text = validation.Message;
-            _validationText.IsVisible = true;
+            _validationText.IsVisible = showValidation;
             FocusField(validation.FocusField);
             return false;
         }
@@ -275,8 +275,7 @@ internal sealed class SlideSizeDialog : Window
 
     private static TextBlock BuildUnitLabel() => new()
     {
-        Width = 28,
-        Margin = new Thickness(6, 0, 0, 0),
+        Width = 30,
         VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -309,7 +308,8 @@ internal sealed class SlideSizeDialog : Window
     private static TextBlock BuildLabel(string label) => new()
     {
         Text = label,
-        Margin = new Thickness(0, 0, 10, 6),
+        Margin = new Thickness(4, 2, 4, 2),
+        HorizontalAlignment = HorizontalAlignment.Right,
         VerticalAlignment = VerticalAlignment.Center,
     };
 

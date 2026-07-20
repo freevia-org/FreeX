@@ -97,10 +97,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         var progressPath = Path.Combine(hostDirectory, "capture-progress.log");
         File.WriteAllText(progressPath, string.Empty);
         var captures = new List<DialogPaneVisualEvidenceCapture>();
-        var hostLimitations = new List<string>
-        {
-            "Visible Avalonia windows are captured from their app-owned render targets; native non-client title-bar pixels are excluded.",
-        };
+        var hostLimitations = new List<string>();
 
         anchor.Width = DialogPaneVisualEvidenceCatalog.LogicalShellWidth;
         anchor.Height = DialogPaneVisualEvidenceCatalog.LogicalShellHeight;
@@ -137,14 +134,36 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                 FocusFirstInputIfNeeded(target, scenario);
                 await PumpLayout();
 
-                var fileName = scenario.Id + ".png";
-                var imagePath = Path.Combine(hostDirectory, fileName);
-                var raster = Capture(target, imagePath);
-                assertions.AddRange(anchor.CompleteDialogPaneVisualEvidence(scenario));
-                var focus = DescribeFocus(target.FocusManager?.GetFocusedElement());
                 var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
                     ? target
                     : anchor.DialogPaneVisualEvidenceMetadataRoot(scenario);
+                if (scenario.RouteId == "review.comments-pane")
+                {
+                    Descendants(metadataRoot).OfType<ScrollViewer>().FirstOrDefault()?.SetCurrentValue(
+                        ScrollViewer.OffsetProperty,
+                        default(Vector));
+                    await PumpLayout();
+                }
+
+                var fileName = scenario.Id + ".png";
+                var imagePath = Path.Combine(hostDirectory, fileName);
+                var raster = Capture(target, imagePath);
+                var focus = DescribeFocus(target.FocusManager?.GetFocusedElement());
+                var comparisonFileName = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                    ? fileName
+                    : Path.Combine("targets", fileName);
+                var comparisonPath = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                    ? imagePath
+                    : Path.Combine(hostDirectory, comparisonFileName);
+                if (scenario.SurfaceKind != DialogPaneVisualEvidenceSurfaceKind.Dialog)
+                    Directory.CreateDirectory(Path.GetDirectoryName(comparisonPath)!);
+                var pixelTarget = DialogPaneVisualEvidenceCatalog.PixelTargetFor(scenario);
+                var comparisonRaster = ReferenceEquals(metadataRoot, target)
+                    ? raster
+                    : Capture(metadataRoot, comparisonPath, pixelTarget?.Width, pixelTarget?.Height);
+                var buttons = Buttons(metadataRoot);
+                var controls = Controls(metadataRoot);
+                assertions.AddRange(anchor.CompleteDialogPaneVisualEvidence(scenario));
 
                 captures.Add(new DialogPaneVisualEvidenceCapture(
                     scenario.Id,
@@ -162,10 +181,16 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                     raster.NonBackgroundPixelCount,
                     focus.Role,
                     focus.Label,
-                    Buttons(metadataRoot),
-                    Controls(metadataRoot),
+                    buttons,
+                    controls,
                     assertions,
-                    []));
+                    [],
+                    96,
+                    96,
+                    "logical-96-dpi",
+                    Path.Combine("avalonia", comparisonFileName).Replace('\\', '/'),
+                    comparisonRaster.LogicalWidth,
+                    comparisonRaster.LogicalHeight));
                 File.AppendAllText(progressPath, $"complete {scenario.Id}{Environment.NewLine}");
             }
             catch (Exception ex)
@@ -297,10 +322,16 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             ?.Focus();
     }
 
-    private static CaptureRaster Capture(Window target, string path)
+    private static CaptureRaster Capture(
+        Visual target,
+        string path,
+        double? requestedLogicalWidth = null,
+        double? requestedLogicalHeight = null)
     {
-        var width = Math.Max(1, (int)Math.Ceiling(target.ClientSize.Width));
-        var height = Math.Max(1, (int)Math.Ceiling(target.ClientSize.Height));
+        var logicalWidth = requestedLogicalWidth ?? (target is Window window ? window.ClientSize.Width : target.Bounds.Width);
+        var logicalHeight = requestedLogicalHeight ?? (target is Window windowTarget ? windowTarget.ClientSize.Height : target.Bounds.Height);
+        var width = Math.Max(1, (int)Math.Ceiling(logicalWidth));
+        var height = Math.Max(1, (int)Math.Ceiling(logicalHeight));
         using var bitmap = new RenderTargetBitmap(new PixelSize(width, height), new Vector(96, 96));
         bitmap.Render(target);
         bitmap.Save(path);
@@ -313,7 +344,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             bitmap.CopyPixels(new PixelRect(0, 0, width, height), pointer, byteCount, stride);
             var pixels = new byte[byteCount];
             Marshal.Copy(pointer, pixels, 0, byteCount);
-            return new CaptureRaster(width, height, CountNonBackgroundPixels(pixels));
+            return new CaptureRaster(logicalWidth, logicalHeight, width, height, CountNonBackgroundPixels(pixels));
         }
         finally
         {
@@ -436,5 +467,10 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             [new("capture-completed", false, exception.Message)],
             [$"Capture failed: {exception.GetType().Name}: {exception.Message}"]);
 
-    private sealed record CaptureRaster(int PixelWidth, int PixelHeight, long NonBackgroundPixelCount);
+    private sealed record CaptureRaster(
+        double LogicalWidth,
+        double LogicalHeight,
+        int PixelWidth,
+        int PixelHeight,
+        long NonBackgroundPixelCount);
 }
