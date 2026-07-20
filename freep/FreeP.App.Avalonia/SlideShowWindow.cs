@@ -9,6 +9,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Free.Shared.AppServices;
 using FreeP.App.Compositor;
+using FreeP.App.Media;
 using FreeP.App.Recording;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
@@ -53,8 +54,8 @@ namespace FreeP.App.Avalonia;
 /// Media
 /// ─────
 /// Media shapes display the poster bitmap + a play badge (same as the slide renderer).
-/// Actual audio/video playback is DEFERRED — Avalonia has no built-in MediaElement;
-/// cross-platform video would need LibVLCSharp (out of scope for Theme 24).
+/// Actual audio/video playback uses the LibVLCSharp adapter with poster/click fallback
+/// when a platform cannot load its native LibVLC runtime.
 /// </summary>
 public sealed class SlideShowWindow : Window
 {
@@ -64,6 +65,7 @@ public sealed class SlideShowWindow : Window
     private readonly SlideShowPlaybackRoute _playbackRoute;
     private readonly SlideShowController _controller;
     private readonly SlideShowSessionController _session;
+    private readonly AvaloniaSlideShowMediaController _mediaController;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
     private IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> _lastAnimationStepFrameEvidence = Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
@@ -86,6 +88,8 @@ public sealed class SlideShowWindow : Window
     private readonly SlideCanvas _slideCanvas;
     // Shape animation overlay: a Canvas placed on top of _slideCanvas.
     private readonly Canvas _animOverlay;
+    // LibVLC video surfaces and audio-only playback slots for the current slide.
+    private readonly Canvas _mediaOverlay;
     // Presenter ink overlay: shared-plan-backed strokes and laser pointer above slide content.
     private readonly Canvas _inkOverlay;
     private readonly Rectangle _transitionFlashOverlay;
@@ -188,6 +192,13 @@ public sealed class SlideShowWindow : Window
             VerticalAlignment   = VerticalAlignment.Center,
         };
 
+        _mediaOverlay = new Canvas
+        {
+            IsHitTestVisible    = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+        };
+
         _inkOverlay = new Canvas
         {
             IsHitTestVisible    = false,
@@ -204,7 +215,11 @@ public sealed class SlideShowWindow : Window
         stage.Children.Add(_transitionBackImage);
         stage.Children.Add(_slideCanvas);
         stage.Children.Add(_animOverlay);
+        stage.Children.Add(_mediaOverlay);
         stage.Children.Add(_inkOverlay);
+
+        _mediaController = new AvaloniaSlideShowMediaController(_mediaOverlay);
+        SizeChanged += (_, _) => SyncMediaOverlayBounds();
 
         _transitionFlashOverlay = new Rectangle
         {
@@ -296,6 +311,10 @@ public sealed class SlideShowWindow : Window
         _session.RecordingReviewPlan;
 
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
+    internal IReadOnlyList<SlideShowMediaShapePlan> ActiveMediaPlansForTest => _mediaController.Active;
+    internal SlideShowMediaClickPlan LastMediaClickForTest => _mediaController.LastClick;
+    internal MediaPlaybackBackendAvailability? MediaPlaybackAvailabilityForTest => _mediaController.Availability;
+    internal MediaPlaybackFailure? LastMediaPlaybackFailureForTest => _mediaController.LastFailure;
     internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
     internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest => _lastAnimationStepFrameEvidence;
     internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest => _lastAnimationStepPlaybackReadinessPlan;
@@ -383,6 +402,19 @@ public sealed class SlideShowWindow : Window
         var pt = e.GetPosition(_slideCanvas);
         var inkResult = BeginPresenterInkStroke(pt.X, pt.Y);
         if (inkResult.IsHandled)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (slide is not null && _mediaController.TryHandleClick(
+            slide,
+            _slideDipW,
+            _slideDipH,
+            _slideCanvas.Bounds.Width,
+            _slideCanvas.Bounds.Height,
+            pt.X,
+            pt.Y))
         {
             e.Handled = true;
             return;
@@ -706,6 +738,13 @@ public sealed class SlideShowWindow : Window
 
         PrepareAnimationOverlay(slide);
 
+        _mediaController.EnterSlide(
+            slide,
+            _slideDipW,
+            _slideDipH,
+            _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW,
+            _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH);
+
         if (plan.Transition is { } t)
             PlayTransition(slide, t);
         else
@@ -721,6 +760,13 @@ public sealed class SlideShowWindow : Window
     }
 
     private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
+
+    private void SyncMediaOverlayBounds()
+    {
+        var width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW;
+        var height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
+        _mediaController.SetCanvasBounds(width, height);
+    }
 
     private void ShowSlideInstant(Slide slide)
     {
@@ -765,9 +811,8 @@ public sealed class SlideShowWindow : Window
 
     private void PlayTransition(Slide slide, SlideTransition t)
     {
-        // Transition sound: Avalonia has no built-in MediaElement.
-        // Sound playback on the Avalonia host is deferred / no-op.
-        // (The sound bytes are preserved on the model and will re-emit on save.)
+        if (t.Sound?.AudioBytes is { Length: > 0 })
+            _mediaController.PlayTransitionSound(t.Sound);
 
         var plan = SlideShowPlaybackPlanner.PlanTransition(_presentation, slide, t);
         t = plan.EffectiveTransition;
@@ -5471,6 +5516,7 @@ public sealed class SlideShowWindow : Window
 
     private void Teardown(DateTimeOffset? nowUtc = null)
     {
+        _mediaController.Teardown();
         if (_session.IsClosed)
         {
             return;
