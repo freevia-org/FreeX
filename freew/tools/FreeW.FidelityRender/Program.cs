@@ -206,6 +206,16 @@ static void RenderDocumentComposite(
     };
     bodyView.LoadModel(doc);
 
+    // A drawing group owns several child visuals but one paragraph anchor. Snapshot that anchor while
+    // the populated view is arranged; the normal detached path below remains authoritative for all
+    // other floating-object kinds.
+    var liveFloatingCanvas = new Canvas { Width = pageWDip, Height = pageHDip };
+    bodyView.SetFloatingCanvas(liveFloatingCanvas);
+    bodyView.Measure(new Size(pageWDip, pageHDip));
+    bodyView.Arrange(new Rect(0, 0, pageWDip, pageHDip));
+    bodyView.UpdateLayout();
+    bodyView.SyncFloatingObjectsCanvas();
+
     // Detach the FlowDocument so we can paginate it ourselves (same pattern as bare path).
     FlowDocument flow = bodyView.Document;
     bodyView.Document = new FlowDocument();
@@ -382,6 +392,22 @@ static void RenderDocumentComposite(
     floatingCanvas.Measure(new Size(pageWDip, pageHDip));
     floatingCanvas.Arrange(new Rect(0, 0, pageWDip, pageHDip));
     floatingCanvas.UpdateLayout();
+
+    // Group children share a common anchor in Word. Preserve the ordinary detached-model path for
+    // other object types, but use the arranged paragraph anchor for each group root.
+    foreach (var groupChild in floatingCanvas.Children
+        .OfType<FrameworkElement>()
+        .Where(child => child.Tag is FreeW.Core.Model.DrawingGroup))
+    {
+        var liveGroupChild = liveFloatingCanvas.Children
+            .OfType<FrameworkElement>()
+            .FirstOrDefault(child => object.ReferenceEquals(child.Tag, groupChild.Tag));
+        if (liveGroupChild is null)
+            continue;
+
+        Canvas.SetLeft(groupChild, Canvas.GetLeft(liveGroupChild));
+        Canvas.SetTop(groupChild, Canvas.GetTop(liveGroupChild));
+    }
 
     var floatingSurface = DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(
         doc.Page,
