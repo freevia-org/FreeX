@@ -927,6 +927,10 @@ public sealed class SlideShowWindow : Window
                 PlayGlitterTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Ripple:
+                PlayRippleTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.PageCurl:
                 PlayPageCurlTransition(slide, t, plan);
                 return;
@@ -1333,6 +1337,54 @@ public sealed class SlideShowWindow : Window
         storyboard.Begin(this, true);
     }
 
+    private void PlayRippleTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var ripple = SlideShowRippleTransitionPlanner.Plan(transition);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildRippleTransitionGeometry(w, h, 0, ripple);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildRippleTransitionGeometry(w, h, progress, ripple),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
     private static Geometry BuildHoneycombTransitionGeometry(
         double width,
         double height,
@@ -1378,6 +1430,43 @@ public sealed class SlideShowWindow : Window
     }
 
     private static PathGeometry BuildGlitterPolygon(
+        IReadOnlyList<SlideShowMaskPoint> maskPoints)
+    {
+        var points = maskPoints.Select(ToPoint).ToArray();
+        if (points.Length == 0)
+            return new PathGeometry();
+
+        var figure = new PathFigure
+        {
+            StartPoint = points[0],
+            IsClosed = true,
+            IsFilled = true
+        };
+        for (var index = 1; index < points.Length; index++)
+            figure.Segments.Add(new LineSegment(points[index], true));
+
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        return geometry;
+    }
+
+    private static Geometry BuildRippleTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowRippleTransitionPlan plan)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var polygon in SlideShowRippleTransitionPlanner.BuildPolygons(
+                     width, height, progress, plan))
+        {
+            geometry.Children.Add(BuildRipplePolygon(polygon.Points));
+        }
+
+        return geometry;
+    }
+
+    private static PathGeometry BuildRipplePolygon(
         IReadOnlyList<SlideShowMaskPoint> maskPoints)
     {
         var points = maskPoints.Select(ToPoint).ToArray();

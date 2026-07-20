@@ -33,6 +33,7 @@ public enum SlideShowTransitionPlaybackKind
     Ferris,
     Flythrough,
     Glitter,
+    Ripple,
     PageCurl,
     PushLike,
     FadeFallback
@@ -159,6 +160,8 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Flythrough => SlideShowTransitionPlaybackKind.Flythrough,
 
             TransitionKind.Glitter => SlideShowTransitionPlaybackKind.Glitter,
+
+            TransitionKind.Ripple => SlideShowTransitionPlaybackKind.Ripple,
 
             TransitionKind.PageCurlSingle or
             TransitionKind.PageCurlDouble => SlideShowTransitionPlaybackKind.PageCurl,
