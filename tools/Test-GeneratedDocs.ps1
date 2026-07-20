@@ -6,6 +6,7 @@ param(
     [string]$CrossAppParityDashboardScriptPath = "tools\Generate-CrossAppParityDashboard.ps1",
     [string]$FreePCommandParityInventoryScriptPath = "tools\Generate-FreePCommandParityInventory.ps1",
     [string]$FreePDialogPaneParityInventoryScriptPath = "tools\Generate-FreePDialogPaneParityInventory.ps1",
+    [string]$FreeWEditingReferenceParityEvidenceScriptPath = "tools\Generate-FreeWEditingReferenceParityEvidence.ps1",
     [string]$FreeWCommandInventoryScriptPath = "tools\Generate-FreeWCommandInventory.ps1"
 )
 
@@ -36,6 +37,7 @@ Invoke-GeneratedDocsCheck -ScriptPath $ConditionalFormatOpenedStateEvidenceScrip
 Invoke-GeneratedDocsCheck -ScriptPath $CrossAppParityDashboardScriptPath -Label "cross-app parity dashboard"
 Invoke-GeneratedDocsCheck -ScriptPath $FreePCommandParityInventoryScriptPath -Label "FreeP command parity inventory"
 Invoke-GeneratedDocsCheck -ScriptPath $FreePDialogPaneParityInventoryScriptPath -Label "FreeP dialog/pane parity inventory"
+Invoke-GeneratedDocsCheck -ScriptPath $FreeWEditingReferenceParityEvidenceScriptPath -Label "FreeW editing/reference parity evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWCommandInventoryScriptPath -Label "FreeW command inventory"
 
 Write-Host "Generated documentation checks passed."
