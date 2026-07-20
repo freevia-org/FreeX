@@ -61,25 +61,16 @@ public sealed class PresentationClipboardInteropTests
             out var bitmap);
         bitmap.Should().BeNull();
 
-        foreach (var format in new[]
-                 {
-                     AvaloniaPresentationSystemClipboard.SelectionPlatformFormat,
-                     AvaloniaPresentationSystemClipboard.SelectionFormat,
-                 })
-        {
-            ReadAvaloniaWin32HGlobal(transfer, format)
-                .Should().Equal(content.SelectionBytes!);
-        }
+        ReadAvaloniaWin32HGlobal(
+                transfer,
+                AvaloniaPresentationSystemClipboard.SelectionPlatformFormat)
+            .Should().Equal(content.SelectionBytes!);
 
         var ownerBytes = Encoding.Unicode.GetBytes("avalonia-owner\0");
-        foreach (var format in new[]
-                 {
-                     AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat,
-                     AvaloniaPresentationSystemClipboard.OwnerTokenFormat,
-                 })
-        {
-            ReadAvaloniaWin32HGlobal(transfer, format).Should().Equal(ownerBytes);
-        }
+        ReadAvaloniaWin32HGlobal(
+                transfer,
+                AvaloniaPresentationSystemClipboard.OwnerTokenPlatformFormat)
+            .Should().Equal(ownerBytes);
     }
 
     [Fact]

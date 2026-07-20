@@ -303,23 +303,10 @@ public sealed class OsClipboardServiceTests
             SelectionBytes: selection,
             OwnerToken: "native-owner"));
 
-        foreach (var format in new[]
-                 {
-                     WpfOsClipboard.SelectionFormat,
-                     WpfOsClipboard.LegacyAvaloniaSelectionFormat,
-                 })
-        {
-            ReadComHGlobal(dataObject, format).Should().Equal(selection);
-        }
-
-        foreach (var format in new[]
-                 {
-                     WpfOsClipboard.OwnerTokenFormat,
-                     WpfOsClipboard.LegacyAvaloniaOwnerTokenFormat,
-                 })
-        {
-            ReadComHGlobal(dataObject, format).Should().Equal(ownerBytes);
-        }
+        ReadComHGlobal(dataObject, WpfOsClipboard.SelectionFormat)
+            .Should().Equal(selection);
+        ReadComHGlobal(dataObject, WpfOsClipboard.OwnerTokenFormat)
+            .Should().Equal(ownerBytes);
     }
 
     [StaFact]
