@@ -100,6 +100,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayFractureTransition(");
         source.Should().Contain("SlideShowFractureTransitionPlanner.Plan(");
         source.Should().Contain("BuildFractureTransitionGeometry(");
+        source.Should().Contain("PlayCrushTransition(");
+        source.Should().Contain("SlideShowCrushTransitionPlanner.Plan(");
+        source.Should().Contain("BuildCrushTransitionGeometry(");
         source.Should().Contain("PlaySwitchTransition(");
         source.Should().Contain("PlayOrbitTransition(");
         source.Should().Contain("PlayFerrisTransition(");

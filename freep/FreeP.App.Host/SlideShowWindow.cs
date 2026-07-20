@@ -959,6 +959,10 @@ public sealed class SlideShowWindow : Window
                 PlayFractureTransition(slide, t, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Crush:
+                PlayCrushTransition(slide, t, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.PageCurl:
                 PlayPageCurlTransition(slide, t, plan);
                 return;
@@ -1749,6 +1753,54 @@ public sealed class SlideShowWindow : Window
         storyboard.Begin(this, true);
     }
 
+    private void PlayCrushTransition(
+        Slide slide,
+        SlideTransition transition,
+        SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var crush = SlideShowCrushTransitionPlanner.Plan(transition);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildCrushTransitionGeometry(w, h, 0, crush);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildCrushTransitionGeometry(w, h, progress, crush),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
     private static Geometry BuildHoneycombTransitionGeometry(
         double width,
         double height,
@@ -1934,6 +1986,22 @@ public sealed class SlideShowWindow : Window
     {
         var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
         foreach (var polygon in SlideShowFractureTransitionPlanner.BuildPolygons(
+                     width, height, progress, plan))
+        {
+            geometry.Children.Add(BuildStripGeometry(polygon.Points));
+        }
+
+        return geometry;
+    }
+
+    private static Geometry BuildCrushTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowCrushTransitionPlan plan)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var polygon in SlideShowCrushTransitionPlanner.BuildPolygons(
                      width, height, progress, plan))
         {
             geometry.Children.Add(BuildStripGeometry(polygon.Points));
