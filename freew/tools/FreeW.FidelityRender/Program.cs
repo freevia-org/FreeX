@@ -450,8 +450,11 @@ static void RenderDocumentComposite(
             }
             else if (child is FrameworkElement fe)
             {
+                var stretch = fe.Tag is FreeW.Core.Model.Shape
+                    ? Stretch.None
+                    : Stretch.Fill;
                 dc.DrawRectangle(
-                    new VisualBrush(fe) { Stretch = Stretch.Fill },
+                    new VisualBrush(fe) { Stretch = stretch },
                     null,
                     localRect);
             }
