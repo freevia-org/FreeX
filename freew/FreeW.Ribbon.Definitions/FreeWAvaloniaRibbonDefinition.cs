@@ -354,12 +354,6 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("Summation  ∑",        new RibbonCommandId("freew.equation.summation")),
         });
 
-    /// <summary>AV-INSERT: Insert &gt; Symbol palette — common special characters.</summary>
-    private static RibbonMenu BuildSymbolMenu() =>
-        new(FreeWRibbonDefinitionData.Symbols
-            .Select(s => new RibbonMenuItem($"{s.Glyph}   {s.Label}", new RibbonCommandId(s.Id)))
-            .ToArray());
-
     /// <summary>
     /// AV-DESIGN: Design &gt; Themes dropdown — one item per built-in <see cref="DocumentTheme.Catalog"/>
     /// entry. Command ids are <c>freew.theme.&lt;name&gt;</c> (lower-case), matching the registry wiring.
@@ -432,7 +426,6 @@ internal static class FreeWAvaloniaRibbonDefinition
     private static RibbonMenu BuildPageColorMenu() =>
         new(FreeWRibbonDefinitionData.PageColors
             .Select(pc => new RibbonMenuItem(pc.Label, new RibbonCommandId(pc.CommandId)))
-            .Concat([RibbonMenuItem.Separator(), new RibbonMenuItem("More Colors...", new RibbonCommandId("freew.page-color.more"))])
             .ToArray());
 
     /// <summary>
@@ -513,7 +506,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Toggle("freew.bullets",           FreeWRibbonText.BulletsCommand.Label);
                     g.Toggle("freew.numbering",         FreeWRibbonText.NumberingCommand.Label);
-                    g.Dropdown("freew.multilevel-list", "Multilevel List", BuildMultilevelListMenu(), d => d with
+                    g.Dropdown("freew.multilevel-list", FreeWRibbonText.MultilevelListCommand.Label, BuildMultilevelListMenu(), d => d with
                     {
                         PreferredLayout = RibbonCommandLayoutKind.Small,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.MultilevelList)
@@ -732,7 +725,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.page-valign", "Vertical Align");
                     g.Button("freew.page-setup", "Page Setup...");
                 });
-                tab.Group("paragraph", "Paragraph", null, 92, g =>
+                tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, null, 92, g =>
                 {
                     g.Button("freew.indent-decrease", "Decrease Indent");
                     g.Button("freew.indent-increase", "Increase Indent");
