@@ -26,6 +26,11 @@ public sealed record CustomParagraphSpacingValidation(
 
 public static class CustomParagraphSpacingDialogPlanner
 {
+    public const string Title = "Custom Paragraph Spacing";
+    public const string Hint = "All values in points (pt). Line spacing is a multiple (for example, 1.15 = 115%).";
+    public const string SpaceBeforeLabel = "Space before (pt):";
+    public const string SpaceAfterLabel = "Space after (pt):";
+    public const string LineSpacingLabel = "Line spacing (x):";
     public const string SpaceBeforeValidationMessage = "Space before must be between 0 and 200 pt.";
     public const string SpaceAfterValidationMessage = "Space after must be between 0 and 200 pt.";
     public const string LineSpacingValidationMessage = "Line spacing must be between 0.01 and 10.";

@@ -1,6 +1,7 @@
 using System.IO;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -52,6 +53,31 @@ public sealed class PageSetupDialogTests
             InsertPicture: () => { },
             OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
+
+    private static PageSetupDialogResult Result(
+        double MarginTopPt,
+        double MarginBottomPt,
+        double MarginLeftPt,
+        double MarginRightPt,
+        bool Landscape,
+        double WidthPt,
+        double HeightPt) =>
+        new(
+            MarginTopPt,
+            MarginBottomPt,
+            MarginLeftPt,
+            MarginRightPt,
+            GutterPt: 0,
+            Landscape,
+            MirrorMargins: false,
+            WidthPt,
+            HeightPt,
+            SectionStart: SectionBreakKind.NextPage,
+            DifferentFirstPage: false,
+            DifferentOddEvenPages: false,
+            HeaderDistancePt: 36,
+            FooterDistancePt: 36,
+            VerticalAlignment: PageVerticalAlignment.Top);
 
     // ── Command registry ──────────────────────────────────────────────────────
 
@@ -149,6 +175,48 @@ public sealed class PageSetupDialogTests
             registry.TryGet(new RibbonCommandId(commandId), out _)
                 .Should().BeTrue($"{commandId} must be registered for the Avalonia Layout/Page Setup surface");
         }
+    }
+
+    [Fact]
+    public void Layout_commands_publish_live_values_checked_modes_and_protection_enablement()
+    {
+        var document = MakeDoc();
+        ((Paragraph)document.Blocks[0]).Formatting = ParagraphFormatting.Default with
+        {
+            IndentLeftPt = 18,
+            IndentRightPt = 24,
+            SpaceBeforePt = 6,
+            SpaceAfterPt = 12,
+        };
+        document.Page.ColumnCount = 3;
+        document.Page.LineNumberMode = LineNumberMode.RestartEachPage;
+        document.Page.AutoHyphenation = true;
+
+        var editor = new DocumentView();
+        editor.LoadDocument(document);
+        var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+
+        Stateful(registry, "freew.indent-left").GetState().Value.Should().Be("18");
+        Stateful(registry, "freew.indent-right").GetState().Value.Should().Be("24");
+        Stateful(registry, "freew.space-before").GetState().Value.Should().Be("6");
+        Stateful(registry, "freew.space-after").GetState().Value.Should().Be("12");
+        Stateful(registry, "freew.columns-three").GetState().IsChecked.Should().BeTrue();
+        Stateful(registry, "freew.line-numbers-restart-page").GetState().IsChecked.Should().BeTrue();
+        Stateful(registry, "freew.hyphenation-auto").GetState().IsChecked.Should().BeTrue();
+
+        editor.SetProtection(ProtectionMode.ReadOnly);
+        Stateful(registry, "freew.orientation").GetState().IsEnabled.Should().BeFalse();
+        Stateful(registry, "freew.page-margins-normal").GetState().IsEnabled.Should().BeFalse();
+        Stateful(registry, "freew.page-size-a4").GetState().IsEnabled.Should().BeFalse();
+        Stateful(registry, "freew.columns-three").GetState().IsEnabled.Should().BeFalse();
+        Stateful(registry, "freew.line-numbers-restart-page").GetState().IsEnabled.Should().BeFalse();
+        Stateful(registry, "freew.hyphenation-auto").GetState().IsEnabled.Should().BeFalse();
+    }
+
+    private static IRibbonStatefulCommand Stateful(RibbonCommandRegistry registry, string commandId)
+    {
+        registry.TryGet(new RibbonCommandId(commandId), out var command).Should().BeTrue();
+        return command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
     }
 
     // ── Ribbon definition ─────────────────────────────────────────────────────
@@ -277,7 +345,7 @@ public sealed class PageSetupDialogTests
         var view = new DocumentView();
         view.LoadDocument(doc);
 
-        var result = new PageSetupDialog.PageSetupDialogResult(
+        var result = Result(
             MarginTopPt:    36,
             MarginBottomPt: 48,
             MarginLeftPt:   54,
@@ -301,7 +369,7 @@ public sealed class PageSetupDialogTests
         var view = new DocumentView();
         view.LoadDocument(doc);
 
-        var result = new PageSetupDialog.PageSetupDialogResult(
+        var result = Result(
             MarginTopPt: 72, MarginBottomPt: 72, MarginLeftPt: 72, MarginRightPt: 72,
             Landscape: false,
             WidthPt: 595.3, HeightPt: 841.9);
@@ -320,7 +388,7 @@ public sealed class PageSetupDialogTests
         view.LoadDocument(doc);
         view.Document.Page.Landscape.Should().BeFalse("default is portrait");
 
-        var result = new PageSetupDialog.PageSetupDialogResult(
+        var result = Result(
             MarginTopPt: 72, MarginBottomPt: 72, MarginLeftPt: 72, MarginRightPt: 72,
             Landscape: true,
             WidthPt: 792, HeightPt: 612);
@@ -341,7 +409,7 @@ public sealed class PageSetupDialogTests
 
         var originalTop = view.Document.Page.MarginTopPt;
 
-        var result = new PageSetupDialog.PageSetupDialogResult(
+        var result = Result(
             MarginTopPt: 36, MarginBottomPt: 36, MarginLeftPt: 36, MarginRightPt: 36,
             Landscape: false,
             WidthPt: 612, HeightPt: 792);

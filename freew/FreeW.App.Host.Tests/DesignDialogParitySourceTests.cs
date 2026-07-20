@@ -22,9 +22,10 @@ public sealed class DesignDialogParitySourceTests
     public void DesignShellWiringGaps_AreRecordedOutsideForbiddenRibbonFiles()
     {
         var avalonia = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogParity.cs"));
+        var sharedSpacing = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "PageLayoutDialogs.cs"));
         avalonia.Should().Contain("public sealed class CustomizeThemeColorsDialog");
         avalonia.Should().Contain("public sealed class CustomizeThemeFontsDialog");
-        avalonia.Should().Contain("public sealed class CustomParagraphSpacingDialog");
+        sharedSpacing.Should().Contain("public sealed class CustomParagraphSpacingDialog");
         avalonia.Should().Contain("public sealed class PageColorDialog");
         avalonia.Should().Contain("public sealed class SetAsDefaultConfirmationDialog");
     }
