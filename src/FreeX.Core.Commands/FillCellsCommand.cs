@@ -49,8 +49,21 @@ public sealed class FillCellsCommand : IWorkbookCommand
         // Excel refuses to fill (Ctrl+D/Ctrl+R) across a merged region: the merge's non-anchor
         // cells must never receive independent content, and a fill that only partially covers a
         // merge would leave the merge's data model out of sync (mirrors AutofillCommand/MoveRangeCommand's merge guard).
-        if (sheet.MergedRegions.Any(region => _range.Overlaps(region)))
-            return new CommandOutcome(false, "Cannot fill a range that intersects merged cells.");
+        // The one shape Excel DOES allow through -- mirroring AutofillCommand's own
+        // TryGetUniformMergeTileSize/ApplyMergeTiledFill carve-out -- is when the merges
+        // overlapping the selection are ALL the same size and exactly tile the selection with
+        // no gaps/partial overlaps (e.g. a "Q1" header merged across A1:B1 stacked over a
+        // second, identically-sized A2:B2 merge): that retiles the merged anchor content
+        // instead of refusing outright.
+        var overlappingMerges = sheet.MergedRegions.Where(region => _range.Overlaps(region)).ToList();
+        if (overlappingMerges.Count > 0)
+        {
+            var tileSpan = TryGetUniformMergeTileSpan(overlappingMerges);
+            if (tileSpan is null)
+                return new CommandOutcome(false, "Cannot fill a range that intersects merged cells.");
+
+            return ApplyMergeTiledFill(ctx, sheet, overlappingMerges, tileSpan.Value);
+        }
 
         _snapshot = [];
         _hyperlinkSnapshot = [];
@@ -193,6 +206,148 @@ public sealed class FillCellsCommand : IWorkbookCommand
             sheet.SetStyleOnly(address.Row, address.Col, styleId.Value);
         else
             sheet.ClearStyleOnly(address.Row, address.Col);
+    }
+
+    /// <summary>
+    /// The uniform-merge-tile shape that lets a fill go through instead of being refused: every
+    /// merged region overlapping <see cref="_range"/> must be the same size, and together they
+    /// must exactly tile the whole selection (no gaps, no partial-overlap merges, no merge that
+    /// straddles a tile boundary). Mirrors AutofillCommand's TryGetUniformMergeTileSize, adapted
+    /// to FillCellsCommand's model where the whole selection (not just a separate source range)
+    /// is pre-populated with equal-size merges.
+    /// </summary>
+    private (uint RowSpan, uint ColSpan)? TryGetUniformMergeTileSpan(IReadOnlyList<GridRange> overlappingMerges)
+    {
+        var rowSpan = overlappingMerges[0].RowCount;
+        var colSpan = overlappingMerges[0].ColCount;
+        if (overlappingMerges.Any(merge => merge.RowCount != rowSpan || merge.ColCount != colSpan))
+            return null;
+        if (_range.RowCount % rowSpan != 0 || _range.ColCount % colSpan != 0)
+            return null;
+
+        var expectedTileCount = (_range.RowCount / rowSpan) * (_range.ColCount / colSpan);
+        if (overlappingMerges.Count != expectedTileCount)
+            return null;
+
+        foreach (var merge in overlappingMerges)
+        {
+            if (!_range.Contains(merge))
+                return null;
+            if ((merge.Start.Row - _range.Start.Row) % rowSpan != 0 || (merge.Start.Col - _range.Start.Col) % colSpan != 0)
+                return null;
+        }
+
+        return (rowSpan, colSpan);
+    }
+
+    /// <summary>
+    /// Handles the merged-cell fill shape <see cref="TryGetUniformMergeTileSpan"/> allows
+    /// through: for each tile NOT on the source edge (row 0 for Down, last row for Up, col 0 for
+    /// Right, last col for Left), copies the same-tile-column/row source tile's anchor content
+    /// into the target tile's anchor, exactly like the plain per-cell fill path but at merge-tile
+    /// granularity. A tile's non-anchor cells are never touched, matching the invariant that only
+    /// a merge's top-left anchor cell holds a value.
+    /// </summary>
+    private CommandOutcome ApplyMergeTiledFill(ICommandContext ctx, Sheet sheet, IReadOnlyList<GridRange> overlappingMerges, (uint RowSpan, uint ColSpan) tileSpan)
+    {
+        var tileRows = (int)(_range.RowCount / tileSpan.RowSpan);
+        var tileCols = (int)(_range.ColCount / tileSpan.ColSpan);
+        var tilesByPosition = overlappingMerges.ToDictionary(merge => (
+            (int)((merge.Start.Row - _range.Start.Row) / tileSpan.RowSpan),
+            (int)((merge.Start.Col - _range.Start.Col) / tileSpan.ColSpan)));
+
+        var sourceForTargetAnchor = new Dictionary<CellAddress, CellAddress>();
+        for (var tr = 0; tr < tileRows; tr++)
+        {
+            for (var tc = 0; tc < tileCols; tc++)
+            {
+                var isSourceTile = _direction switch
+                {
+                    FillCellsDirection.Down => tr == 0,
+                    FillCellsDirection.Up => tr == tileRows - 1,
+                    FillCellsDirection.Right => tc == 0,
+                    FillCellsDirection.Left => tc == tileCols - 1,
+                    _ => false
+                };
+                if (isSourceTile)
+                    continue;
+
+                var sourceKey = _direction switch
+                {
+                    FillCellsDirection.Down => (0, tc),
+                    FillCellsDirection.Up => (tileRows - 1, tc),
+                    FillCellsDirection.Right => (tr, 0),
+                    FillCellsDirection.Left => (tr, tileCols - 1),
+                    _ => (tr, tc)
+                };
+
+                sourceForTargetAnchor[tilesByPosition[(tr, tc)].Start] = tilesByPosition[sourceKey].Start;
+            }
+        }
+
+        var targetAnchors = sourceForTargetAnchor.Keys.ToList();
+        if (targetAnchors.Count == 0)
+            return new CommandOutcome(false, "The fill range must include at least one target cell.");
+        if (targetAnchors.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
+            return CommandGuards.RejectSheetProtected();
+        if (CommandGuards.RejectIfSplitsArray(sheet, targetAnchors) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
+        _snapshot = [];
+        _hyperlinkSnapshot = [];
+        _richTextRunsSnapshot = [];
+        var writtenCells = new List<CellAddress>(targetAnchors.Count);
+
+        foreach (var target in targetAnchors)
+        {
+            var source = sourceForTargetAnchor[target];
+            _snapshot.Add((target, sheet.GetCell(target)?.Clone(), sheet.GetStyleOnly(target.Row, target.Col)));
+            _hyperlinkSnapshot.Add((
+                target,
+                sheet.Hyperlinks.TryGetValue(target, out var oldTarget),
+                oldTarget,
+                sheet.HyperlinkMetadata.TryGetValue(target, out var oldMetadata),
+                oldMetadata));
+            _richTextRunsSnapshot.Add((
+                target,
+                sheet.RichTextRuns.TryGetValue(target, out var oldRuns),
+                oldRuns));
+
+            var sourceCell = sheet.GetCell(source);
+            if (sourceCell is null)
+            {
+                sheet.ClearCell(target);
+                if (sheet.GetStyleOnly(source.Row, source.Col) is { } sourceStyleOnly)
+                    sheet.SetStyleOnly(target.Row, target.Col, sourceStyleOnly);
+                else
+                    sheet.ClearStyleOnly(target.Row, target.Col);
+                sheet.Hyperlinks.Remove(target);
+                sheet.HyperlinkMetadata.Remove(target);
+                sheet.RichTextRuns.Remove(target);
+                writtenCells.Add(target);
+                continue;
+            }
+
+            sheet.SetCell(target, CloneForTarget(sourceCell, source, target, sheet.Name));
+            if (sheet.Hyperlinks.TryGetValue(source, out var sourceTarget))
+                sheet.Hyperlinks[target] = sourceTarget;
+            else
+                sheet.Hyperlinks.Remove(target);
+
+            if (sheet.HyperlinkMetadata.TryGetValue(source, out var sourceMetadata))
+                sheet.HyperlinkMetadata[target] = sourceMetadata;
+            else
+                sheet.HyperlinkMetadata.Remove(target);
+
+            if (sheet.RichTextRuns.TryGetValue(source, out var sourceRuns))
+                sheet.RichTextRuns[target] = sourceRuns;
+            else
+                sheet.RichTextRuns.Remove(target);
+
+            writtenCells.Add(target);
+        }
+
+        return new CommandOutcome(true, AffectedCells: writtenCells);
     }
 
     private static Cell CloneForTarget(Cell sourceCell, CellAddress source, CellAddress target, string sheetName)

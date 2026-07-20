@@ -303,7 +303,7 @@ public sealed class PageSetupDialogModelTests
     }
 
     [Fact]
-    public void TryBuildCommand_BuildsCommandFromValidFields()
+    public void TryBuildCommandPlan_BuildsCommandFromValidFields()
     {
         var sheet = CreateSheet();
         var fields = new PageSetupDialogFields
@@ -322,34 +322,35 @@ public sealed class PageSetupDialogModelTests
             PageOrder = WorksheetPageOrder.OverThenDown,
         };
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeTrue();
-        result.Command.Should().NotBeNull();
+        result.Plan.Should().NotBeNull();
+        result.Plan!.PageSetupCommand.Should().NotBeNull();
         result.Error.Should().BeNull();
     }
 
     [Fact]
-    public void TryBuildCommand_InvalidMarginsReportsError()
+    public void TryBuildCommandPlan_InvalidMarginsReportsError()
     {
         var sheet = CreateSheet();
         var fields = PageSetupDialogModel.FromSheet(sheet) with { MarginsText = "1, 2, 3" };
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeFalse();
-        result.Command.Should().BeNull();
+        result.Plan.Should().BeNull();
         result.Error.Should().NotBeNullOrEmpty();
         result.Target.Should().Be(PageSetupValidationTarget.Margins);
     }
 
     [Fact]
-    public void TryBuildCommand_InvalidPrintTitleReportsError()
+    public void TryBuildCommandPlan_InvalidPrintTitleReportsError()
     {
         var sheet = CreateSheet();
         var fields = PageSetupDialogModel.FromSheet(sheet) with { RepeatRowsText = "abc" };
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeFalse();
         result.Error.Should().NotBeNullOrEmpty();
@@ -357,7 +358,7 @@ public sealed class PageSetupDialogModelTests
     }
 
     [Fact]
-    public void TryBuildCommand_ProducesUndoableLabeledCommand()
+    public void TryBuildCommandPlan_ProducesUndoableLabeledCommand()
     {
         var sheet = CreateSheet();
         var fields = PageSetupDialogModel.FromSheet(sheet) with
@@ -367,10 +368,10 @@ public sealed class PageSetupDialogModelTests
             ScalePercentText = "75",
         };
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeTrue();
-        result.Command!.Label.Should().Be("Page Setup");
+        result.Plan!.PageSetupCommand.Label.Should().Be("Page Setup");
     }
 
     [Fact]
@@ -449,10 +450,10 @@ public sealed class PageSetupDialogModelTests
             PrintComments = WorksheetPrintComments.AsDisplayed,
         };
 
-        var build = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var build = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
         build.Success.Should().BeTrue();
 
-        build.Command!.Apply(ctx).Success.Should().BeTrue();
+        build.Plan!.PageSetupCommand.Apply(ctx).Success.Should().BeTrue();
         sheet.HeaderMargin.Should().Be(0.6);
         sheet.FooterMargin.Should().Be(0.7);
         sheet.CenterHorizontallyOnPage.Should().BeTrue();
@@ -464,7 +465,7 @@ public sealed class PageSetupDialogModelTests
         sheet.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.NotAvailable);
         sheet.PrintComments.Should().Be(WorksheetPrintComments.AsDisplayed);
 
-        build.Command.Revert(ctx);
+        build.Plan!.PageSetupCommand.Revert(ctx);
         sheet.CenterHorizontallyOnPage.Should().BeFalse();
         sheet.PrintBlackAndWhite.Should().BeFalse();
         sheet.FirstPageNumber.Should().BeNull();
@@ -474,12 +475,12 @@ public sealed class PageSetupDialogModelTests
     [InlineData("0")]
     [InlineData("-2")]
     [InlineData("x")]
-    public void TryBuildCommand_RejectsInvalidFirstPageNumber(string text)
+    public void TryBuildCommandPlan_RejectsInvalidFirstPageNumber(string text)
     {
         var sheet = CreateSheet();
         var fields = PageSetupDialogModel.FromSheet(sheet) with { FirstPageNumberText = text };
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeFalse();
         result.Error.Should().NotBeNullOrEmpty();
@@ -490,12 +491,12 @@ public sealed class PageSetupDialogModelTests
     [InlineData("0")]
     [InlineData("-50")]
     [InlineData("abc")]
-    public void TryBuildCommand_RejectsInvalidPrintQuality(string text)
+    public void TryBuildCommandPlan_RejectsInvalidPrintQuality(string text)
     {
         var sheet = CreateSheet();
         var fields = PageSetupDialogModel.FromSheet(sheet) with { PrintQualityDpiText = text };
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeFalse();
         result.Error.Should().NotBeNullOrEmpty();
@@ -503,12 +504,12 @@ public sealed class PageSetupDialogModelTests
     }
 
     [Fact]
-    public void TryBuildCommand_RejectsNegativeHeaderMargin()
+    public void TryBuildCommandPlan_RejectsNegativeHeaderMargin()
     {
         var sheet = CreateSheet();
         var fields = PageSetupDialogModel.FromSheet(sheet) with { HeaderMarginText = "-1" };
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeFalse();
         result.Error.Should().NotBeNullOrEmpty();
@@ -516,12 +517,12 @@ public sealed class PageSetupDialogModelTests
     }
 
     [Fact]
-    public void TryBuildCommand_InvalidPrintAreaReportsTarget()
+    public void TryBuildCommandPlan_InvalidPrintAreaReportsTarget()
     {
         var sheet = CreateSheet();
         var fields = PageSetupDialogModel.FromSheet(sheet) with { PrintAreaText = "not a range" };
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeFalse();
         result.Error.Should().NotBeNullOrEmpty();

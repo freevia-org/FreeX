@@ -13,8 +13,28 @@ public partial class GridView
 {
     public static ConditionalIconCellLayout CalculateConditionalIconCellLayout(
         Rect cellRect,
-        ConditionalFormatIcon icon) =>
-        ConditionalIconLayoutPlanner.CalculateCellLayout(cellRect, icon);
+        ConditionalFormatIcon icon,
+        bool isRightToLeft = false)
+    {
+        // R55-meta-1: the WPF adapter (ConditionalIconLayoutPlanner) predates the R54 RTL-mirroring
+        // param, so we call the portable planner directly to thread isRightToLeft through — matching
+        // how Excel mirrors icon-set glyphs to the cell's right edge on right-to-left sheets.
+        var layout = ConditionalIconCellLayoutPlanner.CalculateCellLayout(
+            cellRect.Left,
+            cellRect.Top,
+            cellRect.Width,
+            cellRect.Height,
+            icon.ShowValue,
+            isRightToLeft);
+
+        var iconRect = new Rect(layout.IconLeft, layout.IconTop, layout.IconSize, layout.IconSize);
+
+        if (!icon.ShowValue)
+            return new ConditionalIconCellLayout(iconRect, Rect.Empty, ShouldDrawText: false);
+
+        var textRect = new Rect(layout.TextLeft, cellRect.Top, layout.TextWidth, cellRect.Height);
+        return new ConditionalIconCellLayout(iconRect, textRect, ShouldDrawText: layout.ShouldDrawText);
+    }
 
     public static bool ShouldDrawCellContent(DisplayCell cell, CellAddress? editingCell)
     {

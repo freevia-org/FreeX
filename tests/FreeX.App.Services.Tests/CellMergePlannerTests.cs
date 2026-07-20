@@ -109,6 +109,47 @@ public sealed class CellMergePlannerTests
     }
 
     [Fact]
+    public void CreateMergeCommands_AllowUnmergeToggleFalse_LeavesAlreadyMergedRowMerged()
+    {
+        // R55-commands-merge-center-5-1: a Merge-Across per-row batch must never toggle an
+        // already-correctly-merged row back off just because CreateMergeCommands is re-invoked for
+        // that row too.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var alreadyMergedRow = Range(sheet.Id, 2, 1, 2, 3);
+        sheet.AddMergedRegion(alreadyMergedRow);
+
+        var commands = CellMergePlanner.CreateMergeCommands(
+            sheet,
+            sheet.Id,
+            alreadyMergedRow,
+            mergeCells: true,
+            allowUnmergeToggle: false);
+
+        commands.Should().NotContain(command => command is UnmergeCellsCommand);
+        commands.Should().ContainSingle().Which.Should().BeOfType<MergeCellsCommand>();
+    }
+
+    [Fact]
+    public void CreateMergeCommands_DefaultAllowUnmergeToggle_StillTogglesAlreadyMergedRangeOff()
+    {
+        // Sibling no-regression test: the direct Merge Cells / Merge & Center gesture (the default,
+        // allowUnmergeToggle: true) must keep its Excel-parity toggle-to-unmerge behavior.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var alreadyMergedRow = Range(sheet.Id, 2, 1, 2, 3);
+        sheet.AddMergedRegion(alreadyMergedRow);
+
+        var commands = CellMergePlanner.CreateMergeCommands(
+            sheet,
+            sheet.Id,
+            alreadyMergedRow,
+            mergeCells: true);
+
+        commands.Should().ContainSingle().Which.Should().BeOfType<UnmergeCellsCommand>();
+    }
+
+    [Fact]
     public void CreateUnmergeCommands_TargetsOverlappingMergedRegions()
     {
         var workbook = CreateWorkbook();
@@ -167,6 +208,41 @@ public sealed class CellMergePlannerTests
 
         plan.WouldLoseContent.Should().BeTrue();
         plan.ConcatenatedText.Should().Be("=A1+A2");
+    }
+
+    [Fact]
+    public void AnalyzeContent_PerRow_SkipsWarningWhenEachRowsLeftmostHasContent()
+    {
+        // R55-commands-merge-center-5-2: for a Merge-Across batch (perRow: true), each row's own
+        // leftmost cell is THAT row's top-left, so A1/A2/A3 all being the sole content in their own
+        // row must not trigger the discard warning.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = Range(sheet.Id, 1, 1, 3, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Mar"));
+
+        var plan = CellMergePlanner.AnalyzeContent(sheet, range, perRow: true);
+
+        plan.WouldLoseContent.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AnalyzeContent_PerRowFalse_StillWarnsForSameData()
+    {
+        // Sibling no-regression test: the direct Merge Cells / Merge & Center gesture (perRow: false,
+        // including the parameterless overload) folds the WHOLE range into one merged cell, so only
+        // range.Start survives -- A2/A3's content is genuinely lost and the warning must still fire.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = Range(sheet.Id, 1, 1, 3, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Mar"));
+
+        CellMergePlanner.AnalyzeContent(sheet, range, perRow: false).WouldLoseContent.Should().BeTrue();
+        CellMergePlanner.AnalyzeContent(sheet, range).WouldLoseContent.Should().BeTrue();
     }
 
     private static Workbook CreateWorkbook()

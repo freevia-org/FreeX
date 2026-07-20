@@ -17,7 +17,7 @@ namespace FreeX.App.Presentation.Tests;
 public sealed class PageSetupDialogModelCultureTests
 {
     [Fact]
-    public void TryBuildCommand_AcceptsCommaDecimalHeaderFooterMarginsUnderDeDeCulture()
+    public void TryBuildCommandPlan_AcceptsCommaDecimalHeaderFooterMarginsUnderDeDeCulture()
     {
         using var cultureScope = TestCultureScope.CurrentCulture("de-DE");
 
@@ -29,16 +29,16 @@ public sealed class PageSetupDialogModelCultureTests
             FooterMarginText = "0,7",
         };
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeTrue();
-        result.Command!.Apply(new PageSetupCultureTestCommandContext(workbook));
+        result.Plan!.PageSetupCommand.Apply(new PageSetupCultureTestCommandContext(workbook));
         sheet.HeaderMargin.Should().Be(0.6);
         sheet.FooterMargin.Should().Be(0.7);
     }
 
     [Fact]
-    public void TryBuildCommand_StillAcceptsInvariantDotDecimalHeaderFooterMarginsUnderDeDeCulture()
+    public void TryBuildCommandPlan_StillAcceptsInvariantDotDecimalHeaderFooterMarginsUnderDeDeCulture()
     {
         using var cultureScope = TestCultureScope.CurrentCulture("de-DE");
 
@@ -50,10 +50,10 @@ public sealed class PageSetupDialogModelCultureTests
             FooterMarginText = "0.7",
         };
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeTrue();
-        result.Command!.Apply(new PageSetupCultureTestCommandContext(workbook));
+        result.Plan!.PageSetupCommand.Apply(new PageSetupCultureTestCommandContext(workbook));
         sheet.HeaderMargin.Should().Be(0.6);
         sheet.FooterMargin.Should().Be(0.7);
     }

@@ -116,6 +116,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         // package XML to tell an enabled custom first-page-number from a disabled one with a stale numeric
         // value left in the file (see the FirstPageNumber assignment below).
         Dictionary<string, bool>? firstPageNumberEnabledByWorksheetPath = null;
+        // Raw hyperlink "location" attribute per worksheet part path + cell ref, but ONLY for
+        // hyperlink elements that ALSO carry an r:id (external relationship). R55-io-hyperlink-
+        // round-trip-5-2: ClosedXML's XLHyperlink.InternalAddress getter -- the only source the load
+        // loop below otherwise reads Bookmark from -- comes back null/empty for this external+location
+        // combination (Excel's "Existing File > Bookmark..." picker), so the sub-address is recovered
+        // directly from the source XML instead.
+        Dictionary<string, Dictionary<string, string>>? externalHyperlinkLocationsByWorksheetPath = null;
         var packageMetadataDiagnostics = MeasureLoadPhase(() =>
         {
             try
@@ -129,6 +136,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 packageParts = XlsxLoadPackageParts.Inspect(packageArchive);
                 chartsheets = XlsxChartsheetReader.Read(packageArchive);
                 firstPageNumberEnabledByWorksheetPath = ReadWorksheetFirstPageNumberEnabledFlags(packageArchive);
+                externalHyperlinkLocationsByWorksheetPath = ReadWorksheetExternalHyperlinkLocations(packageArchive);
 
                 workbookTheme = packageParts.HasTheme
                     ? XlsxWorkbookThemeReader.Load(packageArchive)
@@ -605,17 +613,30 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     var cell = hyperlink.Cell;
                     if (cell is null) continue;
 
-                    var target = hyperlink.ExternalAddress?.ToString() ??
-                                 NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress, xlSheet.Name) ??
-                                 string.Empty;
+                    var addr = new CellAddress(sheet.Id, (uint)cell.Address.RowNumber, (uint)cell.Address.ColumnNumber);
+                    var bookmark = NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress, xlSheet.Name);
+
+                    // R55-io-hyperlink-round-trip-5-2: ClosedXML's InternalAddress getter is empty for
+                    // an external hyperlink that ALSO carries a "location" sub-address (Excel's
+                    // "Existing File > Bookmark..." feature); recover it from the raw source XML.
+                    if (string.IsNullOrWhiteSpace(bookmark) &&
+                        hyperlink.ExternalAddress is not null &&
+                        xmlLayout?.WorksheetPath is { Length: > 0 } hyperlinkWorksheetPath &&
+                        externalHyperlinkLocationsByWorksheetPath is not null &&
+                        externalHyperlinkLocationsByWorksheetPath.TryGetValue(hyperlinkWorksheetPath, out var locationsByRef) &&
+                        locationsByRef.TryGetValue(addr.ToA1(), out var rawLocation))
+                    {
+                        bookmark = rawLocation;
+                    }
+
+                    var target = hyperlink.ExternalAddress?.ToString() ?? bookmark ?? string.Empty;
                     if (string.IsNullOrEmpty(target)) continue;
 
-                    var addr = new CellAddress(sheet.Id, (uint)cell.Address.RowNumber, (uint)cell.Address.ColumnNumber);
                     sheet.Hyperlinks[addr] = target;
                     sheet.HyperlinkMetadata[addr] = new HyperlinkMetadata(
                         GetHyperlinkTargetKind(hyperlink, target),
                         hyperlink.Tooltip ?? "",
-                        NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress, xlSheet.Name) ?? "");
+                        bookmark ?? "");
                 }
                 catch (Exception ex)
                 {
@@ -1747,6 +1768,65 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
             result[XlsxPackagePath.NormalizeEntryPath(entry)] =
                 XlsxWorksheetXmlValueParser.IsTruthy(pageSetup.Attribute("useFirstPageNumber")?.Value);
+        }
+
+        return result;
+    }
+
+    private static readonly XNamespace HyperlinkRelationshipNamespace =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+    // R55-io-hyperlink-round-trip-5-2: reads, per worksheet part path, the raw "location" attribute
+    // of every <hyperlink> element that ALSO carries an r:id (an external relationship) -- Excel's
+    // "Existing File > Bookmark..." feature writes both together (r:id + location="Sheet2!A5") to
+    // jump to a specific sheet/cell inside the linked external workbook. ClosedXML's
+    // XLHyperlink.InternalAddress getter only ever populates for a purely INTERNAL hyperlink, so it
+    // comes back null/empty for this external+location combination and the load loop below would
+    // otherwise silently drop the sub-address. Best-effort: any entry that fails to parse, or has no
+    // hyperlinks element, is simply omitted.
+    private static Dictionary<string, Dictionary<string, string>> ReadWorksheetExternalHyperlinkLocations(
+        ZipArchive archive)
+    {
+        var result = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry))
+        {
+            XDocument xml;
+            try
+            {
+                xml = XlsxPackageXmlEditor.LoadXml(entry);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            if (xml.Root is not { } root)
+                continue;
+
+            var ns = root.Name.Namespace;
+            var hyperlinksElement = root.Element(ns + "hyperlinks");
+            if (hyperlinksElement is null)
+                continue;
+
+            Dictionary<string, string>? byRef = null;
+            foreach (var hyperlinkElement in hyperlinksElement.Elements(ns + "hyperlink"))
+            {
+                var reference = hyperlinkElement.Attribute("ref")?.Value;
+                var location = hyperlinkElement.Attribute("location")?.Value;
+                var relationshipId = hyperlinkElement.Attribute(HyperlinkRelationshipNamespace + "id")?.Value;
+                if (string.IsNullOrEmpty(reference) ||
+                    string.IsNullOrWhiteSpace(location) ||
+                    string.IsNullOrEmpty(relationshipId))
+                {
+                    continue;
+                }
+
+                byRef ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                byRef[reference] = location;
+            }
+
+            if (byRef is not null)
+                result[XlsxPackagePath.NormalizeEntryPath(entry)] = byRef;
         }
 
         return result;

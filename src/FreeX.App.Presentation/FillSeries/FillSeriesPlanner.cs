@@ -225,9 +225,9 @@ public static class FillSeriesPlanner
             // keeps chaining forward (matching a fill-handle drag across the whole rectangle),
             // and if no value has been established yet the line is left untouched until one is.
             if (IsSeriesLineStart(address, range, seriesIn) &&
-                sheet.GetValue(address.Row, address.Col) is NumberValue lineSeed)
+                TryGetLinearOrGrowthSeriesSeed(sheet.GetValue(address.Row, address.Col), out var lineSeedValue))
             {
-                value = lineSeed.Value + step;
+                value = lineSeedValue + step;
                 hasValue = true;
                 continue;
             }
@@ -269,10 +269,10 @@ public static class FillSeriesPlanner
             // forward into it, and if no value has been established yet the line is left
             // untouched until one is.
             if (IsSeriesLineStart(address, range, seriesIn) &&
-                sheet.GetValue(address.Row, address.Col) is NumberValue lineSeed)
+                TryGetLinearOrGrowthSeriesSeed(sheet.GetValue(address.Row, address.Col), out var lineSeedValue))
             {
-                ascending = IsGrowthAscending(lineSeed.Value, step);
-                value = lineSeed.Value * step;
+                ascending = IsGrowthAscending(lineSeedValue, step);
+                value = lineSeedValue * step;
                 hasValue = true;
                 continue;
             }
@@ -406,6 +406,30 @@ public static class FillSeriesPlanner
         seriesIn == FillSeriesDirection.Columns
             ? address.Row == range.Start.Row
             : address.Col == range.Start.Col;
+
+    /// <summary>
+    /// Linear and Growth series treat a date's underlying serial number as a plain numeric seed,
+    /// matching Excel: whether a cell holds 1/1/2026 (a <see cref="DateTimeValue"/>, because it has
+    /// a date number format) or the equivalent bare number 46023 (a <see cref="NumberValue"/>) makes
+    /// no difference to these two series types -- only the dedicated Date series type
+    /// (<see cref="BuildDateSeriesEdits"/>) treats dates specially (month/year clamping etc.). Any
+    /// other seed shape (text, blank, boolean, error) still does not reseed a line.
+    /// </summary>
+    private static bool TryGetLinearOrGrowthSeriesSeed(ScalarValue? value, out double seed)
+    {
+        switch (value)
+        {
+            case NumberValue number:
+                seed = number.Value;
+                return true;
+            case DateTimeValue dateTime:
+                seed = dateTime.Value;
+                return true;
+            default:
+                seed = 0;
+                return false;
+        }
+    }
 
     private static bool IsPastStopValue(double value, double step, double? stopValue)
     {

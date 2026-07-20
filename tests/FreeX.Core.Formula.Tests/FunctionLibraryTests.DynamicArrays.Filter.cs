@@ -59,13 +59,20 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Filter_BlankIfEmptyArgument_ReturnsCalcError()
+    public void Filter_TrailingCommaIfEmptyArgument_SuppliedButBlank_NotCalcError()
     {
+        // The if_empty argument SLOT is supplied here (a trailing comma before the closing paren,
+        // not the argument being left off entirely) -- it just evaluates to BlankValue, the same
+        // way a reference to an empty cell does. Only a genuinely-absent slot (no third argument at
+        // all -- see Filter_NoMatchesWithoutIfEmpty_ReturnsCalcError below) keeps the #CALC! default;
+        // R55-formula-dynamic-array-spill-5-1.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(10)),
             (1, 2, new BoolValue(false)));
 
-        _eval.Evaluate("=FILTER(A1:A1,B1:B1,)", sheet).Should().Be(new ErrorValue("#CALC!"));
+        var rv = _eval.Evaluate("=FILTER(A1:A1,B1:B1,)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        rv.Cells[0, 0].Should().Be(BlankValue.Instance);
     }
 
     [Fact]

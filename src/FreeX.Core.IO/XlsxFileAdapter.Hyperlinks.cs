@@ -1,5 +1,7 @@
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Xml.Linq;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
 
@@ -220,4 +222,85 @@ public sealed partial class XlsxFileAdapter
     private static bool IsSafeExternalHyperlinkUriChar(char c) =>
         (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
         SafeExternalHyperlinkUriCharacters.IndexOf(c, StringComparison.Ordinal) >= 0;
+
+    /// <summary>
+    /// True when <paramref name="sheet"/> has at least one internal (PlaceInThisDocument) hyperlink
+    /// whose <see cref="HyperlinkMetadata.Bookmark"/> is bang-less -- i.e. targets a defined name
+    /// rather than a sheet-qualified cell/range reference. Gates
+    /// <see cref="FixFabricatedDefinedNameHyperlinkLocations"/>, the FULL (ClosedXML) save-path
+    /// counterpart of R38-io-hyperlink-2-1's load-time fix, so the post-processing pass only opens a
+    /// worksheet XML edit session when there is actually a hyperlink of the shape ClosedXML's
+    /// XLHyperlink.InternalAddress getter is known to fabricate a sheet prefix onto.
+    /// </summary>
+    internal static bool HasBareInternalHyperlinkBookmarks(Sheet sheet)
+    {
+        foreach (var metadata in sheet.HyperlinkMetadata.Values)
+        {
+            if (metadata.LinkType == HyperlinkTargetKind.PlaceInThisDocument &&
+                !string.IsNullOrWhiteSpace(metadata.Bookmark) &&
+                !metadata.Bookmark.Contains('!'))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// R55-io-hyperlink-round-trip-5-1: on the FULL (ClosedXML) save path, ClosedXML's own
+    /// XLHyperlink.InternalAddress *getter* fabricates a "&lt;CurrentSheet&gt;!" prefix onto a
+    /// bang-less internal hyperlink address the instant it serializes the "location" attribute --
+    /// the exact same corruption <see cref="NormalizeInternalHyperlinkAddress"/> already strips at
+    /// LOAD time (see its R38-io-hyperlink-2-1 comment), but re-introduced on every FULL save because
+    /// <see cref="CreateXlsxHyperlink"/> can only hand ClosedXML the bare bookmark -- it has no way to
+    /// stop ClosedXML's writer from re-fabricating the prefix when it reads that property back.
+    /// The PATCH-save path never hits this: it bypasses ClosedXML entirely and writes the model's
+    /// Bookmark verbatim (via <see cref="QuoteInternalHyperlinkAddress"/>).
+    /// Post-process the saved worksheet XML here, reusing the exact same detection logic
+    /// <see cref="NormalizeInternalHyperlinkAddress"/> applies at load, so a workbook-scoped
+    /// defined-name hyperlink round-trips through a full save unchanged.
+    /// </summary>
+    internal static void FixFabricatedDefinedNameHyperlinkLocations(
+        Stream packageStream,
+        Workbook workbook,
+        XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+    {
+        if (worksheetPathMap is null)
+            return;
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        using var session = new XlsxWorksheetXmlEditSession(packageStream, worksheetPathMap);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (!HasBareInternalHyperlinkBookmarks(sheet))
+                continue;
+
+            if (!session.TryGetWorksheet(sheet, out var edit))
+                continue;
+
+            var hyperlinksElement = edit.Root.Element(worksheetNs + "hyperlinks");
+            if (hyperlinksElement is null)
+                continue;
+
+            var changed = false;
+            foreach (var hyperlinkElement in hyperlinksElement.Elements(worksheetNs + "hyperlink"))
+            {
+                var locationAttribute = hyperlinkElement.Attribute("location");
+                if (locationAttribute is null || string.IsNullOrWhiteSpace(locationAttribute.Value))
+                    continue;
+
+                var normalized = NormalizeInternalHyperlinkAddress(locationAttribute.Value, sheet.Name);
+                if (!string.Equals(normalized, locationAttribute.Value, StringComparison.Ordinal))
+                {
+                    locationAttribute.Value = normalized!;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                session.MarkDirty(edit);
+        }
+    }
 }

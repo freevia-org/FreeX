@@ -910,10 +910,18 @@ public sealed class AutofillCommand : IWorkbookCommand
             // fill handle treats 2+ identical list values the same as 2+ identical
             // numbers/dates: a flat series that copies the value, not one that advances.
 
+            // Excel reproduces the seed's own case style (ALL-CAPS, all-lowercase, or the
+            // list's canonical Title Case) rather than always emitting the canonical entry
+            // verbatim. Detect each seed's style against its matched canonical entry; when
+            // every seed agrees on one style, re-case the generated entries to match. A
+            // mixed/inconsistent style (or any seed that isn't upper/lower/Title at all)
+            // falls back to the canonical Title-Case text, same as before this fix.
+            var caseStyle = DetectUniformCaseStyle(values, indices, list);
+
             return offset =>
             {
                 var index = Mod(lastIndex + directedStep * (int)offset, list.Count);
-                return new TextValue(list[index]);
+                return new TextValue(ApplyCaseStyle(list[index], caseStyle));
             };
         }
 
@@ -961,6 +969,58 @@ public sealed class AutofillCommand : IWorkbookCommand
     }
 
     private static int Mod(int value, int modulus) => ((value % modulus) + modulus) % modulus;
+
+    private enum TextCaseStyle
+    {
+        /// <summary>The list's own canonical spelling (e.g. "Monday") -- also the fallback
+        /// used when the seed(s) don't share one consistent recognizable style.</summary>
+        Canonical,
+        Upper,
+        Lower
+    }
+
+    /// <summary>
+    /// Classifies <paramref name="value"/> against its matched <paramref name="canonical"/>
+    /// list entry as all-uppercase, all-lowercase, an exact canonical match, or -- for
+    /// anything else (mixed case, partial caps, etc.) -- falls back to
+    /// <see cref="TextCaseStyle.Canonical"/> so the generated series stays canonically spelled.
+    /// </summary>
+    private static TextCaseStyle DetectCaseStyle(string value, string canonical)
+    {
+        if (string.Equals(value, canonical, StringComparison.Ordinal))
+            return TextCaseStyle.Canonical;
+        if (string.Equals(value, canonical.ToUpperInvariant(), StringComparison.Ordinal))
+            return TextCaseStyle.Upper;
+        if (string.Equals(value, canonical.ToLowerInvariant(), StringComparison.Ordinal))
+            return TextCaseStyle.Lower;
+        return TextCaseStyle.Canonical;
+    }
+
+    /// <summary>
+    /// Determines the single case style shared by every seed value (each compared against the
+    /// list entry it matched via <paramref name="indices"/>). If any two seeds disagree on
+    /// style -- e.g. one all-caps and one Title Case -- there is no one consistent style to
+    /// reproduce, so this falls back to <see cref="TextCaseStyle.Canonical"/> (matching FreeX's
+    /// pre-existing behavior for that case).
+    /// </summary>
+    private static TextCaseStyle DetectUniformCaseStyle(IReadOnlyList<string> values, IReadOnlyList<int> indices, IReadOnlyList<string> list)
+    {
+        var style = DetectCaseStyle(values[0], list[indices[0]]);
+        for (var i = 1; i < values.Count; i++)
+        {
+            if (DetectCaseStyle(values[i], list[indices[i]]) != style)
+                return TextCaseStyle.Canonical;
+        }
+
+        return style;
+    }
+
+    private static string ApplyCaseStyle(string canonicalText, TextCaseStyle style) => style switch
+    {
+        TextCaseStyle.Upper => canonicalText.ToUpperInvariant(),
+        TextCaseStyle.Lower => canonicalText.ToLowerInvariant(),
+        _ => canonicalText
+    };
 
     /// <summary>
     /// Fits a straight line (least-squares) through <paramref name="numbers"/> (treated as

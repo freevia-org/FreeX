@@ -151,22 +151,6 @@ public sealed record PageSetupDialogFields
 }
 
 /// <summary>
-/// The outcome of validating + building a command from the dialog fields: either a ready-to-run
-/// command, or a human-readable error describing the first invalid field.
-/// </summary>
-public sealed record PageSetupCommandBuildResult(
-    SetPageSetupCommand? Command,
-    string? Error,
-    PageSetupValidationTarget? Target = null)
-{
-    public bool Success => Command is not null;
-
-    public static PageSetupCommandBuildResult Ok(SetPageSetupCommand command) => new(command, null);
-    public static PageSetupCommandBuildResult Fail(string error, PageSetupValidationTarget? target = null) =>
-        new(null, error, target);
-}
-
-/// <summary>
 /// The complete shared Page Setup command plan, or the first validation error that prevented building it.
 /// </summary>
 public sealed record PageSetupCommandPlanBuildResult(
@@ -426,22 +410,6 @@ public static class PageSetupDialogModel
             ScaleHeaderFooterWithDocument = sheet.HeaderFooterScaleWithDocument,
             AlignHeaderFooterWithMargins = sheet.HeaderFooterAlignWithMargins,
         };
-    }
-
-    /// <summary>
-    /// Validates <paramref name="fields"/> and, on success, builds a <see cref="SetPageSetupCommand"/>
-    /// that carries every page-setup property the dialog now surfaces (orientation, paper, margins,
-    /// header/footer margins, centering, scaling, print titles, print quality, first-page number, page
-    /// order, gridlines/headings, black-and-white, draft quality, cell-error and comment display). The
-    /// first invalid field stops the build and is reported in the result so the caller can surface it.
-    /// Header/footer text is applied by the companion <see cref="BuildHeaderFooterCommand"/>.
-    /// </summary>
-    public static PageSetupCommandBuildResult TryBuildCommand(Sheet sheet, PageSetupDialogFields fields)
-    {
-        var plan = TryBuildCommandPlan(sheet, fields);
-        return plan.Success
-            ? PageSetupCommandBuildResult.Ok(plan.Plan!.PageSetupCommand)
-            : PageSetupCommandBuildResult.Fail(plan.Error ?? "Page setup is invalid.", plan.Target);
     }
 
     /// <summary>

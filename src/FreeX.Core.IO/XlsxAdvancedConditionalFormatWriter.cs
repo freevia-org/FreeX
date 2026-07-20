@@ -315,8 +315,12 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             case CfRuleType.EndsWith:
                 if (!string.IsNullOrWhiteSpace(cf.TextRuleText))
                     rule.SetAttributeValue("text", cf.TextRuleText);
-                if (!string.IsNullOrWhiteSpace(cf.FormulaText))
-                    rule.Add(new XElement(worksheetNs + "formula", cf.FormulaText));
+                rule.SetAttributeValue("operator", ToTextRuleOperatorString(cf.RuleType));
+                rule.Add(new XElement(
+                    worksheetNs + "formula",
+                    !string.IsNullOrWhiteSpace(cf.FormulaText)
+                        ? cf.FormulaText
+                        : BuildSynthesizedTextRuleFormula(cf.RuleType, cf.TextRuleText, cf.AppliesTo.Start.ToA1())));
                 break;
             case CfRuleType.DateOccurring:
                 rule.SetAttributeValue("timePeriod", XlsxAdvancedConditionalFormatMetadata.NormalizeDateOccurringPeriod(cf.DateOccurringPeriod));
@@ -327,6 +331,12 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             case CfRuleType.NoBlanks:
             case CfRuleType.Errors:
             case CfRuleType.NoErrors:
+                rule.Add(new XElement(
+                    worksheetNs + "formula",
+                    !string.IsNullOrWhiteSpace(cf.FormulaText)
+                        ? cf.FormulaText
+                        : BuildSynthesizedBlankOrErrorRuleFormula(cf.RuleType, cf.AppliesTo.Start.ToA1())));
+                break;
             case CfRuleType.UniqueValues:
             case CfRuleType.DuplicateValues:
                 if (!string.IsNullOrWhiteSpace(cf.FormulaText))
@@ -346,6 +356,64 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         return rule;
     }
+
+    /// <summary>
+    /// Maps a text-rule <see cref="CfRuleType"/> to the ST_CfOperator value real Excel writes for
+    /// it -- note this is NOT the same enum member spelling as <see cref="CfRuleType"/> itself
+    /// (e.g. NotContainsText writes operator="notContains", not "notContainsText").
+    /// </summary>
+    private static string ToTextRuleOperatorString(CfRuleType type) => type switch
+    {
+        CfRuleType.ContainsText => "containsText",
+        CfRuleType.NotContainsText => "notContains",
+        CfRuleType.BeginsWith => "beginsWith",
+        CfRuleType.EndsWith => "endsWith",
+        _ => "containsText",
+    };
+
+    /// <summary>
+    /// Synthesizes the boolean <c>&lt;formula&gt;</c> body real Excel writes for a freshly-created
+    /// ContainsText/NotContainsText/BeginsWith/EndsWith rule when FreeX's own model only carries
+    /// <see cref="ConditionalFormat.TextRuleText"/> (never <see cref="ConditionalFormat.FormulaText"/>
+    /// -- <see cref="ConditionalFormatRuleBuilder"/>, the sole rule-creation path, never populates
+    /// it for these types). Excel itself does not read the "operator"/"text" attributes to decide
+    /// what to highlight -- it evaluates this formula, so a rule saved without one is inert on
+    /// reopen even though it round-trips through FreeX's own (attribute-driven) evaluator fine.
+    /// </summary>
+    private static string BuildSynthesizedTextRuleFormula(CfRuleType type, string? text, string topLeftReference)
+    {
+        var quotedText = QuoteFormulaTextLiteral(text);
+        return type switch
+        {
+            CfRuleType.ContainsText => $"NOT(ISERROR(SEARCH({quotedText},{topLeftReference})))",
+            CfRuleType.NotContainsText => $"ISERROR(SEARCH({quotedText},{topLeftReference}))",
+            CfRuleType.BeginsWith => $"LEFT({topLeftReference},LEN({quotedText}))={quotedText}",
+            CfRuleType.EndsWith => $"RIGHT({topLeftReference},LEN({quotedText}))={quotedText}",
+            _ => $"NOT(ISERROR(SEARCH({quotedText},{topLeftReference})))",
+        };
+    }
+
+    /// <summary>
+    /// Synthesizes the boolean <c>&lt;formula&gt;</c> body real Excel writes for a freshly-created
+    /// Blanks/NoBlanks/Errors/NoErrors rule, for the same reason as
+    /// <see cref="BuildSynthesizedTextRuleFormula"/> above -- FreeX's rule-creation path never
+    /// populates <see cref="ConditionalFormat.FormulaText"/> for these types either.
+    /// </summary>
+    private static string BuildSynthesizedBlankOrErrorRuleFormula(CfRuleType type, string topLeftReference) => type switch
+    {
+        CfRuleType.Blanks => $"LEN(TRIM({topLeftReference}))=0",
+        CfRuleType.NoBlanks => $"LEN(TRIM({topLeftReference}))<>0",
+        CfRuleType.Errors => $"ISERROR({topLeftReference})",
+        CfRuleType.NoErrors => $"NOT(ISERROR({topLeftReference}))",
+        _ => $"ISERROR({topLeftReference})",
+    };
+
+    /// <summary>
+    /// Formats a string as an Excel formula string literal: wrapped in double quotes, with any
+    /// embedded double quote doubled per Excel's own escaping rule.
+    /// </summary>
+    private static string QuoteFormulaTextLiteral(string? text) =>
+        "\"" + (text ?? string.Empty).Replace("\"", "\"\"") + "\"";
 
     private static XElement AddConditionalFormatPayloadNativeMetadata(
         XElement payload,

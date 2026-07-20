@@ -564,15 +564,24 @@ public static partial class NumberFormatter
 
         // .NET may produce "-0" (or "-0.00" etc.) when a very small negative number
         // rounds to zero under the format. Excel never displays negative zero — strip the sign.
-        if (numStr.Length > 1 && numStr[0] == '-' && IsNegativeZeroRepresentation(numStr, numberFormat))
+        // This can ONLY be .NET's own auto-generated sign (never a literal '-' the format author
+        // wrote) when the ORIGINAL value passed to this method was itself negative: .NET's custom
+        // numeric-format engine treats '-' purely as a literal character and never emits it on its
+        // own for a non-negative input. Both callers of this method (the single-section magnitude
+        // path and the positional-section path via SelectPositionalSection) already pass an
+        // Math.Abs'd, non-negative value for a negative source number, so a leading '-' seen there
+        // is always an author-literal minus (e.g. the "-0" in "0;-0") and must be preserved --
+        // gating on `value < 0` is what tells the two cases apart.
+        if (value < 0 && numStr.Length > 1 && numStr[0] == '-' && IsNegativeZeroRepresentation(numStr, numberFormat))
             numStr = numStr[1..];
 
         var result = NativeDigits(prefix + numStr + suffix);
 
-        // Multi-section negative formats carry an explicit '-' in the prefix (e.g. the
-        // second section of "0;-0;0;…" is "-0"). If the entire formatted string is a
-        // negative-zero representation, drop the sign so Excel's behaviour is matched.
-        if (result.Length > 1 && result[0] == '-' && IsAllZeroText(result[1..]))
+        // Same distinction as above, applied to the assembled prefix+numStr+suffix result: only
+        // strip when the original value was negative (an auto-generated sign), never when it was
+        // already non-negative (any '-' there is an author-literal character in the format's
+        // prefix/section text and must be kept, per R55-render-number-format-display-5-1).
+        if (value < 0 && result.Length > 1 && result[0] == '-' && IsAllZeroText(result[1..]))
             result = result[1..];
 
         return result;

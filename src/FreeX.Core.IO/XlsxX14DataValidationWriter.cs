@@ -120,12 +120,55 @@ internal static class XlsxX14DataValidationWriter
                 x14Rules.Add(dv);
         }
 
-        if (x14Rules.Count == 0)
+        // Every sqref FreeX is about to (re-)emit below, from its own IsX14-modeled rules, plus
+        // every sqref any OTHER currently-live (non-deleted) DataValidation on this sheet covers --
+        // regardless of its own IsX14 flag. An existing x14:dataValidation entry whose sqref
+        // matches one of the latter but not the former was written (moments earlier, by
+        // ClosedXML's own SaveAs) for a rule FreeX's model does not consider x14 -- e.g. a
+        // Decimal/WholeNumber/Date/Time rule ClosedXML silently auto-promotes into the x14
+        // extension because its bound formula is a cross-sheet reference, even though FreeX left
+        // DataValidation.IsX14 false for it. That rule has no legacy <dataValidation> element
+        // either (ClosedXML wrote it straight into the x14 block), so blindly replacing the whole
+        // ext block below would delete it outright -- preserve any such foreign-but-still-live
+        // entry instead of discarding it. An entry whose sqref matches NEITHER set corresponds to
+        // a rule that has since been deleted from the model entirely (not just un-x14-marked) and
+        // must still be dropped, matching R18-dv-extlst-x14-io-1's "delete resurrects nothing"
+        // contract.
+        var freeXSqrefs = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var dv in x14Rules)
+            freeXSqrefs.Add(NormalizeSqrefForComparison(BuildSqref(dv)));
+
+        var liveSqrefs = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var dv in sheet.DataValidations)
+            liveSqrefs.Add(NormalizeSqrefForComparison(BuildSqref(dv)));
+
+        var foreignX14DvElements = new List<XElement>();
+        var extLstForForeignScan = worksheetRoot.Elements().LastOrDefault(e => e.Name.LocalName == "extLst");
+        var existingX14DvExt = extLstForForeignScan?.Elements()
+            .FirstOrDefault(e => e.Name.LocalName == "ext" && e.Attribute("uri")?.Value == XlsxX14DataValidationReader.X14DvUri);
+        var existingX14DvsElement = existingX14DvExt?.Elements()
+            .FirstOrDefault(e => e.Name.LocalName == "dataValidations");
+        if (existingX14DvsElement is not null)
         {
-            // All x14 rules on this sheet were deleted. If the preserved worksheet XML still has
-            // a stale x14 DV ext block from the source file, strip it so the deleted rule(s) do
-            // not resurrect on reopen. Leave any other ext children (and a non-empty extLst)
-            // untouched; only remove the extLst itself if it becomes empty.
+            foreach (var candidate in existingX14DvsElement.Elements().Where(e => e.Name.LocalName == "dataValidation"))
+            {
+                var rawSqref = candidate.Elements().LastOrDefault(e => e.Name.LocalName == "sqref")?.Value;
+                if (string.IsNullOrEmpty(rawSqref))
+                    continue;
+
+                var sqref = NormalizeSqrefForComparison(rawSqref);
+                if (!freeXSqrefs.Contains(sqref) && liveSqrefs.Contains(sqref))
+                    foreignX14DvElements.Add(new XElement(candidate));
+            }
+        }
+
+        if (x14Rules.Count == 0 && foreignX14DvElements.Count == 0)
+        {
+            // All x14 rules on this sheet were deleted and nothing foreign needs to be kept. If
+            // the preserved worksheet XML still has a stale x14 DV ext block from the source
+            // file, strip it so the deleted rule(s) do not resurrect on reopen. Leave any other
+            // ext children (and a non-empty extLst) untouched; only remove the extLst itself if
+            // it becomes empty.
             var extLst = worksheetRoot.Elements()
                 .LastOrDefault(e => e.Name.LocalName == "extLst");
             if (extLst is null)
@@ -141,13 +184,16 @@ internal static class XlsxX14DataValidationWriter
             return;
         }
 
-        // Build the x14 dataValidations element.
-        var x14DvElements = new List<XElement>(x14Rules.Count);
+        // Build the x14 dataValidations element: FreeX's own modeled rules first, followed by any
+        // foreign (non-FreeX-modeled) entries that must be preserved.
+        var x14DvElements = new List<XElement>(x14Rules.Count + foreignX14DvElements.Count);
         foreach (var dv in x14Rules)
         {
             var x14Dv = BuildX14DataValidationElement(dv);
             x14DvElements.Add(x14Dv);
         }
+
+        x14DvElements.AddRange(foreignX14DvElements);
 
         var x14DvsElement = new XElement(X14Ns + "dataValidations",
             new XAttribute("count", x14DvElements.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
@@ -156,7 +202,8 @@ internal static class XlsxX14DataValidationWriter
         // Find or create the worksheet extLst, then find/replace the x14 DV ext block.
         var existingExtLst = FindOrCreateExtLst(worksheetRoot);
 
-        // Remove any existing x14 DV ext block (we'll rewrite it).
+        // Remove any existing x14 DV ext block (we'll rewrite it -- any entries worth keeping
+        // from it were already copied into foreignX14DvElements above).
         var existing = existingExtLst.Elements()
             .FirstOrDefault(e => e.Name.LocalName == "ext" && e.Attribute("uri")?.Value == XlsxX14DataValidationReader.X14DvUri);
         existing?.Remove();
@@ -266,6 +313,31 @@ internal static class XlsxX14DataValidationWriter
         range.Start == range.End
             ? range.Start.ToA1()
             : range.ToString();
+
+    /// <summary>
+    /// Normalizes an sqref token list for equality comparison between FreeX's own
+    /// <see cref="BuildSqref"/> output (single-cell ranges collapsed to e.g. "D4") and a sqref
+    /// ClosedXML itself wrote into an x14:dataValidation (which always emits the full "D4:D4"
+    /// form, even for a single cell) -- used by <see cref="WriteX14DataValidations"/> to match a
+    /// foreign x14 entry back to a live <see cref="DataValidation"/> in the model regardless of
+    /// which of the two equivalent single-cell notations either side happens to use.
+    /// </summary>
+    private static string NormalizeSqrefForComparison(string sqref)
+    {
+        var parts = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            var colonIndex = part.IndexOf(':');
+            if (colonIndex > 0 &&
+                string.Equals(part[..colonIndex], part[(colonIndex + 1)..], StringComparison.OrdinalIgnoreCase))
+            {
+                parts[i] = part[..colonIndex];
+            }
+        }
+
+        return string.Join(' ', parts);
+    }
 
     private static bool ShouldWriteOperator(DvType type) =>
         type is DvType.WholeNumber or DvType.Decimal or DvType.Date or DvType.Time or DvType.TextLength;

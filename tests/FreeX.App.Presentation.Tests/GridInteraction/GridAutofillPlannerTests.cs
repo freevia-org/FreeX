@@ -564,6 +564,85 @@ public sealed class GridAutofillPlannerTests
             .BeFalse();
     }
 
+    [Fact]
+    public void IsOnHandle_UsesSplitPaneFixedRowWhenSingleCellSelectionScrollsOutOfMainViewport()
+    {
+        var sheet = SheetId.New();
+        var cell = new CellAddress(sheet, 0, 2);
+        var selectedRange = new GridRange(cell, cell);
+
+        // Window > Split with a fixed top row (row 0) pinned via SplitPanes.TopRows, while the
+        // scrollable main pane (viewport.RowMetrics) has scrolled past it entirely — rows 10/11 only.
+        // This mirrors GridView.Rendering.Selection.cs's documented split-pane behavior: the fixed
+        // pane's rows fall OUTSIDE viewport.RowMetrics once the main pane scrolls past them.
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(10, 20, 0),
+                new RowMetric(11, 20, 20)
+            ],
+            [
+                new ColMetric(2, 40, 40)
+            ],
+            SplitPanes: new SplitPaneState(
+                Row: 10,
+                Column: null,
+                TopRows: [new RowMetric(0, 20, 0)]));
+
+        // Fixed-pane row 0 (TopOffset 0, Height 20) renders at originY = columnHeaderHeight (18),
+        // so its rect is [18, 38). Column 2 (LeftOffset 40, Width 40) renders at originX =
+        // rowHeaderWidth (30), so its rect is [70, 110). The handle center sits at (110-3, 38-3).
+        GridAutofillPlanner.IsOnHandle(
+                viewport,
+                selectedRange,
+                new GridPoint(107, 35),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeTrue("the fill handle drawn for a fixed split-pane row must stay hit-testable once the main pane scrolls past it");
+
+        GridAutofillPlanner.IsOnHandle(
+                viewport,
+                selectedRange,
+                new GridPoint(300, 300),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeFalse("far away from the resolved handle position should still miss");
+    }
+
+    [Fact]
+    public void IsOnHandle_DoesNotApplySplitPaneFallbackForMultiCellSelections()
+    {
+        var sheet = SheetId.New();
+        var selectedRange = new GridRange(
+            new CellAddress(sheet, 0, 2),
+            new CellAddress(sheet, 1, 2));
+
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(10, 20, 0),
+                new RowMetric(11, 20, 20)
+            ],
+            [
+                new ColMetric(2, 40, 40)
+            ],
+            SplitPanes: new SplitPaneState(
+                Row: 10,
+                Column: null,
+                TopRows: [new RowMetric(0, 20, 0)]));
+
+        GridAutofillPlanner.IsOnHandle(
+                viewport,
+                selectedRange,
+                new GridPoint(107, 35),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeFalse("the split-pane fallback mirrors the renderer's single-cell-only branch and must not apply to multi-cell ranges");
+    }
+
     private static ViewportModel CreateViewport() =>
         new(
             [],

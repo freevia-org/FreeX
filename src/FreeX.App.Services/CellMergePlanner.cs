@@ -72,7 +72,8 @@ public static class CellMergePlanner
         Sheet sheet,
         SheetId sheetId,
         GridRange range,
-        bool mergeCells)
+        bool mergeCells,
+        bool allowUnmergeToggle = true)
     {
         if (mergeCells)
         {
@@ -80,12 +81,19 @@ public static class CellMergePlanner
                 return [RejectSpillOverlapCommand.Instance];
 
             // Same "Merge & Center" toggle gesture (see CreateMergeAndCenterCommands above): re-invoking
-            // "Merge Cells" -- or, via the per-row loop in the WPF host / Avalonia shell, "Merge Across"
-            // -- on a selection that is already fully covered by an existing merged region unmerges it,
-            // instead of falling through to MergeCellsCommand and failing with "Range overlaps an
-            // existing merged region.", matching real Excel where all three merge commands toggle the
-            // same merged/unmerged state.
-            if (FindCoveringRegion(sheet, range) is { } toggleRegion)
+            // "Merge Cells" on a selection that is already fully covered by an existing merged region
+            // unmerges it, instead of falling through to MergeCellsCommand and failing with "Range
+            // overlaps an existing merged region.", matching real Excel where the direct Merge Cells /
+            // Merge & Center gesture toggles the merged/unmerged state.
+            //
+            // "Merge Across" is different: Excel always leaves the selection UNIFORMLY merged per row,
+            // even when a mixed-state selection already has some rows correctly merged -- it never
+            // toggles an already-merged row back off just because the per-row loop happens to re-invoke
+            // this method for that row too. Callers driving that per-row batch pass
+            // allowUnmergeToggle: false so an already-merged row of the exact target shape falls through
+            // to MergeCellsCommand instead, which absorbs the identical-shape existing region and
+            // re-adds it -- i.e. the row is left merged (a no-op re-merge), never split back apart.
+            if (allowUnmergeToggle && FindCoveringRegion(sheet, range) is { } toggleRegion)
                 return [new UnmergeCellsCommand(sheetId, toggleRegion)];
 
             return range.CellCount <= 1 ? [] : [new MergeCellsCommand(sheetId, range)];
@@ -138,7 +146,21 @@ public static class CellMergePlanner
             .Select(region => (IWorkbookCommand)new UnmergeCellsCommand(sheetId, region))
             .ToList();
 
-    public static MergeCellContentPlan AnalyzeContent(Sheet sheet, GridRange range)
+    public static MergeCellContentPlan AnalyzeContent(Sheet sheet, GridRange range) =>
+        AnalyzeContent(sheet, range, perRow: false);
+
+    /// <summary>
+    /// Analyzes the given range for the "merging cells can discard cell contents" warning.
+    /// </summary>
+    /// <param name="perRow">
+    /// When <c>false</c> (the direct Merge Cells / Merge &amp; Center gesture, which folds the whole
+    /// <paramref name="range"/> into ONE merged cell), only <c>range.Start</c> itself -- the single
+    /// surviving top-left cell -- is exempt from the content-loss check. When <c>true</c> (a Merge
+    /// Across batch, which merges each row of <paramref name="range"/> independently), every row's own
+    /// leftmost cell -- i.e. each address sharing <c>range.Start.Col</c> -- is exempt, since that
+    /// column is the top-left of ITS row's eventual per-row merge and loses nothing.
+    /// </param>
+    public static MergeCellContentPlan AnalyzeContent(Sheet sheet, GridRange range, bool perRow)
     {
         if (range.CellCount <= 1)
             return new MergeCellContentPlan(false, [], "");
@@ -154,19 +176,20 @@ public static class CellMergePlanner
         var entries = new List<MergeCellContentEntry>();
         foreach (var address in range.AllCells())
         {
+            var isTopLeft = perRow ? address.Col == range.Start.Col : address == range.Start;
             if (sheet.GetCell(address) is { } cell && HasContent(cell))
             {
                 entries.Add(new MergeCellContentEntry(
                     address,
                     FormatDisplayText(cell),
-                    address == range.Start));
+                    isTopLeft));
             }
             else if (spillTargetsInRange.Contains(address))
             {
                 entries.Add(new MergeCellContentEntry(
                     address,
                     FormatScalarValue(sheet.GetValue(address)),
-                    address == range.Start));
+                    isTopLeft));
             }
         }
 

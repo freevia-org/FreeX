@@ -375,4 +375,66 @@ public sealed class FillSeriesPlannerTests
             new CellAddress(sheet.Id, 3, 3));
         edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(12, 14, 16);
     }
+
+    // R55-commands-fill-series-5-1: a date-formatted seed cell is stored as a DateTimeValue, not a
+    // NumberValue, but Excel's Linear series type treats the date's underlying serial number as a
+    // plain numeric seed just like the Date series type's own math does -- it must not silently
+    // no-op just because the seed cell happens to be date-formatted.
+    [Fact]
+    public void BuildLinearSeriesEdits_ReseedsFromADateTimeValueSeedUsingItsSerialNumber()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 5));
+        var start = new DateTime(2026, 1, 1);
+        var serial = start.ToOADate();
+        sheet.SetCell(range.Start, DateTimeValue.FromDateTime(start));
+
+        var edits = FillSeriesPlanner.BuildLinearSeriesEdits(sheet, range, step: 1, FillSeriesDirection.Rows);
+
+        edits.Select(edit => edit.Address).Should().Equal(
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, 1, 3),
+            new CellAddress(sheet.Id, 1, 4),
+            new CellAddress(sheet.Id, 1, 5));
+        edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value)
+            .Should()
+            .Equal(serial + 1, serial + 2, serial + 3, serial + 4);
+    }
+
+    // Same fix, Growth series type: Excel's Growth (geometric) series also treats a date seed's
+    // serial number as a plain number.
+    [Fact]
+    public void BuildGrowthSeriesEdits_ReseedsFromADateTimeValueSeedUsingItsSerialNumber()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 3));
+        var start = new DateTime(2026, 1, 1);
+        var serial = start.ToOADate();
+        sheet.SetCell(range.Start, DateTimeValue.FromDateTime(start));
+
+        var edits = FillSeriesPlanner.BuildGrowthSeriesEdits(sheet, range, step: 2, FillSeriesDirection.Rows);
+
+        edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value)
+            .Should()
+            .Equal(serial * 2, serial * 4);
+    }
+
+    // Sibling no-regression: a TextValue seed must still no-op for Linear (unaffected by widening
+    // the accepted seed type from NumberValue to NumberValue-or-DateTimeValue). Growth shares the
+    // same TryGetLinearOrGrowthSeriesSeed gate, so this also covers Growth's identical behavior.
+    [Fact]
+    public void BuildGrowthSeriesEdits_ReturnsNoEditsWhenStartingCellIsNotNumeric()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 3));
+        sheet.SetCell(range.Start, new TextValue("Start"));
+
+        FillSeriesPlanner.BuildGrowthSeriesEdits(sheet, range, step: 2, FillSeriesDirection.Rows).Should().BeEmpty();
+    }
 }

@@ -85,6 +85,18 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetPageSetupMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        // R55-io-hyperlink-round-trip-5-1: strip ClosedXML's fabricated "<Sheet>!" prefix off a
+        // bang-less defined-name hyperlink's saved "location" attribute. Must run on every FULL
+        // save regardless of hasSourcePackage -- worksheet XML content always comes straight from
+        // ClosedXML's own SaveAs output; PreserveSourcePackageParts (below, on the source-package
+        // path) never restores worksheet parts wholesale, so this fixup is the only place that ever
+        // sees (and can correct) the fabricated value.
+        if (featurePlan.HasBareInternalHyperlinkBookmarks)
+        {
+            packageStream.Position = 0;
+            FixFabricatedDefinedNameHyperlinkLocations(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (featurePlan.HasPhoneticProperties)
         {
             packageStream.Position = 0;
@@ -761,10 +773,15 @@ public sealed partial class XlsxFileAdapter
         // labelFilters, positioned right before pivotSorts (or pivotTableStyleInfo, which is required and
         // always present, if there is no pivotSorts) so a mixed preserved+regenerated part stays
         // internally consistent.
+        // AddBeforeSelf places each newly-inserted element immediately before the anchor, so the
+        // LAST call ends up closest to the anchor and thus last in document order. Insert
+        // newValueFilters first (pushed earlier) and newLabelFilters second (ends up right before
+        // the anchor) so the final order is valueFilters-then-labelFilters, matching the comment
+        // above and XlsxPivotTableWriter.cs's own emission order for a fresh part.
         var anchor = pivotTableDefinitionRoot.Element(workbookNs + "pivotSorts")
             ?? pivotTableDefinitionRoot.Element(workbookNs + "pivotTableStyleInfo");
-        InsertBeforeAnchorOrAppend(pivotTableDefinitionRoot, anchor, newLabelFilters);
         InsertBeforeAnchorOrAppend(pivotTableDefinitionRoot, anchor, newValueFilters);
+        InsertBeforeAnchorOrAppend(pivotTableDefinitionRoot, anchor, newLabelFilters);
 
         return true;
     }
@@ -1329,6 +1346,12 @@ public sealed partial class XlsxFileAdapter
         /// which the post-processing pass replaces with <c>auto="1"</c> in the shared-strings part.
         /// </summary>
         public bool HasRichAutoColorRuns;
+        /// <summary>
+        /// True when any sheet has an internal hyperlink whose Bookmark targets a bang-less defined
+        /// name. Gates <see cref="FixFabricatedDefinedNameHyperlinkLocations"/> (R55-io-hyperlink-
+        /// round-trip-5-1), the FULL-save counterpart of the PATCH-save R38-io-hyperlink-2-1 fix.
+        /// </summary>
+        public bool HasBareInternalHyperlinkBookmarks;
 
         public static XlsxPostProcessingFeaturePlan Create(Workbook workbook)
         {
@@ -1375,6 +1398,7 @@ public sealed partial class XlsxFileAdapter
             HasStyleOnlyCells |= sheet.HasStyleOnlyCells;
             if (!HasRichAutoColorRuns)
                 HasRichAutoColorRuns = HasRichTextAutoColorRuns(sheet);
+            HasBareInternalHyperlinkBookmarks |= HasBareInternalHyperlinkBookmarks(sheet);
         }
 
         private void IncludeCellFeatures(Sheet sheet)

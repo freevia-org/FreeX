@@ -285,7 +285,7 @@ public partial class GridView
         var textClipRect = layout.TextClipRect;
         if (cell.ConditionalIcon is { } splitIcon)
         {
-            var iconLayout = CalculateConditionalIconCellLayout(rect, splitIcon);
+            var iconLayout = CalculateConditionalIconCellLayout(rect, splitIcon, IsSheetRightToLeft);
             DrawConditionalIcon(dc, splitIcon, iconLayout.IconRect);
             if (!iconLayout.ShouldDrawText || string.IsNullOrEmpty(cell.DisplayText))
                 return;
@@ -752,7 +752,7 @@ public partial class GridView
 
             if (cell.ConditionalIcon is { } icon)
             {
-                var iconLayout = CalculateConditionalIconCellLayout(rect, icon);
+                var iconLayout = CalculateConditionalIconCellLayout(rect, icon, IsSheetRightToLeft);
                 DrawConditionalIcon(dc, icon, iconLayout.IconRect);
                 if (!iconLayout.ShouldDrawText || string.IsNullOrEmpty(cell.DisplayText))
                     continue;

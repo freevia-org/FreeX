@@ -30,6 +30,33 @@ public sealed class BuiltInNumberFormatCatalogTests
         BuiltInNumberFormatCatalog.ResolveNumberFormatIdForCode(formatCode).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(37, "#,##0_);(#,##0)")]
+    [InlineData(38, "#,##0_);[Red](#,##0)")]
+    [InlineData(39, "#,##0.00_);(#,##0.00)")]
+    [InlineData(40, "#,##0.00_);[Red](#,##0.00)")]
+    public void TryResolveFormatCode_BuiltInCommaStyles_IncludeSkipWidthDirective(int numberFormatId, string expected)
+    {
+        BuiltInNumberFormatCatalog.TryResolveFormatCode(numberFormatId, out var formatCode)
+            .Should().BeTrue();
+
+        formatCode.Should().Be(expected);
+        formatCode.Should().Contain("_)", "Excel's real built-in table pads the positive section to align with the parenthesized negative section");
+    }
+
+    [Theory]
+    [InlineData(5, "$#,##0_);($#,##0)")]
+    [InlineData(6, "$#,##0_);[Red]($#,##0)")]
+    [InlineData(7, "$#,##0.00_);($#,##0.00)")]
+    [InlineData(8, "$#,##0.00_);[Red]($#,##0.00)")]
+    public void TryResolveFormatCode_BuiltInCurrencyStyles_UnchangedByCommaStyleFix(int numberFormatId, string expected)
+    {
+        BuiltInNumberFormatCatalog.TryResolveFormatCode(numberFormatId, out var formatCode)
+            .Should().BeTrue();
+
+        formatCode.Should().Be(expected);
+    }
+
     [Fact]
     public void CatalogLookups_UseStaticDictionariesInsteadOfLinearScans()
     {

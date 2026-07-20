@@ -14,7 +14,13 @@ public static partial class BuiltInFunctions
         var include = args[1] is RangeValue includeRange
             ? includeRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
-        var ifEmpty = args.Count > 2 && args[2] is not BlankValue ? args[2] : ErrorValue.Calc;
+        // if_empty (args[2]) is genuinely omitted only when the argument slot itself is absent
+        // (args.Count <= 2) -- that case keeps FILTER's documented #CALC! default. Once the slot is
+        // actually supplied, whatever it evaluates to (including BlankValue from an explicit
+        // reference to an empty cell) must be used as-is rather than being coerced back to the
+        // omitted-argument default: Excel shows a blank if_empty result as 0, the same way any other
+        // formula whose final result is blank displays as 0 (see NormalizeTopLevelResult).
+        var ifEmpty = args.Count > 2 ? args[2] : ErrorValue.Calc;
 
         if (include.ColCount == 1 && include.RowCount == arr.RowCount)
             return FilterRows(arr, include, ifEmpty);

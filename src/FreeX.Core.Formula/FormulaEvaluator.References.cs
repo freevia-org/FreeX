@@ -975,7 +975,9 @@ public sealed partial class FormulaEvaluator
             // ISREF is true only when the name resolves to an actual reference — a scoped
             // formula that evaluates to a plain scalar is not a reference, matching Excel.
             NamedRangeNode nm => ResolveNamedRangeNodeAsReference(nm, context) is RangeValue ? TrueValue : FalseValue,
-            FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT"
+            // INDEX/CHOOSE both count as reference-returning for ISREF too, the same as OFFSET/
+            // INDIRECT -- see R55-formula-lookup-offset-indirect-5-2.
+            FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT" or "INDEX" or "CHOOSE"
                 => EvaluateReferenceReturningIsRef(fn, context),
             _                 => FalseValue
         };
@@ -1228,7 +1230,9 @@ public sealed partial class FormulaEvaluator
             return ResolveNamedRangeNodeAsReference(named, context);
         }
 
-        if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
+        // INDEX/CHOOSE both count as reference-returning for CELL's reference argument too, the
+        // same as OFFSET/INDIRECT -- see R55-formula-lookup-offset-indirect-5-2.
+        if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT" or "INDEX" or "CHOOSE")
         {
             var value = EvaluateReferenceReturningFunction(fn, context);
             return value is ErrorValue or RangeValue ? value : ErrorValue.Value;
@@ -1243,7 +1247,126 @@ public sealed partial class FormulaEvaluator
         {
             "OFFSET"   => EvaluateOffsetReference(node, context),
             "INDIRECT" => EvaluateIndirectReference(node, context),
+            // INDEX(ref, row, [col]) and CHOOSE(index_num, ref1, ref2, ...) both return a genuine
+            // Excel reference when their source arguments are references -- e.g. OFFSET(INDEX(A1:
+            // A5,3),1,0) or ISREF(CHOOSE(2,A1,B1)) -- the same nested-reference idiom already
+            // supported for OFFSET/INDIRECT/ANCHORARRAY here. See R55-formula-lookup-offset-
+            // indirect-5-1/-2.
+            "INDEX"    => EvaluateIndexAsReference(node, context),
+            "CHOOSE"   => EvaluateChooseAsReference(node, context),
             _          => ErrorValue.Value
+        };
+    }
+
+    /// <summary>
+    /// Resolves INDEX(ref, row_num, [col_num]) to the REFERENCE it selects (a RangeValue over the
+    /// chosen cell/row/column of <paramref name="node"/>'s array argument) rather than that
+    /// selection's value -- mirroring TryEvaluateIndexDirectRange's row/col resolution, but for use
+    /// wherever INDEX's result flows into a reference-expecting position (OFFSET's base argument,
+    /// ISREF, CELL's reference argument). Only the 2/3-argument single-area reference form of INDEX
+    /// is supported here (matching Excel's own "INDEX returns a reference" behavior for a plain
+    /// range array); the 4-argument area_num form and a non-reference (e.g. array-constant) first
+    /// argument fall back to #VALUE!, same as OFFSET's other unsupported base shapes.
+    /// </summary>
+    private ScalarValue EvaluateIndexAsReference(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count is < 2 or > 3) return ErrorValue.Value;
+        if (!TryAsRangeRef(node.Arguments[0], out var range)) return ErrorValue.Value;
+        if (range.SheetName is not null && !context.SheetExists(range.SheetName)) return ErrorValue.Ref;
+
+        var rowValue = EvaluateNode(node.Arguments[1], context);
+        if (rowValue is ErrorValue rowError) return rowError;
+        var columnValue = node.Arguments.Count > 2 ? EvaluateNode(node.Arguments[2], context) : BlankValue.Instance;
+        if (columnValue is ErrorValue columnError) return columnError;
+
+        var rowCoerced = CoerceToNumber(rowValue);
+        if (rowCoerced is ErrorValue rowCoerceError) return rowCoerceError;
+        var columnCoerced = columnValue is BlankValue ? new NumberValue(1) : CoerceToNumber(columnValue);
+        if (columnCoerced is ErrorValue columnCoerceError) return columnCoerceError;
+
+        var rawRow = ((NumberValue)rowCoerced).Value;
+        var rawColumn = ((NumberValue)columnCoerced).Value;
+        if (!double.IsFinite(rawRow) || rawRow < int.MinValue || rawRow > int.MaxValue ||
+            !double.IsFinite(rawColumn) || rawColumn < int.MinValue || rawColumn > int.MaxValue)
+            return ErrorValue.Value;
+
+        int rowIndex = (int)rawRow;
+        int columnIndex = (int)rawColumn;
+
+        uint startRow = Math.Min(range.Start.Row, range.End.Row);
+        uint endRow = Math.Max(range.Start.Row, range.End.Row);
+        uint startCol = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        uint endCol = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+        long rowCount = endRow - startRow + 1L;
+        long colCount = endCol - startCol + 1L;
+
+        if (node.Arguments.Count == 2)
+        {
+            if (rowCount == 1) { columnIndex = rowIndex; rowIndex = 1; }
+            else if (colCount == 1) { columnIndex = 1; }
+            else { columnIndex = 0; }
+        }
+
+        if (rowIndex < 0 || columnIndex < 0) return ErrorValue.Value;
+        if (rowIndex > rowCount || columnIndex > colCount) return ErrorValue.Ref;
+
+        if (rowIndex == 0 && columnIndex == 0)
+            return BuildRangeValueOrError(CreateRangeRef(startRow, startCol, endRow, endCol, range.SheetName), context);
+
+        if (rowIndex == 0)
+        {
+            var targetCol = startCol + (uint)columnIndex - 1;
+            return BuildRangeValueOrError(CreateRangeRef(startRow, targetCol, endRow, targetCol, range.SheetName), context);
+        }
+
+        if (columnIndex == 0)
+        {
+            var targetRow = startRow + (uint)rowIndex - 1;
+            return BuildRangeValueOrError(CreateRangeRef(targetRow, startCol, targetRow, endCol, range.SheetName), context);
+        }
+
+        var row = startRow + (uint)rowIndex - 1;
+        var col = startCol + (uint)columnIndex - 1;
+        return BuildRangeValueOrError(CreateRangeRef(row, col, row, col, range.SheetName), context);
+    }
+
+    /// <summary>
+    /// Resolves CHOOSE(index_num, ref1, ref2, ...) to the REFERENCE its selected branch argument
+    /// denotes (rather than that branch's value) -- used wherever CHOOSE's result flows into a
+    /// reference-expecting position, mirroring <see cref="EvaluateIndexAsReference"/> for INDEX.
+    /// </summary>
+    private ScalarValue EvaluateChooseAsReference(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count < 2) return ErrorValue.Value;
+        var indexVal = EvaluateNode(node.Arguments[0], context);
+        if (indexVal is ErrorValue indexError) return indexError;
+        var coerced = CoerceToNumber(indexVal);
+        if (coerced is ErrorValue coerceError) return coerceError;
+        double rawIdx = ((NumberValue)coerced).Value;
+        if (!double.IsFinite(rawIdx)) return ErrorValue.Value;
+        int idx = (int)rawIdx;
+        if (idx < 1 || idx >= node.Arguments.Count) return ErrorValue.Value;
+
+        var branch = node.Arguments[idx];
+        return branch switch
+        {
+            CellRefNode cellRef => cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName)
+                ? ErrorValue.Ref
+                : BuildRangeValueOrError(new RangeRefNode(cellRef, cellRef, cellRef.SheetName), context),
+            RangeRefNode { EndSheetName: null } rangeRef => rangeRef.SheetName is not null && !context.SheetExists(rangeRef.SheetName)
+                ? ErrorValue.Ref
+                : BuildRangeValueOrError(rangeRef, context),
+            FullColumnRangeRefNode fullColumnRange => fullColumnRange.SheetName is not null && !context.SheetExists(fullColumnRange.SheetName)
+                ? ErrorValue.Ref
+                : BuildRangeValueOrError(ToRangeRef(fullColumnRange), context),
+            FullRowRangeRefNode fullRowRange => fullRowRange.SheetName is not null && !context.SheetExists(fullRowRange.SheetName)
+                ? ErrorValue.Ref
+                : BuildRangeValueOrError(ToRangeRef(fullRowRange), context),
+            NamedRangeNode namedRange => ResolveNamedRangeNodeAsReference(namedRange, context),
+            FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT" or "INDEX" or "CHOOSE" =>
+                EvaluateReferenceReturningFunction(fn, context),
+            FunctionCallNode fn when fn.FunctionName == "ANCHORARRAY" => EvaluateAnchorArray(fn, context),
+            _ => ErrorValue.Value
         };
     }
 
@@ -1345,17 +1468,20 @@ public sealed partial class FormulaEvaluator
                 baseHeight = namedRange.RowCount; baseWidth = namedRange.ColCount;
                 baseSheet = namedRange.SheetName;
                 break;
-            case FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT" or "ANCHORARRAY":
+            case FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT" or "ANCHORARRAY" or "INDEX" or "CHOOSE":
                 // The base argument may itself be a reference-returning function call, e.g.
-                // OFFSET(INDIRECT("A1"),1,1) or OFFSET(OFFSET(A1,0,0),1,1) — both are valid in
-                // Excel. It may also be a spill (#) reference, e.g. OFFSET(A1#,1,0): Excel treats
-                // A1# as the current spill range and offsets from its extent, so ANCHORARRAY(ref)
-                // — the node the parser produces for A1# — is resolved the same way, via
-                // EvaluateAnchorArray directly (it isn't one of the two functions
-                // EvaluateReferenceReturningFunction dispatches). Resolve the nested call to its
-                // RangeValue via the same path used elsewhere for reference-returning arguments
-                // (EvaluateCellReferenceArgument, EvaluateIsRef) and use its bounds as the OFFSET
-                // base.
+                // OFFSET(INDIRECT("A1"),1,1), OFFSET(OFFSET(A1,0,0),1,1), OFFSET(INDEX(A1:A5,3),1,0),
+                // or OFFSET(CHOOSE(2,A1,B1),1,0) — all are valid in Excel: INDEX and CHOOSE return a
+                // genuine reference (not just a value) when their source arguments are references,
+                // the same well-known idiom as nesting OFFSET/INDIRECT here (see
+                // R55-formula-lookup-offset-indirect-5-1). It may also be a spill (#) reference,
+                // e.g. OFFSET(A1#,1,0): Excel treats A1# as the current spill range and offsets from
+                // its extent, so ANCHORARRAY(ref) — the node the parser produces for A1# — is
+                // resolved the same way, via EvaluateAnchorArray directly (it isn't one of the
+                // functions EvaluateReferenceReturningFunction dispatches). Resolve the nested call
+                // to its RangeValue via the same path used elsewhere for reference-returning
+                // arguments (EvaluateCellReferenceArgument, EvaluateIsRef) and use its bounds as the
+                // OFFSET base.
                 var nestedReference = fn.FunctionName == "ANCHORARRAY"
                     ? EvaluateAnchorArray(fn, context)
                     : EvaluateReferenceReturningFunction(fn, context);

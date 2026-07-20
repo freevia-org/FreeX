@@ -37,7 +37,7 @@ public sealed class R17_pagesetup_dialog_Tests
     }
 
     [Fact]
-    public void TryBuildCommand_UnchangedMultiRegionPrintArea_AppliesWithoutCollapsingRegions()
+    public void TryBuildCommandPlan_UnchangedMultiRegionPrintArea_AppliesWithoutCollapsingRegions()
     {
         var (workbook, sheet) = CreateSheetWithMultiRegionPrintArea();
         var ctx = new PageSetupTestCommandContext(workbook);
@@ -45,11 +45,11 @@ public sealed class R17_pagesetup_dialog_Tests
         // Simulate opening Page Setup and clicking OK without touching anything (a no-op submit).
         var fields = PageSetupDialogModel.FromSheet(sheet);
 
-        var result = PageSetupDialogModel.TryBuildCommand(sheet, fields);
+        var result = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
 
         result.Success.Should().BeTrue(result.Error);
 
-        result.Command!.Apply(ctx).Success.Should().BeTrue();
+        result.Plan!.PageSetupCommand.Apply(ctx).Success.Should().BeTrue();
 
         sheet.PrintAreas.Should().HaveCount(2);
         sheet.PrintAreas.Should().ContainInOrder(
