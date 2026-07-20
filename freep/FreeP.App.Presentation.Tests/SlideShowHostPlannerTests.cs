@@ -195,6 +195,154 @@ public sealed class SlideShowHostPlannerTests
         plan.PlaybackKind.Should().Be(expected);
     }
 
+    [Fact]
+    public void RandomCandidateKinds_ContainEachDedicatedPlaybackFamilyExactlyOnce()
+    {
+        var expected = new[]
+        {
+            TransitionKind.Cut,
+            TransitionKind.Fade,
+            TransitionKind.Flash,
+            TransitionKind.Dissolve,
+            TransitionKind.Box,
+            TransitionKind.Reveal,
+            TransitionKind.Uncover,
+            TransitionKind.Cover,
+            TransitionKind.Push,
+            TransitionKind.Split,
+            TransitionKind.Blinds,
+            TransitionKind.RandomBar,
+            TransitionKind.Strips,
+            TransitionKind.Wheel,
+            TransitionKind.Zoom,
+            TransitionKind.Pan,
+            TransitionKind.Gallery,
+            TransitionKind.Conveyor,
+            TransitionKind.Window,
+            TransitionKind.Morph,
+            TransitionKind.Flip,
+            TransitionKind.Cube,
+            TransitionKind.Rotate,
+            TransitionKind.Honeycomb,
+            TransitionKind.Switch,
+            TransitionKind.Orbit,
+            TransitionKind.Ferris,
+            TransitionKind.Flythrough,
+            TransitionKind.Glitter,
+            TransitionKind.Ripple,
+            TransitionKind.Wind,
+            TransitionKind.Curtains,
+            TransitionKind.Shred,
+            TransitionKind.Drape,
+            TransitionKind.Fracture,
+            TransitionKind.Crush,
+            TransitionKind.Prism,
+            TransitionKind.Prestige,
+            TransitionKind.Warp,
+            TransitionKind.Vortex,
+            TransitionKind.PageCurlSingle
+        };
+
+        SlideShowTransitionPlanner.RandomCandidateKinds.Should().Equal(expected);
+        SlideShowTransitionPlanner.RandomCandidateKinds.Should().OnlyHaveUniqueItems();
+
+        var playbackFamilies = SlideShowTransitionPlanner.RandomCandidateKinds
+            .Select(kind => SlideShowTransitionPlanner.Plan(
+                new SlideTransition { Kind = kind }).PlaybackKind)
+            .ToArray();
+        playbackFamilies.Should().OnlyHaveUniqueItems();
+        playbackFamilies.Should().NotContain(SlideShowTransitionPlaybackKind.FadeFallback);
+        playbackFamilies.Should().NotContain(SlideShowTransitionPlaybackKind.PushLike);
+    }
+
+    [Fact]
+    public void PlanTransition_RandomIsStableAcrossEquivalentRendererModels()
+    {
+        var firstPresentation = MakeStableRandomPresentation();
+        var secondPresentation = MakeStableRandomPresentation();
+        var firstSlide = firstPresentation.Slides[1];
+        var secondSlide = secondPresentation.Slides[1];
+        var firstTransition = firstSlide.Transition!;
+        var secondTransition = secondSlide.Transition!;
+
+        var first = SlideShowPlaybackPlanner.PlanTransition(
+            firstPresentation,
+            firstSlide,
+            firstTransition);
+        var second = SlideShowPlaybackPlanner.PlanTransition(
+            secondPresentation,
+            secondSlide,
+            secondTransition);
+
+        first.RandomSeed.Should().Be(second.RandomSeed);
+        first.ResolvedKind.Should().Be(second.ResolvedKind);
+        first.ActionKind.Should().Be(second.ActionKind);
+        first.SourceKind.Should().Be(second.SourceKind);
+        first.SourceKind.Should().NotBe(SlideShowTransitionPlaybackKind.FadeFallback);
+        SlideShowTransitionPlanner.RandomCandidateKinds.Should().Contain(first.ResolvedKind);
+        first.ResolvedKind.Should().NotBe(TransitionKind.Random);
+        first.EffectiveTransition.Kind.Should().Be(first.ResolvedKind);
+        first.EffectiveTransition.DurationMs.Should().Be(firstTransition.DurationMs);
+        first.EffectiveTransition.Direction.Should().Be(firstTransition.Direction);
+        first.EffectiveTransition.SplitOrientation.Should().Be(firstTransition.SplitOrientation);
+        first.EffectiveTransition.WheelSpokeCount.Should().Be(firstTransition.WheelSpokeCount);
+        first.EffectiveTransition.MorphOption.Should().Be(firstTransition.MorphOption);
+        firstTransition.Kind.Should().Be(TransitionKind.Random);
+    }
+
+    [Fact]
+    public void ComputeRandomSeed_IncludesPresentationSlideAndTransitionState()
+    {
+        var presentation = MakeStableRandomPresentation();
+        var slide = presentation.Slides[1];
+        var transition = slide.Transition!;
+        var original = SlideShowTransitionPlanner.ComputeRandomSeed(
+            presentation,
+            slide,
+            transition);
+
+        presentation.SlideSizeCxEmu++;
+        var presentationChanged = SlideShowTransitionPlanner.ComputeRandomSeed(
+            presentation,
+            slide,
+            transition);
+        presentation.SlideSizeCxEmu--;
+
+        slide.Id = "rIdChanged";
+        var slideChanged = SlideShowTransitionPlanner.ComputeRandomSeed(
+            presentation,
+            slide,
+            transition);
+        slide.Id = "rId3";
+
+        transition.DurationMs++;
+        var transitionChanged = SlideShowTransitionPlanner.ComputeRandomSeed(
+            presentation,
+            slide,
+            transition);
+
+        presentationChanged.Should().NotBe(original);
+        slideChanged.Should().NotBe(original);
+        transitionChanged.Should().NotBe(original);
+    }
+
+    [Fact]
+    public void PlanTransition_RandomWithoutHostContextStillUsesCandidateNotFallback()
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Random,
+            DurationMs = 625
+        });
+
+        SlideShowTransitionPlanner.RandomCandidateKinds.Should().Contain(plan.ResolvedKind);
+        plan.ResolvedKind.Should().NotBe(TransitionKind.Random);
+        plan.PlaybackKind.Should().NotBe(SlideShowTransitionPlaybackKind.FadeFallback);
+        plan.RandomSeed.Should().NotBeNull();
+        SlideShowTransitionPlanner.PlanPlaybackKind(TransitionKind.Random)
+            .Should().NotBe(SlideShowTransitionPlaybackKind.FadeFallback);
+    }
+
     [Theory]
     [InlineData(TransitionDirection.Right, -1, 0)]
     [InlineData(TransitionDirection.Left, 1, 0)]
@@ -558,6 +706,34 @@ public sealed class SlideShowHostPlannerTests
         }
 
         return pres;
+    }
+
+    private static Presentation MakeStableRandomPresentation()
+    {
+        var presentation = MakePresentation(3);
+        presentation.SlideSizeCxEmu = 12_192_000;
+        presentation.SlideSizeCyEmu = 6_858_000;
+        presentation.Properties.Title = "Deterministic Random Deck";
+        presentation.Properties.Author = "FreeP";
+
+        for (var index = 0; index < presentation.Slides.Count; index++)
+        {
+            presentation.Slides[index].Id = $"rId{index + 2}";
+            presentation.Slides[index].NumericId = (uint)(256 + index);
+        }
+
+        presentation.Slides[1].Transition = new SlideTransition
+        {
+            Kind = TransitionKind.Random,
+            Direction = TransitionDirection.Right,
+            SplitOrientation = TransitionDirection.Vertical,
+            DurationMs = 875,
+            AdvanceOnClick = false,
+            AdvanceAfterMs = 2_400,
+            MorphOption = "byWord",
+            WheelSpokeCount = 8
+        };
+        return presentation;
     }
 
     private static TextBody MakeTextBody(string text)

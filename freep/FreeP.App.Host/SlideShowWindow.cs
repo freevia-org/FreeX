@@ -802,7 +802,8 @@ public sealed class SlideShowWindow : Window
         // Play transition sound first (fire-and-forget; swallowed on error).
         PlayTransitionSound(t);
 
-        var plan = SlideShowPlaybackPlanner.PlanTransition(t);
+        var plan = SlideShowPlaybackPlanner.PlanTransition(_presentation, slide, t);
+        t = plan.EffectiveTransition;
         _transitionBackImage.Visibility = Visibility.Collapsed;
         _transitionBackImage.Clip = null;
         _transitionBackImage.RenderTransform = Transform.Identity;

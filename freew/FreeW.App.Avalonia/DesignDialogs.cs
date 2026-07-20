@@ -11,36 +11,19 @@ using FreeW.Core.Model;
 namespace FreeW.App.Avalonia;
 
 /// <summary>
-/// AV-DESIGN: Page Borders dialog (Design &gt; Page Background &gt; Page Borders). Collects a line style,
-/// colour and width and returns a <see cref="PageBorder"/> on OK, or signals removal. Mirrors the existing
-/// Avalonia dialog pattern (non-resizable, owner-centred, result via public properties awaited by the shell).
-/// Edge-selection (top/bottom/left/right) is modelled by Word but FreeW's <see cref="PageBorder"/> is a
-/// uniform box, so the dialog applies to all four edges (the most common case); per-edge selection is deferred.
+/// AV-DESIGN: Page Borders dialog (Design &gt; Page Background &gt; Page Borders). The page-border tab uses
+/// the same setting/style/palette/width/art choices and shared result planner as WPF. A page border is a
+/// uniform box in the FreeW model, so the paragraph-edge controls from WPF's combined Borders and Shading
+/// dialog do not belong on this page-only launcher.
 /// </summary>
 public sealed class PageBordersDialog : Window
 {
-    private static readonly (string Label, BorderLineStyle Style)[] BorderStyles =
-    [
-        ("Single", BorderLineStyle.Single),
-        ("Dotted", BorderLineStyle.Dotted),
-        ("Dashed", BorderLineStyle.Dashed),
-        ("Double", BorderLineStyle.Double),
-        ("Thick",  BorderLineStyle.Thick),
-    ];
-
-    private static readonly (string Label, string Hex)[] Colors =
-    [
-        ("Black",     "#000000"),
-        ("Dark Blue", "#1F3864"),
-        ("Blue",      "#2F5496"),
-        ("Red",       "#C00000"),
-        ("Green",     "#548235"),
-        ("Gray",      "#808080"),
-    ];
-
-    private readonly ComboBox _style = new() { MinWidth = 180, Margin = new Thickness(0, 6, 0, 0) };
-    private readonly ComboBox _color = new() { MinWidth = 180, Margin = new Thickness(0, 6, 0, 0) };
-    private readonly ComboBox _width = new() { MinWidth = 180, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly ComboBox _setting = new() { MinWidth = 220 };
+    private readonly ComboBox _style = new() { MinWidth = 220 };
+    private readonly ComboBox _art = new() { MinWidth = 220 };
+    private readonly ComboBox _color = new() { MinWidth = 220 };
+    private readonly TextBox _width = new() { MinWidth = 120 };
+    private readonly TextBlock _status = new();
 
     /// <summary>The border the user chose to apply (OK), or null when cancelled / Remove was clicked.</summary>
     public PageBorder? Result { get; private set; }
@@ -50,39 +33,68 @@ public sealed class PageBordersDialog : Window
 
     public PageBordersDialog(PageBorder? current)
     {
-        Title = "Page Borders";
-        Width = 360;
+        Title = "Borders and Shading";
+        Width = 430;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _style.ItemsSource = BorderStyles.Select(s => s.Label).ToList();
-        _style.SelectedIndex = Math.Max(0, Array.FindIndex(BorderStyles, s => s.Style == (current?.LineStyle ?? BorderLineStyle.Single)));
-
-        _color.ItemsSource = Colors.Select(c => c.Label).ToList();
-        _color.SelectedIndex = Math.Max(0, Array.FindIndex(Colors,
-            c => string.Equals(c.Hex, current?.ColorHex, StringComparison.OrdinalIgnoreCase)));
-
-        _width.ItemsSource = new[] { "0.5 pt", "1 pt", "1.5 pt", "2.25 pt", "3 pt", "4.5 pt", "6 pt" };
-        _width.SelectedIndex = current is null ? 1 : ClosestWidthIndex(current.WidthPt);
+        _setting.ItemsSource = BordersAndShadingDialogPlanner.SettingNames;
+        _setting.SelectedIndex = current is null ? 0 : 1;
+        _style.ItemsSource = BordersAndShadingDialogPlanner.LineStyleNames;
+        _style.SelectedIndex = BordersAndShadingDialogPlanner.IndexOfLineStyle(current?.LineStyle ?? BorderLineStyle.Single);
+        _art.ItemsSource = BordersAndShadingDialogPlanner.ArtBorders.Select(option => option.Label).ToArray();
+        _art.SelectedIndex = BordersAndShadingDialogPlanner.ArtIndexFor(current?.ArtId ?? 0);
+        _color.ItemsSource = BordersAndShadingDialogPlanner.Palette;
+        _color.SelectedIndex = ColorIndex(current?.ColorHex);
+        _width.Text = BordersAndShadingDialogPlanner.FormatPoints(current?.WidthPt ?? 1.0, CultureInfo.CurrentCulture);
         AvaloniaCompactDialogChrome.ApplyComboBox(_style, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_setting, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_art, InsertDialogLayout.ChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_color, InsertDialogLayout.ChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyComboBox(_width, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_width, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, InsertDialogLayout.ChromeStyle, new Thickness(14, 8, 14, 0));
 
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Style:", _style);
-        InsertDialogLayout.AddLabeledRow(grid, 1, "Color:", _color);
-        InsertDialogLayout.AddLabeledRow(grid, 2, "Width:", _width);
+        InsertDialogLayout.AddLabeledRow(grid, 0, "Setting:", _setting);
+        InsertDialogLayout.AddLabeledRow(grid, 1, "Style:", _style);
+        InsertDialogLayout.AddLabeledRow(grid, 2, "Art border:", _art);
+        InsertDialogLayout.AddLabeledRow(grid, 3, "Color:", _color);
+        InsertDialogLayout.AddLabeledRow(grid, 4, "Width (pt):", _width);
 
         var okButton = InsertDialogLayout.MakeButton("OK", (_, _) =>
         {
-            var style = BorderStyles[Math.Max(0, _style.SelectedIndex)].Style;
-            var hex = Colors[Math.Max(0, _color.SelectedIndex)].Hex;
-            var widthPt = WidthPtForIndex(Math.Max(0, _width.SelectedIndex));
-            Result = new PageBorder(hex, widthPt) { LineStyle = style };
+            if (!BordersAndShadingDialogPlanner.TryBuildResult(
+                    new BordersAndShadingDialogInput(
+                        ParagraphSettingIndex: 0,
+                        ParagraphLineStyleIndex: 0,
+                        ParagraphColorHex: null,
+                        ParagraphWidthText: "1",
+                        Top: false,
+                        Left: false,
+                        Bottom: false,
+                        Right: false,
+                        PageSettingIndex: _setting.SelectedIndex,
+                        PageLineStyleIndex: _style.SelectedIndex,
+                        PageColorHex: SelectedColor(),
+                        PageWidthText: _width.Text,
+                        PageArtIndex: _art.SelectedIndex,
+                        ShadingColorHex: null,
+                        ShadingPatternIndex: 0),
+                    CultureInfo.CurrentCulture,
+                    out var planned,
+                    out var error))
+            {
+                _status.Text = error ?? BordersAndShadingDialogPlanner.WidthValidationMessage;
+                _status.IsVisible = true;
+                _width.Focus();
+                return;
+            }
+
+            Result = planned?.PageBorder;
             Close();
         });
         var noneButton = InsertDialogLayout.MakeButton("None", (_, _) =>
@@ -95,26 +107,25 @@ public sealed class PageBordersDialog : Window
 
         var outer = new StackPanel();
         outer.Children.Add(grid);
+        outer.Children.Add(_status);
         outer.Children.Add(btnRow);
         Content = outer;
     }
 
-    private static readonly double[] WidthValues = [0.5, 1.0, 1.5, 2.25, 3.0, 4.5, 6.0];
+    private string? SelectedColor() =>
+        _color.SelectedIndex >= 0 && _color.SelectedIndex < BordersAndShadingDialogPlanner.Palette.Count
+            ? BordersAndShadingDialogPlanner.Palette[_color.SelectedIndex]
+            : null;
 
-    private static int ClosestWidthIndex(double pt)
+    private static int ColorIndex(string? hex)
     {
-        var best = 1;
-        var bestDelta = double.MaxValue;
-        for (var i = 0; i < WidthValues.Length; i++)
+        for (var i = 0; i < BordersAndShadingDialogPlanner.Palette.Count; i++)
         {
-            var d = Math.Abs(WidthValues[i] - pt);
-            if (d < bestDelta) { bestDelta = d; best = i; }
+            if (string.Equals(BordersAndShadingDialogPlanner.Palette[i], hex, StringComparison.OrdinalIgnoreCase))
+                return i;
         }
-        return best;
+        return 0;
     }
-
-    private static double WidthPtForIndex(int index) =>
-        index >= 0 && index < WidthValues.Length ? WidthValues[index] : 1.0;
 }
 
 /// <summary>

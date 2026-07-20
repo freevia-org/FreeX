@@ -61,7 +61,10 @@ public sealed record SlideShowTransitionPlaybackPlan(
     int WheelSpokeCount,
     bool WheelReverse,
     bool ZoomIn,
-    bool BoxExpandsFromCenter);
+    bool BoxExpandsFromCenter,
+    TransitionKind ResolvedKind,
+    ulong? RandomSeed,
+    SlideTransition EffectiveTransition);
 
 public enum SlideShowShapeAnimationEffectKind
 {
@@ -196,6 +199,26 @@ public static class SlideShowPlaybackPlanner
         ArgumentNullException.ThrowIfNull(transition);
 
         var transitionPlan = SlideShowTransitionPlanner.Plan(transition);
+        return BuildTransitionPlaybackPlan(transition, transitionPlan);
+    }
+
+    public static SlideShowTransitionPlaybackPlan PlanTransition(
+        Presentation presentation,
+        Slide slide,
+        SlideTransition transition)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(slide);
+        ArgumentNullException.ThrowIfNull(transition);
+
+        var transitionPlan = SlideShowTransitionPlanner.Plan(presentation, slide, transition);
+        return BuildTransitionPlaybackPlan(transition, transitionPlan);
+    }
+
+    private static SlideShowTransitionPlaybackPlan BuildTransitionPlaybackPlan(
+        SlideTransition transition,
+        SlideShowTransitionPlan transitionPlan)
+    {
         var actionKind = transitionPlan.PlaybackKind switch
         {
             SlideShowTransitionPlaybackKind.Cut => SlideShowTransitionPlaybackActionKind.ShowInstant,
@@ -256,7 +279,32 @@ public static class SlideShowPlaybackPlanner
             transitionPlan.WheelSpokeCount,
             transitionPlan.WheelReverse,
             transitionPlan.ZoomIn,
-            transitionPlan.BoxExpandsFromCenter);
+            transitionPlan.BoxExpandsFromCenter,
+            transitionPlan.ResolvedKind,
+            transitionPlan.RandomSeed,
+            BuildEffectiveTransition(transition, transitionPlan.ResolvedKind));
+    }
+
+    private static SlideTransition BuildEffectiveTransition(
+        SlideTransition transition,
+        TransitionKind resolvedKind)
+    {
+        if (transition.Kind == resolvedKind)
+            return transition;
+
+        return new SlideTransition
+        {
+            Kind = resolvedKind,
+            Direction = transition.Direction,
+            SplitOrientation = transition.SplitOrientation,
+            DurationMs = transition.DurationMs,
+            AdvanceOnClick = transition.AdvanceOnClick,
+            AdvanceAfterMs = transition.AdvanceAfterMs,
+            RawXml = transition.RawXml,
+            MorphOption = transition.MorphOption,
+            WheelSpokeCount = transition.WheelSpokeCount,
+            Sound = transition.Sound
+        };
     }
 
     public static IReadOnlyList<SlideShowShapeAnimationPlaybackPlan> PlanAnimationStep(AnimationStep step)

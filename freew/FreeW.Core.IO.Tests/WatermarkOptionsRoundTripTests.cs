@@ -112,6 +112,28 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithMutatedVmlTextFitShape(TextDocument document, string fitShape)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            xml.Descendants(vml + "textpath").Last().SetAttributeValue("fitshape", fitShape);
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument ReadWithVmlPictureImageData(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -320,6 +342,21 @@ public class WatermarkOptionsRoundTripTests
         rewritten.Descendants(vml + "shape")
             .Single(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject")
             .Attribute("style")!.Value.Should().Contain("width:512.5pt;height:240.25pt");
+    }
+
+    [Theory]
+    [InlineData("t", true)]
+    [InlineData("false", false)]
+    public void NativeVmlTextWatermark_PreservesTextPathFitShape(string token, bool expected)
+    {
+        var loaded = ReadWithMutatedVmlTextFitShape(new TextDocument
+        {
+            Page = { WatermarkOptions = new WatermarkOptions("AUTHORITATIVE") }
+        }, token);
+
+        loaded.Page.WatermarkOptions!.NativeVmlTextFitShape.Should().Be(expected);
+        ReadHeaderXml(loaded).Descendants(XNamespace.Get("urn:schemas-microsoft-com:vml") + "textpath")
+            .Last().Attribute("fitshape")!.Value.Should().Be(expected ? "t" : "f");
     }
 
     [Fact]

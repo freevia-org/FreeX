@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -57,9 +58,8 @@ internal sealed class ChartAxisTitlesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private void Accept()
     {
-        _result = (
-            string.IsNullOrWhiteSpace(_catBox.Text) ? null : _catBox.Text.Trim(),
-            string.IsNullOrWhiteSpace(_valBox.Text) ? null : _valBox.Text.Trim());
+        var result = ChartAxisTitlesDialogPlanner.BuildResult(_catBox.Text, _valBox.Text);
+        _result = (result.CategoryTitle, result.ValueTitle);
         Close();
     }
 

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -11,16 +12,6 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    // Common fonts to list in each combo (heading / body). The same list for both — user can type anything.
-    private static readonly string[] CommonFonts =
-    [
-        "Arial", "Calibri", "Calibri Light", "Cambria", "Century Gothic",
-        "Comic Sans MS", "Consolas", "Constantia", "Corbel", "Courier New",
-        "Garamond", "Georgia", "Gill Sans MT", "Impact", "Lucida Sans",
-        "Palatino Linotype", "Segoe UI", "Tahoma", "Times New Roman",
-        "Trebuchet MS", "Verdana"
-    ];
-
     private readonly ComboBox _headingCombo;
     private readonly ComboBox _bodyCombo;
     private readonly TextBox _nameBox;
@@ -29,16 +20,17 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
     private CustomizeThemeFontsDialog(Window? owner, DocumentFontSet current)
     {
         Owner = owner;
-        Title = "Create New Theme Fonts";
+        Title = CustomizeThemeFontsDialogPlanner.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _headingCombo = FontCombo(current.HeadingFont);
-        _bodyCombo    = FontCombo(current.BodyFont);
-        _nameBox      = new TextBox { Text = "Custom", MinWidth = 200 };
+        var state = CustomizeThemeFontsDialogPlanner.BuildInitialState(current);
+        _headingCombo = FontCombo(state.HeadingFontText);
+        _bodyCombo    = FontCombo(state.BodyFontText);
+        _nameBox      = new TextBox { Text = state.NameText, MinWidth = 200 };
 
         Content = BuildContent();
         Loaded += (_, _) => _headingCombo.Focus();
@@ -100,7 +92,7 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
     private static ComboBox FontCombo(string current)
     {
         var combo = new ComboBox { IsEditable = true, MinWidth = 200 };
-        foreach (var f in CommonFonts)
+        foreach (var f in CustomizeThemeFontsDialogPlanner.CommonFonts)
             combo.Items.Add(f);
         combo.Text = current;
         return combo;
@@ -108,26 +100,15 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
 
     private void Accept()
     {
-        var heading = (_headingCombo.Text ?? string.Empty).Trim();
-        var body    = (_bodyCombo.Text ?? string.Empty).Trim();
-        var name    = _nameBox.Text.Trim();
-
-        if (string.IsNullOrEmpty(heading))
+        if (!CustomizeThemeFontsDialogPlanner.TryBuildResult(
+                new CustomizeThemeFontsDialogInput(_headingCombo.Text, _bodyCombo.Text, _nameBox.Text),
+                out _result,
+                out var validation))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a heading font name.", Title);
-            _headingCombo.Focus();
+            DialogMessageHelper.ShowWarning(this, validation?.Message ?? "Enter both font names.", Title);
+            (validation?.Field == CustomizeThemeFontsDialogField.BodyFont ? _bodyCombo : _headingCombo).Focus();
             return;
         }
-        if (string.IsNullOrEmpty(body))
-        {
-            DialogMessageHelper.ShowWarning(this, "Enter a body font name.", Title);
-            _bodyCombo.Focus();
-            return;
-        }
-        if (string.IsNullOrEmpty(name))
-            name = "Custom";
-
-        _result = new DocumentFontSet(name, heading, body);
         Close();
     }
 
