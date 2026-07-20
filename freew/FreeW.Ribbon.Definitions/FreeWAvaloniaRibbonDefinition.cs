@@ -648,6 +648,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.shape",    "Shape");
                     g.Button("freew.smartart", "SmartArt");
                     g.Button("freew.chart",    "Chart");
+                    g.Dropdown("freew.screenshot", "Screenshot", new RibbonMenu(new[]
+                    {
+                        new RibbonMenuItem("Screen Clipping", new RibbonCommandId("freew.screen-clipping")),
+                    }));
                     g.Button("freew.insert-icon", "Icons");
                     g.Button("freew.text-box", "Text Box");
                 });
@@ -707,7 +711,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                 });
                 tab.Group("symbols", FreeWRibbonText.SymbolsGroup.Label, null, 92, g =>
                 {
-                    g.Dropdown("freew.symbol", FreeWRibbonText.SymbolCommand.Label, BuildSymbolMenu());
+                    g.Button("freew.symbol", FreeWRibbonText.SymbolCommand.Label);
                     // AV-INSERT2: Equation — default (E=mc²) opener + a few common OMML presets.
                     g.Dropdown("freew.equation", "Equation", BuildEquationMenu());
                 });
@@ -1039,6 +1043,18 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.merge-finish", "Finish & Merge");
                     g.Button("freew.merge-email", "Send E-mail Messages");
+                });
+            })
+            .Tab("help", "Help", "Y", tab =>
+            {
+                tab.Group("product", "Product", null, 90, g =>
+                {
+                    g.Button("freew.legal-notices", "Legal Notices", button => button with
+                    {
+                        Icon = new RibbonCommandIcon(
+                            RibbonCommandIconKind.Book,
+                            RibbonCommandIconAccent.Help),
+                    });
                 });
             })
             // ── Table contextual tabs (shown only when caret is in a table cell) ─────────────
