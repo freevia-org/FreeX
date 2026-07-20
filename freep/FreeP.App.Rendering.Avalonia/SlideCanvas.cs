@@ -2276,9 +2276,7 @@ public sealed class SlideCanvas : Control
         double totalWidth = formatted.Sum(ft => ft.Width);
         if (maxWidth > 0 && totalWidth > maxWidth)
         {
-            // Keep existing wrapping/pagination ownership until baseline-aware
-            // line fragmentation has its own measured contract.
-            dc.DrawText(BuildFormattedText(para, maxWidth, wrap: true), new Point(startX, startY));
+            RenderWrappedBaseline(dc, para, startX, startY, maxWidth);
             return;
         }
         double alignWidth = maxWidth > 0 ? maxWidth : totalWidth;
@@ -2297,6 +2295,128 @@ public sealed class SlideCanvas : Control
             dc.DrawText(ft, new Point(x, baselineY - ft.Baseline - offsetDip));
             x += ft.Width;
         }
+    }
+
+    private sealed class BaselineLine
+    {
+        public List<(ResolvedRun Run, FormattedText Text, double Width)> Fragments { get; } = new();
+        public double Width { get; set; }
+        public double Ascent { get; set; }
+        public double Height { get; set; }
+    }
+
+    private static void RenderWrappedBaseline(
+        DrawingContext dc,
+        ResolvedParagraph para,
+        double startX,
+        double startY,
+        double maxWidth)
+    {
+        var lines = BuildBaselineLines(para, maxWidth);
+        double lineY = startY;
+        foreach (var line in lines)
+        {
+            if (line.Fragments.Count == 0)
+            {
+                lineY += Math.Max(1, line.Height);
+                continue;
+            }
+
+            double x = startX + (para.Align switch
+            {
+                TextAlign.Center => Math.Max(0, (maxWidth - line.Width) / 2.0),
+                TextAlign.Right => Math.Max(0, maxWidth - line.Width),
+                _ => 0
+            });
+            double baselineY = ComputeBaselineY(lineY, line.Ascent);
+            foreach (var fragment in line.Fragments)
+            {
+                double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(
+                    fragment.Run.BaselineOffset,
+                    fragment.Run.FontSizePt);
+                dc.DrawText(
+                    fragment.Text,
+                    new Point(x, baselineY - fragment.Text.Baseline - offsetDip));
+                x += fragment.Width;
+            }
+            lineY += Math.Max(1, line.Height);
+        }
+    }
+
+    private static List<BaselineLine> BuildBaselineLines(
+        ResolvedParagraph para,
+        double maxWidth)
+    {
+        var lines = new List<BaselineLine> { new() };
+
+        void NewLine() => lines.Add(new BaselineLine());
+
+        void AddMeasured(ResolvedRun run, string text)
+        {
+            var formatted = BuildSingleRunFormattedTextAt(
+                run,
+                text,
+                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0);
+            double width = formatted.Width;
+            var line = lines[^1];
+            if (line.Fragments.Count > 0 && line.Width + width > maxWidth)
+            {
+                NewLine();
+                line = lines[^1];
+            }
+            line.Fragments.Add((run, formatted, width));
+            line.Width += width;
+            line.Ascent = Math.Max(line.Ascent, formatted.Baseline);
+            line.Height = Math.Max(line.Height, formatted.Height);
+        }
+
+        foreach (var run in para.Runs)
+        {
+            for (int index = 0; index < run.Text.Length;)
+            {
+                char first = run.Text[index];
+                if (first is '\r' or '\n')
+                {
+                    if (first == '\r' && index + 1 < run.Text.Length && run.Text[index + 1] == '\n')
+                        index++;
+                    NewLine();
+                    index++;
+                    continue;
+                }
+
+                bool whitespace = char.IsWhiteSpace(first);
+                int end = index + 1;
+                while (end < run.Text.Length && run.Text[end] is not '\r' and not '\n' &&
+                       char.IsWhiteSpace(run.Text[end]) == whitespace)
+                    end++;
+
+                string token = run.Text[index..end];
+                var line = lines[^1];
+                var tokenText = BuildSingleRunFormattedTextAt(
+                    run,
+                    token,
+                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0);
+                double tokenWidth = tokenText.Width;
+                if (whitespace && (line.Fragments.Count == 0 || line.Width + tokenWidth > maxWidth))
+                {
+                    index = end;
+                    continue;
+                }
+
+                if (!whitespace && tokenWidth > maxWidth)
+                {
+                    foreach (char character in token)
+                        AddMeasured(run, character.ToString());
+                }
+                else
+                {
+                    AddMeasured(run, token);
+                }
+                index = end;
+            }
+        }
+
+        return lines;
     }
 
     // ── Theme 27: math rendering ────────────────────────────────────────────────

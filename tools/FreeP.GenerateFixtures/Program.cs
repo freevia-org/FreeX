@@ -385,4 +385,73 @@ static ChartShape MakeHundredPercentStackedChart()
     Console.WriteLine($"Generated: {outPath}");
 }
 
+// 24-run-baseline-wrap.pptx
+// A wrapped baseline fixture: authored subscript/superscript runs cross line
+// boundaries, with a same-font plain control beside them.
+{
+    var pres = Presentation.CreateEmpty();
+    var slide = pres.Slides[0];
+    slide.Title = "Wrapped baseline offsets";
+    slide.Shapes.Clear();
+    slide.Shapes.Add(new SlideShape
+    {
+        Id = 2,
+        Name = "Wrapped baseline sample",
+        Kind = SlideShapeKind.AutoShape,
+        AutoShapeKind = DrawingShapeKind.Rectangle,
+        OffsetXEmu = 1097280,
+        OffsetYEmu = 1097280,
+        ExtentCxEmu = 3017520,
+        ExtentCyEmu = 4114800,
+        Fill = new ShapeFill.Solid(new SrgbColor(0xF2, 0xF2, 0xF2)),
+        TextBody = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "The quick " },
+                        new Run { Text = "brown", BaselineOffset = -25000 },
+                        new Run { Text = " fox jumps over the " },
+                        new Run { Text = "lazy", BaselineOffset = 30000 },
+                        new Run { Text = " dog while the baseline sample wraps across lines." },
+                    }
+                }
+            }
+        }
+    });
+    slide.Shapes.Add(new SlideShape
+    {
+        Id = 3,
+        Name = "Wrapped baseline plain control",
+        Kind = SlideShapeKind.AutoShape,
+        AutoShapeKind = DrawingShapeKind.Rectangle,
+        OffsetXEmu = 4754880,
+        OffsetYEmu = 1097280,
+        ExtentCxEmu = 3017520,
+        ExtentCyEmu = 4114800,
+        Fill = new ShapeFill.Solid(new SrgbColor(0xF2, 0xF2, 0xF2)),
+        TextBody = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "The quick brown fox jumps over the lazy dog while the plain control wraps across lines." },
+                    }
+                }
+            }
+        }
+    });
+
+    var outPath = Path.Combine(outDir, "24-run-baseline-wrap.pptx");
+    using var fs = File.Create(outPath);
+    PptxPackageWriter.Write(pres, fs);
+    Console.WriteLine($"Generated: {outPath}");
+}
+
 Console.WriteLine("Done.");
