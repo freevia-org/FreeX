@@ -235,6 +235,12 @@ static List<ComparisonRow> CompareCaptures(EvidenceInventory inventory, CaptureM
             rows.Add(new ComparisonRow(pairKey, left.Status + "/" + right.Status, pendingClassification, null, null, null, left.Note ?? right.Note));
             continue;
         }
+        if (left.RouteId.Equals("compare-documents", StringComparison.OrdinalIgnoreCase))
+        {
+            rows.Add(new ComparisonRow(pairKey, "captured/captured", "product-parity-gap", null, null, null,
+                "CompareDocumentsDialog is captured on both hosts, but remains an explicit product parity gap pending the product slice."));
+            continue;
+        }
         var leftPath = ResolveCapturePath(wpf, left.FullPngPath);
         var rightPath = ResolveCapturePath(avalonia, right.FullPngPath);
         var leftTarget = EnsureTargetCrop(left, wpf, leftPath, output, "wpf");
