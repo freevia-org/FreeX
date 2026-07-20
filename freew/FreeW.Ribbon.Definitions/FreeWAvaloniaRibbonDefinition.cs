@@ -887,6 +887,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                 {
                     g.Button("freew.footnote", "Insert Footnote");
                     g.Button("freew.endnote",  "Insert Endnote");
+                    g.Button("freew.next-footnote", "Next Footnote");
+                    g.Button("freew.previous-footnote", "Previous Footnote");
+                    g.Button("freew.next-endnote", "Next Endnote");
+                    g.Button("freew.previous-endnote", "Previous Endnote");
                     g.Button("freew.show-notes", "Show Notes");
                     g.Button("freew.footnote-endnote-options", "Footnote/Endnote Options...");
                 });
