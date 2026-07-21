@@ -2112,7 +2112,8 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult PasteClipboardTextAtActiveCell(
         string? text,
         bool preserveText = false,
-        bool clipboardReadFailed = false)
+        bool clipboardReadFailed = false,
+        string? html = null)
     {
         // Paste Special > Text / Unicode Text (preserveText: true — Excel semantics: paste the
         // clipboard's plain text only) must always go through the external-clipboard plain-text path
@@ -2152,7 +2153,7 @@ public sealed class WorkbookSession
                 RecalcReport: null);
         }
 
-        return PasteExternalTextAtActiveCell(text, preserveText);
+        return PasteExternalTextAtActiveCell(text, preserveText, default, html);
     }
 
     public WorkbookCellEditResult PasteSpecialClipboardAtActiveCell(
@@ -2160,7 +2161,8 @@ public sealed class WorkbookSession
         PasteCellsMode mode,
         PasteSpecialOptions options,
         bool keepSourceColumnWidths = false,
-        bool clipboardReadFailed = false)
+        bool clipboardReadFailed = false,
+        string? html = null)
     {
         if (!Enum.IsDefined(mode))
         {
@@ -2202,7 +2204,7 @@ public sealed class WorkbookSession
                     RecalcReport: null);
             }
 
-            return PasteExternalTextAtActiveCell(text, preserveText: false, options);
+            return PasteExternalTextAtActiveCell(text, preserveText: false, options, html);
         }
 
         if (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal))
@@ -2226,7 +2228,7 @@ public sealed class WorkbookSession
                     RecalcReport: null);
             }
 
-            return PasteExternalTextAtActiveCell(text, preserveText: false, options);
+            return PasteExternalTextAtActiveCell(text, preserveText: false, options, html);
         }
 
         if (SelectedRanges.Count > 1)
@@ -2604,7 +2606,7 @@ public sealed class WorkbookSession
     }
 
     public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText = false) =>
-        PasteExternalTextAtActiveCell(text, preserveText, default);
+        PasteExternalTextAtActiveCell(text, preserveText, default, html: null);
 
     /// <summary>
     /// Same as the <paramref name="preserveText"/>-only overload, but also honors Paste Special's
@@ -2613,15 +2615,34 @@ public sealed class WorkbookSession
     /// (review P46 — this shell used to reject Paste Special entirely for external clipboard text
     /// instead of applying the selected options).
     /// </summary>
-    public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText, PasteSpecialOptions options)
+    public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText, PasteSpecialOptions options) =>
+        PasteExternalTextAtActiveCell(text, preserveText, options, html: null);
+
+    /// <summary>
+    /// Same as the <paramref name="options"/> overload, but also accepts the OS clipboard's HTML
+    /// ('text/html' / CF_HTML) payload alongside the plain-text one, when the caller has it available.
+    /// When <paramref name="html"/> contains a parseable &lt;table&gt;, its actual &lt;tr&gt;/&lt;td&gt;
+    /// row/column structure is preferred over the plain-text tab/newline splitter
+    /// (<see cref="ClipboardSerializer.Deserialize"/>): that splitter treats every bare '\r'/'\n' as a
+    /// new row, which misreads a source cell whose rendered text wraps across multiple lines (or
+    /// contains a literal &lt;br&gt;) as a row break, shifting every subsequent pasted row down by one.
+    /// Mirrors the WPF host's <c>MainWindow.ClipboardCommands.TryGetClipboardHtml</c> /
+    /// <c>TryParseHtmlClipboardTableRows</c> preference (R39-io-external-clipboard-2-3), which the
+    /// Avalonia shell's clipboard paste never received (R57-services-clipboard-formats-5-1).
+    /// </summary>
+    public WorkbookCellEditResult PasteExternalTextAtActiveCell(
+        string text, bool preserveText, PasteSpecialOptions options, string? html)
     {
         ArgumentNullException.ThrowIfNull(text);
 
         var destination = ActiveCell;
         var destinationRange = GetSinglePasteDestinationRange(destination);
-        var rows = ClipboardSerializer.Deserialize(text);
-        var sourceRowCount = (ulong)rows.Length;
-        var sourceColCount = rows.Length == 0 ? 0UL : (ulong)rows.Max(static row => row.Length);
+        IReadOnlyList<IReadOnlyList<string>> rows =
+            TryParseHtmlClipboardTableRows(html) is { Count: > 0 } htmlRows
+                ? htmlRows
+                : ClipboardSerializer.Deserialize(text).Select(static row => (IReadOnlyList<string>)row).ToList();
+        var sourceRowCount = (ulong)rows.Count;
+        var sourceColCount = rows.Count == 0 ? 0UL : (ulong)rows.Max(static row => row.Count);
         var pasteRowCount = options.Transpose ? sourceColCount : sourceRowCount;
         var pasteColCount = options.Transpose ? sourceRowCount : sourceColCount;
         var command = CreateExternalTextPasteCommand(destinationRange, rows, preserveText, options);
@@ -2635,6 +2656,209 @@ public sealed class WorkbookSession
             Math.Max(pasteRowCount, destinationRange.RowCount),
             Math.Max(pasteColCount, destinationRange.ColCount));
         return result;
+    }
+
+    /// <summary>
+    /// Parses a CF_HTML clipboard payload's first &lt;table&gt; into rows of plain cell text (no
+    /// per-cell styling — a lighter-weight recovery than <see cref="FreeX.Core.IO"/>'s whole-file HTML
+    /// import), or <c>null</c> when <paramref name="html"/> is empty or contains no table markup. Only
+    /// the &lt;tr&gt;/&lt;td&gt;/&lt;th&gt; row/column boundaries are recovered here — this is enough to
+    /// stop a multi-line source cell's embedded line break from being misread as a row boundary the way
+    /// the plain-text tab/newline splitter does (R57-services-clipboard-formats-5-1), mirroring the WPF
+    /// host's <c>MainWindow.ClipboardCommands.TryParseHtmlClipboardTableRows</c>.
+    /// </summary>
+    private static List<IReadOnlyList<string>>? TryParseHtmlClipboardTableRows(string? html)
+    {
+        if (string.IsNullOrEmpty(html))
+            return null;
+
+        var fragment = ExtractHtmlClipboardFragment(html);
+        var tableInner = ExtractFirstHtmlTableInner(fragment);
+        if (tableInner is null)
+            return null;
+
+        var rows = new List<List<string>>();
+        foreach (var rowInner in EnumerateHtmlElements(tableInner, "tr"))
+        {
+            var cells = new List<string>();
+            foreach (var cellInner in EnumerateHtmlCells(rowInner))
+                cells.Add(DecodeHtmlCellText(cellInner));
+
+            if (cells.Count > 0)
+                rows.Add(cells);
+        }
+
+        return rows.Count > 0 ? rows.Cast<IReadOnlyList<string>>().ToList() : null;
+    }
+
+    /// <summary>CF_HTML wraps the real markup between StartFragment/EndFragment comments after a small
+    /// header; falls back to the whole payload if the markers are absent (some non-Excel producers, e.g.
+    /// a browser's own copy, omit them).</summary>
+    private static string ExtractHtmlClipboardFragment(string html)
+    {
+        const string startMarker = "<!--StartFragment-->";
+        const string endMarker = "<!--EndFragment-->";
+        var start = html.IndexOf(startMarker, StringComparison.OrdinalIgnoreCase);
+        var end = html.IndexOf(endMarker, StringComparison.OrdinalIgnoreCase);
+        return start >= 0 && end > start
+            ? html[(start + startMarker.Length)..end]
+            : html;
+    }
+
+    private static string? ExtractFirstHtmlTableInner(string html)
+    {
+        int i = 0;
+        while (i < html.Length)
+        {
+            int lt = html.IndexOf('<', i);
+            if (lt < 0)
+                return null;
+            if (string.Equals(HtmlTagNameAt(html, lt), "table", StringComparison.OrdinalIgnoreCase))
+            {
+                int tagEnd = html.IndexOf('>', lt);
+                if (tagEnd < 0)
+                    return null;
+                int closeStart = FindMatchingHtmlClose(html, tagEnd + 1, "table");
+                return closeStart < 0 ? html[(tagEnd + 1)..] : html[(tagEnd + 1)..closeStart];
+            }
+            i = lt + 1;
+        }
+        return null;
+    }
+
+    private static IEnumerable<string> EnumerateHtmlElements(string html, string tag)
+    {
+        int i = 0;
+        while (i < html.Length)
+        {
+            int lt = html.IndexOf('<', i);
+            if (lt < 0)
+                break;
+            if (string.Equals(HtmlTagNameAt(html, lt), tag, StringComparison.OrdinalIgnoreCase))
+            {
+                int tagEnd = html.IndexOf('>', lt);
+                if (tagEnd < 0)
+                    break;
+                int closeStart = FindMatchingHtmlClose(html, tagEnd + 1, tag);
+                string inner = closeStart < 0 ? html[(tagEnd + 1)..] : html[(tagEnd + 1)..closeStart];
+                yield return inner;
+                i = closeStart < 0 ? html.Length : SkipHtmlClosingTag(html, closeStart);
+            }
+            else
+            {
+                i = lt + 1;
+            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateHtmlCells(string rowInner)
+    {
+        int i = 0;
+        while (i < rowInner.Length)
+        {
+            int lt = rowInner.IndexOf('<', i);
+            if (lt < 0)
+                break;
+            var name = HtmlTagNameAt(rowInner, lt);
+            if (name is "td" or "th")
+            {
+                int tagEnd = rowInner.IndexOf('>', lt);
+                if (tagEnd < 0)
+                    break;
+                int closeStart = FindMatchingHtmlClose(rowInner, tagEnd + 1, name);
+                string inner = closeStart < 0 ? rowInner[(tagEnd + 1)..] : rowInner[(tagEnd + 1)..closeStart];
+                yield return inner;
+                i = closeStart < 0 ? rowInner.Length : SkipHtmlClosingTag(rowInner, closeStart);
+            }
+            else
+            {
+                i = lt + 1;
+            }
+        }
+    }
+
+    /// <summary>The element name at a '&lt;' position, or null if it isn't a start/end tag name.</summary>
+    private static string? HtmlTagNameAt(string s, int ltIndex)
+    {
+        int i = ltIndex + 1;
+        if (i < s.Length && s[i] == '/')
+            i++;
+        int start = i;
+        while (i < s.Length && char.IsLetterOrDigit(s[i]))
+            i++;
+        return i > start ? s[start..i].ToLowerInvariant() : null;
+    }
+
+    /// <summary>Find the index of the matching &lt;/tag&gt;, honoring nesting. -1 if none.</summary>
+    private static int FindMatchingHtmlClose(string s, int from, string tag)
+    {
+        int depth = 0;
+        int i = from;
+        while (i < s.Length)
+        {
+            int lt = s.IndexOf('<', i);
+            if (lt < 0)
+                return -1;
+            bool isClose = lt + 1 < s.Length && s[lt + 1] == '/';
+            var name = HtmlTagNameAt(s, lt);
+            if (string.Equals(name, tag, StringComparison.OrdinalIgnoreCase))
+            {
+                if (isClose)
+                {
+                    if (depth == 0)
+                        return lt;
+                    depth--;
+                }
+                else if (!IsHtmlSelfClosing(s, lt))
+                {
+                    depth++;
+                }
+            }
+            i = lt + 1;
+        }
+        return -1;
+    }
+
+    private static bool IsHtmlSelfClosing(string s, int lt)
+    {
+        int gt = s.IndexOf('>', lt);
+        return gt > lt && s[gt - 1] == '/';
+    }
+
+    private static int SkipHtmlClosingTag(string s, int closeStart)
+    {
+        int gt = s.IndexOf('>', closeStart);
+        return gt < 0 ? s.Length : gt + 1;
+    }
+
+    /// <summary>Strips a &lt;td&gt;/&lt;th&gt; cell's inner HTML down to its plain text, turning
+    /// &lt;br&gt; into a newline (so a genuinely multi-line cell still round-trips as one pasted cell,
+    /// matching Excel's own within-cell wrap semantics) and HTML-decoding entities.</summary>
+    private static string DecodeHtmlCellText(string innerHtml)
+    {
+        var sb = new System.Text.StringBuilder(innerHtml.Length);
+        int i = 0;
+        while (i < innerHtml.Length)
+        {
+            char c = innerHtml[i];
+            if (c == '<')
+            {
+                var name = HtmlTagNameAt(innerHtml, i);
+                int gt = innerHtml.IndexOf('>', i);
+                if (gt < 0)
+                    break;
+                if (name is "br")
+                    sb.Append('\n');
+                i = gt + 1;
+            }
+            else
+            {
+                sb.Append(c);
+                i++;
+            }
+        }
+
+        return System.Net.WebUtility.HtmlDecode(sb.ToString()).Trim();
     }
 
     public WorkbookCellEditResult ClearSelectedRangeContents()

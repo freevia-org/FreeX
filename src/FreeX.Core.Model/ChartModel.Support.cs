@@ -113,12 +113,21 @@ public sealed record ChartSeriesColumnMapping(int SeriesXmlIndex, uint ValueColu
 /// Verbatim formula strings for a single chart series, preserved from the source XML.
 /// Used to round-trip multi-area series formulas that cannot be represented as a
 /// single rectangular <see cref="GridRange"/>.
+/// <para>
+/// For a Scatter/Bubble series (which has no <c>cat</c>/<c>val</c> containers), the reader
+/// repurposes <see cref="CatFormula"/> to carry the series' <c>xVal</c> formula and
+/// <see cref="ValFormula"/> to carry its <c>yVal</c> formula — mirroring how
+/// <c>XlsxChartXmlWriter.BuildScatterChartSeries</c> already consumes them on write. A Bubble
+/// series additionally may need to preserve its <c>bubbleSize</c> formula, which has no
+/// standard-chart equivalent to repurpose, hence the dedicated <see cref="BubbleSizeFormula"/>.
+/// </para>
 /// </summary>
 public sealed record ChartSeriesVerbatimFormulas(
     int SeriesIndex,
     string? ValFormula,
     string? CatFormula,
-    string? TxFormula);
+    string? TxFormula,
+    string? BubbleSizeFormula = null);
 
 /// <summary>
 /// Embedded data values for a single chart series, extracted from the

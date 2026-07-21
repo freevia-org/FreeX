@@ -423,11 +423,13 @@ internal static class XlsxSourceDrawingGeometryRewriter
             var (toCol, toColOffset) = ToMarkerIndex(
                 fromLeft + widthPixels,
                 sheet.DefaultColumnWidth * 8,
+                MaxColumnIndex,
                 column => sheet.IsColEffectivelyHidden(column),
                 column => sheet.ColumnWidths.GetValueOrDefault(column, sheet.DefaultColumnWidth) * 8);
             var (toRow, toRowOffset) = ToMarkerIndex(
                 fromTop + heightPixels,
                 sheet.DefaultRowHeight,
+                MaxRowIndex,
                 row => sheet.IsRowEffectivelyHidden(row),
                 row => sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight));
 
@@ -611,18 +613,23 @@ internal static class XlsxSourceDrawingGeometryRewriter
         return true;
     }
 
+    // Excel's real ceilings: 16,384 columns (XFD) vs. 1,048,576 rows.
+    private const uint MaxColumnIndex = 16384;
+    private const uint MaxRowIndex = 1048576;
+
     // Mirrors XlsxWorksheetChartWriter.ToMarkerIndex: walks columns/rows from index 0 accumulating pixel
     // sizes (skipping hidden/zero-size ones) until the remaining distance fits within the next column/row,
     // returning its zero-based index and the leftover sub-cell offset in pixels.
     private static (uint Index, double Offset) ToMarkerIndex(
         double pixels,
         double defaultSize,
+        uint maxIndex,
         Func<uint, bool> isHidden,
         Func<uint, double> getSize)
     {
         var remaining = Math.Max(0, pixels);
         var index = 0u;
-        while (index < 16384)
+        while (index < maxIndex)
         {
             var oneBasedIndex = index + 1;
             var size = isHidden(oneBasedIndex) ? 0 : Math.Max(0, getSize(oneBasedIndex));

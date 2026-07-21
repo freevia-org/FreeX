@@ -18784,7 +18784,7 @@ public static partial class AccessibilityCheckerService
                         return false;
                     }
 
-                    result = Math.Truncate(first / denominator);
+                    result = TruncateFormulaQuotient(first, denominator);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Combin:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var numberChosen) ||
@@ -18857,6 +18857,15 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Power:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var exponent))
+                    {
+                        return false;
+                    }
+
+                    // Excel's POWER(0,0) is #NUM! even though Math.Pow(0,0) returns the
+                    // finite value 1.0 in .NET; mirror BuiltInFunctions.MathCore.Numeric.cs's
+                    // PowerScalar guard so a formula error here is treated the same way the
+                    // real evaluator (and Excel) treats it: as FALSE, not as a real result.
+                    if (first == 0 && exponent == 0)
                     {
                         return false;
                     }
@@ -21589,6 +21598,41 @@ public static partial class AccessibilityCheckerService
             }
 
             return Math.Floor(value);
+        }
+
+        // Mirrors BuiltInFunctions.MathCore.Rounding.cs's TruncateExcelQuotient: raw double
+        // division/truncation for QUOTIENT can be off by one for common decimal inputs (e.g.
+        // 0.3/0.1 == 2.9999999999999996 in IEEE-754 double, truncating to 2 instead of the
+        // Excel-correct 3), so round-trip through decimal first when the operands allow it.
+        private static double TruncateFormulaQuotient(double numerator, double denominator)
+        {
+            if (TryToExcelDecimalFormulaNumber(numerator, out var decimalNumerator) &&
+                TryToExcelDecimalFormulaNumber(denominator, out var decimalDenominator) &&
+                decimalDenominator != 0m)
+            {
+                try
+                {
+                    return (double)Math.Truncate(decimalNumerator / decimalDenominator);
+                }
+                catch (OverflowException)
+                {
+                }
+            }
+
+            return Math.Truncate(numerator / denominator);
+        }
+
+        private static bool TryToExcelDecimalFormulaNumber(double value, out decimal result)
+        {
+            result = 0m;
+            if (!double.IsFinite(value))
+                return false;
+
+            return decimal.TryParse(
+                value.ToString("G15", CultureInfo.InvariantCulture),
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out result);
         }
 
         private static bool TryMRoundFormulaNumber(double number, double multiple, out double result)

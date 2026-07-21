@@ -6405,12 +6405,23 @@ public sealed partial class MainWindow : Window
         double zoomFactor)
     {
         var limit = cellRight;
+        var frozenCols = _session.ActiveSheet.FrozenCols;
+        var previousCol = colMetrics[colIndex].Col;
         for (var index = colIndex + 1; index < colMetrics.Count; index++)
         {
             var col = colMetrics[index].Col;
+            // Frozen/scrolled-body seam: when the sheet is scrolled, the combined colMetrics list
+            // jumps straight from the last frozen column to the (far-away) first visible scrollable
+            // column, with no entry for anything in between. Walking by list index alone cannot tell
+            // that gap apart from an adjacent column, so it would draw the overflow straight across
+            // the scrolled-off range. Excel's frozen pane is a separate clip region -- overflow must
+            // stop at the pane boundary, so bail once we detect the column-number jump past it.
+            if (frozenCols > 0 && previousCol <= frozenCols && col > frozenCols)
+                break;
             if (IsOverflowOccupied(row, col, cellsByAddress))
                 break;
             limit += GetDisplayedColumnWidth(colMetrics[index], zoomFactor);
+            previousCol = col;
         }
         return limit;
     }
@@ -6424,12 +6435,19 @@ public sealed partial class MainWindow : Window
         double zoomFactor)
     {
         var limit = cellLeft;
+        var frozenCols = _session.ActiveSheet.FrozenCols;
+        var previousCol = colMetrics[colIndex].Col;
         for (var index = colIndex - 1; index >= 0; index--)
         {
             var col = colMetrics[index].Col;
+            // Mirror of the seam check above: a scrollable-body cell's leftward overflow must not
+            // tunnel backward across the scrolled-off gap into the frozen pane.
+            if (frozenCols > 0 && previousCol > frozenCols && col <= frozenCols)
+                break;
             if (IsOverflowOccupied(row, col, cellsByAddress))
                 break;
             limit -= GetDisplayedColumnWidth(colMetrics[index], zoomFactor);
+            previousCol = col;
         }
         return limit;
     }

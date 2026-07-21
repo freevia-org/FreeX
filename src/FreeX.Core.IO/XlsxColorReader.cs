@@ -180,6 +180,13 @@ public static class XlsxColorReader
         return true;
     }
 
+    // OOXML reserves indexed=64 for "System Foreground" (black) and indexed=65 for
+    // "System Background" (white); these lie outside the 56-entry standard palette
+    // (indices 1-56) that WorkbookIndexedColorPalette resolves, so they must be
+    // special-cased rather than forwarded to TryResolveColor.
+    private const int SystemForegroundIndexedValue = 64;
+    private const int SystemBackgroundIndexedValue = 65;
+
     private static bool TryReadIndexedColor(XElement? element, WorkbookIndexedColorPalette indexedColors, out CellColor color)
     {
         color = default;
@@ -189,8 +196,21 @@ public static class XlsxColorReader
         var indexedText = element.Attribute("indexed")?.Value;
         // OOXML indexed colors are zero-based; WorkbookIndexedColorPalette stores Excel ColorIndex values one-based.
         if (string.IsNullOrWhiteSpace(indexedText) ||
-            !int.TryParse(indexedText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) ||
-            !indexedColors.TryResolveColor(index + 1, out var indexedColor))
+            !int.TryParse(indexedText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
+        {
+            return false;
+        }
+
+        CellColor indexedColor;
+        if (index == SystemForegroundIndexedValue)
+        {
+            indexedColor = CellColor.Black;
+        }
+        else if (index == SystemBackgroundIndexedValue)
+        {
+            indexedColor = CellColor.White;
+        }
+        else if (!indexedColors.TryResolveColor(index + 1, out indexedColor))
         {
             return false;
         }

@@ -887,6 +887,15 @@ public partial class GridView
                 // straight over it), so a miss only stops the scan once we're past the last column
                 // metric actually present in the viewport; otherwise skip over it and keep going.
                 uint maxViewportCol = viewport.ColMetrics.Count > 0 ? viewport.ColMetrics[^1].Col : colMetric.Col;
+                // The frozen/scrolled-body seam is a DIFFERENT kind of colLookup gap than a
+                // hidden column: when scrolled, colLookup only has entries for 1..FrozenCols and
+                // bodyStart..end, so the (possibly huge) range of merely scrolled-off columns in
+                // between is indistinguishable from a hidden column by TryGetValue alone. Excel's
+                // frozen pane is a genuinely separate clip region, so overflow must never tunnel
+                // across that seam -- clamp the scan so it cannot pass the last frozen column.
+                var frozenColsRight = viewport.FrozenPanes?.Cols ?? 0;
+                if (frozenColsRight > 0 && colMetric.Col <= frozenColsRight)
+                    maxViewportCol = Math.Min(maxViewportCol, frozenColsRight);
                 while (nextCol <= maxViewportCol)
                 {
                     var hasNextMetric = colLookup.TryGetValue(nextCol, out var nextMetric);
@@ -908,6 +917,12 @@ public partial class GridView
                 // entry means "hidden", not "stop" -- only bail once we pass the leftmost column
                 // metric actually present in the viewport.
                 uint minViewportCol = viewport.ColMetrics.Count > 0 ? viewport.ColMetrics[0].Col : colMetric.Col;
+                // Mirror of the seam clamp above: a scrollable-body cell's leftward overflow must
+                // not tunnel backward across the scrolled-off gap into the frozen pane, so clamp
+                // the scan to stop at the first column past the frozen boundary.
+                var frozenColsLeft = viewport.FrozenPanes?.Cols ?? 0;
+                if (frozenColsLeft > 0 && colMetric.Col > frozenColsLeft)
+                    minViewportCol = Math.Max(minViewportCol, frozenColsLeft + 1);
                 while (prevCol >= minViewportCol)
                 {
                     var hasPrevMetric = colLookup.TryGetValue(prevCol, out var prevMetric);

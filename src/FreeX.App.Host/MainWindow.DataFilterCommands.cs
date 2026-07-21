@@ -14,6 +14,20 @@ public partial class MainWindow
     private Func<GridRange, IWorkbookCommand>? _lastAutoFilterCommandFactory;
     private string _lastAutoFilterCommandTitle = "Reapply Filter";
 
+    /// <summary>
+    /// R57-formula-subtotal-aggregate-5-1: every filter/sort command in this file dispatches through
+    /// TryExecuteRepeatableCurrentRangeCommand/TryExecuteRepeatableCurrentSelectionRangesCommand
+    /// (MainWindow.CommandExecution.cs), whose success path only marks the workbook dirty and bumps
+    /// the navigation-cache revision -- it never calls RecalculateIfAutomatic/RecalculateWorkbook.
+    /// Applying, changing, or clearing an AutoFilter changes which rows are hidden, and Sort
+    /// reorders cell values; either way, SUBTOTAL(101-111)/AGGREGATE ignore-hidden formulas (and any
+    /// other formula depending on the affected range) keep their stale cached value until an
+    /// unrelated later edit happens to trigger a recalc pass that touches them. Real Excel always
+    /// recalculates the instant filter visibility (or sorted values) change, so force a full
+    /// recalculation here after every filter/sort mutation in this file.
+    /// </summary>
+    private void RecalculateAfterFilterOrSort() => RecalculateWorkbook();
+
     private void SortAscButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -22,6 +36,7 @@ public partial class MainWindow
                 range,
                 currentRange => new SortCommand(_currentSheetId, ExcludeHeaderRowForQuickSort(currentRange), sortByColOffset: 0, ascending: true)))
             return;
+        RecalculateAfterFilterOrSort();
         UpdateViewport();
     }
 
@@ -33,6 +48,7 @@ public partial class MainWindow
                 range,
                 currentRange => new SortCommand(_currentSheetId, ExcludeHeaderRowForQuickSort(currentRange), sortByColOffset: 0, ascending: false)))
             return;
+        RecalculateAfterFilterOrSort();
         UpdateViewport();
     }
 
@@ -97,6 +113,7 @@ public partial class MainWindow
                     keys,
                     options)))
             return;
+        RecalculateAfterFilterOrSort();
         UpdateViewport();
     }
 
@@ -118,6 +135,7 @@ public partial class MainWindow
         }
 
         ClearRememberedAutoFilterCommand();
+        RecalculateAfterFilterOrSort();
         UpdateFilterViewportAndStatusBar();
     }
 
@@ -132,6 +150,7 @@ public partial class MainWindow
         _lastAutoFilterRange = range;
         _lastAutoFilterCommandTitle = title;
         _lastAutoFilterCommandFactory = createCommand;
+        RecalculateAfterFilterOrSort();
         return true;
     }
 
@@ -151,6 +170,7 @@ public partial class MainWindow
                 _ => _lastAutoFilterCommandFactory(range)))
             return;
 
+        RecalculateAfterFilterOrSort();
         RestoreAutoFilterRangeSelection(range);
         UpdateFilterViewportAndStatusBar();
     }
@@ -178,6 +198,7 @@ public partial class MainWindow
                     _ => new FilterCommand(_currentSheetId, range, filterColOffset, allowedValues: [])))
                 return false;
             ClearRememberedAutoFilterCommand();
+            RecalculateAfterFilterOrSort();
             RestoreAutoFilterRangeSelection(range);
             return true;
         }
@@ -486,6 +507,7 @@ public partial class MainWindow
                 currentRange => BuildClearAllValueFiltersCommand(currentRange)))
             return;
         ClearRememberedAutoFilterCommand();
+        RecalculateAfterFilterOrSort();
         RestoreAutoFilterRangeSelection(range);
         UpdateFilterViewportAndStatusBar();
     }

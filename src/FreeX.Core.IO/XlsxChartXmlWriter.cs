@@ -11,7 +11,7 @@ internal static partial class XlsxChartXmlWriter
     private const int SecondaryValueAxisId = 48672769;
     private const int SeriesAxisId = 48672770;
 
-    public static XDocument ToChartXml(ChartModel chart, Sheet sheet)
+    public static XDocument ToChartXml(ChartModel chart, Workbook workbook, Sheet sheet)
     {
         if (ChartTypeSupport.IsChartExFamily(chart.Type))
             return ToChartExXml(chart, sheet);
@@ -20,7 +20,15 @@ internal static partial class XlsxChartXmlWriter
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
-        var plotCharts = ToPlotChartXml(chart, sheet, chartNs, drawingNs).ToList();
+        // R57-io-chart-series-refs-5-1: series ranges/values/categories must come from the sheet
+        // chart.DataRange actually points at (which for a cross-sheet chart differs from the
+        // chart's own anchor sheet), not from the anchor sheet unconditionally. ToPivotSourceXml's
+        // fallback source-sheet name below intentionally keeps using the anchor `sheet` — that
+        // fallback only applies when the chart doesn't already carry an explicit
+        // PivotSourceSheetName, and mirrors the chart's own hosting sheet, not its data range.
+        var dataSheet = ResolveChartDataSheet(chart, workbook, sheet);
+
+        var plotCharts = ToPlotChartXml(chart, workbook, dataSheet, chartNs, drawingNs).ToList();
 
         return new XDocument(
                 new XElement(chartNs + "chartSpace",
@@ -64,6 +72,21 @@ internal static partial class XlsxChartXmlWriter
                     ToChartUserShapesXml(chart, chartNs, relNs)));
     }
 
+    /// <summary>
+    /// R57-io-chart-series-refs-5-1: resolves the actual <see cref="Sheet"/> that
+    /// <see cref="ChartModel.DataRange"/> points at, so series formulas/caches are keyed to the
+    /// real data sheet rather than always the chart's own anchor sheet — required for a chart
+    /// anchored on one sheet whose series reference a different sheet's cells (a normal,
+    /// Excel-supported "dashboard tab charts data on another tab" scenario). Falls back to the
+    /// anchor sheet when the range's sheet is the anchor sheet itself, or when it cannot be
+    /// resolved (deleted sheet, orphaned reference, etc.) — matches
+    /// <c>XlsxSparklineMapper.ResolveSheetName</c>'s same defensive fallback pattern.
+    /// </summary>
+    private static Sheet ResolveChartDataSheet(ChartModel chart, Workbook workbook, Sheet anchorSheet) =>
+        chart.DataRange.Start.Sheet == anchorSheet.Id
+            ? anchorSheet
+            : workbook.GetSheet(chart.DataRange.Start.Sheet) ?? anchorSheet;
+
     private static bool ShouldWriteChartAxes(ChartType chartType) =>
         chartType is not ChartType.Pie and not ChartType.ThreeDPie and not ChartType.Doughnut;
 
@@ -82,12 +105,13 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<XElement> ToPlotChartXml(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs)
     {
         var groupIndex = 0;
-        foreach (var (plotChart, usesSecondaryAxis) in CreatePlotCharts(chart, sheet, chartNs, drawingNs))
+        foreach (var (plotChart, usesSecondaryAxis) in CreatePlotCharts(chart, workbook, sheet, chartNs, drawingNs))
         {
             // Only the FIRST native plot-chart-type group's <c:dLbls> is modeled by the chart-wide
             // ShowDataLabels*/DataLabel* scalars. Later groups (combo charts) instead re-emit any
@@ -129,6 +153,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<(XElement PlotChart, bool UsesSecondaryAxis)> CreatePlotCharts(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs)
@@ -138,8 +163,8 @@ internal static partial class XlsxChartXmlWriter
         var comboLineIndexes = GetComboLineSeriesIndexes(chart, seriesCount);
         if (chart.Type == ChartType.Stock && IsVolumeStockSubtype(chart.StockSubtype))
         {
-            yield return (CreateStockVolumeBarChart(chart, sheet, chartNs, drawingNs), false);
-            yield return (CreateStockPlotChart(chart, sheet, chartNs, drawingNs), false);
+            yield return (CreateStockVolumeBarChart(chart, workbook, sheet, chartNs, drawingNs), false);
+            yield return (CreateStockPlotChart(chart, workbook, sheet, chartNs, drawingNs), false);
             yield break;
         }
 
@@ -149,8 +174,8 @@ internal static partial class XlsxChartXmlWriter
                 .Where(index => !secondaryIndexes.Contains(index))
                 .ToHashSet();
             if (primaryScatter.Count > 0)
-                yield return (CreateScatterPlotChart(chart, sheet, chartNs, drawingNs, primaryScatter.Contains), false);
-            yield return (CreateScatterPlotChart(chart, sheet, chartNs, drawingNs, secondaryIndexes.Contains), true);
+                yield return (CreateScatterPlotChart(chart, workbook, sheet, chartNs, drawingNs, primaryScatter.Contains), false);
+            yield return (CreateScatterPlotChart(chart, workbook, sheet, chartNs, drawingNs, secondaryIndexes.Contains), true);
             yield break;
         }
 
@@ -160,8 +185,8 @@ internal static partial class XlsxChartXmlWriter
                 .Where(index => !secondaryIndexes.Contains(index))
                 .ToHashSet();
             if (primaryLine.Count > 0)
-                yield return (CreateLinePlotChart(chart, sheet, chartNs, drawingNs, primaryLine.Contains), false);
-            yield return (CreateLinePlotChart(chart, sheet, chartNs, drawingNs, secondaryIndexes.Contains), true);
+                yield return (CreateLinePlotChart(chart, workbook, sheet, chartNs, drawingNs, primaryLine.Contains), false);
+            yield return (CreateLinePlotChart(chart, workbook, sheet, chartNs, drawingNs, secondaryIndexes.Contains), true);
             yield break;
         }
 
@@ -183,55 +208,56 @@ internal static partial class XlsxChartXmlWriter
                 .ToHashSet();
 
             if (primaryBase.Count > 0)
-                yield return (CreateNativePlotChart(chart, sheet, chartNs, drawingNs, primaryBase.Contains), false);
+                yield return (CreateNativePlotChart(chart, workbook, sheet, chartNs, drawingNs, primaryBase.Contains), false);
             if (secondaryBase.Count > 0)
-                yield return (CreateNativePlotChart(chart, sheet, chartNs, drawingNs, secondaryBase.Contains), true);
+                yield return (CreateNativePlotChart(chart, workbook, sheet, chartNs, drawingNs, secondaryBase.Contains), true);
             if (primaryLine.Count > 0)
-                yield return (CreateLinePlotChart(chart, sheet, chartNs, drawingNs, primaryLine.Contains), false);
+                yield return (CreateLinePlotChart(chart, workbook, sheet, chartNs, drawingNs, primaryLine.Contains), false);
             if (secondaryLine.Count > 0)
-                yield return (CreateLinePlotChart(chart, sheet, chartNs, drawingNs, secondaryLine.Contains), true);
+                yield return (CreateLinePlotChart(chart, workbook, sheet, chartNs, drawingNs, secondaryLine.Contains), true);
 
             yield break;
         }
 
-        yield return (CreateNativePlotChart(chart, sheet, chartNs, drawingNs, _ => true), false);
+        yield return (CreateNativePlotChart(chart, workbook, sheet, chartNs, drawingNs, _ => true), false);
     }
 
     private static XElement CreateNativePlotChart(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs,
         Func<int, bool> includeSeries) =>
         chart.Type switch
         {
-            ChartType.Line => CreateLinePlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
-            ChartType.ThreeDLine => Create3DLinePlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
-            ChartType.Scatter => CreateScatterPlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
+            ChartType.Line => CreateLinePlotChart(chart, workbook, sheet, chartNs, drawingNs, includeSeries),
+            ChartType.ThreeDLine => Create3DLinePlotChart(chart, workbook, sheet, chartNs, drawingNs, includeSeries),
+            ChartType.Scatter => CreateScatterPlotChart(chart, workbook, sheet, chartNs, drawingNs, includeSeries),
             ChartType.Radar => new XElement(chartNs + "radarChart",
                 new XElement(chartNs + "radarStyle", new XAttribute("val", "marker")),
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
-            ChartType.Stock => CreateStockPlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
+                BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
+            ChartType.Stock => CreateStockPlotChart(chart, workbook, sheet, chartNs, drawingNs, includeSeries),
             ChartType.Surface => new XElement(chartNs + "surfaceChart",
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
+                BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries)),
             ChartType.ThreeDSurface => new XElement(chartNs + "surface3DChart",
                 new XElement(chartNs + "wireframe", new XAttribute("val", "0")),
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
+                BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries)),
             ChartType.Area or ChartType.StackedArea or ChartType.PercentStackedArea => new XElement(chartNs + "areaChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", ToXlsxAreaGrouping(chart.Type))),
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
+                BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries)),
             ChartType.ThreeDArea => new XElement(chartNs + "area3DChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
+                BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries)),
             ChartType.ThreeDColumn or ChartType.ThreeDBar => new XElement(chartNs + "bar3DChart",
                 new XElement(chartNs + "barDir", new XAttribute("val", chart.Type == ChartType.ThreeDBar ? "bar" : "col")),
                 new XElement(chartNs + "grouping", new XAttribute("val", "clustered")),
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries),
+                BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries),
                 ToBarGapWidthXml(chart, chartNs),
                 new XElement(chartNs + "shape", new XAttribute("val", "box"))),
             ChartType.Bubble => new XElement(chartNs + "bubbleChart",
-                BuildBubbleChartSeries(chart, sheet, chartNs, drawingNs),
+                BuildBubbleChartSeries(chart, workbook, sheet, chartNs, drawingNs),
                 ToBubbleChartOptionXml(chart, chartNs)),
             // R42-io-chart-plotarea-legend-3-2: varyColors must precede the <c:ser> elements per
             // CT_PieChart/CT_Pie3DChart/CT_DoughnutChart -- an explicit "Vary Colors by Point"
@@ -239,14 +265,14 @@ internal static partial class XlsxChartXmlWriter
             // actually written; previously only bar/bar3D charts emitted this element.
             ChartType.Pie => new XElement(chartNs + "pieChart",
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
-                BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs),
+                BuildPieFamilyChartSeries(chart, workbook, sheet, chartNs, drawingNs),
                 ToFirstSliceAngleXml(chart, chartNs)),
             ChartType.ThreeDPie => new XElement(chartNs + "pie3DChart",
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
-                BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs)),
+                BuildPieFamilyChartSeries(chart, workbook, sheet, chartNs, drawingNs)),
             ChartType.Doughnut => new XElement(chartNs + "doughnutChart",
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
-                BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs),
+                BuildPieFamilyChartSeries(chart, workbook, sheet, chartNs, drawingNs),
                 ToFirstSliceAngleXml(chart, chartNs),
                 new XElement(chartNs + "holeSize",
                     new XAttribute("val", Math.Clamp((int)Math.Round(chart.DoughnutHoleSize * 100), 10, 90)))),
@@ -254,7 +280,7 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "barDir", new XAttribute("val", ToXlsxBarDirection(chart.Type))),
                 new XElement(chartNs + "grouping", new XAttribute("val", ToXlsxBarGrouping(chart.Type))),
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries),
+                BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries),
                 ToBarGapWidthXml(chart, chartNs),
                 ToBarOverlapXml(chart, chartNs),
                 ToSeriesLinesXml(chart, chartNs, drawingNs))
@@ -262,18 +288,20 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement CreateStockVolumeBarChart(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs) =>
         new(chartNs + "barChart",
             new XElement(chartNs + "barDir", new XAttribute("val", "col")),
             new XElement(chartNs + "grouping", new XAttribute("val", "clustered")),
-            BuildChartSeries(chart, sheet, chartNs, drawingNs, index => index == 0),
+            BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, index => index == 0),
             ToBarGapWidthXml(chart, chartNs),
             ToBarOverlapXml(chart, chartNs));
 
     private static XElement CreateStockPlotChart(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs,
@@ -284,7 +312,7 @@ internal static partial class XlsxChartXmlWriter
             : includeSeries;
 
         return new XElement(chartNs + "stockChart",
-            BuildChartSeries(chart, sheet, chartNs, drawingNs, stockSeries, forceLineShapeProperties: true),
+            BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, stockSeries, forceLineShapeProperties: true),
             ToChartGuideLineXml(chart, chartNs, drawingNs));
     }
 
@@ -356,6 +384,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement CreateLinePlotChart(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs,
@@ -363,29 +392,31 @@ internal static partial class XlsxChartXmlWriter
         new(chartNs + "lineChart",
             // CT_LineChart requires <c:grouping> before the series.
             new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
-            BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
+            BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
             ToChartGuideLineXml(chart, chartNs, drawingNs));
 
     private static XElement Create3DLinePlotChart(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs,
         Func<int, bool> includeSeries) =>
         new(chartNs + "line3DChart",
             new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
-            BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
+            BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
             ToChartGuideLineXml(chart, chartNs, drawingNs));
 
     private static XElement CreateScatterPlotChart(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs,
         Func<int, bool> includeSeries) =>
         new(chartNs + "scatterChart",
             new XElement(chartNs + "scatterStyle", new XAttribute("val", "lineMarker")),
-            BuildScatterChartSeries(chart, sheet, chartNs, drawingNs, includeSeries));
+            BuildScatterChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries));
 
     private static IEnumerable<XElement> ToChartGuideLineXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {

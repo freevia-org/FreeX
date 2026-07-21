@@ -625,6 +625,13 @@ public static class PasteCommandFactory
         Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns = carriesFormatting ? [] : null;
         Dictionary<CellAddress, string>? hyperlinks = carriesFormatting ? [] : null;
         Dictionary<CellAddress, HyperlinkMetadata>? hyperlinkMetadata = carriesFormatting ? [] : null;
+        // A tiled transpose paste (destination an exact multiple of the transposed block's size)
+        // replicates the source block once per tile; each replica tile must transpose its formulas
+        // against its OWN destination-block origin, not the overall (tile-1) destination start,
+        // else every replica beyond the first copies tile-1's rewritten formula verbatim (R57-meta-1).
+        // Transposing swaps which source axis maps to which destination tile period.
+        var transposeTileRowPeriod = options.Transpose ? sourceRange.ColCount : 0U;
+        var transposeTileColPeriod = options.Transpose ? sourceRange.RowCount : 0U;
         foreach (var (sourceAddress, destinationAddress) in EnumerateTiledAddresses(
             sourceRange,
             targetSheetId,
@@ -642,13 +649,12 @@ public static class PasteCommandFactory
             var destinationStyle = PasteCommandCellFactory.GetDestinationStyle(targetSheet, destinationAddress);
             var pastedRowDelta = (int)destinationAddress.Row - (int)sourceAddress.Row;
             var pastedColDelta = (int)destinationAddress.Col - (int)sourceAddress.Col;
-            // Same transpose-vs-uniform-translation distinction as the non-tiled branch above
-            // (R56-commands-paste-special-5-1): anchor the axis swap at the whole copied block's
-            // start / overall destination start, not at this particular tiled source/destination
-            // pair (EnumerateTiledAddresses may wrap sourceAddress around for replication, but the
-            // block's own anchor for reference-transposition purposes never moves).
             RewriteOperation pastedPasteOp = options.Transpose
-                ? new PasteTransposeOp(sourceRange.Start.Row, sourceRange.Start.Col, destination.Row, destination.Col)
+                ? new PasteTransposeOp(
+                    sourceRange.Start.Row,
+                    sourceRange.Start.Col,
+                    destination.Row + (destinationAddress.Row - destination.Row) / transposeTileRowPeriod * transposeTileRowPeriod,
+                    destination.Col + (destinationAddress.Col - destination.Col) / transposeTileColPeriod * transposeTileColPeriod)
                 : new PasteOffsetOp(pastedRowDelta, pastedColDelta);
             var pastedCell = PasteCommandCellFactory.BuildPastedCell(
                 workbook,
@@ -1089,7 +1095,12 @@ public static class PasteCommandFactory
             return false;
         }
 
-        return (hasDateSeparator && digitGroups >= 3) || hasLetter;
+        // A '/'/'-'-separated candidate with just 2 digit groups (no explicit year, e.g. "3/4" or
+        // "12/25") is exactly Excel's well-known M/D-with-no-year paste/typed-entry behavior --
+        // Excel defaults the missing year to the current year rather than requiring one. Only a
+        // bare digit-groups-only string with NO separator and no letter (e.g. a lone "3") stays text;
+        // digitGroups is already guaranteed >= 2 here, so this simplifies to "has a date separator".
+        return hasDateSeparator || hasLetter;
     }
 
     /// <summary>

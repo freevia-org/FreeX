@@ -42,7 +42,7 @@ internal static class XlsxWorksheetChartWriter
         Stream xlsxStream,
         Workbook workbook,
         Func<ChartModel, bool> isSupportedChart,
-        Func<ChartModel, Sheet, XDocument> createChartXml,
+        Func<ChartModel, Workbook, Sheet, XDocument> createChartXml,
         Func<ChartModel, string> getChartContentType,
         Func<ChartModel, string> getChartRelationshipType,
         IReadOnlyDictionary<string, string>? sourceDrawingPathsBySheet = null)
@@ -114,7 +114,7 @@ internal static class XlsxWorksheetChartWriter
             var drawingPath = reusesOwnSourceDrawingPath
                 ? ownDrawingPath!
                 : AllocateFreshDrawingPath(archive, reservedDrawingPaths, usedDrawingPaths);
-            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingPath, reusesOwnSourceDrawingPath, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType);
+            WriteWorksheetCharts(archive, worksheetPath, workbook, sheet, supportedCharts, drawingPath, reusesOwnSourceDrawingPath, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType);
         }
     }
 
@@ -143,12 +143,13 @@ internal static class XlsxWorksheetChartWriter
     private static void WriteWorksheetCharts(
         ZipArchive archive,
         string worksheetPath,
+        Workbook workbook,
         Sheet sheet,
         IReadOnlyList<ChartModel> charts,
         string drawingPath,
         bool reusesOwnSourceDrawingPath,
         ref int chartIndex,
-        Func<ChartModel, Sheet, XDocument> createChartXml,
+        Func<ChartModel, Workbook, Sheet, XDocument> createChartXml,
         Func<ChartModel, string> getChartContentType,
         Func<ChartModel, string> getChartRelationshipType)
     {
@@ -195,7 +196,7 @@ internal static class XlsxWorksheetChartWriter
             var titleHyperlink = ReadOldChartTitleHyperlink(archive, chartPath, packageRelNs, chartNs, drawingNs, relNs);
 
             archive.GetEntry(chartPath)?.Delete();
-            var chartXml = createChartXml(chart, sheet);
+            var chartXml = createChartXml(chart, workbook, sheet);
             string? titleHyperlinkRelId = null;
             if (titleHyperlink is not null)
             {
@@ -615,8 +616,8 @@ internal static class XlsxWorksheetChartWriter
         XNamespace markupCompatNs) =>
         new(spreadsheetDrawingNs + "absoluteAnchor",
             new XElement(spreadsheetDrawingNs + "pos",
-                new XAttribute("x", DrawingMlUnits.PixelsToEmu(chart.Left)),
-                new XAttribute("y", DrawingMlUnits.PixelsToEmu(chart.Top))),
+                new XAttribute("x", DrawingMlCoordinateUnits.PixelsToEmuSigned(chart.Left)),
+                new XAttribute("y", DrawingMlCoordinateUnits.PixelsToEmuSigned(chart.Top))),
             new XElement(spreadsheetDrawingNs + "ext",
                 new XAttribute("cx", DrawingMlUnits.PixelsToEmu(chart.Width)),
                 new XAttribute("cy", DrawingMlUnits.PixelsToEmu(chart.Height))),
@@ -803,16 +804,20 @@ internal static class XlsxWorksheetChartWriter
             new XElement(spreadsheetDrawingNs + "row", marker.Row),
             new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlUnits.PixelsToEmu(marker.RowOffset)));
 
+    // Excel's real ceilings: 16,384 columns (XFD) vs. 1,048,576 rows.
+    private const uint MaxColumnIndex = 16384;
+    private const uint MaxRowIndex = 1048576;
+
     private static AnchorMarker ToAnchorMarker(Sheet sheet, double left, double top) =>
         new(
-            ToMarkerIndex(left, sheet.DefaultColumnWidth * 8, column => sheet.IsColEffectivelyHidden(column), column => sheet.ColumnWidths.GetValueOrDefault(column, sheet.DefaultColumnWidth) * 8),
-            ToMarkerIndex(top, sheet.DefaultRowHeight, row => sheet.IsRowEffectivelyHidden(row), row => sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight)));
+            ToMarkerIndex(left, sheet.DefaultColumnWidth * 8, MaxColumnIndex, column => sheet.IsColEffectivelyHidden(column), column => sheet.ColumnWidths.GetValueOrDefault(column, sheet.DefaultColumnWidth) * 8),
+            ToMarkerIndex(top, sheet.DefaultRowHeight, MaxRowIndex, row => sheet.IsRowEffectivelyHidden(row), row => sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight)));
 
-    private static MarkerAxis ToMarkerIndex(double pixels, double defaultSize, Func<uint, bool> isHidden, Func<uint, double> getSize)
+    private static MarkerAxis ToMarkerIndex(double pixels, double defaultSize, uint maxIndex, Func<uint, bool> isHidden, Func<uint, double> getSize)
     {
         var remaining = Math.Max(0, pixels);
         var index = 0u;
-        while (index < 16384)
+        while (index < maxIndex)
         {
             var oneBasedIndex = index + 1;
             var size = isHidden(oneBasedIndex) ? 0 : Math.Max(0, getSize(oneBasedIndex));

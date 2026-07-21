@@ -34,7 +34,7 @@ internal static partial class RowColumnShiftHelpers
             foreach (var name in workbook.NamedFormulas.Keys.ToList())
             {
                 var original = workbook.NamedFormulas[name];
-                var rewritten = FormulaRewriter.Rewrite(original, op, hostSheetName);
+                var rewritten = RewriteNamedFormulaText(original, op, hostSheetName);
                 if (rewritten is null || rewritten == original)
                     continue;
 
@@ -50,7 +50,7 @@ internal static partial class RowColumnShiftHelpers
                 // Use the scope sheet's name as the host-sheet context for the rewriter.
                 var sheet = workbook.Sheets.FirstOrDefault(s => s.Id == sheetId);
                 var hostSheetName = sheet?.Name ?? string.Empty;
-                var rewritten = FormulaRewriter.Rewrite(original, op, hostSheetName);
+                var rewritten = RewriteNamedFormulaText(original, op, hostSheetName);
                 if (rewritten is null || rewritten == original)
                     continue;
 
@@ -58,6 +58,48 @@ internal static partial class RowColumnShiftHelpers
                 workbook.DefineNamedFormula(name, rewritten, sheetId);
             }
         }
+    }
+
+    /// <summary>
+    /// Rewrites a defined name's stored RefersTo text for a structural insert/delete operation.
+    /// Most names are a single formula/range expression and go straight through
+    /// <see cref="FormulaRewriter.Rewrite"/>. A UNION (multi-area) name — e.g.
+    /// <c>Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5</c>, entered via Ctrl-click in the Name Manager and
+    /// stored verbatim because <c>GridRange</c> cannot represent more than one rectangle — is a
+    /// comma-joined list of independent area references. <see cref="FormulaRewriter.Rewrite"/>
+    /// parses its whole input as a single formula, and a top-level comma is never valid there
+    /// (only inside a function call's argument list), so passing the joined text through as one
+    /// blob throws inside the rewriter's try/catch and comes back <see langword="null"/> (i.e.
+    /// "leave unchanged") even when every area needs shifting. Splitting on top-level commas via
+    /// <see cref="SplitOnUnquotedCommas"/> — the same quote-aware splitter already used for a
+    /// chart's verbatim multi-area series formula, see <see cref="RewriteChartVerbatimFormulas(Sheet,RewriteOperation,string)"/> —
+    /// and rewriting each area independently lets each one shift — or turn into <c>#REF!</c> if a
+    /// delete fully consumed it — exactly like a single-area name already does.
+    /// </summary>
+    private static string? RewriteNamedFormulaText(string original, RewriteOperation op, string hostSheetName)
+    {
+        var areas = SplitOnUnquotedCommas(original);
+        if (areas.Length <= 1)
+            return FormulaRewriter.Rewrite(original, op, hostSheetName);
+
+        var changed = false;
+        var rewrittenAreas = new string[areas.Length];
+        for (var i = 0; i < areas.Length; i++)
+        {
+            var area = areas[i];
+            var rewritten = FormulaRewriter.Rewrite(area, op, hostSheetName);
+            if (rewritten is null || rewritten == area)
+            {
+                rewrittenAreas[i] = area;
+            }
+            else
+            {
+                rewrittenAreas[i] = rewritten;
+                changed = true;
+            }
+        }
+
+        return changed ? string.Join(",", rewrittenAreas) : null;
     }
 
     /// <summary>

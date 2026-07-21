@@ -75,7 +75,7 @@ public sealed class XlsxWorksheetChartWriterTests
             package,
             workbook,
             _ => true,
-            (_, _) => new XDocument(new XElement(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/chart") + "chartSpace")),
+            (_, _, _) => new XDocument(new XElement(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/chart") + "chartSpace")),
             _ => "application/vnd.openxmlformats-officedocument.drawingml.chart+xml",
             _ => ChartRelationshipType,
             sourceDrawingPaths);

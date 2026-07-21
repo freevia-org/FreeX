@@ -196,7 +196,7 @@ public sealed class R41_ChartHyperlinkRoundTripTests
         titleText.Should().Be("My Title", "the title text itself must still round-trip");
     }
 
-    private static XDocument CreateChartXmlWithTitle(ChartModel chart, Sheet sheet) =>
+    private static XDocument CreateChartXmlWithTitle(ChartModel chart, Workbook workbook, Sheet sheet) =>
         new(new XElement(ChartNs + "chartSpace",
             new XAttribute(XNamespace.Xmlns + "c", ChartNs),
             new XAttribute(XNamespace.Xmlns + "a", DrawingNs),
@@ -268,7 +268,7 @@ public sealed class R41_ChartHyperlinkRoundTripTests
         MemoryStream package,
         Workbook workbook,
         string? ownDrawingPath = null,
-        Func<ChartModel, Sheet, XDocument>? createChartXml = null)
+        Func<ChartModel, Workbook, Sheet, XDocument>? createChartXml = null)
     {
         var sourceDrawingPaths = ownDrawingPath is null
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -278,7 +278,7 @@ public sealed class R41_ChartHyperlinkRoundTripTests
             package,
             workbook,
             _ => true,
-            createChartXml ?? ((_, _) => new XDocument(new XElement(ChartNs + "chartSpace"))),
+            createChartXml ?? ((_, _, _) => new XDocument(new XElement(ChartNs + "chartSpace"))),
             _ => "application/vnd.openxmlformats-officedocument.drawingml.chart+xml",
             _ => ChartRelationshipType,
             sourceDrawingPaths);

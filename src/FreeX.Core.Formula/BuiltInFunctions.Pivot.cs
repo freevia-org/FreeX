@@ -65,14 +65,136 @@ public static partial class BuiltInFunctions
         var firstDataRow = pivotTable.TargetRange.Start.Row + headerRows;
         var outputRow = ResolveGetPivotDataRow(pivotSheet, pivotTable, headers, filters, firstDataRow, materialized.End.Row);
         if (outputRow is null)
+        {
+            // A pure grand-total request (no field/item pairs at all) can fail to resolve to a
+            // displayed cell when Show Row Grand Totals is turned off -- the aggregate still
+            // exists in the pivot cache even though no row renders it. Recompute it directly from
+            // the source data (or #REF! if that isn't safely resolvable) rather than surfacing a
+            // bare #REF! for a value Excel can genuinely answer. See R57-formula-getpivotdata-5-1.
+            if (filters.Count == 0 &&
+                TryComputeGetPivotDataGrandTotal(ctx, pivotTable, headers, dataFieldIndex, out var rowGrandTotal))
+                return rowGrandTotal;
             return ErrorValue.Ref;
+        }
 
         var outputColumn = ResolveGetPivotDataColumn(pivotSheet, pivotTable, headers, filters, dataFieldIndex, materialized.End.Col);
         if (outputColumn is null)
+        {
+            if (filters.Count == 0 &&
+                TryComputeGetPivotDataGrandTotal(ctx, pivotTable, headers, dataFieldIndex, out var columnGrandTotal))
+                return columnGrandTotal;
             return ErrorValue.Ref;
+        }
 
         return pivotSheet.GetCell(outputRow.Value, outputColumn.Value)?.Value ?? ErrorValue.Ref;
     }
+
+    /// <summary>
+    /// Computes GETPIVOTDATA's true grand-total aggregate directly from the pivot's source data
+    /// for a pure grand-total request (no field/item pairs supplied at all), used when no
+    /// rendered Grand Total row/column exists to read (Show Row/Column Grand Totals turned off).
+    /// Only handles the safely-recomputable case -- a plain summary function with no calculated
+    /// field and no "Show Values As" transform -- declining (returning false, so the caller
+    /// surfaces #REF!) for anything more complex rather than risk a wrong number. See
+    /// R57-formula-getpivotdata-5-1.
+    /// </summary>
+    private static bool TryComputeGetPivotDataGrandTotal(
+        IEvalContext ctx,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        int dataFieldIndex,
+        out ScalarValue result)
+    {
+        result = ErrorValue.Ref;
+        if (dataFieldIndex < 0 || dataFieldIndex >= pivotTable.DataFields.Count)
+            return false;
+        var dataField = pivotTable.DataFields[dataFieldIndex];
+        if (!string.IsNullOrWhiteSpace(dataField.CalculatedFieldName) || dataField.ShowValuesAs != PivotShowValuesAs.None)
+            return false;
+        var subtotalFuncNumber = PivotSummaryFunctionToSubtotalFuncNumber(dataField.SummaryFunction);
+        if (subtotalFuncNumber is null)
+            return false;
+        if (dataField.SourceFieldIndex < 0)
+            return false;
+
+        var workbook = ctx.CurrentWorkbook;
+        if (workbook is null)
+            return false;
+        var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet);
+        if (sourceSheet is null)
+            return false;
+
+        var dataCol = pivotTable.SourceRange.Start.Col + (uint)dataField.SourceFieldIndex;
+        if (dataCol > pivotTable.SourceRange.End.Col)
+            return false;
+
+        // A page/filter field constrains which source rows belong to the pivot's current view
+        // even when GETPIVOTDATA supplies no explicit field/item pair for it -- but only when it
+        // is narrowed to exactly one selected item; a multi-select page filter has no single-item
+        // isolation (mirroring PageFieldFiltersMatch), so its combined multi-item total is
+        // genuinely the correct grand total and it is left unconstrained here.
+        var pageConstraints = new List<(uint Col, string Expected)>();
+        foreach (var pageField in pivotTable.PageFields)
+        {
+            if (pageField.SourceFieldIndex < 0)
+                continue;
+            var pageCol = pivotTable.SourceRange.Start.Col + (uint)pageField.SourceFieldIndex;
+            if (pageCol > pivotTable.SourceRange.End.Col)
+                continue;
+            if (!string.IsNullOrWhiteSpace(pageField.SelectedItem))
+                pageConstraints.Add((pageCol, pageField.SelectedItem));
+        }
+
+        var values = new List<ScalarValue>();
+        for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
+        {
+            var included = true;
+            foreach (var (col, expected) in pageConstraints)
+            {
+                var actual = PivotText(sourceSheet.GetCell(row, col)?.Value);
+                if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+                {
+                    included = false;
+                    break;
+                }
+            }
+
+            if (included)
+                values.Add(sourceSheet.GetCell(row, dataCol)?.Value ?? BlankValue.Instance);
+        }
+
+        var subtotalArgs = new List<ScalarValue> { new NumberValue(subtotalFuncNumber.Value) };
+        subtotalArgs.AddRange(values);
+        var aggregate = Subtotal(subtotalArgs, ctx);
+        if (aggregate is ErrorValue)
+            return false;
+
+        result = aggregate;
+        return true;
+    }
+
+    /// <summary>
+    /// Maps a PivotDataFieldModel.SummaryFunction ("sum", "count", "average", ...) to the
+    /// equivalent SUBTOTAL function-number code, so the true grand-total aggregate can be
+    /// computed by reusing SUBTOTAL's own accumulator (Subtotal(...) in
+    /// BuiltInFunctions.Subtotal.cs) rather than duplicating aggregation arithmetic.
+    /// </summary>
+    private static int? PivotSummaryFunctionToSubtotalFuncNumber(string summaryFunction) =>
+        summaryFunction.Trim().ToLowerInvariant() switch
+        {
+            "sum" => 9,
+            "count" => 3,
+            "countnums" => 2,
+            "average" or "avg" => 1,
+            "min" => 5,
+            "max" => 4,
+            "product" => 6,
+            "stddev" or "stddevs" or "stddev.s" => 7,
+            "stddevp" or "stddev.p" => 8,
+            "var" or "vars" or "var.s" => 10,
+            "varp" or "var.p" => 11,
+            _ => null
+        };
 
     private static bool GetPivotDataFilterFieldsAreVisible(
         PivotTableModel pivotTable,
@@ -109,7 +231,15 @@ public static partial class BuiltInFunctions
 
             if (pageField.SelectedItems is { Count: > 0 } selectedItems)
             {
-                if (!selectedItems.Contains(expected, StringComparer.OrdinalIgnoreCase))
+                // A multi-select Page/Filter field (more than one item currently checked) has no
+                // cell that isolates a single item's contribution -- the pivot only ever displays
+                // the COMBINED total of every selected item. Only a page field narrowed to
+                // exactly one selected item has a genuine per-item value to read; requesting one
+                // of several selected items must fail here (the caller then returns #REF!,
+                // matching real Excel) instead of silently returning the multi-item combined
+                // total as if it were that single item's figure. See
+                // R57-formula-getpivotdata-5-3.
+                if (selectedItems.Count != 1 || !selectedItems.Contains(expected, StringComparer.OrdinalIgnoreCase))
                     return false;
                 continue;
             }
@@ -209,9 +339,20 @@ public static partial class BuiltInFunctions
         {
             for (var row = firstDataRow; row <= lastRow; row++)
             {
-                if (IsPivotGrandTotalText(sheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value))
+                if (IsPivotGrandTotalText(pivotTable, sheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value))
                     return row;
             }
+
+            // No row field is constrained (a pure grand-total request for the row axis) and no
+            // rendered Grand Total row was found (Show Row Grand Totals is off). The generic
+            // per-field match loop below is only meaningful when at least one row field is
+            // genuinely constrained -- with zero row-field filters requested, every
+            // `filters.TryGetValue` in that loop would trivially miss and its "no constraint =>
+            // keep matching" fallback would match the very first data row unconditionally
+            // instead of the true (unrendered) aggregate. Signal unresolved so the caller can
+            // fall back to computing the true aggregate directly, or #REF!. See
+            // R57-formula-getpivotdata-5-1.
+            return null;
         }
 
         if (requestedRowFieldCount > 0 && requestedRowFieldCount < rowFields.Count)
@@ -228,7 +369,7 @@ public static partial class BuiltInFunctions
 
         for (var row = firstDataRow; row <= lastRow; row++)
         {
-            if (IsPivotGrandTotalText(sheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value))
+            if (IsPivotGrandTotalText(pivotTable, sheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value))
             {
                 if (!rowFields.Any(field => filters.ContainsKey(PivotHeader(headers, field.SourceFieldIndex))))
                     return row;
@@ -310,10 +451,20 @@ public static partial class BuiltInFunctions
                     continue;
                 for (var level = 0; level < pivotTable.ColumnFields.Count; level++)
                 {
-                    if (IsPivotGrandTotalText(sheet.GetCell(pivotTable.TargetRange.Start.Row + (uint)level, col)?.Value))
+                    if (IsPivotGrandTotalText(pivotTable, sheet.GetCell(pivotTable.TargetRange.Start.Row + (uint)level, col)?.Value))
                         return col;
                 }
             }
+
+            // No column field is constrained (a pure grand-total request for the column axis)
+            // and no rendered Grand Total column was found (Show Column Grand Totals is off).
+            // The generic per-level match loop below is only meaningful when at least one column
+            // field is genuinely constrained -- with zero column-field filters requested, its
+            // "no constraint => keep matching" fallback would match the first data-field column
+            // unconditionally instead of the true (unrendered) aggregate. Signal unresolved so
+            // the caller can fall back to computing the true aggregate directly, or #REF!. See
+            // R57-formula-getpivotdata-5-1.
+            return null;
         }
 
         for (var col = firstValueColumn; col <= lastColumn; col++)
@@ -448,8 +599,16 @@ public static partial class BuiltInFunctions
             new CellAddress(sheet.Id, maxRow.Value, maxCol.Value));
     }
 
-    private static bool IsPivotGrandTotalText(ScalarValue? value) =>
-        value is TextValue text && text.Value.StartsWith("Grand Total", StringComparison.OrdinalIgnoreCase);
+    private static bool IsPivotGrandTotalText(PivotTableModel pivotTable, ScalarValue? value) =>
+        value is TextValue text && text.Value.StartsWith(PivotGrandTotalCaption(pivotTable), StringComparison.OrdinalIgnoreCase);
+
+    // Mirrors PivotTableRefreshService.Captions.cs's GrandTotalCaption(pivotTable) fallback
+    // (that writer-side helper lives in FreeX.Core.Commands, which Core.Formula cannot
+    // reference): the pivot's actual, possibly user-renamed, Grand Total row/column caption,
+    // falling back to Excel's default "Grand Total" text when unset. See
+    // R57-formula-getpivotdata-5-2.
+    private static string PivotGrandTotalCaption(PivotTableModel pivotTable) =>
+        string.IsNullOrWhiteSpace(pivotTable.GrandTotalCaption) ? "Grand Total" : pivotTable.GrandTotalCaption.Trim();
 
     private static bool TryReadPivotSubtotalCaption(ScalarValue? value, out string item)
     {

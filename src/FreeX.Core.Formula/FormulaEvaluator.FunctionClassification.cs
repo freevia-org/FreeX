@@ -138,7 +138,14 @@ public sealed partial class FormulaEvaluator
 
     private static readonly HashSet<string> SingleCellReferenceRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "ROW", "COLUMN", "ROWS", "COLUMNS", "AREAS", "SHEET", "SHEETS", "COUNTBLANK", "CELL", "GETPIVOTDATA"
+        "ROW", "COLUMN", "ROWS", "COLUMNS", "AREAS", "SHEET", "SHEETS", "COUNTBLANK", "CELL", "GETPIVOTDATA",
+        // SUBTOTAL/AGGREGATE must see a bare single-cell reference argument (e.g. A5, not A5:A5)
+        // as a 1-cell RangeValue carrying real sheet/row provenance, exactly like a multi-cell
+        // range, so ShouldSkipSubtotalRow/IsAggregateRowHidden and the nested-subtotal exclusion
+        // can run against it. Without this, a bare CellRefNode falls through to a plain scalar
+        // with no row provenance and the hidden-row/nested-aggregate checks are silently skipped
+        // (see R57-formula-subtotal-aggregate-5-2).
+        "SUBTOTAL", "AGGREGATE"
     };
 
     private static bool IsAggregateFunction(string name) =>

@@ -512,22 +512,27 @@ internal static class NamedDefinitionRecalcHelper
     /// Finds every formula cell whose parsed AST references <paramref name="name"/> (via a
     /// <see cref="NamedRangeNode"/>, possibly nested inside binary/unary operators or function
     /// arguments — mirroring the traversal <see cref="FormulaAuditingService"/> already uses to
-    /// collect precedents). When <paramref name="scopeSheetId"/> is set (a sheet-scoped name), only
-    /// that sheet's formulas are scanned, since a sheet-scoped name (Excel "localSheetId") has no
-    /// qualified Sheet!Name syntax here — <see cref="NamedRangeNode"/> carries only a bare name, so
-    /// it is never reachable from another sheet's formulas. A workbook-global redefine scans every
-    /// sheet; a formula on a sheet that shadows the global name with its own same-named scoped
-    /// definition may be reported too, but that is harmless over-inclusion — it is simply
-    /// recomputed to the same value it already had, since actual name resolution (elsewhere) is
-    /// unaffected by this scan.
+    /// collect precedents). Scans every sheet in the workbook: a sheet-scoped name (Excel
+    /// "localSheetId") is reachable unqualified only from its own scope sheet, but
+    /// <see cref="Parser.ParseSheetQualifiedReference"/>/<see cref="NamedRangeNode.SheetQualifier"/>
+    /// let ANY sheet's formula reach it via an explicit cross-sheet qualifier (e.g. "Sheet2!Rate"
+    /// naming a name scoped to Sheet2, written on Sheet1) — see the evaluator's
+    /// <c>TryResolveSheetQualifiedName</c> (FormulaEvaluator.References.cs), which resolves exactly
+    /// that shape. So restricting the scan to the scope sheet itself (as this used
+    /// to do) misses every cross-sheet-qualified referrer. A formula on a sheet that shadows the
+    /// global name with its own same-named scoped definition may be reported too when
+    /// <paramref name="scopeSheetId"/> is null (workbook-global redefine), but that is harmless
+    /// over-inclusion — it is simply recomputed to the same value it already had, since actual name
+    /// resolution (elsewhere) is unaffected by this scan.
     /// </summary>
     internal static List<CellAddress> FindCellsReferencingName(Workbook workbook, string name, SheetId? scopeSheetId)
     {
         var result = new List<CellAddress>();
+        var scopeSheetName = scopeSheetId is { } scope ? workbook.GetSheet(scope)?.Name : null;
+
         foreach (var sheet in workbook.Sheets)
         {
-            if (scopeSheetId is { } scope && !sheet.Id.Equals(scope))
-                continue;
+            var isScopeSheet = scopeSheetId is { } scopeId && sheet.Id.Equals(scopeId);
 
             foreach (var address in sheet.EnumerateFormulaCells())
             {
@@ -535,19 +540,20 @@ internal static class NamedDefinitionRecalcHelper
                 if (cell?.FormulaText is not { } formulaText)
                     continue;
 
-                if (ReferencesName(formulaText, name))
+                if (ReferencesName(formulaText, name, scopeSheetId, isScopeSheet, scopeSheetName))
                     result.Add(address);
             }
         }
         return result;
     }
 
-    private static bool ReferencesName(string formulaText, string name)
+    private static bool ReferencesName(
+        string formulaText, string name, SheetId? scopeSheetId, bool isScopeSheet, string? scopeSheetName)
     {
         try
         {
             var ast = new Parser(new Lexer(formulaText).Tokenize()).Parse();
-            return ReferencesName(ast, name);
+            return ReferencesName(ast, name, scopeSheetId, isScopeSheet, scopeSheetName);
         }
         catch (FormulaParseException)
         {
@@ -555,12 +561,36 @@ internal static class NamedDefinitionRecalcHelper
         }
     }
 
-    private static bool ReferencesName(FormulaNode node, string name) => node switch
+    private static bool ReferencesName(
+        FormulaNode node, string name, SheetId? scopeSheetId, bool isScopeSheet, string? scopeSheetName) => node switch
     {
-        NamedRangeNode named => string.Equals(named.Name, name, StringComparison.OrdinalIgnoreCase),
-        BinaryOpNode binary => ReferencesName(binary.Left, name) || ReferencesName(binary.Right, name),
-        UnaryOpNode unary => ReferencesName(unary.Operand, name),
-        FunctionCallNode function => function.Arguments.Any(arg => ReferencesName(arg, name)),
+        NamedRangeNode named => string.Equals(named.Name, name, StringComparison.OrdinalIgnoreCase)
+            && MatchesScope(named, scopeSheetId, isScopeSheet, scopeSheetName),
+        BinaryOpNode binary => ReferencesName(binary.Left, name, scopeSheetId, isScopeSheet, scopeSheetName)
+            || ReferencesName(binary.Right, name, scopeSheetId, isScopeSheet, scopeSheetName),
+        UnaryOpNode unary => ReferencesName(unary.Operand, name, scopeSheetId, isScopeSheet, scopeSheetName),
+        FunctionCallNode function => function.Arguments.Any(arg =>
+            ReferencesName(arg, name, scopeSheetId, isScopeSheet, scopeSheetName)),
         _ => false
     };
+
+    /// <summary>
+    /// A workbook-global name (<paramref name="scopeSheetId"/> is null) matches any reference to
+    /// that name text, qualified or not — matching this helper's pre-existing, deliberately
+    /// over-inclusive behavior for globals (see the class doc comment). A sheet-scoped name matches
+    /// either an unqualified reference sitting on its own scope sheet, or an explicit
+    /// <c>SheetQualifier</c> that resolves (case-insensitively, like <see cref="Workbook.GetSheet(string)"/>)
+    /// to the scope sheet's name — the cross-sheet-qualified shape this fix adds coverage for.
+    /// </summary>
+    private static bool MatchesScope(NamedRangeNode named, SheetId? scopeSheetId, bool isScopeSheet, string? scopeSheetName)
+    {
+        if (scopeSheetId is null)
+            return true;
+
+        if (named.SheetQualifier is null)
+            return isScopeSheet;
+
+        return scopeSheetName is not null
+            && string.Equals(named.SheetQualifier, scopeSheetName, StringComparison.OrdinalIgnoreCase);
+    }
 }

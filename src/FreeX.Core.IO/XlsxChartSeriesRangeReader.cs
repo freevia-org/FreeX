@@ -211,13 +211,31 @@ internal static class XlsxChartSeriesRangeReader
     }
 
     /// <summary>
-    /// Returns true when at least one formula in the series XML (val/cat/tx containers)
-    /// cannot be parsed as a single rectangular range. Multi-area formulas such as
-    /// "Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5" trigger this path.
+    /// R57-io-chart-series-refs-5-2: a Scatter/Bubble series has no <c>cat</c>/<c>val</c>
+    /// containers — its point data lives in <c>xVal</c>/<c>yVal</c>[/<c>bubbleSize</c>] instead.
+    /// Detecting this from the series' own child elements (rather than requiring the caller to
+    /// know the chart type) lets <see cref="HasUnparsableFormula"/> and
+    /// <see cref="TryCollectVerbatimFormulas"/> see an unparsable xVal/yVal/bubbleSize formula —
+    /// previously invisible to both, since they only ever inspected tx/cat/val.
+    /// </summary>
+    private static string[] GetSeriesRangeContainerNames(XElement series)
+    {
+        if (ElementByLocalName(series, "xVal") is null && ElementByLocalName(series, "yVal") is null)
+            return ["tx", "cat", "val"];
+
+        return ElementByLocalName(series, "bubbleSize") is null
+            ? ["tx", "xVal", "yVal"]
+            : ["tx", "xVal", "yVal", "bubbleSize"];
+    }
+
+    /// <summary>
+    /// Returns true when at least one formula in the series XML (val/cat/tx containers, or
+    /// xVal/yVal/bubbleSize for a Scatter/Bubble series) cannot be parsed as a single rectangular
+    /// range. Multi-area formulas such as "Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5" trigger this path.
     /// </summary>
     public static bool HasUnparsableFormula(XElement series, SheetId sheetId)
     {
-        foreach (var formula in ReadSeriesRangeFormulas(series))
+        foreach (var formula in ReadSeriesRangeFormulas(series, GetSeriesRangeContainerNames(series)))
         {
             if (!TryParseFormulaRange(formula, sheetId, out _))
                 return true;
@@ -252,11 +270,19 @@ internal static class XlsxChartSeriesRangeReader
         {
             var series = seriesList[i];
             var seriesIndex = ReadSeriesIndex(series, i);
+            var isScatterOrBubble = ElementByLocalName(series, "xVal") is not null ||
+                ElementByLocalName(series, "yVal") is not null;
+            // R57-io-chart-series-refs-5-2: a Scatter/Bubble series has no cat/val containers —
+            // CatFormula/ValFormula are repurposed to carry xVal/yVal instead (matching how
+            // XlsxChartXmlWriter.BuildScatterChartSeries already reads them back on write), and
+            // bubbleSize (Bubble only) gets its own dedicated field since it has no equivalent
+            // to repurpose.
             result.Add(new ChartSeriesVerbatimFormulas(
                 SeriesIndex: seriesIndex,
-                ValFormula: ReadFirstFormula(series, "val"),
-                CatFormula: ReadFirstFormula(series, "cat"),
-                TxFormula: ReadFirstFormula(series, "tx")));
+                ValFormula: ReadFirstFormula(series, isScatterOrBubble ? "yVal" : "val"),
+                CatFormula: ReadFirstFormula(series, isScatterOrBubble ? "xVal" : "cat"),
+                TxFormula: ReadFirstFormula(series, "tx"),
+                BubbleSizeFormula: ReadFirstFormula(series, "bubbleSize")));
         }
 
         return result;

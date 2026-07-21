@@ -131,6 +131,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<XElement> BuildChartSeries(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs,
@@ -158,11 +159,11 @@ internal static partial class XlsxChartXmlWriter
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
             var effectiveCategoryIsNumeric = verbatim?.CatFormula is null && categoryIsNumeric;
             var valueCache = verbatim?.ValFormula is null
-                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), chartNs)
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), GetStripNumberFormatCode(workbook, sheet, layout, strip), chartNs)
                 : null;
             var categoryCache = verbatim?.CatFormula is null && categoryStripValues is not null
                 ? (effectiveCategoryIsNumeric
-                    ? BuildNumCacheXml(categoryStripValues, chartNs)
+                    ? BuildNumCacheXml(categoryStripValues, GetStripNumberFormatCode(workbook, sheet, layout, layout.CategoryStrip), chartNs)
                     : BuildStrCacheXml(categoryStripValues, chartNs))
                 : null;
 
@@ -312,10 +313,31 @@ internal static partial class XlsxChartXmlWriter
         return values;
     }
 
-    private static XElement BuildNumCacheXml(IReadOnlyList<ScalarValue> values, XNamespace chartNs)
+    /// <summary>
+    /// R57-io-chart-series-refs-5-3: resolves the number-format code Excel would cache for a
+    /// strip's numCache/formatCode — the format of the strip's first data cell — instead of the
+    /// hardcoded "General" literal the caller previously always wrote regardless of the source
+    /// cells' real format (e.g. Percentage/Currency).
+    /// </summary>
+    private static string GetStripNumberFormatCode(Workbook workbook, Sheet sheet, ChartSeriesStripLayout layout, uint strip)
+    {
+        if (layout.LastPoint < layout.FirstDataPoint)
+            return "General";
+
+        var cell = layout.SeriesInRows
+            ? sheet.GetCell(strip, layout.FirstDataPoint)
+            : sheet.GetCell(layout.FirstDataPoint, strip);
+        if (cell is null)
+            return "General";
+
+        var formatCode = workbook.GetStyle(cell.StyleId).NumberFormat;
+        return string.IsNullOrEmpty(formatCode) ? "General" : formatCode;
+    }
+
+    private static XElement BuildNumCacheXml(IReadOnlyList<ScalarValue> values, string formatCode, XNamespace chartNs)
     {
         var cache = new XElement(chartNs + "numCache",
-            new XElement(chartNs + "formatCode", "General"),
+            new XElement(chartNs + "formatCode", formatCode),
             new XElement(chartNs + "ptCount", new XAttribute("val", values.Count)));
         for (var i = 0; i < values.Count; i++)
         {
@@ -392,6 +414,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<XElement> BuildScatterChartSeries(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs,
@@ -415,10 +438,10 @@ internal static partial class XlsxChartXmlWriter
             var yValueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, strip);
             var xValueCache = verbatim?.CatFormula is null
-                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, xValueStrip), chartNs)
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, xValueStrip), GetStripNumberFormatCode(workbook, sheet, layout, xValueStrip), chartNs)
                 : null;
             var yValueCache = verbatim?.ValFormula is null
-                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), chartNs)
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), GetStripNumberFormatCode(workbook, sheet, layout, strip), chartNs)
                 : null;
 
             XElement? txElement = verbatim?.TxFormula is { } txFormula
@@ -508,6 +531,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<XElement> BuildBubbleChartSeries(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs)
@@ -527,14 +551,20 @@ internal static partial class XlsxChartXmlWriter
             var effectiveXValueRange = verbatim?.CatFormula ?? xValueRange;
             var yValueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, yValueStrip);
-            var sizeRange = FormatStripRange(layout, sheet.Name, sizeStrip);
+            // R57-io-chart-series-refs-5-2: preserve an unparsable (external-link/multi-area)
+            // bubbleSize formula verbatim instead of always recomputing it positionally — the
+            // xVal/yVal siblings above already had this fallback, bubbleSize did not.
+            var sizeRange = verbatim?.BubbleSizeFormula
+                ?? FormatStripRange(layout, sheet.Name, sizeStrip);
             var xValueCache = verbatim?.CatFormula is null
-                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, xValueStrip), chartNs)
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, xValueStrip), GetStripNumberFormatCode(workbook, sheet, layout, xValueStrip), chartNs)
                 : null;
             var yValueCache = verbatim?.ValFormula is null
-                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, yValueStrip), chartNs)
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, yValueStrip), GetStripNumberFormatCode(workbook, sheet, layout, yValueStrip), chartNs)
                 : null;
-            var sizeCache = BuildNumCacheXml(GetStripPointValues(sheet, layout, sizeStrip), chartNs);
+            var sizeCache = verbatim?.BubbleSizeFormula is null
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, sizeStrip), GetStripNumberFormatCode(workbook, sheet, layout, sizeStrip), chartNs)
+                : null;
 
             XElement? txElement = verbatim?.TxFormula is { } txFormula
                 ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
@@ -570,6 +600,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<XElement> BuildPieFamilyChartSeries(
         ChartModel chart,
+        Workbook workbook,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs)
@@ -596,11 +627,11 @@ internal static partial class XlsxChartXmlWriter
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
             var effectiveCategoryIsNumeric = verbatim?.CatFormula is null && categoryIsNumeric;
             var valueCache = verbatim?.ValFormula is null
-                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, valueStrip), chartNs)
+                ? BuildNumCacheXml(GetStripPointValues(sheet, layout, valueStrip), GetStripNumberFormatCode(workbook, sheet, layout, valueStrip), chartNs)
                 : null;
             var categoryCache = verbatim?.CatFormula is null && categoryStripValues is not null
                 ? (effectiveCategoryIsNumeric
-                    ? BuildNumCacheXml(categoryStripValues, chartNs)
+                    ? BuildNumCacheXml(categoryStripValues, GetStripNumberFormatCode(workbook, sheet, layout, layout.CategoryStrip), chartNs)
                     : BuildStrCacheXml(categoryStripValues, chartNs))
                 : null;
 

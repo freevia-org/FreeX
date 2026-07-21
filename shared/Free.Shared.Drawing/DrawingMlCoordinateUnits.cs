@@ -25,6 +25,15 @@ public static class DrawingMlCoordinateUnits
 
     public static long PixelsToEmu(double pixels) => (long)Math.Round(Math.Max(0, pixels) * EmuPerPixel);
 
+    /// <summary>
+    /// Converts pixels to EMU without clamping negative values to zero. Use this only for
+    /// coordinates that are genuinely signed in the OOXML schema (e.g. absoluteAnchor's
+    /// CT_Point2D pos x/y, which uses ST_AdjCoordinate/ST_Coordinate and can legitimately be
+    /// negative). Non-negative-only coordinates (offsets, extents) must keep using
+    /// <see cref="PixelsToEmu"/>.
+    /// </summary>
+    public static long PixelsToEmuSigned(double pixels) => (long)Math.Round(pixels * EmuPerPixel);
+
     public static double EmuToPixels(double emus) => emus / EmuPerPixel;
 
     public static double EmuToPixels(string? value) =>

@@ -111,6 +111,16 @@ public partial class MainWindow
             var html = BuildHtmlClipboardFragment(fullRangeViewport, sheetForHtml, boundingRange, _workbook.Theme);
             if (!string.IsNullOrEmpty(html))
                 data.SetData(System.Windows.DataFormats.Html, html);
+
+            // R57-services-clipboard-formats-5-3: real Excel places a comma-delimited "CSV" clipboard
+            // format alongside Text/Unicode Text/HTML on every cell-range copy, so a destination that
+            // specifically enumerates for CSV (skipping plain Text) still gets a payload. Re-parse the
+            // already-built TSV/newline `text` (same field values/escaping semantics as ClipboardSerializer
+            // production, just re-delimited) and re-emit it RFC4180-quoted with commas.
+            var csv = BuildCsvClipboardText(text);
+            if (!string.IsNullOrEmpty(csv))
+                data.SetData(System.Windows.DataFormats.CommaSeparatedValue, csv);
+
             System.Windows.Clipboard.SetDataObject(data, copy: true);
         }
         catch
@@ -419,7 +429,10 @@ public partial class MainWindow
                         _internalClipboard = null;
                 };
                 if (mode != PasteMode.Formats)
+                {
                     RecalculateIfAutomatic(pasteOutcome.AffectedCells ?? []);
+                    InvalidateNavigationCachesIfManual();
+                }
 
                 CompletePasteSelection(
                     clip.SourceRange,
@@ -482,6 +495,7 @@ public partial class MainWindow
 
         _repeatPostAction = _ => CompleteExternalPasteSelection(capturedRows, expandToSelectedRange: true);
         RecalculateIfAutomatic(fallbackOutcome.AffectedCells ?? []);
+        InvalidateNavigationCachesIfManual();
 
         CompleteExternalPasteSelection(capturedRows, expandToSelectedRange: true);
         UpdateViewport();
@@ -544,18 +558,65 @@ public partial class MainWindow
         if (tableInner is null)
             return null;
 
-        var rows = new List<IReadOnlyList<string>>();
+        // R57-services-clipboard-formats-5-2: track column occupancy from an active rowspan the same
+        // way FreeX.Core.IO.HtmlTableReader does for whole-file HTML import, so a merged header cell
+        // (colspan) or a rowspan-ed cell keeps every column after it lined up with the right data
+        // column instead of shifting left. Keyed by 1-based column -> the last (0-based) row index it
+        // remains occupied through.
+        var rowSpanRemaining = new Dictionary<int, int>();
+        var rows = new List<List<string>>();
+        var rowIndex = -1;
+
         foreach (var rowInner in EnumerateHtmlElements(tableInner, "tr"))
         {
+            rowIndex++;
             var cells = new List<string>();
-            foreach (var cellInner in EnumerateHtmlCells(rowInner))
-                cells.Add(DecodeHtmlCellText(cellInner));
+            var col = 0;
+
+            foreach (var cellInfo in EnumerateHtmlCells(rowInner))
+            {
+                col++;
+                while (rowSpanRemaining.TryGetValue(col, out var occupiedThroughRow) && occupiedThroughRow >= rowIndex)
+                {
+                    EnsureHtmlPasteColumn(cells, col);
+                    col++;
+                }
+
+                var text = DecodeHtmlCellText(cellInfo.InnerHtml);
+                var colSpan = Math.Max(1, cellInfo.ColSpan);
+                var rowSpan = Math.Max(1, cellInfo.RowSpan);
+                var endCol = col + colSpan - 1;
+
+                // The pasted grid has no merged-cell concept (unlike HtmlTableReader's AddMergedRegion),
+                // so repeat the spanned cell's text across every column it covers -- this matches what a
+                // merged header cell visually represents, and keeps every subsequent column's data under
+                // its own header instead of shifting left by one per colspan.
+                for (var c = col; c <= endCol; c++)
+                {
+                    EnsureHtmlPasteColumn(cells, c);
+                    cells[c - 1] = text;
+                }
+
+                if (rowSpan > 1)
+                {
+                    for (var c = col; c <= endCol; c++)
+                        rowSpanRemaining[c] = rowIndex + rowSpan - 1;
+                }
+
+                col = endCol;
+            }
 
             if (cells.Count > 0)
                 rows.Add(cells);
         }
 
-        return rows.Count > 0 ? rows : null;
+        return rows.Count > 0 ? rows.Cast<IReadOnlyList<string>>().ToList() : null;
+    }
+
+    private static void EnsureHtmlPasteColumn(List<string> row, int col)
+    {
+        while (row.Count < col)
+            row.Add(string.Empty);
     }
 
     /// <summary>CF_HTML wraps the real markup between StartFragment/EndFragment comments after a
@@ -618,7 +679,12 @@ public partial class MainWindow
         }
     }
 
-    private static IEnumerable<string> EnumerateHtmlCells(string rowInner)
+    /// <summary>One &lt;td&gt;/&lt;th&gt; cell's inner HTML plus its colspan/rowspan (each defaulted to 1
+    /// when absent or non-positive), used by <see cref="TryParseHtmlClipboardTableRows"/> to keep
+    /// merged-header columns aligned with their data (R57-services-clipboard-formats-5-2).</summary>
+    private readonly record struct HtmlCellSpan(string InnerHtml, int ColSpan, int RowSpan);
+
+    private static IEnumerable<HtmlCellSpan> EnumerateHtmlCells(string rowInner)
     {
         int i = 0;
         while (i < rowInner.Length)
@@ -632,9 +698,12 @@ public partial class MainWindow
                 int tagEnd = rowInner.IndexOf('>', lt);
                 if (tagEnd < 0)
                     break;
+                var tagContent = rowInner[(lt + 1)..tagEnd];
+                var colSpan = ParseHtmlSpanAttribute(tagContent, "colspan");
+                var rowSpan = ParseHtmlSpanAttribute(tagContent, "rowspan");
                 int closeStart = FindMatchingHtmlClose(rowInner, tagEnd + 1, name);
                 string inner = closeStart < 0 ? rowInner[(tagEnd + 1)..] : rowInner[(tagEnd + 1)..closeStart];
-                yield return inner;
+                yield return new HtmlCellSpan(inner, colSpan, rowSpan);
                 i = closeStart < 0 ? rowInner.Length : SkipHtmlClosingTag(rowInner, closeStart);
             }
             else
@@ -642,6 +711,57 @@ public partial class MainWindow
                 i = lt + 1;
             }
         }
+    }
+
+    /// <summary>Reads a numeric attribute (e.g. <c>colspan="2"</c>, <c>colspan=2</c>, or unquoted/single
+    /// quoted) from a tag's raw attribute text. Returns 1 (the "no span" default) if absent, malformed,
+    /// or non-positive.</summary>
+    private static int ParseHtmlSpanAttribute(string tagContent, string attributeName)
+    {
+        var searchFrom = 0;
+        while (searchFrom < tagContent.Length)
+        {
+            var idx = tagContent.IndexOf(attributeName, searchFrom, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+                return 1;
+
+            var afterIdx = idx + attributeName.Length;
+            var boundaryOk = idx == 0 || char.IsWhiteSpace(tagContent[idx - 1]);
+            if (!boundaryOk)
+            {
+                searchFrom = afterIdx;
+                continue;
+            }
+
+            var p = afterIdx;
+            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
+                p++;
+            if (p >= tagContent.Length || tagContent[p] != '=')
+            {
+                searchFrom = afterIdx;
+                continue;
+            }
+
+            p++;
+            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
+                p++;
+            if (p < tagContent.Length && (tagContent[p] == '"' || tagContent[p] == '\''))
+                p++;
+
+            var digitsStart = p;
+            while (p < tagContent.Length && char.IsDigit(tagContent[p]))
+                p++;
+
+            return int.TryParse(
+                tagContent[digitsStart..p],
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var value) && value > 0
+                ? value
+                : 1;
+        }
+
+        return 1;
     }
 
     private static string? HtmlTagNameAt(string s, int ltIndex)
@@ -757,6 +877,7 @@ public partial class MainWindow
         var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
         _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, default, preserveClipboardVisual);
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        InvalidateNavigationCachesIfManual();
         CompletePasteSelection(clip.SourceRange, default, preserveClipboardVisual);
         if (clip.IsCut)
             _internalClipboard = null;
@@ -1184,11 +1305,31 @@ public partial class MainWindow
         var preserveClipboardVisual = ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut);
         _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose), preserveClipboardVisual);
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        InvalidateNavigationCachesIfManual();
         CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose), preserveClipboardVisual);
         if (clip.IsCut)
             _internalClipboard = null;
         UpdateViewport();
         RefreshToolbar();
+    }
+
+    /// <summary>
+    /// Bumps the navigation-cache revision (sparklines / status-bar stats) when the workbook is
+    /// in a manual calculation mode. Paste/Paste Link/Insert Copied Cells all write cell values
+    /// (or new formulas) immediately regardless of calculation mode -- Excel reflects that in the
+    /// grid right away, only formula recalculation is deferred by Manual mode. But
+    /// <see cref="RecalculateIfAutomatic"/> is a no-op outside Automatic/AutomaticExceptDataTables
+    /// mode, so without this it never bumps <c>_navigationCacheRevision</c>, and
+    /// SparklineValueCache/StatusBarStatsCache (both keyed on that revision) keep returning their
+    /// pre-paste cached result until an unrelated command happens to bump the revision. Mirrors
+    /// the Goal Seek fix in MainWindow.DataCommands.cs.
+    /// </summary>
+    private void InvalidateNavigationCachesIfManual()
+    {
+        if (_workbook.CalculationMode is not (WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables))
+        {
+            InvalidateNavigationCaches();
+        }
     }
 
     // ── HTML clipboard payload (CF_HTML) ─────────────────────────────────────
@@ -1221,4 +1362,66 @@ public partial class MainWindow
     private static string? BuildHtmlClipboardFragment(
         ViewportModel viewport, Sheet? sheet, GridRange range, WorkbookTheme theme) =>
         ClipboardHtmlSerializer.Serialize(viewport, sheet, range, theme)?.CfHtml;
+
+    /// <summary>
+    /// R57-services-clipboard-formats-5-3: re-delimits the tab/CRLF-separated <paramref name="tsvText"/>
+    /// (as produced by <see cref="ClipboardSerializer.Serialize"/>) into RFC4180-quoted comma-separated
+    /// text, for placing on the "CSV" clipboard format alongside Text/HTML. Re-parses via
+    /// <see cref="ClipboardSerializer.Deserialize"/> (the same reader ExecutePaste's external-clipboard
+    /// fallback already relies on) rather than re-implementing TSV parsing here.
+    /// </summary>
+    private static string BuildCsvClipboardText(string tsvText)
+    {
+        if (string.IsNullOrEmpty(tsvText))
+            return string.Empty;
+
+        var rows = ClipboardSerializer.Deserialize(tsvText);
+        var sb = new StringBuilder(tsvText.Length + 16);
+        for (var r = 0; r < rows.Length; r++)
+        {
+            if (r > 0)
+                sb.Append("\r\n");
+
+            var row = rows[r];
+            for (var c = 0; c < row.Length; c++)
+            {
+                if (c > 0)
+                    sb.Append(',');
+
+                AppendCsvField(sb, row[c]);
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static void AppendCsvField(StringBuilder sb, string field)
+    {
+        var requiresQuoting = false;
+        foreach (var ch in field)
+        {
+            if (ch is ',' or '"' or '\r' or '\n')
+            {
+                requiresQuoting = true;
+                break;
+            }
+        }
+
+        if (!requiresQuoting)
+        {
+            sb.Append(field);
+            return;
+        }
+
+        sb.Append('"');
+        foreach (var ch in field)
+        {
+            if (ch == '"')
+                sb.Append("\"\"");
+            else
+                sb.Append(ch);
+        }
+
+        sb.Append('"');
+    }
 }
