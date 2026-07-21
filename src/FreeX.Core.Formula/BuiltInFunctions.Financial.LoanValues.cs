@@ -146,7 +146,14 @@ public static partial class BuiltInFunctions
         if (FirstError(args) is { } e) return e;
         var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
         var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
-        var guessArg = args.Count > 5 && args[5] is not BlankValue ? args[5] : new NumberValue(0.1);
+        // A genuinely-omitted 6th argument defaults to 0.1 (Excel's RATE default guess), but an
+        // explicitly-supplied argument that merely evaluates to blank (e.g. a reference to an
+        // empty cell) must flow through normal numeric coercion instead -- BlankValue coerces to
+        // 0.0 (BuiltInFunctions.Coercion.cs ToNumber), matching Excel's blank-cell-as-0 rule.
+        // args.Count reflects the actual number of arguments written in the formula (see
+        // FormulaEvaluator.Functions.cs, which sizes expandedArgs from node.Arguments.Count with
+        // no arity padding), so it reliably distinguishes "omitted" from "explicit but blank".
+        var guessArg = args.Count > 5 ? args[5] : new NumberValue(0.1);
         return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg, guessArg], values => RateScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
     }
 

@@ -78,7 +78,12 @@ internal static class XlsxWorksheetThreadedCommentMapper
         if (authorsByName.Count == 0)
             return;
 
-        WritePersonsPart(archive, authorsByName, GetNonAuthoringMentionedPersons(workbook, authorsByName));
+        // R56-io-comments-threaded-5-2: the full set of person ids actually referenced by any
+        // comment/reply -- NOT just authorsByName's one-id-per-displayName fallback -- so two
+        // distinct real authors sharing a displayName each still get their own <person> record
+        // (see ResolvePersonIdentitiesById).
+        var personIdentitiesById = ResolvePersonIdentitiesById(workbook, authorsByName);
+        WritePersonsPart(archive, personIdentitiesById, GetNonAuthoringMentionedPersons(workbook, personIdentitiesById.Keys));
         EnsureWorkbookPersonRelationship(archive);
 
         // Allocate next-free threaded comment part indices, checking existing archive entries to
@@ -156,14 +161,25 @@ internal static class XlsxWorksheetThreadedCommentMapper
         return used;
     }
 
+    /// <summary>
+    /// Computes the DEFAULT/fallback personId for each distinct author displayName -- used by
+    /// <see cref="ResolvePersonId"/> only for a comment/reply whose own <c>SourcePersonId</c> is
+    /// null (e.g. a freshly-authored in-memory comment with no preserved source id at all). A
+    /// comment/reply that DOES carry its own preserved <c>SourcePersonId</c> (see
+    /// <see cref="ThreadedComment.SourcePersonId"/>, captured unconditionally on load as of
+    /// R56-io-comments-threaded-5-2) always uses that id directly instead, which is what keeps two
+    /// distinct real authors who happen to share a displayName apart even though this dictionary
+    /// itself can only ever hold ONE id per displayName.
+    /// </summary>
     private static IReadOnlyDictionary<string, string> CreateAuthorIds(Workbook workbook)
     {
-        // Prefer a preserved source personId (kept only when the comment/reply also carries
-        // @mention metadata that references it, see ThreadedComment.SourcePersonId) over a
-        // freshly minted per-author guid, so a preserved mentionpersonId reference still resolves
-        // to a person id present in the rewritten xl/persons/person.xml. When an author has more
-        // than one candidate source id, the first one encountered (in the same deterministic
-        // ordering used below) wins.
+        // Prefer a preserved source personId over a freshly minted per-author guid, so a preserved
+        // mentionpersonId reference still resolves to a person id present in the rewritten
+        // xl/persons/person.xml. When an author has more than one candidate source id (e.g. a
+        // genuine displayName collision between two real people), the first one encountered (in
+        // the same deterministic ordering used below) wins for this FALLBACK dictionary only --
+        // ResolvePersonId still resolves each individual comment/reply to its own distinct
+        // SourcePersonId directly when one is present, so the collision is not lost overall.
         var sourcePersonIdsByAuthor = workbook.Sheets
             .SelectMany(sheet => sheet.ThreadedComments.Values.SelectMany(GetThreadAuthorsWithSourcePersonId))
             .Where(pair => pair.Author.Length > 0 && pair.SourcePersonId is not null)
@@ -237,26 +253,68 @@ internal static class XlsxWorksheetThreadedCommentMapper
     }
 
     /// <summary>
-    /// Collects a display name, by source person id, for every @-mentioned person captured on load
-    /// (<see cref="ThreadedComment.MentionedPersonDisplayNames"/> / <see cref="CommentReply.MentionedPersonDisplayNames"/>)
-    /// whose id is not already one of the ids <paramref name="authorsByName"/> assigned to a
-    /// comment/reply author. Without these, a mentioned person who never posts a comment/reply
-    /// would get no &lt;person&gt; record on save, leaving their preserved mentionpersonId dangling
-    /// (see R12-comments-notes-3).
+    /// Resolves the personId to write for one specific comment/reply: its own preserved
+    /// <paramref name="sourcePersonId"/> when present (trusted directly, regardless of whether
+    /// <paramref name="authorsByName"/>'s single per-displayName entry agrees -- this is what keeps
+    /// two distinct real authors who share a displayName apart, see
+    /// R56-io-comments-threaded-5-2), otherwise the per-author fallback from
+    /// <see cref="CreateAuthorIds"/>.
     /// </summary>
-    private static IReadOnlyDictionary<string, string> GetNonAuthoringMentionedPersons(
+    private static string ResolvePersonId(
+        string author,
+        string? sourcePersonId,
+        IReadOnlyDictionary<string, string> authorsByName) =>
+        sourcePersonId ?? authorsByName[author];
+
+    /// <summary>
+    /// Computes the full set of person ids actually referenced by any comment/reply on save
+    /// (personId -&gt; displayName), used to emit <see cref="WritePersonsPart"/>'s primary
+    /// &lt;person&gt; entries. Usually one id per distinct author displayName (mirroring
+    /// <paramref name="authorsByName"/>), but when the SAME displayName resolves (via each
+    /// comment/reply's own preserved <c>SourcePersonId</c>) to two or more DISTINCT ids -- e.g. two
+    /// different real people, possibly from different organizations, who happen to share a
+    /// displayName -- every one of those distinct ids gets its own entry here, so the two real
+    /// people stay two separate &lt;person&gt; records instead of collapsing into
+    /// <paramref name="authorsByName"/>'s single id for that name (see R56-io-comments-threaded-5-2).
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ResolvePersonIdentitiesById(
         Workbook workbook,
         IReadOnlyDictionary<string, string> authorsByName)
     {
-        var authorPersonIds = authorsByName.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var comment in sheet.ThreadedComments.Values)
+            {
+                foreach (var (author, sourcePersonId) in GetThreadAuthorsWithSourcePersonId(comment))
+                    result.TryAdd(ResolvePersonId(author, sourcePersonId, authorsByName), author);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Collects a display name, by source person id, for every @-mentioned person captured on load
+    /// (<see cref="ThreadedComment.MentionedPersonDisplayNames"/> / <see cref="CommentReply.MentionedPersonDisplayNames"/>)
+    /// whose id is not already one of <paramref name="authorPersonIds"/> (every id actually
+    /// resolved for a comment/reply author, see <see cref="ResolvePersonIdentitiesById"/>). Without
+    /// these, a mentioned person who never posts a comment/reply would get no &lt;person&gt; record
+    /// on save, leaving their preserved mentionpersonId dangling (see R12-comments-notes-3).
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> GetNonAuthoringMentionedPersons(
+        Workbook workbook,
+        IEnumerable<string> authorPersonIds)
+    {
+        var authorPersonIdSet = authorPersonIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var mentioned = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sheet in workbook.Sheets)
         {
             foreach (var comment in sheet.ThreadedComments.Values)
             {
-                AddNonAuthoringMentionedPersons(comment.MentionedPersonDisplayNames, authorPersonIds, mentioned);
+                AddNonAuthoringMentionedPersons(comment.MentionedPersonDisplayNames, authorPersonIdSet, mentioned);
                 foreach (var reply in comment.Replies)
-                    AddNonAuthoringMentionedPersons(reply.MentionedPersonDisplayNames, authorPersonIds, mentioned);
+                    AddNonAuthoringMentionedPersons(reply.MentionedPersonDisplayNames, authorPersonIdSet, mentioned);
             }
         }
 
@@ -407,12 +465,21 @@ internal static class XlsxWorksheetThreadedCommentMapper
                     ParseDateTimeOffset(comment.Attribute("dT")?.Value),
                     XlsxWorksheetXmlValueParser.IsTruthy(comment.Attribute("done")?.Value),
                     mentionsXml,
-                    // Only preserve the source personId when there is @mention metadata to keep
-                    // resolvable; comments without mentions let the writer mint/reuse the normal
-                    // deterministic per-author guid instead (or, when some OTHER comment's
-                    // preserved mention references this same author's real id, reuse that id --
-                    // see CreateAuthorIds' mentionedPersonIdsByDisplayName cross-reference).
-                    mentionsXml is not null ? NormalizeId(comment.Attribute("personId")?.Value) : null,
+                    // R56-io-comments-threaded-5-2: always preserve the source personId, not only
+                    // when this comment happens to carry @mention metadata of its own. Two distinct
+                    // real authors can legitimately share the same displayName (e.g. across
+                    // organizations in a cross-company review workbook); gating this on @mentions
+                    // left every such pair indistinguishable once resolved to "author" (a plain
+                    // displayName string) below, so CreateAuthorIds/WritePersonsPart on save could
+                    // only ever see ONE of the two ids and silently merged them into one <person>.
+                    // Capturing the id unconditionally lets ToThreadedCommentElement/
+                    // ToThreadedCommentReplyElement (via ResolvePersonId) trust each comment's own
+                    // preserved id directly on save, keeping distinct source persons distinct even
+                    // when their displayName collides. (The mentionedPersonIdsByDisplayName
+                    // cross-reference in CreateAuthorIds remains for the separate case of an author
+                    // whose comment/reply model instance was built without a source id at all, e.g.
+                    // a freshly-authored in-memory comment.)
+                    NormalizeId(personId),
                     // Capture a display name for every @-mentioned person so a mention referencing
                     // someone who never authors a comment/reply still gets a <person> record
                     // written back on save (see ReadMentionedPersonDisplayNames).
@@ -511,17 +578,17 @@ internal static class XlsxWorksheetThreadedCommentMapper
 
     private static void WritePersonsPart(
         ZipArchive archive,
-        IReadOnlyDictionary<string, string> authorsByName,
+        IReadOnlyDictionary<string, string> personIdentitiesById,
         IReadOnlyDictionary<string, string> nonAuthoringMentionedPersonsById)
     {
         var personsXml = new XDocument(
             new XElement(
                 ThreadedCommentNs + "personList",
-                authorsByName
+                personIdentitiesById
                     .Select(pair => new XElement(
                         ThreadedCommentNs + "person",
-                        new XAttribute("displayName", pair.Key),
-                        new XAttribute("id", pair.Value)))
+                        new XAttribute("displayName", pair.Value),
+                        new XAttribute("id", pair.Key)))
                     .Concat(nonAuthoringMentionedPersonsById.Select(pair => new XElement(
                         ThreadedCommentNs + "person",
                         new XAttribute("displayName", pair.Value),
@@ -605,7 +672,7 @@ internal static class XlsxWorksheetThreadedCommentMapper
         var element = new XElement(
             ThreadedCommentNs + "threadedComment",
             new XAttribute("ref", address.ToA1()),
-            new XAttribute("personId", authorsByName[author]),
+            new XAttribute("personId", ResolvePersonId(author, comment.SourcePersonId, authorsByName)),
             new XAttribute("id", id),
             new XElement(ThreadedCommentNs + "text", comment.Text));
 
@@ -635,7 +702,7 @@ internal static class XlsxWorksheetThreadedCommentMapper
         var element = new XElement(
             ThreadedCommentNs + "threadedComment",
             new XAttribute("ref", address.ToA1()),
-            new XAttribute("personId", authorsByName[author]),
+            new XAttribute("personId", ResolvePersonId(author, reply.SourcePersonId, authorsByName)),
             new XAttribute("id", id),
             new XAttribute("parentId", parentId),
             new XElement(ThreadedCommentNs + "text", reply.Text));

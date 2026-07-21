@@ -10,7 +10,7 @@ internal static class PasteCommandCellFactory
         Cell sourceCell,
         PasteCellsMode mode,
         PasteSpecialContentKind contentKind,
-        PasteOffsetOp pasteOp,
+        RewriteOperation pasteOp,
         string activeSheetName,
         int rowDelta,
         int colDelta,
@@ -92,14 +92,19 @@ internal static class PasteCommandCellFactory
 
     private static Cell BuildFormulaOrValueCell(
         Cell sourceCell,
-        PasteOffsetOp pasteOp,
+        RewriteOperation pasteOp,
         string activeSheetName,
         int rowDelta,
         int colDelta,
         StyleId destinationStyle)
     {
         var pastedCell = sourceCell.Clone();
-        if (pastedCell.FormulaText is not null && (rowDelta != 0 || colDelta != 0))
+        // A transpose op can move a formula's OTHER references even when the host cell's own
+        // (rowDelta,colDelta) happens to be zero -- transposing swaps the block's shape, so a cell
+        // that lands back on its own address can still hold sibling references that must be
+        // axis-swapped. The rowDelta/colDelta shortcut below is only valid for a uniform-translation
+        // PasteOffsetOp, where a zero delta means every reference in the formula is untouched too.
+        if (pastedCell.FormulaText is not null && (pasteOp is PasteTransposeOp || rowDelta != 0 || colDelta != 0))
         {
             pastedCell.FormulaText =
                 FormulaRewriter.Rewrite(pastedCell.FormulaText, pasteOp, activeSheetName)
@@ -120,13 +125,15 @@ internal static class PasteCommandCellFactory
 
     private static Cell BuildAllCell(
         Cell sourceCell,
-        PasteOffsetOp pasteOp,
+        RewriteOperation pasteOp,
         string activeSheetName,
         int rowDelta,
         int colDelta)
     {
         var pastedCell = sourceCell.Clone();
-        if (pastedCell.FormulaText is not null && (rowDelta != 0 || colDelta != 0))
+        // See BuildFormulaOrValueCell above: a transpose op must always attempt the rewrite, even
+        // when this particular host cell's own delta is zero.
+        if (pastedCell.FormulaText is not null && (pasteOp is PasteTransposeOp || rowDelta != 0 || colDelta != 0))
         {
             pastedCell.FormulaText =
                 FormulaRewriter.Rewrite(pastedCell.FormulaText, pasteOp, activeSheetName)

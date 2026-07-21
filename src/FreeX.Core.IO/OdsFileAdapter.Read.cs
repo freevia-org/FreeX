@@ -255,7 +255,12 @@ public sealed partial class OdsFileAdapter
                 return new TextValue(TextContent(cellElement));
             }
             default:
-                return BlankValue.Instance;
+                // No/unrecognized office:value-type (e.g. per the ODF spec's optional-attribute rule,
+                // a plain string cell may omit it entirely). Fall back to the cell's visible <text:p>
+                // content rather than silently dropping it — real Excel/LibreOffice both render it.
+                return TextContent(cellElement) is { Length: > 0 } text
+                    ? new TextValue(text)
+                    : BlankValue.Instance;
         }
     }
 

@@ -142,6 +142,11 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         var numericCount = 0;
         for (var row = firstDataRow; row <= lastDataRow; row++)
         {
+            // R56-services-autofilter-sort-5-1: a row already hidden by another column's active
+            // filter is not part of the visible dataset Excel scopes Top-N/percent against.
+            if (FilterHiddenRowUpdater.IsHiddenByAnyOtherActiveMechanism(sheet, filterCol, row))
+                continue;
+
             if (sheet.GetValue(row, filterCol) is NumberValue)
                 numericCount++;
         }
@@ -165,6 +170,10 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         {
             for (var row = firstDataRow; row <= lastDataRow; row++)
             {
+                // R56-services-autofilter-sort-5-1: skip rows already hidden by another column's
+                // active filter -- Excel computes the Top-N boundary only over the visible dataset.
+                if (FilterHiddenRowUpdater.IsHiddenByAnyOtherActiveMechanism(sheet, filterCol, row))
+                    continue;
                 if (sheet.GetValue(row, filterCol) is not NumberValue number)
                     continue;
 
@@ -184,9 +193,11 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
 
             if (heapCount < keepCount)
             {
-                // Fewer numeric rows than requested count: everything numeric qualifies.
+                // Fewer numeric (visible) rows than requested count: everything visible+numeric qualifies.
                 for (var row = firstDataRow; row <= lastDataRow; row++)
                 {
+                    if (FilterHiddenRowUpdater.IsHiddenByAnyOtherActiveMechanism(sheet, filterCol, row))
+                        continue;
                     if (sheet.GetValue(row, filterCol) is NumberValue)
                         keptRows[(int)(row - firstDataRow)] = true;
                 }
@@ -199,6 +210,8 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
                 var boundary = heap[0].Value;
                 for (var row = firstDataRow; row <= lastDataRow; row++)
                 {
+                    if (FilterHiddenRowUpdater.IsHiddenByAnyOtherActiveMechanism(sheet, filterCol, row))
+                        continue;
                     if (sheet.GetValue(row, filterCol) is not NumberValue number)
                         continue;
 

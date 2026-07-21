@@ -150,6 +150,51 @@ public sealed class CellMergePlannerTests
     }
 
     [Fact]
+    public void CreateFormatCellsMergeCommands_AllowUnmergeToggleFalse_LeavesAlreadyMergedRowMerged()
+    {
+        // R56-meta-1: production Merge-Across call sites go through
+        // CellMergePlanner.CreateFormatCellsMergeCommands (via CreateMergeCellsCommand /
+        // BuildMergeWithoutCenterCommand), NOT CreateMergeCommands directly, so the
+        // allowUnmergeToggle: false plumbing must reach all the way through this entry point too --
+        // an already-correctly-merged row of the exact target shape must be left merged (a no-op
+        // re-merge), never toggled back off just because the per-row batch re-invokes this method.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var alreadyMergedRow = Range(sheet.Id, 2, 1, 2, 3);
+        sheet.AddMergedRegion(alreadyMergedRow);
+
+        var commands = CellMergePlanner.CreateFormatCellsMergeCommands(
+            sheet,
+            sheet.Id,
+            alreadyMergedRow,
+            mergeCells: true,
+            allowUnmergeToggle: false);
+
+        commands.Should().NotContain(command => command is UnmergeCellsCommand);
+        commands.Should().ContainSingle().Which.Should().BeOfType<MergeCellsCommand>();
+    }
+
+    [Fact]
+    public void CreateFormatCellsMergeCommands_DefaultAllowUnmergeToggle_StillTogglesAlreadyMergedRangeOff()
+    {
+        // Sibling no-regression test: the direct Merge Cells gesture (the default,
+        // allowUnmergeToggle: true) reached through CreateFormatCellsMergeCommands must keep its
+        // Excel-parity toggle-to-unmerge behavior.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var alreadyMergedRow = Range(sheet.Id, 2, 1, 2, 3);
+        sheet.AddMergedRegion(alreadyMergedRow);
+
+        var commands = CellMergePlanner.CreateFormatCellsMergeCommands(
+            sheet,
+            sheet.Id,
+            alreadyMergedRow,
+            mergeCells: true);
+
+        commands.Should().ContainSingle().Which.Should().BeOfType<UnmergeCellsCommand>();
+    }
+
+    [Fact]
     public void CreateUnmergeCommands_TargetsOverlappingMergedRegions()
     {
         var workbook = CreateWorkbook();

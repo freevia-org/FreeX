@@ -304,7 +304,12 @@ internal static class XlsxSharedStringMetadataPreserver
         foreach (var element in sharedStrings)
         {
             var text = ReadSharedStringPlainText(element, workbookNs);
-            if (string.IsNullOrEmpty(text) || duplicates?.Contains(text) == true)
+            // An empty concatenated text (e.g. a rich <si> whose only run has empty <t/>, or a
+            // phonetic-only entry) is still a real shared-string entry that must participate in
+            // matching -- it can be matched positionally like any other text, including "". Only
+            // an already-flagged duplicate text is skipped here (it's handled by the duplicate
+            // positional-match pass instead).
+            if (duplicates?.Contains(text) == true)
                 continue;
 
             if (unique.ContainsKey(text))

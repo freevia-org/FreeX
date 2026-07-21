@@ -638,7 +638,17 @@ internal static class FilterHiddenRowUpdater
         }
     }
 
-    private static bool IsHiddenByAnyOtherActiveMechanism(Sheet sheet, uint excludeCol, uint row)
+    /// <summary>
+    /// True when <paramref name="row"/> is currently hidden by some mechanism OTHER than
+    /// <paramref name="excludeCol"/>'s own condition/average/top-bottom/color filter (a value-list
+    /// filter on any column, or another column's owned condition/average/top-bottom/color filter).
+    /// Used by <see cref="TopBottomFilterCommand"/>/<see cref="AverageFilterCommand"/> to scope their
+    /// Top-N boundary / average statistic to the rows still VISIBLE under every OTHER active
+    /// column's filter (finding R56-services-autofilter-sort-5-1) -- <paramref name="excludeCol"/>'s
+    /// own prior ownership of a row must never exclude it, since that column's filter is the one
+    /// about to be recomputed.
+    /// </summary>
+    internal static bool IsHiddenByAnyOtherActiveMechanism(Sheet sheet, uint excludeCol, uint row)
     {
         if (sheet.ValueFilterHiddenRows.Contains(row))
             return true;

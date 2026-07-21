@@ -78,7 +78,12 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         {
             CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
             ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
-            Id = reloadedComment.Replies[0].Id
+            Id = reloadedComment.Replies[0].Id,
+            // R56-io-comments-threaded-5-2: SourcePersonId is now captured unconditionally from
+            // the source package's personId attribute (previously only when @mention metadata was
+            // present), so a patch-save round trip through a real source package now preserves it
+            // instead of leaving it null.
+            SourcePersonId = reloadedComment.Replies[0].SourcePersonId
         });
     }
 
@@ -304,13 +309,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
             IsResolved = true,
             Id = comment.Id,
+            // R56-io-comments-threaded-5-2: SourcePersonId is now captured unconditionally from
+            // the source package's personId attribute (previously only when @mention metadata was
+            // present), so a full-save round trip through a real source package now preserves it
+            // instead of leaving it null.
+            SourcePersonId = comment.SourcePersonId,
             Replies =
             [
                 new CommentReply("Adjusted after audit", "Codex")
                 {
                     CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
                     ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 15, 0, TimeSpan.Zero),
-                    Id = comment.Replies[0].Id
+                    Id = comment.Replies[0].Id,
+                    SourcePersonId = comment.Replies[0].SourcePersonId
                 }
             ]
         });

@@ -419,14 +419,25 @@ public class ViewportLayoutTests
     }
 
     [Fact]
-    public void GetViewport_WithSplitPaneOffsetsUsesIndependentTopRightAndBottomLeftStarts()
+    public void GetViewport_SplitPaneOffsetsNeverDivergeTopRightOrBottomLeftFromMainPane()
     {
+        // Excel's split model gives the bottom row-band (bottom-left + bottom-right) and the
+        // right column-band (top-right + bottom-right) exactly ONE shared scrollbar each -- the
+        // same main TopRow/LeftCol that already drives the main (bottom-right) pane. A stale
+        // SplitPaneOffsets value (e.g. left over from an earlier wheel-scroll or Go To) must never
+        // pull TopRightColumns/BottomLeftRows away from the current main position -- there is no
+        // such thing as an independent scroll offset for either of these two panes (r56 fix: they
+        // used to desync from the main pane permanently, with no way to ever resync).
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SplitRow = 4;
         sheet.SplitColumn = 4;
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 12), new TextValue("top-offset"));
-        sheet.SetCell(new CellAddress(sheet.Id, 30, 1), new TextValue("left-offset"));
+        // Stale offsets far outside the default (main-mirrored) window, so there is no ambiguity
+        // about whether a cell near col 10 / row 20 might incidentally fall in both windows.
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 500), new TextValue("stale-top-offset"));
+        sheet.SetCell(new CellAddress(sheet.Id, 8000, 1), new TextValue("stale-left-offset"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 10), new TextValue("top-right-at-main-col"));
+        sheet.SetCell(new CellAddress(sheet.Id, 20, 1), new TextValue("bottom-left-at-main-row"));
         sheet.SetCell(new CellAddress(sheet.Id, 20, 10), new TextValue("main"));
 
         var viewport = new ViewportService().GetViewport(
@@ -437,15 +448,43 @@ public class ViewportLayoutTests
                 10,
                 120,
                 160,
-                SplitPaneOffsets: new SplitPaneViewportOffsets(TopRightLeftCol: 12, BottomLeftTopRow: 30)));
+                SplitPaneOffsets: new SplitPaneViewportOffsets(TopRightLeftCol: 500, BottomLeftTopRow: 8000)));
 
         viewport.Cells.Select(cell => (cell.Row, cell.Col, cell.DisplayText))
             .Should().Contain((20u, 10u, "main"));
         viewport.SplitPanes.Should().NotBeNull();
-        viewport.SplitPanes!.TopRightColumns.Select(column => column.Col).Should().StartWith([12u]);
-        viewport.SplitPanes.BottomLeftRows.Select(row => row.Row).Should().StartWith([30u]);
+        viewport.SplitPanes!.TopRightColumns.Select(column => column.Col).Should().StartWith([10u]);
+        viewport.SplitPanes.BottomLeftRows.Select(row => row.Row).Should().StartWith([20u]);
         viewport.SplitPanes.Cells.Select(cell => (cell.Row, cell.Col, cell.DisplayText))
-            .Should().Equal((1u, 12u, "top-offset"), (30u, 1u, "left-offset"));
+            .Should().Contain((1u, 10u, "top-right-at-main-col"))
+            .And.Contain((20u, 1u, "bottom-left-at-main-row"))
+            .And.NotContain((1u, 500u, "stale-top-offset"))
+            .And.NotContain((8000u, 1u, "stale-left-offset"));
+    }
+
+    [Fact]
+    public void GetViewport_WithoutSplitPaneOffsetsTopRightAndBottomLeftTrackMainPositionByDefault()
+    {
+        // Sibling no-regression coverage: the ordinary (no stale offset supplied) case must keep
+        // behaving exactly as before -- TopRight/BottomLeft simply mirror the main TopRow/LeftCol.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SplitRow = 4;
+        sheet.SplitColumn = 4;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 10), new TextValue("top-right-at-main-col"));
+        sheet.SetCell(new CellAddress(sheet.Id, 20, 1), new TextValue("bottom-left-at-main-row"));
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(20, 10, 120, 160));
+
+        viewport.SplitPanes.Should().NotBeNull();
+        viewport.SplitPanes!.TopRightColumns.Select(column => column.Col).Should().StartWith([10u]);
+        viewport.SplitPanes.BottomLeftRows.Select(row => row.Row).Should().StartWith([20u]);
+        viewport.SplitPanes.Cells.Select(cell => (cell.Row, cell.Col, cell.DisplayText))
+            .Should().Contain((1u, 10u, "top-right-at-main-col"))
+            .And.Contain((20u, 1u, "bottom-left-at-main-row"));
     }
 
     [Fact]

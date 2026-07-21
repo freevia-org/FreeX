@@ -292,7 +292,12 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
                 return column with { TotalsRowFunction = functionName, TotalsRowFormula = null, TotalsRowLabel = null };
             }
 
-            return column with { TotalsRowFormula = formulaText, TotalsRowFunction = null, TotalsRowLabel = null };
+            // ECMA-376 18.3.1.90: a totals-row formula that isn't one of the recognized built-in
+            // SUBTOTAL(n,[Column]) aggregates gets totalsRowFunction="custom" written alongside
+            // totalsRowFormula, the same way real Excel always serializes a directly-typed custom
+            // total. Leaving TotalsRowFunction null here produced a <totalsRowFormula> with no
+            // totalsRowFunction attribute at all -- a shape Excel itself never writes.
+            return column with { TotalsRowFormula = formulaText, TotalsRowFunction = "custom", TotalsRowLabel = null };
         }
 
         if (cell.Value is TextValue text)

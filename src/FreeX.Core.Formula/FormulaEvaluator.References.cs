@@ -82,26 +82,60 @@ public sealed partial class FormulaEvaluator
             var scopedRange = context.TryResolveNamedRange(node.Name);
             if (scopedRange is not null)
             {
-                // Bare named range reference outside a function: return top-left cell value.
-                // For 2D named ranges this is intentionally lossy — full implicit-intersection
-                // semantics (Excel 365 spill behaviour) are a Phase 5 enhancement.
-                return BuildRangeValueOrError(scopedRange.Value, context);
+                // Bare named range reference outside a function: apply the same current-cell
+                // implicit intersection EvaluateRange applies to a bare cell-range reference
+                // (see EvaluateNamedRangeScalar below).
+                return EvaluateNamedRangeScalar(scopedRange.Value, context);
             }
         }
 
         var range = context.TryResolveNamedRange(node.Name);
         if (range is not null)
         {
-            // Bare named range reference outside a function: return top-left cell value.
-            // For 2D named ranges this is intentionally lossy — full implicit-intersection
-            // semantics (Excel 365 spill behaviour) are a Phase 5 enhancement.
-            return BuildRangeValueOrError(range.Value, context);
+            // Bare named range reference outside a function: apply the same current-cell
+            // implicit intersection EvaluateRange applies to a bare cell-range reference
+            // (see EvaluateNamedRangeScalar below).
+            return EvaluateNamedRangeScalar(range.Value, context);
         }
 
         // Not a plain range — check whether it's a formula-expression named definition.
         return TryEvaluateNamedFormula(node.Name, context, out var formulaValue)
             ? formulaValue
             : ErrorValue.Name;
+    }
+
+    /// <summary>
+    /// Evaluates a bare named-range reference (e.g. a Data-Validation Formula1 of "=Flags", or a
+    /// Conditional-Format rule of "=Flags") the same way <see cref="EvaluateRange"/> evaluates a
+    /// bare cell-range reference: when there's a genuine current-cell context and the named
+    /// range spans more than one cell, implicitly intersect with the formula's own row/column
+    /// (Excel's legacy @ behaviour) instead of returning the full multi-cell RangeValue. Without
+    /// this, callers that only understand a scalar result (DataValidationService.ValidateCore,
+    /// ViewportService.ConditionalFormatFormulas — both call Evaluate directly, with no
+    /// implicit-intersection post-processing) silently coerce the raw RangeValue to false for
+    /// every row. A direct range ARGUMENT to a function (e.g. SUM(Flags)) never reaches this
+    /// method — FormulaEvaluator.Functions.cs special-cases NamedRangeNode as a function argument
+    /// and builds the full RangeValue directly — so full-range semantics there are unaffected.
+    /// </summary>
+    private static ScalarValue EvaluateNamedRangeScalar(FreeX.Core.Model.GridRange range, IEvalContext context)
+    {
+        if (context.CurrentCellAddress is { } current && (range.RowCount > 1 || range.ColCount > 1))
+        {
+            bool rowInBounds = current.Row >= range.Start.Row && current.Row <= range.End.Row;
+            bool colInBounds = current.Col >= range.Start.Col && current.Col <= range.End.Col;
+            uint? targetRow = range.RowCount == 1 ? range.Start.Row : rowInBounds ? current.Row : null;
+            uint? targetColumn = range.ColCount == 1 ? range.Start.Col : colInBounds ? current.Col : null;
+
+            if (targetRow is not { } resolvedRow || targetColumn is not { } resolvedColumn)
+                return ErrorValue.Value;
+
+            var sheetName = context.TryGetSheetName(range.Start.Sheet);
+            return sheetName is not null
+                ? context.GetCellValue(sheetName, resolvedRow, resolvedColumn)
+                : context.GetCellValue(resolvedRow, resolvedColumn);
+        }
+
+        return BuildRangeValueOrError(range, context);
     }
 
     /// <summary>
@@ -1126,7 +1160,10 @@ public sealed partial class FormulaEvaluator
             return TryGetCell(namedRange.SheetName, namedRange.StartRow, namedRange.StartCol, context, out cell);
         }
 
-        if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
+        // INDEX/CHOOSE both count as reference-returning for ISFORMULA/FORMULATEXT's argument too,
+        // the same as OFFSET/INDIRECT (and the same as the r55 ISREF/CELL fixes) -- see
+        // R55-formula-lookup-offset-indirect-5-2 and R56-formula-information-fns-5-1.
+        if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT" or "INDEX" or "CHOOSE")
         {
             var reference = EvaluateReferenceReturningFunction(fn, context);
             if (reference is ErrorValue error)

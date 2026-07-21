@@ -73,11 +73,13 @@ public sealed class XlsxWorksheetThreadedCommentMapperAuthorPersonIdReuseTests
         var loadedBobAddress = new CellAddress(loadedSheet.Id, 4, 5);
 
         loadedSheet.ThreadedComments[loadedBobAddress].Author.Should().Be("Bob");
-        // Bob's own comment has no mentions of its own, so SourcePersonId stays null on load (the
-        // existing, already-working semantics of ThreadedComment.SourcePersonId are unchanged);
-        // the fix instead cross-references Alice's preserved mention against Bob's author name
-        // when minting/reusing ids on save, asserted below.
-        loadedSheet.ThreadedComments[loadedBobAddress].SourcePersonId.Should().BeNull();
+        // R56-io-comments-threaded-5-2: SourcePersonId is now captured unconditionally from the
+        // source personId attribute, not only when the comment itself carries @mention metadata,
+        // so Bob's own comment (which has no mentions of its own) still keeps his real id directly
+        // -- no longer needing the mentionedPersonIdsByDisplayName cross-reference fallback below
+        // for THIS scenario (that fallback remains in place for a comment/reply model instance
+        // that genuinely has no preserved source id of its own, e.g. one built purely in-memory).
+        loadedSheet.ThreadedComments[loadedBobAddress].SourcePersonId.Should().Be(BobPersonId);
         loadedSheet.ThreadedComments[loadedAliceAddress].MentionedPersonDisplayNames.Should()
             .ContainKey(BobPersonId).WhoseValue.Should().Be("Bob");
 

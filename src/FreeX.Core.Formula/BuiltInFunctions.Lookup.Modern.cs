@@ -153,8 +153,8 @@ public static partial class BuiltInFunctions
     {
         var matchModeRange = matchModeArg as RangeValue;
         var searchModeRange = searchModeArg as RangeValue;
-        if ((matchModeRange is not null && (matchModeRange.RowCount != lookupValues.RowCount || matchModeRange.ColCount != lookupValues.ColCount)) ||
-            (searchModeRange is not null && (searchModeRange.RowCount != lookupValues.RowCount || searchModeRange.ColCount != lookupValues.ColCount)))
+        if ((matchModeRange is not null && !CanBroadcastToShape(matchModeRange, lookupValues.RowCount, lookupValues.ColCount)) ||
+            (searchModeRange is not null && !CanBroadcastToShape(searchModeRange, lookupValues.RowCount, lookupValues.ColCount)))
             return ErrorValue.Value;
 
         var results = new ScalarValue[lookupValues.RowCount, lookupValues.ColCount];
@@ -163,8 +163,8 @@ public static partial class BuiltInFunctions
             for (int c = 0; c < lookupValues.ColCount; c++)
             {
                 var lookupValue = lookupValues.Cells[r, c];
-                var matchModeValue = matchModeRange is null ? matchModeArg : matchModeRange.Cells[r, c];
-                var searchModeValue = searchModeRange is null ? searchModeArg : searchModeRange.Cells[r, c];
+                var matchModeValue = matchModeRange is null ? matchModeArg : ValueAtBroadcastCell(matchModeRange, r, c);
+                var searchModeValue = searchModeRange is null ? searchModeArg : ValueAtBroadcastCell(searchModeRange, r, c);
                 var result = lookupValue is ErrorValue e
                     ? e
                     : XlookupScalar(lookupValue, lookupVector, returnArr, lookupIsVertical, ifNotFound, matchModeValue, searchModeValue);

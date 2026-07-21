@@ -79,12 +79,17 @@ public sealed class XlsxThreadedCommentMapperTests
         // XlsxWorksheetThreadedCommentMapperIdAndMentionPreservationTests for the "does not
         // regenerate on a later re-save" behavior this id is meant to enable).
         loadedComment.Id.Should().NotBeNullOrWhiteSpace();
+        // R56-io-comments-threaded-5-2: SourcePersonId is now captured unconditionally from the
+        // comment's own personId attribute on load (previously only when @mention metadata was
+        // present), so it now carries the stable per-author id the mapper minted on the save above
+        // instead of staying null.
         loadedComment.Should().Be(new ThreadedComment("Please review total", "Quinn")
         {
             CreatedAtUtc = createdAt,
             ModifiedAtUtc = createdAt,
             IsResolved = true,
-            Id = loadedComment.Id
+            Id = loadedComment.Id,
+            SourcePersonId = loadedComment.SourcePersonId
         });
     }
 
@@ -158,18 +163,24 @@ public sealed class XlsxThreadedCommentMapperTests
         comment.Replies.Should().HaveCount(2);
         comment.Replies[0].Id.Should().NotBeNullOrWhiteSpace();
         comment.Replies[1].Id.Should().NotBeNullOrWhiteSpace();
+        // R56-io-comments-threaded-5-2: SourcePersonId is now captured unconditionally from each
+        // reply's own personId attribute on load (previously only when @mention metadata was
+        // present), so the second load in this save-load-save-load round trip now preserves the
+        // stable per-author id minted by the first save instead of leaving it null.
         comment.Replies.Should().Equal(
             new CommentReply("Looks high", "Codex")
             {
                 CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 5, 0, TimeSpan.Zero),
                 ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 5, 0, TimeSpan.Zero),
-                Id = comment.Replies[0].Id
+                Id = comment.Replies[0].Id,
+                SourcePersonId = comment.Replies[0].SourcePersonId
             },
             new CommentReply("Updated after audit", "Dana")
             {
                 CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 10, 0, TimeSpan.Zero),
                 ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 10, 0, TimeSpan.Zero),
-                Id = comment.Replies[1].Id
+                Id = comment.Replies[1].Id,
+                SourcePersonId = comment.Replies[1].SourcePersonId
             });
     }
 

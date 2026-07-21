@@ -298,7 +298,14 @@ public static class PasteCommandFactory
                     var destinationStyle = PasteCommandCellFactory.GetDestinationStyle(targetSheet, destinationAddress);
                     var pastedRowDelta = (int)destinationAddress.Row - (int)source.Row;
                     var pastedColDelta = (int)destinationAddress.Col - (int)source.Col;
-                    var pastedPasteOp = new PasteOffsetOp(pastedRowDelta, pastedColDelta);
+                    // Transpose swaps each relative reference's own (row,col) offset from the copied
+                    // block's anchor onto the destination block's anchor -- it is NOT the uniform
+                    // per-cell translation PasteOffsetOp applies (which would just shift every
+                    // reference by this host cell's own delta, producing garbage references for
+                    // anything other than a self-reference) (R56-commands-paste-special-5-1).
+                    RewriteOperation pastedPasteOp = options.Transpose
+                        ? new PasteTransposeOp(sourceRange.Start.Row, sourceRange.Start.Col, destination.Row, destination.Col)
+                        : new PasteOffsetOp(pastedRowDelta, pastedColDelta);
                     pastedCell = PasteCommandCellFactory.BuildPastedCell(
                         workbook,
                         sourceCell,
@@ -635,7 +642,14 @@ public static class PasteCommandFactory
             var destinationStyle = PasteCommandCellFactory.GetDestinationStyle(targetSheet, destinationAddress);
             var pastedRowDelta = (int)destinationAddress.Row - (int)sourceAddress.Row;
             var pastedColDelta = (int)destinationAddress.Col - (int)sourceAddress.Col;
-            var pastedPasteOp = new PasteOffsetOp(pastedRowDelta, pastedColDelta);
+            // Same transpose-vs-uniform-translation distinction as the non-tiled branch above
+            // (R56-commands-paste-special-5-1): anchor the axis swap at the whole copied block's
+            // start / overall destination start, not at this particular tiled source/destination
+            // pair (EnumerateTiledAddresses may wrap sourceAddress around for replication, but the
+            // block's own anchor for reference-transposition purposes never moves).
+            RewriteOperation pastedPasteOp = options.Transpose
+                ? new PasteTransposeOp(sourceRange.Start.Row, sourceRange.Start.Col, destination.Row, destination.Col)
+                : new PasteOffsetOp(pastedRowDelta, pastedColDelta);
             var pastedCell = PasteCommandCellFactory.BuildPastedCell(
                 workbook,
                 sourceCell,

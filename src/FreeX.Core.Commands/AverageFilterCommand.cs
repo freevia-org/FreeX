@@ -71,6 +71,16 @@ public sealed class AverageFilterCommand : IWorkbookCommand
             for (var offset = 0; offset < dataRowCount; offset++)
             {
                 var row = firstDataRow + (uint)offset;
+
+                // R56-services-autofilter-sort-5-1: a row already hidden by another column's active
+                // filter is excluded from Excel's Above/Below-Average statistic (and, via the NaN
+                // sentinel below, from the resulting visibility decision for that row too).
+                if (FilterHiddenRowUpdater.IsHiddenByAnyOtherActiveMechanism(sheet, filterCol, row))
+                {
+                    values[offset] = double.NaN;
+                    continue;
+                }
+
                 if (sheet.GetValue(row, filterCol) is NumberValue number)
                 {
                     values[offset] = number.Value;

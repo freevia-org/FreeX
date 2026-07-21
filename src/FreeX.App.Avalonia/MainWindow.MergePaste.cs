@@ -115,7 +115,7 @@ public sealed partial class MainWindow
         // upper-leftmost value" confirmation instead of the per-row merges below silently discarding
         // every non-left-most value in each row with zero warning.
         var contentResolution = MergeCellContentResolution.KeepFirstCell;
-        var contentPlan = CellMergePlanner.AnalyzeContent(sheet, range);
+        var contentPlan = CellMergePlanner.AnalyzeContent(sheet, range, perRow: true);
         if (contentPlan.WouldLoseContent)
         {
             var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
@@ -138,9 +138,11 @@ public sealed partial class MainWindow
                 new CellAddress(sheetId, row, range.Start.Col),
                 new CellAddress(sheetId, row, range.End.Col));
 
-            // Per-row merge with no centering, using the resolution chosen (once) above.
+            // Per-row merge with no centering, using the resolution chosen (once) above. Pass
+            // allowUnmergeToggle: false so an already-merged row of the exact target shape is left
+            // merged (a no-op re-merge) instead of being toggled back off by this per-row re-invocation.
             rowCommands.Add(BuildMergeWithoutCenterCommand(
-                sheet, sheetId, rowRange, contentResolution));
+                sheet, sheetId, rowRange, contentResolution, allowUnmergeToggle: false));
         }
 
         if (rowCommands.Count == 0)
@@ -165,12 +167,14 @@ public sealed partial class MainWindow
     /// <summary>
     /// Builds the command(s) to merge <paramref name="range"/> into one region WITHOUT re-centering.
     /// Delegates to <see cref="FreeX.App.Services.CellMergePlanner.CreateFormatCellsMergeCommands"/>
-    /// (mergeCells: true) rather than duplicating its merge/concatenate logic here, so "Merge Cells"
-    /// and, via the per-row loop in <see cref="MergeAcrossSelectedRangeAsync"/>, "Merge Across" pick up
-    /// the same Excel-parity toggle-to-unmerge gesture that planner implements: re-invoking either
-    /// command on a selection that is already fully covered by an existing merged region unmerges it
-    /// instead of failing with "Range overlaps an existing merged region.". The center
-    /// <see cref="ApplyStyleCommand"/> that
+    /// (mergeCells: true) rather than duplicating its merge/concatenate logic here. For the direct
+    /// "Merge Cells" gesture (the <paramref name="allowUnmergeToggle"/> default of <c>true</c>),
+    /// re-invoking on a selection that is already fully covered by an existing merged region unmerges it
+    /// instead of failing with "Range overlaps an existing merged region.". The per-row loop in
+    /// <see cref="MergeAcrossSelectedRangeAsync"/> passes <c>allowUnmergeToggle: false</c> instead, since
+    /// "Merge Across" must always leave the selection uniformly merged per row -- an already-merged row
+    /// of the exact target shape falls through to a no-op re-merge rather than being toggled back off.
+    /// The center <see cref="ApplyStyleCommand"/> that
     /// <see cref="FreeX.App.Services.CellMergePlanner.CreateMergeAndCenterCommands(Sheet?, SheetId, GridRange, MergeCellContentResolution)"/>
     /// appends is filtered out by CreateFormatCellsMergeCommands for the concatenate path, and never
     /// added on the keep-first-cell path, so no re-centering leaks in here. A degenerate (single-cell)
@@ -180,10 +184,11 @@ public sealed partial class MainWindow
         Sheet sheet,
         SheetId sheetId,
         GridRange range,
-        MergeCellContentResolution contentResolution)
+        MergeCellContentResolution contentResolution,
+        bool allowUnmergeToggle = true)
     {
         var commands = CellMergePlanner.CreateFormatCellsMergeCommands(
-            sheet, sheetId, range, mergeCells: true, contentResolution);
+            sheet, sheetId, range, mergeCells: true, contentResolution, allowUnmergeToggle);
 
         return commands.Count == 1
             ? commands[0]

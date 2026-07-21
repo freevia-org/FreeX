@@ -70,6 +70,17 @@ internal static class XlsxNumberFormatCatalogWriter
                 continue;
             }
 
+            // No numFmt currently occupies this catalog id (e.g. ClosedXML's rebuild assigned the
+            // same formatCode a different id). Before minting a brand-new entry, check whether an
+            // equivalent formatCode already exists under another (already-referenced) id — otherwise
+            // every round trip where the live id drifts adds one more orphaned duplicate.
+            var equivalentForNewId = FindEquivalentNumberFormat(numFmts, workbookNs, formatCode);
+            if (equivalentForNewId is not null && XlsxXmlAttributeReader.ReadIntAttribute(equivalentForNewId, "numFmtId") is { } equivalentIdForNewId)
+            {
+                remap[numberFormatId] = equivalentIdForNewId;
+                continue;
+            }
+
             remap[numberFormatId] = numberFormatId;
             usedIds.Add(numberFormatId);
             numFmts.Add(new XElement(

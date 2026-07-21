@@ -1616,6 +1616,17 @@ internal static partial class RowColumnShiftHelpers
         GridRange range,
         AddressShift shift)
     {
+        // A whole-row DELETE that consumes exactly the table's old Totals row shrinks table.Range so
+        // the physical totals row no longer exists -- real Excel automatically unchecks "Total Row"
+        // in that case. Copying TotalsRowShown verbatim would leave it true and mislabel the table's
+        // new (genuine, untouched) last data row as the totals row for every downstream data-body/
+        // totals-bounds computation (GetDataBodyRowBounds, DataBodyRange/IsDataBodyRow).
+        var totalsRowShown = table.TotalsRowShown
+            && !(shift.Axis == AddressShiftAxis.Rows
+                && shift.Kind == AddressShiftKind.Delete
+                && table.Range.End.Row >= shift.Start
+                && table.Range.End.Row <= shift.End);
+
         var clone = new StructuredTableModel
         {
             Id = table.Id,
@@ -1623,7 +1634,7 @@ internal static partial class RowColumnShiftHelpers
             DisplayName = table.DisplayName,
             Range = range,
             HasAutoFilter = table.HasAutoFilter,
-            TotalsRowShown = table.TotalsRowShown,
+            TotalsRowShown = totalsRowShown,
             HeaderRowCount = table.HeaderRowCount,
             TotalsRowCount = table.TotalsRowCount,
             InsertRow = table.InsertRow,

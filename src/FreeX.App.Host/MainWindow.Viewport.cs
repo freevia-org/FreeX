@@ -169,49 +169,13 @@ public partial class MainWindow
 
     private bool TryScrollIndependentSplitPane(bool horizontal, int notches)
     {
-        if (SheetGrid.Viewport?.SplitPanes is null)
-            return false;
-
-        if (horizontal && _activeSplitPaneRegion == FreeX.App.UI.SplitPaneRegion.TopRight)
-        {
-            var chrome = FreeX.App.UI.GridView.CalculateSplitPaneScrollbarChrome(
-                SheetGrid.Viewport,
-                SheetGrid.ActualWidth,
-                SheetGrid.ActualHeight);
-            if (chrome.HorizontalTopRight is not { } horizontalTopRightScrollbar)
-                return false;
-            var current = _splitPaneViewportOffsets.TryGetValue(_currentSheetId, out var offsets)
-                ? offsets.TopRightLeftCol
-                : null;
-            var target = FreeX.App.UI.GridView.CalculateSplitPaneScrollbarWheelTarget(
-                horizontalTopRightScrollbar,
-                current ?? Math.Max(1, (uint)HorizontalScroll.Value),
-                notches);
-            _splitPaneViewportOffsets[_currentSheetId] = (offsets ?? new SplitPaneViewportOffsets()) with { TopRightLeftCol = target.Index };
-            UpdateViewport();
-            return true;
-        }
-
-        if (!horizontal && _activeSplitPaneRegion == FreeX.App.UI.SplitPaneRegion.BottomLeft)
-        {
-            var chrome = FreeX.App.UI.GridView.CalculateSplitPaneScrollbarChrome(
-                SheetGrid.Viewport,
-                SheetGrid.ActualWidth,
-                SheetGrid.ActualHeight);
-            if (chrome.VerticalBottomLeft is not { } verticalBottomLeftScrollbar)
-                return false;
-            var current = _splitPaneViewportOffsets.TryGetValue(_currentSheetId, out var offsets)
-                ? offsets.BottomLeftTopRow
-                : null;
-            var target = FreeX.App.UI.GridView.CalculateSplitPaneScrollbarWheelTarget(
-                verticalBottomLeftScrollbar,
-                current ?? Math.Max(1, (uint)VerticalScroll.Value),
-                notches);
-            _splitPaneViewportOffsets[_currentSheetId] = (offsets ?? new SplitPaneViewportOffsets()) with { BottomLeftTopRow = target.Index };
-            UpdateViewport();
-            return true;
-        }
-
+        // TopRight (columns) and BottomLeft (rows) share exactly the SAME scrollbar as the main
+        // (bottom-right) pane in Excel's split model -- top-right/bottom-right always show
+        // identical columns, and bottom-left/bottom-right always show identical rows. Neither has
+        // an independent scroll offset of its own (r56 fix: the old sticky TopRightLeftCol/
+        // BottomLeftTopRow offset let these two panes desync from the main pane permanently, with
+        // no way to ever resync). Always fall through to the normal main-scrollbar wheel handling
+        // in SheetGrid_MouseWheel, which keeps them locked together by construction.
         return false;
     }
 
@@ -220,17 +184,18 @@ public partial class MainWindow
         if (SheetGrid.Viewport?.SplitPanes is null)
             return;
 
-        _splitPaneViewportOffsets.TryGetValue(_currentSheetId, out var offsets);
-        offsets ??= new SplitPaneViewportOffsets();
-
+        // The TopRight/BottomLeft scrollbar chrome shares the SAME scroll position as the main
+        // (bottom-right) pane in Excel's split model (see TryScrollIndependentSplitPane) -- route
+        // a drag/click on that chrome straight into the main scrollbar rather than a separate
+        // sticky per-pane offset, so the two panes in that band can never desync.
         if (target is
             {
                 Region: FreeX.App.UI.SplitPaneRegion.TopRight,
                 Orientation: FreeX.App.UI.SplitPaneScrollbarOrientation.Horizontal
             })
         {
-            _splitPaneViewportOffsets[_currentSheetId] = offsets with { TopRightLeftCol = target.Index };
-            UpdateViewport();
+            HorizontalScroll.Maximum = Math.Max(HorizontalScroll.Maximum, target.Index);
+            HorizontalScroll.Value = target.Index;
             return;
         }
 
@@ -240,8 +205,8 @@ public partial class MainWindow
                 Orientation: FreeX.App.UI.SplitPaneScrollbarOrientation.Vertical
             })
         {
-            _splitPaneViewportOffsets[_currentSheetId] = offsets with { BottomLeftTopRow = target.Index };
-            UpdateViewport();
+            VerticalScroll.Maximum = Math.Max(VerticalScroll.Maximum, target.Index);
+            VerticalScroll.Value = target.Index;
         }
     }
 
@@ -269,21 +234,20 @@ public partial class MainWindow
             HorizontalScroll.Value = plan.Horizontal.Value;
         }
 
-        // The target cell may be out of view in an independently-scrolled split pane (bottom-left's
-        // own vertical offset or top-right's own horizontal offset) that the main scrollbars above
-        // cannot reach -- update that pane's offset directly, mirroring TryScrollIndependentSplitPane
-        // / OnSplitPaneScrollbarScrolled.
-        if (plan.BottomLeftTopRow is not null || plan.TopRightLeftCol is not null)
+        // The target cell may be out of view in the bottom-left/top-right pane; since that pane
+        // shares its scroll position with the main pane (see TryScrollIndependentSplitPane), reveal
+        // it by moving the SAME main scrollbar rather than a separate sticky per-pane offset --
+        // bottom-left/top-right have no independent scroll offset of their own (r56 fix).
+        if (plan.BottomLeftTopRow is { } newBottomLeftTopRow)
         {
-            var offsets = _splitPaneViewportOffsets.TryGetValue(_currentSheetId, out var existing)
-                ? existing
-                : new SplitPaneViewportOffsets();
-            if (plan.BottomLeftTopRow is { } newBottomLeftTopRow)
-                offsets = offsets with { BottomLeftTopRow = newBottomLeftTopRow };
-            if (plan.TopRightLeftCol is { } newTopRightLeftCol)
-                offsets = offsets with { TopRightLeftCol = newTopRightLeftCol };
-            _splitPaneViewportOffsets[_currentSheetId] = offsets;
-            UpdateViewport();
+            VerticalScroll.Maximum = Math.Max(VerticalScroll.Maximum, newBottomLeftTopRow);
+            VerticalScroll.Value = newBottomLeftTopRow;
+        }
+
+        if (plan.TopRightLeftCol is { } newTopRightLeftCol)
+        {
+            HorizontalScroll.Maximum = Math.Max(HorizontalScroll.Maximum, newTopRightLeftCol);
+            HorizontalScroll.Value = newTopRightLeftCol;
         }
     }
 
@@ -691,15 +655,19 @@ public partial class MainWindow
         return _viewportService.GetViewport(_workbook, _currentSheetId, request);
     }
 
+    // TopRight (columns) and BottomLeft (rows) share the SAME shared scrollbar as the main
+    // (bottom-right) pane in Excel's split model -- neither has an independent scroll offset of
+    // its own, so this always mirrors the CURRENT main topRow/leftCol rather than ever consulting
+    // a sticky per-sheet offset, which used to let these two panes desync permanently from the
+    // main pane with no way to resync (r56 fix).
     private SplitPaneViewportOffsets? GetSplitPaneViewportOffsets(Sheet? sheet, uint topRow, uint leftCol)
     {
         if (sheet is null || (!sheet.SplitRow.HasValue && !sheet.SplitColumn.HasValue))
             return null;
 
-        _splitPaneViewportOffsets.TryGetValue(sheet.Id, out var offsets);
         return new SplitPaneViewportOffsets(
-            sheet.SplitColumn.HasValue ? offsets?.TopRightLeftCol ?? leftCol : null,
-            sheet.SplitRow.HasValue ? offsets?.BottomLeftTopRow ?? topRow : null);
+            sheet.SplitColumn.HasValue ? leftCol : null,
+            sheet.SplitRow.HasValue ? topRow : null);
     }
 
     private static GridRange? CalculatePagePreviewRange(Sheet? sheet, ViewportModel viewport)

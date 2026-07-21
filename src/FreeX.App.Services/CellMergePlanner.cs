@@ -123,7 +123,8 @@ public static class CellMergePlanner
         SheetId sheetId,
         GridRange range,
         bool mergeCells,
-        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell,
+        bool allowUnmergeToggle = true)
     {
         if (mergeCells)
         {
@@ -134,10 +135,10 @@ public static class CellMergePlanner
                 ? CreateMergeAndCenterCommands(sheet, sheetId, range, contentResolution)
                     .Where(command => command is not ApplyStyleCommand)
                     .ToList()
-                : CreateMergeCommands(sheet, sheetId, range, mergeCells: true);
+                : CreateMergeCommands(sheet, sheetId, range, mergeCells: true, allowUnmergeToggle);
         }
 
-        return CreateMergeCommands(sheet, sheetId, range, mergeCells: false);
+        return CreateMergeCommands(sheet, sheetId, range, mergeCells: false, allowUnmergeToggle);
     }
 
     public static IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(Sheet sheet, SheetId sheetId, GridRange range) =>

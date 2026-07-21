@@ -194,7 +194,7 @@ public partial class MainWindow
         // the Avalonia shell's MergeAcrossSelectedRangeAsync (MainWindow.MergePaste.cs), instead of
         // silently dirtying the workbook and pushing a phantom undo entry for a composite of no-ops.
         if (range.ColCount <= 1) return;
-        if (!TryResolveMergeContentResolution(range, out var contentResolution)) return;
+        if (!TryResolveMergeContentResolution(range, out var contentResolution, perRow: true)) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Merge Across",
                 sheetId =>
@@ -208,7 +208,8 @@ public partial class MainWindow
                             new GridRange(
                                 new CellAddress(sheetId, row, currentRange.Start.Col),
                                 new CellAddress(sheetId, row, currentRange.End.Col)),
-                            contentResolution));
+                            contentResolution,
+                            allowUnmergeToggle: false));
                     }
 
                     return commands.Count == 1
@@ -276,7 +277,8 @@ public partial class MainWindow
     private IWorkbookCommand CreateMergeCellsCommand(
         SheetId sheetId,
         GridRange range,
-        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell,
+        bool allowUnmergeToggle = true)
     {
         if (_workbook.GetSheet(sheetId) is not { } sheet)
             return new MergeCellsCommand(sheetId, range);
@@ -286,7 +288,8 @@ public partial class MainWindow
             sheetId,
             range,
             mergeCells: true,
-            contentResolution);
+            contentResolution,
+            allowUnmergeToggle);
 
         return commands.Count == 1
             ? commands[0]
@@ -295,13 +298,16 @@ public partial class MainWindow
 
     private bool TryResolveMergeContentResolution(
         GridRange range,
-        out MergeCellContentResolution contentResolution)
+        out MergeCellContentResolution contentResolution,
+        bool perRow = false)
     {
         contentResolution = MergeCellContentResolution.KeepFirstCell;
         if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
             return true;
 
-        var contentPlan = CellMergePlanner.AnalyzeContent(sheet, range);
+        var contentPlan = perRow
+            ? CellMergePlanner.AnalyzeContent(sheet, range, perRow: true)
+            : CellMergePlanner.AnalyzeContent(sheet, range);
         if (!contentPlan.WouldLoseContent)
             return true;
 

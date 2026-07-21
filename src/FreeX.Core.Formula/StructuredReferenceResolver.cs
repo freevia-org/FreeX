@@ -155,7 +155,7 @@ public static class StructuredReferenceResolver
             "#ALL" => new GridRange(
                 new CellAddress(sheet.Id, table.Range.Start.Row, table.Range.Start.Col),
                 new CellAddress(sheet.Id, table.Range.End.Row, table.Range.End.Col)),
-            "#HEADERS" => new GridRange(
+            "#HEADERS" when HeaderRowCount(table) > 0 => new GridRange(
                 new CellAddress(sheet.Id, table.Range.Start.Row, table.Range.Start.Col),
                 new CellAddress(sheet.Id, table.Range.Start.Row, table.Range.End.Col)),
             "#DATA" => DataBodyRange(sheet, table, table.Range.Start.Col, table.Range.End.Col),
@@ -182,7 +182,7 @@ public static class StructuredReferenceResolver
             "#ALL" => new GridRange(
                 new CellAddress(sheet.Id, table.Range.Start.Row, col),
                 new CellAddress(sheet.Id, table.Range.End.Row, col)),
-            "#HEADERS" => new GridRange(
+            "#HEADERS" when HeaderRowCount(table) > 0 => new GridRange(
                 new CellAddress(sheet.Id, table.Range.Start.Row, col),
                 new CellAddress(sheet.Id, table.Range.Start.Row, col)),
             "#DATA" => DataBodyRange(sheet, table, col, col),
@@ -215,7 +215,7 @@ public static class StructuredReferenceResolver
             "#ALL" => new GridRange(
                 new CellAddress(sheet.Id, table.Range.Start.Row, startCol),
                 new CellAddress(sheet.Id, table.Range.End.Row, endCol)),
-            "#HEADERS" => new GridRange(
+            "#HEADERS" when HeaderRowCount(table) > 0 => new GridRange(
                 new CellAddress(sheet.Id, table.Range.Start.Row, startCol),
                 new CellAddress(sheet.Id, table.Range.Start.Row, endCol)),
             "#DATA" => DataBodyRange(sheet, table, startCol, endCol),

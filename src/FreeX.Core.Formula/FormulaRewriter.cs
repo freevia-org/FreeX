@@ -10,6 +10,18 @@ public sealed record DeleteRowsOp(string SheetName, uint StartRow,  uint Count) 
 public sealed record InsertColsOp(string SheetName, uint BeforeCol, uint Count) : RewriteOperation;
 public sealed record DeleteColsOp(string SheetName, uint StartCol,  uint Count) : RewriteOperation;
 public sealed record PasteOffsetOp(int RowDelta, int ColDelta)                  : RewriteOperation;
+// Transpose paste: a relative reference's (row,col) offset from the COPIED block's own anchor
+// (SourceAnchorRow/Col) is axis-swapped and re-anchored at the DESTINATION block's anchor
+// (DestAnchorRow/Col) -- e.g. a reference 2 columns left of the source anchor becomes 2 rows
+// above the destination anchor. This is distinct from PasteOffsetOp, which applies one uniform
+// (RowDelta,ColDelta) translation to every reference -- correct for a plain paste (every cell in
+// the block moves by the same amount) but wrong once Transpose swaps the block's shape, where
+// each reference's own position within the block determines a different translation.
+public sealed record PasteTransposeOp(
+    uint SourceAnchorRow,
+    uint SourceAnchorCol,
+    uint DestAnchorRow,
+    uint DestAnchorCol)                                                        : RewriteOperation;
 public sealed record MoveRangeOp(
     string SheetName,
     uint SourceStartRow,
@@ -239,6 +251,7 @@ public static class FormulaRewriter
             InsertColsOp ins => RewriteCellRefInsertCols(cr, ins, ref changed),
             DeleteColsOp del => RewriteCellRefDeleteCols(cr, del, ref changed),
             PasteOffsetOp paste => RewriteCellRefPaste(cr, paste, ref changed),
+            PasteTransposeOp transpose => RewriteCellRefTranspose(cr, transpose, ref changed),
             MoveRangeOp move => RewriteCellRefMove(cr, move, ref changed),
             RenameSheetOp rename => RewriteCellRefRenameSheet(cr, rename, ref changed),
             DeleteSheetOp => RewriteSheetQualifiedRefDeleteSheet(ref changed),
@@ -802,6 +815,56 @@ public static class FormulaRewriter
         return cr with { Row = newRow, ColumnName = newColName };
     }
 
+    // ── Paste transpose ───────────────────────────────────────────────────────
+
+    private static FormulaNode RewriteCellRefTranspose(
+        CellRefNode cr, PasteTransposeOp op, ref bool changed)
+    {
+        var newRow = cr.Row;
+        var newColNum = cr.ColumnNumber;
+        bool rowChanged = false, colChanged = false;
+
+        // A relative COLUMN token takes on the position implied by this reference's ROW offset
+        // from the source anchor -- transposing swaps which axis drives which. An absolute column
+        // ($ on the column) keeps its literal value untouched, exactly like a plain paste offset.
+        if (!cr.IsColAbsolute)
+        {
+            long rowOffsetFromSourceAnchor = (long)cr.Row - op.SourceAnchorRow;
+            long c = (long)op.DestAnchorCol + rowOffsetFromSourceAnchor;
+            if (c < 1 || c > CellAddress.MaxCol)
+            {
+                changed = true;
+                return new ErrorNode(ErrorValue.Ref);
+            }
+            newColNum = (uint)c;
+            colChanged = newColNum != cr.ColumnNumber;
+        }
+
+        // Likewise, a relative ROW token takes on the position implied by this reference's COLUMN
+        // offset from the source anchor.
+        if (!cr.IsRowAbsolute)
+        {
+            long colOffsetFromSourceAnchor = (long)cr.ColumnNumber - op.SourceAnchorCol;
+            long r = (long)op.DestAnchorRow + colOffsetFromSourceAnchor;
+            if (r < 1 || r > CellAddress.MaxRow)
+            {
+                changed = true;
+                return new ErrorNode(ErrorValue.Ref);
+            }
+            newRow = (uint)r;
+            rowChanged = newRow != cr.Row;
+        }
+
+        if (!rowChanged && !colChanged)
+            return cr;
+
+        changed = true;
+        var newColName = colChanged
+            ? CellAddress.NumberToColumnName(newColNum)
+            : cr.ColumnName;
+        return cr with { Row = newRow, ColumnName = newColName };
+    }
+
     private static FormulaNode RewriteCellRefMove(
         CellRefNode cr, MoveRangeOp op, ref bool changed)
     {
@@ -1103,7 +1166,7 @@ public static class FormulaRewriter
 
     private static bool Matches(string? refSheetName, RewriteOperation op, string hostSheetName)
     {
-        if (op is PasteOffsetOp) return true;   // paste always adjusts
+        if (op is PasteOffsetOp or PasteTransposeOp) return true;   // paste always adjusts
         if (op is RenameSheetOp rename)
             return refSheetName is not null &&
                    string.Equals(refSheetName, rename.OldSheetName, StringComparison.OrdinalIgnoreCase);

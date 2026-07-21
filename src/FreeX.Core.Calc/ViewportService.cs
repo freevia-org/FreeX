@@ -137,11 +137,18 @@ public sealed partial class ViewportService : IViewportService
         var splitLeftColumns = sheet.SplitColumn is { } splitColumn
             ? BuildColMetrics(sheet, 1, splitColumn - 1, request.AvailableWidth)
             : [];
+        // Excel's split model gives the bottom row-band (bottom-left + bottom-right) and the right
+        // column-band (top-right + bottom-right) exactly ONE shared scrollbar each -- the same
+        // main VerticalScroll/HorizontalScroll that already drives rowMetrics/colMetrics for the
+        // main (bottom-right) pane. TopRight and BottomLeft therefore always mirror the main
+        // pane's current position; they have no independent scroll offset of their own (r56 fix
+        // -- the previous SplitPaneOffsets.TopRightLeftCol/BottomLeftTopRow override let these two
+        // panes desync permanently from the main pane, with no way to ever resync them).
         var topRightColumns = sheet.SplitColumn.HasValue
-            ? BuildColMetrics(sheet, request.SplitPaneOffsets?.TopRightLeftCol ?? request.LeftCol, CellAddress.MaxCol, request.AvailableWidth)
+            ? BuildColMetrics(sheet, request.LeftCol, CellAddress.MaxCol, request.AvailableWidth)
             : colMetrics;
         var bottomLeftRows = sheet.SplitRow.HasValue
-            ? BuildRowMetrics(sheet, request.SplitPaneOffsets?.BottomLeftTopRow ?? request.TopRow, CellAddress.MaxRow, request.AvailableHeight)
+            ? BuildRowMetrics(sheet, request.TopRow, CellAddress.MaxRow, request.AvailableHeight)
             : rowMetrics;
         var splitPanes = (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue)
             ? new SplitPaneState(
