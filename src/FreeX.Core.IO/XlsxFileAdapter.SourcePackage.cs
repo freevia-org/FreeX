@@ -60,7 +60,7 @@ public sealed partial class XlsxFileAdapter
             XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
         if (sourceParts.HasDrawings)
         {
-            var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, generatedArchive, context);
+            var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, generatedArchive, context, workbook);
             XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, generatedArchive, context, drawingPaths);
         }
         if (sourcePackage.WorksheetsWithPreservableSourceMetadata?.Count != 0)

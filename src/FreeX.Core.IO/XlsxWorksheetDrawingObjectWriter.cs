@@ -41,6 +41,63 @@ internal static class XlsxWorksheetDrawingObjectWriter
         return false;
     }
 
+    /// <summary>
+    /// The cNvPr names of the drawing objects on <paramref name="sheet"/> that this writer re-emits a
+    /// FRESH anchor for even though they were originally loaded from the source .xlsx — i.e. a
+    /// picture/text box/shape whose <c>IsSourceLoaded</c> flag has been CLEARED by an edit (a colour,
+    /// rotation, gradient or effect change — see the R51/R62 drawing-format commands) so
+    /// <see cref="IsSupportedPicture"/>/<see cref="IsSupportedTextBox"/>/<see cref="IsSupportedShape"/>
+    /// now accept it. When such an object is saved on the source-package path, the writer emits its new
+    /// anchor into the drawing part BEFORE <see cref="XlsxWorksheetDrawingPartMerger"/> copies the
+    /// original source anchors back in; unless the merger is told to drop the object's ORIGINAL anchor,
+    /// the saved drawing part carries BOTH anchors and the object is duplicated on reload.
+    /// <para>
+    /// The reader stamps each source-loaded object's <see cref="TextBoxModel.Name"/> (etc.) from the
+    /// source anchor's <c>cNvPr@name</c>, and no edit that clears <c>IsSourceLoaded</c> also renames the
+    /// object, so the freshly written anchor and the original source anchor share that name — it is the
+    /// stable key that lets the merger recognise the two as the same logical object across the anchor
+    /// type / geometry differences the edit introduces.
+    /// </para>
+    /// <para>
+    /// A name is only reported when NO object on the sheet still holds it as a source-loaded object: Excel
+    /// reuses default names ("TextBox 1", "Picture 1", …) independently per sheet, so a genuinely distinct
+    /// source-loaded object and a newly authored object can share one name, and the still-source-loaded
+    /// one's original anchor must keep being preserved. Names are compared ordinally, matching the
+    /// verbatim round-trip through the reader and writer.
+    /// </para>
+    /// </summary>
+    public static IReadOnlySet<string> GetRewrittenSourceObjectNames(Sheet sheet)
+    {
+        var rewrittenNames = new HashSet<string>(StringComparer.Ordinal);
+        var sourceLoadedNames = new HashSet<string>(StringComparer.Ordinal);
+        CollectDrawingObjectNames(sheet.Pictures, IsSupportedPicture, picture => picture.Name, picture => picture.IsSourceLoaded, rewrittenNames, sourceLoadedNames);
+        CollectDrawingObjectNames(sheet.TextBoxes, IsSupportedTextBox, textBox => textBox.Name, textBox => textBox.IsSourceLoaded, rewrittenNames, sourceLoadedNames);
+        CollectDrawingObjectNames(sheet.DrawingShapes, IsSupportedShape, shape => shape.Name, shape => shape.IsSourceLoaded, rewrittenNames, sourceLoadedNames);
+        rewrittenNames.ExceptWith(sourceLoadedNames);
+        return rewrittenNames;
+    }
+
+    private static void CollectDrawingObjectNames<T>(
+        IEnumerable<T> objects,
+        Func<T, bool> isSupported,
+        Func<T, string?> getName,
+        Func<T, bool> isSourceLoaded,
+        HashSet<string> rewrittenNames,
+        HashSet<string> sourceLoadedNames)
+    {
+        foreach (var drawingObject in objects)
+        {
+            var name = getName(drawingObject);
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            if (isSourceLoaded(drawingObject))
+                sourceLoadedNames.Add(name);
+            else if (isSupported(drawingObject))
+                rewrittenNames.Add(name);
+        }
+    }
+
     public static void Save(
         Stream xlsxStream,
         Workbook workbook,

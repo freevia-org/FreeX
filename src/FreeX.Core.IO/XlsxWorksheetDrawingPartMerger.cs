@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
+using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
 
@@ -61,15 +62,22 @@ internal static class XlsxWorksheetDrawingPartMerger
     public static void Merge(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
-        XlsxSourcePackagePreservationContext? context)
+        XlsxSourcePackagePreservationContext? context,
+        Workbook? workbook = null)
     {
-        _ = MergeAndGetDrawingPaths(sourceArchive, targetArchive, context);
+        _ = MergeAndGetDrawingPaths(sourceArchive, targetArchive, context, workbook);
     }
 
+    // The optional workbook is the in-memory model being saved (null on the workbook-less path or in tests
+    // that drive the merger directly). When supplied, each sheet's edited-but-originally-source-loaded drawing
+    // objects are resolved via XlsxWorksheetDrawingObjectWriter.GetRewrittenSourceObjectNames so
+    // MergeDrawingPart can drop their now-stale ORIGINAL source anchors — the writer has already re-emitted
+    // a fresh anchor for each, and re-adding the original would duplicate the object on reload.
     public static XlsxWorksheetDrawingPathMap MergeAndGetDrawingPaths(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
-        XlsxSourcePackagePreservationContext? context)
+        XlsxSourcePackagePreservationContext? context,
+        Workbook? workbook = null)
     {
         if (context is null)
         {
@@ -103,7 +111,10 @@ internal static class XlsxWorksheetDrawingPartMerger
             if (string.IsNullOrWhiteSpace(sourceDrawingPath) || string.IsNullOrWhiteSpace(targetDrawingPath))
                 continue;
 
-            MergeDrawingPart(sourceArchive, targetArchive, sourceDrawingPath, targetDrawingPath, context.RelNs, context.PackageRelNs);
+            var supersededSourceNames = workbook?.GetSheet(sheetName) is { } sheet
+                ? XlsxWorksheetDrawingObjectWriter.GetRewrittenSourceObjectNames(sheet)
+                : null;
+            MergeDrawingPart(sourceArchive, targetArchive, sourceDrawingPath, targetDrawingPath, context.RelNs, context.PackageRelNs, supersededSourceNames);
         }
 
         return new XlsxWorksheetDrawingPathMap(sourceDrawingPaths, targetDrawingPaths);
@@ -218,8 +229,10 @@ internal static class XlsxWorksheetDrawingPartMerger
         string sourceDrawingPath,
         string targetDrawingPath,
         XNamespace relNs,
-        XNamespace packageRelNs)
+        XNamespace packageRelNs,
+        IReadOnlySet<string>? supersededSourceNames = null)
     {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         var sourceDrawingEntry = sourceArchive.GetEntry(sourceDrawingPath);
         var targetDrawingEntry = targetArchive.GetEntry(targetDrawingPath);
         if (sourceDrawingEntry is null || targetDrawingEntry is null)
@@ -253,6 +266,19 @@ internal static class XlsxWorksheetDrawingPartMerger
         var changed = false;
         foreach (var sourceAnchor in sourceDrawingXml.Root.Elements())
         {
+            // Drop a source anchor whose object was originally loaded from the .xlsx but has since been
+            // edited so its IsSourceLoaded flag was cleared: XlsxWorksheetDrawingObjectWriter has already
+            // re-emitted a fresh anchor for it into the target drawing (with the same cNvPr name), so
+            // re-adding this ORIGINAL anchor would leave the saved part holding both — the object would be
+            // duplicated on reload. The anchor's cNvPr name doesn't carry a relationship id, so read it off
+            // the un-remapped source element.
+            if (supersededSourceNames is { Count: > 0 })
+            {
+                var sourceObjectName = ReadFirstNonVisualPropertyName(sourceAnchor, spreadsheetDrawingNs);
+                if (sourceObjectName is not null && supersededSourceNames.Contains(sourceObjectName))
+                    continue;
+            }
+
             var anchorCopy = new XElement(sourceAnchor);
             RemapRelationshipReferences(anchorCopy, relNs, relIdMap);
             if (!existingAnchorKeys.Add(GetDrawingAnchorIdentity(anchorCopy)))
