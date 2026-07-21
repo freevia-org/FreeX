@@ -120,7 +120,12 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
             }
         }
 
-        return new CommandOutcome(true);
+        // Report the affected cells (mirroring GroupedEditCellsCommand's own affected-cell list)
+        // so WorkbookSession's undo/redo selection-restore path (ApplySuccessfulHistoryResult /
+        // CommandOutcome.AffectedCells contract) knows which sheet(s) and range this grouped style
+        // command touched -- without this, undoing it while a different sheet is active had
+        // nothing to switch back to or restore a selection for.
+        return new CommandOutcome(true, AffectedCells: _snapshot.ConvertAll(s => s.Address));
     }
 
     public void Revert(ICommandContext ctx)

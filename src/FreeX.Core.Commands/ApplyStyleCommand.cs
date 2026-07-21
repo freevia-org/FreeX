@@ -148,7 +148,12 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
             sheet.SetStyleOnly(row, col, newStyleId);
         }
 
-        return new CommandOutcome(true);
+        // Report the affected cells (mirroring PropagateCalculatedColumnCommand's use of its own
+        // snapshot) so WorkbookSession's undo/redo selection-restore path (ApplySuccessfulHistoryResult
+        // / CommandOutcome.AffectedCells contract) knows which sheet and range this style command
+        // touched -- without this, undoing a style command applied on a different sheet than the
+        // one currently active had nothing to switch back to or restore a selection for.
+        return new CommandOutcome(true, AffectedCells: _snapshot.ConvertAll(s => s.Address));
     }
 
     public void Revert(ICommandContext ctx)

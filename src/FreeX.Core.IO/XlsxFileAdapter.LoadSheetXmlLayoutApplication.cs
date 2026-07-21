@@ -110,6 +110,11 @@ public sealed partial class XlsxFileAdapter
                 ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
                 ApplyChartUserShapesRelationshipMetadata(chart, chartPart);
                 sheet.Charts.Add(chart);
+                AddLoadedDrawingObjectOrder(
+                    loadedDrawingObjectOrder,
+                    chartPart.DrawingOrderIndex,
+                    SelectionPaneObjectKind.Chart,
+                    chart.Id);
             }
         }
         foreach (var picturePart in layout.PictureParts)

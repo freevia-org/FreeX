@@ -5,7 +5,18 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
 
-internal sealed record XlsxChartPackagePart(XDocument Xml, XDocument? Relationships, string? Name, XlsxDrawingAnchor? Anchor);
+internal sealed record XlsxChartPackagePart(
+    XDocument Xml,
+    XDocument? Relationships,
+    string? Name,
+    XlsxDrawingAnchor? Anchor,
+    // R63-io-drawing-chart-zorder: the chart's position among its sibling anchors in the drawing
+    // part's document order (same mechanism as XlsxPicturePackagePart/XlsxTextBoxPackagePart/
+    // XlsxShapePackagePart's DrawingOrderIndex -- see ReadNearestAnchorOrderIndex). Defaults to -1
+    // (unknown/no anchor) so the one out-of-scope positional caller that never supplies it
+    // (XlsxFileAdapter.SourcePackageSnapshot.cs's TryReadWorksheetChartParts fallback, which also
+    // passes Anchor: null) keeps compiling unchanged.
+    int DrawingOrderIndex = -1);
 
 internal sealed record XlsxPicturePackagePart(
     byte[] ImageBytes,
@@ -213,11 +224,19 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     chartAnchor = chartAnchor with { Width = xfrmWidthPixels, Height = xfrmHeightPixels };
             }
 
+            // R63-io-drawing-chart-zorder: same nearest-anchor sibling-index lookup ReadPictureParts/
+            // ReadSpElement/ReadCxnSpElement already use for their own DrawingOrderIndex (see
+            // ReadNearestAnchorOrderIndex in XlsxWorksheetDrawingPartReader.Anchors.cs) -- without this,
+            // a chart carried no record of its true position relative to sibling shape/picture/text-box
+            // anchors and always normalized to the back of the z-order stack on load.
+            var chartDrawingOrderIndex = ReadNearestAnchorOrderIndex(chartElement);
+
             charts.Add(new XlsxChartPackagePart(
                 XlsxPackageXmlEditor.LoadXml(chartEntry),
                 chartRelationships,
                 ReadNonVisualName(chartElement),
-                chartAnchor));
+                chartAnchor,
+                chartDrawingOrderIndex));
         }
 
         return charts;

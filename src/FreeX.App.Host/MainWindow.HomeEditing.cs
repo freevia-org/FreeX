@@ -419,24 +419,42 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>
+    /// Home&gt;Clear&gt;Clear Hyperlinks (ribbon command id "Clear Hyperlinks", see
+    /// Ribbon/FreeXRibbonHandlerMap.g.cs) and the worksheet right-click Clear submenu's own
+    /// "Clear Hyperlinks" entry (WorksheetContextMenuAction.ClearHyperlinks) both route here.
+    /// Matching Excel, this strips the hyperlink's visible formatting (blue/underline) via
+    /// RemoveHyperlinksCommand -- despite this method's historical "Clear" name, it is the
+    /// format-STRIPPING handler. It keeps this exact name because the ribbon handler map is
+    /// generated (from tools/ribgen.py + a pre-cutover XAML snapshot) and renaming it would
+    /// require regenerating that map. The distinct format-PRESERVING behavior used by the
+    /// right-click top-level "Remove Hyperlink" item lives in RemoveHyperlinkMenuItem_Click below.
+    /// </summary>
     private void ClearHyperlinksMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Clear Hyperlinks",
                 range,
-                (sheetId, currentRange) => new ClearHyperlinksCommand(sheetId, currentRange)))
+                (sheetId, currentRange) => new RemoveHyperlinksCommand(sheetId, currentRange)))
             return;
         UpdateViewport();
     }
 
-    private void RemoveHyperlinks()
+    /// <summary>
+    /// The worksheet right-click "Remove Hyperlink" top-level item
+    /// (WorksheetContextMenuAction.RemoveHyperlinks) routes here. Matching Excel, this removes
+    /// only the hyperlink target and preserves the cell's visible formatting (blue/underline) via
+    /// ClearHyperlinksCommand; it does not strip formatting the way Home&gt;Clear&gt;Clear
+    /// Hyperlinks (ClearHyperlinksMenuItem_Click above) does.
+    /// </summary>
+    private void RemoveHyperlinkMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
-                "Remove Hyperlinks",
+                "Remove Hyperlink",
                 range,
-                (sheetId, currentRange) => new RemoveHyperlinksCommand(sheetId, currentRange)))
+                (sheetId, currentRange) => new ClearHyperlinksCommand(sheetId, currentRange)))
             return;
         UpdateViewport();
     }

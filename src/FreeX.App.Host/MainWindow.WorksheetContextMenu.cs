@@ -335,9 +335,9 @@ public partial class MainWindow
                 break;
             case WorksheetContextMenuAction.RemoveHyperlinks:
                 // Excel's right-click "Remove Hyperlink" removes only the link and keeps the
-                // cell's visible formatting (blue/underline); only Home>Clear>Remove Hyperlinks
-                // strips that formatting. Route to the format-preserving Clear Hyperlinks handler.
-                ClearHyperlinksMenuItem_Click(this, new RoutedEventArgs());
+                // cell's visible formatting (blue/underline); only Home>Clear>Clear Hyperlinks
+                // strips that formatting. Route to the dedicated format-preserving handler.
+                RemoveHyperlinkMenuItem_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.ClearContents:
                 ExecuteClearSelection();

@@ -5,16 +5,25 @@ namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Excel's right-click "Remove Hyperlink" removes only the link and keeps the cell's visible
-/// hyperlink formatting (blue/underline); only the ribbon's Home&gt;Clear&gt;Remove Hyperlinks
-/// command strips that formatting (resetting Underline/DoubleUnderline/FontColor via
-/// RemoveHyperlinksCommand). These source-contract checks pin the WPF host's worksheet
-/// context-menu routing so a future edit can't silently reattach the format-stripping command
-/// to the right-click path again.
+/// hyperlink formatting (blue/underline); only Home&gt;Clear&gt;Clear Hyperlinks (the ribbon
+/// command whose id is literally "Clear Hyperlinks", see Ribbon/FreeXRibbonHandlerMap.g.cs)
+/// strips that formatting (resetting Underline/DoubleUnderline/FontColor via
+/// RemoveHyperlinksCommand). r63 fixed the WPF host: previously BOTH the ribbon's Clear
+/// Hyperlinks command and the right-click "Remove Hyperlink" item routed through the single
+/// ClearHyperlinksMenuItem_Click handler using the format-preserving ClearHyperlinksCommand, so
+/// the ribbon path never actually stripped formatting. The ribbon handler map is generated (by
+/// tools/ribgen.py from a pre-cutover XAML snapshot that no longer exists in the repo) and could
+/// not be safely regenerated, so the fix keeps the ClearHyperlinksMenuItem_Click method name
+/// (which the generated map still points the ribbon's "Clear Hyperlinks" id at) but changes its
+/// body to use RemoveHyperlinksCommand, and moves the format-preserving behavior to a new
+/// RemoveHyperlinkMenuItem_Click method used only by the right-click "Remove Hyperlink" item.
+/// These source-contract checks pin that corrected WPF host worksheet/ribbon routing so a future
+/// edit can't silently swap the two command types back.
 /// </summary>
 public sealed class WorksheetContextMenuRemoveHyperlinkRoutingSourceTests
 {
     [Fact]
-    public void RemoveHyperlinksContextMenuAction_RoutesToFormatPreservingClearHyperlinksHandler()
+    public void RemoveHyperlinksContextMenuAction_RoutesToFormatPreservingRemoveHyperlinkHandler()
     {
         var source = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs");
@@ -28,20 +37,84 @@ public sealed class WorksheetContextMenuRemoveHyperlinkRoutingSourceTests
         var caseBody = source[caseIndex..breakIndex];
 
         caseBody.Should().Contain(
-            "ClearHyperlinksMenuItem_Click",
-            "right-click Remove Hyperlink must route to the format-preserving Clear Hyperlinks handler, matching Excel");
+            "RemoveHyperlinkMenuItem_Click",
+            "right-click Remove Hyperlink must route to the dedicated format-preserving handler, matching Excel");
         caseBody.Should().NotContain(
-            "RemoveHyperlinks()",
-            "the right-click Remove Hyperlink action must not call the format-stripping RemoveHyperlinks() helper");
+            "ClearHyperlinksMenuItem_Click",
+            "the right-click Remove Hyperlink action must not call the ribbon's format-stripping Clear Hyperlinks handler");
     }
 
     [Fact]
-    public void RemoveHyperlinksCommand_StripFormattingBehaviorRemainsReservedForRibbonClearHyperlinks()
+    public void ClearHyperlinksContextMenuAction_StillRoutesToRibbonSharedFormatStrippingHandler()
     {
-        // The ribbon's Home>Clear>Remove Hyperlinks path (and its pinned unit test
-        // HyperlinkCommandTests.RemoveHyperlinksCommand_RemovesHyperlinkAndResetsHyperlinkStyle)
-        // still uses the format-stripping RemoveHyperlinksCommand directly; only the worksheet
-        // right-click path was re-pointed to the format-preserving ClearHyperlinksCommand.
+        // The worksheet right-click Clear submenu's own "Clear Hyperlinks" entry
+        // (WorksheetContextMenuAction.ClearHyperlinks) mirrors ribbon Home>Clear semantics and
+        // must keep sharing the ribbon's format-stripping handler -- unlike the sibling
+        // top-level "Remove Hyperlink" item checked above, this one was not re-pointed.
+        var source = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs");
+
+        var caseIndex = source.IndexOf("case WorksheetContextMenuAction.ClearHyperlinks:", System.StringComparison.Ordinal);
+        caseIndex.Should().BeGreaterThan(-1, "the ClearHyperlinks context-menu action must still be handled");
+
+        var breakIndex = source.IndexOf("break;", caseIndex, System.StringComparison.Ordinal);
+        breakIndex.Should().BeGreaterThan(caseIndex);
+
+        source[caseIndex..breakIndex].Should().Contain(
+            "ClearHyperlinksMenuItem_Click",
+            "the right-click Clear submenu's Clear Hyperlinks entry must keep matching ribbon Home>Clear semantics (format-stripping)");
+    }
+
+    [Fact]
+    public void RibbonClearHyperlinksHandler_UsesFormatStrippingCommand()
+    {
+        // The ribbon command id "Clear Hyperlinks" (Ribbon/FreeXRibbonHandlerMap.g.cs) resolves
+        // by reflection to this exact method name, so it cannot be renamed without regenerating
+        // that generated map -- but its body must perform Excel's format-stripping behavior.
+        var handlerMapSource = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Host", "Ribbon", "FreeXRibbonHandlerMap.g.cs");
+        handlerMapSource.Should().Contain(
+            "[\"Clear Hyperlinks\"] = \"ClearHyperlinksMenuItem_Click\",",
+            "the ribbon's Clear Hyperlinks command id must still resolve to ClearHyperlinksMenuItem_Click by reflection");
+
+        var source = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Host", "MainWindow.HomeEditing.cs");
+
+        var methodIndex = source.IndexOf(
+            "private void ClearHyperlinksMenuItem_Click(object sender, RoutedEventArgs e)", System.StringComparison.Ordinal);
+        methodIndex.Should().BeGreaterThan(-1);
+        var closeIndex = source.IndexOf("\n    }", methodIndex, System.StringComparison.Ordinal);
+        closeIndex.Should().BeGreaterThan(methodIndex);
+
+        source[methodIndex..closeIndex].Should().Contain(
+            "new RemoveHyperlinksCommand(",
+            "the ribbon's Clear Hyperlinks command must strip hyperlink formatting, matching Excel");
+    }
+
+    [Fact]
+    public void RemoveHyperlinkMenuItem_UsesFormatPreservingCommand()
+    {
+        var source = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Host", "MainWindow.HomeEditing.cs");
+
+        var methodIndex = source.IndexOf(
+            "private void RemoveHyperlinkMenuItem_Click(object sender, RoutedEventArgs e)", System.StringComparison.Ordinal);
+        methodIndex.Should().BeGreaterThan(-1, "a dedicated format-preserving handler must exist for the right-click Remove Hyperlink item");
+        var closeIndex = source.IndexOf("\n    }", methodIndex, System.StringComparison.Ordinal);
+        closeIndex.Should().BeGreaterThan(methodIndex);
+
+        source[methodIndex..closeIndex].Should().Contain(
+            "new ClearHyperlinksCommand(",
+            "the right-click Remove Hyperlink item must preserve hyperlink formatting, matching Excel");
+    }
+
+    [Fact]
+    public void RemoveHyperlinksCommand_StripFormattingBehaviorBackingRibbonClearHyperlinks()
+    {
+        // The ribbon's Home>Clear>Clear Hyperlinks path (via ClearHyperlinksMenuItem_Click above)
+        // and its pinned unit test
+        // HyperlinkCommandTests.RemoveHyperlinksCommand_RemovesHyperlinkAndResetsHyperlinkStyle
+        // both rely on RemoveHyperlinksCommand actually stripping the visible hyperlink styling.
         var commandsSource = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.Core.Commands", "HyperlinkCommands.cs");
 
@@ -55,10 +128,11 @@ public sealed class WorksheetContextMenuRemoveHyperlinkRoutingSourceTests
     public void AvaloniaWorksheetContextMenu_AlreadyRoutesRemoveHyperlinksToFormatPreservingHandler()
     {
         // The Avalonia shell keeps its worksheet context-menu switch inline in MainWindow.cs
-        // (there is no separate MainWindow.WorksheetContextMenu.cs file on that shell). It
-        // already dispatches both ClearHyperlinks and RemoveHyperlinks context actions to the
-        // same ClearSelectedRangeHyperlinks() handler, which in turn uses ClearHyperlinksCommand
-        // (see WorkbookSession.ClearSelectedRangeHyperlinks), so no change was needed there.
+        // (there is no separate MainWindow.WorksheetContextMenu.cs file on that shell). Since R60
+        // it dispatches ClearHyperlinks (ribbon-mirroring) to the format-stripping
+        // RemoveSelectedRangeHyperlinks() handler and RemoveHyperlinks (right-click's own item) to
+        // the format-preserving ClearSelectedRangeHyperlinks() handler -- these are DISTINCT
+        // handlers, which is exactly the WPF host now mirrors above.
         var avaloniaMainWindowPath = Path.Combine(
             WorkspaceFileLocator.FindWorkspaceRoot(), "src", "FreeX.App.Avalonia", "MainWindow.WorksheetContextMenu.cs");
         File.Exists(avaloniaMainWindowPath)

@@ -70,6 +70,13 @@ internal static partial class XlsxChartXmlWriter
         || format.FillThemeColor is not null
         || format.BorderThemeColor is not null
         || format.TextThemeColor is not null
+        // R63-io-chart-legend-datalabels-6-1 (write side): a delete-only series dLbls (every
+        // other field null) must still count as "has formatting" -- mirrors the reader's
+        // HasSeriesDataLabelMetadata (XlsxChartDataLabelReader.cs), which treats IsDeleted the
+        // same way. Without this, ToPointDataLabelsXml nulls seriesDefaults out before it ever
+        // reaches ToSeriesDataLabelDefaultsXml, and the per-series "hide all labels" override
+        // set by the model/reader on load is silently dropped on save.
+        || format.IsDeleted is not null
         || format.Position is not null
         || format.ShowValue is not null
         || format.ShowCategoryName is not null
@@ -87,6 +94,18 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartNs,
         XNamespace drawingNs)
     {
+        // R63-io-chart-legend-datalabels-6-1 (write side): CT_DLbls' trailing content is a choice
+        // between <c:delete> and the Group_DLbls defaults (numFmt, spPr, txPr, dLblPos, show*,
+        // separator) -- they are mutually exclusive per the OOXML schema, so a series-level
+        // "delete all data labels" must emit ONLY <c:delete val="1"/> and suppress the rest.
+        // Without this, a round trip (load -> save -> reload) resurrects the labels the user
+        // deleted, because the delete flag would be silently dropped on save.
+        if (format.IsDeleted == true)
+        {
+            yield return new XElement(chartNs + "delete", new XAttribute("val", "1"));
+            yield break;
+        }
+
         yield return ToSeriesDataLabelNumberFormatXml(format, chartNs);
         yield return ToShapeProperties(
             chartNs,
