@@ -264,10 +264,7 @@ public sealed partial class XlsxFileAdapter
             foreach (var (rowNum, level) in sheet.RowOutlineLevels)
             {
                 if (IsValidWorksheetRow(rowNum))
-                    // OOXML's ST_OutlineLevel caps at 7 (Excel's UI supports at most 8 nested
-                    // outline groups, levels 0-7); clamp defensively in case an in-memory sheet
-                    // ever carries a stale/out-of-range level (R58-outline-6-2).
-                    xlSheet.Row((int)rowNum).OutlineLevel = Math.Min(level, 7);
+                    xlSheet.Row((int)rowNum).OutlineLevel = level;
             }
 
             // Hide the detail rows a collapsed group summarizes. Do NOT call Collapse() here --
@@ -313,8 +310,7 @@ public sealed partial class XlsxFileAdapter
             foreach (var (colNum, level) in sheet.ColOutlineLevels)
             {
                 if (IsValidWorksheetColumn(colNum))
-                    // See the row-side clamp above (R58-outline-6-2).
-                    xlSheet.Column((int)colNum).OutlineLevel = Math.Min(level, 7);
+                    xlSheet.Column((int)colNum).OutlineLevel = level;
             }
 
             // See the row-side handling above (R35-deferred-collapse-anchor-1): hide detail columns
