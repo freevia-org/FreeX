@@ -55,20 +55,6 @@ public static class PageLayoutRibbonPolicyPlanner
             _ => WorksheetPageMargins.Normal
         };
 
-    /// <summary>
-    /// Header margin (inches) Excel's Margins gallery applies alongside the preset's page margins.
-    /// Excel's "Wide" preset sets Header/Footer to 0.5"; "Normal" and "Narrow" both keep 0.3".
-    /// </summary>
-    public static double ResolveHeaderMargin(PageLayoutMarginPreset preset) =>
-        preset == PageLayoutMarginPreset.Wide ? 0.5 : 0.3;
-
-    /// <summary>
-    /// Footer margin (inches) Excel's Margins gallery applies alongside the preset's page margins.
-    /// Excel's "Wide" preset sets Header/Footer to 0.5"; "Normal" and "Narrow" both keep 0.3".
-    /// </summary>
-    public static double ResolveFooterMargin(PageLayoutMarginPreset preset) =>
-        preset == PageLayoutMarginPreset.Wide ? 0.5 : 0.3;
-
     public static WorksheetPageOrientation ResolveOrientation(PageLayoutOrientationPreset preset) =>
         preset == PageLayoutOrientationPreset.Landscape
             ? WorksheetPageOrientation.Landscape

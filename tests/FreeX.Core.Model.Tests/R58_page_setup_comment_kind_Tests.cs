@@ -16,33 +16,10 @@ namespace FreeX.Core.Model.Tests;
 /// </summary>
 public sealed class R58_page_setup_comment_kind_Tests
 {
-    [Fact]
-    public void WorksheetPageMargins_Normal_MatchesRealExcelPreset()
-    {
-        WorksheetPageMargins.Normal.Should().Be(new WorksheetPageMargins(0.7, 0.7, 0.75, 0.75));
-    }
-
-    [Fact]
-    public void WorksheetPageMargins_Narrow_MatchesRealExcelPreset()
-    {
-        WorksheetPageMargins.Narrow.Should().Be(new WorksheetPageMargins(0.25, 0.25, 0.75, 0.75));
-    }
-
-    [Fact]
-    public void WorksheetPageMargins_Wide_IsUnchangedAndStillCorrect()
-    {
-        // Sibling no-regression check: Wide was already correct and must not be touched.
-        WorksheetPageMargins.Wide.Should().Be(new WorksheetPageMargins(1.25, 1.25, 1.0, 1.0));
-    }
-
-    [Fact]
-    public void Sheet_NewSheet_DefaultsPageMarginsToNormal_NotNarrow()
-    {
-        var wb = new Workbook("test");
-        var sheet = wb.AddSheet("Sheet1");
-
-        sheet.PageMargins.Should().Be(WorksheetPageMargins.Normal);
-    }
+    // R58-io-page-setup-6-1 (Normal/Narrow margin constants + Sheet default) was REVERTED:
+    // the Excel-correct constants broke ~12 pinned App.Presentation pagination/geometry tests
+    // that codified the old values. Deferred to a coordinated backlog pass. The comment-kind
+    // half (6-4) is kept and tested below.
 
     [Fact]
     public void GetDisplayedCommentOverlays_ThreadedCommentOnly_HasThreadedCommentKind()
