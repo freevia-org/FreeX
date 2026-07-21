@@ -301,6 +301,13 @@ internal static class XlsxChartDataLabelReader
             pointStyle.FillThemeColor,
             pointStyle.BorderThemeColor,
             pointStyle.TextThemeColor,
+            // R62-io-chart-legend-datalabels-6-1: a series-level <c:delete val="1"/> means "no
+            // labels for this series", overriding the chart-wide default -- must be read like the
+            // per-point delete (ReadPointDataLabelFormat) or the override is silently lost.
+            // R62-io-chart-legend-datalabels-6-1: a series-level <c:delete val="1"/> means "no
+            // labels for this series", overriding the chart-wide default -- must be read like the
+            // per-point delete (ReadPointDataLabelFormat) or the override is silently lost.
+            ReadNullableBool(dataLabels.Element(ChartNs + "delete")?.Attribute("val")?.Value),
             dataLabels.Element(ChartNs + "dLblPos") is { } position
                 ? FromXlsxDataLabelPosition(position.Attribute("val")?.Value)
                 : null,
@@ -477,6 +484,9 @@ internal static class XlsxChartDataLabelReader
         || format.FillThemeColor is not null
         || format.BorderThemeColor is not null
         || format.TextThemeColor is not null
+        // R62-io-chart-legend-datalabels-6-1: a delete-only series <c:dLbls> (no other children)
+        // must still count as metadata, or the per-series "hide all labels" override is discarded.
+        || format.IsDeleted is not null
         || format.Position is not null
         || format.ShowValue is not null
         || format.ShowCategoryName is not null

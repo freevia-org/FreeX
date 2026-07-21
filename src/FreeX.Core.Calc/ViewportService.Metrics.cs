@@ -98,7 +98,10 @@ public sealed partial class ViewportService
     {
         var frozenRows = Math.Min(sheet.FrozenRows, CellAddress.MaxRow);
         if (frozenRows == 0)
-            return BuildRowMetrics(sheet, startRow, CellAddress.MaxRow, availableHeight);
+        {
+            var rows = BuildRowMetrics(sheet, startRow, CellAddress.MaxRow, availableHeight);
+            return PrependScrolledPastMergeAnchorRows(sheet, 1, rows);
+        }
 
         var pinnedRows = BuildRowMetrics(sheet, 1, frozenRows, availableHeight);
         var pinnedHeight = SumRowHeights(pinnedRows);
@@ -107,17 +110,22 @@ public sealed partial class ViewportService
         if (remainingHeight <= 0 || bodyStart > CellAddress.MaxRow)
             return pinnedRows;
 
-        return CombineRowsWithOffset(
-            pinnedRows,
-            BuildRowMetrics(sheet, bodyStart, CellAddress.MaxRow, remainingHeight),
-            pinnedHeight);
+        var bodyRows = PrependScrolledPastMergeAnchorRows(
+            sheet,
+            frozenRows + 1,
+            BuildRowMetrics(sheet, bodyStart, CellAddress.MaxRow, remainingHeight));
+
+        return CombineRowsWithOffset(pinnedRows, bodyRows, pinnedHeight);
     }
 
     private static IReadOnlyList<ColMetric> BuildFrozenAwareColMetrics(Sheet sheet, uint startCol, double availableWidth)
     {
         var frozenCols = Math.Min(sheet.FrozenCols, CellAddress.MaxCol);
         if (frozenCols == 0)
-            return BuildColMetrics(sheet, startCol, CellAddress.MaxCol, availableWidth);
+        {
+            var columns = BuildColMetrics(sheet, startCol, CellAddress.MaxCol, availableWidth);
+            return PrependScrolledPastMergeAnchorCols(sheet, 1, columns);
+        }
 
         var pinnedColumns = BuildColMetrics(sheet, 1, frozenCols, availableWidth);
         var pinnedWidth = SumColumnWidths(pinnedColumns);
@@ -126,10 +134,124 @@ public sealed partial class ViewportService
         if (remainingWidth <= 0 || bodyStart > CellAddress.MaxCol)
             return pinnedColumns;
 
-        return CombineColumnsWithOffset(
-            pinnedColumns,
-            BuildColMetrics(sheet, bodyStart, CellAddress.MaxCol, remainingWidth),
-            pinnedWidth);
+        var bodyColumns = PrependScrolledPastMergeAnchorCols(
+            sheet,
+            frozenCols + 1,
+            BuildColMetrics(sheet, bodyStart, CellAddress.MaxCol, remainingWidth));
+
+        return CombineColumnsWithOffset(pinnedColumns, bodyColumns, pinnedWidth);
+    }
+
+    /// <summary>
+    /// When the viewport has scrolled so the visible window's first row (<c>rows[0].Row</c>) is
+    /// past a merge's anchor row -- the anchor sits above <paramref name="lookbackFloorRow"/>
+    /// (the first row this metrics band is even allowed to represent -- 1 for the unfrozen case,
+    /// or one past the last frozen row for the frozen body band, so an anchor already covered by
+    /// the frozen band's own metrics is never re-added here) -- but the merge still extends into
+    /// the visible window, Excel keeps showing the merge's visible remainder (fill, border, text),
+    /// simply clipped at the top of the window exactly like it clips a very tall single row. The
+    /// merge's value/style live only on the anchor cell, so the anchor row must stay addressable
+    /// (as a zero-height metric, mirroring how <see cref="IsHiddenMergeAnchorRowWithVisibleRemainder"/>
+    /// keeps a hidden anchor addressable) for the still-visible remainder to keep drawing instead
+    /// of vanishing outright.
+    ///
+    /// EVERY row between the earliest such anchor and the window's own first row is materialized
+    /// as a zero-height metric here too -- not just the anchor row itself. WPF's GridView merge
+    /// surface only needs the anchor row present (it sums whichever of the merge's other rows
+    /// happen to be in the metrics, tolerating gaps), but Avalonia's grid builder
+    /// (MainWindow.BuildSheetGrid's ResolveVisibleMergeAnchor/ResolveVisibleMergeSpan) walks a
+    /// merge's remaining extent by literal, CONSECUTIVE sheet-row numbers to size the
+    /// anchor's rendered row-span -- a lone anchor entry separated from the window by a gap (e.g.
+    /// anchor row 5, window starting row 7, with row 6 entirely absent) breaks that walk on its
+    /// very first step and collapses the rendered span back down to just the zero-height anchor
+    /// row, leaving the genuinely visible remainder (rows 7-10) unrendered. Filling every
+    /// intervening row keeps the sheet-row-number sequence contiguous with the grid-index
+    /// sequence so that walk -- and WPF's gap-tolerant summation -- both see a correct span.
+    ///
+    /// Bounded by <see cref="MaxViewportListCapacityHint"/>: an anchor scrolled an enormous
+    /// distance above the window (a colossal merge, or a jump-scroll past a huge banner merge)
+    /// would otherwise require materializing hundreds of thousands of placeholder rows just to
+    /// bridge the gap. Past that bound this skips prepending entirely for that merge, leaving
+    /// both shells at their pre-existing behavior for that one pathological case: WPF's merge
+    /// surface simply won't draw the remainder (unfixed, same as before this method existed), and
+    /// Avalonia's own substitute-anchor fallback keeps working unaffected, since the true anchor
+    /// is never exposed to it in the first place.
+    /// </summary>
+    private static IReadOnlyList<RowMetric> PrependScrolledPastMergeAnchorRows(
+        Sheet sheet, uint lookbackFloorRow, IReadOnlyList<RowMetric> rows)
+    {
+        if (rows.Count == 0)
+            return rows;
+
+        var windowStartRow = rows[0].Row;
+        if (windowStartRow <= lookbackFloorRow)
+            return rows;
+
+        uint? earliestAnchorRow = null;
+        var regions = sheet.MergedRegions;
+        for (var i = 0; i < regions.Count; i++)
+        {
+            var region = regions[i];
+            if (region.Start.Row < lookbackFloorRow || region.Start.Row >= windowStartRow)
+                continue;
+            if (region.End.Row < windowStartRow)
+                continue;
+
+            if (earliestAnchorRow is null || region.Start.Row < earliestAnchorRow)
+                earliestAnchorRow = region.Start.Row;
+        }
+
+        if (earliestAnchorRow is not { } anchorRow)
+            return rows;
+
+        var gap = (long)windowStartRow - anchorRow;
+        if (gap > MaxViewportListCapacityHint)
+            return rows;
+
+        var combined = new List<RowMetric>((int)gap + rows.Count);
+        for (var r = anchorRow; r < windowStartRow; r++)
+            combined.Add(new RowMetric(r, 0, 0));
+        combined.AddRange(rows);
+        return combined;
+    }
+
+    /// <summary>Column counterpart of <see cref="PrependScrolledPastMergeAnchorRows"/>.</summary>
+    private static IReadOnlyList<ColMetric> PrependScrolledPastMergeAnchorCols(
+        Sheet sheet, uint lookbackFloorCol, IReadOnlyList<ColMetric> columns)
+    {
+        if (columns.Count == 0)
+            return columns;
+
+        var windowStartCol = columns[0].Col;
+        if (windowStartCol <= lookbackFloorCol)
+            return columns;
+
+        uint? earliestAnchorCol = null;
+        var regions = sheet.MergedRegions;
+        for (var i = 0; i < regions.Count; i++)
+        {
+            var region = regions[i];
+            if (region.Start.Col < lookbackFloorCol || region.Start.Col >= windowStartCol)
+                continue;
+            if (region.End.Col < windowStartCol)
+                continue;
+
+            if (earliestAnchorCol is null || region.Start.Col < earliestAnchorCol)
+                earliestAnchorCol = region.Start.Col;
+        }
+
+        if (earliestAnchorCol is not { } anchorCol)
+            return columns;
+
+        var gap = (long)windowStartCol - anchorCol;
+        if (gap > MaxViewportListCapacityHint)
+            return columns;
+
+        var combined = new List<ColMetric>((int)gap + columns.Count);
+        for (var c = anchorCol; c < windowStartCol; c++)
+            combined.Add(new ColMetric(c, 0, 0));
+        combined.AddRange(columns);
+        return combined;
     }
 
     private static double SumRowHeights(IReadOnlyList<RowMetric> rows)

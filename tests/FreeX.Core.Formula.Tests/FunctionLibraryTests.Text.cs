@@ -125,16 +125,48 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void LeftAndRight_MismatchedNumCharsArgument_ReturnsValueError()
+    public void LeftAndRight_RowVectorAndColumnVectorNumCharsArgument_SpillToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! --
+        // this test previously asserted the old (superseded) #VALUE! behavior.
         var sheet = MakeSheet(
             (1, 1, new TextValue("Apple")),
             (2, 1, new TextValue("Banana")),
             (1, 2, new NumberValue(2)),
             (1, 3, new NumberValue(4)));
 
-        _eval.Evaluate("=LEFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=RIGHT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        var left = _eval.Evaluate("=LEFT(A1:A2,B1:C1)", sheet).Should().BeOfType<RangeValue>().Subject;
+        left.RowCount.Should().Be(2);
+        left.ColCount.Should().Be(2);
+        ((TextValue)left.At(1, 1)).Value.Should().Be("Ap");
+        ((TextValue)left.At(1, 2)).Value.Should().Be("Appl");
+        ((TextValue)left.At(2, 1)).Value.Should().Be("Ba");
+        ((TextValue)left.At(2, 2)).Value.Should().Be("Bana");
+
+        var right = _eval.Evaluate("=RIGHT(A1:A2,B1:C1)", sheet).Should().BeOfType<RangeValue>().Subject;
+        right.RowCount.Should().Be(2);
+        right.ColCount.Should().Be(2);
+        ((TextValue)right.At(1, 1)).Value.Should().Be("le");
+        ((TextValue)right.At(1, 2)).Value.Should().Be("pple");
+        ((TextValue)right.At(2, 1)).Value.Should().Be("na");
+        ((TextValue)right.At(2, 2)).Value.Should().Be("nana");
+    }
+
+    [Fact]
+    public void LeftAndRight_TrulyMismatchedNumCharsArgument_ReturnsValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (2, 2, new NumberValue(4)),
+            (3, 2, new NumberValue(1)));
+
+        _eval.Evaluate("=LEFT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=RIGHT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -229,15 +261,39 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Text_MismatchedFormatArgument_ReturnsValueError()
+    public void Text_RowVectorAndColumnVectorFormatArgument_SpillsToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! --
+        // this test previously asserted the old (superseded) #VALUE! behavior.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(3.14159)),
             (2, 1, new NumberValue(42)),
             (1, 2, new TextValue("0.00")),
             (1, 3, new TextValue("000")));
 
-        _eval.Evaluate("=TEXT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        var result = _eval.Evaluate("=TEXT(A1:A2,B1:C1)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(2);
+        ((TextValue)result.At(1, 1)).Value.Should().Be("3.14");
+        ((TextValue)result.At(1, 2)).Value.Should().Be("003");
+        ((TextValue)result.At(2, 1)).Value.Should().Be("42.00");
+        ((TextValue)result.At(2, 2)).Value.Should().Be("042");
+    }
+
+    [Fact]
+    public void Text_TrulyMismatchedFormatArgument_ReturnsValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(3.14159)),
+            (2, 1, new NumberValue(42)),
+            (1, 2, new TextValue("0.00")),
+            (2, 2, new TextValue("000")),
+            (3, 2, new TextValue("0")));
+
+        _eval.Evaluate("=TEXT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     // TRIM / CASE / SUBSTITUTE / SEARCH / VALUE
@@ -979,15 +1035,39 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Rept_MismatchedTimesArgument_ReturnsValueError()
+    public void Rept_RowVectorAndColumnVectorTimesArgument_SpillsToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! --
+        // this test previously asserted the old (superseded) #VALUE! behavior.
         var sheet = MakeSheet(
             (1, 1, new TextValue("a")),
             (2, 1, new TextValue("bc")),
             (1, 2, new NumberValue(3)),
             (1, 3, new NumberValue(2)));
 
-        _eval.Evaluate("=REPT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        var result = _eval.Evaluate("=REPT(A1:A2,B1:C1)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(2);
+        ((TextValue)result.At(1, 1)).Value.Should().Be("aaa");
+        ((TextValue)result.At(1, 2)).Value.Should().Be("aa");
+        ((TextValue)result.At(2, 1)).Value.Should().Be("bcbcbc");
+        ((TextValue)result.At(2, 2)).Value.Should().Be("bcbc");
+    }
+
+    [Fact]
+    public void Rept_TrulyMismatchedTimesArgument_ReturnsValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (2, 1, new TextValue("bc")),
+            (1, 2, new NumberValue(3)),
+            (2, 2, new NumberValue(2)),
+            (3, 2, new NumberValue(1)));
+
+        _eval.Evaluate("=REPT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

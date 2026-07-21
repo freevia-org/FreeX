@@ -567,6 +567,9 @@ internal static partial class XlsxChartXmlWriter
             ChartLegendPosition.Left => "l",
             ChartLegendPosition.Top => "t",
             ChartLegendPosition.Bottom => "b",
+            // R62-io-chart-legend-datalabels-6-2: re-emit the top-right corner legend instead of
+            // collapsing it into a full-height right-side legend.
+            ChartLegendPosition.TopRight => "tr",
             _ => "r"
         };
 

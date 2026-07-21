@@ -894,7 +894,7 @@ internal static class XlsxStylesheetMetadataPreserver
     }
 
     private static string ResolveDirectChildXml(XElement xf, XName childName) =>
-        xf.Element(childName)?.ToString(SaveOptions.DisableFormatting) ?? string.Empty;
+        BuildNamespaceAgnosticXml(xf.Element(childName));
 
     private static string ResolveIndexedRecordXml(XElement xf, string attributeName, XElement? list, XName itemName)
     {
@@ -905,7 +905,34 @@ internal static class XlsxStylesheetMetadataPreserver
         if (index < 0 || index >= items.Count)
             return string.Empty;
 
-        return items[index].ToString(SaveOptions.DisableFormatting);
+        return BuildNamespaceAgnosticXml(items[index]);
+    }
+
+    // Real Excel-authored styles.xml uses the default (unprefixed) spreadsheetml namespace, while
+    // ClosedXML's own SaveAs() output always uses an explicit "x:" prefix on every element (e.g.
+    // <x:styleSheet xmlns:x="..."><x:fonts><x:font>...). XElement.ToString() reproduces whichever
+    // prefix was in scope when the element was parsed, so a raw string compare between a source
+    // element and its rebuilt ClosedXML counterpart never matches even when they render identically.
+    // Strip every element/attribute down to its local name (dropping namespace URIs and prefixes
+    // entirely, and any xmlns declarations) before serializing, so the comparison is namespace-agnostic
+    // and depends only on element/attribute names, values, and structure.
+    private static string BuildNamespaceAgnosticXml(XElement? element) =>
+        element is null ? string.Empty : NormalizeElementForSignature(element).ToString(SaveOptions.DisableFormatting);
+
+    private static XElement NormalizeElementForSignature(XElement element)
+    {
+        var normalized = new XElement(element.Name.LocalName);
+        foreach (var attribute in element.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration)
+                continue;
+            normalized.SetAttributeValue(attribute.Name.LocalName, attribute.Value);
+        }
+
+        foreach (var child in element.Elements())
+            normalized.Add(NormalizeElementForSignature(child));
+
+        return normalized;
     }
 
     private static string ResolveNumFmtSignatureKey(XElement xf, XElement? numFmtsList, XNamespace workbookNs)
@@ -970,7 +997,7 @@ internal static class XlsxStylesheetMetadataPreserver
             return;
 
         var sourceItem = sourceItems[sourceIndex];
-        var sourceItemXml = sourceItem.ToString(SaveOptions.DisableFormatting);
+        var sourceItemXml = BuildNamespaceAgnosticXml(sourceItem);
 
         var targetList = targetRoot.Element(workbookNs + listElementName);
         if (targetList is null)
@@ -980,7 +1007,7 @@ internal static class XlsxStylesheetMetadataPreserver
         var targetIndex = -1;
         for (var i = 0; i < targetItems.Count; i++)
         {
-            if (string.Equals(targetItems[i].ToString(SaveOptions.DisableFormatting), sourceItemXml, StringComparison.Ordinal))
+            if (string.Equals(BuildNamespaceAgnosticXml(targetItems[i]), sourceItemXml, StringComparison.Ordinal))
             {
                 targetIndex = i;
                 break;

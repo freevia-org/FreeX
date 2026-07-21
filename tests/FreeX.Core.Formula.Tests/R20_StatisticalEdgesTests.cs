@@ -9,7 +9,7 @@ namespace FreeX.Core.Formula.Tests;
 /// Regression tests for round-20 statistical-function findings:
 /// - R20-statistical-functions-1: RANK.AVG must accept a single-cell reference argument
 ///   (like RANK.EQ does) instead of returning #VALUE!.
-/// - R20-statistical-functions-2: HYPERGEOM.DIST must enforce the documented lower-bound
+/// - R20-statistical-functions-2: HYPGEOM.DIST must enforce the documented lower-bound
 ///   domain check and return #NUM! for impossible sample_s values.
 /// - R20-statistical-functions-3: FREQUENCY must bin positionally in the order the
 ///   bins_array was supplied, not after sorting it.
@@ -54,7 +54,7 @@ public class R20_statistical_Tests
         // sample_size=9, population_successes=2, population_size=10 -> population has only
         // 8 non-successes, so drawing 9 items with 0 successes is impossible.
         // sample_s must be >= max(0, sample_size - population_size + population_successes) = 1.
-        _eval.Evaluate("=HYPERGEOM.DIST(0,9,2,10,FALSE)", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=HYPGEOM.DIST(0,9,2,10,FALSE)", MakeSheet()).Should().Be(ErrorValue.Num);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class R20_statistical_Tests
     {
         // sample_s = 1 is the smallest valid value for this scenario and should compute
         // a normal (non-error) probability.
-        var result = _eval.Evaluate("=HYPERGEOM.DIST(1,9,2,10,FALSE)", MakeSheet());
+        var result = _eval.Evaluate("=HYPGEOM.DIST(1,9,2,10,FALSE)", MakeSheet());
         result.Should().BeOfType<NumberValue>();
     }
 

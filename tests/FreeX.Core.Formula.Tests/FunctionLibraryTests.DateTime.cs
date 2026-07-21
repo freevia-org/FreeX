@@ -265,22 +265,47 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void DateDifference_MismatchedRangeArgumentShapes_ReturnValueError()
+    public void DateDifference_RowVectorAndColumnVectorRangeArguments_SpillToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! -- DAYS
+        // and NETWORKDAYS are 2-arg calls routed through MapBinaryMathArgs (the fixed helper).
         var sheet = MakeSheet(
             (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
             (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
             (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (1, 3, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+
+        AssertGrid(_eval.Evaluate("=DAYS(B1:C1,A1:A2)", sheet), new double[,] { { 4, 9 }, { 3, 8 } });
+        AssertGrid(_eval.Evaluate("=NETWORKDAYS(A1:A2,B1:C1)", sheet), new double[,] { { 5, 8 }, { 4, 7 } });
+    }
+
+    [Fact]
+    public void DateDifference_TrulyMismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch. DAYS360/YEARFRAC are always routed
+        // through MapTernaryTextArgs (even for their 2-arg form, via a scalar third default
+        // argument) -- this bucket intentionally left that N-ary helper family with its narrower
+        // (exact-shape-or-1x1) broadcast rule to limit blast radius across other pinned tests, so
+        // a row-vector/column-vector combination there is still (and correctly, for the
+        // currently-shipped fix) a #VALUE!, unlike DAYS/NETWORKDAYS above.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (2, 2, new NumberValue(new DateTime(2024, 1, 10).ToOADate())),
+            (3, 2, new NumberValue(new DateTime(2024, 1, 15).ToOADate())),
             (1, 3, new NumberValue(new DateTime(2024, 1, 10).ToOADate())),
             (1, 4, new NumberValue(0)),
             (1, 5, new NumberValue(3)));
 
-        _eval.Evaluate("=DAYS(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DAYS(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NETWORKDAYS(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=DAYS360(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=DAYS360(A1:A2,B1,D1:E1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=YEARFRAC(A1:A2,B1:C1,0)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=YEARFRAC(A1:A2,B1,D1:E1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=NETWORKDAYS(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -330,18 +355,64 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void DateOffset_MismatchedRangeArgumentShapes_ReturnValueError()
+    public void DateOffset_RowVectorAndColumnVectorRangeArguments_SpillToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! --
+        // this test previously asserted the old (superseded) #VALUE! behavior. EDATE/EOMONTH/
+        // WORKDAY/WEEKDAY are all 2-arg calls routed through MapBinaryMathArgs (the fixed helper).
         var sheet = MakeSheet(
             (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
             (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())),
             (1, 2, new NumberValue(1)),
             (1, 3, new NumberValue(2)));
 
-        _eval.Evaluate("=EDATE(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=EOMONTH(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=WORKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=WEEKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        AssertGrid(_eval.Evaluate("=EDATE(A1:A2,B1:C1)", sheet), new[,]
+        {
+            { new DateTime(2024, 2, 29).ToOADate(), new DateTime(2024, 3, 31).ToOADate() },
+            { new DateTime(2024, 3, 29).ToOADate(), new DateTime(2024, 4, 29).ToOADate() },
+        });
+        AssertGrid(_eval.Evaluate("=EOMONTH(A1:A2,B1:C1)", sheet), new[,]
+        {
+            { new DateTime(2024, 2, 29).ToOADate(), new DateTime(2024, 3, 31).ToOADate() },
+            { new DateTime(2024, 3, 31).ToOADate(), new DateTime(2024, 4, 30).ToOADate() },
+        });
+        AssertGrid(_eval.Evaluate("=WORKDAY(A1:A2,B1:C1)", sheet), new[,]
+        {
+            { new DateTime(2024, 2, 1).ToOADate(), new DateTime(2024, 2, 2).ToOADate() },
+            { new DateTime(2024, 3, 1).ToOADate(), new DateTime(2024, 3, 4).ToOADate() },
+        });
+        AssertGrid(_eval.Evaluate("=WEEKDAY(A1:A2,B1:C1)", sheet), new double[,] { { 4, 3 }, { 5, 4 } });
+    }
+
+    [Fact]
+    public void DateOffset_TrulyMismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)),
+            (3, 2, new NumberValue(3)));
+
+        _eval.Evaluate("=EDATE(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=EOMONTH(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=WORKDAY(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=WEEKDAY(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    private static void AssertGrid(ScalarValue value, double[,] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        int rows = expected.GetLength(0);
+        int cols = expected.GetLength(1);
+        range.RowCount.Should().Be(rows);
+        range.ColCount.Should().Be(cols);
+        for (int r = 1; r <= rows; r++)
+            for (int c = 1; c <= cols; c++)
+                ((NumberValue)range.At(r, c)).Value.Should().BeApproximately(expected[r - 1, c - 1], 1e-9);
     }
 
     [Fact]

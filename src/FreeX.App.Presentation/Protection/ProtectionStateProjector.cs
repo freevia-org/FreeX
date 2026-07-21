@@ -21,7 +21,13 @@ public sealed record SheetProtectionState(
 /// <summary>
 /// What the Protect Workbook dialog should display for the current workbook state.
 /// </summary>
-/// <param name="IsStructureProtected">True when structure protection is currently applied.</param>
+/// <param name="IsStructureProtected">
+/// True when the dialog should act as an unprotect prompt: either structure protection is
+/// currently applied, or a protection password is stored at all (e.g. a "Windows only" lock,
+/// which Core has no dedicated flag for but still preserves the password on read/write). Real
+/// Excel treats any active protection -- structure or windows-only -- as requiring the existing
+/// password before it can be changed, rather than only gating on the structure flag.
+/// </param>
 /// <param name="HasPassword">True when a structure-protection password is currently stored.</param>
 /// <param name="Options">The pre-filled dialog options reflecting the current state.</param>
 public sealed record WorkbookProtectionState(
@@ -54,10 +60,19 @@ public static class ProtectionStateProjector
         ArgumentNullException.ThrowIfNull(workbook);
 
         var hasPassword = ProtectionPassword.IsSet(workbook.StructureProtectionPassword);
-        var options = workbook.IsStructureProtected
-            ? ProtectWorkbookOptions.FromCore(structureProtected: true)
+
+        // A "Windows only" protected workbook (lockWindows + password, no lockStructure) preserves
+        // its password on read (XlsxWorkbookMetadataReader) even though workbook.IsStructureProtected
+        // is false. Gating purely on IsStructureProtected would open the dialog in protect-mode for
+        // such a workbook and let ProtectWorkbookCommand silently overwrite that never-invalid,
+        // never-expired password with whatever the user types (or nothing) -- with no verification
+        // prompt, unlike real Excel. Treat any stored password as "protected" too so the dialog opens
+        // in unprotect-mode and requires the existing password before anything can change.
+        var isProtected = workbook.IsStructureProtected || hasPassword;
+        var options = isProtected
+            ? ProtectWorkbookOptions.FromCore(structureProtected: workbook.IsStructureProtected)
             : ProtectWorkbookOptions.Default;
 
-        return new WorkbookProtectionState(workbook.IsStructureProtected, hasPassword, options);
+        return new WorkbookProtectionState(isProtected, hasPassword, options);
     }
 }

@@ -148,10 +148,12 @@ internal static class XlsxSourceDrawingGeometryRewriter
                 .Element(SpreadsheetDrawingNs + "nvSpPr")?
                 .Element(SpreadsheetDrawingNs + "cNvSpPr")?
                 .Attribute("txBox")?.Value == "1";
-            var txBodyElement = shapeElement.Element(SpreadsheetDrawingNs + "txBody");
-            var text = string.Concat(txBodyElement?.Descendants(drawingNs + "t").Select(t => t.Value) ?? []);
 
-            if (isTextBox && !string.IsNullOrEmpty(text))
+            // R62-io-drawing-textbox-6-3: mirror XlsxWorksheetDrawingParts.ReadSpElement's identical
+            // gate -- route purely on the txBox="1" marker, not on non-empty text, so an emptied
+            // (text-deleted) text box still zips up against sheet.TextBoxes here instead of shifting
+            // into shapeElements and desynchronizing the index-based Zip alignment below.
+            if (isTextBox)
             {
                 textBoxElements.Add(shapeElement);
                 continue;

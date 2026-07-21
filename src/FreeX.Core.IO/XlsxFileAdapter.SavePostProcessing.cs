@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -33,10 +34,21 @@ public sealed partial class XlsxFileAdapter
             XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);
         }
 
+        // R62-io-defined-name-print-6-2: also run SaveToPackage when any sheet has a live
+        // AutoFilter, even if the workbook has zero ordinary named ranges/formulas. SaveToPackage
+        // (via CreateDefinedNameEntries) is the ONLY code path that emits/keeps in sync the
+        // built-in _xlnm._FilterDatabase name for a sheet's AutoFilter (XlsxNamedRangeMapper.cs
+        // documents this as "actively managed... on every save"), so gating the whole call solely
+        // on NamedRanges/NamedFormulas being non-empty silently skipped _FilterDatabase for any
+        // workbook whose ONLY defined-name-worthy content is an AutoFilter (e.g. every first save
+        // of a brand-new workbook that only has an AutoFilter applied). The AutoFilter check itself
+        // is batched into featurePlan.HasLiveAutoFilter (computed once in the sheet-feature-detection
+        // pass) rather than re-scanning workbook.Sheets here.
         if (workbook.NamedRanges.Count > 0 ||
             workbook.NamedFormulas.Count > 0 ||
             workbook.ScopedNamedRanges.Count > 0 ||
-            workbook.ScopedNamedFormulas.Count > 0)
+            workbook.ScopedNamedFormulas.Count > 0 ||
+            featurePlan.HasLiveAutoFilter)
         {
             packageStream.Position = 0;
             XlsxNamedRangeMapper.SaveToPackage(workbook, packageStream);
@@ -1323,6 +1335,14 @@ public sealed partial class XlsxFileAdapter
         public bool HasSupportedCharts;
         public bool HasSupportedDrawingObjects;
         /// <summary>
+        /// True when any sheet has a live AutoFilter. <see cref="XlsxNamedRangeMapper.SaveToPackage"/>
+        /// is the ONLY code path that emits/keeps in sync the built-in <c>_xlnm._FilterDatabase</c>
+        /// name for a sheet's AutoFilter (R62-io-defined-name-print-6-2), so the SaveToPackage gate
+        /// must run whenever this is true even when the workbook has zero ordinary named
+        /// ranges/formulas.
+        /// </summary>
+        public bool HasLiveAutoFilter;
+        /// <summary>
         /// True when any sheet has at least one source-loaded picture/text box/shape. Gates the F15
         /// anchor-geometry rewrite (<see cref="XlsxSourceDrawingGeometryRewriter"/>) that keeps a
         /// resize/move of a source-loaded drawing object from being discarded on save.
@@ -1387,6 +1407,8 @@ public sealed partial class XlsxFileAdapter
             if (!HasSupportedCharts)
                 HasSupportedCharts = HasSupportedXlsxCharts(sheet);
             HasSupportedDrawingObjects |= XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(sheet);
+            HasLiveAutoFilter |= !string.IsNullOrWhiteSpace(
+                XlsxWorksheetAutoFilterXmlMapper.GetEffectiveReference(sheet.AutoFilter));
             HasSourceLoadedDrawingObjects |= XlsxSourceDrawingGeometryRewriter.HasSourceLoadedDrawingObjects(sheet);
             HasStructuredTables |= sheet.StructuredTables.Count > 0;
             HasPivotTables |= sheet.PivotTables.Count > 0;

@@ -115,6 +115,57 @@ public sealed class WorkbookReferenceNavigatorTests
     }
 
     [Fact]
+    public void TryParseReferenceRange_ResolvesSheetQualifiedDefinedName()
+    {
+        // R62-commands-name-box-6-3: "Sheet2!Rate" is legal defined-name syntax in Excel's Name Box
+        // (mirroring formulas, e.g. "=Sheet2!Rate") and must resolve the same as the bare name
+        // "Rate" once the sheet prefix is stripped, instead of failing to match any key because the
+        // un-stripped "Sheet2!Rate" text is used verbatim for the dictionary lookup.
+        var currentSheetId = SheetId.New();
+        var dataSheetId = SheetId.New();
+        var namedRange = new GridRange(
+            new CellAddress(dataSheetId, 2, 2),
+            new CellAddress(dataSheetId, 2, 2));
+        var names = new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Rate"] = namedRange
+        };
+
+        WorkbookReferenceNavigator.TryParseReferenceRange(
+            "Sheet2!Rate",
+            currentSheetId,
+            sheetName => string.Equals(sheetName, "Sheet2", StringComparison.OrdinalIgnoreCase) ? dataSheetId : null,
+            names,
+            out var range).Should().BeTrue();
+
+        range.Should().Be(namedRange);
+    }
+
+    [Fact]
+    public void TryParseReferenceRange_UnqualifiedDefinedNameStillResolvesFromCurrentSheet()
+    {
+        // Sibling no-regression case: a plain (unqualified) name lookup must be completely
+        // unaffected by the sheet-prefix-stripping fix above.
+        var currentSheetId = SheetId.New();
+        var namedRange = new GridRange(
+            new CellAddress(currentSheetId, 10, 2),
+            new CellAddress(currentSheetId, 12, 4));
+        var names = new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Sales_Total"] = namedRange
+        };
+
+        WorkbookReferenceNavigator.TryParseReferenceRange(
+            "Sales_Total",
+            currentSheetId,
+            static _ => null,
+            names,
+            out var range).Should().BeTrue();
+
+        range.Should().Be(namedRange);
+    }
+
+    [Fact]
     public void BuildReferenceChoices_PutsDefaultThenRecentThenSortedNamesWithoutDuplicates()
     {
         var choices = WorkbookReferenceNavigator.BuildReferenceChoices(

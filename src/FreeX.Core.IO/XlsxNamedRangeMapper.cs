@@ -323,11 +323,27 @@ internal static class XlsxNamedRangeMapper
     {
         foreach (var (name, range) in workbook.NamedRanges)
         {
+            // R62-commands-name-box-6-2: skip a NamedRanges entry that collides with a
+            // NamedFormulas entry of the same name (see CreateDefinedNameEntries' matching guard).
+            // Without this, ClosedXML's xlWorkbook.DefinedNames.Add would be called twice for the
+            // same name — the NamedRanges call below succeeds first, then the NamedFormulas call
+            // further down throws (Excel/ClosedXML disallow a duplicate defined name), which
+            // SaveWorkbookDefinedName's catch-all silently swallows as a spurious "could not be
+            // saved and was skipped" warning for the user's real, authoritative name — even though
+            // no data is actually lost (ApplyPackagePostProcessing's SaveToPackage pass corrects the
+            // text afterward). Skipping the non-authoritative NamedRanges side here avoids the
+            // ClosedXML exception (and the false-positive warning) entirely.
+            if (workbook.NamedFormulas.ContainsKey(name))
+                continue;
+
             SaveWorkbookDefinedName(workbook, xlWorkbook, name, range, warnings);
         }
 
         foreach (var (key, range) in workbook.ScopedNamedRanges)
         {
+            if (workbook.ScopedNamedFormulas.ContainsKey(key))
+                continue;
+
             SaveSheetScopedDefinedName(workbook, xlWorkbook, key.Name, key.Sheet, range, warnings);
         }
 
@@ -466,6 +482,15 @@ internal static class XlsxNamedRangeMapper
     {
         foreach (var (name, range) in workbook.NamedRanges)
         {
+            // R62-commands-name-box-6-2: a name can end up present in BOTH NamedRanges and
+            // NamedFormulas (e.g. a multi-area/union name loaded into NamedFormulas because a
+            // single GridRange cannot represent it, followed by the Name Box's create-on-unknown
+            // fallback defining a colliding single-area NamedRanges entry with the same text).
+            // NamedFormulas is authoritative for a colliding name — skip the NamedRanges entry so
+            // CreateDefinedNameEntries never yields two entries for the same (name, scope) key.
+            if (workbook.NamedFormulas.ContainsKey(name))
+                continue;
+
             if (IsExcelReservedDefinedName(name) ||
                 !TryFormatRangeAddress(workbook, range, xlWorkbook: null, out var address))
                 continue;
@@ -481,6 +506,10 @@ internal static class XlsxNamedRangeMapper
 
         foreach (var (key, range) in workbook.ScopedNamedRanges)
         {
+            // Same collision guard as above, for the sheet-scoped pair.
+            if (workbook.ScopedNamedFormulas.ContainsKey(key))
+                continue;
+
             if (IsExcelReservedDefinedName(key.Name) ||
                 !TryGetLocalSheetId(workbook, key.Sheet, out var localSheetId) ||
                 !TryFormatRangeAddress(workbook, range, xlWorkbook: null, out var address))

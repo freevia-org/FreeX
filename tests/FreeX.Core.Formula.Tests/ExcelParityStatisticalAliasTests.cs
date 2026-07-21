@@ -281,11 +281,34 @@ public sealed class ExcelParityStatisticalAliasTests
         Number("=CRITBINOM(10,0.5,0.75)", sheet).Should().BeApproximately(Number("=BINOM.INV(10,0.5,0.75)", sheet), 1e-12);
         Number("=NEGBINOMDIST(3,4,0.4)", sheet).Should().BeApproximately(Number("=NEGBINOM.DIST(3,4,0.4,FALSE)", sheet), 1e-12);
         Number("=POISSON(2,5,TRUE)", sheet).Should().BeApproximately(Number("=POISSON.DIST(2,5,TRUE)", sheet), 1e-12);
-        Number("=HYPGEOMDIST(1,4,8,20)", sheet).Should().BeApproximately(Number("=HYPERGEOM.DIST(1,4,8,20,FALSE)", sheet), 1e-12);
+        Number("=HYPGEOMDIST(1,4,8,20)", sheet).Should().BeApproximately(Number("=HYPGEOM.DIST(1,4,8,20,FALSE)", sheet), 1e-12);
         Number("=EXPONDIST(0.2,10,TRUE)", sheet).Should().BeApproximately(Number("=EXPON.DIST(0.2,10,TRUE)", sheet), 1e-12);
         Number("=WEIBULL(105,20,100,TRUE)", sheet).Should().BeApproximately(Number("=WEIBULL.DIST(105,20,100,TRUE)", sheet), 1e-12);
         Number("=GAMMADIST(10,9,2,TRUE)", sheet).Should().BeApproximately(Number("=GAMMA.DIST(10,9,2,TRUE)", sheet), 1e-12);
         Number("=GAMMAINV(0.5,9,2)", sheet).Should().BeApproximately(Number("=GAMMA.INV(0.5,9,2)", sheet), 1e-12);
+    }
+
+    [Fact]
+    public void HypgeomDist_ModernExcelName_ResolvesInsteadOfNameError()
+    {
+        // Excel's real modern hypergeometric function name is "HYPGEOM.DIST" (dot-inserted from
+        // the legacy HYPGEOMDIST, exactly parallel to BINOMDIST->BINOM.DIST, NORMDIST->NORM.DIST).
+        // Regression guard for R62-formula-statistical-dist-6-1: previously only the misspelled
+        // "HYPERGEOM.DIST" (extra "ER") was registered, so this formula evaluated to #NAME?.
+        var sheet = Values();
+        var result = _eval.Evaluate("=HYPGEOM.DIST(1,4,8,20,FALSE)", sheet);
+        result.Should().NotBe(ErrorValue.Name);
+        result.Should().BeOfType<NumberValue>().Subject.Value.Should().BeApproximately(0.36326109390985956, 1e-8);
+    }
+
+    [Fact]
+    public void HypgeomDistLegacyAlias_StillResolves_SiblingNoRegression()
+    {
+        // Sibling no-regression test: the legacy 4-arg HYPGEOMDIST alias (kept distinct from the
+        // modern 5-arg HYPGEOM.DIST) must continue to resolve and agree with the modern function.
+        var sheet = Values();
+        Number("=HYPGEOMDIST(1,4,8,20)", sheet)
+            .Should().BeApproximately(Number("=HYPGEOM.DIST(1,4,8,20,FALSE)", sheet), 1e-12);
     }
 
     [Fact]

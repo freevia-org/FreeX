@@ -7297,6 +7297,16 @@ public sealed partial class MainWindow : Window
         }
 
         var source = _session.SelectedRange;
+
+        // Excel's double-click-fill-handle gesture: extend straight down to match the populated
+        // extent of the nearest non-blank adjacent column, matching the WPF host's
+        // OnAutofillHandleDoubleClicked (MainWindow.xaml.cs). Handled immediately -- no drag starts.
+        if (args.ClickCount >= 2)
+        {
+            CommitAutofillHandleDoubleClick(source);
+            return true;
+        }
+
         BeginCellSelectionDrag(args, capture, source.Start);
         // BeginCellSelectionDrag clears stale gesture state before establishing persistent pointer
         // capture, so arm autofill only after capture has been initialized.
@@ -7304,6 +7314,61 @@ public sealed partial class MainWindow : Window
         _autofillSourceRange = source;
         _autofillTarget = source.End;
         return true;
+    }
+
+    /// <summary>
+    /// Handles a fill-handle double-click: fill straight down to match the populated extent of the
+    /// nearest non-blank adjacent column (checked to the left first, then the right, matching
+    /// Excel), stopping at the first blank row below the source. Mirrors the Windows host's
+    /// autofill-handle double-click handler.
+    /// </summary>
+    private void CommitAutofillHandleDoubleClick(GridRange source)
+    {
+        var adjacentLastRow = ResolveAutofillAdjacentColumnLastPopulatedRow(_session.ActiveSheet, source);
+        var fillRange = GridAutofillPlanner.CalculateDoubleClickFillRange(source, adjacentLastRow);
+        if (fillRange is null)
+            return;
+
+        var completedSelection = GridAutofillPlanner.CalculateCompletedSelectionRange(source, fillRange.Value);
+        ClearSelectedDrawingObject();
+        var result = _session.AutofillDragRange(source, fillRange.Value, ctrlHeld: false);
+        _session.SelectRange(completedSelection);
+        RefreshShell(result.Success
+            ? $"Autofilled {FormatRangeReference(completedSelection)}"
+            : result.ErrorMessage ?? "Autofill failed.");
+    }
+
+    /// <summary>
+    /// Finds the last populated row of the contiguous data run in the column immediately to the
+    /// left of <paramref name="source"/> (checked first) or immediately to the right, starting
+    /// from the row below the source's seed row and stopping at the first blank cell. Returns null
+    /// when neither neighbor has any data immediately below the seed row.
+    /// </summary>
+    private static uint? ResolveAutofillAdjacentColumnLastPopulatedRow(Sheet sheet, GridRange source)
+    {
+        var seedRow = source.Start.Row;
+        if (source.Start.Col > 1 &&
+            ResolveAutofillColumnLastPopulatedRow(sheet, source.Start.Col - 1, seedRow) is { } leftRow)
+        {
+            return leftRow;
+        }
+
+        return ResolveAutofillColumnLastPopulatedRow(sheet, source.End.Col + 1, seedRow);
+    }
+
+    private static uint? ResolveAutofillColumnLastPopulatedRow(Sheet sheet, uint column, uint seedRow)
+    {
+        if (column > CellAddress.MaxCol || seedRow >= CellAddress.MaxRow)
+            return null;
+
+        if (sheet.GetValue(seedRow + 1, column) is BlankValue)
+            return null;
+
+        var lastRow = seedRow + 1;
+        while (lastRow < CellAddress.MaxRow && sheet.GetValue(lastRow + 1, column) is not BlankValue)
+            lastRow++;
+
+        return lastRow;
     }
 
     private bool IsPointerOnAutofillHandle(PointerEventArgs args)
@@ -7376,6 +7441,15 @@ public sealed partial class MainWindow : Window
         _autofillTarget = target;
         CommitAutofillDrag(ctrlHeld);
     }
+
+    /// <summary>
+    /// Test-only seam that drives the real fill-handle double-click commit path directly (instead
+    /// of simulating a double-click <see cref="PointerPressedEventArgs"/>), so headless tests can
+    /// assert on the resulting cell values without constructing pointer input. Not used by
+    /// production code paths.
+    /// </summary>
+    internal void RaiseAutofillHandleDoubleClickForTest(GridRange source) =>
+        CommitAutofillHandleDoubleClick(source);
 
     private static FillCellsDirection ResolveAutofillDirection(GridRange source, GridRange fillRange)
     {
@@ -15907,15 +15981,56 @@ public sealed partial class MainWindow : Window
     // Sheet-scope-aware Name Box reference resolution, matching formula evaluation's precedence
     // (Workbook.TryGetNamedRange(name, contextSheetId, ...): sheet-scoped names on the active sheet
     // take precedence over a same-named workbook-global name).
-    private bool TryParseCellAddressBoxReferenceRange(string text, out GridRange range) =>
-        WorkbookReferenceNavigator.TryParseReferenceRange(
-            text,
-            _session.ActiveSheet.Id,
-            name => _session.Workbook.Sheets.FirstOrDefault(sheet =>
-                string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
-            _session.Workbook.NamedRanges,
-            name => _session.Workbook.TryGetNamedRange(name, _session.ActiveSheet.Id, out var scoped) ? scoped : null,
-            out range);
+    private bool TryParseCellAddressBoxReferenceRange(string text, out GridRange range)
+    {
+        if (WorkbookReferenceNavigator.TryParseReferenceRange(
+                text,
+                _session.ActiveSheet.Id,
+                name => _session.Workbook.Sheets.FirstOrDefault(sheet =>
+                    string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
+                _session.Workbook.NamedRanges,
+                name => _session.Workbook.TryGetNamedRange(name, _session.ActiveSheet.Id, out var scoped) ? scoped : null,
+                out range))
+        {
+            return true;
+        }
+
+        // Excel also lets the Name Box resolve a structured table's name, selecting the table's
+        // data-body range (the same rows a structured reference like Table1[#Data] would select),
+        // rather than only cell/named-range references. Without this, an existing table's name
+        // falls through to TryDefineNameFromCellAddressBox and silently creates a colliding
+        // defined name (matches the WPF host's TryFindStructuredTableDataBodyRange).
+        return TryFindStructuredTableDataBodyRange(text.Trim(), out range);
+    }
+
+    // Matches StructuredReferenceResolver's table-name lookup (name OR display name, both header-row
+    // and totals-row aware) so Name Box navigation lands on exactly the same range a structured
+    // reference to the same table would resolve to.
+    private bool TryFindStructuredTableDataBodyRange(string name, out GridRange range)
+    {
+        foreach (var sheet in _session.Workbook.Sheets)
+        {
+            var table = sheet.StructuredTables.FirstOrDefault(t =>
+                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase));
+            if (table is null)
+                continue;
+
+            var rowCount = checked((int)table.Range.RowCount);
+            var headerRows = (uint)Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
+            var startRow = table.Range.Start.Row + headerRows;
+            var endRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
+            range = startRow > endRow
+                ? table.Range
+                : new GridRange(
+                    new CellAddress(table.Range.Start.Sheet, startRow, table.Range.Start.Col),
+                    new CellAddress(table.Range.Start.Sheet, endRow, table.Range.End.Col));
+            return true;
+        }
+
+        range = default;
+        return false;
+    }
 
     private void NavigateCellAddressBoxTo(GridRange selectedRange)
     {
@@ -15934,6 +16049,16 @@ public sealed partial class MainWindow : Window
         var name = text.Trim();
         if (_session.Workbook.ValidateNamedRangeName(name) is not null)
             return false;
+        // Never silently define a name that collides with an existing structured table's name --
+        // Excel rejects this outright (a table name and a defined name share one namespace).
+        // TryParseCellAddressBoxReferenceRange already resolves table names to a selection before
+        // this method runs, so this is a defense-in-depth guard against ever reaching here for one.
+        if (_session.Workbook.Sheets.Any(sheet => sheet.StructuredTables.Any(t =>
+                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase))))
+        {
+            return false;
+        }
 
         var command = new DefineNamedRangeCommand(name, _session.SelectedRange, NamedRangeMetadata.WorkbookScope);
         var result = _session.ExecuteReviewCommand(command);

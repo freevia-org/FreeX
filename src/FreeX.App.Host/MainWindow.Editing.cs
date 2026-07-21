@@ -871,15 +871,55 @@ public partial class MainWindow
     // (Workbook.TryGetNamedRange(name, contextSheetId, ...): sheet-scoped names on the active sheet
     // take precedence over a same-named workbook-global name). Also resolves cross-sheet references
     // typed as SheetName!A1 (matching the Avalonia shell's TryParseCellAddressBoxReferenceRange).
-    private bool TryParseNameBoxReferenceRange(string text, out GridRange range) =>
-        WorkbookReferenceNavigator.TryParseReferenceRange(
-            text,
-            _currentSheetId,
-            name => _workbook.Sheets.FirstOrDefault(sheet =>
-                string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
-            _workbook.NamedRanges,
-            name => _workbook.TryGetNamedRange(name, _currentSheetId, out var scoped) ? scoped : null,
-            out range);
+    private bool TryParseNameBoxReferenceRange(string text, out GridRange range)
+    {
+        if (WorkbookReferenceNavigator.TryParseReferenceRange(
+                text,
+                _currentSheetId,
+                name => _workbook.Sheets.FirstOrDefault(sheet =>
+                    string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
+                _workbook.NamedRanges,
+                name => _workbook.TryGetNamedRange(name, _currentSheetId, out var scoped) ? scoped : null,
+                out range))
+        {
+            return true;
+        }
+
+        // Excel also lets the Name Box resolve a structured table's name, selecting the table's
+        // data-body range (the same rows a structured reference like Table1[#Data] would select),
+        // rather than only cell/named-range references. Without this, an existing table's name
+        // falls through to TryDefineNameFromNameBox and silently creates a colliding defined name.
+        return TryFindStructuredTableDataBodyRange(text.Trim(), out range);
+    }
+
+    // Matches StructuredReferenceResolver's table-name lookup (name OR display name, both header-row
+    // and totals-row aware) so Name Box navigation lands on exactly the same range a structured
+    // reference to the same table would resolve to.
+    private bool TryFindStructuredTableDataBodyRange(string name, out GridRange range)
+    {
+        foreach (var sheet in _workbook.Sheets)
+        {
+            var table = sheet.StructuredTables.FirstOrDefault(t =>
+                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase));
+            if (table is null)
+                continue;
+
+            var rowCount = checked((int)table.Range.RowCount);
+            var headerRows = (uint)Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
+            var startRow = table.Range.Start.Row + headerRows;
+            var endRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
+            range = startRow > endRow
+                ? table.Range
+                : new GridRange(
+                    new CellAddress(table.Range.Start.Sheet, startRow, table.Range.Start.Col),
+                    new CellAddress(table.Range.Start.Sheet, endRow, table.Range.End.Col));
+            return true;
+        }
+
+        range = default;
+        return false;
+    }
 
     // Cross-sheet Name Box navigation must refresh the sheet-tab strip (active-tab highlight)
     // and the Protect-Sheet/Protect-Workbook ribbon state for the newly-active sheet, matching
@@ -903,6 +943,16 @@ public partial class MainWindow
         var name = CellAddressBox.Text.Trim();
         if (_workbook.ValidateNamedRangeName(name) is not null)
             return false;
+        // Never silently define a name that collides with an existing structured table's name --
+        // Excel rejects this outright (a table name and a defined name share one namespace).
+        // TryParseNameBoxReferenceRange already resolves table names to a selection before this
+        // method runs, so this is a defense-in-depth guard against ever reaching here for one.
+        if (_workbook.Sheets.Any(sheet => sheet.StructuredTables.Any(t =>
+                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase))))
+        {
+            return false;
+        }
         if (SheetGrid.SelectedRange is not { } range)
             return false;
 

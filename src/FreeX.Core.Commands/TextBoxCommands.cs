@@ -174,6 +174,7 @@ public sealed class RotateTextBoxCommand : IWorkbookCommand
     private readonly Guid _textBoxId;
     private readonly double _rotationDegrees;
     private double _previousRotationDegrees;
+    private bool _previousIsSourceLoaded;
     private bool _applied;
 
     public string Label => "Rotate Text Box";
@@ -198,7 +199,12 @@ public sealed class RotateTextBoxCommand : IWorkbookCommand
             return TextBoxCommandGuards.TextBoxNotFound();
 
         _previousRotationDegrees = textBox.RotationDegrees;
+        _previousIsSourceLoaded = textBox.IsSourceLoaded;
         textBox.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
+        // R62-io-drawing-textbox-6-1: mirror DrawingShapeFormatCommands' fix for the same class of
+        // bug — a loaded text box's edit must clear IsSourceLoaded so the full writer emits the
+        // edited object instead of silently discarding the rotation via the preserved source XML.
+        textBox.IsSourceLoaded = false;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [textBox.Anchor]);
     }
@@ -209,6 +215,7 @@ public sealed class RotateTextBoxCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox)) return;
         textBox.RotationDegrees = _previousRotationDegrees;
+        textBox.IsSourceLoaded = _previousIsSourceLoaded;
         _applied = false;
     }
 
@@ -228,6 +235,7 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
     private WorkbookThemeColorReference? _previousFillThemeColor;
     private WorkbookThemeColorReference? _previousOutlineThemeColor;
     private bool _previousHasFill;
+    private bool _previousIsSourceLoaded;
     private bool _applied;
 
     public string Label => "Text Box Colors";
@@ -264,6 +272,7 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
         _previousFillThemeColor = textBox.FillThemeColor;
         _previousOutlineThemeColor = textBox.OutlineThemeColor;
         _previousHasFill = textBox.HasFill;
+        _previousIsSourceLoaded = textBox.IsSourceLoaded;
         if (_updateFill)
         {
             textBox.HasFill = _hasFill ?? (_fillColor is not null);
@@ -277,6 +286,10 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
             textBox.OutlineThemeColor = null;
         }
 
+        // R62-io-drawing-textbox-6-1: mirror DrawingShapeFormatCommands' fix — clear IsSourceLoaded
+        // so the full writer emits the edited fill/outline instead of silently discarding it via the
+        // preserved source XML passthrough.
+        textBox.IsSourceLoaded = false;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [textBox.Anchor]);
     }
@@ -291,6 +304,7 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
         textBox.FillThemeColor = _previousFillThemeColor;
         textBox.OutlineThemeColor = _previousOutlineThemeColor;
         textBox.HasFill = _previousHasFill;
+        textBox.IsSourceLoaded = _previousIsSourceLoaded;
         _applied = false;
     }
 }

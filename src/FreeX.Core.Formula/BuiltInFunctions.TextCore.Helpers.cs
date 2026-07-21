@@ -60,8 +60,51 @@ public static partial class BuiltInFunctions
     private static bool CanBroadcastToShape(RangeValue range, int rows, int cols) =>
         (range.RowCount == rows && range.ColCount == cols) || (range.RowCount == 1 && range.ColCount == 1);
 
+    // Per-axis: an axis whose extent is 1 is held fixed (broadcast) rather than indexed. Safe for
+    // every existing caller of CanBroadcastToShape (which only ever admits a range that either
+    // matches the target shape exactly on both axes, or is a full 1x1 scalar), and required for
+    // TryGrowBroadcastShape's row-vector x column-vector 2-D grow below, where a range can be 1 on
+    // only ONE axis while still needing its other axis indexed by the running row/col.
     private static ScalarValue ValueAtBroadcastCell(RangeValue range, int row, int col) =>
-        range.RowCount == 1 && range.ColCount == 1 ? range.Cells[0, 0] : range.Cells[row, col];
+        range.Cells[range.RowCount == 1 ? 0 : row, range.ColCount == 1 ? 0 : col];
+
+    /// <summary>Whether a dimension of size <paramref name="source"/> can broadcast to <paramref name="target"/> (equal, or either side is 1).</summary>
+    private static bool CanBroadcastAxis(int target, int source) => target == source || target == 1 || source == 1;
+
+    /// <summary>
+    /// Grows a running (rows, cols) broadcast shape to the bounding Max(rows)/Max(cols) across all
+    /// present (non-null) ranges, matching Excel's 2-D dynamic-array broadcast rule: two ranges are
+    /// compatible on an axis when their extents are equal or either is 1 -- e.g. a 2x1 column vector
+    /// and a 1x2 row vector cross-broadcast into a 2x2 spilled result, rather than requiring an exact
+    /// shape match or a full 1x1 scalar. This mirrors FormulaEvaluator.ControlFlow's
+    /// TryExpandBroadcastShape/BroadcastElementAt (used by IF/CHOOSE) and FormulaEvaluator.Operators'
+    /// ElementwiseOp (used by binary operators), which already implement this same rule; the Map*Args
+    /// helpers below previously only accepted an exact shape match or a 1x1 scalar (see
+    /// R62-formula-array-broadcast-6-1). Returns false when any two ranges are incompatible on the
+    /// same axis -- Excel's #VALUE! for a genuine array-shape mismatch. With no ranges present at all
+    /// (all null), returns true with rows=cols=1 -- callers should prefer the plain scalar path in
+    /// that case rather than wrapping a trivial 1x1 RangeValue.
+    /// </summary>
+    private static bool TryGrowBroadcastShape(RangeValue?[] ranges, out int rows, out int cols)
+    {
+        rows = 1;
+        cols = 1;
+        foreach (var range in ranges)
+        {
+            if (range is null) continue;
+            if (!CanBroadcastAxis(rows, range.RowCount) || !CanBroadcastAxis(cols, range.ColCount))
+            {
+                rows = 0;
+                cols = 0;
+                return false;
+            }
+
+            rows = Math.Max(rows, range.RowCount);
+            cols = Math.Max(cols, range.ColCount);
+        }
+
+        return true;
+    }
 
     private static RangeValue? ChooseBroadcastShape(params RangeValue?[] ranges)
     {

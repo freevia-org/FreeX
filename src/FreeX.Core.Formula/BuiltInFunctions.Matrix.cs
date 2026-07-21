@@ -91,11 +91,23 @@ public static partial class BuiltInFunctions
 
         // Build augmented matrix [A | I]
         var aug = new double[n, 2 * n];
+        double matrixNorm = 0.0;
         for (int i = 0; i < n; i++)
         {
-            for (int j = 0; j < n; j++) aug[i, j] = a[i, j];
+            for (int j = 0; j < n; j++)
+            {
+                aug[i, j] = a[i, j];
+                double av = Math.Abs(a[i, j]);
+                if (av > matrixNorm) matrixNorm = av;
+            }
             aug[i, n + i] = 1.0;
         }
+
+        // Singularity threshold scaled to the matrix's own magnitude (relative epsilon), rather
+        // than a fixed absolute cutoff, so a uniformly small-but-well-conditioned matrix (e.g.
+        // diag(1e-15)) is not falsely reported as singular. Falls back to an MDETERM-style tiny
+        // absolute floor for an all-zero matrix.
+        double pivotEpsilon = matrixNorm > 0.0 ? matrixNorm * 1e-12 : 1e-300;
 
         // Gauss-Jordan elimination with partial pivoting
         for (int col = 0; col < n; col++)
@@ -107,7 +119,7 @@ public static partial class BuiltInFunctions
                 double v = Math.Abs(aug[r, col]);
                 if (v > pivotMax) { pivotMax = v; pivotRow = r; }
             }
-            if (pivotMax < 1e-14) return ErrorValue.Num; // singular
+            if (pivotMax < pivotEpsilon) return ErrorValue.Num; // singular
 
             if (pivotRow != col)
             {

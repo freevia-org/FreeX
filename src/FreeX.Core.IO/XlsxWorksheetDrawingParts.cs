@@ -429,9 +429,13 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var txBodyElement = shapeElement.Element(spreadsheetDrawingNs + "txBody");
         var text = ReadShapeTextBodyPlainText(txBodyElement, drawingNs);
 
-        if (isTxBox && !string.IsNullOrEmpty(text))
+        if (isTxBox)
         {
-            // True text-box: forward to textBoxes list (original behaviour).
+            // True text-box: forward to textBoxes list (original behaviour). R62-io-drawing-textbox-6-3:
+            // route here purely on the cNvSpPr/@txBox="1" marker -- an emptied (text-deleted) text box
+            // still carries that marker and Excel authors it with a <a:prstGeom prst="rect"/> just like
+            // a populated one, so gating on non-empty text here would misclassify it as a generic
+            // Rectangle shape and permanently lose its TextBox identity.
             textBoxes.Add(new XlsxTextBoxPackagePart(
                 text,
                 name,

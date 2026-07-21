@@ -274,6 +274,16 @@ public sealed class ChartModel
     public string? SecondaryAxisTitle { get; set; }
     public double? SecondaryAxisMinimum { get; set; }
     public double? SecondaryAxisMaximum { get; set; }
+
+    /// <summary>
+    /// R62-io-chart-axis-6-2: the secondary value axis's OWN major/minor unit, captured separately
+    /// from the primary (Y) axis's <see cref="YAxisMajorUnit"/>/<see cref="YAxisMinorUnit"/> so the
+    /// writer doesn't silently clone the primary axis's current unit onto the secondary axis. Null
+    /// means "not captured" — the writer falls back to the primary (Y) axis's value, matching prior
+    /// behavior for charts never round-tripped through the XLSX reader.
+    /// </summary>
+    public double? SecondaryAxisMajorUnit { get; set; }
+    public double? SecondaryAxisMinorUnit { get; set; }
     public ChartDataLabelNumberFormat SecondaryAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
     public string? SecondaryAxisNumberFormatCode { get; set; }
     public bool? SecondaryAxisNumberFormatSourceLinked { get; set; }

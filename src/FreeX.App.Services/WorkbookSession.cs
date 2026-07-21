@@ -3812,16 +3812,21 @@ public sealed class WorkbookSession
             // re-selects the whole sorted/filled range), not just a single cell. Compute the
             // bounding range of every affected cell -- reported in row-major order by the
             // command, so AffectedCells[0] is the range's top-left -- and select that, mirroring
-            // ApplySuccessfulRangeEditResult's forward-operation behavior.
+            // ApplySuccessfulRangeEditResult's forward-operation behavior. When the affected range
+            // lives on a different sheet than the one currently active (e.g. the user switched
+            // tabs after the command ran, with no new undo entry for that switch), Excel also
+            // switches the view back to that sheet -- mirroring ApplySuccessfulEditResult's own
+            // cross-sheet switch -- instead of collapsing the restored selection to a single cell.
             var boundingRange = BoundingRangeOrDefault(result.AffectedCells, ActiveCell);
-            if (ActiveSheet.Id.Equals(boundingRange.Start.Sheet))
+            if (!ActiveSheet.Id.Equals(boundingRange.Start.Sheet))
             {
-                ApplySuccessfulRangeEditResult(result, boundingRange);
+                RememberActiveWorksheetSelection();
+                var selection = _sheetSelectionService.SelectSheet(Workbook, boundingRange.Start.Sheet, _groupedSheetIds);
+                ActiveSheet = selection.Sheet;
+                RefreshSheetTabsForActiveSheet();
             }
-            else
-            {
-                ApplySuccessfulEditResult(result, ActiveCell);
-            }
+
+            ApplySuccessfulRangeEditResult(result, boundingRange);
             return;
         }
 

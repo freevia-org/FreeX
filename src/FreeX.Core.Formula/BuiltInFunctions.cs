@@ -521,7 +521,7 @@ public static partial class BuiltInFunctions
         ["POISSON"]          = (PoissonDist, 3, 3),
         ["POISSON.DIST"]     = (PoissonDist, 3, 3),
         ["HYPGEOMDIST"]      = (HypergeomDistCompat, 4, 4),
-        ["HYPERGEOM.DIST"]   = (HypergeomDist, 5, 5),
+        ["HYPGEOM.DIST"]     = (HypergeomDist, 5, 5),
 
         // ── Phase B5: Continuous distributions ──────────────────────────────
         ["EXPONDIST"]        = (ExponDist, 3, 3),

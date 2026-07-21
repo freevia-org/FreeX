@@ -407,15 +407,39 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Hyperlink_MismatchedRangeArgumentShapes_ReturnValueError()
+    public void Hyperlink_RowVectorAndColumnVectorRangeArguments_SpillToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! --
+        // this test previously asserted the old (superseded) #VALUE! behavior.
         var sheet = MakeSheet(
             (1, 1, new TextValue("https://example.com/a")),
             (2, 1, new TextValue("https://example.com/b")),
             (1, 2, new TextValue("A")),
             (1, 3, new TextValue("B")));
 
-        _eval.Evaluate("=HYPERLINK(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        var result = _eval.Evaluate("=HYPERLINK(A1:A2,B1:C1)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(2);
+        ((TextValue)result.At(1, 1)).Value.Should().Be("A");
+        ((TextValue)result.At(1, 2)).Value.Should().Be("B");
+        ((TextValue)result.At(2, 1)).Value.Should().Be("A");
+        ((TextValue)result.At(2, 2)).Value.Should().Be("B");
+    }
+
+    [Fact]
+    public void Hyperlink_TrulyMismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("https://example.com/a")),
+            (2, 1, new TextValue("https://example.com/b")),
+            (1, 2, new TextValue("A")),
+            (2, 2, new TextValue("B")),
+            (3, 2, new TextValue("C")));
+
+        _eval.Evaluate("=HYPERLINK(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -484,8 +508,54 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void FixedAndDollar_MismatchedDecimalsArgument_ReturnsValueError()
+    public void Dollar_RowVectorAndColumnVectorDecimalsArgument_SpillsToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! -- DOLLAR
+        // is 2-arg (routed through MapBinaryMathArgs, the fixed helper). FIXED's third (no_commas)
+        // argument routes it through MapTernaryTextArgs instead, which this bucket intentionally
+        // left with its narrower (exact-shape-or-1x1) broadcast rule -- see
+        // FixedAndDollar_TernaryHelperShapeMismatch_StillReturnsValueError below.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(-12.34)),
+            (1, 2, new NumberValue(1)),
+            (1, 3, new NumberValue(0)));
+
+        var dollarResult = _eval.Evaluate("=DOLLAR(A1:A2,B1:C1)", sheet).Should().BeOfType<RangeValue>().Subject;
+        dollarResult.RowCount.Should().Be(2);
+        dollarResult.ColCount.Should().Be(2);
+        ((TextValue)dollarResult.At(1, 1)).Value.Should().Be("$1,234.6");
+        ((TextValue)dollarResult.At(1, 2)).Value.Should().Be("$1,235");
+        ((TextValue)dollarResult.At(2, 1)).Value.Should().Be("($12.3)");
+        ((TextValue)dollarResult.At(2, 2)).Value.Should().Be("($12)");
+    }
+
+    [Fact]
+    public void FixedAndDollar_TrulyMismatchedDecimalsArgument_ReturnsValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(-12.34)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(0)),
+            (3, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=FIXED(A1:A2,B1:B3,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DOLLAR(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void FixedAndDollar_TernaryHelperShapeMismatch_StillReturnsValueError()
+    {
+        // FIXED(number, decimals, no_commas) is a 3-arg call routed through MapTernaryTextArgs,
+        // which this bucket did NOT extend to the row-vector x column-vector cross-broadcast rule
+        // (R62-formula-array-broadcast-6-1 was scoped to MapBinaryMathArgs to limit blast radius
+        // across ~40 other pinned ternary/quaternary/N-ary tests) -- so a row-vector/column-vector
+        // combination here is still (and correctly, for the currently-shipped fix) a #VALUE!, unlike
+        // the 2-arg DOLLAR case above.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(1234.56)),
             (2, 1, new NumberValue(-12.34)),
@@ -493,7 +563,6 @@ public partial class FunctionLibraryTests
             (1, 3, new NumberValue(0)));
 
         _eval.Evaluate("=FIXED(A1:A2,B1:C1,TRUE)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=DOLLAR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -951,15 +1020,39 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Filterxml_MismatchedRangeArgumentShapes_ReturnValueError()
+    public void Filterxml_RowVectorAndColumnVectorRangeArguments_SpillToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! --
+        // this test previously asserted the old (superseded) #VALUE! behavior.
         var sheet = MakeSheet(
             (1, 1, new TextValue("<root><item>A</item></root>")),
             (2, 1, new TextValue("<root><item>B</item></root>")),
             (1, 2, new TextValue("/root/item")),
             (1, 3, new TextValue("/root/item")));
 
-        _eval.Evaluate("=FILTERXML(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        var result = _eval.Evaluate("=FILTERXML(A1:A2,B1:C1)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(2);
+        ((TextValue)result.At(1, 1)).Value.Should().Be("A");
+        ((TextValue)result.At(1, 2)).Value.Should().Be("A");
+        ((TextValue)result.At(2, 1)).Value.Should().Be("B");
+        ((TextValue)result.At(2, 2)).Value.Should().Be("B");
+    }
+
+    [Fact]
+    public void Filterxml_TrulyMismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("<root><item>A</item></root>")),
+            (2, 1, new TextValue("<root><item>B</item></root>")),
+            (1, 2, new TextValue("/root/item")),
+            (2, 2, new TextValue("/root/item")),
+            (3, 2, new TextValue("/root/item")));
+
+        _eval.Evaluate("=FILTERXML(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

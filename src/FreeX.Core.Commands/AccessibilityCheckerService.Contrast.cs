@@ -1483,7 +1483,7 @@ public static partial class AccessibilityCheckerService
             case "CRITBINOM":
                 kind = ConditionalFormulaScalarFunctionKind.BinomInv;
                 return true;
-            case "HYPERGEOM.DIST":
+            case "HYPGEOM.DIST":
                 kind = ConditionalFormulaScalarFunctionKind.HypergeomDist;
                 return true;
             case "HYPGEOMDIST":
@@ -15579,7 +15579,7 @@ public static partial class AccessibilityCheckerService
             InvokeCoreFormulaScalarFunction(
                 "BINOM.INV", new NumberValue(trialsValue), new NumberValue(probability), new NumberValue(alpha));
 
-        // Delegated to Core.Formula (registered as HYPERGEOM.DIST; Core also carries the round-20
+        // Delegated to Core.Formula (registered as HYPGEOM.DIST; Core also carries the round-20
         // lower-bound domain fix the shadow lacked).
         private static ScalarValue FormulaHypergeomDistScalar(
             double sampleSuccessesValue,
@@ -15588,7 +15588,7 @@ public static partial class AccessibilityCheckerService
             double populationSizeValue,
             bool cumulative) =>
             InvokeCoreFormulaScalarFunction(
-                "HYPERGEOM.DIST", new NumberValue(sampleSuccessesValue), new NumberValue(sampleSizeValue),
+                "HYPGEOM.DIST", new NumberValue(sampleSuccessesValue), new NumberValue(sampleSizeValue),
                 new NumberValue(populationSuccessesValue), new NumberValue(populationSizeValue),
                 new BoolValue(cumulative));
 

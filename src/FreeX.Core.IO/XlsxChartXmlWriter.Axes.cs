@@ -151,13 +151,20 @@ internal static partial class XlsxChartXmlWriter
 
         yield return ToCategoryAxisXml(chart, chartNs, drawingNs);
         var valueAxisNumberFormat = ToEffectiveValueAxisNumberFormat(chart);
-        var valueAxisMajorTickStyle = ToEffectiveAxisMajorTickStyle(chart.Type, chart.YAxisMajorTickStyle);
         var valueAxisCrossBetween = ToEffectiveValueAxisCrossBetween(chart);
         // For bar-direction charts the value axis is HORIZONTAL (rendered at the bottom / X), so its
         // scaling (min/max/major/minor unit, log scale) is read from the X* fields
         // (XlsxChartAxisReader.ApplyValueAxisProperties(useXAxis: valueAxisOnX), SupportsXAxisBounds(Bar)==true).
         // Mirror that routing on write, otherwise a fixed bar-chart value range (e.g. 0..1) is silently dropped.
         var valueAxisOnX = IsHorizontalBarChart(chart.Type);
+        // R62-io-chart-axis-6-3: same routing, extended to the value axis's own tick-mark styles and
+        // spPr line (XlsxChartAxisReader.ApplyValueAxisProperties(useXAxis: valueAxisOnX) captures
+        // these into X* for bar-family charts) -- hardcoding these to Y* below silently dropped the
+        // value axis's own tick/line style and instead emitted the (unrelated, unset) Y* default.
+        var valueAxisMajorTickStyle = ToEffectiveAxisMajorTickStyle(chart, valueAxisOnX ? chart.XAxisMajorTickStyle : chart.YAxisMajorTickStyle);
+        var valueAxisMinorTickStyle = valueAxisOnX ? chart.XAxisMinorTickStyle : chart.YAxisMinorTickStyle;
+        var valueAxisLineColor = valueAxisOnX ? chart.XAxisLineColor : chart.YAxisLineColor;
+        var valueAxisLineThickness = valueAxisOnX ? chart.XAxisLineThickness : chart.YAxisLineThickness;
         var valueAxisMinimum = valueAxisOnX ? chart.XAxisMinimum : chart.YAxisMinimum;
         var valueAxisMaximum = valueAxisOnX ? chart.XAxisMaximum : chart.YAxisMaximum;
         var valueAxisMajorUnit = valueAxisOnX ? chart.XAxisMajorUnit : chart.YAxisMajorUnit;
@@ -211,9 +218,9 @@ internal static partial class XlsxChartXmlWriter
             valueAxisMinorGridlineColor,
             valueAxisGridlineThickness,
             valueAxisMajorTickStyle,
-            chart.YAxisMinorTickStyle,
-            chart.YAxisLineColor,
-            chart.YAxisLineThickness,
+            valueAxisMinorTickStyle,
+            valueAxisLineColor,
+            valueAxisLineThickness,
             valueAxisShowLabels,
             valueAxisTickLabelPosition,
             chart.YAxisLabelTextColor,
@@ -260,6 +267,12 @@ internal static partial class XlsxChartXmlWriter
             var secondaryAxisCrosses = chart.SecondaryAxisCrosses ?? chart.YAxisCrosses;
             var secondaryAxisCrossesAt = chart.SecondaryAxisCrossesAt ?? chart.YAxisCrossesAt;
             var secondaryAxisCrossBetween = chart.SecondaryAxisCrossBetween ?? chart.YAxisCrossBetween;
+            // R62-io-chart-axis-6-2: same "prefer own captured value, else clone primary (Y) axis"
+            // pattern as the other secondary-axis fields above — without this, the secondary axis's
+            // own majorUnit/minorUnit (e.g. 0.1 on a 0..1 percentage axis) was always overwritten with
+            // whatever the primary axis's current majorUnit/minorUnit happened to be (e.g. 20).
+            var secondaryAxisMajorUnit = chart.SecondaryAxisMajorUnit ?? chart.YAxisMajorUnit;
+            var secondaryAxisMinorUnit = chart.SecondaryAxisMinorUnit ?? chart.YAxisMinorUnit;
             yield return ToValueAxisXml(
                 chart.SecondaryAxisTitle,
                 null,
@@ -269,8 +282,8 @@ internal static partial class XlsxChartXmlWriter
                 chart.HideYAxis,
                 secondaryAxisMinimum,
                 secondaryAxisMaximum,
-                chart.YAxisMajorUnit,
-                chart.YAxisMinorUnit,
+                secondaryAxisMajorUnit,
+                secondaryAxisMinorUnit,
                 secondaryAxisLogScale,
                 secondaryAxisLogBase,
                 secondaryAxisReverseOrder,
@@ -331,6 +344,14 @@ internal static partial class XlsxChartXmlWriter
         var categoryAxisTickLabelPosition = categoryAxisIsOnY ? chart.YAxisTickLabelPosition : chart.XAxisTickLabelPosition;
         var categoryAxisCrosses = categoryAxisIsOnY ? chart.YAxisCrosses : chart.XAxisCrosses;
         var categoryAxisCrossesAt = categoryAxisIsOnY ? chart.YAxisCrossesAt : chart.XAxisCrossesAt;
+        // R62-io-chart-axis-6-3: same routing, extended to the category axis's own tick-mark styles
+        // and spPr line — XlsxChartAxisReader.ApplyCategoryAxisProperties now captures these into Y*
+        // for bar-family charts (categoryAxisOnY), so the writer must read them back from Y* too, not
+        // unconditionally from X* (which belongs to the value axis for a horizontal Bar chart).
+        var categoryAxisMajorTickStyle = categoryAxisIsOnY ? chart.YAxisMajorTickStyle : chart.XAxisMajorTickStyle;
+        var categoryAxisMinorTickStyle = categoryAxisIsOnY ? chart.YAxisMinorTickStyle : chart.XAxisMinorTickStyle;
+        var categoryAxisLineColor = categoryAxisIsOnY ? chart.YAxisLineColor : chart.XAxisLineColor;
+        var categoryAxisLineThickness = categoryAxisIsOnY ? chart.YAxisLineThickness : chart.XAxisLineThickness;
         var categoryAxisPosition = ToXlsxCategoryAxisPosition(chart);
         return new XElement(chartNs + (isDateAxis ? "dateAx" : "catAx"),
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
@@ -357,10 +378,10 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "numFmt",
                 new XAttribute("formatCode", ToXlsxNumberFormatCode(chart.XAxisNumberFormat, chart.XAxisNumberFormatCode)),
                 new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(chart.XAxisNumberFormat, chart.XAxisNumberFormatSourceLinked))),
-            new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(ToEffectiveAxisMajorTickStyle(chart.Type, chart.XAxisMajorTickStyle)))),
-            new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
+            new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(ToEffectiveAxisMajorTickStyle(chart, categoryAxisMajorTickStyle)))),
+            new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(categoryAxisMinorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(categoryAxisShowLabels, categoryAxisTickLabelPosition))),
-            ToAxisLineShapeProperties(chart.XAxisLineColor, chart.XAxisLineThickness, chartNs, drawingNs),
+            ToAxisLineShapeProperties(categoryAxisLineColor, categoryAxisLineThickness, chartNs, drawingNs),
             ToAxisLabelTextProperties(chart.XAxisLabelTextThemeColor, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
             ToAxisCrossesXml(categoryAxisCrosses, categoryAxisCrossesAt, chartNs),
@@ -598,10 +619,27 @@ internal static partial class XlsxChartXmlWriter
             gridlineThickness == 1;
     }
 
-    private static ChartAxisTickStyle ToEffectiveAxisMajorTickStyle(ChartType chartType, ChartAxisTickStyle tickStyle) =>
-        IsClassicStackedBarOrColumnChart(chartType) && tickStyle == ChartAxisTickStyle.Outside
+    private static ChartAxisTickStyle ToEffectiveAxisMajorTickStyle(ChartModel chart, ChartAxisTickStyle tickStyle) =>
+        IsClassicStackedBarOrColumnChart(chart.Type)
+            && tickStyle == ChartAxisTickStyle.Outside
+            && !HasAnyExplicitAxisMajorTickStyle(chart)
             ? ChartAxisTickStyle.None
             : tickStyle;
+
+    // R62-io-chart-axis-6-3 follow-up: the Excel-native "hide default tick marks" look for a classic
+    // Stacked/PercentStacked Column/Bar chart (see XlsxClassicChartDefaultTests) is only a heuristic
+    // FALLBACK for a totally vanilla, never-customized chart -- both axes there are left at the
+    // ChartAxisTickStyle.Outside default. Once EITHER axis's own MajorTickStyle has been explicitly set
+    // away from Outside (e.g. a horizontal Bar/StackedBar chart whose value axis was explicitly hidden
+    // via XAxisMajorTickStyle=None while its category axis was left at the untouched Outside default),
+    // the heuristic must back off entirely for BOTH axes. Otherwise the untouched-but-genuine Outside
+    // axis silently gets rewritten to None on save: for a bar-family chart, the category axis's own tick
+    // is now correctly routed through Y* (see ApplyCategoryAxisProperties's categoryAxisOnY routing),
+    // and unconditionally applying this heuristic to that real captured value regressed the pre-existing
+    // corpus round-trip test (generated-charts-classic-extended-004, Charts[1]/[2] StackedBar/
+    // PercentStackedBar): YAxis.MajorTickStyle flipped from Outside to None on every round-trip.
+    private static bool HasAnyExplicitAxisMajorTickStyle(ChartModel chart) =>
+        chart.XAxisMajorTickStyle != ChartAxisTickStyle.Outside || chart.YAxisMajorTickStyle != ChartAxisTickStyle.Outside;
 
     private static ChartAxisCrossBetween? ToEffectiveValueAxisCrossBetween(ChartModel chart) =>
         chart.YAxisCrossBetween ?? (IsClassicStackedBarOrColumnChart(chart.Type) ? ChartAxisCrossBetween.Between : null);

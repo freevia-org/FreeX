@@ -35,7 +35,11 @@ public enum ChartType
     ThreeDSurface
 }
 
-public enum ChartLegendPosition { None, Left, Right, Top, Bottom }
+// R62-io-chart-legend-datalabels-6-2: TopRight added (at the end, preserving the existing members'
+// ordinal values) so a legend explicitly placed at the top-right corner (<c:legendPos val="tr"/>,
+// a real ST_LegendPos value reachable from Excel's Format Legend pane, most commonly on pie charts)
+// round-trips as a compact corner legend instead of collapsing into a full-height right-side legend.
+public enum ChartLegendPosition { None, Left, Right, Top, Bottom, TopRight }
 
 // R51-io-chart-datalabel-3-1: Left/Right/Top/Bottom added (at the end, preserving the existing
 // members' ordinal values) so the family of chart types whose data labels support OOXML
@@ -438,6 +442,12 @@ public sealed record ChartSeriesDataLabelFormat(
     WorkbookThemeColorReference? FillThemeColor = null,
     WorkbookThemeColorReference? BorderThemeColor = null,
     WorkbookThemeColorReference? TextThemeColor = null,
+    // R62-io-chart-legend-datalabels-6-1: models the series-level <c:dLbls><c:delete val="1"/></c:dLbls>
+    // override (CT_DLbls' delete|Group_DLbls choice) -- Excel writes this when the user hides just
+    // this series' data labels, overriding a chart-wide showVal=1 default. Like
+    // ChartPointDataLabelFormat.IsDeleted, this must be modeled even when every other field on this
+    // record is null, otherwise the per-series suppression is silently discarded on open.
+    bool? IsDeleted = null,
     ChartDataLabelPosition? Position = null,
     bool? ShowValue = null,
     bool? ShowCategoryName = null,

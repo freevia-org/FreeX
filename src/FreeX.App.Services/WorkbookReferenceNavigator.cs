@@ -95,14 +95,26 @@ public static class WorkbookReferenceNavigator
 
         var trimmedName = text.Trim();
 
-        if (resolveScopedName?.Invoke(trimmedName) is { } scopedRange)
+        // A sheet-qualified reference to a defined name (e.g. "Sheet2!Rate") is legal in formulas
+        // and in Excel's own Name Box, but the name itself is never stored with its sheet prefix
+        // baked into the key -- strip it the same way TryParseRange does internally before falling
+        // back to the plain name lookup, so "Sheet2!Rate" resolves the same as "Rate" instead of
+        // silently failing to match any key.
+        var nameLookupText = trimmedName;
+        if (TryResolveReferenceSheet(defaultSheetId, trimmedName, resolveSheetId, out _, out var strippedRemainder) &&
+            !string.IsNullOrWhiteSpace(strippedRemainder))
+        {
+            nameLookupText = strippedRemainder;
+        }
+
+        if (resolveScopedName?.Invoke(nameLookupText) is { } scopedRange)
         {
             range = scopedRange;
             return true;
         }
 
         if (definedNames is not null &&
-            definedNames.TryGetValue(trimmedName, out var namedRange))
+            definedNames.TryGetValue(nameLookupText, out var namedRange))
         {
             range = namedRange;
             return true;

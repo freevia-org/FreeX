@@ -151,19 +151,55 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void BinaryMath_MismatchedRangeArgumentShapes_ReturnValueError()
+    public void BinaryMath_RowVectorAndColumnVectorRangeArguments_SpillToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector (A1:A2)
+        // crossed with a 1x2 row vector (B1:C1) must 2-D cross-broadcast into a 2x2 spilled
+        // result (matching Excel dynamic arrays and FreeX's own IF/CHOOSE/operator broadcast
+        // rule), not #VALUE! -- this test previously asserted the old (superseded) #VALUE!
+        // behavior for exactly this shape combination.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(4)),  (2, 1, new NumberValue(9)),
             (1, 2, new NumberValue(2)),  (1, 3, new NumberValue(4)));
 
-        _eval.Evaluate("=POWER(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=MOD(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=LOG(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=QUOTIENT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=CEILING(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=FLOOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=MROUND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        AssertGrid(_eval.Evaluate("=POWER(A1:A2,B1:C1)", sheet), new double[,] { { 16, 256 }, { 81, 6561 } });
+        AssertGrid(_eval.Evaluate("=MOD(A1:A2,B1:C1)", sheet), new double[,] { { 0, 0 }, { 1, 1 } });
+        AssertGrid(_eval.Evaluate("=LOG(A1:A2,B1:C1)", sheet), new double[,] { { 2, 1 }, { Math.Log(9) / Math.Log(2), Math.Log(9) / Math.Log(4) } });
+        AssertGrid(_eval.Evaluate("=QUOTIENT(A1:A2,B1:C1)", sheet), new double[,] { { 2, 1 }, { 4, 2 } });
+        AssertGrid(_eval.Evaluate("=CEILING(A1:A2,B1:C1)", sheet), new double[,] { { 4, 4 }, { 10, 12 } });
+        AssertGrid(_eval.Evaluate("=FLOOR(A1:A2,B1:C1)", sheet), new double[,] { { 4, 4 }, { 8, 8 } });
+        AssertGrid(_eval.Evaluate("=MROUND(A1:A2,B1:C1)", sheet), new double[,] { { 4, 4 }, { 10, 8 } });
+    }
+
+    [Fact]
+    public void BinaryMath_TrulyMismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        // Sibling no-regression: two ranges that conflict on the SAME axis (neither equal nor
+        // size-1 on that axis) must still be a genuine #VALUE! shape mismatch even under the new
+        // row-vector x column-vector cross-broadcast rule.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)), (2, 1, new NumberValue(9)),
+            (1, 2, new NumberValue(2)), (2, 2, new NumberValue(3)), (3, 2, new NumberValue(4)));
+
+        _eval.Evaluate("=POWER(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=MOD(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=LOG(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=QUOTIENT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CEILING(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=FLOOR(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=MROUND(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    private static void AssertGrid(ScalarValue value, double[,] expected, double tolerance = 1e-9)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        int rows = expected.GetLength(0);
+        int cols = expected.GetLength(1);
+        range.RowCount.Should().Be(rows);
+        range.ColCount.Should().Be(cols);
+        for (int r = 1; r <= rows; r++)
+            for (int c = 1; c <= cols; c++)
+                ((NumberValue)range.At(r, c)).Value.Should().BeApproximately(expected[r - 1, c - 1], tolerance);
     }
 
     [Fact]
@@ -241,18 +277,42 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Rounding_MismatchedDigitsArgument_ReturnsValueError()
+    public void Rounding_RowVectorAndColumnVectorDigitsArgument_SpillsToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1 (the finding's own example:
+        // ROUND({1.234;5.678},{1,2})-shaped call): a 2x1 column vector (A1:A2) crossed with a 1x2
+        // row vector (B1:C1) must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! --
+        // this test previously asserted the old (superseded) #VALUE! behavior for exactly this
+        // shape combination.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(12.345)),
             (2, 1, new NumberValue(-12.345)),
             (1, 2, new NumberValue(1)),
             (1, 3, new NumberValue(-1)));
 
-        _eval.Evaluate("=ROUND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=ROUNDUP(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=ROUNDDOWN(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=TRUNC(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        AssertGrid(_eval.Evaluate("=ROUND(A1:A2,B1:C1)", sheet), new double[,] { { 12.3, 10 }, { -12.3, -10 } });
+        AssertGrid(_eval.Evaluate("=ROUNDUP(A1:A2,B1:C1)", sheet), new double[,] { { 12.4, 20 }, { -12.4, -20 } });
+        AssertGrid(_eval.Evaluate("=ROUNDDOWN(A1:A2,B1:C1)", sheet), new double[,] { { 12.3, 10 }, { -12.3, -10 } });
+        AssertGrid(_eval.Evaluate("=TRUNC(A1:A2,B1:C1)", sheet), new double[,] { { 12.3, 10 }, { -12.3, -10 } });
+    }
+
+    [Fact]
+    public void Rounding_TrulyMismatchedDigitsArgument_ReturnsValueError()
+    {
+        // Sibling no-regression: two ranges that conflict on the SAME axis (neither equal nor
+        // size-1 on that axis) must still be a genuine #VALUE! shape mismatch even under the new
+        // row-vector x column-vector cross-broadcast rule.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(12.345)),
+            (2, 1, new NumberValue(-12.345)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(-1)),
+            (3, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=ROUND(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=ROUNDUP(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=ROUNDDOWN(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TRUNC(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -784,15 +844,33 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void TwoArgumentCombinatoricsAndTrig_MismatchedRangeArgumentShapes_ReturnValueError()
+    public void TwoArgumentCombinatoricsAndTrig_RowVectorAndColumnVectorRangeArguments_SpillToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! --
+        // this test previously asserted the old (superseded) #VALUE! behavior.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(2)), (2, 1, new NumberValue(3)),
             (1, 2, new NumberValue(4)), (1, 3, new NumberValue(5)));
 
-        _eval.Evaluate("=ATAN2(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=COMBIN(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=PERMUT(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+        AssertGrid(_eval.Evaluate("=ATAN2(A1:A2,B1:C1)", sheet),
+            new[,] { { Math.Atan2(4, 2), Math.Atan2(5, 2) }, { Math.Atan2(4, 3), Math.Atan2(5, 3) } });
+        AssertGrid(_eval.Evaluate("=COMBIN(B1:C1,A1:A2)", sheet), new double[,] { { 6, 10 }, { 4, 10 } });
+        AssertGrid(_eval.Evaluate("=PERMUT(B1:C1,A1:A2)", sheet), new double[,] { { 12, 20 }, { 24, 60 } });
+    }
+
+    [Fact]
+    public void TwoArgumentCombinatoricsAndTrig_TrulyMismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)), (2, 1, new NumberValue(3)),
+            (1, 2, new NumberValue(4)), (2, 2, new NumberValue(5)), (3, 2, new NumberValue(6)));
+
+        _eval.Evaluate("=ATAN2(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=COMBIN(B1:B3,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=PERMUT(B1:B3,A1:A2)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -1098,17 +1176,36 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void BitFunctions_MismatchedRangeArgumentShapes_ReturnValueError()
+    public void BitFunctions_RowVectorAndColumnVectorRangeArguments_SpillToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! --
+        // this test previously asserted the old (superseded) #VALUE! behavior.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
             (1, 2, new NumberValue(3)), (1, 3, new NumberValue(1)));
 
-        _eval.Evaluate("=BITAND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=BITOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=BITXOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=BITLSHIFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=BITRSHIFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        AssertGrid(_eval.Evaluate("=BITAND(A1:A2,B1:C1)", sheet), new double[,] { { 1, 1 }, { 2, 0 } });
+        AssertGrid(_eval.Evaluate("=BITOR(A1:A2,B1:C1)", sheet), new double[,] { { 7, 5 }, { 7, 7 } });
+        AssertGrid(_eval.Evaluate("=BITXOR(A1:A2,B1:C1)", sheet), new double[,] { { 6, 4 }, { 5, 7 } });
+        AssertGrid(_eval.Evaluate("=BITLSHIFT(A1:A2,B1:C1)", sheet), new double[,] { { 40, 10 }, { 48, 12 } });
+        AssertGrid(_eval.Evaluate("=BITRSHIFT(A1:A2,B1:C1)", sheet), new double[,] { { 0, 2 }, { 0, 3 } });
+    }
+
+    [Fact]
+    public void BitFunctions_TrulyMismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(3)), (2, 2, new NumberValue(1)), (3, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=BITAND(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITOR(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITXOR(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITLSHIFT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITRSHIFT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -1125,14 +1222,51 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void EngineeringBaseConversions_MismatchedNumberAndPlacesRanges_ReturnValueError()
+    public void EngineeringBaseConversions_RowVectorAndColumnVectorRangeArguments_SpillToCrossBroadcastMatrix()
     {
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
+        // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! --
+        // this test previously asserted the old (superseded) #VALUE! behavior.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
             (1, 2, new NumberValue(4)), (1, 3, new NumberValue(5)));
 
-        _eval.Evaluate("=DEC2BIN(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=BIN2HEX(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        AssertTextGrid(_eval.Evaluate("=DEC2BIN(A1:A2,B1:C1)", sheet),
+            new[,] { { "0101", "00101" }, { "0110", "00110" } });
+
+        // A1:A2 (5,6) are not valid binary digit strings, so BIN2HEX correctly errors per cell
+        // (Excel-genuine #NUM!, not a shape-mismatch #VALUE!) once the spill shape itself is valid.
+        var bin2hex = _eval.Evaluate("=BIN2HEX(A1:A2,B1:C1)", sheet).Should().BeOfType<RangeValue>().Subject;
+        bin2hex.RowCount.Should().Be(2);
+        bin2hex.ColCount.Should().Be(2);
+        for (int r = 1; r <= 2; r++)
+            for (int c = 1; c <= 2; c++)
+                bin2hex.At(r, c).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void EngineeringBaseConversions_TrulyMismatchedNumberAndPlacesRanges_ReturnValueError()
+    {
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(4)), (2, 2, new NumberValue(5)), (3, 2, new NumberValue(3)));
+
+        _eval.Evaluate("=DEC2BIN(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BIN2HEX(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    private static void AssertTextGrid(ScalarValue value, string[,] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        int rows = expected.GetLength(0);
+        int cols = expected.GetLength(1);
+        range.RowCount.Should().Be(rows);
+        range.ColCount.Should().Be(cols);
+        for (int r = 1; r <= rows; r++)
+            for (int c = 1; c <= cols; c++)
+                ((TextValue)range.At(r, c)).Value.Should().Be(expected[r - 1, c - 1]);
     }
 
     [Fact]
@@ -1244,5 +1378,27 @@ public partial class FunctionLibraryTests
             (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)),
             (2, 1, new NumberValue(2)), (2, 2, new NumberValue(4)));
         _eval.Evaluate("=MINVERSE(A1:B2)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Minverse_SmallMagnitudeWellConditioned_ReturnsInverse()
+    {
+        // Regression guard for R62-formula-matrix-6-1: diag(1e-15,1e-15) is trivially invertible
+        // (condition number 1 - as well-conditioned as a matrix can be), det = 1e-30, inverse is
+        // diag(1e+15,1e+15). Real Excel inverts this without error. FreeX previously compared the
+        // RAW (pre-elimination) pivot magnitude against a fixed absolute 1e-14 epsilon, so this
+        // uniformly-small-but-nonsingular matrix falsely returned #NUM! (the pivot threshold must
+        // scale to the matrix's own magnitude instead of using an absolute cutoff).
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1e-15)), (1, 2, new NumberValue(0)),
+            (2, 1, new NumberValue(0)), (2, 2, new NumberValue(1e-15)));
+        var result = _eval.Evaluate("=MINVERSE(A1:B2)", sheet);
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        ((NumberValue)rv.At(1, 1)).Value.Should().BeApproximately(1e+15, 1);
+        ((NumberValue)rv.At(1, 2)).Value.Should().BeApproximately(0, 1e-6);
+        ((NumberValue)rv.At(2, 1)).Value.Should().BeApproximately(0, 1e-6);
+        ((NumberValue)rv.At(2, 2)).Value.Should().BeApproximately(1e+15, 1);
     }
 }

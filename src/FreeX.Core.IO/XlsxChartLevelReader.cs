@@ -63,6 +63,11 @@ internal static class XlsxChartLevelReader
             "t" => ChartLegendPosition.Top,
             "b" => ChartLegendPosition.Bottom,
             "r" => ChartLegendPosition.Right,
+            // R62-io-chart-legend-datalabels-6-2: "tr" (top-right corner) is a real ST_LegendPos
+            // value reachable from Excel's Format Legend pane (commonly on pie charts); without
+            // this case it fell through to plain Right, stretching a compact corner legend into a
+            // full-height right-side legend on round-trip.
+            "tr" => ChartLegendPosition.TopRight,
             _ => ChartLegendPosition.Right
         };
         // R45-io-chart-datatable-legend-3-2: remember whether the file actually declared a

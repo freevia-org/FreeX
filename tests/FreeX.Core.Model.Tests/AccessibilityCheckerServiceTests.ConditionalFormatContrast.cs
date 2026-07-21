@@ -3144,7 +3144,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,BINOM.DIST.RANGE($C1,$D1,$A1,2)>0.6)", "B1", "B4");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,BINOM.INV($C1,$D1,$E1)>=2)", "B1", "B2", "B3");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,CRITBINOM($C1,$D1,$E1)=0)", "B4");
-        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,HYPERGEOM.DIST($A1,$C1,2,$H1,FALSE)>0.3)", "B1", "B4");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,HYPGEOM.DIST($A1,$C1,2,$H1,FALSE)>0.3)", "B1", "B4");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,HYPGEOMDIST($A1,$C1,2,$H1)>0.3)", "B1", "B4");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,NEGBINOM.DIST($A1,$C1,$D1,FALSE)>0.05)", "B1", "B2");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("AND($G1,NEGBINOMDIST($A1,$C1,$D1)>0.05)", "B1", "B2");
@@ -3170,7 +3170,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(BINOM.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B8", "B9");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISNA(BINOM.DIST($A1,$C1,$D1,TRUE))", "B8");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERR(BINOM.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B9");
-        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(HYPERGEOM.DIST($A1,$C1,2,$H1,TRUE))", "B3", "B5", "B6", "B8", "B9");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(HYPGEOM.DIST($A1,$C1,2,$H1,TRUE))", "B3", "B5", "B6", "B8", "B9");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(NEGBINOM.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B8", "B9");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(POISSON.DIST($A1,$C1,TRUE))", "B5", "B6", "B8", "B9");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(SERIESSUM($A1,$I1,$J1,$K1))", "B8", "B9");
@@ -3182,7 +3182,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("FISHER($A$1:$A$1)>0");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("BINOM.DIST($A$1:$A$2,$C1,$D1,TRUE)>0");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("BINOM.DIST($A1,$C1,$D1)>0");
-        AssertFormulaDiscreteStatisticalFunctionContrastLocations("HYPERGEOM.DIST($A1,$C1,2,$H1)>0");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("HYPGEOM.DIST($A1,$C1,2,$H1)>0");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("NEGBINOM.DIST($A1,$C1,$D1)>0");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("POISSON.DIST($A1,$C1,\"TRUE\")>0");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("SERIESSUM($A1,$I1,$J1,$K$1:$K$2)>0");

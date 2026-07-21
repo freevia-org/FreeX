@@ -82,10 +82,15 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
         if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
+        // R62-meta-1: a Chart now moves through the same DrawingObjectZOrder-backed path as every
+        // other supported kind. Routing it through Move(sheet.Charts, ...) instead (the old
+        // behaviour) only ever reordered the Charts list -- it never touched DrawingObjectZOrder,
+        // so a chart's Bring Forward/Send Backward had zero effect on its position relative to
+        // shapes/pictures/text boxes in the same drawing stack.
         return _kind switch
         {
-            SelectionPaneObjectKind.Chart => Move(sheet.Charts, chart => chart.Id, chart => chart.DataRange.Start),
-            SelectionPaneObjectKind.Picture or
+            SelectionPaneObjectKind.Chart or
+                SelectionPaneObjectKind.Picture or
                 SelectionPaneObjectKind.TextBox or
                 SelectionPaneObjectKind.Shape => MoveDrawingObject(sheet),
             _ => new CommandOutcome(false, "Selection pane object kind is not supported.")

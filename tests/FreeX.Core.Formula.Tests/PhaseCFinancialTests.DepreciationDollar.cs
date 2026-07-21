@@ -154,7 +154,16 @@ public partial class PhaseCFinancialTests
             Calc("DOLLARFR(1.0625,32)"),
             Calc("DOLLARFR(2.5,16)"));
 
-        EvalWithData("DOLLARDE(A1:A2,B1:C1)", (1, 1, 1.02), (2, 1, 2.16), (1, 2, 32.0), (1, 3, 16.0)).Should().Be(ErrorValue.Value);
+        // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector (A1:A2)
+        // crossed with a 1x2 row vector (B1:C1) must 2-D cross-broadcast into a 2x2 spilled
+        // result, not #VALUE! -- this previously asserted the old (superseded) #VALUE! behavior.
+        AssertApproxGrid(
+            EvalWithData("DOLLARDE(A1:A2,B1:C1)", (1, 1, 1.02), (2, 1, 2.16), (1, 2, 32.0), (1, 3, 16.0)),
+            new[,] { { Calc("DOLLARDE(1.02,32)"), Calc("DOLLARDE(1.02,16)") }, { Calc("DOLLARDE(2.16,32)"), Calc("DOLLARDE(2.16,16)") } });
+
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch.
+        EvalWithData("DOLLARDE(A1:A2,B1:B3)", (1, 1, 1.02), (2, 1, 2.16), (1, 2, 32.0), (2, 2, 16.0), (3, 2, 8.0)).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

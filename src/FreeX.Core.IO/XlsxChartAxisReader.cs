@@ -16,13 +16,51 @@ internal static class XlsxChartAxisReader
 
         if (chart.Type is ChartType.Scatter or ChartType.Bubble)
         {
-            var plotChart = chart.Type == ChartType.Bubble
-                ? plotArea.Element(ChartNs + "bubbleChart")
-                : plotArea.Element(ChartNs + "scatterChart");
-            var axisIds = ReadAxisIds(plotChart);
+            // R62-io-chart-axis-6-1: a scatter/bubble chart with a secondary axis carries MULTIPLE
+            // <c:scatterChart>/<c:bubbleChart> plot groups, each with its own axId pair — the primary
+            // group is not necessarily the FIRST one in document order. Resolve which group is primary
+            // vs secondary by the physical position (axPos) of each group's own value axis (l/b =
+            // primary, r/t = secondary) instead of blindly taking the first group's axis pair, otherwise
+            // chart.YAxis* silently ends up populated from the secondary axis's scale when the secondary
+            // group happens to be declared first.
+            var plotElementName = chart.Type == ChartType.Bubble
+                ? ChartNs + "bubbleChart"
+                : ChartNs + "scatterChart";
+            var plotGroups = plotArea.Elements(plotElementName).ToList();
             var valueAxes = plotArea.Elements(ChartNs + "valAx").ToList();
-            var xAxis = FindAxisByIdOrIndex(valueAxes, axisIds, 0);
-            var yAxis = FindAxisByIdOrIndex(valueAxes, axisIds, 1);
+
+            XElement? xAxis = null;
+            XElement? yAxis = null;
+            XElement? secondaryYAxis = null;
+
+            foreach (var group in plotGroups)
+            {
+                var groupAxisIds = ReadAxisIds(group);
+                var groupXAxis = FindAxisByIdOrIndex(valueAxes, groupAxisIds, 0);
+                var groupYAxis = FindAxisByIdOrIndex(valueAxes, groupAxisIds, 1);
+                var groupYAxisPosition = groupYAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value;
+                var isSecondaryGroup = groupYAxisPosition is "r" or "t";
+                if (isSecondaryGroup)
+                {
+                    secondaryYAxis ??= groupYAxis;
+                }
+                else if (xAxis is null && yAxis is null)
+                {
+                    xAxis = groupXAxis;
+                    yAxis = groupYAxis;
+                }
+            }
+
+            // Fallback for malformed/legacy files where axPos is missing on every group (so every
+            // group looked "secondary") — keep the previous first-group behavior rather than leaving
+            // the primary axes unresolved.
+            if (xAxis is null && yAxis is null && plotGroups.Count > 0)
+            {
+                var fallbackAxisIds = ReadAxisIds(plotGroups[0]);
+                xAxis = FindAxisByIdOrIndex(valueAxes, fallbackAxisIds, 0);
+                yAxis = FindAxisByIdOrIndex(valueAxes, fallbackAxisIds, 1);
+            }
+
             chart.XAxisTitle = ReadAxisTitle(xAxis);
             chart.YAxisTitle = ReadAxisTitle(yAxis);
             chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(xAxis));
@@ -37,6 +75,11 @@ internal static class XlsxChartAxisReader
             ApplyValueAxisProperties(yAxis, chart, useXAxis: false);
             ApplyAxisLabelFormatting(xAxis, chart, useXAxis: true);
             ApplyAxisLabelFormatting(yAxis, chart, useXAxis: false);
+
+            // R62-io-chart-axis-6-1: capture the secondary value axis's own min/max/title/log/units
+            // separately, matching the non-scatter/bubble branch below (ApplySecondaryAxisProperties)
+            // — previously this was never called for scatter/bubble at all.
+            ApplySecondaryAxisProperties(secondaryYAxis, chart);
             return;
         }
 
@@ -100,6 +143,12 @@ internal static class XlsxChartAxisReader
         var scaling = axisElement.Element(ChartNs + "scaling");
         chart.SecondaryAxisMinimum = ReadDouble(scaling?.Element(ChartNs + "min")?.Attribute("val")?.Value);
         chart.SecondaryAxisMaximum = ReadDouble(scaling?.Element(ChartNs + "max")?.Attribute("val")?.Value);
+
+        // R62-io-chart-axis-6-2: capture the secondary axis's OWN majorUnit/minorUnit — without this,
+        // the writer has no per-secondary-axis unit to fall back on and always clones the primary (Y)
+        // axis's majorUnit/minorUnit onto the secondary axis on every save.
+        chart.SecondaryAxisMajorUnit = ReadDouble(axisElement.Element(ChartNs + "majorUnit")?.Attribute("val")?.Value);
+        chart.SecondaryAxisMinorUnit = ReadDouble(axisElement.Element(ChartNs + "minorUnit")?.Attribute("val")?.Value);
 
         // R36-io-chart-axis-scaling-2-2: capture the secondary axis's OWN orientation/log-scale/
         // tick-style/crossing — these must not be conflated with the primary (Y) axis's fields
@@ -482,8 +531,23 @@ internal static class XlsxChartAxisReader
             chart.YAxisReverseOrder = categoryReverseOrder;
         else
             chart.XAxisReverseOrder = categoryReverseOrder;
-        chart.XAxisMajorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
-        chart.XAxisMinorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
+        // R62-io-chart-axis-6-3: route the category axis's OWN tick-mark styles to whichever field the
+        // renderer reads for the category axis's PHYSICAL position, same as gridlines/tickLblPos/
+        // crosses above/below — otherwise, for bar-family charts, this always writes the X* tick fields
+        // and gets clobbered a few lines later by ApplyValueAxisProperties (which, for bar charts, also
+        // targets X* via useXAxis: true), losing the category axis's own tick styles.
+        var categoryMajorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
+        var categoryMinorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
+        if (categoryAxisOnY)
+        {
+            chart.YAxisMajorTickStyle = categoryMajorTickStyle;
+            chart.YAxisMinorTickStyle = categoryMinorTickStyle;
+        }
+        else
+        {
+            chart.XAxisMajorTickStyle = categoryMajorTickStyle;
+            chart.XAxisMinorTickStyle = categoryMinorTickStyle;
+        }
         var tickLabelPositionValue = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value;
         var categoryShowLabels = tickLabelPositionValue != "none";
         var categoryTickLabelPosition = FromXlsxTickLabelPosition(tickLabelPositionValue);
@@ -529,7 +593,14 @@ internal static class XlsxChartAxisReader
             chart.XAxisMajorUnit = ReadDouble(axisElement.Element(ChartNs + "majorUnit")?.Attribute("val")?.Value);
             chart.XAxisMinorUnit = ReadDouble(axisElement.Element(ChartNs + "minorUnit")?.Attribute("val")?.Value);
         }
-        ApplyXAxisLineProperties(chart, ReadAxisLine(axisElement.Element(ChartNs + "spPr")));
+        // R62-io-chart-axis-6-3: same routing as the tick-mark styles above — the category axis's own
+        // spPr line color/thickness must land on Y* for bar-family charts, not clobber (and then be
+        // clobbered by) the value axis's X* line properties.
+        var categoryAxisLine = ReadAxisLine(axisElement.Element(ChartNs + "spPr"));
+        if (categoryAxisOnY)
+            ApplyYAxisLineProperties(chart, categoryAxisLine);
+        else
+            ApplyXAxisLineProperties(chart, categoryAxisLine);
 
         // R47-io-chart-axis-scaling-3-1: route the category axis's OWN crosses/crossesAt to Y* for
         // bar-family charts (same reasoning as gridlines/tickLblPos above) — otherwise it is always
