@@ -881,7 +881,11 @@ public sealed partial class FormulaEvaluator
             return true;
         }
 
-        var columnCoerced = columnValue is BlankValue ? new NumberValue(1) : CoerceToNumber(columnValue);
+        // An explicitly-blank column_num (trailing comma, or a genuine blank-cell reference)
+        // coerces to 0 -- Excel's "spill the whole row" behaviour -- mirroring rowCoerced's own
+        // plain CoerceToNumber(BlankValue) above, and matching BuiltInFunctions.IndexScalar's
+        // slow-path handling of the same explicit-blank-column form.
+        var columnCoerced = CoerceToNumber(columnValue);
         if (columnCoerced is ErrorValue columnCoerceError)
         {
             result = columnCoerceError;
@@ -1318,7 +1322,9 @@ public sealed partial class FormulaEvaluator
 
         var rowCoerced = CoerceToNumber(rowValue);
         if (rowCoerced is ErrorValue rowCoerceError) return rowCoerceError;
-        var columnCoerced = columnValue is BlankValue ? new NumberValue(1) : CoerceToNumber(columnValue);
+        // An explicitly-blank column_num coerces to 0 (whole-row spill), matching the same fix
+        // applied to TryEvaluateIndexDirectRange above and BuiltInFunctions.IndexScalar's slow path.
+        var columnCoerced = CoerceToNumber(columnValue);
         if (columnCoerced is ErrorValue columnCoerceError) return columnCoerceError;
 
         var rawRow = ((NumberValue)rowCoerced).Value;

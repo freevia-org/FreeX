@@ -257,22 +257,25 @@ public sealed class Lexer
 
     /// <summary>
     /// Recognizes the unquoted on-disk external-workbook sheet-qualifier form <c>[n]SheetName!</c>,
-    /// where <c>n</c> is the 1-based external-reference index (e.g. <c>[1]Sheet1!A1</c>). Excel's
-    /// quoted equivalent <c>'[1]Sheet1'!A1</c> already lexes to a single SheetQualifier token via
-    /// <see cref="ReadQuotedSheetQualifier"/> whose value is the bracketed "[1]Sheet1" string; this
-    /// produces the identical token shape/value for the unquoted form so
-    /// <see cref="ExternalSheetReferenceResolver"/> and the rest of the parser resolve both forms
-    /// the same way.
+    /// where <c>n</c> is the 1-based external-reference index (e.g. <c>[1]Sheet1!A1</c>), AND the
+    /// sibling external-workbook DEFINED-NAME reference form <c>[n]!</c> with NO sheet segment at
+    /// all (e.g. <c>[1]!TaxRate</c>, the on-disk shape for a workbook-scoped name exposed by an
+    /// external link). Excel's quoted equivalents (<c>'[1]Sheet1'!A1</c> / <c>'[1]'!TaxRate</c>)
+    /// already lex to a single SheetQualifier token via <see cref="ReadQuotedSheetQualifier"/> whose
+    /// value is the bracketed "[1]Sheet1" (or bare "[1]") string; this produces the identical token
+    /// shape/value for the unquoted forms so <see cref="ExternalSheetReferenceResolver"/> (sheet
+    /// form) / <c>Parser.ParseExternalDefinedNameReference</c> (name-only form) and the rest of the
+    /// parser resolve every shape the same way.
     ///
     /// Only matches when the bracket content is ALL DIGITS (the numeric external-reference index)
-    /// immediately closed by ']', immediately followed by an identifier-shaped sheet name, and then
-    /// '!' -- this can never collide with a structured-table-reference selector: a structured
-    /// reference selector's bracket content is a column name / '@'/'#' keyword, never immediately
-    /// followed (once the bracket closes) by a second, unbracketed identifier and '!'. Any other
-    /// shape (no digits, unterminated, no trailing sheet-name-then-'!') falls through unchanged to
-    /// <see cref="ReadStructuredReferenceSelector"/> without consuming any input, so
-    /// Table1[Column1], [@Column1], [#Totals], and every other structured-reference shape lex
-    /// exactly as before.
+    /// immediately closed by ']', immediately followed by EITHER an identifier-shaped sheet name
+    /// and then '!' OR '!' directly (zero-length sheet segment) -- this can never collide with a
+    /// structured-table-reference selector: a structured reference selector's bracket content is a
+    /// column name / '@'/'#' keyword, never immediately followed (once the bracket closes) by '!'
+    /// itself or a second, unbracketed identifier and '!'. Any other shape (no digits, unterminated,
+    /// no trailing '!') falls through unchanged to <see cref="ReadStructuredReferenceSelector"/>
+    /// without consuming any input, so Table1[Column1], [@Column1], [#Totals], and every other
+    /// structured-reference shape lex exactly as before.
     /// </summary>
     private bool TryReadExternalSheetQualifier(out Token token)
     {
@@ -293,7 +296,10 @@ public sealed class Lexer
         while (pos < _text.Length && (char.IsLetterOrDigit(_text[pos]) || _text[pos] == '_' || _text[pos] == '.'))
             pos++;
 
-        if (pos == sheetStart || pos >= _text.Length || _text[pos] != '!')
+        // pos == sheetStart here means a zero-length sheet segment -- the "[n]!Name" external
+        // defined-name shape, which is just as valid as "[n]SheetName!Ref" as long as '!' follows
+        // immediately.
+        if (pos >= _text.Length || _text[pos] != '!')
             return false;
 
         var value = _text[start..pos];

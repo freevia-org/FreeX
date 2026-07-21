@@ -169,6 +169,20 @@ public sealed partial class FormulaEvaluator
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         SingleCellReferenceRangeFunctions.Contains(name);
 
+    // SUBTOTAL/AGGREGATE's leading control arguments (SUBTOTAL's function_num; AGGREGATE's
+    // function_num and options) must NOT be wrapped into a 1x1 RangeValue when they happen to be
+    // bare cell references (e.g. =AGGREGATE(B1,C1,A5)) -- only the actual data/range arguments
+    // need the RangeValue-with-provenance treatment for hidden-row/nested-aggregate exclusion.
+    // Wrapping the control args breaks ToNumber(func_num)/ToNumber(options), which has no
+    // RangeValue case (see R58-meta-1).
+    private static bool IsSingleCellReferenceRangeDataArgument(string name, int argIndex) =>
+        name switch
+        {
+            "SUBTOTAL" => argIndex >= 1,
+            "AGGREGATE" => argIndex >= 2,
+            _ => true
+        };
+
     private static bool IsConditionalAggregateRangeArgument(string name, int argIndex) =>
         name switch
         {

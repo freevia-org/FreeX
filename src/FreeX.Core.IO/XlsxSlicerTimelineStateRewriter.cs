@@ -918,40 +918,97 @@ internal static class XlsxSlicerTimelineStateRewriter
         if (string.IsNullOrWhiteSpace(fieldName))
             return null;
 
+        // R58-io-slicer-timeline-6-1: resolve the SPECIFIC pivot cache this slicer is bound to via its
+        // SourcePivotTableName -> PivotTableModel.CacheId -> PivotCacheModel, before falling back to a
+        // name-only scan across every cache. Two independent pivot tables can each carry a field with the
+        // same name (e.g. "Region") but different shared-item lists; scanning workbook.PivotCaches in
+        // collection order and returning the first name match silently picks the wrong cache's caption
+        // list whenever the slicer's bound cache isn't first, corrupting the selection on save.
+        var boundCache = ResolveSlicerBoundPivotCache(workbook, slicer.SourcePivotTableName);
+        if (boundCache is not null)
+        {
+            var captions = TryResolveSharedItemCaptions(archive, boundCache, fieldName);
+            if (captions is not null)
+                return captions;
+        }
+
         foreach (var cache in workbook.PivotCaches)
         {
-            var field = cache.Fields.FirstOrDefault(candidate =>
-                string.Equals(candidate.Name, fieldName, StringComparison.OrdinalIgnoreCase) &&
-                candidate.SharedItems is { Count: > 0 });
-            if (field is null || string.IsNullOrEmpty(cache.PackagePart))
+            if (ReferenceEquals(cache, boundCache))
                 continue;
 
-            var cacheEntry = archive.GetEntry(XlsxPackagePath.NormalizePackagePath(cache.PackagePart));
-            if (cacheEntry is null)
-                continue;
-
-            var cacheDefinitionXml = XlsxPackageXmlEditor.LoadXml(cacheEntry);
-            var cacheFieldElement = cacheDefinitionXml.Root?
-                .Elements()
-                .FirstOrDefault(element => string.Equals(element.Name.LocalName, "cacheFields", StringComparison.OrdinalIgnoreCase))?
-                .Elements()
-                .FirstOrDefault(element =>
-                    string.Equals(element.Name.LocalName, "cacheField", StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(element.Attribute("name")?.Value, fieldName, StringComparison.OrdinalIgnoreCase));
-
-            var sharedItemsElement = cacheFieldElement?
-                .Elements()
-                .FirstOrDefault(element => string.Equals(element.Name.LocalName, "sharedItems", StringComparison.OrdinalIgnoreCase));
-            if (sharedItemsElement is null)
-                continue;
-
-            return sharedItemsElement
-                .Elements()
-                .Select(item => ResolveRawSharedItemCaption(item, field))
-                .ToList();
+            var captions = TryResolveSharedItemCaptions(archive, cache, fieldName);
+            if (captions is not null)
+                return captions;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Resolves the specific <see cref="PivotCacheModel"/> backing <paramref name="sourcePivotTableName"/>,
+    /// mirroring <see cref="ResolvePivotHostTabId"/>'s name-based pivot table lookup: find the
+    /// <see cref="PivotTableModel"/> with that name across every sheet, then match its
+    /// <see cref="PivotTableModel.CacheId"/> to a <see cref="PivotCacheModel"/> in
+    /// <see cref="Workbook.PivotCaches"/>. Returns <see langword="null"/> when the name is absent or
+    /// unresolvable so callers can fall back to the legacy name-only scan.
+    /// </summary>
+    private static PivotCacheModel? ResolveSlicerBoundPivotCache(Workbook workbook, string? sourcePivotTableName)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePivotTableName))
+            return null;
+
+        PivotTableModel? boundPivotTable = null;
+        foreach (var sheet in workbook.Sheets)
+        {
+            boundPivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+                string.Equals(pivot.Name, sourcePivotTableName, StringComparison.OrdinalIgnoreCase));
+            if (boundPivotTable is not null)
+                break;
+        }
+
+        if (boundPivotTable is null)
+            return null;
+
+        return workbook.PivotCaches.FirstOrDefault(cache => cache.CacheId == boundPivotTable.CacheId);
+    }
+
+    /// <summary>
+    /// Reads the raw per-index caption list for <paramref name="fieldName"/> from a single, specific
+    /// <see cref="PivotCacheModel"/>'s package part, or <see langword="null"/> if that cache has no such
+    /// field/shared items or its part can't be loaded.
+    /// </summary>
+    private static IReadOnlyList<string?>? TryResolveSharedItemCaptions(ZipArchive archive, PivotCacheModel cache, string fieldName)
+    {
+        var field = cache.Fields.FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, fieldName, StringComparison.OrdinalIgnoreCase) &&
+            candidate.SharedItems is { Count: > 0 });
+        if (field is null || string.IsNullOrEmpty(cache.PackagePart))
+            return null;
+
+        var cacheEntry = archive.GetEntry(XlsxPackagePath.NormalizePackagePath(cache.PackagePart));
+        if (cacheEntry is null)
+            return null;
+
+        var cacheDefinitionXml = XlsxPackageXmlEditor.LoadXml(cacheEntry);
+        var cacheFieldElement = cacheDefinitionXml.Root?
+            .Elements()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "cacheFields", StringComparison.OrdinalIgnoreCase))?
+            .Elements()
+            .FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "cacheField", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(element.Attribute("name")?.Value, fieldName, StringComparison.OrdinalIgnoreCase));
+
+        var sharedItemsElement = cacheFieldElement?
+            .Elements()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "sharedItems", StringComparison.OrdinalIgnoreCase));
+        if (sharedItemsElement is null)
+            return null;
+
+        return sharedItemsElement
+            .Elements()
+            .Select(item => ResolveRawSharedItemCaption(item, field))
+            .ToList();
     }
 
     /// <summary>

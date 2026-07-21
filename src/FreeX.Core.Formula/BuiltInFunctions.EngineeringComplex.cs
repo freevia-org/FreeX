@@ -59,7 +59,10 @@ public static partial class BuiltInFunctions
     {
         if (value is ErrorValue e) return e;
         var number = ToNumber(value);
-        return double.IsFinite(number) ? new NumberValue(ErfApprox(number)) : ErrorValue.Num;
+        // Use the shared high-precision Erf (built on the cancellation-free Erfc Chebyshev
+        // approximation) instead of a coarse ~1.5e-7-accurate rational approximation, so ERF/
+        // ERF.PRECISE match Excel to full double precision (e.g. ERF(2) = 0.9953222650189527).
+        return double.IsFinite(number) ? new NumberValue(Erf(number)) : ErrorValue.Num;
     }
 
     private static ScalarValue ErfBetweenScalar(ScalarValue lower, ScalarValue upper)
@@ -69,7 +72,7 @@ public static partial class BuiltInFunctions
         var lowerNumber = ToNumber(lower);
         var upperNumber = ToNumber(upper);
         if (!double.IsFinite(lowerNumber) || !double.IsFinite(upperNumber)) return ErrorValue.Num;
-        return NumberResult(ErfApprox(upperNumber) - ErfApprox(lowerNumber));
+        return NumberResult(Erf(upperNumber) - Erf(lowerNumber));
     }
 
     private static ScalarValue ErfcFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -85,20 +88,8 @@ public static partial class BuiltInFunctions
         var number = ToNumber(value);
         // Use the cancellation-free complementary error function (shared with NORMSDIST/NORMSCDF)
         // instead of 1-erf(x), which loses all precision (and eventually rounds to exactly 0) for
-        // large x due to catastrophic cancellation against ErfApprox's ~1.5e-7 absolute error bound.
+        // large x due to catastrophic cancellation.
         return double.IsFinite(number) ? new NumberValue(Erfc(number)) : ErrorValue.Num;
-    }
-
-    private static double ErfApprox(double x)
-    {
-        if (x == 0) return 0;
-
-        var sign = Math.Sign(x);
-        var ax = Math.Abs(x);
-        const double p = 0.3275911;
-        var t = 1.0 / (1.0 + p * ax);
-        var y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.Exp(-ax * ax);
-        return sign * y;
     }
 
     private static ScalarValue ComplexFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -107,7 +98,7 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
-        var suffix = args.Count > 2 && args[2] is not BlankValue ? ToText(args[2]).ToLowerInvariant() : "i";
+        var suffix = args.Count > 2 && args[2] is not BlankValue ? ToText(args[2]) : "i";
         if (suffix is not ("i" or "j")) return ErrorValue.Value;
 
         return MapBinaryMathArgs(args[0], args[1], (realValue, imaginaryValue) => ComplexScalar(realValue, imaginaryValue, suffix));
@@ -620,7 +611,7 @@ public static partial class BuiltInFunctions
         var text = ToText(value).Trim();
         if (text.Length == 0) return (0, 0, "i", ErrorValue.Num);
 
-        var suffix = text[^1].ToString().ToLowerInvariant();
+        var suffix = text[^1].ToString();
         if (suffix is not ("i" or "j"))
         {
             return TryParseComplexNumber(text, out var realOnly)

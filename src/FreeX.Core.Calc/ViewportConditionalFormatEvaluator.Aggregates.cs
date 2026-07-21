@@ -281,9 +281,41 @@ internal static partial class ViewportConditionalFormatEvaluator
         if (cf.Operator is not (CfOperator.Equal or CfOperator.NotEqual))
             return false;
 
+        // Excel never treats a text cell value as equal to a numeric CellIs comparand -- e.g.
+        // typing ="5"=5 evaluates to FALSE even though the text and the number "look the same".
+        // Only compare as strings when the comparand itself is genuinely textual (a quoted
+        // literal, or a formula/cell-reference that resolves to text); a numeric comparand always
+        // fails Equal and always satisfies NotEqual against a text cell.
+        if (IsNumericCellValueComparand(cf, sheet, workbook, addr, cfContext))
+            return cf.Operator == CfOperator.NotEqual;
+
         var threshold = ResolveCellValueTextThreshold(cf, sheet, workbook, addr, cfContext);
         var isEqual = threshold is not null && string.Equals(s, threshold, StringComparison.OrdinalIgnoreCase);
         return cf.Operator == CfOperator.Equal ? isEqual : !isEqual;
+    }
+
+    /// <summary>
+    /// Determines whether a CellIs Equal/NotEqual rule's Value1 comparand resolves to a genuine
+    /// number rather than text, so <see cref="MatchesCellValue"/> can apply Excel's "text never
+    /// equals a number" rule instead of falling into a coincidental case-insensitive string match.
+    /// </summary>
+    private static bool IsNumericCellValueComparand(
+        ConditionalFormat cf,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress addr,
+        CfEvaluationContext cfContext)
+    {
+        if (TryResolveCellValueScalarThreshold(cf, CfThresholdFormulaSlot.CellValue1, sheet, workbook, addr, cfContext, out var scalar))
+            return TryGetDouble(scalar, out _);
+
+        // No parsed formula cache entry: Value1 is either blank, or a bare (unquoted) literal that
+        // parsed directly as a double -- TryAddCellValueFormulaCache deliberately skips caching a
+        // formula in exactly that case, since a bare numeric literal is Excel's normal encoding for
+        // a numeric CellIs comparand (e.g. Value1="5" with no surrounding quotes).
+        return cf.Value1 is { } raw &&
+               !(raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"') &&
+               TryParseDouble(raw, out _);
     }
 
     /// <summary>

@@ -78,6 +78,30 @@ public sealed class PageLayoutRibbonActionPlannerTests
         b4PaperSize.StatusResourceKey.Should().Be("RibbonWire_PaperB4");
     }
 
+    [Theory]
+    [InlineData(PageLayoutMarginPreset.Normal, 0.3, 0.3)]
+    [InlineData(PageLayoutMarginPreset.Narrow, 0.3, 0.3)]
+    [InlineData(PageLayoutMarginPreset.Wide, 0.5, 0.5)]
+    public void PlanMarginsPreset_CarriesHeaderAndFooterMarginForPreset(
+        PageLayoutMarginPreset preset,
+        double expectedHeaderMargin,
+        double expectedFooterMargin)
+    {
+        var plan = PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset);
+
+        plan.HeaderMargin.Should().Be(expectedHeaderMargin);
+        plan.FooterMargin.Should().Be(expectedFooterMargin);
+    }
+
+    [Fact]
+    public void PlanOrientationPreset_LeavesHeaderAndFooterMarginUnset()
+    {
+        var orientation = PageLayoutRibbonActionPlanner.PlanOrientationPreset(PageLayoutOrientationPreset.Landscape);
+
+        orientation.HeaderMargin.Should().BeNull();
+        orientation.FooterMargin.Should().BeNull();
+    }
+
     private static PageLayoutRibbonActionDescriptor Descriptor(string commandId) =>
         PageLayoutRibbonActionPlanner.RibbonActionDescriptors
             .Single(descriptor => descriptor.CommandId == commandId);

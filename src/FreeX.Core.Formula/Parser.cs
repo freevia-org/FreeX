@@ -702,6 +702,14 @@ public sealed class Parser
                     return ParseSheetSpanBody(startSheet, endSheet);
                 }
 
+                // The external-workbook DEFINED-NAME reference shape "[n]!Name" (no sheet segment
+                // at all, e.g. [1]!TaxRate) lexes to a SheetQualifier token whose value is the bare
+                // "[n]" bracket with nothing to qualify against -- there is no sheet name here, so
+                // routing it through ParseSheetQualifiedReference (which expects sheetToken.Value to
+                // BE a real/resolvable sheet name) would be wrong. Build the NamedRangeNode directly.
+                if (IsExternalLinkIndexOnlyQualifier(sheetToken.Value))
+                    return ParseExternalDefinedNameReference(sheetToken.Value);
+
                 return ParseSheetQualifiedReference(sheetToken.Value);
             }
 
@@ -866,6 +874,52 @@ public sealed class Parser
 
         var value = double.Parse(Advance().Value, System.Globalization.CultureInfo.InvariantCulture);
         return new NumberNode(negative ? -value : value);
+    }
+
+    /// <summary>
+    /// True when <paramref name="value"/> is the bracketed EXTERNAL-WORKBOOK-INDEX-ONLY shape
+    /// "[n]" -- an all-digit numeric external-reference index with no sheet-name segment (e.g. the
+    /// "[1]" <see cref="Lexer.TryReadExternalSheetQualifier"/> produces for the on-disk external
+    /// defined-name reference form <c>[1]!TaxRate</c>) -- as opposed to the ordinary sheet-qualified
+    /// shape "[n]SheetName" (e.g. "[1]Sheet1") that <see cref="ParseSheetQualifiedReference"/>
+    /// handles.
+    /// </summary>
+    private static bool IsExternalLinkIndexOnlyQualifier(string value)
+    {
+        if (value.Length < 3 || value[0] != '[' || value[^1] != ']')
+            return false;
+
+        for (var i = 1; i < value.Length - 1; i++)
+        {
+            if (!char.IsDigit(value[i]))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Parses the trailing defined-name identifier of an external-workbook DEFINED-NAME reference
+    /// with no sheet segment (e.g. <c>[1]!TaxRate</c>) into a <see cref="NamedRangeNode"/> whose
+    /// <see cref="NamedRangeNode.Name"/> carries the whole "[n]!Name" text verbatim -- a real Excel
+    /// defined name can never itself contain '[', ']', or '!' (Workbook.InvalidSheetNameChars-style
+    /// name-validation rules forbid them), so this shape can never collide with an ordinary name and
+    /// is safe to pass straight through as an opaque lookup key. <see cref="NamedRangeNode.SheetQualifier"/>
+    /// is left null -- there is no sheet to qualify against here, unlike the sheet-qualified
+    /// "[n]SheetName!Name" shape. See FormulaEvaluator.Contexts.cs's
+    /// ExternalSheetReferenceResolver.TryResolveExternalDefinedName for the resolution side, which
+    /// recognizes this same "[n]!Name" shape (via SheetEvalContext.TryGetNamedFormulaText) and
+    /// rewrites it to the already-supported quoted external-sheet cell-reference form using the
+    /// cached ExternalLinkModel.DefinedNames RefersTo text.
+    /// </summary>
+    private FormulaNode ParseExternalDefinedNameReference(string bracketIndexText)
+    {
+        if (Current.Type != TokenType.NamedRange)
+            throw new FormulaParseException(
+                $"Expected a defined name after '{bracketIndexText}!' at position {Current.Position}");
+
+        var nameToken = Advance();
+        return new NamedRangeNode(bracketIndexText + "!" + nameToken.Value);
     }
 
     private FormulaNode ParseSheetQualifiedReference(string sheetName)

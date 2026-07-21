@@ -1273,23 +1273,45 @@ public sealed partial class ViewportService : IViewportService
     private static string FormatThreadedComment(ThreadedComment comment)
     {
         var body = new StringBuilder();
-        AppendCommentLine(body, comment.Author, comment.Text);
+        AppendCommentLine(body, comment.Author, comment.CreatedAtUtc, comment.Text);
         foreach (var reply in comment.Replies)
         {
             body.AppendLine();
             body.AppendLine();
-            AppendCommentLine(body, reply.Author, reply.Text);
+            AppendCommentLine(body, reply.Author, reply.CreatedAtUtc, reply.Text);
         }
 
         return body.ToString();
     }
 
-    private static void AppendCommentLine(StringBuilder body, string? author, string text)
+    private static void AppendCommentLine(StringBuilder body, string? author, DateTimeOffset? createdAtUtc, string text)
     {
-        if (!string.IsNullOrWhiteSpace(author))
-            body.Append(author.Trim()).Append(": ");
+        var heading = FormatCommentMessageHeading(author, createdAtUtc);
+        if (!string.IsNullOrEmpty(heading))
+            body.Append(heading).Append(": ");
 
         body.Append(text);
+    }
+
+    /// <summary>
+    /// Builds the "{Author} - yyyy-MM-dd HH:mm UTC" heading for one message in the hover-preview
+    /// popup, matching FreeX.App.Presentation.Comments.ThreadedCommentDialogPlanner.FormatMessageHeading
+    /// (the format the inline comment editor uses for the very same thread). Core.Calc cannot
+    /// reference App.Presentation, so the format is intentionally duplicated here rather than
+    /// shared -- the two must be kept in sync by hand so the hover popup and the editor agree on
+    /// every message's author/timestamp heading instead of the hover view silently dropping the
+    /// timestamp.
+    /// </summary>
+    private static string FormatCommentMessageHeading(string? author, DateTimeOffset? createdAtUtc)
+    {
+        var label = author?.Trim() ?? string.Empty;
+        if (createdAtUtc is null)
+            return label;
+
+        var formatted = createdAtUtc.Value
+            .ToUniversalTime()
+            .ToString("yyyy-MM-dd HH:mm 'UTC'", System.Globalization.CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(label) ? formatted : $"{label} - {formatted}";
     }
 
     // ── Conditional format evaluation ─────────────────────────────────────────

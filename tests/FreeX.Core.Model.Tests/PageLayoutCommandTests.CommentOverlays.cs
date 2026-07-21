@@ -56,8 +56,8 @@ public sealed partial class PageLayoutCommandTests
             [1, 2, 3]);
 
         overlays.Should().Equal(
-            new WorksheetDisplayedComment(a1, "check header", 0, 0),
-            new WorksheetDisplayedComment(b2, "review total", 1, 1),
-            new WorksheetDisplayedComment(c2, "legacy note", 1, 2));
+            new WorksheetDisplayedComment(a1, "check header", 0, 0, CellCommentDisplayKind.ThreadedComment),
+            new WorksheetDisplayedComment(b2, "review total", 1, 1, CellCommentDisplayKind.ThreadedComment),
+            new WorksheetDisplayedComment(c2, "legacy note", 1, 2, CellCommentDisplayKind.Note));
     }
 }

@@ -123,7 +123,8 @@ public partial class GridView
         if (IsInlineCommentEditorOpen())
             return;
 
-        if (TryGetCommentPreviewAt(pos, out var cell, out var rect))
+        if (TryGetCommentPreviewAt(pos, out var cell, out var rect) &&
+            !IsPinnedNoteAddress(cell.Row, cell.Col))
         {
             ShowCommentPreview(cell, rect, CommentPreviewActivation.Hover);
             return;
@@ -131,6 +132,12 @@ public partial class GridView
 
         RestoreSelectedCommentPreview();
     }
+
+    // A cell whose note is pinned always-visible (Excel's "Show Comment"/"Always Show") already
+    // renders via RefreshPinnedNoteBoxes's independent _pinnedNoteBorders overlay, so the transient
+    // hover-preview border must not also be raised for it -- otherwise the two boxes overlap.
+    private bool IsPinnedNoteAddress(uint row, uint col) =>
+        PinnedNoteAddresses is { } pinned && pinned.Contains((row, col));
 
     private void UpdateCommentPreviewForSelection()
     {

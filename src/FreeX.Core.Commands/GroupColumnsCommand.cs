@@ -33,31 +33,38 @@ public sealed class GroupColumnsCommand : IWorkbookCommand
 
         _previousLevels = [];
         _previouslyHiddenByGroup = [];
-        _previousCollapsedAnchors = _level == 0 ? [.. sheet.CollapsedAnchorCols] : null;
+        _previousCollapsedAnchors = [.. sheet.CollapsedAnchorCols];
         for (uint c = _startCol; c <= _endCol; c++)
         {
             sheet.ColOutlineLevels.TryGetValue(c, out var prev);
             _previousLevels[c] = prev;
+            int newLevel;
             if (_level == 0)
             {
                 sheet.ColOutlineLevels.Remove(c);
-                if (sheet.GroupHiddenCols.Remove(c))
-                    _previouslyHiddenByGroup.Add(c);
+                newLevel = 0;
             }
             else
-                sheet.ColOutlineLevels[c] = OutlineGroupingService.GetGroupedOutlineLevel(prev, _level, _preserveExistingHierarchy);
+            {
+                newLevel = OutlineGroupingService.GetGroupedOutlineLevel(prev, _level, _preserveExistingHierarchy);
+                sheet.ColOutlineLevels[c] = newLevel;
+            }
+
+            // A column whose own outline level just decreased (a full Ungroup to 0, or a partial
+            // Ungroup of a nested subgroup down to a nonzero level) can no longer rely on whatever
+            // nested subgroup previously justified hiding it -- un-hide it here regardless of the
+            // target level, not only when ungrouping all the way to 0 (R58-commands-outline-group-6-1).
+            if (newLevel < prev && sheet.GroupHiddenCols.Remove(c))
+                _previouslyHiddenByGroup.Add(c);
         }
 
-        if (_level == 0)
-        {
-            ColumnGroupAnchorHelper.RemoveInvalidAnchorsAffectedByRange(
-                sheet.ColOutlineLevels,
-                sheet.GroupHiddenCols,
-                sheet.CollapsedAnchorCols,
-                sheet.OutlineSummaryRight ?? true,
-                _startCol,
-                _endCol);
-        }
+        ColumnGroupAnchorHelper.RemoveInvalidAnchorsAffectedByRange(
+            sheet.ColOutlineLevels,
+            sheet.GroupHiddenCols,
+            sheet.CollapsedAnchorCols,
+            sheet.OutlineSummaryRight ?? true,
+            _startCol,
+            _endCol);
 
         return new CommandOutcome(true);
     }

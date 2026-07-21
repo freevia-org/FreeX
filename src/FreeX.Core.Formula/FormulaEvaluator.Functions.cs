@@ -243,7 +243,8 @@ public sealed partial class FormulaEvaluator
                     : context.GetCellValue(aggregateCell.Row, aggregateCell.ColumnNumber);
                 expandedArgs.Add(new ReferencedScalarValue(value));
             }
-            else if (arg is CellRefNode cell && isSingleCellReferenceRangeFunction)
+            else if (arg is CellRefNode cell && isSingleCellReferenceRangeFunction &&
+                     IsSingleCellReferenceRangeDataArgument(functionName, argIndex))
             {
                 if (cell.SheetName is not null && !context.SheetExists(cell.SheetName))
                 {

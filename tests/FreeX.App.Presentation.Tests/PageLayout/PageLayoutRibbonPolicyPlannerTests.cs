@@ -22,6 +22,28 @@ public sealed class PageLayoutRibbonPolicyPlannerTests
     }
 
     [Theory]
+    [InlineData(PageLayoutMarginPreset.Normal, 0.3)]
+    [InlineData(PageLayoutMarginPreset.Narrow, 0.3)]
+    [InlineData(PageLayoutMarginPreset.Wide, 0.5)]
+    public void ResolveHeaderMargin_MatchesExcelsMarginsGalleryPresets(
+        PageLayoutMarginPreset preset,
+        double expectedHeaderMargin)
+    {
+        PageLayoutRibbonPolicyPlanner.ResolveHeaderMargin(preset).Should().Be(expectedHeaderMargin);
+    }
+
+    [Theory]
+    [InlineData(PageLayoutMarginPreset.Normal, 0.3)]
+    [InlineData(PageLayoutMarginPreset.Narrow, 0.3)]
+    [InlineData(PageLayoutMarginPreset.Wide, 0.5)]
+    public void ResolveFooterMargin_MatchesExcelsMarginsGalleryPresets(
+        PageLayoutMarginPreset preset,
+        double expectedFooterMargin)
+    {
+        PageLayoutRibbonPolicyPlanner.ResolveFooterMargin(preset).Should().Be(expectedFooterMargin);
+    }
+
+    [Theory]
     [InlineData(PageLayoutOrientationPreset.Portrait, WorksheetPageOrientation.Portrait)]
     [InlineData(PageLayoutOrientationPreset.Landscape, WorksheetPageOrientation.Landscape)]
     public void ResolveOrientation_MapsRibbonPresetToWorksheetOrientation(

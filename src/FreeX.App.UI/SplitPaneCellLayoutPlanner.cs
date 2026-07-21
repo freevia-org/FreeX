@@ -222,6 +222,7 @@ public static class SplitPaneCellLayoutPlanner
         {
             DisplayText = string.Empty,
             HasComment = false,
+            CommentDisplay = null,
             ConditionalIcon = null,
             ConditionalDataBar = null,
         };

@@ -33,31 +33,38 @@ public sealed class GroupRowsCommand : IWorkbookCommand
 
         _previousLevels = [];
         _previouslyHiddenByGroup = [];
-        _previousCollapsedAnchors = _level == 0 ? [.. sheet.CollapsedAnchorRows] : null;
+        _previousCollapsedAnchors = [.. sheet.CollapsedAnchorRows];
         for (uint r = _startRow; r <= _endRow; r++)
         {
             sheet.RowOutlineLevels.TryGetValue(r, out var prev);
             _previousLevels[r] = prev;
+            int newLevel;
             if (_level == 0)
             {
                 sheet.RowOutlineLevels.Remove(r);
-                if (sheet.GroupHiddenRows.Remove(r))
-                    _previouslyHiddenByGroup.Add(r);
+                newLevel = 0;
             }
             else
-                sheet.RowOutlineLevels[r] = OutlineGroupingService.GetGroupedOutlineLevel(prev, _level, _preserveExistingHierarchy);
+            {
+                newLevel = OutlineGroupingService.GetGroupedOutlineLevel(prev, _level, _preserveExistingHierarchy);
+                sheet.RowOutlineLevels[r] = newLevel;
+            }
+
+            // A row whose own outline level just decreased (a full Ungroup to 0, or a partial
+            // Ungroup of a nested subgroup down to a nonzero level) can no longer rely on whatever
+            // nested subgroup previously justified hiding it -- un-hide it here regardless of the
+            // target level, not only when ungrouping all the way to 0 (R58-commands-outline-group-6-1).
+            if (newLevel < prev && sheet.GroupHiddenRows.Remove(r))
+                _previouslyHiddenByGroup.Add(r);
         }
 
-        if (_level == 0)
-        {
-            RowGroupAnchorHelper.RemoveInvalidAnchorsAffectedByRange(
-                sheet.RowOutlineLevels,
-                sheet.GroupHiddenRows,
-                sheet.CollapsedAnchorRows,
-                sheet.OutlineSummaryBelow ?? true,
-                _startRow,
-                _endRow);
-        }
+        RowGroupAnchorHelper.RemoveInvalidAnchorsAffectedByRange(
+            sheet.RowOutlineLevels,
+            sheet.GroupHiddenRows,
+            sheet.CollapsedAnchorRows,
+            sheet.OutlineSummaryBelow ?? true,
+            _startRow,
+            _endRow);
 
         return new CommandOutcome(true);
     }

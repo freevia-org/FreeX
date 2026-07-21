@@ -1880,6 +1880,36 @@ public sealed class WorkbookSession
         FormulaEditAddress = null;
     }
 
+    /// <summary>
+    /// Excel auto-clears a cell's red "Circle Invalid Data" oval the instant the flagged value is
+    /// corrected -- the user never has to manually re-run Data &gt; Data Validation &gt; Circle
+    /// Invalid Data. Both shells keep their circled-cell overlay as a simple list that is otherwise
+    /// only ever (re)populated by a fresh Circle Invalid Data run and cleared by Clear Validation
+    /// Circles, so this shared, host-agnostic helper re-checks <paramref name="circledCells"/>
+    /// against a fresh <see cref="DataValidationCirclePlanner.FindInvalidDataCells"/> scan of
+    /// <paramref name="activeSheet"/> and drops any entry that no longer violates its rule. Entries
+    /// that belong to a different (inactive) sheet are left untouched, since the fresh scan only
+    /// covers <paramref name="activeSheet"/>. Returns <paramref name="circledCells"/> unchanged
+    /// (same reference) when nothing needed pruning, so callers can cheaply detect a no-op.
+    /// </summary>
+    public static IReadOnlyList<CellAddress> PruneCorrectedValidationCircles(
+        Workbook workbook, Sheet activeSheet, IReadOnlyList<CellAddress> circledCells)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(activeSheet);
+        ArgumentNullException.ThrowIfNull(circledCells);
+
+        if (circledCells.Count == 0)
+            return circledCells;
+
+        var stillInvalid = new HashSet<CellAddress>(DataValidationCirclePlanner.FindInvalidDataCells(workbook, activeSheet));
+        var pruned = circledCells
+            .Where(address => address.Sheet != activeSheet.Id || stillInvalid.Contains(address))
+            .ToList();
+
+        return pruned.Count == circledCells.Count ? circledCells : pruned;
+    }
+
     public WorkbookCellEditResult CommitCellText(string text, bool useR1C1ReferenceStyle = false)
     {
         ArgumentNullException.ThrowIfNull(text);

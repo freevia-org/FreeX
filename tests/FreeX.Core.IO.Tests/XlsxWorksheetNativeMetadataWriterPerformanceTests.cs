@@ -15,7 +15,13 @@ public sealed class XlsxWorksheetNativeMetadataWriterPerformanceTests
 
         source.Should().Contain("foreach (var sheet in workbook.Sheets)");
         source.Should().Contain($"var metadata = sheet.{propertyName};");
-        source.Should().Contain("if (metadata is null)");
+        // A plain substring (no required closing paren) so this still matches
+        // XlsxWorksheetPrimaryViewMetadataWriter's extended guard ("if (metadata is null &&
+        // !isActiveSheet)", which additionally still visits the active sheet even with no metadata
+        // so tabSelected can be synced -- see R58-services-zoom-view-state-6-1) as well as the
+        // plain "if (metadata is null)" early-exit used by the other writers here; the actual
+        // performance contract under test is the absence of a LINQ filter iterator below.
+        source.Should().Contain("if (metadata is null");
         source.Should().NotContain(
             "workbook.Sheets.Where(",
             "worksheet native metadata saving should avoid allocating a LINQ filter iterator over workbook sheets");

@@ -185,7 +185,11 @@ public static partial class BuiltInFunctions
         double rawRowNum = ToNumber(rowValue);
         if (!double.IsFinite(rawRowNum) || rawRowNum > int.MaxValue) return ErrorValue.Value;
         int rowNum = (int)rawRowNum;
-        double rawColNum = columnValue is BlankValue ? 1.0 : ToNumber(columnValue);
+        // An explicitly-blank column_num (trailing comma, or a genuine blank-cell reference)
+        // coerces to 0 -- the same "spill the whole row" behaviour Excel gives INDEX(range,row_num,0)
+        // -- mirroring row_num's own plain ToNumber(BlankValue)==0.0 coercion two lines above. This
+        // is the exact symmetric counterpart of INDEX(range,,col_num) spilling the whole column.
+        double rawColNum = ToNumber(columnValue);
         if (!double.IsFinite(rawColNum) || rawColNum > int.MaxValue) return ErrorValue.Value;
         int colNum = (int)rawColNum;
 

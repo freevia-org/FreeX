@@ -150,8 +150,8 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Volume, "ml", 0.001);
         Add(UnitCategory.Volume, "cl", 0.01);
         Add(UnitCategory.Volume, "dl", 0.1);
-        Add(UnitCategory.Volume, "Nmi3", 6352182208);
-        Add(UnitCategory.Volume, "Nmi^3", 6352182208);
+        Add(UnitCategory.Volume, "Nmi3", 6352182208000);
+        Add(UnitCategory.Volume, "Nmi^3", 6352182208000);
 
         // Speed (base = m/s)
         Add(UnitCategory.Speed, "m/s", 1);

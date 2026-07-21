@@ -19,10 +19,19 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
     internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
     {
+        var activeSheet = ResolveActiveSheet(workbook);
+
         foreach (var sheet in workbook.Sheets)
         {
             var metadata = sheet.PrimaryViewMetadata;
-            if (metadata is null)
+            var isActiveSheet = ReferenceEquals(sheet, activeSheet);
+
+            // A sheet with no preserved sheetView metadata at all (never had any non-modeled
+            // attribute, e.g. a plain sheet that was never the active tab) has nothing here to
+            // reconcile -- UNLESS it is the currently active sheet, in which case tabSelected="1"
+            // must still be stamped onto its sheetView below even though there is no load-time bag
+            // to drive anything else.
+            if (metadata is null && !isActiveSheet)
                 continue;
 
             if (!session.TryGetWorksheet(sheet, out var worksheetEdit))
@@ -51,18 +60,26 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
             // attribute entirely. Reapplying a stale value from the load-time native metadata bag for
             // any of these would silently undo that intentional removal/change (e.g. resurrecting
             // rightToLeft="1" after the user toggled Sheet.IsRightToLeft to false -- see the regression
-            // this guards against).
-            var (pvAttrs, pvChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetView"));
+            // this guards against). tabSelected is excluded for the same reason: it is driven purely
+            // by which sheet is currently active (Workbook.ActiveSheetIndex), never by the load-time
+            // bag -- see the explicit tabSelected sync below.
+            var (pvAttrs, pvChildren) = XmlNativeBagSerializer.Deserialize(metadata?.Get("sheetView"));
             XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
                 sheetView,
                 pvAttrs,
                 [
                     "workbookViewId", "view", "showGridLines", "showRowColHeaders", "showRuler", "zoomScale",
-                    "showFormulas", "topLeftCell", "showZeros", "rightToLeft",
+                    "showFormulas", "topLeftCell", "showZeros", "rightToLeft", "tabSelected",
                     "zoomScaleNormal", "zoomScaleSheetLayoutView", "zoomScalePageLayoutView"
                 ]);
 
             RefreshPerViewModeZoom(sheetView, sheet, pvAttrs);
+
+            // Excel marks exactly one sheetView (the active tab) with tabSelected="1" and omits the
+            // attribute on every other sheet; sync it here from the live Workbook.ActiveSheetIndex on
+            // every save so switching the active sheet and saving actually repoints it, instead of
+            // leaving whichever sheet was active at load time permanently marked selected.
+            sheetView.SetAttributeValue("tabSelected", isActiveSheet ? "1" : null);
 
             if (pvChildren.Count > 0)
             {
@@ -85,6 +102,24 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
     private static bool IsModeledPrimaryViewElement(string name) =>
         name is "pane" or "selection";
+
+    // Mirrors the same workbook-view-index -> Sheet resolution XlsxWorkbookMetadataWriter uses for
+    // bookViews/workbookView/@activeTab (ClampToVisibleSheetIndex), minus the hidden-sheet redirect:
+    // an out-of-range or absent ActiveSheetIndex falls back to the first sheet, matching Excel's own
+    // "always exactly one selected tab" invariant.
+    private static Sheet? ResolveActiveSheet(Workbook workbook)
+    {
+        if (workbook.Sheets.Count == 0)
+            return null;
+
+        var index = workbook.ActiveSheetIndex ?? 0;
+        if (index < 0)
+            index = 0;
+        else if (index >= workbook.Sheets.Count)
+            index = workbook.Sheets.Count - 1;
+
+        return workbook.Sheets[index];
+    }
 
     private static readonly string[] PerViewModeZoomAttributeNames =
         ["zoomScaleNormal", "zoomScaleSheetLayoutView", "zoomScalePageLayoutView"];
@@ -117,7 +152,27 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
         };
 
         var zoomValue = sheet.ZoomPercent.ToString(CultureInfo.InvariantCulture);
-        XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetView, currentZoomAttribute, zoomValue);
+
+        // FreeX models a single live Sheet.ZoomPercent shared by all three view modes (no per-view-
+        // mode zoom memory of its own -- see the type comment above), so switching view mode with no
+        // zoom action at all simply carries the PREVIOUS mode's zoom value into ZoomPercent
+        // unchanged. Blindly overwriting the newly-current mode's own remembered zoomScale<Mode>
+        // attribute with that merely-inherited value would silently discard Excel's genuine
+        // per-mode zoom memory for a save that never touched zoom (see the regression this guards
+        // against). Without a dedicated "did the user actually zoom while in this mode" model flag,
+        // the only available signal is whether the live value matches one of the file's OTHER
+        // per-mode zoom attributes as loaded: if so, it was almost certainly just inherited from the
+        // mode the user switched out of, so the current mode's own stale value (already reseeded
+        // above) is left untouched. Only a live value that matches none of the other modes' loaded
+        // zoom is treated as a genuine zoom change and persisted into the current mode's attribute.
+        var matchesAnotherModesLoadedZoom = pvAttrs is not null &&
+            PerViewModeZoomAttributeNames.Any(attributeName =>
+                attributeName != currentZoomAttribute &&
+                pvAttrs.TryGetValue(attributeName, out var otherLoadedValue) &&
+                string.Equals(otherLoadedValue, zoomValue, StringComparison.Ordinal));
+
+        if (!matchesAnotherModesLoadedZoom)
+            XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetView, currentZoomAttribute, zoomValue);
     }
 
     private static XElement? FindPrimarySheetView(XElement sheetViews)

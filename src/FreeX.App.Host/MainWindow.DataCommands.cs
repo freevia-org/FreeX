@@ -82,6 +82,7 @@ public partial class MainWindow
             SetActiveCell(destination);
             EnsureCellVisible(destination);
             UpdateViewport();
+            PruneCorrectedValidationCircles();
             RefreshStatusBar();
             RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, null, imported.Sheets.Count));
         }
@@ -163,6 +164,7 @@ public partial class MainWindow
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
+        PruneCorrectedValidationCircles();
     }
 
     private void ApplyTextToColumnsRangeSelection(
@@ -237,6 +239,7 @@ public partial class MainWindow
             MessageBoxButton.OK,
             MessageBoxImage.Information);
         UpdateViewport();
+        PruneCorrectedValidationCircles();
     }
 
     private void AdvancedFilterBtn_Click(object sender, RoutedEventArgs e)
@@ -272,6 +275,7 @@ public partial class MainWindow
         if (result.CopyToCell is { } destinationCell)
             SetActiveCell(destinationCell);
         UpdateViewport();
+        PruneCorrectedValidationCircles();
         RefreshStatusBar();
     }
 
@@ -327,6 +331,7 @@ public partial class MainWindow
         SetActiveCell(dialog.Result.DestinationCell);
         EnsureCellVisible(dialog.Result.DestinationCell);
         UpdateViewport();
+        PruneCorrectedValidationCircles();
     }
 
     private void CircleInvalidDataMenuItem_Click(object sender, RoutedEventArgs e)
@@ -360,6 +365,33 @@ public partial class MainWindow
         SheetGrid.ValidationCircleCells = null;
         UpdateViewport();
         RefreshStatusBar();
+    }
+
+    // Excel auto-clears a cell's red "invalid data" circle the instant the flagged value is
+    // corrected -- the user never has to manually re-run Data Validation > Circle Invalid Data.
+    // SheetGrid.ValidationCircleCells is otherwise only ever (re)populated by
+    // CircleInvalidDataMenuItem_Click and cleared by ClearValidationCirclesMenuItem_Click, so any
+    // data-changing command in this file that can land on an already-circled cell (Get Data,
+    // Text to Columns, Remove Duplicates, Advanced Filter, Consolidate, Subtotal, Data Table) needs
+    // to re-check the still-circled set afterward, or a corrected cell stays circled until the user
+    // manually re-runs the command.
+    private void PruneCorrectedValidationCircles()
+    {
+        if (SheetGrid.ValidationCircleCells is not { Count: > 0 } circled)
+            return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        // The actual re-check is the shared WorkbookSession.PruneCorrectedValidationCircles helper
+        // (FreeX.App.Services) so the Avalonia shell's equivalent overlay (MainWindow.DataTools.cs)
+        // applies the identical rule.
+        var pruned = WorkbookSession.PruneCorrectedValidationCircles(_workbook, sheet, circled);
+        if (ReferenceEquals(pruned, circled))
+            return;
+
+        SheetGrid.ValidationCircleCells = pruned.Count == 0 ? null : pruned;
     }
 
     private void ApplyConsolidateRangeSelection(
@@ -632,6 +664,7 @@ public partial class MainWindow
 
             RecalculateIfAutomatic(removeOutcome.AffectedCells ?? []);
             UpdateViewport();
+            PruneCorrectedValidationCircles();
             return;
         }
 
@@ -659,6 +692,7 @@ public partial class MainWindow
         SelectSubtotalResultRange(
             SubtotalPlanner.ExpandRangeForInsertedSubtotalRows(sourceRange, outcome.AffectedCells));
         UpdateViewport();
+        PruneCorrectedValidationCircles();
     }
 
     private void SelectSubtotalResultRange(GridRange range)
@@ -774,6 +808,7 @@ public partial class MainWindow
 
         RecalculateWorkbook();
         UpdateViewport();
+        PruneCorrectedValidationCircles();
         RefreshSheetTabs();
         if (!refreshedSelectionUi)
             RefreshStatusBar();
@@ -817,6 +852,7 @@ public partial class MainWindow
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
+        PruneCorrectedValidationCircles();
         RefreshStatusBar();
     }
 

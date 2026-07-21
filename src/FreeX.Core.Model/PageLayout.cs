@@ -60,9 +60,9 @@ public readonly record struct WorksheetPageMargins(
     double Top,
     double Bottom)
 {
-    public static WorksheetPageMargins Normal { get; } = new(1.0, 1.0, 1.0, 1.0);
+    public static WorksheetPageMargins Normal { get; } = new(0.7, 0.7, 0.75, 0.75);
     public static WorksheetPageMargins Wide { get; } = new(1.25, 1.25, 1.0, 1.0);
-    public static WorksheetPageMargins Narrow { get; } = new(0.5, 0.5, 0.5, 0.5);
+    public static WorksheetPageMargins Narrow { get; } = new(0.25, 0.25, 0.75, 0.75);
 }
 
 public readonly record struct WorksheetScaleToFit(
@@ -114,7 +114,8 @@ public readonly record struct WorksheetDisplayedComment(
     CellAddress Address,
     string Text,
     int RowIndex,
-    int ColumnIndex);
+    int ColumnIndex,
+    CellCommentDisplayKind Kind = CellCommentDisplayKind.Note);
 
 public static class WorksheetPageLayout
 {
@@ -242,20 +243,33 @@ public static class WorksheetPageLayout
         // have an entry for the same address. The threaded comment is the real, currently-authored
         // content (author, replies, resolution) and must win; the legacy dictionary only fills in
         // addresses that have a plain (non-threaded) note and no threaded comment at all.
+        //
+        // The display kind (Note / ThreadedComment / Mixed) mirrors the same address-presence
+        // logic the live on-screen indicator uses (see ViewportService.CreateCellCommentDisplay),
+        // so a print/PDF renderer can recover which color the on-screen triangle used for that
+        // address instead of the merge silently collapsing everything to plain text.
         var mergedComments = threadedComments
-            .Select(pair => new KeyValuePair<CellAddress, string>(pair.Key, pair.Value.Text))
-            .Concat(comments.Where(pair => !threadedComments.ContainsKey(pair.Key)));
+            .Select(pair => (
+                Key: pair.Key,
+                Text: pair.Value.Text,
+                Kind: comments.ContainsKey(pair.Key)
+                    ? CellCommentDisplayKind.Mixed
+                    : CellCommentDisplayKind.ThreadedComment))
+            .Concat(comments
+                .Where(pair => !threadedComments.ContainsKey(pair.Key))
+                .Select(pair => (Key: pair.Key, Text: pair.Value, Kind: CellCommentDisplayKind.Note)));
 
         return mergedComments
-            .Where(pair => rowIndexes.ContainsKey(pair.Key.Row) && columnIndexes.ContainsKey(pair.Key.Col))
-            .Where(pair => shownComments is null || shownComments.Contains(pair.Key))
-            .OrderBy(pair => rowIndexes[pair.Key.Row])
-            .ThenBy(pair => columnIndexes[pair.Key.Col])
-            .Select(pair => new WorksheetDisplayedComment(
-                pair.Key,
-                pair.Value,
-                rowIndexes[pair.Key.Row],
-                columnIndexes[pair.Key.Col]))
+            .Where(item => rowIndexes.ContainsKey(item.Key.Row) && columnIndexes.ContainsKey(item.Key.Col))
+            .Where(item => shownComments is null || shownComments.Contains(item.Key))
+            .OrderBy(item => rowIndexes[item.Key.Row])
+            .ThenBy(item => columnIndexes[item.Key.Col])
+            .Select(item => new WorksheetDisplayedComment(
+                item.Key,
+                item.Text,
+                rowIndexes[item.Key.Row],
+                columnIndexes[item.Key.Col],
+                item.Kind))
             .ToList();
     }
 

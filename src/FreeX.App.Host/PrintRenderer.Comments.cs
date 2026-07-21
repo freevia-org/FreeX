@@ -41,7 +41,8 @@ public static partial class PrintRenderer
             ? Brushes.White
             : new SolidColorBrush(Color.FromRgb(255, 255, 225));
         var border = new Pen(blackAndWhite ? Brushes.Black : new SolidColorBrush(Color.FromRgb(128, 128, 128)), 0.75);
-        var indicator = blackAndWhite ? Brushes.Black : new SolidColorBrush(Color.FromRgb(192, 0, 0));
+        var noteIndicator = blackAndWhite ? Brushes.Black : new SolidColorBrush(Color.FromRgb(192, 0, 0));
+        var threadedIndicator = blackAndWhite ? Brushes.Black : new SolidColorBrush(Color.FromRgb(124, 55, 158));
         var typeface = new Typeface("Segoe UI");
 
         foreach (var overlay in overlays)
@@ -57,6 +58,10 @@ public static partial class PrintRenderer
                 ctx.LineTo(new Point(cellLeft + colWidth, cellTop + 7), true, false);
             }
             triangle.Freeze();
+            // Note (legacy) prints red; ThreadedComment/Mixed print the same purple #7C379E used
+            // on-screen by GridView.Rendering.CommentIndicatorBrush, so the printed page matches
+            // what the user actually saw on the sheet.
+            var indicator = overlay.Kind == CellCommentDisplayKind.Note ? noteIndicator : threadedIndicator;
             dc.DrawGeometry(indicator, null, triangle);
 
             var boxWidth = Math.Min(180, Math.Max(80, colWidth * 2.2));

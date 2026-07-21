@@ -405,7 +405,7 @@ internal static class XlsxSlicerTimelineWriter
     // for yet) so the cache definition is left exactly as it was before this fix in that case.
     private static XElement? BuildPivotSlicerCacheDataElement(Workbook workbook, SlicerModel slicer)
     {
-        var field = ResolveSlicerSharedItemsField(workbook, slicer.SourceFieldName);
+        var field = ResolveSlicerSharedItemsField(workbook, slicer);
         if (field?.SharedItems is not { Count: > 0 } sharedItems)
             return null;
 
@@ -436,13 +436,33 @@ internal static class XlsxSlicerTimelineWriter
                     items)));
     }
 
-    private static PivotCacheFieldModel? ResolveSlicerSharedItemsField(Workbook workbook, string? sourceFieldName)
+    // R58-io-slicer-timeline-6-1: resolve the SPECIFIC pivot cache this slicer is bound to (via
+    // SourcePivotTableName -> PivotTableModel.CacheId -> PivotCacheModel) before falling back to a
+    // name-only scan across every cache in the workbook. Two independent pivot tables can each carry a
+    // field with the same name but different shared-item lists; a name-only scan in collection order
+    // would pick whichever cache happens to come first, authoring the wrong item/selection list for a
+    // freshly inserted slicer whenever its bound cache isn't first.
+    private static PivotCacheFieldModel? ResolveSlicerSharedItemsField(Workbook workbook, SlicerModel slicer)
     {
+        var sourceFieldName = slicer.SourceFieldName;
         if (string.IsNullOrWhiteSpace(sourceFieldName))
             return null;
 
+        var boundCache = ResolveSlicerBoundPivotCache(workbook, slicer.SourcePivotTableName);
+        if (boundCache is not null)
+        {
+            var boundField = boundCache.Fields.FirstOrDefault(field =>
+                string.Equals(field.Name, sourceFieldName, StringComparison.OrdinalIgnoreCase) &&
+                field.SharedItems is { Count: > 0 });
+            if (boundField is not null)
+                return boundField;
+        }
+
         foreach (var cache in workbook.PivotCaches)
         {
+            if (ReferenceEquals(cache, boundCache))
+                continue;
+
             foreach (var field in cache.Fields)
             {
                 if (string.Equals(field.Name, sourceFieldName, StringComparison.OrdinalIgnoreCase) &&
@@ -454,6 +474,34 @@ internal static class XlsxSlicerTimelineWriter
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Resolves the specific <see cref="PivotCacheModel"/> backing <paramref name="sourcePivotTableName"/>,
+    /// mirroring <see cref="ResolvePivotHostTabId"/>'s name-based pivot table lookup: find the
+    /// <see cref="PivotTableModel"/> with that name across every sheet, then match its
+    /// <see cref="PivotTableModel.CacheId"/> to a <see cref="PivotCacheModel"/> in
+    /// <see cref="Workbook.PivotCaches"/>. Returns <see langword="null"/> when the name is absent or
+    /// unresolvable so callers can fall back to the legacy name-only scan.
+    /// </summary>
+    private static PivotCacheModel? ResolveSlicerBoundPivotCache(Workbook workbook, string? sourcePivotTableName)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePivotTableName))
+            return null;
+
+        PivotTableModel? boundPivotTable = null;
+        foreach (var sheet in workbook.Sheets)
+        {
+            boundPivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+                string.Equals(pivot.Name, sourcePivotTableName, StringComparison.OrdinalIgnoreCase));
+            if (boundPivotTable is not null)
+                break;
+        }
+
+        if (boundPivotTable is null)
+            return null;
+
+        return workbook.PivotCaches.FirstOrDefault(cache => cache.CacheId == boundPivotTable.CacheId);
     }
 
     // P12: the slicerCache's pivotTable/@tabId is the sheetId of the worksheet hosting the pivot, not a

@@ -347,7 +347,7 @@ public sealed partial class Sheet
     public int PaperSizeCode { get; set; } = PaperSizeCodes.DefaultCode;
 
     /// <summary>Worksheet page margins in inches.</summary>
-    public WorksheetPageMargins PageMargins { get; set; } = WorksheetPageMargins.Narrow;
+    public WorksheetPageMargins PageMargins { get; set; } = WorksheetPageMargins.Normal;
 
     /// <summary>Distance from the page top to the printed header, in inches.</summary>
     public double HeaderMargin { get; set; } = 0.3;

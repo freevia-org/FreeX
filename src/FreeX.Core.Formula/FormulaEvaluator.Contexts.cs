@@ -85,6 +85,144 @@ internal static class ExternalSheetReferenceResolver
             : path;
         return string.Equals(fileName, book, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Resolves the external-workbook DEFINED-NAME reference shape <c>[n]!Name</c> (no sheet
+    /// segment -- the opaque <see cref="NamedRangeNode.Name"/> text
+    /// <c>Parser.ParseExternalDefinedNameReference</c> builds for e.g. <c>[1]!TaxRate</c>) into an
+    /// already-parseable rewritten formula text that reuses the existing quoted external-sheet
+    /// cell-reference machinery (<c>'[1]Sheet1'!$B$2</c>), so the caller
+    /// (<see cref="FormulaEvaluator"/>'s SheetEvalContext.TryGetNamedFormulaText) can hand the
+    /// result straight to the ordinary named-formula parse/eval path exactly like any other named
+    /// formula's RefersTo text -- which in turn resolves the rewritten cell reference through the
+    /// SAME cached-value lookup <see cref="TryResolve"/> already provides for the sheet-qualified
+    /// form, so a mixed formula like <c>=[1]!TaxRate+B2</c> recomputes its local half live instead
+    /// of failing to parse at all.
+    /// Returns <see langword="false"/> when <paramref name="name"/> isn't this shape, the external
+    /// index is out of range, no defined name in that link matches (case-insensitively; a
+    /// workbook-scoped candidate -- <see cref="ExternalDefinedNameModel.SheetId"/> null -- is
+    /// preferred over a sheet-scoped one of the same name, matching Excel's own preference for the
+    /// workbook-global definition when a bare, unscoped reference could mean either), or its cached
+    /// RefersTo text doesn't have the expected "Sheet!Ref" shape.
+    /// </summary>
+    public static bool TryResolveExternalDefinedName(Workbook? workbook, string name, out string formulaText)
+    {
+        formulaText = "";
+        if (workbook is null || !TrySplitExternalDefinedNameReference(name, out var externalIndex, out var definedName))
+            return false;
+
+        if (externalIndex < 1 || externalIndex > workbook.ExternalLinks.Count)
+            return false;
+
+        var link = workbook.ExternalLinks[externalIndex - 1];
+        ExternalDefinedNameModel? match = null;
+        foreach (var candidate in link.DefinedNames)
+        {
+            if (!string.Equals(candidate.Name, definedName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (candidate.SheetId is null)
+            {
+                match = candidate;
+                break;
+            }
+
+            match ??= candidate;
+        }
+
+        if (match?.RefersTo is not { Length: > 0 } refersTo ||
+            !TrySplitSheetQualifiedRefersTo(refersTo, out var sheetPart, out var cellPart))
+        {
+            return false;
+        }
+
+        var quotedSheet = ("[" + externalIndex.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]" + sheetPart)
+            .Replace("'", "''");
+        formulaText = "'" + quotedSheet + "'!" + cellPart;
+        return true;
+    }
+
+    /// <summary>Splits the opaque "[n]!Name" NamedRangeNode.Name text into the numeric external
+    /// index and the trailing defined-name identifier.</summary>
+    private static bool TrySplitExternalDefinedNameReference(string name, out int externalIndex, out string definedName)
+    {
+        externalIndex = 0;
+        definedName = "";
+        if (string.IsNullOrEmpty(name) || name[0] != '[')
+            return false;
+
+        var closeIndex = name.IndexOf(']');
+        if (closeIndex < 2)
+            return false;
+
+        if (!int.TryParse(
+                name[1..closeIndex],
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out externalIndex))
+        {
+            return false;
+        }
+
+        if (closeIndex + 1 >= name.Length || name[closeIndex + 1] != '!')
+            return false;
+
+        definedName = name[(closeIndex + 2)..];
+        return definedName.Length > 0;
+    }
+
+    /// <summary>
+    /// Splits an <see cref="ExternalDefinedNameModel.RefersTo"/> text (e.g. <c>Sheet1!$B$2</c>, or
+    /// <c>'My Sheet'!$B$2</c> when the sheet name needs quoting) into its sheet-name and
+    /// cell/range-reference parts, understanding the same doubled-apostrophe quoting convention as
+    /// <see cref="Lexer.ReadQuotedSheetQualifier"/>.
+    /// </summary>
+    private static bool TrySplitSheetQualifiedRefersTo(string refersTo, out string sheetPart, out string cellPart)
+    {
+        sheetPart = "";
+        cellPart = "";
+        if (string.IsNullOrEmpty(refersTo))
+            return false;
+
+        if (refersTo[0] == '\'')
+        {
+            var sb = new System.Text.StringBuilder();
+            var i = 1;
+            while (i < refersTo.Length)
+            {
+                if (refersTo[i] == '\'')
+                {
+                    if (i + 1 < refersTo.Length && refersTo[i + 1] == '\'')
+                    {
+                        sb.Append('\'');
+                        i += 2;
+                        continue;
+                    }
+
+                    i++; // skip closing quote
+                    break;
+                }
+
+                sb.Append(refersTo[i]);
+                i++;
+            }
+
+            if (i >= refersTo.Length || refersTo[i] != '!')
+                return false;
+
+            sheetPart = sb.ToString();
+            cellPart = refersTo[(i + 1)..];
+            return sheetPart.Length > 0 && cellPart.Length > 0;
+        }
+
+        var bangIndex = refersTo.IndexOf('!');
+        if (bangIndex < 0)
+            return false;
+
+        sheetPart = refersTo[..bangIndex];
+        cellPart = refersTo[(bangIndex + 1)..];
+        return sheetPart.Length > 0 && cellPart.Length > 0;
+    }
 }
 
 public sealed partial class FormulaEvaluator
@@ -238,6 +376,14 @@ public sealed partial class FormulaEvaluator
         public string? TryGetNamedFormulaText(string name)
         {
             if (_workbook is null) return null;
+
+            // The opaque "[n]!Name" shape (an external-workbook DEFINED-NAME reference with no
+            // sheet segment, e.g. [1]!TaxRate -- see Parser.ParseExternalDefinedNameReference)
+            // is never a real workbook/sheet-scoped name, so check it first and rewrite it to the
+            // already-supported quoted external-sheet cell-reference form.
+            if (ExternalSheetReferenceResolver.TryResolveExternalDefinedName(_workbook, name, out var externalFormulaText))
+                return externalFormulaText;
+
             // Sheet-scope-first for named formulas too.
             return _workbook.TryGetNamedFormulaText(name, _sheet.Id);
         }

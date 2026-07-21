@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -200,10 +201,35 @@ public sealed partial class MainWindow
         RefreshShell(UiText.Get("TableLoc_ClearedValidationCircles"));
     }
 
+    // Excel auto-clears a cell's red "invalid data" circle the instant the flagged value is
+    // corrected -- the user never has to manually re-run Data > Circle Invalid Data. This overlay
+    // (and therefore this prune) runs on every RefreshShell, which fires after every cell-edit
+    // commit (CommitFormulaBox / CommitEditAcrossSelection / spelling and symbol inserts all call
+    // RefreshShell on success), so re-checking the active sheet's still-invalid set here keeps the
+    // on-screen circles in sync with the corrected data without needing a dedicated edit-commit hook.
+    // The actual re-check is the shared WorkbookSession.PruneCorrectedValidationCircles helper so the
+    // WPF host's equivalent overlay (MainWindow.DataCommands.cs) applies the identical rule.
+    private void PruneCorrectedValidationCircles()
+    {
+        if (_validationCircleCells.Count == 0)
+            return;
+
+        var pruned = WorkbookSession.PruneCorrectedValidationCircles(
+            _session.Workbook, _session.ActiveSheet, _validationCircleCells);
+
+        if (ReferenceEquals(pruned, _validationCircleCells))
+            return;
+
+        _validationCircleCells.Clear();
+        _validationCircleCells.AddRange(pruned);
+    }
+
     // Called from BuildDrawingObjectOverlay so circles are painted onto the same overlay Canvas that hosts
     // charts / drawing objects / trace arrows, using the same coordinate mapping (TryGetDisplayedCellBounds).
     private void AddValidationCircleOverlay(Canvas overlay, ViewportModel viewport)
     {
+        PruneCorrectedValidationCircles();
+
         if (_validationCircleCells.Count == 0)
             return;
 
