@@ -7091,7 +7091,74 @@ public sealed partial class XlsxFileAdapter
             if (mergeCells.Parent is null)
                 InsertMergeCellsElement(root, worksheetNs, mergeCells);
 
+            ExtendDimensionForMergeRegions(root, worksheetNs, patch.Current);
+
             return true;
+        }
+
+        // R60-io-sheet-dimension-usedrange-6-2: a merge-only patch (no cell-value changes) never
+        // runs UpdateDimension, so a new merge over previously blank/default cells left the sheet's
+        // <dimension> ref stale (understating the used range / Ctrl+End extent versus the freshly
+        // written <mergeCells>). UpdateDimension itself only scans <c> elements, which a merge over
+        // blank cells never creates, so it cannot be reused as-is; instead grow the existing
+        // dimension bounds (never shrink) to cover every current merge region's reference.
+        private static void ExtendDimensionForMergeRegions(
+            XElement worksheetRoot,
+            XNamespace worksheetNs,
+            IReadOnlyList<GridRange> mergeRegions)
+        {
+            if (mergeRegions.Count == 0)
+                return;
+
+            var dimension = worksheetRoot.Element(worksheetNs + "dimension");
+            var reference = dimension?.Attribute("ref")?.Value;
+            if (dimension is null ||
+                string.IsNullOrWhiteSpace(reference) ||
+                !TryParseDimensionRange(reference, out var minRow, out var minCol, out var maxRow, out var maxCol))
+            {
+                return;
+            }
+
+            var extended = false;
+            foreach (var region in mergeRegions)
+            {
+                if (region.Start.Row < minRow) { minRow = region.Start.Row; extended = true; }
+                if (region.Start.Col < minCol) { minCol = region.Start.Col; extended = true; }
+                if (region.End.Row > maxRow) { maxRow = region.End.Row; extended = true; }
+                if (region.End.Col > maxCol) { maxCol = region.End.Col; extended = true; }
+            }
+
+            if (!extended)
+                return;
+
+            var start = ToReference(minRow, minCol);
+            var end = ToReference(maxRow, maxCol);
+            dimension.SetAttributeValue("ref", start == end ? start : $"{start}:{end}");
+        }
+
+        private static bool TryParseDimensionRange(
+            string reference,
+            out uint minRow,
+            out uint minCol,
+            out uint maxRow,
+            out uint maxCol)
+        {
+            minRow = minCol = maxRow = maxCol = 0;
+            var separatorIndex = reference.IndexOf(':');
+            if (separatorIndex < 0)
+            {
+                if (!TryParseCellReference(reference, out minRow, out minCol))
+                    return false;
+
+                maxRow = minRow;
+                maxCol = minCol;
+                return true;
+            }
+
+            var startReference = reference[..separatorIndex];
+            var endReference = reference[(separatorIndex + 1)..];
+            return TryParseCellReference(startReference, out minRow, out minCol) &&
+                   TryParseCellReference(endReference, out maxRow, out maxCol);
         }
 
         public static bool ApplyHyperlinkChanges(

@@ -108,14 +108,19 @@ public partial class GridView
         if (renderMode != DrawingObjectLayerRenderMode.Objects)
             return;
 
-        RenderCharts(dc);
         if (HasExplicitDrawingObjectZOrder())
         {
+            // R60-render-drawing-shapes-6-1: charts used to be hard-coded to render behind every
+            // shape/picture/textbox via an unconditional RenderCharts(dc) pass here. When the sheet
+            // carries an explicit drawing z-order, charts now draw as part of
+            // RenderDrawingObjectsByZOrder, in their recorded stacking position, instead of always
+            // being forced to the bottom.
             RenderNativeSlicerTimelineControls(dc);
             RenderDrawingObjectsByZOrder(dc);
         }
         else
         {
+            RenderCharts(dc);
             RenderDrawingShapes(dc);
             RenderNativeSlicerTimelineControls(dc);
             RenderPictures(dc);

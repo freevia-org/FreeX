@@ -200,6 +200,15 @@ public static partial class BuiltInFunctions
 
     private static int DbcsByteWidthAt(string text, int index)
     {
+        // Excel's *B functions only apply DBCS 2-byte-per-character widths when the running
+        // Office/Windows language is itself a DBCS language (Japanese/Chinese/Korean). Under any
+        // other culture (e.g. en-US, the common default), they behave exactly like their SBCS
+        // counterparts (LEN/LEFT/RIGHT/MID/...) regardless of the string's content -- see
+        // ConvertDbcsWidthForCurrentCulture()/IsDbcsCulture(), the same gate BuiltInFunctions.TextAdvanced.cs
+        // already uses for ASC/DBCS.
+        if (!ConvertDbcsWidthForCurrentCulture())
+            return IsSurrogatePairAt(text, index) ? 2 : 1;
+
         if (IsSurrogatePairAt(text, index)) return 2;
         return IsDbcsWide(text[index]) ? 2 : 1;
     }

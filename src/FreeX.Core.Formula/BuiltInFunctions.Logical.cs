@@ -97,8 +97,14 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Not(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue err) return err;
-        return new BoolValue(!ToBool(args[0]));
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, NotScalar);
+        return NotScalar(args[0]);
+    }
+
+    private static ScalarValue NotScalar(ScalarValue value)
+    {
+        if (value is ErrorValue err) return err;
+        return new BoolValue(!ToBool(value));
     }
 
     private static ScalarValue Ifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

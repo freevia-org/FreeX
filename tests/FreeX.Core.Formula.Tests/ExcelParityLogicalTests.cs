@@ -53,5 +53,35 @@ public sealed class ExcelParityLogicalTests
         _eval.Evaluate("=OR(FALSE,NA())", Sheet()).Should().Be(ErrorValue.NA);
     }
 
+    // R60-formula-logical-6-1: NOT(A1:A3) must broadcast element-wise across the range
+    // (matching Excel's dynamic-array spill), not silently truncate to NOT(A1).
+    [Fact]
+    public void Not_MultiCellRange_BroadcastsElementWise()
+    {
+        var sheet = Sheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new BoolValue(false));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new BoolValue(true));
+
+        AssertColumn(_eval.Evaluate("=NOT(A1:A3)", sheet), false, true, false);
+    }
+
+    // Sibling no-regression: a plain scalar NOT argument must keep working unchanged.
+    [Fact]
+    public void Not_ScalarArgument_StillWorks()
+    {
+        _eval.Evaluate("=NOT(TRUE)", Sheet()).Should().Be(new BoolValue(false));
+        _eval.Evaluate("=NOT(FALSE)", Sheet()).Should().Be(new BoolValue(true));
+    }
+
+    private static void AssertColumn(ScalarValue value, params bool[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            range.At(row + 1, 1).Should().Be(new BoolValue(expected[row]));
+    }
+
     private static Sheet Sheet() => new(SheetId.New(), "S");
 }

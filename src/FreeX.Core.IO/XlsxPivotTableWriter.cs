@@ -8,6 +8,13 @@ namespace FreeX.Core.IO;
 
 internal static partial class XlsxPivotTableWriter
 {
+    // R60-io-pivot-layout-6-1: the real Excel wire format for "Repeat All Item Labels" is the x14
+    // extension on each axis pivotField (DocumentFormat.OpenXml.Office2010.Excel.PivotField.FillDownLabels),
+    // NOT the private fx:tableProps repeatItemLabels attribute FreeX also writes. Ext URI per
+    // [MS-XLSX] section on pivotField extLst.
+    private static readonly XNamespace X14PivotFieldExtensionNamespace = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+    private const string X14PivotFieldExtensionUri = "{2946ED86-A175-432A-8AC1-64E0C546D7DE}";
+
     public static void Save(
         Stream xlsxStream,
         Workbook workbook,
@@ -339,8 +346,10 @@ internal static partial class XlsxPivotTableWriter
             FreeXPivotTableExtension(pivot, workbookNs)));
     }
 
-    // Persists pivot-table flags with no base-schema attribute (repeatItemLabels only exists in the x14
-    // extension) and FreeX-authored field selection/grouping state inside a schema-valid extLst/ext block.
+    // Persists FreeX-authored field selection/grouping state, plus a legacy repeatItemLabels marker kept
+    // ONLY for back-compat with older FreeX-authored files, inside a schema-valid extLst/ext block. The
+    // real OOXML wire format for "Repeat All Item Labels" is the per-field x14 fillDownLabels extension
+    // (see ToX14FillDownLabelsExtension), which real Excel actually reads/writes.
     // Returns null when nothing needs preserving.
     private static XElement? FreeXPivotTableExtension(PivotTableModel pivot, XNamespace workbookNs)
     {
@@ -372,6 +381,17 @@ internal static partial class XlsxPivotTableWriter
                 new XAttribute(XNamespace.Xmlns + "fx", FreeXPivotExtensionNamespace),
                 tableProps));
     }
+
+    // R60-io-pivot-layout-6-1: builds the real per-field x14 extension real Excel uses for
+    // "Repeat All Item Labels" -- <extLst><ext uri="{2946ED86-...}"><x14:pivotField fillDownLabels="1"/></ext></extLst>.
+    private static XElement ToX14FillDownLabelsExtension(XNamespace workbookNs) =>
+        new(
+            workbookNs + "extLst",
+            new XElement(
+                workbookNs + "ext",
+                new XAttribute("uri", X14PivotFieldExtensionUri),
+                new XAttribute(XNamespace.Xmlns + "x14", X14PivotFieldExtensionNamespace),
+                new XElement(X14PivotFieldExtensionNamespace + "pivotField", new XAttribute("fillDownLabels", "1"))));
 
     private static IEnumerable<XElement> FreeXPivotFieldExtensionElements(
         string axis,
@@ -435,9 +455,8 @@ internal static partial class XlsxPivotTableWriter
                     dataFieldIndexes.Contains(index) ? new XAttribute("dataField", "1") : null,
                     // insertBlankRow is the per-field flag for a blank line after items in OOXML
                     // (CT_PivotField); it is not a pivotTableDefinition attribute. repeatItemLabels has no
-                    // home in the base spreadsheetml schema (it only exists in the x14 extension), so it is
-                    // intentionally not emitted to keep output schema-valid; the modeled value is preserved
-                    // and round-trips through the native JSON adapter.
+                    // home in the base spreadsheetml schema -- it is emitted below as the real x14
+                    // fillDownLabels per-field extension (ToX14FillDownLabelsExtension).
                     isAxisField && pivot.BlankLineAfterItems ? new XAttribute("insertBlankRow", "1") : null,
                     // R52-io-pivot-layout-3-4: CT_PivotField's own compact/outline attributes (both default
                     // true when omitted) are what a real Excel client actually applies when rendering this
@@ -449,7 +468,15 @@ internal static partial class XlsxPivotTableWriter
                     isAxisField ? new XAttribute("compact", pivot.ReportLayout == PivotReportLayout.Compact ? "1" : "0") : null,
                     isAxisField ? new XAttribute("outline", pivot.ReportLayout == PivotReportLayout.Tabular ? "0" : "1") : null,
                     pivot.ShowSubtotals ? new XAttribute("defaultSubtotal", "1") : null,
-                    pivot.ShowSubtotals && pivot.SubtotalPlacement == PivotSubtotalPlacement.Top ? new XAttribute("subtotalTop", "1") : null,
+                    // R60-io-pivot-layout-6-2: the OOXML schema default for subtotalTop (when omitted) is
+                    // TRUE (Top), so Bottom placement must explicitly write "0" -- omitting the attribute
+                    // for Bottom (as before) is schema-identical to Top and silently reverts the user's
+                    // choice when opened in real Excel or any correct OOXML consumer. Unlike defaultSubtotal,
+                    // this is written unconditionally (not gated on pivot.ShowSubtotals): subtotalTop is the
+                    // model's persisted top/bottom PREFERENCE, independent of whether subtotals currently
+                    // display -- gating it on ShowSubtotals would silently forget a user's Bottom choice
+                    // (defaulting back to Top on read) the moment subtotals are toggled off.
+                    new XAttribute("subtotalTop", pivot.SubtotalPlacement == PivotSubtotalPlacement.Top ? "1" : "0"),
                     new XAttribute("showAll", metadataField?.ShowAll == true ? "1" : "0"),
                     ToOptionalBoolAttribute("includeNewItemsInFilter", metadataField?.IncludeNewItemsInFilter),
                     ToOptionalBoolAttribute("multipleItemSelectionAllowed", metadataField?.MultipleItemSelectionAllowed),
@@ -458,7 +485,11 @@ internal static partial class XlsxPivotTableWriter
                     ToOptionalBoolAttribute("dragToPage", metadataField?.DragToPage),
                     ToOptionalBoolAttribute("dragToData", metadataField?.DragToData),
                     ToOptionalBoolAttribute("showDropDowns", metadataField?.ShowDropDowns),
-                    ToPivotFieldItemsXml(metadataField, pivotCache, index, workbookNs));
+                    ToPivotFieldItemsXml(metadataField, pivotCache, index, workbookNs),
+                    // R60-io-pivot-layout-6-1: emit the real x14 fillDownLabels extension (the private
+                    // fx:tableProps repeatItemLabels attribute below is kept only for FreeX's own
+                    // back-compat round-trip; it is not real OOXML and real Excel never reads it).
+                    isAxisField && pivot.RepeatItemLabels ? ToX14FillDownLabelsExtension(workbookNs) : null);
             }));
     }
 

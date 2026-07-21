@@ -50,11 +50,20 @@ public sealed class XlsxVbaProjectSignaturePackageGraphTests
         adapter.Load(saved).GetSheetAt(0).GetValue(2, 1).Should().Be(new NumberValue(42));
     }
 
+    // R60-io-vba-macro-6-2: a full-save's ONLY authority for stripping xl/vbaProjectSignature.bin
+    // used to be "this is a full/rebuilt save", with no check on whether xl/vbaProject.bin itself
+    // changed. Since FreeX has no VBA editor, every edited save (patch or full) copies
+    // vbaProject.bin through byte-for-byte unchanged -- so a valid signature over those same
+    // unchanged bytes was unforced data loss (real Excel would then report the macros unsigned
+    // and a "digitally signed macros only" security policy would silently disable them). The
+    // signature must now survive a full save exactly like it already does a patch save, as long
+    // as vbaProject.bin itself is unchanged.
     [Fact]
-    public void LoadedWorkbookFullSave_RemovesStaleVbaProjectSignaturePackageReferences()
+    public void LoadedWorkbookFullSave_PreservesVbaProjectSignatureWhenVbaProjectUnchanged()
     {
         using var source = CreateWorkbookWithSignedVbaProject();
         var sourceVbaProjectBytes = ReadPackageEntryBytes(source, VbaProjectPath);
+        var sourceSignatureBytes = ReadPackageEntryBytes(source, VbaProjectSignaturePath);
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
 
@@ -66,26 +75,61 @@ public sealed class XlsxVbaProjectSignaturePackageGraphTests
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         ReadPackageEntryBytes(saved, VbaProjectPath).Should().Equal(sourceVbaProjectBytes);
+        ReadPackageEntryBytes(saved, VbaProjectSignaturePath).Should().Equal(
+            sourceSignatureBytes,
+            "the VBA project's own signature stays cryptographically valid when vbaProject.bin's bytes never changed");
+
+        AssertSignedVbaProjectGraph(saved);
 
         saved.Position = 0;
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
-        archive.GetEntry(VbaProjectSignaturePath).Should().BeNull("rebuilt saves cannot preserve a valid VBA project signature");
-        archive.GetEntry(VbaProjectRelationshipsPath).Should().BeNull("the signature-only VBA relationship part would point at a removed part");
-
         var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
-        AssertContentTypeOverride(contentTypesXml, VbaProjectPath, VbaProjectContentType);
-        ContentTypeOverrideExists(contentTypesXml, VbaProjectSignaturePath, VbaProjectSignatureContentType)
-            .Should()
-            .BeFalse();
-        ContentTypeOverrideExists(contentTypesXml, "xl/workbook.xml", MacroEnabledWorkbookContentType)
-            .Should()
-            .BeTrue();
-
-        var workbookRelsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
-        AssertRelationship(workbookRelsXml, VbaProjectRelationshipType, "vbaProject.bin");
+        AssertContentTypeOverride(contentTypesXml, "xl/workbook.xml", MacroEnabledWorkbookContentType);
 
         saved.Position = 0;
         adapter.Load(saved).GetSheetAt(0).GetValue(1, 2).Should().Be(new TextValue("full-save-edit"));
+    }
+
+    // Sibling no-regression test: the WHOLE-PACKAGE digital signature (_xmlsignatures/*) signs
+    // the entire OPC graph, which a full/edited save always regenerates -- so unlike the VBA
+    // project's own signature, it must still be unconditionally stripped on every edited save.
+    // This guards against the fix above accidentally widening past the VBA-specific signature.
+    [Fact]
+    public void LoadedWorkbookFullSave_StillRemovesWholePackageDigitalSignature()
+    {
+        using var source = CreateWorkbookWithSignedVbaProject();
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            WriteBinaryEntry(archive, "_xmlsignatures/sig1.xml", [0x53, 0x49, 0x47]);
+
+            var contentTypesXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
+            EnsureContentTypeOverride(
+                contentTypesXml,
+                "_xmlsignatures/sig1.xml",
+                "application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+        }
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("full-save-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        savedArchive.GetEntry("_xmlsignatures/sig1.xml").Should().BeNull(
+            "the whole-package digital signature always goes stale on an edited save and must still be stripped");
+
+        // ...while the VBA project's own signature (a different part entirely) still survives,
+        // since vbaProject.bin itself was not touched by this edit.
+        savedArchive.GetEntry(VbaProjectSignaturePath).Should().NotBeNull(
+            "the unrelated VBA project signature must not be collaterally stripped");
     }
 
     private static MemoryStream CreateWorkbookWithSignedVbaProject()

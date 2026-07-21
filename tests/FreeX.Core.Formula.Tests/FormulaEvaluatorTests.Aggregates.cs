@@ -251,4 +251,27 @@ public partial class FormulaEvaluatorTests
         // a3 is blank
         _evaluator.Evaluate("=COUNTA(A1:A3)", sheet).Should().Be(new NumberValue(2));
     }
+
+    // R60-formula-statistics-6-1: a directly-erroring (non-range) argument must propagate,
+    // exactly like COUNT's Count_ErrorArgument_PropagatesError above.
+    [Fact]
+    public void CountA_DirectErrorArgument_PropagatesError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=COUNTA(NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    // Sibling no-regression: an error arriving through a cell/range reference must still be
+    // counted as non-blank rather than propagated, matching COUNT's own
+    // RangeOnlyAggregates_PreserveErrorsAndFallbackCases asymmetry.
+    [Fact]
+    public void CountA_RangeSourcedError_CountsAsNonBlank()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), ErrorValue.NA);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+
+        _evaluator.Evaluate("=COUNTA(A1:A2)", sheet, workbook).Should().Be(new NumberValue(2));
+    }
 }

@@ -39,6 +39,14 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     private const string CalculationChainRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
 
+    // Test-only observation seam (never influences production behavior: the default value is
+    // null, so this is a no-op unless a test explicitly sets it). Lets tests capture the transient
+    // in-memory copy this method allocates for a non-mutating call, so they can assert it gets
+    // disposed when sanitization throws mid-rewrite (R60-missing-dispose-sweep-1). AsyncLocal so
+    // the hook only flows within the calling test's own execution context and cannot race with
+    // unrelated tests invoking this same method concurrently elsewhere in the assembly.
+    internal static readonly AsyncLocal<Action<MemoryStream>?> TransientSanitizedStreamCreatedForTests = new();
+
     public static MemoryStream Create(MemoryStream sourcePackage) =>
         Create(sourcePackage, removeUnsupportedConditionalFormatting: false);
 
@@ -71,6 +79,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         {
             sourcePackage.Position = 0;
             sanitized = new MemoryStream();
+            TransientSanitizedStreamCreatedForTests.Value?.Invoke(sanitized);
             if (sourcePackage.TryGetBuffer(out var sourceBuffer) &&
                 sourceBuffer.Array is not null &&
                 sourcePackage.Length <= int.MaxValue &&
@@ -105,66 +114,81 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 "The workbook could not be read because the file is not a valid .xlsx package (it may be corrupted, truncated, or not actually an Excel file).");
         }
 
-        using (archive)
+        try
         {
-            if (hasRangeHyperlinks)
-                StripRangeHyperlinkRefs(archive);
-            if (requirements.HasPivotPackageMetadata)
-                XlsxPivotPackageCleaner.RemovePivotPackageMetadata(archive);
-            if (requirements.HasChartExChartParts)
-                RemoveChartExDrawingRelationships(archive);
-            if (requirements.HasDrawingPackageParts)
-                RemoveDrawingPackageParts(archive);
-            if (requirements.HasAllConditionalFormattingBlocks)
-                RemoveAllConditionalFormattingBlocks(archive);
-            else if (requirements.HasUnsupportedConditionalFormattingBlocks)
-                RemoveUnsupportedConditionalFormattingBlocks(archive);
-            if (requirements.HasWorksheetDynamicFilters)
-                RemoveWorksheetDynamicFilters(archive);
-            if (requirements.HasWorksheetGridXmlSchemaIssues)
-                NormalizeWorksheetGridXml(archive);
-            if (requirements.HasWorksheetPageLayoutSchemaIssues)
-                NormalizeWorksheetPageLayout(archive);
-            if (requirements.HasWorksheetPageBreakSchemaIssues)
-                NormalizeWorksheetPageBreaks(archive);
-            if (requirements.HasWorksheetAutoFilterSchemaIssues)
-                NormalizeWorksheetAutoFilters(archive);
-            if (requirements.HasStructuredTableAutoFilterSchemaIssues)
-                NormalizeStructuredTableAutoFilters(archive);
-            if (requirements.HasStructuredTableSortStateSchemaIssues)
-                NormalizeStructuredTableSortStates(archive);
-            if (requirements.HasStructuredTableMetadataSchemaIssues)
-                NormalizeStructuredTableMetadata(archive);
-            if (requirements.HasWorksheetSheetViewSchemaIssues)
-                NormalizeWorksheetSheetViews(archive);
-            if (requirements.HasWorkbookViewSchemaIssues)
-                NormalizeWorkbookViews(archive);
-            if (requirements.HasWorkbookCalculationPropertySchemaIssues)
-                NormalizeWorkbookCalculationProperties(archive);
-            if (requirements.HasWorkbookFileSharingSchemaIssues)
-                NormalizeWorkbookFileSharing(archive);
-            if (requirements.HasWorkbookFileRecoveryPropertySchemaIssues)
-                NormalizeWorkbookFileRecoveryProperties(archive);
-            if (requirements.HasWorkbookProtectionSchemaIssues)
-                NormalizeWorkbookProtection(archive);
-            if (requirements.HasWorkbookWebPublishingSchemaIssues)
-                NormalizeWorkbookWebPublishing(archive);
-            if (requirements.HasWorkbookSmartTagSchemaIssues)
-                NormalizeWorkbookSmartTags(archive);
-            if (requirements.HasWorkbookNativeMetadataSchemaIssues)
-                NormalizeWorkbookNativeMetadata(archive);
-            if (requirements.HasWorksheetRelationshipMarkerSchemaIssues)
-                NormalizeWorksheetRelationshipMarkers(archive);
-            if (requirements.HasWorksheetNativeMetadataSchemaIssues)
-                NormalizeWorksheetNativeMetadata(archive);
-            if (requirements.HasCalculationChainPackagePart)
-                RemoveCalculationChainPackagePart(archive);
-            if (requirements.MergeCellWorksheetPathsToStrip is { Count: > 0 } mergeCellWorksheetPaths)
-                RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths);
-            if (requirements.HasDocumentPropertiesPackageGraphIssues)
-                XlsxDocumentPropertiesPreserver.NormalizePackageGraph(archive);
-            if (requirements.HasCustomRibbonPackageGraphIssues)
-                XlsxCustomRibbonPackageGraphNormalizer.NormalizePackage(archive);
+            using (archive)
+            {
+                if (hasRangeHyperlinks)
+                    StripRangeHyperlinkRefs(archive);
+                if (requirements.HasPivotPackageMetadata)
+                    XlsxPivotPackageCleaner.RemovePivotPackageMetadata(archive);
+                if (requirements.HasChartExChartParts)
+                    RemoveChartExDrawingRelationships(archive);
+                if (requirements.HasDrawingPackageParts)
+                    RemoveDrawingPackageParts(archive);
+                if (requirements.HasAllConditionalFormattingBlocks)
+                    RemoveAllConditionalFormattingBlocks(archive);
+                else if (requirements.HasUnsupportedConditionalFormattingBlocks)
+                    RemoveUnsupportedConditionalFormattingBlocks(archive);
+                if (requirements.HasWorksheetDynamicFilters)
+                    RemoveWorksheetDynamicFilters(archive);
+                if (requirements.HasWorksheetGridXmlSchemaIssues)
+                    NormalizeWorksheetGridXml(archive);
+                if (requirements.HasWorksheetPageLayoutSchemaIssues)
+                    NormalizeWorksheetPageLayout(archive);
+                if (requirements.HasWorksheetPageBreakSchemaIssues)
+                    NormalizeWorksheetPageBreaks(archive);
+                if (requirements.HasWorksheetAutoFilterSchemaIssues)
+                    NormalizeWorksheetAutoFilters(archive);
+                if (requirements.HasStructuredTableAutoFilterSchemaIssues)
+                    NormalizeStructuredTableAutoFilters(archive);
+                if (requirements.HasStructuredTableSortStateSchemaIssues)
+                    NormalizeStructuredTableSortStates(archive);
+                if (requirements.HasStructuredTableMetadataSchemaIssues)
+                    NormalizeStructuredTableMetadata(archive);
+                if (requirements.HasWorksheetSheetViewSchemaIssues)
+                    NormalizeWorksheetSheetViews(archive);
+                if (requirements.HasWorkbookViewSchemaIssues)
+                    NormalizeWorkbookViews(archive);
+                if (requirements.HasWorkbookCalculationPropertySchemaIssues)
+                    NormalizeWorkbookCalculationProperties(archive);
+                if (requirements.HasWorkbookFileSharingSchemaIssues)
+                    NormalizeWorkbookFileSharing(archive);
+                if (requirements.HasWorkbookFileRecoveryPropertySchemaIssues)
+                    NormalizeWorkbookFileRecoveryProperties(archive);
+                if (requirements.HasWorkbookProtectionSchemaIssues)
+                    NormalizeWorkbookProtection(archive);
+                if (requirements.HasWorkbookWebPublishingSchemaIssues)
+                    NormalizeWorkbookWebPublishing(archive);
+                if (requirements.HasWorkbookSmartTagSchemaIssues)
+                    NormalizeWorkbookSmartTags(archive);
+                if (requirements.HasWorkbookNativeMetadataSchemaIssues)
+                    NormalizeWorkbookNativeMetadata(archive);
+                if (requirements.HasWorksheetRelationshipMarkerSchemaIssues)
+                    NormalizeWorksheetRelationshipMarkers(archive);
+                if (requirements.HasWorksheetNativeMetadataSchemaIssues)
+                    NormalizeWorksheetNativeMetadata(archive);
+                if (requirements.HasCalculationChainPackagePart)
+                    RemoveCalculationChainPackagePart(archive);
+                if (requirements.MergeCellWorksheetPathsToStrip is { Count: > 0 } mergeCellWorksheetPaths)
+                    RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths);
+                if (requirements.HasDocumentPropertiesPackageGraphIssues)
+                    XlsxDocumentPropertiesPreserver.NormalizePackageGraph(archive);
+                if (requirements.HasCustomRibbonPackageGraphIssues)
+                    XlsxCustomRibbonPackageGraphNormalizer.NormalizePackage(archive);
+            }
+        }
+        catch when (!ReferenceEquals(sanitized, sourcePackage))
+        {
+            // Mirrors CreateFusedTransientPackage's try/finally in this same file: any exception
+            // raised while rewriting the untrusted XML (e.g. an XmlException from a malformed part
+            // this sanitizer exists to recover from) must not leak the transient in-memory copy
+            // this method allocated. `archive` is already disposed by the `using` above
+            // (leaveOpen: true, so `sanitized` itself is untouched by that); only dispose
+            // `sanitized` here, and never when it's the caller's own sourcePackage instance
+            // (mutateSourcePackage), which this method does not own.
+            sanitized.Dispose();
+            throw;
         }
 
         sanitized.Position = 0;

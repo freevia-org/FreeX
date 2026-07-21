@@ -228,6 +228,18 @@ public static class WorksheetPrintRenderPlanner
         return indexes;
     }
 
-    private static IReadOnlyList<GridRange> ResolveUsedRange(Sheet sheet) =>
-        sheet.GetUsedRange() is { } usedRange ? [usedRange] : [];
+    /// <summary>
+    /// Resolves the range to print when falling back to the worksheet's used range. Excel always
+    /// prints one blank page (sized to the configured paper/orientation, with margins and any
+    /// configured header/footer) for a sheet with no content at all rather than showing no page, so
+    /// an empty/null used range degenerates to the single cell A1 instead of an empty list.
+    /// </summary>
+    private static IReadOnlyList<GridRange> ResolveUsedRange(Sheet sheet)
+    {
+        if (sheet.GetUsedRange() is { } usedRange)
+            return [usedRange];
+
+        var blankAnchor = new CellAddress(sheet.Id, 1, 1);
+        return [new GridRange(blankAnchor, blankAnchor)];
+    }
 }

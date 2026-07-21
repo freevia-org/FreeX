@@ -385,6 +385,19 @@ public partial class MainWindow
             var anchor = _selectionAnchor ?? range.Start;
             splitRow = anchor.Row > 1 ? anchor.Row : null;
             splitColumn = anchor.Col > 1 ? anchor.Col : null;
+
+            // Excel's Split command is never a no-op: when the active cell is A1 (row 1, col 1 --
+            // the only case where both of the above resolve to null, since row/col can't be < 1),
+            // there is no row/column context to derive a split position from, so Excel falls back
+            // to splitting the visible window into 4 roughly-equal panes at its midpoint instead of
+            // silently doing nothing (R60-commands-freeze-split-6-2).
+            if (splitRow is null && splitColumn is null && SheetGrid.Viewport is { } viewport)
+            {
+                if (viewport.RowMetrics.Count > 1)
+                    splitRow = viewport.RowMetrics[viewport.RowMetrics.Count / 2].Row;
+                if (viewport.ColMetrics.Count > 1)
+                    splitColumn = viewport.ColMetrics[viewport.ColMetrics.Count / 2].Col;
+            }
         }
 
         if (!TryExecuteGroupedSheetCommand(

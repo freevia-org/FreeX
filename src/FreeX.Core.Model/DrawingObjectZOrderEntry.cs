@@ -9,7 +9,8 @@ public static class DrawingObjectZOrder
     public static bool IsSupportedKind(SelectionPaneObjectKind kind) =>
         kind is SelectionPaneObjectKind.Shape or
             SelectionPaneObjectKind.Picture or
-            SelectionPaneObjectKind.TextBox;
+            SelectionPaneObjectKind.TextBox or
+            SelectionPaneObjectKind.Chart;
 
     public static IReadOnlyList<DrawingObjectZOrderEntry> GetNormalizedOrder(Sheet sheet)
     {

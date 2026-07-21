@@ -14,6 +14,13 @@ public static class PageLayoutRibbonCommandPlanner
     public static IWorkbookCommand BuildMarginsCommand(SheetId sheetId, WorksheetPageMargins margins) =>
         new SetPageMarginsCommand(sheetId, margins);
 
+    public static IWorkbookCommand BuildMarginsCommand(
+        SheetId sheetId,
+        WorksheetPageMargins margins,
+        double? headerMargin,
+        double? footerMargin) =>
+        new SetPageMarginsCommand(sheetId, margins, headerMargin, footerMargin);
+
     public static IWorkbookCommand BuildOrientationCommand(SheetId sheetId, WorksheetPageOrientation orientation) =>
         new SetPageOrientationCommand(sheetId, orientation);
 

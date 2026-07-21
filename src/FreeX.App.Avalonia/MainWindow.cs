@@ -395,6 +395,10 @@ public sealed partial class MainWindow : Window
     // grid selection-fill token, deriving its RGB from the SelectionBorder accent.
     private static readonly IBrush SelectionFill = Brush(32, 33, 115, 70);
     private static readonly IBrush SelectionHeaderBackground = Brush(218, 232, 218);
+    // Mirrors WPF's GridView.Rendering.Headers.cs ActiveHeaderHighlightBrush(151,181,135): within a
+    // multi-cell selection, the active cell's own row/column header renders with this stronger tint
+    // so it stands out from the rest of the selection's flat SelectionHeaderBackground.
+    private static readonly IBrush ActiveSelectionHeaderBackground = Brush(151, 181, 135);
     private static readonly IBrush SelectionHeaderForeground = Brush(31, 31, 31);
     private static readonly IBrush DrawingObjectBoundsFill = Brush(42, 11, 112, 116);
     private static readonly IBrush DrawingObjectBoundsBorder = Brush(11, 112, 116);
@@ -1143,7 +1147,7 @@ public sealed partial class MainWindow : Window
                     ["Clear Formats"] = ClearSelectedRangeFormats,
                     ["Clear Contents"] = ClearSelectedRangeContents,
                     ["Clear Comments and Notes"] = ClearSelectedRangeComments,
-                    ["Clear Hyperlinks"] = ClearSelectedRangeHyperlinks,
+                    ["Clear Hyperlinks"] = RemoveSelectedRangeHyperlinks,
                     // Home ▸ Editing ▸ AutoSum dropdown items (canonical ids from HomeRibbonMenus.AutoSum; the
                     // Formulas-tab AutoSum picker shares these ids, so this covers both). Split-button face is
                     // wired above (home.autoSum). Mirrors the native AutoSum submenu handlers.
@@ -2248,7 +2252,7 @@ public sealed partial class MainWindow : Window
 
         _clearCommentsMenuItem.Click += (_, _) => ClearSelectedRangeComments();
 
-        _clearHyperlinksMenuItem.Click += (_, _) => ClearSelectedRangeHyperlinks();
+        _clearHyperlinksMenuItem.Click += (_, _) => RemoveSelectedRangeHyperlinks();
 
         _boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);
 
@@ -3012,7 +3016,7 @@ public sealed partial class MainWindow : Window
         _clearCommentsFlyoutItem.Click += (_, _) => ClearSelectedRangeComments();
 
         _clearHyperlinksFlyoutItem.Header = "Clear Hyperlinks";
-        _clearHyperlinksFlyoutItem.Click += (_, _) => ClearSelectedRangeHyperlinks();
+        _clearHyperlinksFlyoutItem.Click += (_, _) => RemoveSelectedRangeHyperlinks();
 
         _boldButton.Content = "B";
         _boldButton.FontWeight = FontWeight.Bold;
@@ -5976,8 +5980,7 @@ public sealed partial class MainWindow : Window
     {
         if (background == null)
         {
-            _worksheetBackgroundBrushSource = null;
-            _worksheetBackgroundBrushCache = null;
+            ClearWorksheetBackgroundBrushCache();
             return null;
         }
 
@@ -5986,8 +5989,7 @@ public sealed partial class MainWindow : Window
 
         if (!TryCreateDrawingBitmap(background.ImageBytes, out var bitmap))
         {
-            _worksheetBackgroundBrushSource = null;
-            _worksheetBackgroundBrushCache = null;
+            ClearWorksheetBackgroundBrushCache();
             return null;
         }
 
@@ -6000,9 +6002,24 @@ public sealed partial class MainWindow : Window
             DestinationRect = new RelativeRect(0, 0, bitmap.PixelSize.Width, bitmap.PixelSize.Height, RelativeUnit.Absolute),
         };
 
+        // Dispose the previously cached brush's native bitmap before replacing the reference — Avalonia's
+        // Bitmap wraps an unmanaged Skia surface and is not finalizer-reclaimed like a BCL stream, so
+        // simply overwriting the field (the old behavior) leaked one native bitmap per background change.
+        (_worksheetBackgroundBrushCache?.Source as IDisposable)?.Dispose();
         _worksheetBackgroundBrushSource = background;
         _worksheetBackgroundBrushCache = brush;
         return brush;
+    }
+
+    /// <summary>
+    /// Clears the cached worksheet-background <see cref="ImageBrush"/>, disposing its underlying
+    /// native <see cref="Bitmap"/> first so removing/changing the background picture does not leak it.
+    /// </summary>
+    private void ClearWorksheetBackgroundBrushCache()
+    {
+        (_worksheetBackgroundBrushCache?.Source as IDisposable)?.Dispose();
+        _worksheetBackgroundBrushSource = null;
+        _worksheetBackgroundBrushCache = null;
     }
 
     private static bool TryCreateDrawingBitmap(byte[] imageBytes, out Bitmap bitmap)
@@ -6533,10 +6550,27 @@ public sealed partial class MainWindow : Window
             ? _session.SelectedRanges.Any(range => range.Overlaps(merge))
             : IsSelectedCell(address);
 
-    private Border CreateHeaderCell(string text, bool selected = false, double zoomFactor = 1) =>
+    // Mirrors the WPF GridView's TryRenderSingleCellSelectedHeaders special case: a plain single-cell
+    // selection (the common click-a-cell case) shows the same flat SelectionHeaderBackground on both
+    // of its headers, so the active/selected distinction only matters once the selection spans more
+    // than one cell.
+    private bool IsMultiCellSelection() =>
+        _session.SelectedRanges.Count > 1 ||
+        (_session.SelectedRanges.Count == 1 && _session.SelectedRanges[0].CellCount > 1);
+
+    // The active cell's own column/row header renders with ActiveSelectionHeaderBackground so the
+    // user can locate the active cell at a glance within a multi-cell selection (matches WPF's
+    // ActiveHeaderHighlightBrush behavior in GridView.Rendering.Headers.cs).
+    private bool IsActiveHeaderColumn(uint col) =>
+        IsMultiCellSelection() && _session.ActiveCell.Col == col;
+
+    private bool IsActiveHeaderRow(uint row) =>
+        IsMultiCellSelection() && _session.ActiveCell.Row == row;
+
+    private Border CreateHeaderCell(string text, bool selected = false, bool isActive = false, double zoomFactor = 1) =>
         CreateCellBorder(
             text,
-            selected ? SelectionHeaderBackground : HeaderBackground,
+            isActive ? ActiveSelectionHeaderBackground : selected ? SelectionHeaderBackground : HeaderBackground,
             selected ? SelectionHeaderForeground : HeaderForeground,
             TextAlignment.Center,
             AvaloniaVerticalAlignment.Center,
@@ -6580,7 +6614,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private Control CreateColumnHeaderCell(uint col, ColMetric metric, bool selected, double zoomFactor)
     {
-        var header = CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, zoomFactor);
+        var header = CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, IsActiveHeaderColumn(col), zoomFactor);
         header.Padding = new Thickness(0, GetColumnOutlineGutterHeight(_session.Viewport, zoomFactor), 0, 0);
         header.Cursor = new Cursor(StandardCursorType.Hand);
         header.PointerPressed += (_, args) =>
@@ -6622,7 +6656,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private Control CreateRowHeaderCell(uint row, RowMetric metric, bool selected, double zoomFactor)
     {
-        var header = CreateHeaderCell(row.ToString(), selected, zoomFactor);
+        var header = CreateHeaderCell(row.ToString(), selected, IsActiveHeaderRow(row), zoomFactor);
         header.Padding = new Thickness(GetRowOutlineGutterWidth(_session.Viewport, zoomFactor), 0, 0, 0);
         header.Cursor = new Cursor(StandardCursorType.Hand);
         header.PointerPressed += (_, args) =>
@@ -9161,7 +9195,7 @@ public sealed partial class MainWindow : Window
                 ClearSelectedRangeComments();
                 break;
             case WorksheetContextMenuAction.ClearHyperlinks:
-                ClearSelectedRangeHyperlinks();
+                RemoveSelectedRangeHyperlinks();
                 break;
             case WorksheetContextMenuAction.HideRows:
                 HideSelectedRows();
@@ -11412,6 +11446,8 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(dialog, "FindReplaceDialog");
 
+        var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
+
         // Resolve a localized caption, stripping the WPF access-key marker ('_') so labels read cleanly.
         string Fr(string key, string fallback) =>
             (UiText.GetNeutralResourceKeys().Contains(key) ? UiText.Get(key) : fallback)
@@ -11596,7 +11632,7 @@ public sealed partial class MainWindow : Window
 
         var options = optionsControls;
 
-        FindOptions BuildOptions() => CreateFindOptions(options, findFormat);
+        FindOptions BuildOptions() => CreateFindOptions(options, findFormat, selectionScopeAtOpen);
         bool MatchCase() => options.MatchCaseBox.IsChecked == true;
         bool MatchEntire() => options.MatchEntireCellBox.IsChecked == true;
 
@@ -11736,6 +11772,7 @@ public sealed partial class MainWindow : Window
     private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
     {
         FindDialogResult? result = null;
+        var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
         var dialog = new Window
         {
             Title = "Find",
@@ -11805,7 +11842,7 @@ public sealed partial class MainWindow : Window
             result = new FindDialogResult(
                 findBox.Text ?? "",
                 action,
-                CreateFindOptions(optionsControls, findFormat),
+                CreateFindOptions(optionsControls, findFormat, selectionScopeAtOpen),
                 optionsControls.MatchCaseBox.IsChecked == true,
                 optionsControls.MatchEntireCellBox.IsChecked == true);
             dialog.Close();
@@ -11923,6 +11960,7 @@ public sealed partial class MainWindow : Window
     private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
     {
         ReplaceDialogResult? result = null;
+        var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
         var dialog = new Window
         {
             Title = "Replace",
@@ -12017,7 +12055,7 @@ public sealed partial class MainWindow : Window
                 findBox.Text ?? "",
                 replaceBox.Text ?? "",
                 action,
-                CreateFindOptions(optionsControls, findFormat),
+                CreateFindOptions(optionsControls, findFormat, selectionScopeAtOpen),
                 optionsControls.MatchCaseBox.IsChecked == true,
                 optionsControls.MatchEntireCellBox.IsChecked == true,
                 replacementFormat);
@@ -15528,7 +15566,10 @@ public sealed partial class MainWindow : Window
         return result;
     }
 
-    private FindOptions CreateFindOptions(FindOptionsControls controls, StyleDiff? requiredFormat = null) =>
+    private FindOptions CreateFindOptions(
+        FindOptionsControls controls,
+        StyleDiff? requiredFormat = null,
+        IReadOnlyList<GridRange>? selectionScope = null) =>
         new(
             Within: controls.WithinBox.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet,
             CurrentSheetId: _session.ActiveSheet.Id,
@@ -15540,7 +15581,20 @@ public sealed partial class MainWindow : Window
                 3 => FindLookIn.Comments,
                 _ => FindLookIn.Values
             },
-            RequiredFormat: requiredFormat);
+            RequiredFormat: requiredFormat,
+            SelectionScope: selectionScope);
+
+    /// <summary>
+    /// Excel: when more than one cell is selected before Find &amp; Replace is opened, Replace
+    /// All/Find All is automatically restricted to that selection. Captured once, when a Find/Replace
+    /// dialog is opened, so scope reflects the selection at open time (matching Excel), not whatever
+    /// is selected later while the modeless dialog stays open.
+    /// </summary>
+    private IReadOnlyList<GridRange>? CaptureFindReplaceSelectionScopeAtOpen()
+    {
+        var range = _session.SelectedRange;
+        return range.Start != range.End ? [range] : null;
+    }
 
     private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
     {
@@ -21001,6 +21055,31 @@ public sealed partial class MainWindow : Window
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Clear Hyperlinks failed.");
+            return;
+        }
+
+        RefreshShell(UiText.Format("MainLoc_ClearedHyperlinksFrom", rangeReference));
+    }
+
+    /// <summary>
+    /// Excel's Home&gt;Clear&gt;Remove Hyperlinks (and the equivalent right-click Clear submenu
+    /// entry) strips the cell's hyperlink formatting (blue/underline) along with the link -- unlike
+    /// right-click's top-level "Remove Hyperlink" item, which keeps the formatting (see
+    /// <see cref="ClearSelectedRangeHyperlinks"/>, used for that case).
+    /// </summary>
+    private void RemoveSelectedRangeHyperlinks()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.RemoveSelectedRangeHyperlinks();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Remove Hyperlinks failed.");
             return;
         }
 

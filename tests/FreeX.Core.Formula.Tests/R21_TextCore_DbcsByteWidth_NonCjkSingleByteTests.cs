@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Threading;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -9,7 +11,9 @@ namespace FreeX.Core.Formula.Tests;
 /// codepoint above U+00FF as a 2-byte DBCS character, over-counting non-CJK scripts (Cyrillic, Greek, Hebrew,
 /// Arabic, ...) that are single-byte in every real DBCS codepage (Shift-JIS/GBK/Big5/EUC-KR). Real Excel
 /// returns the same byte count as LEN for such text. CJK ideographs/kana/hangul/fullwidth forms must still
-/// count as 2 bytes.
+/// count as 2 bytes -- but (R60-formula-text-clean-6-1) only when the running culture is itself a DBCS
+/// language (ja/zh/ko); under any other culture (e.g. en-US) the *B functions behave exactly like LEN,
+/// regardless of the string's content, so CJK-width assertions below run under a forced ja-JP culture.
 /// </summary>
 public sealed class R21_TextCore_DbcsByteWidth_NonCjkSingleByteTests
 {
@@ -30,8 +34,19 @@ public sealed class R21_TextCore_DbcsByteWidth_NonCjkSingleByteTests
     public void LenB_StillCountsCjkIdeographsAsTwoBytes()
     {
         // Mixed text: 'A' (1 byte) + CJK ideograph U+754C (2 bytes) + Cyrillic 'Б' (1 byte) = 4 bytes total,
-        // not 6 (which the pre-fix code returned by treating the Cyrillic char as 2 bytes as well).
-        _eval.Evaluate("=LENB(\"A界Б\")", Sheet()).Should().Be(new NumberValue(4));
+        // not 6 (which the pre-fix code returned by treating the Cyrillic char as 2 bytes as well). DBCS
+        // width doubling only applies under a DBCS-language culture (R60-formula-text-clean-6-1), so force
+        // ja-JP here to exercise it.
+        var originalCulture = Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("ja-JP");
+            _eval.Evaluate("=LENB(\"A界Б\")", Sheet()).Should().Be(new NumberValue(4));
+        }
+        finally
+        {
+            Thread.CurrentThread.CurrentCulture = originalCulture;
+        }
     }
 
     [Fact]

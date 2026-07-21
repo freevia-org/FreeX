@@ -27,7 +27,9 @@ public static partial class PrintRenderer
         bool ignorePrintArea = false,
         double pageWidthInches = 8.27,
         double pageHeightInches = 11.69,
-        string workbookDirectory = "")
+        string workbookDirectory = "",
+        int pageNumberOffset = 0,
+        int? totalPageCountOverride = null)
     {
         var doc = new FixedDocument();
 
@@ -68,7 +70,11 @@ public static partial class PrintRenderer
         {
             commentSummaryPages = [];
         }
-        var totalPages = printPlan.GridPageCount + commentSummaryPages.Count;
+        // For a single-sheet render this is just this sheet's own page count. RenderWorkbook/
+        // CreateWorkbookPaginator (Entire Workbook printing) override this with the combined
+        // page count across every printed sheet so &N is the whole print job's total instead of
+        // restarting at each sheet's own count (R60-services-print-preview-6-1).
+        var totalPages = totalPageCountOverride ?? (printPlan.GridPageCount + commentSummaryPages.Count);
         var printableHyperlinks = BuildPrintableHyperlinkLookup(workbook, sheet);
         var printableCellDestinations = BuildPrintableCellDestinationLookup(workbook, sheet);
 
@@ -98,7 +104,12 @@ public static partial class PrintRenderer
                 sheet.RowHeights,
                 columnWidthsPixels,
                 sheet.PrintHeadings);
+            // ResolveHeaderFooterForPage's "different first page"/odd-even distinction is decided
+            // per-sheet (each sheet keeps its own Page Setup), so it must key off this sheet's OWN
+            // page number, not the cross-sheet running total below -- only the &P/&N text drawn on
+            // the page uses the continuous, offset number.
             var pageNumber = page.PageNumber;
+            var displayedPageNumber = pageNumber + pageNumberOffset;
             var (pageHeader, pageFooter, pageHeaderPictures, pageFooterPictures) = ResolveHeaderFooterForPage(sheet, pageNumber);
             // Same effective scale percent (explicit Scale% or the ratio implied by Fit-to-pages) that
             // PagePaginationPlanner already used to decide this area's page capacity/count -- feeding it
@@ -143,7 +154,7 @@ public static partial class PrintRenderer
                 sheet.ThreadedComments,
                 printPlan.Metrics.PrintableWidth,
                 printPlan.Metrics.PrintableHeight,
-                pageNumber,
+                displayedPageNumber,
                 totalPages,
                 sheet.PrintDraftQuality,
                 sheet.PrintBlackAndWhite,
@@ -199,15 +210,34 @@ public static partial class PrintRenderer
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(viewportService);
 
+        var visibleSheets = workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden).ToList();
+        // Excel's default "Auto" First page number keeps &P/&N continuous across the whole Entire
+        // Workbook print job instead of restarting at each sheet -- pre-compute every visible
+        // sheet's own page count once so each sheet can be rendered with a running offset and the
+        // combined grand total (R60-services-print-preview-6-1).
+        var sheetPageCounts = visibleSheets.Select(sheet => ComputeSheetTotalPageCount(sheet, ignorePrintAreas)).ToList();
+        var grandTotalPages = sheetPageCounts.Sum();
+
         var result = new FixedDocument();
-        foreach (var sheet in workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden))
+        var pageNumberOffset = 0;
+        for (var sheetIndex = 0; sheetIndex < visibleSheets.Count; sheetIndex++)
         {
-            var sheetDocument = RenderWorksheet(workbook, sheet.Id, viewportService, ignorePrintArea: ignorePrintAreas, workbookDirectory: workbookDirectory);
+            var sheet = visibleSheets[sheetIndex];
+            var sheetDocument = RenderWorksheet(
+                workbook,
+                sheet.Id,
+                viewportService,
+                ignorePrintArea: ignorePrintAreas,
+                workbookDirectory: workbookDirectory,
+                pageNumberOffset: pageNumberOffset,
+                totalPageCountOverride: grandTotalPages);
             if (result.Pages.Count == 0)
                 result.DocumentPaginator.PageSize = sheetDocument.DocumentPaginator.PageSize;
 
             foreach (var page in sheetDocument.Pages.ToList())
                 result.Pages.Add(ClonePageAsBitmap(sheetDocument, page));
+
+            pageNumberOffset += sheetPageCounts[sheetIndex];
         }
 
         return result;
@@ -222,12 +252,52 @@ public static partial class PrintRenderer
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(viewportService);
 
-        var paginators = workbook.Sheets
-            .Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden)
-            .Select(sheet => RenderWorksheet(workbook, sheet.Id, viewportService, ignorePrintArea: ignorePrintAreas, workbookDirectory: workbookDirectory).DocumentPaginator)
-            .Where(paginator => paginator.PageCount > 0)
-            .ToList();
+        var visibleSheets = workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden).ToList();
+        var sheetPageCounts = visibleSheets.Select(sheet => ComputeSheetTotalPageCount(sheet, ignorePrintAreas)).ToList();
+        var grandTotalPages = sheetPageCounts.Sum();
+
+        var paginators = new List<DocumentPaginator>();
+        var pageNumberOffset = 0;
+        for (var sheetIndex = 0; sheetIndex < visibleSheets.Count; sheetIndex++)
+        {
+            var sheet = visibleSheets[sheetIndex];
+            var paginator = RenderWorksheet(
+                workbook,
+                sheet.Id,
+                viewportService,
+                ignorePrintArea: ignorePrintAreas,
+                workbookDirectory: workbookDirectory,
+                pageNumberOffset: pageNumberOffset,
+                totalPageCountOverride: grandTotalPages).DocumentPaginator;
+            if (paginator.PageCount > 0)
+                paginators.Add(paginator);
+
+            pageNumberOffset += sheetPageCounts[sheetIndex];
+        }
+
         return new WorkbookDocumentPaginator(paginators);
+    }
+
+    /// <summary>
+    /// Computes a sheet's own printed page count (grid pages + any "Comments: At end of sheet"
+    /// appendix pages) without doing the full visual render -- used by <see cref="RenderWorkbook"/>
+    /// and <see cref="CreateWorkbookPaginator"/> to pre-derive each sheet's contribution to the
+    /// Entire Workbook print job's running page-number offset and combined total before any sheet
+    /// is actually rendered (a sheet's own footer needs to know the totals from sheets printed
+    /// AFTER it too).
+    /// </summary>
+    private static int ComputeSheetTotalPageCount(Sheet sheet, bool ignorePrintArea)
+    {
+        if (!WorksheetPrintRenderPlanner.TryBuild(sheet, printRangeOverride: null, ignorePrintArea, out var printPlan))
+            return 0;
+
+        if (sheet.PrintComments != WorksheetPrintComments.AtEnd)
+            return printPlan.GridPageCount;
+
+        var (printedComments, printedThreadedComments) = FilterCommentsToPrintedCells(sheet, printPlan);
+        var commentSummaryPageCount = PrintCommentSummaryPlanner.BuildPages(
+            printedComments, printedThreadedComments, printPlan.Metrics.PageHeight, printPlan.Metrics.MarginTop).Count;
+        return printPlan.GridPageCount + commentSummaryPageCount;
     }
 
     private static PageContent ClonePageAsBitmap(FixedDocument document, PageContent pageContent)

@@ -143,33 +143,39 @@ public partial class GridView
         var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
         var renderScale = Math.Clamp(Math.Max(dpi.DpiScaleX, dpi.DpiScaleY) * zoom, 0.25, 4.0);
         foreach (var chart in Charts)
+            RenderChart(dc, chart, visibleRight, visibleBottom, renderScale);
+    }
+
+    // R60-render-drawing-shapes-6-1: extracted so a single chart can be drawn in its recorded
+    // z-order position (see RenderDrawingObjectsByZOrder) instead of only ever being drawable as
+    // part of the unconditional "all charts first" pass.
+    private void RenderChart(DrawingContext dc, ChartModel chart, double visibleRight, double visibleBottom, double renderScale)
+    {
+        if (!chart.IsVisible || Viewport == null) return;
+        var rect = CreateChartRect(chart);
+        if (TryResolveLiveObjectTransform(
+                chart.Id,
+                ObjectKind.Chart,
+                rect,
+                committedRotationDegrees: 0,
+                committedFlipHorizontal: false,
+                committedFlipVertical: false,
+                out var previewRect,
+                out _,
+                out _,
+                out _))
         {
-            if (!chart.IsVisible) continue;
-            var rect = CreateChartRect(chart);
-            if (TryResolveLiveObjectTransform(
-                    chart.Id,
-                    ObjectKind.Chart,
-                    rect,
-                    committedRotationDegrees: 0,
-                    committedFlipHorizontal: false,
-                    committedFlipVertical: false,
-                    out var previewRect,
-                    out _,
-                    out _,
-                    out _))
-            {
-                rect = previewRect;
-            }
-
-            if (!ShouldDisplayDrawingObjectRect(rect, 0, visibleRight, visibleBottom))
-                continue;
-
-            DrawChartObjectBackground(dc, chart, rect);
-            var img = GetCachedChartImage(chart, Viewport, WorkbookTheme, renderScale);
-            if (img is not null)
-                dc.DrawImage(img, rect);
-            DrawChartObjectBorder(dc, chart, rect);
+            rect = previewRect;
         }
+
+        if (!ShouldDisplayDrawingObjectRect(rect, 0, visibleRight, visibleBottom))
+            return;
+
+        DrawChartObjectBackground(dc, chart, rect);
+        var img = GetCachedChartImage(chart, Viewport, WorkbookTheme, renderScale);
+        if (img is not null)
+            dc.DrawImage(img, rect);
+        DrawChartObjectBorder(dc, chart, rect);
     }
 
     private void DrawChartObjectBackground(DrawingContext dc, ChartModel chart, Rect rect)
@@ -389,11 +395,14 @@ public partial class GridView
             return;
 
         var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);
-        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var pixelsPerDip = dpi.PixelsPerDip;
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
         var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
         var metricLookups = GetRenderMetricLookups(Viewport);
+        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+        var chartRenderScale = Math.Clamp(Math.Max(dpi.DpiScaleX, dpi.DpiScaleY) * zoom, 0.25, 4.0);
         foreach (var entry in order)
         {
             switch (entry.Kind)
@@ -407,16 +416,90 @@ public partial class GridView
                 case SelectionPaneObjectKind.TextBox when FindTextBox(entry.Id) is { } textBox:
                     RenderTextBox(dc, metricLookups, textBox, themeEffect, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
                     break;
+                case SelectionPaneObjectKind.Chart when FindChart(entry.Id) is { } chart:
+                    // R60-render-drawing-shapes-6-1: charts now draw in their recorded z-order slot
+                    // instead of always being forced behind every shape/picture/textbox.
+                    RenderChart(dc, chart, visibleRight, visibleBottom, chartRenderScale);
+                    break;
             }
         }
     }
 
-    private IReadOnlyList<DrawingObjectZOrderEntry> GetNormalizedDrawingObjectZOrder() =>
-        GridDrawingObjectPlanner.NormalizeDrawingObjectZOrder(
+    private IReadOnlyList<DrawingObjectZOrderEntry> GetNormalizedDrawingObjectZOrder()
+    {
+        var normalized = GridDrawingObjectPlanner.NormalizeDrawingObjectZOrder(
             DrawingShapes,
             Pictures,
             TextBoxes,
             DrawingObjectZOrder);
+
+        return Charts is { Count: > 0 } charts
+            ? MergeChartsIntoDrawingObjectZOrder(normalized, charts, DrawingObjectZOrder)
+            : normalized;
+    }
+
+    // R60-render-drawing-shapes-6-1: GridDrawingObjectPlanner.NormalizeDrawingObjectZOrder (shared
+    // with the OOXML load-time normalizer) only knows about shapes/pictures/textboxes, so charts are
+    // merged back in here at the GridView render layer: any chart position recorded in the raw
+    // DrawingObjectZOrder list is preserved relative to the other objects, and any chart with no
+    // recorded position is appended at the end -- mirroring the "missing object" fallback the shared
+    // normalizer already uses for shapes/pictures/textboxes.
+    private static IReadOnlyList<DrawingObjectZOrderEntry> MergeChartsIntoDrawingObjectZOrder(
+        IReadOnlyList<DrawingObjectZOrderEntry> normalized,
+        IReadOnlyList<ChartModel> charts,
+        IReadOnlyList<DrawingObjectZOrderEntry>? rawOrder)
+    {
+        var placedChartIds = new HashSet<Guid>();
+        var merged = new List<DrawingObjectZOrderEntry>(normalized.Count + charts.Count);
+
+        if (rawOrder is { Count: > 0 })
+        {
+            var normalizedIndex = 0;
+            foreach (var entry in rawOrder)
+            {
+                if (entry.Kind == SelectionPaneObjectKind.Chart)
+                {
+                    if (placedChartIds.Add(entry.Id) && ChartExists(charts, entry.Id))
+                        merged.Add(entry);
+                    continue;
+                }
+
+                if (normalizedIndex < normalized.Count &&
+                    normalized[normalizedIndex].Kind == entry.Kind &&
+                    normalized[normalizedIndex].Id == entry.Id)
+                {
+                    merged.Add(normalized[normalizedIndex]);
+                    normalizedIndex++;
+                }
+            }
+
+            while (normalizedIndex < normalized.Count)
+                merged.Add(normalized[normalizedIndex++]);
+        }
+        else
+        {
+            merged.AddRange(normalized);
+        }
+
+        foreach (var chart in charts)
+        {
+            if (placedChartIds.Add(chart.Id))
+                merged.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Chart, chart.Id));
+        }
+
+        return merged;
+    }
+
+    private static bool ChartExists(IReadOnlyList<ChartModel> charts, Guid id)
+    {
+        foreach (var chart in charts)
+        {
+            if (chart.Id == id)
+                return true;
+        }
+
+        return false;
+    }
 
     private DrawingShapeModel? FindDrawingShape(Guid id)
     {
@@ -455,6 +538,20 @@ public partial class GridView
         {
             if (textBox.Id == id)
                 return textBox;
+        }
+
+        return null;
+    }
+
+    private ChartModel? FindChart(Guid id)
+    {
+        if (Charts is null)
+            return null;
+
+        foreach (var chart in Charts)
+        {
+            if (chart.Id == id)
+                return chart;
         }
 
         return null;
@@ -1796,7 +1893,14 @@ public partial class GridView
         if (string.IsNullOrEmpty(text))
             return;
 
-        var textWidth = Math.Max(1, rect.Width - ShapeTextHPad * 2);
+        // R60-render-drawing-shapes-6-4: when "Wrap text in shape" is off, Excel keeps the text on
+        // a single unconstrained line (which may overflow the shape's left/right edges) instead of
+        // word-wrapping it. Passing 0 as the FormattedText width cap -- the same sentinel the
+        // cell-text renderer uses for its own wrap-off path (see GetDefaultWrappedFormattedText
+        // callers in GridView.Rendering.cs) -- disables wrapping entirely.
+        var textWidth = shape.ShapeTextWrap
+            ? Math.Max(1, rect.Width - ShapeTextHPad * 2)
+            : 0;
         var textHeight = Math.Max(1, rect.Height - ShapeTextVPad * 2);
 
         // Resolve text color: theme → explicit → white-on-dark heuristic.

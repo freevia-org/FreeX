@@ -97,7 +97,11 @@ public partial class GridView
             {
                 dc.DrawImage(image, rect);
             }
-            dc.DrawRectangle(null, PictureBorderPen, rect);
+            // R60-render-drawing-shapes-6-3: Excel draws no border on an inserted picture unless the
+            // user explicitly applies one via Picture Format > Picture Border ("No Line" is the
+            // default). PictureModel does not yet capture an authored <a:ln> outline to gate on, so
+            // -- at minimum -- stop drawing the unconditional flat gray border every image picture
+            // used to get regardless of its source formatting.
             PopDrawingObjectTransform(dc, transformDepth);
             return;
         }

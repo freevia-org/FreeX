@@ -3037,6 +3037,27 @@ public sealed class WorkbookSession
         return result;
     }
 
+    /// <summary>
+    /// Excel's Home&gt;Clear&gt;Remove Hyperlinks (and the equivalent right-click Clear submenu entry)
+    /// strips the cell's hyperlink AND its blue/underline formatting -- unlike right-click's top-level
+    /// "Remove Hyperlink" item (<see cref="ClearSelectedRangeHyperlinks"/>), which keeps the formatting.
+    /// </summary>
+    public WorkbookCellEditResult RemoveSelectedRangeHyperlinks()
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateRangeCommand(
+                range,
+                "Remove Hyperlinks",
+                static (sheetId, sheetRange) => new RemoveHyperlinksCommand(sheetId, sheetRange)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public HyperlinkDialogPrefill GetSelectedRangeHyperlinkDialogPrefill() =>
         HyperlinkDialogPrefill.FromCell(ActiveSheet, SelectedRange.Start);
 

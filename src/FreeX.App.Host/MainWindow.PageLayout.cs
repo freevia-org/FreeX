@@ -217,7 +217,11 @@ public partial class MainWindow
         var plan = PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset);
         TryExecuteGroupedSheetCommand(
             plan.CommandLabel,
-            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, plan.Value));
+            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(
+                sheetId,
+                plan.Value,
+                plan.HeaderMargin,
+                plan.FooterMargin));
     }
 
     private void MarginCustomMenuItem_Click(object sender, RoutedEventArgs e)

@@ -29,7 +29,7 @@ public sealed partial class FormulaEvaluator
 
     private static readonly HashSet<string> ReferenceProvenanceAggregates = new(StringComparer.OrdinalIgnoreCase)
     {
-        "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "AND", "OR", "XOR",
+        "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "COUNTA", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "AND", "OR", "XOR",
         "STDEV", "STDEV.S", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
         "VAR", "VAR.S", "VAR.P", "VARP", "VARA", "VARPA",
         "MEDIAN",
@@ -104,7 +104,7 @@ public sealed partial class FormulaEvaluator
         "SIN", "SINH", "COS", "COSH", "TAN", "TANH", "DEGREES", "RADIANS",
         "ASIN", "ASINH", "ACOS", "ACOSH", "ATAN", "ATAN2", "ATANH", "LN", "EXP", "FACT",
         "ROUND", "ROUNDUP", "ROUNDDOWN", "TRUNC",
-        "ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISERR", "ISNA", "ISNONTEXT", "ISLOGICAL",
+        "ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISERR", "ISNA", "ISNONTEXT", "ISLOGICAL", "NOT",
         "ISEVEN", "ISODD", "ODD", "EVEN",
         "DATE", "TIME",
         "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND",

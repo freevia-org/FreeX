@@ -20,9 +20,17 @@ public sealed partial class FindReplaceDialog : Window
     private IReadOnlyList<FindResult> _results = [];
     private int _currentIndex = -1;
     private string _lastSearch = string.Empty;
+    // Tracks every option Find Next's "same search" detection needs, not just the search text --
+    // Match Case/Match Entire Cell/Look In/Within/Search Order all change which results are found
+    // and in what order, so any of them changing must be treated exactly like a brand-new search
+    // (R60-commands-find-replace-6-3).
+    private FindOptions? _lastFindOptions;
+    private bool _lastMatchCase;
+    private bool _lastMatchEntireCell;
     private StyleDiff? _findFormatDiff;
     private StyleDiff? _replaceFormatDiff;
     private bool _syncingSearchText;
+    private IReadOnlyList<GridRange>? _selectionScopeAtOpen;
 
     public FindReplaceDialog(
         Func<Workbook> getWorkbook,
@@ -46,6 +54,24 @@ public sealed partial class FindReplaceDialog : Window
         }
         UpdateReplaceButtonVisibility();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+        Loaded += (_, _) => CaptureSelectionScopeAtOpen();
+    }
+
+    /// <summary>
+    /// Excel: when more than one cell is selected before Find &amp; Replace is opened, Replace
+    /// All/Find All is automatically restricted to that selection. Captured once when the dialog
+    /// finishes loading (by which point <see cref="Window.Owner"/> is set) so subsequent grid
+    /// selection changes made while this modeless dialog stays open don't retroactively change the
+    /// scope, matching Excel's "at open time" semantics.
+    /// </summary>
+    private void CaptureSelectionScopeAtOpen()
+    {
+        if (Owner is MainWindow mainWindow &&
+            mainWindow.SheetGrid.SelectedRange is { } range &&
+            range.Start != range.End)
+        {
+            _selectionScopeAtOpen = [range];
+        }
     }
 
     /// <summary>
@@ -141,17 +167,32 @@ public sealed partial class FindReplaceDialog : Window
         var search = SearchText;
         if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
 
-        if (search != _lastSearch)
+        var options = CreateFindOptions();
+        var matchCase = MatchCaseBox.IsChecked == true;
+        var matchEntireCell = MatchEntireBox.IsChecked == true;
+
+        // "Same search" means the text AND every option that affects which results are found/their
+        // order are unchanged since the previous Find Next -- comparing only the text (as before)
+        // let a stale _currentIndex from a differently-filtered/ordered result set silently carry
+        // over whenever an option was toggled without retyping the query (R60-commands-find-replace-6-3).
+        var sameSearch = search == _lastSearch &&
+            options == _lastFindOptions &&
+            matchCase == _lastMatchCase &&
+            matchEntireCell == _lastMatchEntireCell;
+        if (!sameSearch)
         {
             _currentIndex = -1;
             _lastSearch = search;
+            _lastFindOptions = options;
+            _lastMatchCase = matchCase;
+            _lastMatchEntireCell = matchEntireCell;
         }
 
         _results = FindReplaceService.Find(
             _getWorkbook(), search,
-            CreateFindOptions(),
-            matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true);
+            options,
+            matchCase: matchCase,
+            matchEntireCell: matchEntireCell);
 
         UpdateResultsGrid();
 
@@ -162,10 +203,67 @@ public sealed partial class FindReplaceDialog : Window
             return;
         }
 
-        _currentIndex = (_currentIndex + 1) % _results.Count;
+        // On a brand-new search (fresh text or a changed option, both reset _currentIndex to -1
+        // above) Excel starts searching forward from the ACTIVE cell, wrapping around -- it never
+        // restarts at the first match in sheet order regardless of where the user currently is
+        // (R60-commands-find-replace-6-1). Continuing an unchanged search just advances to the next
+        // result as before.
+        _currentIndex = _currentIndex < 0
+            ? FindFirstResultIndexAfterActiveCell(_results, options.SearchOrder)
+            : (_currentIndex + 1) % _results.Count;
         var result = _results[_currentIndex];
         SetStatusText(UiText.Format("FindReplace_MatchStatus", _currentIndex + 1, _results.Count));
         _navigateTo(result.Address);
+    }
+
+    /// <summary>
+    /// Mirrors the Avalonia shell's WorkbookSession.FindFirstResultAfterActiveCell: the first result
+    /// (in the given search order) that sorts strictly after the active cell, or index 0 (wrap to
+    /// the first sheet-order match) when none do / no active cell is available.
+    /// </summary>
+    private int FindFirstResultIndexAfterActiveCell(IReadOnlyList<FindResult> results, FindSearchOrder searchOrder)
+    {
+        var activeCell = _getActiveSelectionCell();
+        if (activeCell is null)
+            return 0;
+
+        var workbook = _getWorkbook();
+        for (var index = 0; index < results.Count; index++)
+        {
+            if (CompareFindOrder(workbook, results[index].Address, activeCell.Value, searchOrder) > 0)
+                return index;
+        }
+
+        return 0;
+    }
+
+    private static int CompareFindOrder(Workbook workbook, CellAddress left, CellAddress right, FindSearchOrder searchOrder)
+    {
+        var leftSheetIndex = FindSheetIndex(workbook, left.Sheet);
+        var rightSheetIndex = FindSheetIndex(workbook, right.Sheet);
+        var sheetComparison = leftSheetIndex.CompareTo(rightSheetIndex);
+        if (sheetComparison != 0)
+            return sheetComparison;
+
+        if (searchOrder == FindSearchOrder.ByColumns)
+        {
+            var colComparison = left.Col.CompareTo(right.Col);
+            return colComparison != 0 ? colComparison : left.Row.CompareTo(right.Row);
+        }
+
+        var rowComparison = left.Row.CompareTo(right.Row);
+        return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
+    }
+
+    private static int FindSheetIndex(Workbook workbook, SheetId sheetId)
+    {
+        for (var index = 0; index < workbook.Sheets.Count; index++)
+        {
+            if (workbook.Sheets[index].Id.Equals(sheetId))
+                return index;
+        }
+
+        return int.MaxValue;
     }
 
     private void FindAll()
@@ -314,7 +412,8 @@ public sealed partial class FindReplaceDialog : Window
                 3 => FindLookIn.Comments,
                 _ => FindLookIn.Values
             },
-            RequiredFormat: _findFormatDiff);
+            RequiredFormat: _findFormatDiff,
+            SelectionScope: _selectionScopeAtOpen);
 
     private void PickFormat(ref StyleDiff? target, params Button[] buttons)
     {

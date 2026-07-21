@@ -841,6 +841,83 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Equal("C1:D1", "A3:B4");
     }
 
+    // R60-io-sheet-dimension-usedrange-6-2: a patch-save whose ONLY change is a new merge over
+    // previously blank/default cells never extended <dimension>, because UpdateDimension (the only
+    // place that recomputes it) only runs when the patch has an actual cell-value change --
+    // ApplyMergeRegionChanges never touched <dimension> at all. CreateSourcePackage's dimension is
+    // "A1:C3" (A1/B2/C3 are the only populated cells); merging E5:F6 -- blank cells entirely outside
+    // that range, with no other edit -- must extend the saved <dimension> to "A1:F6" so Ctrl+End /
+    // the used-range extent stays consistent with the newly written <mergeCells>.
+    [Fact]
+    public void Save_LoadedWorkbookWithNewMergeOverBlankCellsBeyondDimension_ExtendsWorksheetDimension()
+    {
+        var sourceBytes = CreateSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        ReadWorksheetDimension(sourceBytes, "xl/worksheets/sheet1.xml").Should().Be("A1:C3");
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 5, 5),
+            new CellAddress(sheet.Id, 6, 6)));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        ReadMergeCellReferences(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .Equal("E5:F6");
+        ReadWorksheetDimension(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .Be("A1:F6", "the new merge extends beyond the sheet's prior A1:C3 used range");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloaded = adapter.Load(reloadStream).GetSheetAt(0);
+        reloaded.MergedRegions
+            .Select(region => region.ToString())
+            .Should()
+            .Equal("E5:F6");
+    }
+
+    // Sibling no-regression test: a merge that stays WITHIN the sheet's existing used range must
+    // leave <dimension> untouched -- the fix only ever grows the ref, it must never shrink or
+    // rewrite it when the merge doesn't actually extend past the current bounds.
+    [Fact]
+    public void Save_LoadedWorkbookWithNewMergeWithinDimension_LeavesWorksheetDimensionUnchanged()
+    {
+        var sourceBytes = CreateSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        ReadWorksheetDimension(sourceBytes, "xl/worksheets/sheet1.xml").Should().Be("A1:C3");
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2)));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        ReadMergeCellReferences(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .Equal("A1:B2");
+        ReadWorksheetDimension(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .Be("A1:C3", "a merge fully inside the existing used range must not alter <dimension>");
+    }
+
     [Fact]
     public void Save_LoadedWorkbookWithInternalHyperlinkEdit_PatchesSourcePackage()
     {

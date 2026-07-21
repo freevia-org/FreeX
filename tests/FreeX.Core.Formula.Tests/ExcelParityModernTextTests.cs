@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Threading;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -7,6 +9,24 @@ namespace FreeX.Core.Formula.Tests;
 public sealed class ExcelParityModernTextTests
 {
     private readonly FormulaEvaluator _eval = new();
+
+    // R60-formula-text-clean-6-1: the *B functions' DBCS 2-byte-per-character width only applies
+    // under a DBCS-language culture (ja/zh/ko) -- under any other culture (e.g. en-US) they behave
+    // like their non-B counterparts regardless of content. Tests that assert DBCS width must force
+    // a DBCS culture for the duration of the assertion.
+    private static void UnderDbcsCulture(Action action)
+    {
+        var originalCulture = Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("ja-JP");
+            action();
+        }
+        finally
+        {
+            Thread.CurrentThread.CurrentCulture = originalCulture;
+        }
+    }
 
     [Theory]
     [InlineData("=TEXTBEFORE(\"Little Red Riding Hood's red hood\",\"Red\")", "Little ")]
@@ -99,7 +119,8 @@ public sealed class ExcelParityModernTextTests
     [InlineData("=SEARCHB(\"?B\",\"A\u754cB\")", 2)]
     public void ByteTextFunctions_CountDbcsCharactersAsTwoBytes(string formula, double expected)
     {
-        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+        UnderDbcsCulture(() =>
+            _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected)));
     }
 
     [Theory]
@@ -109,7 +130,8 @@ public sealed class ExcelParityModernTextTests
     [InlineData("=SEARCHB(\"~~\",\"A~\u754c\")", 2)]
     public void SearchFunctions_TildeEscapesWildcardCharacters(string formula, double expected)
     {
-        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+        UnderDbcsCulture(() =>
+            _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected)));
     }
 
     [Theory]
@@ -119,7 +141,8 @@ public sealed class ExcelParityModernTextTests
     [InlineData("=REPLACEB(\"A\u754cB\",2,2,\"X\")", "AXB")]
     public void ByteTextFunctions_SliceAndReplaceByDbcsByteOffsets(string formula, string expected)
     {
-        _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected));
+        UnderDbcsCulture(() =>
+            _eval.Evaluate(formula, Sheet()).Should().Be(new TextValue(expected)));
     }
 
     [Fact]
@@ -129,8 +152,31 @@ public sealed class ExcelParityModernTextTests
             (1, 1, new TextValue("A\u754c")),
             (2, 1, new TextValue("BC")));
 
-        AssertColumn(_eval.Evaluate("=LENB(A1:A2)", sheet), new NumberValue(3), new NumberValue(2));
-        AssertColumn(_eval.Evaluate("=LEFTB(A1:A2,2)", sheet), new TextValue("A"), new TextValue("BC"));
+        UnderDbcsCulture(() =>
+        {
+            AssertColumn(_eval.Evaluate("=LENB(A1:A2)", sheet), new NumberValue(3), new NumberValue(2));
+            AssertColumn(_eval.Evaluate("=LEFTB(A1:A2,2)", sheet), new TextValue("A"), new TextValue("BC"));
+        });
+    }
+
+    // R60-formula-text-clean-6-1 (new coverage): under a non-DBCS culture (e.g. en-US), the *B
+    // functions must behave exactly like their non-B counterparts even for CJK content -- the bug
+    // this finding fixes was content-driven double-counting regardless of culture.
+    [Fact]
+    public void ByteTextFunctions_UnderNonDbcsCulture_BehaveLikeNonByteCounterparts()
+    {
+        var originalCulture = Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+
+            _eval.Evaluate("=LENB(\"A\u754cB\")", Sheet()).Should().Be(new NumberValue(3));
+            _eval.Evaluate("=LEFTB(\"A\u754cB\",2)", Sheet()).Should().Be(new TextValue("A\u754c"));
+        }
+        finally
+        {
+            Thread.CurrentThread.CurrentCulture = originalCulture;
+        }
     }
 
     [Theory]

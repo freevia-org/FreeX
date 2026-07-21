@@ -71,30 +71,53 @@ public sealed class SetPageMarginsCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly WorksheetPageMargins _margins;
+    private readonly double? _headerMargin;
+    private readonly double? _footerMargin;
     private WorksheetPageMargins _previousMargins;
+    private double _previousHeaderMargin;
+    private double _previousFooterMargin;
 
     public string Label => "Page Margins";
 
-    public SetPageMarginsCommand(SheetId sheetId, WorksheetPageMargins margins)
+    public SetPageMarginsCommand(
+        SheetId sheetId,
+        WorksheetPageMargins margins,
+        double? headerMargin = null,
+        double? footerMargin = null)
     {
         _sheetId = sheetId;
         _margins = margins;
+        _headerMargin = headerMargin;
+        _footerMargin = footerMargin;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_margins.Left < 0 || _margins.Right < 0 || _margins.Top < 0 || _margins.Bottom < 0)
             return PageSetupCommandGuards.PageMarginsCannotBeNegative();
+        if (_headerMargin is < 0 || _footerMargin is < 0)
+            return PageSetupCommandGuards.PageMarginsCannotBeNegative();
 
         var sheet = ctx.GetSheet(_sheetId);
         _previousMargins = sheet.PageMargins;
+        _previousHeaderMargin = sheet.HeaderMargin;
+        _previousFooterMargin = sheet.FooterMargin;
         sheet.PageMargins = _margins;
+        if (_headerMargin is { } headerMargin)
+            sheet.HeaderMargin = headerMargin;
+        if (_footerMargin is { } footerMargin)
+            sheet.FooterMargin = footerMargin;
         return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
     {
-        ctx.GetSheet(_sheetId).PageMargins = _previousMargins;
+        var sheet = ctx.GetSheet(_sheetId);
+        sheet.PageMargins = _previousMargins;
+        if (_headerMargin is not null)
+            sheet.HeaderMargin = _previousHeaderMargin;
+        if (_footerMargin is not null)
+            sheet.FooterMargin = _previousFooterMargin;
     }
 }
 

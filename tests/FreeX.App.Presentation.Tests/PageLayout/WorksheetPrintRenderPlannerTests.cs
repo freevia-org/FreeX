@@ -19,12 +19,34 @@ public sealed class WorksheetPrintRenderPlannerTests
             new CellAddress(sheetId, endRow, endCol));
 
     [Fact]
-    public void TryBuild_EmptySheetReturnsFalse()
+    public void TryBuild_EmptySheetProducesOneBlankPage()
     {
+        // Excel's Print Preview always shows exactly one blank, paper-sized page (with margins and
+        // any configured header/footer) for a sheet with no content at all, rather than no page.
         var (_, sheet) = CreateBook();
 
-        WorksheetPrintRenderPlanner.TryBuild(sheet, printRangeOverride: null, ignorePrintArea: false, out _)
-            .Should().BeFalse();
+        WorksheetPrintRenderPlanner.TryBuild(sheet, printRangeOverride: null, ignorePrintArea: false, out var plan)
+            .Should().BeTrue();
+
+        plan.Pages.Should().ContainSingle();
+        plan.PrintRanges.Should().ContainSingle()
+            .Which.Should().Be(Range(sheet.Id, 1, 1, 1, 1));
+    }
+
+    [Fact]
+    public void TryBuild_EmptySheetWithIgnorePrintAreaAlsoProducesOneBlankPage()
+    {
+        // Sibling of TryBuild_EmptySheetProducesOneBlankPage: the ignorePrintArea path routes through
+        // the same used-range fallback and must not regress to the old "no page" behavior either.
+        var (_, sheet) = CreateBook();
+        sheet.PrintArea = Range(sheet.Id, 1, 1, 2, 2);
+
+        WorksheetPrintRenderPlanner.TryBuild(sheet, printRangeOverride: null, ignorePrintArea: true, out var plan)
+            .Should().BeTrue();
+
+        plan.Pages.Should().ContainSingle();
+        plan.PrintRanges.Should().ContainSingle()
+            .Which.Should().Be(Range(sheet.Id, 1, 1, 1, 1));
     }
 
     [Fact]

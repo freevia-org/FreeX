@@ -15,11 +15,13 @@ public static partial class PrintRenderer
     // overflow-into-blank-neighbor text the same way the interactive grid (GridView.Rendering.cs)
     // does, reading DisplayCell.Style — which the viewport already merges conditional formatting
     // into — so CF highlight/colorscale fills and dxf font colors print exactly as displayed.
-    // NOTE: RenderPageVisual (PrintRenderer.HeaderFooter.cs, owned by a different fix bucket)
-    // already threads a `blackAndWhite` flag (from Sheet.PrintBlackAndWhite) to sibling drawing
-    // helpers such as DrawDisplayedComments, but does not currently pass it into this method —
-    // so Page Setup > Sheet > "Black and white" is not yet honored for cell fills/borders/font
-    // color on this path. That wiring lives in the caller and is out of scope here.
+    // Page Setup > Sheet > "Black and white" (Sheet.PrintBlackAndWhite) is threaded in here the
+    // same way RenderPageVisual (PrintRenderer.HeaderFooter.cs) already threads it to
+    // DrawDisplayedComments: fills are suppressed (no color/pattern paint), and borders/gridlines
+    // are forced to solid black instead of their authored/light-gray color, matching Excel's
+    // grayscale print preview.
+    private static readonly Pen BlackAndWhiteGridlinePen = new(Brushes.Black, 0.5);
+
     private static void DrawPrintedGridCells(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
@@ -34,7 +36,8 @@ public static partial class PrintRenderer
         bool printGridlines,
         WorksheetPrintErrorValue printErrorValue,
         double gridLeft,
-        double gridTop)
+        double gridTop,
+        bool blackAndWhite = false)
     {
         // Multi-pass rendering (fills, then gridlines/borders, then text) mirrors the interactive
         // grid's layering (GridView.Rendering.cs). A single combined per-cell pass would have the
@@ -58,7 +61,9 @@ public static partial class PrintRenderer
                 cellLookup.TryGetValue((row, col), out var cell);
                 var style = cell.Style;
 
-                if (style is not null && HasVisiblePrintedFill(style))
+                // Excel's "Black and white" print option forces every fill to transparent/white --
+                // never merely dimmed or grayscaled -- so skip the fill entirely instead of drawing it.
+                if (!blackAndWhite && style is not null && HasVisiblePrintedFill(style))
                 {
                     DrawPrintedCellFill(dc, cellRect, style);
                 }
@@ -83,13 +88,13 @@ public static partial class PrintRenderer
                 if (printGridlines)
                 {
                     dc.DrawRectangle(null,
-                        new Pen(Brushes.LightGray, 0.5),
+                        blackAndWhite ? BlackAndWhiteGridlinePen : new Pen(Brushes.LightGray, 0.5),
                         cellRect);
                 }
 
                 if (style is not null && HasVisiblePrintedBorder(style))
                 {
-                    DrawPrintedCellBorders(dc, cellRect, style);
+                    DrawPrintedCellBorders(dc, cellRect, style, blackAndWhite);
                 }
             }
         }
@@ -152,7 +157,8 @@ public static partial class PrintRenderer
                     pageColumns,
                     colIndex,
                     row,
-                    cellLookup);
+                    cellLookup,
+                    blackAndWhite);
             }
         }
     }
@@ -168,12 +174,25 @@ public static partial class PrintRenderer
         IReadOnlyList<uint> pageColumns,
         int colIndex,
         uint row,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup)
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        bool blackAndWhite = false)
     {
         var textRotation = style?.TextRotation ?? 0;
         var renderText = CellTextOrientationLayoutPlanner.PrepareDisplayText(displayText, textRotation);
         var hasOrientation = CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation);
-        var textBrush = ResolvePrintedTextBrush(style, out var textColor);
+        // Excel's "Black and white" print option forces every font color to black regardless of
+        // its authored color, matching the same flag already applied to comments/gridlines/borders.
+        Brush textBrush;
+        Color textColor;
+        if (blackAndWhite)
+        {
+            textBrush = Brushes.Black;
+            textColor = Colors.Black;
+        }
+        else
+        {
+            textBrush = ResolvePrintedTextBrush(style, out textColor);
+        }
         var wrapText = style?.WrapText == true;
 
         // Read the cell's own font (size/name/bold/italic) instead of a fixed print font, so a
@@ -523,19 +542,19 @@ public static partial class PrintRenderer
         style.BorderDiagonalDown.Style != BorderStyle.None ||
         style.BorderDiagonalUp.Style != BorderStyle.None;
 
-    private static void DrawPrintedCellBorders(DrawingContext dc, Rect rect, CellStyle style)
+    private static void DrawPrintedCellBorders(DrawingContext dc, Rect rect, CellStyle style, bool blackAndWhite = false)
     {
-        DrawPrintedBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top));
-        DrawPrintedBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
-        DrawPrintedBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom));
-        DrawPrintedBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
+        DrawPrintedBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), blackAndWhite);
+        DrawPrintedBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), blackAndWhite);
+        DrawPrintedBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), blackAndWhite);
+        DrawPrintedBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite);
         if (style.BorderDiagonalDown.Style != BorderStyle.None)
-            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom));
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite);
         if (style.BorderDiagonalUp.Style != BorderStyle.None)
-            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top));
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top), blackAndWhite);
     }
 
-    private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2)
+    private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2, bool blackAndWhite = false)
     {
         if (border.Style == BorderStyle.None) return;
 
@@ -559,7 +578,12 @@ public static partial class PrintRenderer
             _ => DashStyles.Solid
         };
 
-        var pen = new Pen(new SolidColorBrush(Color.FromRgb(border.Color.R, border.Color.G, border.Color.B)), thickness)
+        // Excel's "Black and white" print option forces every border to solid black regardless of
+        // its authored color.
+        var borderBrush = blackAndWhite
+            ? Brushes.Black
+            : new SolidColorBrush(Color.FromRgb(border.Color.R, border.Color.G, border.Color.B));
+        var pen = new Pen(borderBrush, thickness)
         {
             DashStyle = dash
         };

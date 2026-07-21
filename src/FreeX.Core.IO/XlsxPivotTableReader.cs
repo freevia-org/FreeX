@@ -273,7 +273,10 @@ internal static partial class XlsxPivotTableReader
             Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstDataRow") ?? 1),
             Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstDataCol") ?? 1),
             XlsxXmlAttributeReader.ReadBoolAttribute(firstPivotFieldElement, "defaultSubtotal"),
-            XlsxXmlAttributeReader.ReadBoolAttribute(firstPivotFieldElement, "subtotalTop")
+            // R60-io-pivot-layout-6-2: CT_PivotField's subtotalTop defaults to TRUE (Top) when the
+            // attribute is omitted -- defaulting to false (Bottom) here reads a schema-correct Top-placed
+            // file (the overwhelmingly common case) backwards as Bottom.
+            XlsxXmlAttributeReader.ReadBoolAttribute(firstPivotFieldElement, "subtotalTop", defaultValue: true)
                 ? PivotSubtotalPlacement.Top
                 : PivotSubtotalPlacement.Bottom,
             // OOXML CT_pivotTableDefinition spells grand-total visibility as rowGrandTotals / colGrandTotals
@@ -282,10 +285,14 @@ internal static partial class XlsxPivotTableReader
             ReadGrandTotal(root, "rowGrandTotals", "showRowGrandTotals") || ReadGrandTotal(root, "colGrandTotals", "showColumnGrandTotals"),
             ReadGrandTotal(root, "rowGrandTotals", "showRowGrandTotals"),
             ReadGrandTotal(root, "colGrandTotals", "showColumnGrandTotals"),
-            // repeatItemLabels has no base-schema home (x14-only), so FreeX persists it in a tableProps
-            // extLst extension. Prefer that; fall back to the legacy definition-level attribute. insertBlankRow
-            // is a per-pivotField OOXML flag, so read it from any field (legacy fallback to blankLineAfterItems).
-            ReadFreeXTableBool(root, workbookNs, "repeatItemLabels")
+            // R60-io-pivot-layout-6-1: the real OOXML wire format is the per-field x14 fillDownLabels
+            // extension (read off whichever pivotField is actually on the row/col axis, same field
+            // FindFirstPivotFieldElement resolves for subtotalTop below); prefer that, then fall back to
+            // the legacy FreeX fx:tableProps repeatItemLabels attribute, then the legacy definition-level
+            // attribute, for back-compat with older FreeX-authored files. insertBlankRow is a per-pivotField
+            // OOXML flag, so read it from any field (legacy fallback to blankLineAfterItems).
+            ReadX14FillDownLabels(firstPivotFieldElement, workbookNs)
+                ?? ReadFreeXTableBool(root, workbookNs, "repeatItemLabels")
                 ?? XlsxXmlAttributeReader.ReadBoolAttribute(root, "repeatItemLabels", defaultValue: true),
             ReadAnyPivotFieldBool(root, workbookNs, "insertBlankRow")
                 ?? XlsxXmlAttributeReader.ReadBoolAttribute(root, "blankLineAfterItems"),
@@ -388,6 +395,30 @@ internal static partial class XlsxPivotTableReader
         }
 
         return null;
+    }
+
+    // R60-io-pivot-layout-6-1: reads the real x14 fillDownLabels extension off a pivotField -- the wire
+    // format real Excel uses for "Repeat All Item Labels" (ext uri "{2946ED86-A175-432A-8AC1-64E0C546D7DE}"
+    // per [MS-XLSX], DocumentFormat.OpenXml.Office2010.Excel.PivotField.FillDownLabels). Returns null when
+    // the field carries no such extension so callers can fall back to FreeX's legacy fx extension/attribute.
+    private static bool? ReadX14FillDownLabels(XElement? pivotFieldElement, XNamespace workbookNs)
+    {
+        if (pivotFieldElement is null)
+            return null;
+
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        var x14PivotField = pivotFieldElement
+            .Element(workbookNs + "extLst")?
+            .Elements(workbookNs + "ext")
+            .FirstOrDefault(ext => string.Equals(
+                ext.Attribute("uri")?.Value,
+                "{2946ED86-A175-432A-8AC1-64E0C546D7DE}",
+                StringComparison.OrdinalIgnoreCase))?
+            .Element(x14Ns + "pivotField");
+        if (x14PivotField?.Attribute("fillDownLabels") is null)
+            return null;
+
+        return XlsxXmlAttributeReader.ReadBoolAttribute(x14PivotField, "fillDownLabels");
     }
 
     // Reads a grand-total flag, preferring the OOXML attribute name (rowGrandTotals / colGrandTotals) and

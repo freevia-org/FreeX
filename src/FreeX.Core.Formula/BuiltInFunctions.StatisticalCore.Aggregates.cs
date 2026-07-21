@@ -220,7 +220,13 @@ public static partial class BuiltInFunctions
         int count = 0;
         foreach (var arg in args)
         {
-            if (arg is not BlankValue)
+            // A bare (non-reference) erroring argument propagates, e.g. =COUNTA(NA()); but an
+            // error arriving through a cell/range reference is wrapped in ReferencedScalarValue
+            // (COUNTA is a ReferenceProvenanceAggregate) and is still counted as non-blank,
+            // matching Excel and mirroring Count()'s direct-vs-range-sourced error asymmetry above.
+            if (arg is ErrorValue err) return err;
+            var value = arg is ReferencedScalarValue referenced ? referenced.Value : arg;
+            if (value is not BlankValue)
                 count++;
         }
         return new NumberValue(count);
