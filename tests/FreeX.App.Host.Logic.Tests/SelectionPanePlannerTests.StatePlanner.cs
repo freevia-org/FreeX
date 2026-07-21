@@ -144,10 +144,13 @@ public sealed partial class SelectionPanePlannerTests
             picture.Id,
             SelectionPaneDropPlacement.After,
             IsAllowed: false));
+        // Charts are now a supported Selection Pane z-order participant (matching Excel, which lets
+        // you drag a chart to reorder it alongside shapes/pictures/textboxes in the pane), so a drop
+        // cue targeting a chart is allowed rather than rejected.
         chartCue.Should().Be(new SelectionPaneDropVisualPlan(
             chart.Id,
             SelectionPaneDropPlacement.After,
-            IsAllowed: false));
+            IsAllowed: true));
     }
 
     [Fact]

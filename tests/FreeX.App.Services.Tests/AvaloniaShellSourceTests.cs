@@ -677,7 +677,10 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.ClearComments, \"Clear Comments and Notes\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_clearCommentsMenuItem.Click += (_, _) => ClearSelectedRangeComments();");
         catalogSource.Should().Contain("new(NativeMenuItemId.ClearHyperlinks, \"Clear Hyperlinks\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_clearHyperlinksMenuItem.Click += (_, _) => ClearSelectedRangeHyperlinks();");
+        // Same Home > Clear > Clear Hyperlinks semantics as the flyout item above -- strips both the
+        // hyperlink and its formatting, so it is wired through RemoveSelectedRangeHyperlinks rather
+        // than the format-preserving ClearSelectedRangeHyperlinks.
+        source.Should().Contain("_clearHyperlinksMenuItem.Click += (_, _) => RemoveSelectedRangeHyperlinks();");
         catalogSource.Should().Contain("new(NativeMenuItemId.Bold, \"Bold\", NativeMenuGesture(WorkbookShortcutRoute.ToggleBold))");
         source.Should().Contain("_boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);");
         catalogSource.Should().Contain("new(NativeMenuItemId.Italic, \"Italic\", NativeMenuGesture(WorkbookShortcutRoute.ToggleItalic))");
@@ -3654,7 +3657,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_clearCommentsFlyoutItem.Header = \"Clear Comments and Notes\";");
         source.Should().Contain("_clearCommentsFlyoutItem.Click += (_, _) => ClearSelectedRangeComments();");
         source.Should().Contain("_clearHyperlinksFlyoutItem.Header = \"Clear Hyperlinks\";");
-        source.Should().Contain("_clearHyperlinksFlyoutItem.Click += (_, _) => ClearSelectedRangeHyperlinks();");
+        // Home > Clear > Clear Hyperlinks strips the hyperlink AND its blue/underline formatting in
+        // Excel (unlike the right-click "Remove Hyperlink" item, which keeps the formatting and stays
+        // wired to ClearSelectedRangeHyperlinks) -- so this flyout item is wired through
+        // RemoveSelectedRangeHyperlinks (see WorkbookSession.cs).
+        source.Should().Contain("_clearHyperlinksFlyoutItem.Click += (_, _) => RemoveSelectedRangeHyperlinks();");
         catalogSource.Should().Contain("new(NativeMenuItemId.Clear, \"Clear\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_clearMenuItem.Menu = CreateNativeClearMenu();");
         catalogSource.Should().Contain("Item(NativeMenuItemId.Clear)");
@@ -5094,7 +5101,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var chooseFormatButton = CreateFindReplaceFormatButton(\"FindChooseFormatFromCellButton\", \"Choose From Cell\");");
         source.Should().Contain("var clearFormatButton = CreateFindReplaceFormatButton(\"FindClearFormatButton\", \"Clear Format\");");
         source.Should().Contain("var findFormatRow = CreateFindReplaceFormatRow(\"Find format\", chooseFormatButton, clearFormatButton);");
-        source.Should().Contain("CreateFindOptions(optionsControls, findFormat)");
+        // CreateFindOptions now threads the selection-scope-at-open through as a third argument
+        // (Excel restricts Find All/Replace All to the selection that existed when the dialog opened).
+        source.Should().Contain("CreateFindOptions(optionsControls, findFormat, selectionScopeAtOpen)");
         source.Should().Contain("{automationPrefix}WithinBox");
         source.Should().Contain("{automationPrefix}SearchBox");
         source.Should().Contain("{automationPrefix}LookInBox");
@@ -5121,7 +5130,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"GoToSpecialOkButton\"");
         source.Should().Contain("Header = \"Go To Special\"");
         source.Should().Contain("Header = \"Values for constants and formulas\"");
-        source.Should().Contain("private FindOptions CreateFindOptions(FindOptionsControls controls, StyleDiff? requiredFormat = null)");
+        // CreateFindOptions wraps onto multiple lines now that it takes a third parameter for the
+        // selection-scope-at-open (see the CreateFindOptions(optionsControls, findFormat,
+        // selectionScopeAtOpen) call-site assertion above) -- assert each parameter line separately
+        // instead of one single-line signature string.
+        source.Should().Contain("private FindOptions CreateFindOptions(");
+        source.Should().Contain("FindOptionsControls controls,");
+        source.Should().Contain("StyleDiff? requiredFormat = null,");
+        source.Should().Contain("IReadOnlyList<GridRange>? selectionScope = null) =>");
         source.Should().Contain("private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)");
         source.Should().Contain("private static Button CreateFindReplaceFormatButton(string automationId, string content)");
         source.Should().Contain("private static StackPanel CreateFindReplaceFormatRow(string label, Button chooseButton, Button clearButton)");
@@ -5144,7 +5160,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.GoToCell(match.Address);");
         source.Should().Contain("_session.ReplaceNextValue(");
         source.Should().Contain("_session.ReplaceAllValues(");
-        source.Should().Contain("CreateFindOptions(options, findFormat)");
+        source.Should().Contain("CreateFindOptions(options, findFormat, selectionScopeAtOpen)");
         source.Should().Contain("MatchEntire(), replacementFormat)");
         source.Should().Contain("var result = _session.GoToReference(reference);");
         source.Should().Contain("var result = _session.GoToSpecial(kind, options);");

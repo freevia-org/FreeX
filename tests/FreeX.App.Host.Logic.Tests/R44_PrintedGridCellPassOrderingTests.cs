@@ -143,6 +143,7 @@ public sealed class R44_PrintedGridCellPassOrderingTests
                 WorksheetPrintErrorValue.Displayed,
                 0.0,
                 0.0,
+                false,
             ]);
         }
 
