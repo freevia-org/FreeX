@@ -274,6 +274,116 @@ public sealed class XlsxRichTextRunRoundTripTests
         runs[0].Bold.Should().BeTrue();
     }
 
+    [Fact]
+    public void RichRun_ClearedOverride_PersistsThroughPatchSave_WhenValueAndStyleAreUnchanged()
+    {
+        // R61-io-rich-text-runs-6-1 ("an even starker variant"): a whole-cell command
+        // (mirrors ApplyStyleCommand.ClearOverriddenRunProperties) clears the stale per-run
+        // color override on "World" WITHOUT changing cell.Value or cell.StyleId at all (e.g.
+        // the command's whole-cell style diff happened to be a no-op against this cell's
+        // existing style). Before the fix, TryGetPatchableValueChanges's skip condition
+        // (`!formulaChanged && !valueChanged && !styleChanged`) saw no reason to visit this
+        // cell at all -- the RichTextRuns clearing that DID happen in memory was 100%
+        // invisible to patch-save, so "World" kept its stale <color rgb="FFFF0000"/> in the
+        // saved package forever despite the user's whole-cell command clearing it in memory.
+        using var pkg = BuildMinimalXlsx("""
+            <row r="1">
+              <c r="A1" t="inlineStr">
+                <is>
+                  <r><t>Hello </t></r>
+                  <r><rPr><color rgb="FFFF0000"/></rPr><t>World</t></r>
+                </is>
+              </c>
+            </row>
+            """);
+
+        var adapter  = new XlsxFileAdapter();
+        var workbook = adapter.Load(pkg);
+        var sheet    = workbook.GetSheetAt(0);
+        var addr     = A(sheet, 1, 1);
+        var originalStyleId = sheet.GetCell(addr)!.StyleId;
+
+        // Materialize the cell-patch baseline against the freshly-loaded (unedited) state --
+        // mirrors what the real app does right after opening a file, before any user edit is
+        // possible. Without this, the baseline would lazily materialize on the FIRST save call
+        // below (i.e. from the ALREADY-cleared state), making the edit invisible for reasons
+        // unrelated to this finding.
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var prepareBlockReason)
+            .Should().BeTrue(prepareBlockReason);
+
+        // Sanity: the stale red override loaded correctly.
+        sheet.RichTextRuns.Should().ContainKey(addr);
+        sheet.RichTextRuns[addr][1].FontColor.Should().Be(CellRunColor.FromRgb(new CellColor(0xFF, 0x00, 0x00)));
+
+        // Clear the per-run override in memory -- cell.Value and cell.StyleId are left exactly
+        // as they were.
+        sheet.RichTextRuns[addr] = new List<CellTextRun>
+        {
+            new("Hello ", Bold: null, Italic: null, Underline: null, Strikethrough: null,
+                FontName: null, FontSize: null, FontColor: null),
+            new("World", Bold: null, Italic: null, Underline: null, Strikethrough: null,
+                FontName: null, FontSize: null, FontColor: null),
+        };
+
+        var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var rs       = reloaded.GetSheetAt(0);
+        var rAddr    = A(rs, 1, 1);
+
+        rs.GetCell(rAddr)!.StyleId.Should().Be(originalStyleId);
+        rs.GetCell(rAddr)!.Value.Should().Be(new TextValue("Hello World"));
+
+        // The key assertion: "World" must NOT still carry the stale red override.
+        if (rs.RichTextRuns.TryGetValue(rAddr, out var reloadedRuns))
+        {
+            reloadedRuns.Should().OnlyContain(r => r.FontColor == null,
+                "the cleared per-run color override must not resurrect on reload");
+        }
+    }
+
+    /// <summary>Sibling no-regression check: a cell whose rich-run overrides genuinely did NOT
+    /// change still round-trips its (correct) per-run formatting untouched when a different
+    /// cell triggers patch-save -- the new runsChanged detection must not force a spurious
+    /// rewrite of a cell nothing happened to.</summary>
+    [Fact]
+    public void RichRun_UnchangedOverride_StillPersistsThroughPatchSave_WhenAnotherCellModified()
+    {
+        using var pkg = BuildMinimalXlsx("""
+            <row r="1">
+              <c r="A1" t="inlineStr">
+                <is>
+                  <r><t>Hello </t></r>
+                  <r><rPr><color rgb="FFFF0000"/></rPr><t>World</t></r>
+                </is>
+              </c>
+            </row>
+            <row r="2">
+              <c r="A2" t="inlineStr"><is><t>plain</t></is></c>
+            </row>
+            """);
+
+        var workbook = LoadXlsx(pkg);
+        var sheet    = workbook.GetSheetAt(0);
+
+        // Touch a different cell -- A1's own value/style/runs are untouched.
+        sheet.SetCell(A(sheet, 2, 1), new TextValue("changed"));
+
+        using var saved    = SaveXlsx(workbook);
+        var       reloaded = LoadXlsx(saved);
+        var       rs       = reloaded.GetSheetAt(0);
+        var       rAddr    = A(rs, 1, 1);
+
+        rs.RichTextRuns.Should().ContainKey(rAddr);
+        var runs = rs.RichTextRuns[rAddr];
+        runs.Should().HaveCount(2);
+        runs[1].FontColor.Should().Be(CellRunColor.FromRgb(new CellColor(0xFF, 0x00, 0x00)),
+            "a cell whose runs never changed must keep its original formatting");
+    }
+
     // ── NativeJson round-trip ────────────────────────────────────────────────
 
     [Fact]
@@ -325,6 +435,49 @@ public sealed class XlsxRichTextRunRoundTripTests
         runs[1].Text.Should().Be("st");
         runs[1].Bold.Should().BeNull();
         runs[1].VertAlign.Should().Be(CellTextRunVertAlign.Subscript);
+    }
+
+    [Fact]
+    public void RichRun_DoubleUnderlineCharsetFamilyScheme_SurviveNativeJsonRoundTrip()
+    {
+        // R61-io-rich-text-runs-6-2: NativeJsonAdapter's CellTextRunDto previously had no
+        // DoubleUnderline/Charset/Family/Scheme fields at all, so a double-underline run
+        // (or one with an explicit charset/family/scheme) silently downgraded to a plain
+        // single-underline run with those four properties reset to null on reload.
+        var workbook = new Workbook("RichRunDoubleUnderlineNativeJson");
+        var sheet    = workbook.AddSheet("Sheet1");
+        var addr     = A(sheet, 4, 4);
+
+        sheet.SetCell(addr, new TextValue("Total: 500"));
+        sheet.RichTextRuns[addr] = new List<CellTextRun>
+        {
+            new("Total: 500",
+                Bold:            true,
+                Italic:          null,
+                Underline:       true,
+                Strikethrough:   null,
+                FontName:        "MS Gothic",
+                FontSize:        11.0,
+                FontColor:       null,
+                VertAlign:       CellTextRunVertAlign.None,
+                DoubleUnderline: true,
+                Charset:         128,
+                Family:          2,
+                Scheme:          "minor"),
+        };
+
+        using var saved    = SaveJson(workbook);
+        var       reloaded = ReloadJson(saved);
+        var       rs       = reloaded.GetSheetAt(0);
+
+        rs.RichTextRuns.Should().ContainKey(A(rs, 4, 4));
+        var run = rs.RichTextRuns[A(rs, 4, 4)].Should().ContainSingle().Subject;
+
+        run.Underline.Should().BeTrue();
+        run.DoubleUnderline.Should().BeTrue();
+        run.Charset.Should().Be(128);
+        run.Family.Should().Be(2);
+        run.Scheme.Should().Be("minor");
     }
 
     [Fact]

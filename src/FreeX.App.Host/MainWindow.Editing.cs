@@ -19,10 +19,10 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private void EnterEditMode()
+    private void EnterEditMode(double? clickX = null)
     {
         if (_selectionAnchor.HasValue)
-            ShowInlineEditor(_selectionAnchor.Value);
+            ShowInlineEditor(_selectionAnchor.Value, clickX);
         else
         {
             FocusFormulaBarAtEnd();
@@ -62,7 +62,7 @@ public partial class MainWindow
         Keyboard.Focus(FormulaBar);
     }
 
-    private void ShowInlineEditor(CellAddress addr)
+    private void ShowInlineEditor(CellAddress addr, double? clickX = null)
     {
         if (!HideTextBoxInlineEditor(commit: true))
             return;
@@ -167,7 +167,7 @@ public partial class MainWindow
         EditOverlay.IsHitTestVisible = true;
         RefreshFormulaReferenceHighlights();
         _inlineEditor.Focus();
-        _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
+        _inlineEditor.CaretIndex = ResolveInlineEditorCaretIndex(clickX, layout.TextOverlayRect.Left - 4);
         _inlineEditor.SelectionLength = 0;
         SetFormulaEditStatusBarMode(pointMode: false);
 
@@ -192,6 +192,34 @@ public partial class MainWindow
 
             return null;
         }
+    }
+
+    /// <summary>
+    /// Real Excel (and FreeX's own Avalonia shell via CalculateInlineCellCaretIndex) places the
+    /// caret at the pixel position that was double-clicked, not always at the end of the text
+    /// (R61-render-formula-bar-6-2). When a double-click x-coordinate (in SheetGrid/EditOverlay
+    /// coordinate space, i.e. e.GetPosition(SheetGrid).X) is supplied, hit-test it against the
+    /// already-laid-out inline editor via WPF's own GetCharacterIndexFromPoint; a plain keyboard
+    /// entry (F2, typing to start an entry, Enter/Tab navigation, etc.) passes null and keeps the
+    /// existing "caret at end" behavior.
+    /// </summary>
+    private int ResolveInlineEditorCaretIndex(double? clickX, double editorCanvasLeft)
+    {
+        if (_inlineEditor is null)
+            return 0;
+
+        var textLength = _inlineEditor.Text.Length;
+        if (clickX is not { } x)
+            return textLength;
+
+        // The editor was just given its final Text/Width/Height/position this pass; force a
+        // synchronous layout pass so GetCharacterIndexFromPoint hit-tests the current content
+        // rather than stale (or absent) layout.
+        _inlineEditor.UpdateLayout();
+        double localX = x - editorCanvasLeft;
+        int hitIndex = _inlineEditor.GetCharacterIndexFromPoint(
+            new System.Windows.Point(localX, _inlineEditor.ActualHeight / 2), snapToText: true);
+        return hitIndex >= 0 ? Math.Clamp(hitIndex, 0, textLength) : textLength;
     }
 
     private void SyncFormulaBarTextFromInlineEditor()

@@ -67,6 +67,7 @@ public static partial class FlashFillService
             ?? TryExtractDigitsOnly(examples)
             ?? TryDateComponentExtraction(examples)
             ?? TryExtractFinalDigitRun(examples)
+            ?? TryExtractFirstDigitRun(examples)
             ?? TryThreeTokenNameInitial(examples)
             ?? TryThreeTokenNameDropMiddle(examples)
             ?? TryPairedDelimiterExtraction(examples)
@@ -135,6 +136,8 @@ public static partial class FlashFillService
 
         var patterns = new List<Func<IReadOnlyList<string>, string>>
         {
+            s => s[0] + s[1],
+            s => s[1] + s[0],
             s => s[0] + " " + s[1],
             s => s[1] + ", " + s[0],
             s => s[0] + "." + s[1],
@@ -159,7 +162,7 @@ public static partial class FlashFillService
             emailPatterns.Add(firstLastInitialEmailPattern);
 
         if (emailPatterns.Count > 0)
-            patterns.InsertRange(6, emailPatterns);
+            patterns.InsertRange(8, emailPatterns);
 
         if (TryLastFirstInitialEmailPattern(exampleSources, exampleOutputs) is { } lastInitialEmailPattern)
             patterns.Add(lastInitialEmailPattern);

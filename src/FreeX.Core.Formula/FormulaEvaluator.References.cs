@@ -802,7 +802,7 @@ public sealed partial class FormulaEvaluator
         out ScalarValue result)
     {
         result = BlankValue.Instance;
-        if (node.Arguments.Count != 1 || functionName is not ("ROWS" or "COLUMNS" or "AREAS"))
+        if (node.Arguments.Count != 1 || functionName is not ("ROWS" or "COLUMNS" or "AREAS" or "ROW" or "COLUMN"))
             return false;
 
         if (!TryAsRangeRef(node.Arguments[0], out var range))
@@ -824,10 +824,50 @@ public sealed partial class FormulaEvaluator
         uint r1 = Math.Max(range.Start.Row, range.End.Row);
         uint c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
         uint c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+
+        // ROW/COLUMN report POSITIONAL row/column numbers, unlike every other structured-range
+        // function here (ROWS/COLUMNS/AREAS/aggregates), which only ever count or fold values —
+        // for those, silently clamping an open-ended full-column/full-row reference down to the
+        // sheet's used range is harmless (blank cells beyond it don't change a count or a sum).
+        // For ROW/COLUMN it is NOT harmless: ROW(A:A) must evaluate to the literal array
+        // {1;2;...;1048576}, so INDEX(ROW(A:A),100) resolves to 100. Deliberately bypass the
+        // generic per-argument ClampOpenEndedRangeToUsed path below (and its cell-value
+        // materialization + MaxMaterializedRangeCells cap, neither of which apply here since we
+        // only need the range's own coordinates, not any cell's contents) and compute directly
+        // from the RAW, unclamped extent instead.
+        if (functionName is "ROW" or "COLUMN")
+        {
+            result = functionName == "ROW"
+                ? BuildPositionalNumbers(r0, r1, c0, range.SheetName, isRow: true)
+                : BuildPositionalNumbers(c0, c1, r0, range.SheetName, isRow: false);
+            return true;
+        }
+
         result = functionName == "ROWS"
             ? new NumberValue(r1 - r0 + 1)
             : new NumberValue(c1 - c0 + 1);
         return true;
+    }
+
+    // Builds the positional-number result for ROW/COLUMN over a (possibly full-column/full-row)
+    // range: a single NumberValue when the range collapses to one row/column, otherwise a
+    // RangeValue array of consecutive position numbers, matching Excel's array-form ROW/COLUMN.
+    private static ScalarValue BuildPositionalNumbers(uint from, uint to, uint otherAxisStart, string? sheetName, bool isRow)
+    {
+        if (from == to)
+            return new NumberValue(from);
+
+        int count = (int)(to - from) + 1;
+        var cells = isRow ? new ScalarValue[count, 1] : new ScalarValue[1, count];
+        for (int i = 0; i < count; i++)
+        {
+            var value = new NumberValue(from + (uint)i);
+            if (isRow) cells[i, 0] = value; else cells[0, i] = value;
+        }
+
+        return isRow
+            ? new RangeValue(cells, from, otherAxisStart) { SheetName = sheetName }
+            : new RangeValue(cells, otherAxisStart, from) { SheetName = sheetName };
     }
 
     private bool TryEvaluateIndexDirectRange(FunctionCallNode node, IEvalContext context, out ScalarValue result)

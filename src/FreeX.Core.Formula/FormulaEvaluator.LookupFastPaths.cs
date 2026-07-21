@@ -895,8 +895,11 @@ public sealed partial class FormulaEvaluator
         for (var index = 0; index < lookupReader.Count; index++)
         {
             var candidate = lookupReader.GetValue(index);
-            if (candidate is ErrorValue)
-                continue;
+            // Match VLOOKUP/HLOOKUP/MATCH's direct-range fast paths (EvaluateLegacyLookupDirectTable
+            // / EvaluateMatchDirectRange above): an error encountered while scanning the lookup
+            // vector poisons the whole lookup and must be returned immediately, not skipped.
+            if (candidate is ErrorValue error)
+                return error;
 
             if (candidate is not BlankValue && BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
             if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)

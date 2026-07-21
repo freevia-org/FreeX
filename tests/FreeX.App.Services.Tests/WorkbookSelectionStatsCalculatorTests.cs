@@ -82,8 +82,13 @@ public sealed class WorkbookSelectionStatsCalculatorTests
     }
 
     [Fact]
-    public void Calculate_HiddenColumnsAreExcludedFromSelectionStats()
+    public void Calculate_ManuallyHiddenColumnsAreStillIncludedInSelectionStats()
     {
+        // R61-render-status-bar-stats-6-1: Excel's status-bar AutoCalculate over a plain
+        // rectangular selection still includes manually-hidden (Format > Hide Column) columns --
+        // only AutoFilter-hidden rows are genuinely excluded (that's why SUBTOTAL(109,...) exists
+        // as a separate mechanism). This test previously asserted the manually-hidden column 2
+        // was excluded (Count=2/Sum=40); that was the bug.
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(20)));
@@ -96,12 +101,39 @@ public sealed class WorkbookSelectionStatsCalculatorTests
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 1, 3)));
 
-        stats.Count.Should().Be(2);
-        stats.NumericalCount.Should().Be(2);
-        stats.Sum.Should().Be(40);
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(3);
+        stats.Sum.Should().Be(60);
         stats.Average.Should().Be(20);
         stats.Min.Should().Be(10);
         stats.Max.Should().Be(30);
+    }
+
+    [Fact]
+    public void Calculate_ManuallyHiddenAndGroupCollapsedRowsAreStillIncludedInSelectionStats()
+    {
+        // Sibling no-regression coverage: a manually-hidden row (Format > Hide Row) and an
+        // outline-group-collapsed row must also remain INCLUDED in the selection stats, matching
+        // Excel -- only Sheet.FilterHiddenRows (AutoFilter) should be excluded.
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(100)));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromValue(new NumberValue(20)));
+        sheet.HiddenRows.Add(2);
+        sheet.GroupHiddenRows.Add(3);
+
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 1)));
+
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(3);
+        stats.Sum.Should().Be(130);
+        stats.Average.Should().Be(130.0 / 3);
+        stats.Min.Should().Be(10);
+        stats.Max.Should().Be(100);
     }
 
     [Fact]

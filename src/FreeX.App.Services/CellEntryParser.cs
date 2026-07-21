@@ -27,6 +27,15 @@ public static class CellEntryParser
             return BlankValue.Instance;
         }
 
+        // Excel's text-escape convention: a leading apostrophe forces the typed entry to be kept
+        // as text (apostrophe stripped), e.g. '007 -> "007". Mirrors PasteCommandFactory
+        // .ParseClipboardValue's identical rule for the paste path; must be checked before any
+        // numeric/boolean/date coercion below.
+        if (text.StartsWith('\''))
+        {
+            return new TextValue(text[1..]);
+        }
+
         if (TryParseFiniteNumber(text, out var number))
         {
             return new NumberValue(number);

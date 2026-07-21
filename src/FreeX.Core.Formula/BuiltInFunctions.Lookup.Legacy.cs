@@ -351,7 +351,9 @@ public static partial class BuiltInFunctions
         int matchIdx = -1;
         for (int i = 0; i < lookupFlat.Count; i++)
         {
-            if (lookupFlat[i] is ErrorValue) continue;
+            // Match VLOOKUP/HLOOKUP/MATCH: an error encountered while scanning the lookup
+            // vector poisons the whole lookup and must be returned immediately, not skipped.
+            if (lookupFlat[i] is ErrorValue lookupFlatError) return lookupFlatError;
             if (lookupFlat[i] is not BlankValue && ApproxLookupTypeClass(lookupFlat[i]) != lookupClass) continue;
             if (CompareScalar(lookupFlat[i], lookupVal) <= 0)
                 matchIdx = i;
@@ -367,7 +369,9 @@ public static partial class BuiltInFunctions
         for (int i = 0; i < lookupVector.Count; i++)
         {
             var candidate = lookupVector[i];
-            if (candidate is ErrorValue) continue;
+            // Match VLOOKUP/HLOOKUP/MATCH: an error encountered while scanning the lookup
+            // vector poisons the whole lookup and must be returned immediately, not skipped.
+            if (candidate is ErrorValue candidateError) return candidateError;
             if (candidate is not BlankValue && ApproxLookupTypeClass(candidate) != lookupClass) continue;
             if (CompareScalar(candidate, lookupVal) <= 0)
                 matchIdx = i;

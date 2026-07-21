@@ -61,7 +61,10 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        // See the identical comment on Left above -- only a genuinely-omitted num_bytes (the
+        // OmittedOptionalOrdinalArgumentValue sentinel) defaults to 1; an explicit blank-cell
+        // reference must coerce to 0, yielding "".
+        var countArg = args.Count > 1 && args[1] is not OmittedOptionalOrdinalArgumentValue ? args[1] : new NumberValue(1);
         return MapBinaryMathArgs(args[0], countArg, LeftBScalarWithCount);
     }
 
@@ -96,7 +99,10 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        // See the identical comment on Left above -- only a genuinely-omitted num_bytes (the
+        // OmittedOptionalOrdinalArgumentValue sentinel) defaults to 1; an explicit blank-cell
+        // reference must coerce to 0, yielding "".
+        var countArg = args.Count > 1 && args[1] is not OmittedOptionalOrdinalArgumentValue ? args[1] : new NumberValue(1);
         return MapBinaryMathArgs(args[0], countArg, RightBScalarWithCount);
     }
 

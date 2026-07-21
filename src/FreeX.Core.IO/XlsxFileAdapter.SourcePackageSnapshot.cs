@@ -6175,7 +6175,8 @@ public sealed partial class XlsxFileAdapter
                                 cell.ArrayMode,
                                 cell.StyleId,
                                 sourceStyleIndex,
-                                cell.IgnoreFormulaError));
+                                cell.IgnoreFormulaError,
+                                sheet.RichTextRuns.GetValueOrDefault(new CellAddress(sheet.Id, row, col))));
                     }
 
                     Array.Sort(cells, XlsxPatchCellEntry.Compare);
@@ -6250,7 +6251,8 @@ public sealed partial class XlsxFileAdapter
                             cell.ArrayMode,
                             cell.StyleId,
                             sourceStyleIndex,
-                            cell.IgnoreFormulaError));
+                            cell.IgnoreFormulaError,
+                            sheet.RichTextRuns.GetValueOrDefault(new CellAddress(sheet.Id, row, col))));
                 }
 
                 Array.Sort(cells, XlsxPatchCellEntry.Compare);
@@ -6303,6 +6305,18 @@ public sealed partial class XlsxFileAdapter
             worksheetViewChanges = [];
             currentPatchValidationModelFingerprint = null;
             blockReason = null;
+            // R61-io-rich-text-runs-6-1: NativeJsonAdapter.SaveForPatchValidationFingerprint
+            // unconditionally serializes Sheet.RichTextRuns (it is not gated by the
+            // includeCells/includeCellStyles flags that deliberately exclude per-cell
+            // Value/StyleId from this fingerprint, since those ARE covered by `changes` instead).
+            // A rich-run edit is likewise fully covered by `changes` now, but the fingerprint
+            // does not know that -- so every cell whose runs changed must be reverted to its
+            // baseline snapshot for the duration of the modelMatches fingerprint comparison
+            // below, then restored, exactly like Value/StyleId already are in
+            // ModelMatchesWithOriginalValues. Otherwise ANY legitimate rich-run-only (or
+            // rich-run-plus-style) edit would spuriously fail this safety net and force an
+            // unnecessary full-save fallback regardless of what `changes` correctly captures.
+            var richRunFingerprintReverts = new List<(Sheet Sheet, CellAddress Address, IReadOnlyList<CellTextRun>? OriginalRichRuns)>();
             if (workbook.SheetCount != _worksheets.Count)
                 return Fail("change_sheet_count", out blockReason);
 
@@ -6508,6 +6522,13 @@ public sealed partial class XlsxFileAdapter
                             RichRuns: cell.Value is TextValue
                                 ? sheet.RichTextRuns.GetValueOrDefault(new CellAddress(baseline.SheetId, row, col))
                                 : null));
+                        if (cell.Value is TextValue &&
+                            sheet.RichTextRuns.ContainsKey(new CellAddress(baseline.SheetId, row, col)))
+                        {
+                            // A brand-new cell has no baseline rich-run snapshot at all -- revert
+                            // to "no override" (null) for the fingerprint comparison below.
+                            richRunFingerprintReverts.Add((sheet, new CellAddress(baseline.SheetId, row, col), null));
+                        }
                         if (changes.Count > changeLimit)
                             return Fail("change_limit_cells", out blockReason);
 
@@ -6533,8 +6554,29 @@ public sealed partial class XlsxFileAdapter
 
                     var formulaChanged = !string.Equals(cell.FormulaText, original.FormulaText, StringComparison.Ordinal);
                     var valueChanged = !Equals(cell.Value, original.Value);
-                    if (!formulaChanged && !valueChanged && !styleChanged)
+
+                    // R61-io-rich-text-runs-6-1: a whole-cell command (e.g. ApplyStyleCommand) can
+                    // clear/replace per-run formatting overrides in Sheet.RichTextRuns without the
+                    // cell's own Value or resolved StyleId changing at all -- that edit must still
+                    // count as a change, or it is silently invisible to patch-save forever.
+                    var currentRichRuns = !cell.HasFormula && cell.Value is TextValue
+                        ? sheet.RichTextRuns.GetValueOrDefault(new CellAddress(baseline.SheetId, row, col))
+                        : null;
+                    var runsChanged = !RichRunsEqual(currentRichRuns, original.RichRuns);
+
+                    if (!formulaChanged && !valueChanged && !styleChanged && !runsChanged)
                         continue;
+
+                    if (runsChanged)
+                    {
+                        // See the richRunFingerprintReverts revert/restore block below Fail-outs
+                        // for why this is collected: CreatePatchValidationModelFingerprint
+                        // unconditionally includes Sheet.RichTextRuns, so a rich-run edit must be
+                        // temporarily reverted to its baseline value for that comparison, exactly
+                        // like the cell Value/StyleId reverts ModelMatchesWithOriginalValues
+                        // already performs for those fields.
+                        richRunFingerprintReverts.Add((sheet, new CellAddress(baseline.SheetId, row, col), original.RichRuns));
+                    }
 
                     if (_chartSourceRanges.Contains(baseline.SheetId, row, col))
                         return Fail("change_chart_source_cell", out blockReason);
@@ -6559,9 +6601,11 @@ public sealed partial class XlsxFileAdapter
                     }
 
                     XlsxCellValuePatchKind patchKind;
+                    var patchRichRunsChanged = false;
                     if (!formulaChanged && !valueChanged)
                     {
                         patchKind = XlsxCellValuePatchKind.CellStyle;
+                        patchRichRunsChanged = runsChanged;
                     }
                     else if (formulaChanged)
                     {
@@ -6599,9 +6643,11 @@ public sealed partial class XlsxFileAdapter
                         original.SourceStyleIndex,
                         newSourceStyleIndex,
                         original.IgnoreFormulaError,
-                        RichRuns: patchKind == XlsxCellValuePatchKind.LiteralValue && cell.Value is TextValue
-                            ? sheet.RichTextRuns.GetValueOrDefault(new CellAddress(baseline.SheetId, row, col))
-                            : null));
+                        RichRuns: (patchKind == XlsxCellValuePatchKind.LiteralValue && cell.Value is TextValue) ||
+                                  (patchKind == XlsxCellValuePatchKind.CellStyle && patchRichRunsChanged)
+                            ? currentRichRuns
+                            : null,
+                        RichRunsChanged: patchRichRunsChanged));
                     if (changes.Count > changeLimit)
                         return Fail("change_limit_cells", out blockReason);
                 }
@@ -6665,39 +6711,63 @@ public sealed partial class XlsxFileAdapter
                     return Fail("change_sheet_identity_or_style_only_cells", out blockReason);
             }
 
-            bool modelMatches;
-            if (ChangesOnlyExistingCells(
-                    changes,
-                    dimensionChanges,
-                    mergeRegionChanges,
-                    hyperlinkChanges,
-                    commentChanges,
-                    worksheetViewChanges))
+            var savedRichRuns = new List<(Sheet Sheet, CellAddress Address, IReadOnlyList<CellTextRun>? Current)>(
+                richRunFingerprintReverts.Count);
+            foreach (var (revertSheet, address, originalRuns) in richRunFingerprintReverts)
             {
-                currentPatchValidationModelFingerprint = CreatePatchValidationModelFingerprint(workbook);
-                modelMatches = string.Equals(
-                    _modelFingerprint,
-                    currentPatchValidationModelFingerprint,
-                    StringComparison.Ordinal);
+                savedRichRuns.Add((revertSheet, address, revertSheet.RichTextRuns.GetValueOrDefault(address)));
+                if (originalRuns is { Count: > 0 })
+                    revertSheet.RichTextRuns[address] = originalRuns;
+                else
+                    revertSheet.RichTextRuns.Remove(address);
             }
-            else
+
+            bool modelMatches;
+            try
             {
-                modelMatches = changes.Count == 0 &&
-                       dimensionChanges.Count == 0 &&
-                       mergeRegionChanges.Count == 0 &&
-                       hyperlinkChanges.Count == 0 &&
-                       commentChanges.Count == 0 &&
-                       worksheetViewChanges.Count == 0 &&
-                       currentModelFingerprint is not null
-                    ? string.Equals(_modelFingerprint, currentModelFingerprint, StringComparison.Ordinal)
-                    : ModelMatchesWithOriginalValues(
-                        workbook,
+                if (ChangesOnlyExistingCells(
                         changes,
                         dimensionChanges,
                         mergeRegionChanges,
                         hyperlinkChanges,
                         commentChanges,
-                        worksheetViewChanges);
+                        worksheetViewChanges))
+                {
+                    currentPatchValidationModelFingerprint = CreatePatchValidationModelFingerprint(workbook);
+                    modelMatches = string.Equals(
+                        _modelFingerprint,
+                        currentPatchValidationModelFingerprint,
+                        StringComparison.Ordinal);
+                }
+                else
+                {
+                    modelMatches = changes.Count == 0 &&
+                           dimensionChanges.Count == 0 &&
+                           mergeRegionChanges.Count == 0 &&
+                           hyperlinkChanges.Count == 0 &&
+                           commentChanges.Count == 0 &&
+                           worksheetViewChanges.Count == 0 &&
+                           currentModelFingerprint is not null
+                        ? string.Equals(_modelFingerprint, currentModelFingerprint, StringComparison.Ordinal)
+                        : ModelMatchesWithOriginalValues(
+                            workbook,
+                            changes,
+                            dimensionChanges,
+                            mergeRegionChanges,
+                            hyperlinkChanges,
+                            commentChanges,
+                            worksheetViewChanges);
+                }
+            }
+            finally
+            {
+                foreach (var (revertSheet, address, current) in savedRichRuns)
+                {
+                    if (current is { Count: > 0 })
+                        revertSheet.RichTextRuns[address] = current;
+                    else
+                        revertSheet.RichTextRuns.Remove(address);
+                }
             }
 
             return modelMatches || Fail("change_unsupported_model_delta", out blockReason);
@@ -6838,6 +6908,15 @@ public sealed partial class XlsxFileAdapter
             {
                 if (!RewriteFormulaCachedCellValue(cell, worksheetNs, change.NewValue))
                     return false;
+            }
+            else if (change.Kind == XlsxCellValuePatchKind.CellStyle && change.RichRunsChanged)
+            {
+                // R61-io-rich-text-runs-6-1: the cell's plain Value/StyleId didn't change, but its
+                // rich-text run overrides did (e.g. a whole-cell style command cleared stale
+                // per-run formatting) -- rewrite the <is>/run content so that edit isn't silently
+                // dropped from the saved package. change.NewValue is the cell's own (unchanged)
+                // current value here, so this only touches run formatting, not the text itself.
+                removedSharedStringReference = RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns);
             }
 
             if (change.HasStyleChange)
@@ -6996,7 +7075,16 @@ public sealed partial class XlsxFileAdapter
                 }
                 else if (change.Kind == XlsxCellValuePatchKind.CellStyle)
                 {
-                    // Style-only changes intentionally leave cell contents and formulas untouched.
+                    // Style-only changes intentionally leave cell contents and formulas untouched,
+                    // UNLESS the cell's rich-text run overrides changed independently of its plain
+                    // Value/resolved StyleId (R61-io-rich-text-runs-6-1) -- e.g. a whole-cell style
+                    // command clearing stale per-run formatting. change.NewValue is the cell's own
+                    // (unchanged) current value here, so this only rewrites run formatting.
+                    if (change.RichRunsChanged &&
+                        RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns))
+                    {
+                        sharedStringReferencesRemoved++;
+                    }
                 }
                 else
                 {
@@ -8006,6 +8094,30 @@ public sealed partial class XlsxFileAdapter
 
         private static bool IsPatchableScalarValue(ScalarValue value) =>
             value is BlankValue or NumberValue or BoolValue or TextValue or DateTimeValue or ErrorValue;
+
+        /// <summary>
+        /// Structural equality for a cell's rich-text run sequence, used by patch-save's change
+        /// detection (R61-io-rich-text-runs-6-1) to notice a per-run formatting edit even when the
+        /// cell's plain Value and resolved StyleId are unchanged. Null and an empty list are treated
+        /// as equivalent ("no run overrides") since <see cref="Sheet.RichTextRuns"/> never stores an
+        /// empty list for a live entry, but a baseline/current snapshot could legitimately hold
+        /// either depending on how it was captured.
+        /// </summary>
+        private static bool RichRunsEqual(IReadOnlyList<CellTextRun>? a, IReadOnlyList<CellTextRun>? b)
+        {
+            var aCount = a?.Count ?? 0;
+            var bCount = b?.Count ?? 0;
+            if (aCount != bCount)
+                return false;
+
+            for (var i = 0; i < aCount; i++)
+            {
+                if (!a![i].Equals(b![i]))
+                    return false;
+            }
+
+            return true;
+        }
 
         private bool TryGetSourceStyleIndex(StyleId styleId, out string? sourceStyleIndex) =>
             _sourceStyleIndexesByStyleId.TryGetValue(styleId, out sourceStyleIndex);
@@ -10564,7 +10676,16 @@ public sealed partial class XlsxFileAdapter
                         StyleId = change.NewStyleId,
                         SourceStyleIndex = change.HasStyleChange
                             ? change.NewSourceStyleIndex
-                            : current.SourceStyleIndex
+                            : current.SourceStyleIndex,
+                        // R61-io-rich-text-runs-6-1: advance the baseline's rich-run snapshot only
+                        // when this change actually carries updated run content -- a LiteralValue
+                        // patch always reflects the cell's current runs (attached unconditionally
+                        // above), while a CellStyle patch only does when RichRunsChanged is true.
+                        // Any other kind (formula/deleted-cell) leaves the prior snapshot in place.
+                        RichRuns = change.Kind == XlsxCellValuePatchKind.LiteralValue ||
+                                   (change.Kind == XlsxCellValuePatchKind.CellStyle && change.RichRunsChanged)
+                            ? change.RichRuns
+                            : current.RichRuns
                     };
                 }
 
@@ -10586,7 +10707,8 @@ public sealed partial class XlsxFileAdapter
                         FormulaArrayMode.Dynamic,
                         change.NewStyleId,
                         change.NewSourceStyleIndex,
-                        false));
+                        false,
+                        change.RichRuns));
             }
 
             if (writeIndex != cells.Length)
@@ -10876,7 +10998,14 @@ public sealed partial class XlsxFileAdapter
         FormulaArrayMode ArrayMode,
         StyleId StyleId,
         string? SourceStyleIndex,
-        bool IgnoreFormulaError);
+        bool IgnoreFormulaError,
+        // R61-io-rich-text-runs-6-1: the baseline's own snapshot of Sheet.RichTextRuns for this
+        // cell, captured alongside Value/StyleId so patch-save's change detection can notice a
+        // per-run formatting edit that leaves the cell's plain Value and resolved StyleId
+        // unchanged (e.g. ApplyStyleCommand.ClearOverriddenRunProperties clearing stale run
+        // overrides when a whole-cell style command supersedes them). Null/empty are equivalent
+        // (no rich-run overrides) — see RichRunsEqual.
+        IReadOnlyList<CellTextRun>? RichRuns = null);
 
     private sealed record XlsxCellValuePatch(
         XlsxCellValuePatchKind Kind,
@@ -10896,7 +11025,14 @@ public sealed partial class XlsxFileAdapter
         string? NewSourceStyleIndex,
         bool OriginalIgnoreFormulaError,
         bool ConsumesSourceStyleOnlyCell = false,
-        IReadOnlyList<CellTextRun>? RichRuns = null)
+        IReadOnlyList<CellTextRun>? RichRuns = null,
+        // R61-io-rich-text-runs-6-1: true only for a CellStyle-kind patch whose rich-text runs
+        // differ from the baseline — signals that ApplyChanges/ApplySimpleExistingCellChange must
+        // rewrite the cell's <is>/run content (via RichRuns) even though Value/StyleId look
+        // unchanged. Distinct from "RichRuns is null", which for a CellStyle-kind patch is
+        // ambiguous between "runs didn't change" (leave content alone) and "runs were cleared to
+        // none" (must still rewrite as plain text) — see the CellStyle branches below.
+        bool RichRunsChanged = false)
     {
         public bool HasStyleChange => OriginalStyleId != NewStyleId;
     }

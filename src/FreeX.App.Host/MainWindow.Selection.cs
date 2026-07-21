@@ -530,8 +530,11 @@ public partial class MainWindow
                 SetActiveCell(newAddr);
                 if (e.ClickCount == 2)
                 {
+                    // R61-render-formula-bar-6-2: thread the double-click pointer X through so the
+                    // inline editor's caret lands at the clicked pixel (mirroring Excel and FreeX's
+                    // own Avalonia shell) instead of always at the end of the text.
                     if (!TryShowPivotTableDetails(showMessage: false))
-                        EnterEditMode();
+                        EnterEditMode(pos.X);
                     e.Handled = true;
                 }
                 else

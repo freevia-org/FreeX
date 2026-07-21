@@ -409,15 +409,19 @@ public sealed partial class FormulaEvaluator
     /// <summary>
     /// Identifies the specific (function, argument-index) slots whose optional numeric argument must
     /// be distinguished from an explicit blank-cell reference: TEXTBEFORE/TEXTAFTER's instance_num
-    /// (index 2), FIND/SEARCH's start_num (index 2), LEFT/RIGHT's num_chars (index 1), and
-    /// SUBSTITUTE's instance_num (index 3). See the OmittedArgumentNode branch above for why.
+    /// (index 2), FIND/SEARCH's start_num (index 2), LEFT/RIGHT's num_chars (index 1),
+    /// SUBSTITUTE's instance_num (index 3), and the byte-count variants FINDB/SEARCHB's start_num
+    /// (index 2) and LEFTB/RIGHTB's num_bytes (index 1), which need the identical distinction as
+    /// their non-B siblings. See the OmittedArgumentNode branch above for why.
     /// </summary>
     private static bool IsOmittedOptionalOrdinalArgument(string functionName, int argIndex) =>
         (functionName, argIndex) switch
         {
             ("TEXTBEFORE", 2) or ("TEXTAFTER", 2) => true,
             ("FIND", 2) or ("SEARCH", 2) => true,
+            ("FINDB", 2) or ("SEARCHB", 2) => true,
             ("LEFT", 1) or ("RIGHT", 1) => true,
+            ("LEFTB", 1) or ("RIGHTB", 1) => true,
             ("SUBSTITUTE", 3) => true,
             _ => false
         };

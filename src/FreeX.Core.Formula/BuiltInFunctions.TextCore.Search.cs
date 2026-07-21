@@ -85,7 +85,10 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        var startArg = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(1);
+        // See the identical comment in Find above -- only a genuinely-omitted start_num (the
+        // OmittedOptionalOrdinalArgumentValue sentinel) defaults to 1; an explicit blank-cell
+        // reference must coerce to 0 and hit the startByte<1 domain check below.
+        var startArg = args.Count > 2 && args[2] is not OmittedOptionalOrdinalArgumentValue ? args[2] : new NumberValue(1);
         return MapTernaryTextArgs(args[0], args[1], startArg, (findValue, withinValue, startValue) =>
             FindSearchBScalarWithArgs(findValue, withinValue, startValue, useWildcards));
     }

@@ -179,6 +179,21 @@ public sealed class ConditionalFormat
     public RgbColor? DataBarNegativeFillColor { get; set; }
     public RgbColor? DataBarNegativeBorderColor { get; set; }
     /// <summary>
+    /// Maps to the x14 <c>dataBar/@negativeBarColorSameAsPositive</c> attribute: true when the user
+    /// explicitly checked "Same as Positive Value" for the negative fill in Excel's Negative Value
+    /// and Axis dialog. When true, <see cref="DataBarNegativeFillColor"/> is redundant (Excel omits
+    /// the <c>negativeFillColor</c> child in this case) and the negative bar should use
+    /// <see cref="DataBarColor"/> instead.
+    /// </summary>
+    public bool DataBarNegativeFillSameAsPositive { get; set; }
+    /// <summary>
+    /// Maps to the x14 <c>dataBar/@negativeBarBorderColorSameAsPositive</c> attribute: true when the
+    /// user explicitly checked "Same as Positive Value" for the negative border in Excel's Negative
+    /// Value and Axis dialog. When true, <see cref="DataBarNegativeBorderColor"/> is redundant and the
+    /// negative bar's border should use <see cref="DataBarBorderColor"/> instead.
+    /// </summary>
+    public bool DataBarNegativeBorderSameAsPositive { get; set; }
+    /// <summary>
     /// Raw value of the x14 <c>dataBar/@direction</c> attribute ("context" or "rightToLeft"), preserved
     /// verbatim for XLSX round-trip fidelity. Null means the attribute was absent (Excel's default,
     /// left-to-right growth). Rendering does not currently consult this value.
@@ -305,6 +320,8 @@ public sealed class ConditionalFormat
             DataBarAxisColor = DataBarAxisColor,
             DataBarNegativeFillColor = DataBarNegativeFillColor,
             DataBarNegativeBorderColor = DataBarNegativeBorderColor,
+            DataBarNegativeFillSameAsPositive = DataBarNegativeFillSameAsPositive,
+            DataBarNegativeBorderSameAsPositive = DataBarNegativeBorderSameAsPositive,
             DataBarDirection = DataBarDirection,
             AboveAverage = AboveAverage,
             EqualAverage = EqualAverage,

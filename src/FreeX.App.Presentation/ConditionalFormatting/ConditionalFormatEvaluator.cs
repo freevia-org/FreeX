@@ -12,6 +12,12 @@ namespace FreeX.App.Presentation.ConditionalFormatting;
 /// </summary>
 public static class ConditionalFormatEvaluator
 {
+    // Excel's automatic negative data-bar fill color (solid red) — used whenever a data-bar rule
+    // does not specify an explicit DataBarNegativeFillColor. Mirrors
+    // ViewportConditionalFormatEvaluator.Thresholds.ExcelAutomaticNegativeDataBarColor (the grid
+    // engine this evaluator is a portable port of) so PDF/print rendering matches the on-screen grid.
+    private static readonly RgbColor ExcelAutomaticNegativeDataBarColor = new(0xFF, 0x00, 0x00);
+
     // ── Data bars ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -76,7 +82,7 @@ public static class ConditionalFormatEvaluator
             var axisFraction = (0 - min) / (max - min);
             var negativeFill = rule.DataBarNegativeFillColor.HasValue
                 ? PresentationRgb.FromRgbColor(rule.DataBarNegativeFillColor.Value)
-                : fill;
+                : PresentationRgb.FromRgbColor(ExcelAutomaticNegativeDataBarColor);
 
             if (cellValue >= 0)
             {

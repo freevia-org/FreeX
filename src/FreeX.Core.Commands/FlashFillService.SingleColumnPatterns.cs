@@ -1081,6 +1081,96 @@ public static partial class FlashFillService
                source.AsSpan(start, length).SequenceEqual(expected.AsSpan());
     }
 
+    /// <summary>
+    /// Extracts the FIRST embedded digit run (e.g. "12" from "Room12-Wing3"), the counterpart
+    /// to <see cref="TryExtractFinalDigitRun"/>. Only fires when every example has a digit run
+    /// AFTER the leading one being matched, so it never fights with the final-digit-run pattern
+    /// when a source contains just a single digit run. Sources that already look like an
+    /// embedded date (e.g. "2026-03-05") are left to the dedicated date-component/date-extraction
+    /// patterns earlier in the chain, so this generic fallback never overrides their deliberate
+    /// null (ambiguous-component) result with an arbitrary "first number" guess.
+    /// </summary>
+    private static Func<string, string?>? TryExtractFirstDigitRun(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        var sawLaterDigitRun = false;
+        foreach (var (source, expected) in examples)
+        {
+            if (expected.Length == 0 ||
+                !expected.All(char.IsDigit) ||
+                source.All(char.IsDigit) ||
+                TryFindEmbeddedDateComponentTokens(source, out _) ||
+                !TryGetFirstDigitRunRange(source, out var digitRunStart, out var digitRunEndExclusive) ||
+                !source.AsSpan(digitRunStart, digitRunEndExclusive - digitRunStart).SequenceEqual(expected.AsSpan()) ||
+                HasMatchingDigitRunAfter(source, expected, digitRunEndExclusive))
+            {
+                return null;
+            }
+
+            sawLaterDigitRun |= HasDigitRunAfter(source, digitRunEndExclusive);
+        }
+
+        if (!sawLaterDigitRun)
+            return null;
+
+        var cache = new ExtractedSegmentCache();
+        return source => TryGetFirstDigitRunRange(source, out var digitRunStart, out var digitRunEndExclusive)
+            ? cache.GetOrAdd(source, digitRunStart, digitRunEndExclusive)
+            : null;
+    }
+
+    private static bool TryGetFirstDigitRunRange(string source, out int digitRunStart, out int digitRunEndExclusive)
+    {
+        digitRunStart = 0;
+        digitRunEndExclusive = 0;
+        var start = 0;
+        while (start < source.Length && !char.IsDigit(source[start]))
+            start++;
+
+        if (start >= source.Length)
+            return false;
+
+        var end = start;
+        while (end < source.Length && char.IsDigit(source[end]))
+            end++;
+
+        digitRunStart = start;
+        digitRunEndExclusive = end;
+        return digitRunStart < digitRunEndExclusive;
+    }
+
+    private static bool HasDigitRunAfter(string source, int startExclusive)
+    {
+        for (var i = startExclusive; i < source.Length; i++)
+        {
+            if (char.IsDigit(source[i]))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasMatchingDigitRunAfter(string source, string expected, int startExclusive)
+    {
+        var runStart = -1;
+        for (var i = startExclusive; i < source.Length; i++)
+        {
+            if (char.IsDigit(source[i]))
+            {
+                if (runStart < 0)
+                    runStart = i;
+
+                continue;
+            }
+
+            if (runStart >= 0 && DigitRunEquals(source, runStart, i, expected))
+                return true;
+
+            runStart = -1;
+        }
+
+        return runStart >= 0 && DigitRunEquals(source, runStart, source.Length, expected);
+    }
+
     private static Func<string, string?>? TryDelimitedPartCaseTransform(
         IReadOnlyList<(string Source, string Expected)> examples)
     {

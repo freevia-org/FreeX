@@ -1758,31 +1758,36 @@ public sealed class RecalcEngine
             // Also mark this dependency plan non-cacheable: the correct edge depends on live sheet
             // state (the spill extent) that can change without the formula's own AST changing, so a
             // later re-registration (e.g. RebuildFormulaDependencies) must re-run this branch instead of
-            // reusing a stale cached rectangle from before the anchor grew. Only handles the plain
-            // same-sheet CellRefNode/CellRefNode shape the parser always produces for this operator;
-            // anything else (e.g. a named-range anchor) falls through to the generic case.
+            // reusing a stale cached rectangle from before the anchor grew. The anchor is resolved via
+            // TryResolveAnchorForDependencies, which handles a bare same-sheet CellRefNode, a
+            // cross-sheet CellRefNode (Sheet1!A1#:C5), and a single-cell NamedRangeNode anchor
+            // (Anchor#:C5 where Anchor points at one cell) -- mirroring TryResolveAnchorAddress in
+            // FormulaEvaluator.Functions.cs so the dependency graph covers exactly what the evaluator
+            // can read. Per that evaluator's own documented semantics, the end cell is always parsed
+            // unqualified relative to the ANCHOR's own sheet, not the formula's sheet, so the union
+            // rectangle (and the live-spill-extent lookup) is built on the anchor's resolved sheet.
             case FunctionCallNode anchorArray when anchorArray.FunctionName == "ANCHORARRAY" &&
                 anchorArray.Arguments.Count == 2 &&
-                anchorArray.Arguments[0] is CellRefNode { SheetName: null } anchorCell &&
+                TryResolveAnchorForDependencies(anchorArray.Arguments[0], defaultSheetId, workbook, out var anchorSheetId, out var anchorRow, out var anchorCol) &&
                 anchorArray.Arguments[1] is CellRefNode { SheetName: null } endCell:
             {
                 cacheableForDependencyPlan = false;
 
-                var unionEndRow = Math.Max(anchorCell.Row, endCell.Row);
-                var unionEndCol = Math.Max(anchorCell.ColumnNumber, endCell.ColumnNumber);
+                var unionEndRow = Math.Max(anchorRow, endCell.Row);
+                var unionEndCol = Math.Max(anchorCol, endCell.ColumnNumber);
 
-                if (workbook?.GetSheet(defaultSheetId) is { } anchorSheet &&
+                if (workbook?.GetSheet(anchorSheetId) is { } anchorSheet &&
                     anchorSheet.TryGetSpillExtent(
-                        new CellAddress(defaultSheetId, anchorCell.Row, anchorCell.ColumnNumber),
+                        new CellAddress(anchorSheetId, anchorRow, anchorCol),
                         out var spillRows, out var spillCols))
                 {
-                    unionEndRow = Math.Max(unionEndRow, anchorCell.Row + spillRows - 1);
-                    unionEndCol = Math.Max(unionEndCol, anchorCell.ColumnNumber + spillCols - 1);
+                    unionEndRow = Math.Max(unionEndRow, anchorRow + spillRows - 1);
+                    unionEndCol = Math.Max(unionEndCol, anchorCol + spillCols - 1);
                 }
 
                 refs.AddRange(new GridRange(
-                    new CellAddress(defaultSheetId, anchorCell.Row, anchorCell.ColumnNumber),
-                    new CellAddress(defaultSheetId, unionEndRow, unionEndCol)));
+                    new CellAddress(anchorSheetId, anchorRow, anchorCol),
+                    new CellAddress(anchorSheetId, unionEndRow, unionEndCol)));
                 return false;
             }
 
@@ -1805,6 +1810,76 @@ public sealed class RecalcEngine
 
     private static bool IsVolatileFunctionName(string name) =>
         name is "NOW" or "TODAY" or "RAND" or "RANDBETWEEN" or "RANDARRAY" or "INDIRECT" or "OFFSET" or "CELL" or "INFO";
+
+    /// <summary>
+    /// Resolves an ANCHORARRAY anchor argument to the concrete (sheet, row, col) cell it points at,
+    /// for dependency-registration purposes. Mirrors TryResolveAnchorAddress in
+    /// FormulaEvaluator.Functions.cs: a bare same-sheet CellRefNode, a cross-sheet CellRefNode
+    /// (Sheet1!A1), and a NamedRangeNode that resolves (via Workbook.TryGetNamedRange, sheet-scope
+    /// first) to a single-cell range are all supported. A named FORMULA anchor (sheet-scoped or
+    /// global) and a multi-cell named range are NOT resolved here -- ANCHORARRAY itself rejects
+    /// those (TryResolveAnchorAddress only accepts a single-cell reference), so returning false lets
+    /// the caller fall through to the generic per-argument CollectReferences case, same as before.
+    /// </summary>
+    private static bool TryResolveAnchorForDependencies(
+        FormulaNode arg,
+        SheetId defaultSheetId,
+        FreeX.Core.Model.Workbook? workbook,
+        out SheetId anchorSheetId,
+        out uint anchorRow,
+        out uint anchorCol)
+    {
+        anchorSheetId = defaultSheetId;
+        anchorRow = 0;
+        anchorCol = 0;
+
+        switch (arg)
+        {
+            case CellRefNode { SheetName: null } cellRef:
+                anchorRow = cellRef.Row;
+                anchorCol = cellRef.ColumnNumber;
+                return true;
+
+            case CellRefNode cellRef:
+            {
+                var targetSheet = workbook?.GetSheet(cellRef.SheetName!);
+                if (targetSheet is null)
+                    return false;
+
+                anchorSheetId = targetSheet.Id;
+                anchorRow = cellRef.Row;
+                anchorCol = cellRef.ColumnNumber;
+                return true;
+            }
+
+            case NamedRangeNode named:
+            {
+                if (workbook is null)
+                    return false;
+
+                // Sheet-scope precedence: a sheet-scoped named FORMULA must shadow a same-named
+                // workbook-global named RANGE, mirroring the eval side (ResolveNamedRangeNodeAsReference)
+                // and the generic NamedRangeNode dependency case above. A formula-valued name can't be
+                // resolved to a static address here, so bail out (falls through to the generic case).
+                if (workbook.ScopedNamedFormulas.ContainsKey((named.Name, defaultSheetId)))
+                    return false;
+
+                if (!workbook.TryGetNamedRange(named.Name, defaultSheetId, out var namedRange))
+                    return false;
+
+                if (namedRange.RowCount != 1 || namedRange.ColCount != 1)
+                    return false;
+
+                anchorSheetId = namedRange.Start.Sheet;
+                anchorRow = namedRange.Start.Row;
+                anchorCol = namedRange.Start.Col;
+                return true;
+            }
+
+            default:
+                return false;
+        }
+    }
 
     private static GridRange CreateGridRange(SheetId sheetId, RangeRefNode range)
     {

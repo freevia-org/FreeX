@@ -287,11 +287,16 @@ public partial class PhaseA2FunctionTests
     [Fact]
     public void Cell_Prefix_UsesStyleOnlyCells()
     {
+        // R61-formula-cell-info-6-3: the label prefix only ever applies to TEXT in Excel -- a
+        // style-only cell (no value set, so genuinely BlankValue) reports "" regardless of its
+        // alignment, exactly like the General-aligned-blank case does (this test previously
+        // asserted "^", which was the same pre-fix bug the R61 fix corrects: Left/Center/Right/
+        // Fill alignment must not report a prefix for a non-text cell).
         var (wb, sheet) = MakeWb();
         var styleId = wb.RegisterStyle(new CellStyle { HorizontalAlignment = HorizontalAlignment.Center });
         sheet.SetStyleOnly(1, 1, styleId);
 
-        _eval.Evaluate("=CELL(\"prefix\",A1)", sheet, wb).Should().Be(new TextValue("^"));
+        _eval.Evaluate("=CELL(\"prefix\",A1)", sheet, wb).Should().Be(new TextValue(""));
     }
 
     [Fact]
@@ -312,7 +317,10 @@ public partial class PhaseA2FunctionTests
 
         _eval.Evaluate("=CELL(\"width\",Data!A1)", host, wb).Should().Be(new NumberValue(15));
         _eval.Evaluate("=CELL(\"format\",Data!A1)", host, wb).Should().Be(new TextValue("F2"));
-        _eval.Evaluate("=CELL(\"prefix\",Data!A1)", host, wb).Should().Be(new TextValue("^"));
+        // R61-formula-cell-info-6-3: Data!A1 holds a NUMBER (12.34), and the label prefix only
+        // ever applies to TEXT in Excel -- Center alignment on a number reports "", not "^" (this
+        // test previously asserted "^", the pre-fix bug the R61 fix corrects).
+        _eval.Evaluate("=CELL(\"prefix\",Data!A1)", host, wb).Should().Be(new TextValue(""));
         _eval.Evaluate("=CELL(\"protect\",Data!A1)", host, wb).Should().Be(new NumberValue(1));
     }
 

@@ -695,15 +695,19 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 new XAttribute("maxLength", (cf.DataBarMaxLength ?? 100).ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("gradient", cf.DataBarGradient ? "1" : "0"),
                 cf.DataBarBorder ? new XAttribute("border", "1") : null,
+                cf.DataBarNegativeFillSameAsPositive ? new XAttribute("negativeBarColorSameAsPositive", "1") : null,
+                cf.DataBarNegativeBorderSameAsPositive ? new XAttribute("negativeBarBorderColorSameAsPositive", "1") : null,
                 string.IsNullOrWhiteSpace(cf.DataBarAxisPosition) ? null : new XAttribute("axisPosition", cf.DataBarAxisPosition),
                 string.IsNullOrWhiteSpace(cf.DataBarDirection) ? null : new XAttribute("direction", cf.DataBarDirection),
                 ToX14DataBarCfvoXml(x14Ns, xmNs, cf.DataBarMinThresholdType, cf.DataBarMinThresholdValue, isMinimum: true),
                 ToX14DataBarCfvoXml(x14Ns, xmNs, cf.DataBarMaxThresholdType, cf.DataBarMaxThresholdValue, isMinimum: false),
                 // x14 CT_DataBar requires this child order: cfvo, cfvo, fillColor?, borderColor?,
                 // negativeFillColor?, negativeBorderColor?, axisColor?. axisColor must come last.
+                // negativeFillColor/negativeBorderColor are redundant (and omitted, matching Excel)
+                // when the "same as positive" toggle is set for that channel.
                 ToX14ColorXml(x14Ns, "borderColor", cf.DataBarBorderColor),
-                ToX14ColorXml(x14Ns, "negativeFillColor", cf.DataBarNegativeFillColor),
-                ToX14ColorXml(x14Ns, "negativeBorderColor", cf.DataBarNegativeBorderColor),
+                cf.DataBarNegativeFillSameAsPositive ? null : ToX14ColorXml(x14Ns, "negativeFillColor", cf.DataBarNegativeFillColor),
+                cf.DataBarNegativeBorderSameAsPositive ? null : ToX14ColorXml(x14Ns, "negativeBorderColor", cf.DataBarNegativeBorderColor),
                 ToX14ColorXml(x14Ns, "axisColor", cf.DataBarAxisColor));
             AddNativeX14DataBarChildren(dataBar, cf, x14Ns);
 

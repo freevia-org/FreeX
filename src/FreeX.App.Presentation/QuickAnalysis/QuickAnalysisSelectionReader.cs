@@ -71,10 +71,14 @@ public static class QuickAnalysisSelectionReader
     }
 
     /// <summary>
-    /// Heuristic header detection: a multi-row selection has a header row when its first row is all text and
-    /// at least one column's data rows are non-text (numbers or dates). That mirrors the common "labels over
-    /// values" table shape; a text-only grid (no numeric/date data) is treated as having no header so it does
-    /// not masquerade as a typed table.
+    /// Heuristic header detection: a multi-row selection has a header row when at least one column shows the
+    /// classic "labels over values" shape -- a non-empty text cell in the first row sitting over numeric/date
+    /// data below. Unlike a strict "first row is entirely text" rule, a column whose header cell happens to be
+    /// numeric/date itself (e.g. a year used as a column heading) does not veto detection, as long as it does not
+    /// contradict the pattern -- i.e. as long as that column's data rows below aren't purely text (which would
+    /// suggest the "header" is really just a stray data value sitting over label data, not a heading). A
+    /// text-only grid (no numeric/date data anywhere) is treated as having no header so it does not masquerade
+    /// as a typed table.
     /// </summary>
     private static bool DetectHeaderRow(Sheet sheet, GridRange range)
     {
@@ -82,28 +86,45 @@ public static class QuickAnalysisSelectionReader
             return false;
 
         var headerRow = range.Start.Row;
-        var firstRowAllText = true;
-        for (var col = range.Start.Col; col <= range.End.Col; col++)
-        {
-            if (sheet.GetValue(headerRow, col) is not TextValue { Value.Length: > 0 })
-            {
-                firstRowAllText = false;
-                break;
-            }
-        }
-
-        if (!firstRowAllText)
-            return false;
+        var sawLabelOverValueColumn = false;
 
         for (var col = range.Start.Col; col <= range.End.Col; col++)
         {
+            var headerIsText = sheet.GetValue(headerRow, col) is TextValue { Value.Length: > 0 };
+
+            var belowHasNumericOrDate = false;
+            var belowHasNonText = false;
+            var belowHasAnyValue = false;
             for (var row = headerRow + 1; row <= range.End.Row; row++)
             {
-                if (sheet.GetValue(row, col) is NumberValue or DateTimeValue or BoolValue)
-                    return true;
+                var value = sheet.GetValue(row, col);
+                if (value is BlankValue)
+                    continue;
+
+                belowHasAnyValue = true;
+                if (value is NumberValue or DateTimeValue or BoolValue)
+                    belowHasNumericOrDate = true;
+                if (value is not TextValue)
+                    belowHasNonText = true;
             }
+
+            if (headerIsText)
+            {
+                // A text heading over numeric/date data is the classic "labels over values" signal.
+                if (belowHasNumericOrDate)
+                    sawLabelOverValueColumn = true;
+
+                continue;
+            }
+
+            // The header cell itself isn't text (e.g. a numeric column heading such as a year). That is
+            // only consistent with a header row when the column below isn't purely text -- otherwise the
+            // "header" looks like a stray data value sitting over label data, so bail conservatively rather
+            // than let another column's signal override an outright contradiction.
+            if (belowHasAnyValue && !belowHasNonText)
+                return false;
         }
 
-        return false;
+        return sawLabelOverValueColumn;
     }
 }

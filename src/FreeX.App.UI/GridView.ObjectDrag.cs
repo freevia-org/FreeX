@@ -638,10 +638,14 @@ public partial class GridView
                 {
                     return shapeHit;
                 }
-            }
 
-            if (TryHitCharts(pos, out var orderedChartHit))
-                return orderedChartHit;
+                if (entry.Kind == SelectionPaneObjectKind.Chart &&
+                    FindChart(entry.Id) is { } chart &&
+                    TryHitChart(chart, pos, out var orderedChartHit))
+                {
+                    return orderedChartHit;
+                }
+            }
 
             return default;
         }

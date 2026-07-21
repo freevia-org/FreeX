@@ -139,6 +139,21 @@ public sealed class DataBarEvaluatorTests
     }
 
     [Fact]
+    public void DataBar_NegativeRange_DefaultsToExcelAutomaticRed_WhenNoNegativeColorSet()
+    {
+        // R61-io-cf-databar-x14-6-1: with no explicit DataBarNegativeFillColor, Excel's "automatic"
+        // negative data-bar fill is solid red (0xFF,0x00,0x00), never the positive fill color -- this
+        // must match the on-screen grid engine (ViewportConditionalFormatEvaluator).
+        var rule = DataBarRule(); // DataBarColor = (10, 20, 30), DataBarNegativeFillColor left null.
+        var stats = ConditionalFormatStatistics.FromValues([-50, 50]);
+
+        var negative = ConditionalFormatEvaluator.EvaluateDataBar(rule, -25, stats);
+
+        negative!.Value.FillColor.Should().Be(new PresentationRgb(0xFF, 0x00, 0x00));
+        negative.Value.FillColor.Should().NotBe(new PresentationRgb(10, 20, 30));
+    }
+
+    [Fact]
     public void DataBar_AxisNone_UsesLeftAnchoredEvenWithNegativeRange()
     {
         var rule = DataBarRule();

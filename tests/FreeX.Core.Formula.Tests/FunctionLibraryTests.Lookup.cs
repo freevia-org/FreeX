@@ -1112,8 +1112,12 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Lookup_IgnoresErrorsInsideLookupVector()
+    public void Lookup_ErrorInsideLookupVector_PropagatesError()
     {
+        // R61-formula-lookup-array-form-6-1: LOOKUP previously silently SKIPPED an error cell
+        // encountered during its approximate-match scan (this test used to assert the resulting
+        // "hit" -- the OLD, Excel-incorrect behavior). VLOOKUP/HLOOKUP/MATCH all RETURN an error
+        // hit in the lookup column immediately, poisoning the whole lookup; LOOKUP must match.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(1)),
             (2, 1, ErrorValue.DivByZero),
@@ -1123,7 +1127,7 @@ public partial class FunctionLibraryTests
             (3, 2, new TextValue("hit")));
 
         _eval.Evaluate("=LOOKUP(2,A1:A3,B1:B3)", sheet)
-            .Should().Be(new TextValue("hit"));
+            .Should().Be(ErrorValue.DivByZero);
     }
 
     [Fact]
@@ -1137,13 +1141,15 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Lookup_ArrayFormIgnoresErrorsInsideLookupVector()
+    public void Lookup_ArrayFormErrorInsideLookupVector_PropagatesError()
     {
+        // R61-formula-lookup-array-form-6-1: same fix as the vector-form sibling above, but for
+        // LOOKUP's array form (LookupArrayForm -> LookupVectorForm).
         var sheet = MakeSheet(
             (1, 1, new NumberValue(1)), (1, 2, ErrorValue.DivByZero), (1, 3, new NumberValue(2)),
             (2, 1, new TextValue("first")), (2, 2, new TextValue("skip")), (2, 3, new TextValue("hit")));
 
-        _eval.Evaluate("=LOOKUP(2,A1:C2)", sheet).Should().Be(new TextValue("hit"));
+        _eval.Evaluate("=LOOKUP(2,A1:C2)", sheet).Should().Be(ErrorValue.DivByZero);
     }
 
     [Fact] public void Lookup_LookupVectorArgumentError_PropagatesError()

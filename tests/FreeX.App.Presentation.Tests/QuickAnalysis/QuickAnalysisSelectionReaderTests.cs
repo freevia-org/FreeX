@@ -64,4 +64,44 @@ public sealed class QuickAnalysisSelectionReaderTests
 
         description.HasHeaderRow.Should().BeFalse();
     }
+
+    [Fact]
+    public void Describe_DetectsHeaderRow_WhenOneColumnHeadingIsNumeric()
+    {
+        // R61-commands-sort-multilevel-6-2: A1=2023 (a numeric year heading), B1="Revenue" (text).
+        // Real Excel still recognizes row 1 as a header because column B shows the classic
+        // "label over values" shape, even though column A's heading happens to be a number matching
+        // its own column's data type.
+        var sheet = CreateSheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2023));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Revenue"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2024));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(500));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(2025));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(300));
+
+        var description = QuickAnalysisSelectionReader.Describe(sheet, Range(sheet, 1, 1, 3, 2));
+
+        description.HasHeaderRow.Should().BeTrue();
+        description.DataRowCount.Should().Be(2u);
+    }
+
+    [Fact]
+    public void Describe_NoHeaderRow_WhenNumericHeadingSitsOverPureTextColumn()
+    {
+        // Sibling no-regression case: a numeric "header" cell sitting over a column that is purely
+        // text below (no other column shows a label-over-values shape either) should NOT be treated
+        // as a header -- it looks like a stray data value sitting over label data, not a heading.
+        var sheet = CreateSheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(5));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("apple"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Q2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("banana"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("Q3"));
+
+        var description = QuickAnalysisSelectionReader.Describe(sheet, Range(sheet, 1, 1, 3, 2));
+
+        description.HasHeaderRow.Should().BeFalse();
+    }
 }

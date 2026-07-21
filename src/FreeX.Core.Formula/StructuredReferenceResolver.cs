@@ -356,7 +356,13 @@ public static class StructuredReferenceResolver
     private static GridRange? DataBodyRange(Sheet sheet, StructuredTableModel table, uint startCol, uint endCol)
     {
         var startRow = table.Range.Start.Row + HeaderRowCount(table);
-        var endRow = table.TotalsRowShown && table.Range.End.Row > startRow
+        // table.Range.End.Row is always >= 1 (a table spans at least one row), so this decrement
+        // can never underflow. It must run whenever TotalsRowShown regardless of how startRow
+        // compares to it -- including the degenerate 0-data-row case (header+totals only, e.g.
+        // Range.End.Row == startRow) -- so that the subsequent startRow > endRow check can
+        // correctly detect and report an empty data body instead of misclassifying the totals
+        // row itself as a data row.
+        var endRow = table.TotalsRowShown
             ? table.Range.End.Row - 1
             : table.Range.End.Row;
         if (startRow > endRow)
@@ -370,10 +376,10 @@ public static class StructuredReferenceResolver
     private static bool IsDataBodyRow(StructuredTableModel table, uint row)
     {
         var startRow = table.Range.Start.Row + HeaderRowCount(table);
-        var endRow = table.TotalsRowShown && table.Range.End.Row > startRow
+        var endRow = table.TotalsRowShown
             ? table.Range.End.Row - 1
             : table.Range.End.Row;
-        return row >= startRow && row <= endRow;
+        return startRow <= endRow && row >= startRow && row <= endRow;
     }
 
     // Excel tables normally have a single header row, but headerRowCount="0" (a headerless table)

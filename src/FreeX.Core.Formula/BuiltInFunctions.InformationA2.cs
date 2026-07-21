@@ -119,12 +119,17 @@ public static partial class BuiltInFunctions
     private static string CellPrefixCode(CellStyle? style, ScalarValue cellValue) =>
         (style?.HorizontalAlignment ?? HorizontalAlignment.General) switch
         {
-            HorizontalAlignment.Left => "'",
-            HorizontalAlignment.Center => "^",
-            HorizontalAlignment.Right => "\"",
+            // The "label prefix" is a Lotus-1-2-3-era concept that only ever applies to TEXT
+            // labels: Excel's own CELL("prefix") returns "" for a number/blank/logical/error cell
+            // regardless of its alignment (e.g. an explicitly left-aligned numeric ID column still
+            // reports ""). Gate every explicit-alignment branch on cellValue being TextValue, same
+            // as the General-alignment branch below already does (added by the R33 fix).
+            HorizontalAlignment.Left => cellValue is TextValue ? "'" : "",
+            HorizontalAlignment.Center => cellValue is TextValue ? "^" : "",
+            HorizontalAlignment.Right => cellValue is TextValue ? "\"" : "",
             // Fill repeats the cell text to fill the column; Excel reports the
             // fill-alignment label prefix as a single backslash.
-            HorizontalAlignment.Fill => "\\",
+            HorizontalAlignment.Fill => cellValue is TextValue ? "\\" : "",
             // General left-justifies TEXT (Excel reports the apostrophe label prefix
             // for it, same as an explicit Left alignment) but right-justifies/has no
             // label for numbers and blanks.

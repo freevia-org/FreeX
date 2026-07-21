@@ -91,10 +91,14 @@ public static partial class BuiltInFunctions
         double rawNumChars = ToNumber(numCharsValue);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawNumChars)) return ErrorValue.Value;
         if (rawStart > int.MaxValue || rawNumChars > int.MaxValue) return ErrorValue.Value;
+        // Check the RAW double before truncating -- mirroring LEFT/MID's rawCount/rawLen<0 checks
+        // in BuiltInFunctions.TextCore.Slice.cs. A fractional negative like -0.5 truncates to 0 via
+        // the (int) cast below, which would silently pass a post-cast `numChars < 0` check even
+        // though Excel rejects any negative num_chars with #VALUE!.
+        if (rawStart < 1 || rawNumChars < 0) return ErrorValue.Value;
 
         int startNum = (int)rawStart;
         int numChars = (int)rawNumChars;
-        if (startNum < 1 || numChars < 0) return ErrorValue.Value;
 
         return ReplaceText(ToText(value), startNum, numChars, ToText(newTextValue));
     }
@@ -122,10 +126,13 @@ public static partial class BuiltInFunctions
         double rawNumBytes = ToNumber(numBytesValue);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawNumBytes)) return ErrorValue.Value;
         if (rawStart > int.MaxValue || rawNumBytes > int.MaxValue) return ErrorValue.Value;
+        // See the identical comment in ReplaceScalarWithArgs above -- check the RAW double before
+        // truncating so a fractional negative like -0.5 is rejected instead of silently truncating
+        // to 0 via the (int) cast below.
+        if (rawStart < 1 || rawNumBytes < 0) return ErrorValue.Value;
 
         int startByte = (int)rawStart;
         int numBytes = (int)rawNumBytes;
-        if (startByte < 1 || numBytes < 0) return ErrorValue.Value;
 
         return ReplaceBText(ToText(value), startByte, numBytes, ToText(newTextValue));
     }

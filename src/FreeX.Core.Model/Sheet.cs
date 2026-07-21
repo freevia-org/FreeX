@@ -661,6 +661,19 @@ public sealed partial class Sheet
     public bool IsColEffectivelyHidden(uint col) =>
         HiddenCols.Contains(col) || GroupHiddenCols.Contains(col);
 
+    /// <summary>
+    /// True if the row is hidden specifically by an active AutoFilter, as opposed to a manual
+    /// Format &gt; Hide Row or an outline-group collapse. Excel's status-bar AutoCalculate
+    /// (Sum/Average/Count/...) over a plain rectangular selection still includes manually-hidden
+    /// and group-collapsed rows -- only AutoFilter-hidden rows are genuinely absent from the
+    /// selection's contribution (that distinction is exactly why SUBTOTAL(109,...) exists as a
+    /// separate mechanism to additionally exclude manual/group-hidden rows). Callers that compute
+    /// selection-scoped aggregates (see WorkbookSelectionStatsCalculator) must use this predicate
+    /// instead of <see cref="IsRowEffectivelyHidden"/>, which is intended for rendering/print/
+    /// navigation, where every hiding mechanism is equally "not shown".
+    /// </summary>
+    public bool IsRowFilterHidden(uint row) => FilterHiddenRows.Contains(row);
+
     private readonly List<GridRange> _mergedRegions = [];
 
     /// <summary>Cell comments keyed by address.</summary>

@@ -43,6 +43,37 @@ public sealed class CellEntryParserTests
     }
 
     [Fact]
+    public void CreateCell_LeadingApostropheStripsQuoteAndForcesText()
+    {
+        // R61-render-formula-bar-6-1: typing '007 must strip the apostrophe and store clean
+        // text "007", matching Excel and mirroring PasteCommandFactory.ParseClipboardValue's
+        // identical paste-path rule -- not the literal "'007" (apostrophe baked into the value).
+        var cell = CellEntryParser.CreateCell("'007", Anchor, useR1C1ReferenceStyle: false);
+
+        cell.Value.Should().BeOfType<TextValue>()
+            .Which.Value.Should().Be("007");
+    }
+
+    [Fact]
+    public void CreateCell_LeadingApostropheForcesTextEvenForNumericLookingRemainder()
+    {
+        // Sibling no-regression: the apostrophe rule must short-circuit BEFORE numeric/boolean/date
+        // coercion, so '12.5, 'TRUE, and a bare quote all stay text with the quote stripped instead
+        // of being (mis)parsed as a number/boolean, and plain unquoted entries are unaffected.
+        CellEntryParser.CreateCell("'12.5", Anchor, useR1C1ReferenceStyle: false)
+            .Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("12.5");
+
+        CellEntryParser.CreateCell("'TRUE", Anchor, useR1C1ReferenceStyle: false)
+            .Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("TRUE");
+
+        CellEntryParser.CreateCell("'", Anchor, useR1C1ReferenceStyle: false)
+            .Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("");
+
+        CellEntryParser.CreateCell("12.5", Anchor, useR1C1ReferenceStyle: false)
+            .Value.Should().BeOfType<NumberValue>().Which.Value.Should().Be(12.5);
+    }
+
+    [Fact]
     public void CreateCell_CreatesA1FormulaWithoutLeadingEquals()
     {
         var cell = CellEntryParser.CreateCell("=A1+B1", Anchor, useR1C1ReferenceStyle: false);

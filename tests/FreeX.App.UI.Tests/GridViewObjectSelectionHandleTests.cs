@@ -110,6 +110,96 @@ public sealed class GridViewObjectSelectionHandleTests
     }
 
     [Fact]
+    public void HitTestDrawingObject_ChartAboveShapeInZOrder_HitsChartFirst()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var anchor = new CellAddress(sheetId, 1, 1);
+            var shape = new DrawingShapeModel
+            {
+                Anchor = anchor,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var chart = new ChartModel
+            {
+                Id = Guid.NewGuid(),
+                DataRange = new GridRange(anchor, new CellAddress(sheetId, 4, 3)),
+                Left = 0,
+                Top = 0,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(),
+                DrawingShapes = [shape],
+                Charts = [chart],
+                DrawingObjectZOrder =
+                [
+                    new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id),
+                    new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Chart, chart.Id)
+                ]
+            };
+
+            var hit = GridViewTestHelpers.HitTestDrawingObject(
+                grid,
+                new Point(GridView.RowHeaderWidth + 10, GridView.ColHeaderHeight + 10));
+
+            hit.Id.Should().Be(chart.Id);
+            hit.Kind.Should().Be(ObjectKind.Chart);
+        });
+    }
+
+    [Fact]
+    public void HitTestDrawingObject_ShapeAboveChartInZOrder_HitsShapeFirst()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var anchor = new CellAddress(sheetId, 1, 1);
+            var shape = new DrawingShapeModel
+            {
+                Anchor = anchor,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var chart = new ChartModel
+            {
+                Id = Guid.NewGuid(),
+                DataRange = new GridRange(anchor, new CellAddress(sheetId, 4, 3)),
+                Left = 0,
+                Top = 0,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(),
+                DrawingShapes = [shape],
+                Charts = [chart],
+                DrawingObjectZOrder =
+                [
+                    new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Chart, chart.Id),
+                    new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id)
+                ]
+            };
+
+            var hit = GridViewTestHelpers.HitTestDrawingObject(
+                grid,
+                new Point(GridView.RowHeaderWidth + 10, GridView.ColHeaderHeight + 10));
+
+            hit.Id.Should().Be(shape.Id);
+            hit.Kind.Should().Be(ObjectKind.Shape);
+        });
+    }
+
+    [Fact]
     public void HitTestDrawingObject_SelectsChartFromAbsoluteBounds()
     {
         WpfTestThread.Run(() =>

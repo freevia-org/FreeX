@@ -353,6 +353,12 @@ public sealed partial class XlsxFileAdapter
                                 format.DataBarNegativeFillColor = negativeFillColor;
                             if (XlsxColorReader.TryReadRgbColor(x14DataBar.Element(x14Ns + "negativeBorderColor"), out var negativeBorderColor))
                                 format.DataBarNegativeBorderColor = negativeBorderColor;
+                            var negativeFillSameAsPositive = x14DataBar.Attribute("negativeBarColorSameAsPositive")?.Value;
+                            if (negativeFillSameAsPositive is not null)
+                                format.DataBarNegativeFillSameAsPositive = IsTruthy(negativeFillSameAsPositive);
+                            var negativeBorderSameAsPositive = x14DataBar.Attribute("negativeBarBorderColorSameAsPositive")?.Value;
+                            if (negativeBorderSameAsPositive is not null)
+                                format.DataBarNegativeBorderSameAsPositive = IsTruthy(negativeBorderSameAsPositive);
                             var nativeX14Children = ReadNativeX14DataBarPayloadChildXmls(x14DataBar, x14Ns);
                             if (nativeX14Children.Count > 0)
                                 format.NativePayloadChildXmls = AppendNativePayloadChildXmls(format.NativePayloadChildXmls, nativeX14Children);
@@ -735,6 +741,8 @@ public sealed partial class XlsxFileAdapter
             DataBarAxisColor = source.DataBarAxisColor,
             DataBarNegativeFillColor = source.DataBarNegativeFillColor,
             DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
+            DataBarNegativeFillSameAsPositive = source.DataBarNegativeFillSameAsPositive,
+            DataBarNegativeBorderSameAsPositive = source.DataBarNegativeBorderSameAsPositive,
             DataBarDirection = source.DataBarDirection,
             AboveAverage = source.AboveAverage,
             EqualAverage = source.EqualAverage,

@@ -114,13 +114,12 @@ internal static class XlsxWorkbookMetadataReader
                 return WorkbookProtectionState.None;
 
             var isStructureProtected = XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockStructure");
-
-            if (!isStructureProtected)
-                return WorkbookProtectionState.None;
-
             var passwordHash = ReadWorkbookPasswordHash(protection);
 
-            return new WorkbookProtectionState(true, passwordHash);
+            if (!isStructureProtected && passwordHash is null)
+                return WorkbookProtectionState.None;
+
+            return new WorkbookProtectionState(isStructureProtected, passwordHash);
         }
         catch
         {
@@ -402,13 +401,18 @@ internal static class XlsxWorkbookMetadataReader
             return WorkbookProtectionState.None;
 
         var isStructureProtected = XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockStructure");
-
-        if (!isStructureProtected)
-            return WorkbookProtectionState.None;
-
         var passwordHash = ReadWorkbookPasswordHash(protection);
 
-        return new WorkbookProtectionState(true, passwordHash);
+        // A workbookPassword can legitimately be present even when lockStructure is absent -- e.g.
+        // Excel's Protect Workbook dialog with only "Windows" checked still writes the password the
+        // user typed. Dropping it here (as if the element carried nothing worth keeping) would lose
+        // it permanently on the next full rebuild save, since ApplyProtection only ever re-emits the
+        // password from this state's PasswordHash. Only collapse to None when there is truly nothing
+        // to preserve (no structure lock and no password).
+        if (!isStructureProtected && passwordHash is null)
+            return WorkbookProtectionState.None;
+
+        return new WorkbookProtectionState(isStructureProtected, passwordHash);
     }
 
     /// <summary>
@@ -417,11 +421,20 @@ internal static class XlsxWorkbookMetadataReader
     /// <c>spinCount</c>) Excel writes by default since Excel 2013 — encoded so
     /// <see cref="ProtectionPasswordHelper.VerifyStoredPassword"/> can verify against it. Returns null
     /// when neither scheme is present (structure locked with no password at all).
+    /// <para>
+    /// The legacy attribute is only accepted when it has the exact 4-hex-digit shape Excel always
+    /// writes (<see cref="ProtectionPasswordHelper.IsLegacyPasswordHash"/>). A malformed value (e.g. a
+    /// hand-edited or corrupted file) is never a real Excel-authored hash; accepting it verbatim here
+    /// would let it flow into <see cref="ProtectionPasswordHelper.ToLegacyPasswordHash"/> at save time,
+    /// which -- unable to tell a stored hash from a freshly-typed password -- would re-hash the garbage
+    /// into a plausible-looking 4-hex value instead of the schema normalizer having a chance to strip
+    /// it, silently laundering invalid data into a fake-valid password on round-trip.
+    /// </para>
     /// </summary>
     private static string? ReadWorkbookPasswordHash(XElement protection)
     {
         var legacyPassword = protection.Attribute("workbookPassword")?.Value;
-        if (!string.IsNullOrEmpty(legacyPassword))
+        if (!string.IsNullOrEmpty(legacyPassword) && ProtectionPasswordHelper.IsLegacyPasswordHash(legacyPassword))
             return legacyPassword;
 
         var hashValue = protection.Attribute("workbookHashValue")?.Value;

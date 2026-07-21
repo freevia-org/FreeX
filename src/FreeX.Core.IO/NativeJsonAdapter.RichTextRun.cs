@@ -64,6 +64,18 @@ public sealed partial class NativeJsonAdapter
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public CellTextRunVertAlign VertAlign { get; set; } = CellTextRunVertAlign.None;
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? DoubleUnderline { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? Charset { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? Family { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Scheme { get; set; }
     }
 
     // ── Save ─────────────────────────────────────────────────────────────────
@@ -104,6 +116,10 @@ public sealed partial class NativeJsonAdapter
             FontName     = run.FontName,
             FontSize     = run.FontSize,
             VertAlign    = run.VertAlign,
+            DoubleUnderline = run.DoubleUnderline,
+            Charset      = run.Charset,
+            Family       = run.Family,
+            Scheme       = run.Scheme,
         };
 
         if (run.FontColor is { } rc)
@@ -165,7 +181,11 @@ public sealed partial class NativeJsonAdapter
         dto.FontName,
         dto.FontSize,
         ToCellRunColor(dto),
-        Enum.IsDefined(dto.VertAlign) ? dto.VertAlign : CellTextRunVertAlign.None);
+        Enum.IsDefined(dto.VertAlign) ? dto.VertAlign : CellTextRunVertAlign.None,
+        dto.DoubleUnderline,
+        dto.Charset,
+        dto.Family,
+        dto.Scheme);
 
     private static CellRunColor? ToCellRunColor(CellTextRunDto dto)
     {
