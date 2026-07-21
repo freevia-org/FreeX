@@ -55,6 +55,19 @@ public static class PageLayoutRibbonPolicyPlanner
             _ => WorksheetPageMargins.Normal
         };
 
+    /// <summary>
+    /// Resolves the header/footer distance-from-edge (in inches) that Excel's Margins gallery applies
+    /// alongside the Left/Right/Top/Bottom margins for a given preset. Normal and Narrow both use
+    /// Excel's 0.3in header/footer; Wide uses 0.5in.
+    /// </summary>
+    public static (double HeaderMargin, double FooterMargin) ResolveHeaderFooterMargins(
+        PageLayoutMarginPreset preset) =>
+        preset switch
+        {
+            PageLayoutMarginPreset.Wide => (0.5, 0.5),
+            _ => (0.3, 0.3)
+        };
+
     public static WorksheetPageOrientation ResolveOrientation(PageLayoutOrientationPreset preset) =>
         preset == PageLayoutOrientationPreset.Landscape
             ? WorksheetPageOrientation.Landscape

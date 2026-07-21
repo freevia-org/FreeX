@@ -242,10 +242,12 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
-            var styleId = sheet.GetCell(row, filterCol)?.StyleId ??
-                sheet.GetStyleOnly(row, filterCol) ??
-                StyleId.Default;
-            var fillColor = ctx.Workbook.GetStyle(styleId).FillColor;
+            // filter-by-color-cf: resolve the color Excel would actually show for this cell,
+            // including any conditional-formatting-driven fill, not just the cell's static stored
+            // style — otherwise a CF-red cell never matches a "red" filter.
+            var cell = sheet.GetCell(row, filterCol);
+            var address = new CellAddress(_sheetId, row, filterCol);
+            var fillColor = SortCommand.GetEffectiveColor(ctx.Workbook, sheet, address, cell, wantFill: true);
             FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fillColor == _fillColor);
         }
 
@@ -294,10 +296,11 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
-            var styleId = sheet.GetCell(row, filterCol)?.StyleId ??
-                sheet.GetStyleOnly(row, filterCol) ??
-                StyleId.Default;
-            var fillColor = ctx.Workbook.GetStyle(styleId).FillColor;
+            // filter-by-color-cf: a CF-driven fill counts as "has a fill" here too, so a CF-red
+            // cell must NOT wrongly match "No Fill".
+            var cell = sheet.GetCell(row, filterCol);
+            var address = new CellAddress(_sheetId, row, filterCol);
+            var fillColor = SortCommand.GetEffectiveColor(ctx.Workbook, sheet, address, cell, wantFill: true);
             FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fillColor is null);
         }
 
@@ -349,10 +352,12 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
-            var styleId = sheet.GetCell(row, filterCol)?.StyleId ??
-                sheet.GetStyleOnly(row, filterCol) ??
-                StyleId.Default;
-            var fontColor = ctx.Workbook.GetStyle(styleId).FontColor;
+            // filter-by-color-cf: resolve the color Excel would actually show for this cell,
+            // including any conditional-formatting-driven font color, not just the cell's static
+            // stored style — otherwise a CF-red-font cell never matches a "red" font-color filter.
+            var cell = sheet.GetCell(row, filterCol);
+            var address = new CellAddress(_sheetId, row, filterCol);
+            var fontColor = SortCommand.GetEffectiveColor(ctx.Workbook, sheet, address, cell, wantFill: false);
             FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fontColor == _fontColor);
         }
 

@@ -17,9 +17,10 @@ public sealed class PagePaginationPlannerTests
     [Fact]
     public void CalculatePageCapacity_DerivesRowsAndColumnsFromPrintableArea()
     {
-        // A4 portrait, narrow (0.5") margins: printable 7.27" x 10.69" at 96 dpi.
-        // columns: floor((8.27-1.0)*96 / 40) = floor(697.92/40) = 17.
-        // rows:    floor((11.69-1.0)*96 / 20) = floor(1026.24/20) = 51.
+        // A4 portrait, narrow (Excel: 0.25" left/right, 0.75" top/bottom) margins:
+        // printable 7.77" x 10.19" at 96 dpi.
+        // columns: floor((8.27-0.25-0.25)*96 / 40) = floor(745.92/40) = 18.
+        // rows:    floor((11.69-0.75-0.75)*96 / 20) = floor(978.24/20) = 48.
         var capacity = PagePaginationPlanner.CalculatePageCapacity(
             Range(1, 1, 100, 100),
             WorksheetScaleToFit.Default,
@@ -29,8 +30,8 @@ public sealed class PagePaginationPlannerTests
             WorksheetPageOrientation.Portrait,
             WorksheetPageMargins.Narrow);
 
-        capacity.RowsPerPage.Should().Be(51);
-        capacity.ColumnsPerPage.Should().Be(17);
+        capacity.RowsPerPage.Should().Be(48);
+        capacity.ColumnsPerPage.Should().Be(18);
     }
 
     [Fact]
@@ -70,9 +71,9 @@ public sealed class PagePaginationPlannerTests
             WorksheetPageOrientation.Portrait,
             WorksheetPageMargins.Narrow);
 
-        // 100% capacity is 17 columns / 51 rows; 50% scale fits twice as much per page.
-        capacity.ColumnsPerPage.Should().Be(34);
-        capacity.RowsPerPage.Should().Be(102);
+        // 100% capacity is 18 columns / 48 rows; 50% scale fits twice as much per page.
+        capacity.ColumnsPerPage.Should().Be(36);
+        capacity.RowsPerPage.Should().Be(96);
     }
 
     [Fact]
@@ -87,14 +88,14 @@ public sealed class PagePaginationPlannerTests
             WorksheetPageOrientation.Portrait,
             WorksheetPageMargins.Narrow);
 
-        // 70 rows / 51 per page = 2 row pages; 20 columns / 17 per page = 2 column pages.
+        // 70 rows / 48 per page = 2 row pages; 20 columns / 18 per page = 2 column pages.
         result.RowPageCount.Should().Be(2);
         result.ColumnPageCount.Should().Be(2);
         result.PageCount.Should().Be(4);
-        result.RowSegments[0].Should().Be(new PageAxisSegment(1, 51));
-        result.RowSegments[1].Should().Be(new PageAxisSegment(52, 70));
-        result.ColumnSegments[0].Should().Be(new PageAxisSegment(1, 17));
-        result.ColumnSegments[1].Should().Be(new PageAxisSegment(18, 20));
+        result.RowSegments[0].Should().Be(new PageAxisSegment(1, 48));
+        result.RowSegments[1].Should().Be(new PageAxisSegment(49, 70));
+        result.ColumnSegments[0].Should().Be(new PageAxisSegment(1, 18));
+        result.ColumnSegments[1].Should().Be(new PageAxisSegment(19, 20));
         result.EffectiveScalePercent.Should().Be(100.0);
     }
 
@@ -112,7 +113,7 @@ public sealed class PagePaginationPlannerTests
             rowPageBreaks: [5],
             columnPageBreaks: [5]);
 
-        plan.Capacity.Should().Be(new PageCapacity(RowsPerPage: 51, ColumnsPerPage: 17));
+        plan.Capacity.Should().Be(new PageCapacity(RowsPerPage: 48, ColumnsPerPage: 18));
         plan.RowPageCount.Should().Be(2);
         plan.ColumnPageCount.Should().Be(2);
         plan.PageCount.Should().Be(4);

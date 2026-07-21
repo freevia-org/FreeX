@@ -60,9 +60,9 @@ public readonly record struct WorksheetPageMargins(
     double Top,
     double Bottom)
 {
-    public static WorksheetPageMargins Normal { get; } = new(1.0, 1.0, 1.0, 1.0);
+    public static WorksheetPageMargins Normal { get; } = new(0.7, 0.7, 0.75, 0.75);
     public static WorksheetPageMargins Wide { get; } = new(1.25, 1.25, 1.0, 1.0);
-    public static WorksheetPageMargins Narrow { get; } = new(0.5, 0.5, 0.5, 0.5);
+    public static WorksheetPageMargins Narrow { get; } = new(0.25, 0.25, 0.75, 0.75);
 }
 
 public readonly record struct WorksheetScaleToFit(

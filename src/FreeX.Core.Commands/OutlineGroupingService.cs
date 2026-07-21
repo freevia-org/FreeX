@@ -12,8 +12,8 @@ public static class OutlineGroupingService
 {
     public static void ValidateOutlineLevel(int level)
     {
-        if (level is < 0 or > 8)
-            throw new ArgumentOutOfRangeException(nameof(level), "Outline level must be 0–8.");
+        if (level is < 0 or > 7)
+            throw new ArgumentOutOfRangeException(nameof(level), "Outline level must be 0–7.");
     }
 
     public static OutlineGroupingAxis GetGroupingAxis(GridRange range) =>
@@ -30,9 +30,9 @@ public static class OutlineGroupingService
         if (!preserveExistingHierarchy)
             return requestedLevel;
 
-        var normalizedPrevious = Math.Clamp(previousLevel, 0, 8);
+        var normalizedPrevious = Math.Clamp(previousLevel, 0, 7);
         return normalizedPrevious > 0
-            ? Math.Min(normalizedPrevious + 1, 8)
+            ? Math.Min(normalizedPrevious + 1, 7)
             : 1;
     }
 }

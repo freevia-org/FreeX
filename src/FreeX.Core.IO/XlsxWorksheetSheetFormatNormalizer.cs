@@ -116,7 +116,7 @@ internal static class XlsxWorksheetSheetFormatNormalizer
     {
         var trimmed = value?.Trim();
         return uint.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) &&
-               parsed <= 8
+               parsed <= 7
             ? parsed.ToString(CultureInfo.InvariantCulture)
             : null;
     }

@@ -3259,6 +3259,22 @@ public sealed partial class XlsxFileAdapter
                     return false;
                 }
 
+                // R59 io-protection-5-1/5-2: a Protect-Sheet permission-flag edit or an Allow-Edit-
+                // Range add/remove/password-change is likewise never re-derived from the model by
+                // the patch-save normalizers (NormalizePatchWorksheetProtection only cosmetically
+                // normalizes the *original* sheetProtection attributes;
+                // NormalizePatchWorksheetProtectedRanges only cosmetically normalizes the *original*
+                // protectedRanges element) -- force the full ClosedXML save (which does call
+                // XlsxWorksheetProtectionMetadataWriter/XlsxAllowEditRangeMapper off the current
+                // model) only when one of those genuinely differs from the source. A plain cell edit
+                // on a protected sheet whose permissions/ranges are unchanged must still take the
+                // cheap cell-patch path below.
+                if (WorksheetProtectionPermissionsOrAllowEditRangesChanged(sourceSheetProtection, sheet))
+                {
+                    blockReason = "worksheet_postprocessing_protection_permissions_changed";
+                    return false;
+                }
+
                 if (!TryReadWorksheetPackageGuardInfo(
                         worksheetEntry,
                         workbookNs,
@@ -5455,22 +5471,29 @@ public sealed partial class XlsxFileAdapter
 
         private readonly record struct XlsxWorksheetSourceProtectionInfo(
             bool IsProtected,
-            string? PasswordHash);
+            string? PasswordHash,
+            IReadOnlyCollection<SheetProtectionPermission> Permissions,
+            IReadOnlyDictionary<string, string?> AllowEditRanges);
 
         /// <summary>
-        /// Streaming read of just the root-level <c>sheetProtection</c> element's protection-relevant
-        /// attributes, without loading the full worksheet XDocument (mirrors
-        /// <see cref="XlsxWorksheetGridXmlNormalizer.AnyRowMissingRowIndex"/>'s style). Encodes the
-        /// password the same way <c>XlsxFileAdapter.SheetXmlLayout</c>'s
+        /// Streaming read of just the root-level <c>sheetProtection</c>/<c>protectedRanges</c>
+        /// elements' protection-relevant attributes, without loading the full worksheet XDocument
+        /// (mirrors <see cref="XlsxWorksheetGridXmlNormalizer.AnyRowMissingRowIndex"/>'s style).
+        /// Encodes the password the same way <c>XlsxFileAdapter.SheetXmlLayout</c>'s
         /// <c>ReadSheetProtectionPasswordHash</c> does at full-load time, so the result is directly
-        /// comparable to <see cref="Sheet.ProtectionPassword"/>.
+        /// comparable to <see cref="Sheet.ProtectionPassword"/>. Also captures the permission
+        /// booleans (via <see cref="XlsxSheetProtectionPermissionMapper.Read"/>) and the Allow-Edit
+        /// ranges/range-passwords (via <see cref="XlsxAllowEditRangeMapper.Read(XDocument, XNamespace, out Dictionary{GridRange, string})"/>)
+        /// so patch-save eligibility can detect a genuine permission or allow-edit-range delta
+        /// (see <see cref="WorksheetProtectionPermissionsOrAllowEditRangesChanged"/>) instead of
+        /// forcing a full save on every protected/protected-ranges worksheet unconditionally.
         /// </summary>
         private static bool TryReadSheetProtectionPackageGuardInfo(
             ZipArchiveEntry worksheetEntry,
             XNamespace worksheetNs,
             out XlsxWorksheetSourceProtectionInfo info)
         {
-            info = new XlsxWorksheetSourceProtectionInfo(false, null);
+            info = new XlsxWorksheetSourceProtectionInfo(false, null, DefaultSourceProtectionPermissions, EmptyAllowEditRanges);
 
             try
             {
@@ -5487,6 +5510,11 @@ public sealed partial class XlsxFileAdapter
                 if (reader.IsEmptyElement)
                     return true;
 
+                var isProtected = false;
+                string? passwordHash = null;
+                var permissions = DefaultSourceProtectionPermissions;
+                var allowEditRanges = EmptyAllowEditRanges;
+
                 var rootDepth = reader.Depth;
                 while (reader.Read())
                 {
@@ -5501,35 +5529,72 @@ public sealed partial class XlsxFileAdapter
                         continue;
 
                     if (reader.Depth != rootDepth + 1 ||
-                        !string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal) ||
-                        reader.LocalName != "sheetProtection")
+                        !string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal))
                     {
                         continue;
                     }
 
-                    var isProtected = XlsxWorksheetXmlValueParser.IsTruthy(reader.GetAttribute("sheet"));
-                    var legacyPassword = reader.GetAttribute("password");
-                    string? passwordHash;
-                    if (!string.IsNullOrEmpty(legacyPassword))
+                    if (reader.LocalName == "sheetProtection")
                     {
-                        passwordHash = legacyPassword;
-                    }
-                    else
-                    {
-                        var hashValue = reader.GetAttribute("hashValue");
-                        passwordHash = string.IsNullOrEmpty(hashValue)
-                            ? null
-                            : ProtectionPasswordHelper.EncodeIso29500Hash(
-                                reader.GetAttribute("algorithmName"),
-                                reader.GetAttribute("spinCount"),
-                                reader.GetAttribute("saltValue"),
-                                hashValue);
+                        isProtected = XlsxWorksheetXmlValueParser.IsTruthy(reader.GetAttribute("sheet"));
+                        var legacyPassword = reader.GetAttribute("password");
+                        if (!string.IsNullOrEmpty(legacyPassword))
+                        {
+                            passwordHash = legacyPassword;
+                        }
+                        else
+                        {
+                            var hashValue = reader.GetAttribute("hashValue");
+                            passwordHash = string.IsNullOrEmpty(hashValue)
+                                ? null
+                                : ProtectionPasswordHelper.EncodeIso29500Hash(
+                                    reader.GetAttribute("algorithmName"),
+                                    reader.GetAttribute("spinCount"),
+                                    reader.GetAttribute("saltValue"),
+                                    hashValue);
+                        }
+
+                        var protectionElement = new XElement(worksheetNs + "sheetProtection");
+                        if (reader.MoveToFirstAttribute())
+                        {
+                            do
+                            {
+                                if (reader.Prefix == "xmlns" || reader.LocalName == "xmlns")
+                                    continue;
+
+                                protectionElement.SetAttributeValue(reader.LocalName, reader.Value);
+                            } while (reader.MoveToNextAttribute());
+
+                            reader.MoveToElement();
+                        }
+
+                        permissions = XlsxSheetProtectionPermissionMapper.Read(protectionElement);
+                        continue;
                     }
 
-                    info = new XlsxWorksheetSourceProtectionInfo(isProtected, passwordHash);
-                    return true;
+                    if (reader.LocalName == "protectedRanges")
+                    {
+                        var protectedRangesElement = XElement.Load(reader.ReadSubtree());
+                        var syntheticDocument = new XDocument(
+                            new XElement(worksheetNs + "worksheet", protectedRangesElement));
+                        var ranges = XlsxAllowEditRangeMapper.Read(
+                            syntheticDocument,
+                            worksheetNs,
+                            out var passwordsByRange);
+                        var byReference = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var range in ranges)
+                        {
+                            byReference[range.ToString()] = passwordsByRange.TryGetValue(range, out var password)
+                                ? password
+                                : null;
+                        }
+
+                        allowEditRanges = byReference;
+                        continue;
+                    }
                 }
 
+                info = new XlsxWorksheetSourceProtectionInfo(isProtected, passwordHash, permissions, allowEditRanges);
                 return true;
             }
             catch
@@ -5538,15 +5603,71 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
+        private static readonly IReadOnlyCollection<SheetProtectionPermission> DefaultSourceProtectionPermissions =
+            XlsxSheetProtectionPermissionMapper.Read(null);
+
+        private static readonly IReadOnlyDictionary<string, string?> EmptyAllowEditRanges =
+            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
         /// <summary>
         /// True when the live model's sheet-protection state has diverged from what the source
         /// bytes still hold (i.e. a Protect/Unprotect Sheet command ran since load). Compares only
         /// what patch-save can never re-derive from the model (IsProtected + the password/hash
-        /// verifier) -- permission-boolean changes are handled separately and are safe to patch.
+        /// verifier) -- permission-boolean and Allow-Edit-Range changes are handled separately by
+        /// <see cref="WorksheetProtectionPermissionsOrAllowEditRangesChanged"/>.
         /// </summary>
         private static bool WorksheetProtectionStateChanged(XlsxWorksheetSourceProtectionInfo source, Sheet sheet) =>
             source.IsProtected != sheet.IsProtected ||
             !string.Equals(source.PasswordHash, sheet.ProtectionPassword, StringComparison.Ordinal);
+
+        /// <summary>
+        /// True when the live model's Protect-Sheet permission flags (<see cref="Sheet.ProtectionPermissions"/>)
+        /// or its Allow-Edit-Ranges (<see cref="Sheet.AllowEditRanges"/>/<see cref="Sheet.AllowEditRangePasswords"/>)
+        /// genuinely differ from what the source bytes parse to. Patch-save
+        /// (<c>NormalizePatchWorksheetProtection</c>/<c>NormalizePatchWorksheetProtectedRanges</c>) only
+        /// cosmetically normalizes the *original* elements -- it never re-derives either from the
+        /// model (that only happens on the full/source-independent save path via
+        /// <see cref="XlsxWorksheetProtectionMetadataWriter"/>/<see cref="XlsxAllowEditRangeMapper"/>).
+        /// A real (not always-true) comparison here matters: forcing a full save whenever a
+        /// protected sheet merely carries an *unchanged* set of permissions/ranges would regress a
+        /// plain cell edit on that sheet onto the slower, source-independent path for no reason (and
+        /// previously produced schema-invalid output on some full-save protectedRanges shapes -- see
+        /// R57/R59 io-protection-5-1/5-2 history). Only force full save when something patch-save
+        /// cannot express actually changed.
+        /// </summary>
+        private static bool WorksheetProtectionPermissionsOrAllowEditRangesChanged(
+            XlsxWorksheetSourceProtectionInfo source,
+            Sheet sheet)
+        {
+            if (source.Permissions.Count != sheet.ProtectionPermissions.Count ||
+                !source.Permissions.All(sheet.ProtectionPermissions.Contains))
+            {
+                return true;
+            }
+
+            if (source.AllowEditRanges.Count != sheet.AllowEditRanges.Count)
+                return true;
+
+            foreach (var range in sheet.AllowEditRanges)
+            {
+                if (!source.AllowEditRanges.TryGetValue(range.ToString(), out var sourcePassword))
+                    return true;
+
+                var modelPassword = sheet.AllowEditRangePasswords.TryGetValue(range, out var storedPassword)
+                    ? storedPassword
+                    : null;
+
+                if (!string.Equals(
+                        string.IsNullOrEmpty(sourcePassword) ? null : sourcePassword,
+                        string.IsNullOrEmpty(modelPassword) ? null : modelPassword,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
         {

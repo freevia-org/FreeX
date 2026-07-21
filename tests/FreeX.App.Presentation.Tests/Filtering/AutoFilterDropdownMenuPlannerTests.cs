@@ -193,6 +193,43 @@ public sealed class AutoFilterDropdownMenuPlannerTests
     }
 
     [Fact]
+    public void CreateMenuPlan_ColorOptions_ResolveConditionalFormatDrivenFillColor()
+    {
+        // filter-by-color-cf: a CF rule colors row 3 (value > 100) red purely via conditional
+        // formatting -- no manual/static fill is set on that cell. The offered color list must
+        // include that CF-driven red as a Cell Fill Color option, and that CF-red row must NOT
+        // count towards "No Fill" (only the genuinely uncolored row 2 does).
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(50));  // no CF match, no fill
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(200)); // CF match -> red fill
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "100",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) }
+        });
+
+        var plan = new AutoFilterDropdownPlan(range, FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(workbook, sheet, plan, Text, "(Blanks)");
+
+        menu.ColorOptions.Should().Contain(option =>
+            option.Kind == AutoFilterColorFilterKind.CellFillColor &&
+            option.Label == "#FF0000");
+        // "No Fill" is only offered/matched for the genuinely uncolored row (50); the CF-red row
+        // must not be lumped into it.
+        menu.ColorOptions.Should().Contain(option => option.Kind == AutoFilterColorFilterKind.NoFill);
+    }
+
+    [Fact]
     public void CreateMenuPlan_ReflectsFilteredRowsInChecklistAndSelectAllState()
     {
         var sheet = new Sheet(SheetId, "Sheet1");

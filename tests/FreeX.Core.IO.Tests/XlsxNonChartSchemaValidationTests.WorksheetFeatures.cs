@@ -1405,6 +1405,136 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         AssertProtectedRangesReloadModel(saved);
     }
 
+    // R59 io-protection-5-1/5-2: patch-save can never re-derive sheetProtection's permission
+    // booleans or a worksheet's protectedRanges/AllowEditRanges from the model (see
+    // NormalizePatchWorksheetProtection/NormalizePatchWorksheetProtectedRanges -- both are purely
+    // cosmetic normalizers of the *original* bytes). Loading a source package and then only
+    // toggling a permission flag or adding/removing an Allow-Edit-Range must be detected as a
+    // genuine delta (WorksheetProtectionPermissionsOrAllowEditRangesChanged) and forced onto the
+    // full ClosedXML save path -- which DOES re-derive both from the current model -- so the
+    // change is not silently discarded by the source-copy/cell-patch shortcuts. A plain cell edit
+    // on an already-protected sheet whose permissions/ranges are UNCHANGED must still take the
+    // cheap cell-patch path.
+
+    [Fact]
+    public void ProtectSheetCommand_TogglingPermissionFlag_ForcesFullSaveAndPersists()
+    {
+        using var source = Save(CreateSheetProtectionSourceWorkbook());
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        // Deliberately does NOT call TryPrepareLoadedPackageSnapshotForEdit before mutating: that
+        // helper memoizes cell-patch eligibility for the lifetime of the loaded source-package
+        // snapshot (see AllowsCellPatchSave/IsCellPatchEligibilityLazy caching in
+        // TryEnsureCellPatchEligibility), so pre-computing it BEFORE the permission edit would
+        // freeze the "unchanged" (eligible) verdict and never observe this edit. Production callers
+        // only pre-warm that baseline once, immediately after Load()/session creation, before any
+        // edit commands run -- mirrors FreeXR11B7Tests.ProtectSheetCommand_AfterUnprotecting...
+        // which uses the same Load-then-mutate-then-Save shape to exercise a genuine post-load
+        // protection-state delta.
+        var sheet = workbook.GetSheetAt(0);
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("worksheet_postprocessing_protection_permissions_changed");
+        SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.IsProtected.Should().BeTrue();
+        reloadedSheet.ProtectionPermissions.Should().Contain(SheetProtectionPermission.FormatCells);
+    }
+
+    [Fact]
+    public void AllowEditRange_Added_ForcesFullSaveAndPersists()
+    {
+        using var source = Save(CreateProtectedRangesSourceWorkbook());
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        // See ProtectSheetCommand_TogglingPermissionFlag_ForcesFullSaveAndPersists above for why
+        // Prepare() must NOT be called before this edit.
+        var sheet = workbook.GetSheetAt(0);
+        sheet.AllowEditRanges.Add(new GridRange(
+            new CellAddress(sheet.Id, 6, 6),
+            new CellAddress(sheet.Id, 7, 7)));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("worksheet_postprocessing_protection_permissions_changed");
+        SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var reloadedRanges = reloaded.GetSheetAt(0).AllowEditRanges;
+        reloadedRanges.Should().HaveCount(2);
+        reloadedRanges.Select(range => range.ToString()).Should().Contain("F6:G7");
+    }
+
+    [Fact]
+    public void AllowEditRange_Removed_ForcesFullSaveAndPersists()
+    {
+        using var source = Save(CreateProtectedRangesSourceWorkbook());
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        // See ProtectSheetCommand_TogglingPermissionFlag_ForcesFullSaveAndPersists above for why
+        // Prepare() must NOT be called before this edit.
+        var sheet = workbook.GetSheetAt(0);
+        sheet.AllowEditRanges.Clear();
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("worksheet_postprocessing_protection_permissions_changed");
+        SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        reloaded.GetSheetAt(0).AllowEditRanges.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ProtectedSheet_PlainCellEditWithUnchangedPermissionsAndRanges_StaysOnCellPatchPath()
+    {
+        using var source = Save(CreateProtectedRangesSourceWorkbook());
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        AssertProtectedRangesModel(reloadedSheet);
+        reloadedSheet.GetCell(new CellAddress(reloadedSheet.Id, 4, 4))!.Value.Should().Be(new NumberValue(42));
+    }
 
     [Fact]
     public void WorksheetCalculationProperties_ProducesSchemaValidWorkbook()

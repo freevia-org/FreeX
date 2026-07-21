@@ -30,7 +30,9 @@ public sealed record PageLayoutRibbonActionDescriptor(
 public sealed record PageLayoutPresetCommandPlan<T>(
     T Value,
     string CommandLabel,
-    string StatusResourceKey);
+    string StatusResourceKey,
+    double? HeaderMargin = null,
+    double? FooterMargin = null);
 
 /// <summary>
 /// Shared Page Layout ribbon action catalog. Platform shells still own dialogs and dispatch, but the
@@ -128,8 +130,10 @@ public static class PageLayoutRibbonActionPlanner
     ];
 
     public static PageLayoutPresetCommandPlan<WorksheetPageMargins> PlanMarginsPreset(
-        PageLayoutMarginPreset preset) =>
-        new(
+        PageLayoutMarginPreset preset)
+    {
+        var (headerMargin, footerMargin) = PageLayoutRibbonPolicyPlanner.ResolveHeaderFooterMargins(preset);
+        return new(
             PageLayoutRibbonPolicyPlanner.ResolveMargins(preset),
             PageMarginsCommandLabel,
             preset switch
@@ -137,7 +141,10 @@ public static class PageLayoutRibbonActionPlanner
                 PageLayoutMarginPreset.Wide => "RibbonWire_MarginsWide",
                 PageLayoutMarginPreset.Narrow => "RibbonWire_MarginsNarrow",
                 _ => "RibbonWire_MarginsNormal",
-            });
+            },
+            headerMargin,
+            footerMargin);
+    }
 
     public static PageLayoutPresetCommandPlan<WorksheetPageOrientation> PlanOrientationPreset(
         PageLayoutOrientationPreset preset) =>

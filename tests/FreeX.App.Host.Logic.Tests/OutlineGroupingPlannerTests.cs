@@ -32,11 +32,14 @@ public sealed class OutlineGroupingPlannerTests
     [Fact]
     public void GetNextOutlineLevel_ClampsToExcelMaximumOutlineLevel()
     {
+        // Excel/OOXML's ST_OutlineLevel maxes out at 7 (R58-outline-6-2): even when an existing
+        // level in the selection is already at (or beyond) the cap, the next requested level must
+        // not advance past 7.
         var levels = new Dictionary<uint, int> { [2] = 8 };
 
         OutlineGroupingPlanner.GetNextOutlineLevel(1, 3, levels)
             .Should()
-            .Be(8);
+            .Be(7);
     }
 
     [Fact]

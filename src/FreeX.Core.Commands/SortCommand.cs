@@ -950,14 +950,15 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         };
     }
 
-    private static CellStyle GetStyle(Workbook workbook, Cell? cell) =>
-        workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
-
     /// <summary>
-    /// R39-commands-sort-custom-2-2: resolves the color Excel would actually show for a cell
-    /// when "Sort On" is Cell Color/Font Color — the cell's static stored style overlaid with the
-    /// color contributed by the highest-precedence matching conditional-formatting rule, mirroring
-    /// how Sort On > Cell Color/Font Color includes CF-driven colors in real Excel.
+    /// R39-commands-sort-custom-2-2 / filter-by-color-cf: resolves the color Excel would actually
+    /// show for a cell when sorting/filtering by Cell Color or Font Color — the cell's static
+    /// stored style overlaid with the color contributed by the highest-precedence matching
+    /// conditional-formatting rule, mirroring how Sort On/Filter by Cell Color/Font Color includes
+    /// CF-driven colors in real Excel. Shared by <see cref="SortCommand"/> (Sort On: Cell/Font
+    /// Color) and by FilterCommand's cell-color/font-color/no-fill filter commands and
+    /// AutoFilterDropdownMenuPlanner's color-options list, so a CF-red cell is treated as red by
+    /// both the offered color swatches and the actual match — never as "no fill".
     /// <para>
     /// This intentionally only evaluates CF rule shapes that can be judged purely from the cell's
     /// own value (literal CellValue comparisons, Blanks/NoBlanks/Errors/NoErrors, and the simple
@@ -969,9 +970,13 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     /// FreeX.Core.Commands, so reusing it here is out of scope for this fix.
     /// </para>
     /// </summary>
-    private static CellColor? GetEffectiveColor(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell, bool wantFill)
+    public static CellColor? GetEffectiveColor(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell, bool wantFill)
     {
-        var style = GetStyle(workbook, cell);
+        // Resolve the cell's static style the same way callers used to before this helper was
+        // shared: prefer the live Cell's own StyleId, then fall back to a style-only (no Cell
+        // object, e.g. an empty formatted cell) entry recorded against this address, then Default.
+        var styleId = cell?.StyleId ?? sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
+        var style = workbook.GetStyle(styleId);
         CellColor? effective = wantFill ? style.FillColor : style.FontColor;
         if (sheet.ConditionalFormats.Count == 0)
             return effective;

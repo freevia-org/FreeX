@@ -192,19 +192,26 @@ public static class AutoFilterDropdownMenuPlanner
 
         for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
         {
-            var style = GetCellStyle(workbook, sheet, row, filterColumn);
-            if (style.FillColor is { } fillColor)
+            // filter-by-color-cf: offer the color Excel would actually display for this cell —
+            // including any conditional-formatting-driven fill/font color — not just the cell's
+            // static stored style, so a CF-red cell shows up under its CF color rather than under
+            // "No Fill".
+            var cell = sheet.GetCell(row, filterColumn);
+            var address = new CellAddress(sheet.Id, row, filterColumn);
+            var fillColor = SortCommand.GetEffectiveColor(workbook, sheet, address, cell, wantFill: true);
+            if (fillColor is { } fill)
             {
-                if (seenFillColors.Add(fillColor))
-                    fillColors.Add(fillColor);
+                if (seenFillColors.Add(fill))
+                    fillColors.Add(fill);
             }
             else
             {
                 hasNoFill = true;
             }
 
-            if (!style.FontColor.IsBlack && seenFontColors.Add(style.FontColor))
-                fontColors.Add(style.FontColor);
+            var fontColor = SortCommand.GetEffectiveColor(workbook, sheet, address, cell, wantFill: false) ?? CellColor.Black;
+            if (!fontColor.IsBlack && seenFontColors.Add(fontColor))
+                fontColors.Add(fontColor);
         }
 
         var options = new List<AutoFilterColorOption>();
@@ -215,14 +222,6 @@ public static class AutoFilterDropdownMenuPlanner
         options.AddRange(fontColors.Select(color =>
             new AutoFilterColorOption(FormatHexColor(color), AutoFilterColorFilterKind.FontColor, color)));
         return options;
-    }
-
-    private static CellStyle GetCellStyle(Workbook workbook, Sheet sheet, uint row, uint col)
-    {
-        var styleId = sheet.GetCell(row, col)?.StyleId ??
-            sheet.GetStyleOnly(row, col) ??
-            StyleId.Default;
-        return workbook.GetStyle(styleId);
     }
 
     public static bool HasActiveFilter(Sheet sheet, GridRange range)

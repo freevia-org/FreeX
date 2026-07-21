@@ -343,9 +343,11 @@ public sealed class PagePaginationAccuracyTests
     [Fact]
     public void Paginate_LargeHeaderFooterMarginsProduceMoreRowPages()
     {
-        // 51 rows at 20px each. With zero header/footer margins ~51 rows fit on 1 page.
-        // With 1"+1" header/footer margin, fewer rows fit per page -> multiple pages needed.
-        const uint rowCount = 51;
+        // 48 rows at 20px each. A4 portrait narrow margins (0.75"+0.75" top/bottom) give a printable
+        // body of 978.24px, so with zero header/footer margin all 48 rows fit on 1 page
+        // (floor(978.24/20) = 48 rows/page). With 1"+1" header/footer margin, body height drops to
+        // 786.24px -> only 39 rows/page fit, so the same 48 rows need 2 pages.
+        const uint rowCount = 48;
         var range = Range(1, 1, rowCount, 5);
         var margins = WorksheetPageMargins.Narrow;
         var noScale = new WorksheetScaleToFit(ScalePercent: null, FitToPagesWide: null, FitToPagesTall: null);
@@ -387,14 +389,14 @@ public sealed class PagePaginationAccuracyTests
     [Fact]
     public void CalculatePageCapacity_HeaderFooterMarginsSubtractedCorrectly()
     {
-        // A4 portrait, narrow (0.5") margins.
-        // Paper height = 11.69", page margins = 0.5+0.5 = 1.0" -> printable = 10.69" = 1026.24px.
+        // A4 portrait, narrow (Excel: 0.25" left/right, 0.75" top/bottom) margins.
+        // Paper height = 11.69", page margins = 0.75+0.75 = 1.5" -> printable = 10.19" = 978.24px.
         // Header = 0.3", Footer = 0.3" -> reserved = 0.6" = 57.6px.
-        // Body height = 1026.24 - 57.6 = 968.64px.
-        // Rows per page (at 20px) = floor(968.64 / 20) = 48.
+        // Body height = 978.24 - 57.6 = 920.64px.
+        // Rows per page (at 20px) = floor(920.64 / 20) = 46.
         const double pageH = 11.69;
-        const double topMarginIn = 0.5;
-        const double bottomMarginIn = 0.5;
+        const double topMarginIn = 0.75;
+        const double bottomMarginIn = 0.75;
         const double headerIn = 0.3;
         const double footerIn = 0.3;
         const double dpi = 96.0;

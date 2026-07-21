@@ -173,6 +173,118 @@ public partial class SortFilterTests
     }
 
     [Fact]
+    public void CellFillColorFilterCommand_MatchesConditionalFormatDrivenFillColor()
+    {
+        // filter-by-color-cf: a CF rule colors row 3 (value > 100) red purely via conditional
+        // formatting -- no manual/static fill is ever set on that cell. "Filter by Cell Color: red"
+        // must still hide the rows Excel would NOT display as red, and keep the CF-red row visible.
+        var (wb, sheet, ctx) = MakeContext();
+        var sid = sheet.Id;
+        var red = new CellColor(255, 0, 0);
+
+        sheet.SetCell(new CellAddress(sid, 1, 1), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sid, 2, 1), new NumberValue(50));  // no CF match, no fill
+        sheet.SetCell(new CellAddress(sid, 3, 1), new NumberValue(200)); // CF match -> red fill
+        sheet.SetCell(new CellAddress(sid, 4, 1), new NumberValue(10));  // no CF match, no fill
+
+        var range = new GridRange(
+            new CellAddress(sid, 1, 1),
+            new CellAddress(sid, 4, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "100",
+            FormatIfTrue = new CellStyle { FillColor = red }
+        });
+
+        var command = new CellFillColorFilterCommand(sid, range, filterColOffset: 0, red);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        // Row 3 is the only row Excel would show as red -- rows 2 and 4 (no color at all) must be
+        // hidden; row 3 (CF-red) and the header row must stay visible.
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([2u, 4u]);
+
+        command.Revert(ctx);
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CellNoFillColorFilterCommand_DoesNotMatchConditionalFormatDrivenFillColor()
+    {
+        // filter-by-color-cf sibling case: the same CF-red cell (row 3) must NOT be treated as
+        // "No Fill" -- only the truly uncolored rows (2 and 4) match "Filter by No Fill".
+        var (wb, sheet, ctx) = MakeContext();
+        var sid = sheet.Id;
+        var red = new CellColor(255, 0, 0);
+
+        sheet.SetCell(new CellAddress(sid, 1, 1), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sid, 2, 1), new NumberValue(50));  // no CF match, no fill
+        sheet.SetCell(new CellAddress(sid, 3, 1), new NumberValue(200)); // CF match -> red fill
+        sheet.SetCell(new CellAddress(sid, 4, 1), new NumberValue(10));  // no CF match, no fill
+
+        var range = new GridRange(
+            new CellAddress(sid, 1, 1),
+            new CellAddress(sid, 4, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "100",
+            FormatIfTrue = new CellStyle { FillColor = red }
+        });
+
+        var command = new CellNoFillColorFilterCommand(sid, range, filterColOffset: 0);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        // Row 3 (CF-red) must be hidden by "No Fill" -- rows 2 and 4 (truly uncolored) stay visible.
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u]);
+
+        command.Revert(ctx);
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CellFillColorFilterCommand_ManuallyFilledCell_UnchangedByCfResolution()
+    {
+        // filter-by-color-cf no-regression sibling: a manually (statically) filled cell with no
+        // conditional formatting present at all must keep matching/not-matching exactly as before.
+        var (wb, sheet, ctx) = MakeContext();
+        var sid = sheet.Id;
+        var green = new CellColor(0, 176, 80);
+        var yellow = new CellColor(255, 192, 0);
+        var greenCellStyle = CellStyle.Default.Clone();
+        greenCellStyle.FillColor = green;
+        var yellowCellStyle = CellStyle.Default.Clone();
+        yellowCellStyle.FillColor = yellow;
+        var greenStyle = wb.RegisterStyle(greenCellStyle);
+        var yellowStyle = wb.RegisterStyle(yellowCellStyle);
+
+        sheet.SetCell(new CellAddress(sid, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sid, 2, 1), new TextValue("Ready"));
+        sheet.SetCell(new CellAddress(sid, 3, 1), new TextValue("Blocked"));
+        sheet.GetCell(2, 1)!.StyleId = greenStyle;
+        sheet.GetCell(3, 1)!.StyleId = yellowStyle;
+
+        var range = new GridRange(
+            new CellAddress(sid, 1, 1),
+            new CellAddress(sid, 3, 1));
+        var command = new CellFillColorFilterCommand(sid, range, filterColOffset: 0, green);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u]);
+
+        command.Revert(ctx);
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Filter_Clear_DoesNotDestroyExternallyHiddenRows()
     {
         var (wb, sheet, ctx) = MakeContext();

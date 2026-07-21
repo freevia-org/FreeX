@@ -7,9 +7,9 @@ namespace FreeX.App.Presentation.Tests.PageLayout;
 public sealed class PageLayoutRibbonPolicyPlannerTests
 {
     [Theory]
-    [InlineData(PageLayoutMarginPreset.Normal, 1.0, 1.0)]
+    [InlineData(PageLayoutMarginPreset.Normal, 0.7, 0.75)]
     [InlineData(PageLayoutMarginPreset.Wide, 1.25, 1.0)]
-    [InlineData(PageLayoutMarginPreset.Narrow, 0.5, 0.5)]
+    [InlineData(PageLayoutMarginPreset.Narrow, 0.25, 0.75)]
     public void ResolveMargins_MapsRibbonPresetToWorksheetMargins(
         PageLayoutMarginPreset preset,
         double expectedLeft,
@@ -19,6 +19,21 @@ public sealed class PageLayoutRibbonPolicyPlannerTests
 
         margins.Left.Should().Be(expectedLeft);
         margins.Top.Should().Be(expectedTop);
+    }
+
+    [Theory]
+    [InlineData(PageLayoutMarginPreset.Normal, 0.3, 0.3)]
+    [InlineData(PageLayoutMarginPreset.Wide, 0.5, 0.5)]
+    [InlineData(PageLayoutMarginPreset.Narrow, 0.3, 0.3)]
+    public void ResolveHeaderFooterMargins_MapsRibbonPresetToExcelHeaderFooterDistance(
+        PageLayoutMarginPreset preset,
+        double expectedHeader,
+        double expectedFooter)
+    {
+        var (header, footer) = PageLayoutRibbonPolicyPlanner.ResolveHeaderFooterMargins(preset);
+
+        header.Should().Be(expectedHeader);
+        footer.Should().Be(expectedFooter);
     }
 
     [Theory]

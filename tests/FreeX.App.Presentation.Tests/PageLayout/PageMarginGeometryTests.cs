@@ -30,15 +30,17 @@ public sealed class PageMarginGeometryTests
             WorksheetPageOrientation.Portrait,
             WorksheetPageMargins.Normal);
 
+        // Excel's real Normal margins (0.7in left/right, 0.75in top/bottom) narrow the guide band
+        // slightly compared to the old (incorrect) 1.0in-all-around constants.
         guide.Should().Be(new PageMarginGuideLayout(
             Top: 28,
             Left: 45,
             Bottom: 78,
             Right: 245,
-            MarginLeft: 68.529411764705884,
-            MarginRight: 221.47058823529412,
-            MarginTop: 32.545454545454547,
-            MarginBottom: 73.454545454545453));
+            MarginLeft: 61.470588235294116,
+            MarginRight: 228.52941176470588,
+            MarginTop: 31.40909090909091,
+            MarginBottom: 74.5909090909091));
     }
 
     [Fact]
@@ -77,10 +79,13 @@ public sealed class PageMarginGeometryTests
             WorksheetPageOrientation.Portrait,
             WorksheetPageMargins.Normal);
 
-        handles.Left.Should().Be(new LayoutRect(130 - 4, 18 - 14, 8, 12));
-        handles.Right.Should().Be(new LayoutRect(780 - 4, 18 - 14, 8, 12));
-        handles.Top.Should().Be(new LayoutRect(30 - 14, 118 - 4, 12, 8));
-        handles.Bottom.Should().Be(new LayoutRect(30 - 14, 1018 - 4, 12, 8));
+        // Letter is 8.5in x 11in. Excel's real Normal margins are 0.7in left/right, 0.75in top/bottom.
+        // marginLeft = 30 + 850*(0.7/8.5) = 30 + 70 = 100; marginRight = 30 + 850*(1 - 0.7/8.5) = 810.
+        // marginTop = 18 + 1100*(0.75/11) = 18 + 75 = 93; marginBottom = 18 + 1100*(1 - 0.75/11) = 1043.
+        handles.Left.Should().Be(new LayoutRect(100 - 4, 18 - 14, 8, 12));
+        handles.Right.Should().Be(new LayoutRect(810 - 4, 18 - 14, 8, 12));
+        handles.Top.Should().Be(new LayoutRect(30 - 14, 93 - 4, 12, 8));
+        handles.Bottom.Should().Be(new LayoutRect(30 - 14, 1043 - 4, 12, 8));
     }
 
     [Fact]

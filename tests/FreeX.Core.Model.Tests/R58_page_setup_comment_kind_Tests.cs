@@ -16,10 +16,29 @@ namespace FreeX.Core.Model.Tests;
 /// </summary>
 public sealed class R58_page_setup_comment_kind_Tests
 {
-    // R58-io-page-setup-6-1 (Normal/Narrow margin constants + Sheet default) was REVERTED:
-    // the Excel-correct constants broke ~12 pinned App.Presentation pagination/geometry tests
-    // that codified the old values. Deferred to a coordinated backlog pass. The comment-kind
-    // half (6-4) is kept and tested below.
+    // R58-io-page-setup-6-1 (Normal/Narrow margin constants + Sheet default) was originally
+    // REVERTED because the Excel-correct constants broke ~12 pinned App.Presentation
+    // pagination/geometry tests that codified the old (incorrect) values. Round 59 landed the
+    // fix for real, together with the coordinated update of every dependent pinned test in
+    // FreeX.App.Presentation.Tests (PageMarginGeometryTests, PagePaginationAccuracyTests,
+    // PagePaginationPlannerTests, R18_pagination_Tests, PageLayoutRibbonPolicyPlannerTests).
+
+    [Fact]
+    public void WorksheetPageMargins_GalleryConstants_MatchRealExcelMarginPresets()
+    {
+        WorksheetPageMargins.Normal.Should().Be(new WorksheetPageMargins(0.7, 0.7, 0.75, 0.75));
+        WorksheetPageMargins.Narrow.Should().Be(new WorksheetPageMargins(0.25, 0.25, 0.75, 0.75));
+        WorksheetPageMargins.Wide.Should().Be(new WorksheetPageMargins(1.25, 1.25, 1.0, 1.0));
+    }
+
+    [Fact]
+    public void Sheet_DefaultPageMargins_IsExcelsTrueBlankWorkbookNormalMargins()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+
+        sheet.PageMargins.Should().Be(WorksheetPageMargins.Normal);
+    }
 
     [Fact]
     public void GetDisplayedCommentOverlays_ThreadedCommentOnly_HasThreadedCommentKind()

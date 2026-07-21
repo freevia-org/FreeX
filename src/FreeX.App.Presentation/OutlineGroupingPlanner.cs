@@ -11,7 +11,7 @@ public static class OutlineGroupingPlanner
                 maxExisting = level;
         }
 
-        return Math.Min(maxExisting + 1, 8);
+        return Math.Min(maxExisting + 1, 7);
     }
 
     public static int GetUngroupedOutlineLevel(
