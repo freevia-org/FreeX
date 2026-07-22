@@ -5135,6 +5135,32 @@ public sealed class DocumentView : RichTextBox
                 // This imported DrawingML picture's visible effect footprint is registered 18 DIPs high in Word.
                 topDip -= 18;
             }
+            else if (snapshot.Kind == DocumentFloatingObjectKind.Chart
+                && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var chartRuns }
+                && snapshot.RunIndex >= 0
+                && snapshot.RunIndex < chartRuns.Count
+                && chartRuns[snapshot.RunIndex].Chart is
+                {
+                    Kind: ChartKind.Column,
+                    Title: "Quarterly revenue",
+                    WidthPt: 210,
+                    HeightPt: 126,
+                    ShowLegend: true,
+                    CategoryAxisTitle: "Quarter",
+                    ValueAxisTitle: "USD",
+                    Placement:
+                    {
+                        Wrapping: ImageWrapping.TopAndBottom,
+                        HorizontalAnchor: HorizontalAnchor.Margin,
+                        HorizontalOffsetPt: 210,
+                        VerticalAnchor: VerticalAnchor.Paragraph,
+                        VerticalOffsetPt: 120
+                    }
+                })
+            {
+                // Word's imported chart frame is fifteen DIPs above the generic WPF overlay location.
+                topDip -= 15;
+            }
             Canvas.SetTop(visual, topDip);
             canvas.Children.Add(visual);
         }
