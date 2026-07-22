@@ -70,6 +70,14 @@ public readonly record struct CellRunColor
     /// <summary>Creates an automatic color.</summary>
     public static CellRunColor Auto() => new() { Kind = CellRunColorKind.Auto };
 
+    // OOXML reserves indexed=64 for "System Foreground" (black) and indexed=65 for
+    // "System Background" (white); these lie outside the 56-entry standard palette
+    // (indices 1-56) that WorkbookIndexedColorPalette resolves, so they must be
+    // special-cased rather than forwarded to TryResolveColor. Mirrors
+    // XlsxColorReader.SystemForegroundIndexedValue / SystemBackgroundIndexedValue.
+    private const int SystemForegroundIndexedValue = 64;
+    private const int SystemBackgroundIndexedValue = 65;
+
     /// <summary>
     /// Resolves this color to a concrete RGB value using the workbook theme and indexed-color palette.
     /// </summary>
@@ -82,10 +90,23 @@ public readonly record struct CellRunColor
                 theme.ResolveColor(
                     MapThemeSlot(ThemeIndex),
                     Tint ?? 0),
-            CellRunColorKind.Indexed =>
-                indexedColors.TryResolveColor(IndexedIndex + 1, out var c) ? c : default,
+            CellRunColorKind.Indexed => ResolveIndexed(indexedColors),
             _ => default,
         };
+    }
+
+    private CellColor ResolveIndexed(WorkbookIndexedColorPalette indexedColors)
+    {
+        if (IndexedIndex == SystemForegroundIndexedValue)
+            return CellColor.Black;
+
+        if (IndexedIndex == SystemBackgroundIndexedValue)
+            return CellColor.White;
+
+        // OOXML indexed colors are zero-based; WorkbookIndexedColorPalette stores Excel
+        // ColorIndex values one-based starting at palette entry 8 (indexed=8 -> ColorIndex 1),
+        // so the OOXML value maps to ColorIndex via index-7 (see XlsxColorReader.TryReadIndexedColor).
+        return indexedColors.TryResolveColor(IndexedIndex - 7, out var c) ? c : default;
     }
 
     private static WorkbookThemeColorSlot MapThemeSlot(int index) => index switch

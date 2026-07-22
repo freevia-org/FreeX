@@ -136,6 +136,7 @@ public sealed partial class FormulaEvaluator
             // produces a RangeValue when it yields an array (functions, operators, array constants).
             var result = ast is RangeRefNode or FullColumnRangeRefNode or FullRowRangeRefNode
                     or NamedRangeNode or StructuredReferenceNode or StructuredCurrentRowReferenceNode
+                    or IntersectionNode or NamedRangeEndpointNode
                 ? EvaluateArrayOperand(ast, context)
                 : EvaluateNode(ast, context);
 
@@ -190,6 +191,8 @@ public sealed partial class FormulaEvaluator
                 BinaryOpNode binary => EvaluateBinaryOp(binary, context),
                 UnaryOpNode unary => EvaluateUnaryOp(unary, context),
                 FunctionCallNode func => EvaluateFunction(func, context),
+                IntersectionNode intersection => EvaluateIntersectionNode(intersection, context),
+                NamedRangeEndpointNode endpoint => EvaluateNamedRangeEndpointNode(endpoint, context),
                 _ => throw new FormulaEvalException("#VALUE!", $"Unknown node type: {node.GetType().Name}")
             };
         }

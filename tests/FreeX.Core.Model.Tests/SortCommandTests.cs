@@ -310,6 +310,11 @@ public sealed class SortCommandTests
     [Fact]
     public void SortCommand_CanSortRowsByFontColorDescending()
     {
+        // R65-commands-sort-6-2: FontColor is a non-nullable CellStyle member (default Black),
+        // so "Plain" is itself a font-color value (Black), not a "no font color" state — with no
+        // target color chosen, Excel has no way to order Black/Blue/Red against each other, so
+        // the comparison is a no-op and all three rows keep their original relative order. This
+        // used to fabricate an R/G/B byte ordering (Red, Blue, Plain/Black) instead.
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         var ctx = new TestCommandContext(workbook);
@@ -324,9 +329,9 @@ public sealed class SortCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        sheet.GetValue(1, 2).Should().Be(new TextValue("Red"));
+        sheet.GetValue(1, 2).Should().Be(new TextValue("Plain"));
         sheet.GetValue(2, 2).Should().Be(new TextValue("Blue"));
-        sheet.GetValue(3, 2).Should().Be(new TextValue("Plain"));
+        sheet.GetValue(3, 2).Should().Be(new TextValue("Red"));
     }
 
     [Fact]

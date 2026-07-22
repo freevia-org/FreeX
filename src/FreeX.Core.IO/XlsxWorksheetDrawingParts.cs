@@ -32,7 +32,13 @@ internal sealed record XlsxPicturePackagePart(
     double CropTop,
     double CropRight,
     double CropBottom,
-    int DrawingOrderIndex);
+    int DrawingOrderIndex,
+    // R65-io-image-drawing-6-1: non-null only for a "Link to File" picture -- its <a:blip> carries
+    // r:link instead of r:embed, and there is no embedded image part in the package for it at all
+    // (ImageBytes is empty and ContentType is ""). Carries the external relationship Target verbatim
+    // so the writer can re-emit the same r:link + External relationship on save instead of the
+    // picture silently vanishing (see XlsxWorksheetDrawingObjectWriter.AddPictureAnchor).
+    string? LinkTarget = null);
 
 internal sealed record XlsxTextBoxPackagePart(
     string Text,
@@ -260,17 +266,41 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
         foreach (var pictureElement in drawingXml.Descendants(spreadsheetDrawingNs + "pic"))
         {
-            var imageRelId = ReadPictureEmbedRelationshipId(pictureElement, drawingNs, relNs);
-            if (string.IsNullOrWhiteSpace(imageRelId))
+            var (blipRelId, isExternalLink) = ReadPictureBlipRelationshipId(pictureElement, drawingNs, relNs);
+            if (string.IsNullOrWhiteSpace(blipRelId))
                 continue;
 
-            if (!relationshipTargets.TryGetValue(imageRelId, out var imageTarget))
+            if (!relationshipTargets.TryGetValue(blipRelId, out var blipTarget))
                 continue;
 
-            var imagePath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, imageTarget);
-            var imageEntry = archive.GetEntry(imagePath);
-            if (imageEntry is null)
-                continue;
+            byte[] imageBytes;
+            string contentType;
+            string? linkTarget = null;
+            if (isExternalLink)
+            {
+                // R65-io-image-drawing-6-1: a picture inserted via Excel "Link to File" carries r:link
+                // (not r:embed) and has NO corresponding image part inside the package at all --
+                // blipTarget is an external URI/path (often absolute, e.g.
+                // "file:///C:/Images/photo.png"), not a package-relative part path, so it must never be
+                // run through ResolveRelationshipTarget/archive.GetEntry (which looks for -- and would
+                // fail to find -- a package entry; that failed lookup is exactly how this picture used
+                // to be silently dropped). Materialize it with no embedded bytes instead, preserving the
+                // external target verbatim so the writer can re-emit the same r:link + External
+                // relationship on save.
+                imageBytes = [];
+                contentType = "";
+                linkTarget = blipTarget;
+            }
+            else
+            {
+                var imagePath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, blipTarget);
+                var imageEntry = archive.GetEntry(imagePath);
+                if (imageEntry is null)
+                    continue;
+
+                imageBytes = ReadEntryBytes(imageEntry);
+                contentType = XlsxPackagePath.GetImageContentType(imagePath);
+            }
 
             var sourceRectangle = pictureElement
                 .Element(spreadsheetDrawingNs + "blipFill")?
@@ -304,8 +334,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 ReadDrawingRotation(pictureTransform), ReadDrawingFlipHorizontal(pictureTransform), ReadDrawingFlipVertical(pictureTransform), groupTransform);
 
             pictures.Add(new XlsxPicturePackagePart(
-                ReadEntryBytes(imageEntry),
-                XlsxPackagePath.GetImageContentType(imagePath),
+                imageBytes,
+                contentType,
                 name,
                 title,
                 altText,
@@ -317,7 +347,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 ReadSourceRectangleRatio(sourceRectangle, "t"),
                 ReadSourceRectangleRatio(sourceRectangle, "r"),
                 ReadSourceRectangleRatio(sourceRectangle, "b"),
-                anchorElement is null ? -1 : ReadAnchorOrderIndex(anchorElement, spreadsheetDrawingNs)));
+                anchorElement is null ? -1 : ReadAnchorOrderIndex(anchorElement, spreadsheetDrawingNs),
+                linkTarget));
         }
 
         return pictures;
@@ -339,16 +370,33 @@ internal static partial class XlsxWorksheetDrawingPartReader
         return ms.ToArray();
     }
 
-    private static string? ReadPictureEmbedRelationshipId(XElement pictureElement, XNamespace drawingNs, XNamespace relNs)
+    /// <summary>
+    /// Reads the relationship id a picture's <c>&lt;a:blip&gt;</c> points at, preferring
+    /// <c>r:embed</c> (a normal embedded image part) and falling back to <c>r:link</c> only when no
+    /// embed id is present anywhere on the element (R65-io-image-drawing-6-1: a picture inserted via
+    /// Excel's "Link to File" carries only <c>r:link</c>, pointing at an External-mode relationship
+    /// whose Target is an external file path/URI, not a package part). <c>IsExternalLink</c> is true
+    /// only for that link fallback, telling the caller to treat the resolved relationship target as an
+    /// external URI rather than a package-relative part path.
+    /// </summary>
+    private static (string? RelationshipId, bool IsExternalLink) ReadPictureBlipRelationshipId(
+        XElement pictureElement, XNamespace drawingNs, XNamespace relNs)
     {
         foreach (var blip in pictureElement.Descendants(drawingNs + "blip"))
         {
-            var relationshipId = blip.Attribute(relNs + "embed")?.Value;
-            if (!string.IsNullOrWhiteSpace(relationshipId))
-                return relationshipId;
+            var embedId = blip.Attribute(relNs + "embed")?.Value;
+            if (!string.IsNullOrWhiteSpace(embedId))
+                return (embedId, false);
         }
 
-        return null;
+        foreach (var blip in pictureElement.Descendants(drawingNs + "blip"))
+        {
+            var linkId = blip.Attribute(relNs + "link")?.Value;
+            if (!string.IsNullOrWhiteSpace(linkId))
+                return (linkId, true);
+        }
+
+        return (null, false);
     }
 
     private static Dictionary<string, string> ReadRelationshipTargetsById(XElement relationshipRoot, XNamespace packageRelNs)

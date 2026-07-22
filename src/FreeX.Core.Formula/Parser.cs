@@ -335,7 +335,31 @@ public sealed class Parser
             return ParseUnary();
         }
 
-        return ParsePostfix();
+        return ParseIntersection();
+    }
+
+    // Intersection → Postfix ( Intersection Postfix )*
+    // Excel's explicit INTERSECTION reference operator: a plain space directly between two
+    // reference operands (e.g. A1:C3 B2:D4). The Lexer only ever emits an Intersection token
+    // when whitespace separates two raw CellRef/NamedRange tokens (see
+    // Lexer.InsertIntersectionTokens) -- never around an operator, comma, or paren -- so this
+    // loop only fires for genuine intersection syntax; every pre-existing whitespace-tolerant
+    // formula shape (e.g. SUM( A1 , B1 )) never produces an Intersection token at all and reaches
+    // ParsePostfix directly, unaffected. Sits between ':' (parsed inside ParsePrimary/ParsePostfix,
+    // so binds tighter) and ordinary arithmetic (parsed by the callers above, so binds looser),
+    // matching Excel's reference-operator-precedence table.
+    private FormulaNode ParseIntersection()
+    {
+        var left = ParsePostfix();
+
+        while (Current.Type == TokenType.Intersection)
+        {
+            Advance();
+            var right = ParsePostfix();
+            left = new IntersectionNode(left, right);
+        }
+
+        return left;
     }
 
     // Postfix → Primary ( '%' | '#' )*
@@ -365,11 +389,17 @@ public sealed class Parser
             // resolved to an out-of-bounds #REF!, so a valid-looking end doesn't leave stray
             // tokens behind for Parse() to reject as "Unexpected token".
             var endEndpoint = ParseIndexRangeEndpoint();
-            return startEndpoint is CellRefNode startCellRef
-                ? (endEndpoint is CellRefNode endCellRef
-                    ? new RangeRefNode(startCellRef, endCellRef, startCellRef.SheetName)
-                    : endEndpoint) // end side out-of-bounds/malformed -> its own #REF!
-                : startEndpoint;   // start side out-of-bounds -> #REF!, matching Excel
+            if (startEndpoint is not CellRefNode startCellRef)
+                return startEndpoint;   // start side out-of-bounds -> #REF!, matching Excel
+
+            return endEndpoint switch
+            {
+                CellRefNode endCellRef => new RangeRefNode(startCellRef, endCellRef, startCellRef.SheetName),
+                // A defined NAME used as the end endpoint (e.g. INDEX(A1:C3,3,3):EndName) --
+                // resolved to its top-left cell at evaluation time; see NamedRangeEndpointNode.
+                NamedRangeNode => new NamedRangeEndpointNode(startCellRef, endEndpoint),
+                _ => endEndpoint // end side out-of-bounds/malformed -> its own #REF!
+            };
         }
 
         while (true)
@@ -477,6 +507,13 @@ public sealed class Parser
     {
         if (Current.Type == TokenType.CellRef)
             return ParseCellRef(Advance());
+
+        // A defined NAME used as the range's end endpoint (e.g. A1:EndName) -- Excel resolves the
+        // name to its (top-left) cell and forms the range from there. The caller wraps this in a
+        // NamedRangeEndpointNode rather than a plain RangeRefNode since the name can't be resolved
+        // to a concrete cell until evaluation time.
+        if (Current.Type == TokenType.NamedRange)
+            return new NamedRangeNode(Advance().Value);
 
         if (Current.Type == TokenType.FunctionName)
         {
@@ -719,17 +756,21 @@ public sealed class Parser
                 if (cellRef is not CellRefNode rangeStartRef)
                     return cellRef;
 
-                // Check for range operator ':'. The end endpoint may be a plain cell reference or
-                // -- real Excel's INDEX "reference form" -- an INDEX(...) call that statically
-                // folds to one (e.g. A1:INDEX(A1:C3,3,3)); ParseIndexRangeEndpoint handles both,
-                // same as the INDEX-anchored start-endpoint path in ParsePostfix above.
+                // Check for range operator ':'. The end endpoint may be a plain cell reference,
+                // a defined NAME (e.g. A1:EndName -- see NamedRangeEndpointNode), or -- real
+                // Excel's INDEX "reference form" -- an INDEX(...) call that statically folds to
+                // one (e.g. A1:INDEX(A1:C3,3,3)); ParseIndexRangeEndpoint handles all three, same
+                // as the INDEX-anchored start-endpoint path in ParsePostfix above.
                 if (Current.Type == TokenType.Colon)
                 {
                     Advance();
                     var endRef = ParseIndexRangeEndpoint();
-                    return endRef is CellRefNode rangeEndRef
-                        ? new RangeRefNode(rangeStartRef, rangeEndRef)
-                        : endRef;
+                    return endRef switch
+                    {
+                        CellRefNode rangeEndRef => new RangeRefNode(rangeStartRef, rangeEndRef),
+                        NamedRangeNode => new NamedRangeEndpointNode(rangeStartRef, endRef),
+                        _ => endRef
+                    };
                 }
 
                 return cellRef;
@@ -765,6 +806,20 @@ public sealed class Parser
                     return fullRowRange;
 
                 var token = Advance();
+
+                // A defined NAME used as the START endpoint of the ':' range operator (e.g.
+                // StartCell:B2, StartCell:EndName) -- the 3-D span and full-column/full-row checks
+                // above already claimed every other shape a NamedRange-then-Colon token pair can
+                // form, so reaching here with a Colon unambiguously means this. Excel resolves the
+                // name to its (top-left) cell and forms the range from there; see
+                // NamedRangeEndpointNode.
+                if (Current.Type == TokenType.Colon)
+                {
+                    Advance();
+                    var endpoint = ParseIndexRangeEndpoint();
+                    return new NamedRangeEndpointNode(new NamedRangeNode(token.Value), endpoint);
+                }
+
                 if (Current.Type == TokenType.StructuredReferenceSelector)
                 {
                     var selector = Advance();

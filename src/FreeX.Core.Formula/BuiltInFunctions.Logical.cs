@@ -104,7 +104,15 @@ public static partial class BuiltInFunctions
     private static ScalarValue NotScalar(ScalarValue value)
     {
         if (value is ErrorValue err) return err;
-        return new BoolValue(!ToBool(value));
+        // A blank argument (e.g. NOT() on an empty cell) coerces to FALSE, same as ToBool did.
+        // TryDirectLogicalBool has no blank case (AND/OR/XOR handle blank cells separately via
+        // ReferencedScalarValue), so preserve that behavior explicitly before delegating.
+        if (value is BlankValue) return new BoolValue(true);
+        // Route through the same direct-logical coercion AND/OR/XOR use, so a numeric-text
+        // argument (e.g. "1"/"0") coerces to its numeric value instead of erroring, while
+        // genuinely non-numeric text still yields #VALUE! (ToBool has no numeric-text case).
+        if (!TryDirectLogicalBool(value, out var direct)) return ErrorValue.Value;
+        return new BoolValue(!direct);
     }
 
     private static ScalarValue Ifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

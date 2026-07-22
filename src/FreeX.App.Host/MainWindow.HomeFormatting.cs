@@ -152,7 +152,10 @@ public partial class MainWindow
     private void WrapTextBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        ApplyStyleDiff(new StyleDiff(WrapText: IsRibbonCommandChecked("Wrap Text")));
+        // Routed through ApplyStyleDiffWithWrapGrowth (not the generic ApplyStyleDiff) so that
+        // enabling Wrap Text auto-grows an auto-height row to fit, matching Excel and the Avalonia
+        // shell's WorkbookSession.SetSelectedRangeWrapText (see MainWindow.CellsCommands.cs).
+        ApplyStyleDiffWithWrapGrowth(new StyleDiff(WrapText: IsRibbonCommandChecked("Wrap Text")));
     }
 
     private void MergeCenterBtn_Click(object sender, RoutedEventArgs e)

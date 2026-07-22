@@ -11,8 +11,20 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private GridRange? _lastAutoFilterRange;
-    private Func<GridRange, IWorkbookCommand>? _lastAutoFilterCommandFactory;
-    private string _lastAutoFilterCommandTitle = "Reapply Filter";
+
+    /// <summary>
+    /// R65-services-autofilter-6-2: remembers the command factory for EVERY currently active
+    /// AutoFilter column, keyed by that column's ABSOLUTE index (range.Start.Col + filterColOffset)
+    /// -- not just a single "last applied" slot. Excel's Data &gt; Reapply re-evaluates every active
+    /// filter criterion on the sheet, so <see cref="ReapplyAutoFilter"/> must be able to rebuild and
+    /// re-run each column's own mechanism (value list, Top 10/Above-Average, custom condition, or
+    /// color) together, not just whichever one happened to be applied most recently. A later call
+    /// for the SAME column intentionally overwrites that column's own entry (Excel allows only one
+    /// active AutoFilter criterion per column); a different column's entry is left untouched. Sort
+    /// commands are never inserted here (see <see cref="TryExecuteAutoFilterSortCommand"/>) so a
+    /// last-used Sort can never be replayed as "reapply filter".
+    /// </summary>
+    private readonly Dictionary<uint, Func<GridRange, IWorkbookCommand>> _activeAutoFilterColumnFactories = new();
 
     /// <summary>
     /// R57-formula-subtotal-aggregate-5-1: every filter/sort command in this file dispatches through
@@ -139,7 +151,40 @@ public partial class MainWindow
         UpdateFilterViewportAndStatusBar();
     }
 
+    /// <summary>Back-compat entry point for callers with no distinct per-column identity of their
+    /// own (e.g. screenshot-tour scripts driving a single-column scenario, and reflection-based
+    /// tests that resolve this method by name) -- remembers the factory under offset 0 of
+    /// <paramref name="range"/>. Genuine multi-column call sites in this file use
+    /// <see cref="TryExecuteRememberedAutoFilterColumnCommand"/> (a distinctly-named method, so
+    /// name-only reflection lookups of THIS method stay unambiguous) so each column keeps its own
+    /// entry.</summary>
     private bool TryExecuteRememberedAutoFilterCommand(
+        string title,
+        GridRange range,
+        Func<GridRange, IWorkbookCommand> createCommand) =>
+        TryExecuteRememberedAutoFilterColumnCommand(title, range, filterColOffset: 0, createCommand);
+
+    private bool TryExecuteRememberedAutoFilterColumnCommand(
+        string title,
+        GridRange range,
+        uint filterColOffset,
+        Func<GridRange, IWorkbookCommand> createCommand)
+    {
+        if (!TryExecuteRepeatableCurrentRangeCommand(title, range, _ => createCommand(range)))
+            return false;
+
+        _lastAutoFilterRange = range;
+        _activeAutoFilterColumnFactories[range.Start.Col + filterColOffset] = createCommand;
+        RecalculateAfterFilterOrSort();
+        return true;
+    }
+
+    /// <summary>
+    /// R65-services-autofilter-6-2: executes a Sort command triggered from the AutoFilter dropdown
+    /// WITHOUT remembering it in <see cref="_activeAutoFilterColumnFactories"/> -- Data &gt; Reapply
+    /// must only ever re-run active FILTER criteria, never replay a one-off Sort.
+    /// </summary>
+    private bool TryExecuteAutoFilterSortCommand(
         string title,
         GridRange range,
         Func<GridRange, IWorkbookCommand> createCommand)
@@ -148,15 +193,20 @@ public partial class MainWindow
             return false;
 
         _lastAutoFilterRange = range;
-        _lastAutoFilterCommandTitle = title;
-        _lastAutoFilterCommandFactory = createCommand;
         RecalculateAfterFilterOrSort();
         return true;
     }
 
+    /// <summary>
+    /// R65-services-autofilter-6-2: Data &gt; Reapply must re-evaluate EVERY currently active
+    /// AutoFilter column criterion against the sheet's current data, not just whichever column's
+    /// filter happened to be applied most recently. Rebuild one fresh command per remembered column
+    /// (see <see cref="_activeAutoFilterColumnFactories"/>), in column order, and run them together
+    /// as a single undoable operation.
+    /// </summary>
     private void ReapplyAutoFilter()
     {
-        if (_lastAutoFilterRange is not { } range || _lastAutoFilterCommandFactory is null)
+        if (_lastAutoFilterRange is not { } range || _activeAutoFilterColumnFactories.Count == 0)
         {
             _messageService.ShowInfo(
                 UiText.Get("MainWindowMessage_ReapplyFilterNoFilter"),
@@ -165,9 +215,9 @@ public partial class MainWindow
         }
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
-                _lastAutoFilterCommandTitle,
+                "Reapply Filter",
                 range,
-                _ => _lastAutoFilterCommandFactory(range)))
+                _ => BuildReapplyAllActiveAutoFilterColumnsCommand(range)))
             return;
 
         RecalculateAfterFilterOrSort();
@@ -175,12 +225,31 @@ public partial class MainWindow
         UpdateFilterViewportAndStatusBar();
     }
 
+    private IWorkbookCommand BuildReapplyAllActiveAutoFilterColumnsCommand(GridRange range)
+    {
+        var columnCommands = _activeAutoFilterColumnFactories
+            .OrderBy(entry => entry.Key)
+            .Select(entry => entry.Value(range))
+            .ToList();
+
+        return columnCommands.Count == 1
+            ? columnCommands[0]
+            : new CompositeWorkbookCommand("Reapply Filter", columnCommands);
+    }
+
     private void ClearRememberedAutoFilterCommand()
     {
         _lastAutoFilterRange = null;
-        _lastAutoFilterCommandFactory = null;
-        _lastAutoFilterCommandTitle = "Reapply Filter";
+        _activeAutoFilterColumnFactories.Clear();
     }
+
+    /// <summary>
+    /// R65-services-autofilter-6-2: clears only ONE column's remembered filter factory (e.g. that
+    /// column's dropdown "Clear Filter" action), leaving every OTHER active column's remembered
+    /// filter intact so <see cref="ReapplyAutoFilter"/> still re-evaluates them.
+    /// </summary>
+    private void ClearRememberedAutoFilterColumn(uint absoluteColumn) =>
+        _activeAutoFilterColumnFactories.Remove(absoluteColumn);
 
     private void UpdateFilterViewportAndStatusBar()
     {
@@ -197,7 +266,7 @@ public partial class MainWindow
                     range,
                     _ => new FilterCommand(_currentSheetId, range, filterColOffset, allowedValues: [])))
                 return false;
-            ClearRememberedAutoFilterCommand();
+            ClearRememberedAutoFilterColumn(range.Start.Col + filterColOffset);
             RecalculateAfterFilterOrSort();
             RestoreAutoFilterRangeSelection(range);
             return true;
@@ -205,7 +274,7 @@ public partial class MainWindow
 
         if (result.SortDirection != AutoFilterSortDirection.None)
         {
-            if (!TryExecuteRememberedAutoFilterCommand(
+            if (!TryExecuteAutoFilterSortCommand(
                     "Sort",
                     range,
                     currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, result.SortDirection == AutoFilterSortDirection.Ascending)))
@@ -224,9 +293,10 @@ public partial class MainWindow
                 AutoFilterColorFilterKind.NoFill => "Filter by No Fill",
                 _ => "Filter by Cell Color"
             };
-            if (!TryExecuteRememberedAutoFilterCommand(
+            if (!TryExecuteRememberedAutoFilterColumnCommand(
                     label,
                     range,
+                    filterColOffset,
                     currentRange => colorFilter.Kind switch
                     {
                         AutoFilterColorFilterKind.FontColor when colorFilter.Color is { } fontColor =>
@@ -252,9 +322,10 @@ public partial class MainWindow
                 return false;
             }
 
-            if (!TryExecuteRememberedAutoFilterCommand(
+            if (!TryExecuteRememberedAutoFilterColumnCommand(
                     "Filter",
                     range,
+                    filterColOffset,
                     currentRange => promptPlan.CreateCommand(_currentSheetId, currentRange, filterColOffset)))
                 return false;
             RestoreAutoFilterRangeSelection(range);
@@ -273,9 +344,10 @@ public partial class MainWindow
             ? result.SelectedValues
             : FilterInputParser.ParseAllowedValues(value);
 
-        if (!TryExecuteRememberedAutoFilterCommand(
+        if (!TryExecuteRememberedAutoFilterColumnCommand(
                 "Filter",
                 range,
+                filterColOffset,
                 currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)))
             return false;
 

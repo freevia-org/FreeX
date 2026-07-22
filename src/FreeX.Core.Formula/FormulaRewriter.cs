@@ -334,6 +334,10 @@ public static class FormulaRewriter
             return RewriteRangeDeleteCellsShiftUp(rr, endRef, delCellsUp, hostSheetName, ref changed);
         if (op is DeleteCellsShiftLeftOp delCellsLeft)
             return RewriteRangeDeleteCellsShiftLeft(rr, endRef, delCellsLeft, hostSheetName, ref changed);
+        if (op is InsertCellsShiftRightOp insCellsRight)
+            return RewriteRangeInsertCellsShiftRight(rr, endRef, insCellsRight, hostSheetName, ref changed);
+        if (op is InsertCellsShiftDownOp insCellsDown)
+            return RewriteRangeInsertCellsShiftDown(rr, endRef, insCellsDown, hostSheetName, ref changed);
 
         var start = RewriteCellRef(rr.Start, op, hostSheetName, ref changed);
         var end   = RewriteCellRef(endRef,   op, hostSheetName, ref changed);
@@ -519,6 +523,52 @@ public static class FormulaRewriter
             Start = rr.Start with { ColumnName = CellAddress.NumberToColumnName(startCol) },
             End = endRef with { ColumnName = CellAddress.NumberToColumnName(endCol) },
         };
+    }
+
+    /// <summary>
+    /// Insert Cells / Shift Right: a range ref only shifts when its ENTIRE row span sits inside the
+    /// op's row band [<see cref="InsertCellsShiftRightOp.BandStartRow"/>..<see cref="InsertCellsShiftRightOp.BandEndRow"/>].
+    /// A range that straddles the band (one row inside, one outside) can't be represented after a
+    /// partial shift by a single rectangle -- shifting only the in-band corner's column while leaving
+    /// the other corner's column untouched produces a bounding box that silently pulls in unrelated
+    /// cells (e.g. <c>SUM(D1:D5)</c> with the band on row 1 only becomes <c>E1:D5</c>, which normalizes
+    /// to the D1:E5 bounding box). Leave the range entirely untouched in that case (and likewise when
+    /// its rows fall wholly outside the band), instead of falling back to the generic per-endpoint
+    /// rewrite the delete-cells ops use.
+    /// </summary>
+    private static FormulaNode RewriteRangeInsertCellsShiftRight(
+        RangeRefNode rr, CellRefNode endRef, InsertCellsShiftRightOp op, string hostSheetName, ref bool changed)
+    {
+        if (!Matches(rr.SheetName, op, hostSheetName))
+            return rr;
+
+        // Excel treats A5:A1 (rows reversed) the same as A1:A5 — normalize before the band check.
+        uint rowStart = Math.Min(rr.Start.Row, endRef.Row);
+        uint rowEnd = Math.Max(rr.Start.Row, endRef.Row);
+        if (rowStart < op.BandStartRow || rowEnd > op.BandEndRow)
+            return rr;
+
+        return RewriteRangeGenericEndpoints(rr, endRef, op, hostSheetName, ref changed);
+    }
+
+    /// <summary>
+    /// Insert Cells / Shift Down: mirrors <see cref="RewriteRangeInsertCellsShiftRight"/>, banded on
+    /// columns instead of rows -- a range ref only shifts when its ENTIRE column span sits inside
+    /// [<see cref="InsertCellsShiftDownOp.RangeStartCol"/>..<see cref="InsertCellsShiftDownOp.RangeEndCol"/>].
+    /// </summary>
+    private static FormulaNode RewriteRangeInsertCellsShiftDown(
+        RangeRefNode rr, CellRefNode endRef, InsertCellsShiftDownOp op, string hostSheetName, ref bool changed)
+    {
+        if (!Matches(rr.SheetName, op, hostSheetName))
+            return rr;
+
+        // Excel treats B3:A1 (columns reversed) the same as A1:B3 — normalize before the band check.
+        uint colStart = Math.Min(rr.Start.ColumnNumber, endRef.ColumnNumber);
+        uint colEnd = Math.Max(rr.Start.ColumnNumber, endRef.ColumnNumber);
+        if (colStart < op.RangeStartCol || colEnd > op.RangeEndCol)
+            return rr;
+
+        return RewriteRangeGenericEndpoints(rr, endRef, op, hostSheetName, ref changed);
     }
 
     /// <summary>

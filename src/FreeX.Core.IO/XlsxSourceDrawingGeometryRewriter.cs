@@ -120,8 +120,7 @@ internal static class XlsxSourceDrawingGeometryRewriter
 
         var sourcePictures = sheet.Pictures.Where(picture => picture.IsSourceLoaded).ToList();
         var pictureElements = drawingRoot.Descendants(SpreadsheetDrawingNs + "pic").ToList();
-        var pictureAnchors = pictureElements.Skip(Math.Max(0, pictureElements.Count - sourcePictures.Count));
-        foreach (var (pictureElement, picture) in pictureAnchors.Zip(sourcePictures))
+        foreach (var (pictureElement, picture) in MatchPictureElementsToModels(pictureElements, sourcePictures))
         {
             var anchor = FindNearestAnchorElement(pictureElement);
             if (anchor is not null &&
@@ -206,6 +205,90 @@ internal static class XlsxSourceDrawingGeometryRewriter
 
         return changed;
     }
+
+    /// <summary>
+    /// R65-io-image-drawing-6-2 fix: pairs each SOURCE-LOADED <see cref="PictureModel"/> with its
+    /// correct physical <c>&lt;xdr:pic&gt;</c> element by IDENTITY (matching the <c>cNvPr@name</c> the
+    /// reader stamped onto <see cref="PictureModel.Name"/> when it was loaded — see
+    /// <c>XlsxWorksheetDrawingParts.ReadNonVisualProperties</c>/<c>ReadPictureParts</c>), rather than a
+    /// positional <c>Skip(pictureElements.Count - sourcePictures.Count).Zip(...)</c> that silently
+    /// assumed every UNMODELED <c>&lt;xdr:pic&gt;</c> element (e.g. a "Link to File" picture the reader
+    /// could not — before R65-io-image-drawing-6-1 — materialize, or any other element skipped for a
+    /// different reason, such as a picture whose relationship or image part is missing) sorts BEFORE
+    /// every modeled one in document order. When an unmodeled element instead sits in the middle (or
+    /// after) the modeled ones, that positional assumption pairs the wrong physical element with a
+    /// model, and an edit to one picture gets written onto a completely different picture's XML.
+    /// <para>
+    /// Falls back to positional pairing, in document order, ONLY among the elements/models left over
+    /// after every name match is resolved (covers a picture with no name, or more than one picture
+    /// sharing the same name — Excel does not guarantee uniqueness) so every source-loaded model still
+    /// gets a best-effort match instead of being silently skipped.
+    /// </para>
+    /// </summary>
+    private static IEnumerable<(XElement Element, PictureModel Picture)> MatchPictureElementsToModels(
+        List<XElement> pictureElements,
+        IReadOnlyList<PictureModel> sourcePictures)
+    {
+        var elementsByName = new Dictionary<string, Queue<XElement>>(StringComparer.Ordinal);
+        var leftoverElements = new List<XElement>();
+        foreach (var element in pictureElements)
+        {
+            var name = ReadPictureCNvPrName(element);
+            if (string.IsNullOrEmpty(name))
+            {
+                leftoverElements.Add(element);
+                continue;
+            }
+
+            if (!elementsByName.TryGetValue(name, out var queue))
+            {
+                queue = new Queue<XElement>();
+                elementsByName[name] = queue;
+            }
+
+            queue.Enqueue(element);
+        }
+
+        var matches = new List<(XElement, PictureModel)>();
+        var leftoverPictures = new List<PictureModel>();
+        foreach (var picture in sourcePictures)
+        {
+            if (!string.IsNullOrEmpty(picture.Name) &&
+                elementsByName.TryGetValue(picture.Name, out var queue) &&
+                queue.Count > 0)
+            {
+                matches.Add((queue.Dequeue(), picture));
+            }
+            else
+            {
+                leftoverPictures.Add(picture);
+            }
+        }
+
+        // Any elements whose name queue still has entries (more physical elements sharing a name than
+        // models claimed it, or a name no source-loaded model carries at all — e.g. the unmodeled
+        // linked-picture element) are also leftovers.
+        foreach (var queue in elementsByName.Values)
+        {
+            while (queue.Count > 0)
+                leftoverElements.Add(queue.Dequeue());
+        }
+
+        // Restore document order among the leftovers: draining per-name queues and the initial
+        // unnamed-element pass does not preserve their original interleaving.
+        leftoverElements = leftoverElements.OrderBy(pictureElements.IndexOf).ToList();
+
+        foreach (var pair in leftoverElements.Zip(leftoverPictures))
+            matches.Add(pair);
+
+        return matches;
+    }
+
+    private static string? ReadPictureCNvPrName(XElement pictureElement) =>
+        pictureElement
+            .Element(SpreadsheetDrawingNs + "nvPicPr")?
+            .Element(SpreadsheetDrawingNs + "cNvPr")?
+            .Attribute("name")?.Value;
 
     /// <summary>
     /// R17 fix: beyond anchor geometry, an edited source-loaded text box's body text

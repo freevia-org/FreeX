@@ -66,14 +66,17 @@ public sealed class R16_spill_merge_Tests
     }
 
     [Fact]
-    public void IsSpillBlocked_AnchorCellItselfMerged_DoesNotBlockOnItsOwnMerge()
+    public void IsSpillBlocked_AnchorCellItselfMerged_BlocksOnItsOwnMerge()
     {
+        // Round-65 fix (R65-calc-array-spill-6-2): the anchor cell (r==0,c==0) being part of a
+        // merged region MUST block the spill just like any other target cell - Excel refuses to
+        // enter a dynamic-array formula into a merged cell at all ("Spill range has merged cells"),
+        // regardless of whether the array's own footprint would otherwise fit. Only the
+        // already-occupied-by-formula check is skipped for the anchor, not the merge/table checks.
         var sheet = MakeSheet();
-        // The anchor cell (r==0,c==0) being part of a merge (as the merge's top-left) should not,
-        // by itself, block the spill - only non-anchor target cells matter.
         sheet.AddMergedRegion(new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1)));
 
         var anchor = new CellAddress(sheet.Id, 1, 1);
-        sheet.IsSpillBlocked(anchor, 1, 1).Should().BeFalse();
+        sheet.IsSpillBlocked(anchor, 1, 1).Should().BeTrue();
     }
 }

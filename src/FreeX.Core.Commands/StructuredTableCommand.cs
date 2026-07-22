@@ -37,6 +37,13 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         if (sheet.StructuredTables.Any(t => t.Range.Overlaps(_range)))
             return new CommandOutcome(false, "A table cannot overlap another table.");
 
+        // Excel forbids creating a table over a live dynamic-array spill range — mirrors
+        // CellMergePlanner.HasLiveSpillTarget's merge-over-spill guard for the same reason: a
+        // table would silently absorb the spilled cells as static table data, and the next
+        // recalculation would then turn the spill anchor into #SPILL! and blank the members.
+        if (sheet.EnumerateSpillTargetCells().Any(_range.Contains))
+            return new CommandOutcome(false, "A table cannot overlap a spilled array range.");
+
         var id = NextTableId(ctx.Workbook);
         var name = NextTableName(ctx.Workbook);
         var table = new StructuredTableModel

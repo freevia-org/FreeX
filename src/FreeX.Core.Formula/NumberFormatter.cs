@@ -74,13 +74,31 @@ public static partial class NumberFormatter
         bool uses1904DateSystem)
         => FormatWithColor(value, formatString, (int?)targetWidthCharacters, indexedColors, theme, uses1904DateSystem);
 
+    /// <summary>
+    /// Same as the other <paramref name="targetWidthCharacters"/>-aware overload, but lets the
+    /// caller suppress Excel's width-based '#' overflow indicator entirely -- used for cells whose
+    /// style has ShrinkToFit, where the real value must shrink to fit the column instead of being
+    /// replaced by hashes (the '#' indicator is only ever correct for the non-shrink, clip/overflow
+    /// rendering path).
+    /// </summary>
+    public static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
+        int targetWidthCharacters,
+        WorkbookIndexedColorPalette indexedColors,
+        WorkbookTheme theme,
+        bool uses1904DateSystem,
+        bool suppressWidthOverflowIndicator)
+        => FormatWithColor(value, formatString, (int?)targetWidthCharacters, indexedColors, theme, uses1904DateSystem, suppressWidthOverflowIndicator);
+
     private static FormatResult FormatWithColor(
         ScalarValue value,
         string formatString,
         int? targetWidthCharacters,
         WorkbookIndexedColorPalette? indexedColors = null,
         WorkbookTheme? theme = null,
-        bool uses1904DateSystem = false)
+        bool uses1904DateSystem = false,
+        bool suppressWidthOverflowIndicator = false)
     {
         if (string.IsNullOrEmpty(formatString) || IsGeneralFormat(formatString))
             return new FormatResult(FormatGeneral(value, uses1904DateSystem, targetWidthCharacters));
@@ -100,7 +118,9 @@ public static partial class NumberFormatter
             ShouldAttemptSimpleDateTimeFormat(formatString) &&
             TryFormatSimpleDateTime(dateTimeValue.Value, formatString, targetWidthCharacters, uses1904DateSystem, out var simpleDateTime))
         {
-            return ApplyWidthOverflowIndicator(simpleDateTime, targetWidthCharacters);
+            return suppressWidthOverflowIndicator
+                ? simpleDateTime
+                : ApplyWidthOverflowIndicator(simpleDateTime, targetWidthCharacters);
         }
 
         var sections = SplitSections(formatString);
@@ -123,7 +143,7 @@ public static partial class NumberFormatter
         // not just the specific invalid-value/accounting-fill cases already handled inside
         // FormatNumber/FormatDateTimeWithColor. Scope this strictly to numeric/date-time values
         // (never text/bool/error/blank, which always overflow into neighboring cells instead).
-        return value is NumberValue or DateTimeValue
+        return value is NumberValue or DateTimeValue && !suppressWidthOverflowIndicator
             ? ApplyWidthOverflowIndicator(formatted, targetWidthCharacters)
             : formatted;
     }

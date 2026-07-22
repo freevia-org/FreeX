@@ -170,7 +170,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 CellBorderStyles: XlsxCellBorderStyleReader.Read(stylesXml, workbookTheme, loadedIndexedColors),
                 CellGradientFills: XlsxCellGradientFillReader.Read(stylesXml, workbookTheme, loadedIndexedColors),
                 PivotTableStyles: XlsxPivotTableStyleMetadataReader.Load(stylesXml),
-                StructuredTableStyles: XlsxStructuredTableStyleMetadataReader.Load(stylesXml),
+                StructuredTableStyles: XlsxStructuredTableStyleMetadataReader.Load(stylesXml, workbookTheme, loadedIndexedColors),
                 CustomViews: workbookMetadata.CustomViews);
         });
         var indexedColors = styleMetadata.IndexedColors;

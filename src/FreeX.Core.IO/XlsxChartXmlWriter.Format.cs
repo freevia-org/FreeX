@@ -463,6 +463,12 @@ internal static partial class XlsxChartXmlWriter
             ChartDataLabelPosition.InsideEnd => "inEnd",
             ChartDataLabelPosition.OutsideEnd => "outEnd",
             ChartDataLabelPosition.InsideBase => "inBase",
+            // R65-default-fallback-swallow-sweep-1: side positions, valid for the line/scatter/bubble
+            // family (ISO/IEC 29500 §21.2.2.44).
+            ChartDataLabelPosition.Left => "l",
+            ChartDataLabelPosition.Right => "r",
+            ChartDataLabelPosition.Top => "t",
+            ChartDataLabelPosition.Bottom => "b",
             _ => "bestFit"
         };
 
@@ -479,8 +485,11 @@ internal static partial class XlsxChartXmlWriter
     ///   - Clustered/3-D bar or column: ctr, inEnd, outEnd, inBase are all valid; FreeX's model can
     ///     produce inBase (<see cref="ChartDataLabelPosition.InsideBase"/>) and passes it through
     ///     unchanged for this family. bestFit is invalid here, so it is remapped down to ctr.
-    ///   - Line, 3-D line, scatter, bubble: only ctr, l, r, t, b are valid; FreeX's model never
-    ///     produces l/r/t/b, so every position (including outEnd/inEnd/bestFit/inBase) is gated to ctr.
+    ///   - Line, 3-D line, scatter, bubble: only ctr, l, r, t, b are valid; FreeX's model can produce
+    ///     l/r/t/b (<see cref="ChartDataLabelPosition.Left"/>/<see cref="ChartDataLabelPosition.Right"/>/
+    ///     <see cref="ChartDataLabelPosition.Top"/>/<see cref="ChartDataLabelPosition.Bottom"/>) and
+    ///     passes those through unchanged for this family; only the genuinely invalid
+    ///     outEnd/inEnd/bestFit/inBase are gated down to ctr.
     /// </summary>
     private static XElement? GatedDataLabelPositionXml(ChartModel chart, XNamespace chartNs)
     {
@@ -511,13 +520,14 @@ internal static partial class XlsxChartXmlWriter
         if (hasNoValidPosition)
             return null;
 
-        // Line/3-D line, scatter, bubble only accept ctr, l, r, t, b — FreeX's model never produces
-        // l/r/t/b, and inEnd/outEnd/bestFit/inBase are all invalid here (Excel rejects the chart part
-        // with a repair prompt), so gate every position down to ctr for this family.
+        // Line/3-D line, scatter, bubble only accept ctr, l, r, t, b. l/r/t/b are exactly the side
+        // positions this family supports, so they pass through unchanged; inEnd/outEnd/bestFit/inBase
+        // are all invalid here (Excel rejects the chart part with a repair prompt), so those are
+        // gated down to ctr.
         var isLineScatterOrBubble = chartType is ChartType.Line or ChartType.ThreeDLine
             or ChartType.Scatter or ChartType.Bubble;
         if (isLineScatterOrBubble)
-            return "ctr";
+            return position is "l" or "r" or "t" or "b" or "ctr" ? position : "ctr";
 
         // Clustered/3-D bar/column and everything else FreeX can author: bestFit is not a valid value
         // outside pie, so fall back to ctr. inBase IS valid for this family, so it passes through

@@ -210,7 +210,7 @@ public static class XlsxColorReader
         {
             indexedColor = CellColor.White;
         }
-        else if (!indexedColors.TryResolveColor(index + 1, out indexedColor))
+        else if (!indexedColors.TryResolveColor(index - 7, out indexedColor))
         {
             return false;
         }

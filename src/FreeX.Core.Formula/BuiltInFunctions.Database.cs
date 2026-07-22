@@ -251,8 +251,57 @@ public static partial class BuiltInFunctions
             return NumberResult(nums.Average());
         });
 
+    /// <summary>
+    /// Validates the 2-arg field-omitted form DCOUNT/DCOUNTA also accept: Excel documents that
+    /// when the field argument is omitted, the function counts ALL records matching criteria,
+    /// independent of any particular field's numeric/non-blank content.
+    /// </summary>
+    private static bool TryDbArgsFieldOmitted(
+        IReadOnlyList<ScalarValue> args,
+        out RangeValue database,
+        out RangeValue criteria,
+        out ScalarValue? error)
+    {
+        database = null!;
+        criteria = null!;
+        error = null;
+        if (args[0] is ErrorValue e0) { error = e0; return false; }
+        if (args[1] is ErrorValue e1) { error = e1; return false; }
+        if (args[0] is not RangeValue db) { error = ErrorValue.Value; return false; }
+        if (args[1] is not RangeValue cr) { error = ErrorValue.Value; return false; }
+        database = db;
+        criteria = cr;
+        return true;
+    }
+
+    /// <summary>Counts database rows (excluding the header) that match at least one criteria row.</summary>
+    private static int CountMatchingDatabaseRows(RangeValue database, RangeValue criteria, IEvalContext ctx)
+    {
+        if (database.RowCount < 2) return 0;
+        int count = 0;
+        for (int r = 1; r < database.RowCount; r++)
+        {
+            for (int cr = 1; cr < criteria.RowCount; cr++)
+            {
+                if (DbRowMatchesCriteriaRow(database, r, criteria, cr, ctx))
+                {
+                    count++;
+                    break;
+                }
+            }
+        }
+        return count;
+    }
+
     private static ScalarValue DCount(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        // Field omitted: =DCOUNT(database,criteria) counts every matching record, regardless
+        // of whether any field in it is numeric.
+        if (args.Count == 2)
+        {
+            if (!TryDbArgsFieldOmitted(args, out var db0, out var cr0, out var err0)) return err0!;
+            return new NumberValue(CountMatchingDatabaseRows(db0, cr0, ctx));
+        }
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
         // A field that doesn't resolve to a database column is a #VALUE! error, matching
         // every other D-function (DSUM/DAVERAGE/etc. via DatabaseExtractNumeric). This must
@@ -271,6 +320,13 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue DCountA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        // Field omitted: =DCOUNTA(database,criteria) counts every matching record, same as
+        // DCOUNT's field-omitted form (see CountMatchingDatabaseRows).
+        if (args.Count == 2)
+        {
+            if (!TryDbArgsFieldOmitted(args, out var db0, out var cr0, out var err0)) return err0!;
+            return new NumberValue(CountMatchingDatabaseRows(db0, cr0, ctx));
+        }
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
         // See DCount: an unresolvable field is #VALUE!, matching every sibling D-function.
         if (ResolveDatabaseField(db, f) is null) return ErrorValue.Value;

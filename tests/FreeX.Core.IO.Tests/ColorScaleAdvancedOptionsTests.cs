@@ -258,9 +258,12 @@ public sealed class ColorScaleAdvancedOptionsTests
                             new XElement(MainNs + "cfvo", new XAttribute("type", "num"), new XAttribute("val", "0")),
                             new XElement(MainNs + "cfvo", new XAttribute("type", "percentile"), new XAttribute("val", "50")),
                             new XElement(MainNs + "cfvo", new XAttribute("type", "num"), new XAttribute("val", "100")),
-                            new XElement(MainNs + "color", new XAttribute("indexed", "4"), new XAttribute("tint", "-0.25")),
-                            new XElement(MainNs + "color", new XAttribute("indexed", "5")),
-                            new XElement(MainNs + "color", new XAttribute("indexed", "6"), new XAttribute("tint", "0.2"))))));
+                            // OOXML indexed=N maps to WorkbookIndexedColorPalette's 1-based ColorIndex via N-7
+                            // (see XlsxColorReader.TryReadIndexedColor), so indexed=12/13/14 below hit the same
+                            // ColorIndex 5/6/7 authored overrides as ReplaceIndexedColors sets up further down.
+                            new XElement(MainNs + "color", new XAttribute("indexed", "12"), new XAttribute("tint", "-0.25")),
+                            new XElement(MainNs + "color", new XAttribute("indexed", "13")),
+                            new XElement(MainNs + "color", new XAttribute("indexed", "14"), new XAttribute("tint", "0.2"))))));
         });
         var package = new MemoryStream();
         sourcePackage.Position = 0;

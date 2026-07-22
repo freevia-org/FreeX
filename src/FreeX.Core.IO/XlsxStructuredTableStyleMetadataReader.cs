@@ -22,7 +22,10 @@ internal static class XlsxStructuredTableStyleMetadataReader
         "lastTotalCell"
     };
 
-    public static List<StructuredTableStyleModel> Load(XDocument? stylesXml)
+    public static List<StructuredTableStyleModel> Load(
+        XDocument? stylesXml,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors)
     {
         var result = new List<StructuredTableStyleModel>();
         try
@@ -74,7 +77,7 @@ internal static class XlsxStructuredTableStyleMetadataReader
                         SupportedSemanticElementTypes.Contains(type) &&
                         dxfId is >= 0 &&
                         dxfId.Value < differentialStyles.Count
-                            ? ReadDifferentialStyleDiff(differentialStyles[dxfId.Value], workbookNs)
+                            ? ReadDifferentialStyleDiff(differentialStyles[dxfId.Value], workbookNs, theme, indexedColors)
                             : null));
                 }
 
@@ -89,14 +92,18 @@ internal static class XlsxStructuredTableStyleMetadataReader
         return result;
     }
 
-    private static StyleDiff? ReadDifferentialStyleDiff(XElement dxf, XNamespace workbookNs)
+    private static StyleDiff? ReadDifferentialStyleDiff(
+        XElement dxf,
+        XNamespace workbookNs,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors)
     {
         var font = dxf.Element(workbookNs + "font");
         CellColor? fontColor = null;
         bool? bold = null;
         if (font is not null)
         {
-            if (XlsxColorReader.TryReadCellColor(font.Element(workbookNs + "color"), out var readFontColor))
+            if (XlsxColorReader.TryReadCellColor(font.Element(workbookNs + "color"), theme, indexedColors, out var readFontColor))
                 fontColor = readFontColor;
 
             if (font.Element(workbookNs + "b") is { } boldElement)
@@ -115,7 +122,7 @@ internal static class XlsxStructuredTableStyleMetadataReader
             if (patternStyle != CellFillPatternStyle.None)
                 fillPatternStyle = patternStyle;
 
-            if (XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "fgColor"), out var foregroundColor))
+            if (XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "fgColor"), theme, indexedColors, out var foregroundColor))
             {
                 if (patternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
                     fillColor = foregroundColor;
@@ -124,7 +131,7 @@ internal static class XlsxStructuredTableStyleMetadataReader
             }
 
             if (fillColor is null &&
-                XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "bgColor"), out var backgroundColor))
+                XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "bgColor"), theme, indexedColors, out var backgroundColor))
             {
                 fillColor = backgroundColor;
             }

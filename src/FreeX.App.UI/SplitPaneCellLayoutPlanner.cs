@@ -794,11 +794,25 @@ public static class SplitPaneCellLayoutPlanner
         SplitPaneOccupiedCellMap occupied)
     {
         double width = 0;
+        if (columns.Count == 0)
+            return width;
+
+        // A plain hidden column has NO entry in the pane's column lookup at all (mirrors
+        // ViewportService.Metrics, which skips hidden columns entirely rather than giving them a
+        // zero-width entry), so a TryGetValue miss doesn't necessarily mean "past the end of this
+        // pane" -- it can also mean "this column is hidden". Mirror GridView.Rendering.cs's
+        // maxViewportCol bound: only stop the scan once we're past the last column metric actually
+        // present in this pane; a hidden column in between is transparent to overflow.
+        var maxCol = columns[columns.Count - 1].Col;
         var nextCol = cell.Col + 1;
-        while (columns.TryGetValue(nextCol, out var nextMetric) &&
-               !occupied.Contains(cell.Row, nextCol))
+        while (nextCol <= maxCol)
         {
-            width += nextMetric!.Width;
+            var hasNextMetric = columns.TryGetValue(nextCol, out var nextMetric);
+            if (hasNextMetric && !occupied.Contains(cell.Row, nextCol))
+                width += nextMetric!.Width;
+            else if (hasNextMetric)
+                break;
+
             nextCol++;
         }
 
@@ -813,15 +827,26 @@ public static class SplitPaneCellLayoutPlanner
         SplitPaneOccupiedCellMap occupied)
     {
         double width = 0;
-        if (cell.Col <= 1)
+        if (cell.Col <= 1 || columns.Count == 0)
+            return width;
+
+        // Same hidden-column transparency as the rightward scan above -- a missing lookup entry
+        // means "hidden", not "stop"; only bail once we pass the leftmost column metric actually
+        // present in this pane.
+        var minCol = columns[0].Col;
+        if (cell.Col <= minCol)
             return width;
 
         var prevCol = cell.Col - 1;
-        while (columns.TryGetValue(prevCol, out var prevMetric) &&
-               !occupied.Contains(cell.Row, prevCol))
+        while (prevCol >= minCol)
         {
-            width += prevMetric!.Width;
-            if (prevCol == 1)
+            var hasPrevMetric = columns.TryGetValue(prevCol, out var prevMetric);
+            if (hasPrevMetric && !occupied.Contains(cell.Row, prevCol))
+                width += prevMetric!.Width;
+            else if (hasPrevMetric)
+                break;
+
+            if (prevCol == minCol)
                 break;
             prevCol--;
         }

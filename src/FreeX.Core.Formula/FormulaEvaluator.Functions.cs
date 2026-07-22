@@ -171,8 +171,14 @@ public sealed partial class FormulaEvaluator
                 continue;
             }
 
-            if (TryAsRangeRef(arg, out var range))
+            if (TryResolveReferenceRange(arg, context, out var range, out var referenceRangeError))
             {
+                if (referenceRangeError is { } refErr)
+                {
+                    expandedArgs.Add(new RangeMaterializationErrorValue(refErr));
+                    continue;
+                }
+
                 if (range.SheetName is not null && !context.SheetExists(range.SheetName))
                 {
                     expandedArgs.Add(ErrorValue.Ref);

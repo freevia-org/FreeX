@@ -57,15 +57,19 @@ public sealed class Lexer
         }
 
         var tokens = new List<Token>(Math.Min(_text.Length + 1, FormulaSafetyLimits.MaxParseTokens + 1));
+        var precededByWhitespace = new List<bool>(tokens.Capacity);
 
         while (_pos < _text.Length)
         {
+            var posBeforeSkip = _pos;
             SkipWhitespace();
             if (_pos >= _text.Length)
                 break;
 
+            var hadWhitespace = _pos > posBeforeSkip;
             var token = ReadNextToken();
             tokens.Add(token);
+            precededByWhitespace.Add(hadWhitespace);
 
             if (tokens.Count > FormulaSafetyLimits.MaxParseTokens)
                 throw new FormulaParseException(
@@ -73,11 +77,52 @@ public sealed class Lexer
         }
 
         tokens.Add(new Token(TokenType.EndOfFormula, "", _pos));
+        precededByWhitespace.Add(false);
+
+        InsertIntersectionTokens(tokens, precededByWhitespace);
+
         if (startPosition == 0)
             AddCachedTokens(_text, tokens);
 
         return tokens;
     }
+
+    /// <summary>
+    /// Excel's explicit INTERSECTION reference operator is written as a plain space directly
+    /// between two reference operands (e.g. the space in <c>A1:C3 B2:D4</c>) -- there is no
+    /// dedicated character for it, so recognizing it means noticing where whitespace was actually
+    /// skipped between two tokens that are each reference-shaped on their own (a bare cell
+    /// reference or a defined name -- the same raw token that ends the first operand's range/name
+    /// and starts the second's, regardless of how much of a range/name each one spans). Everywhere
+    /// else a space appears in a formula -- around an operator, after a comma, inside/around
+    /// parens -- at least one side of the gap is some other token kind (Comma, an operator,
+    /// OpenParen/CloseParen, ...), so this insertion is a no-op there and every pre-existing
+    /// whitespace-tolerant shape (e.g. <c>SUM( A1 , B1 )</c>) is completely unaffected. Runs once,
+    /// after the whole formula is tokenized, since it only needs each adjacent pair's token kinds
+    /// and whether whitespace separated them -- no parser-level context is required.
+    /// </summary>
+    private static void InsertIntersectionTokens(List<Token> tokens, List<bool> precededByWhitespace)
+    {
+        for (var i = tokens.Count - 1; i >= 1; i--)
+        {
+            if (precededByWhitespace[i] &&
+                IsIntersectionOperandToken(tokens[i - 1].Type) &&
+                IsIntersectionOperandToken(tokens[i].Type))
+            {
+                tokens.Insert(i, new Token(TokenType.Intersection, " ", tokens[i].Position));
+            }
+        }
+    }
+
+    /// <summary>
+    /// True for the raw token kinds that can end (on the left) or start (on the right) an
+    /// intersection operand: a bare cell reference or a defined-name identifier. A colon-range
+    /// (A1:C3) is still just a CellRef token on each side at the lexer level (Parser combines them
+    /// later), so this correctly fires on the C3 in "A1:C3 B2:D4" without needing to know the
+    /// range was there at all.
+    /// </summary>
+    private static bool IsIntersectionOperandToken(TokenType type) =>
+        type is TokenType.CellRef or TokenType.NamedRange;
 
     private static bool TryGetCachedTokens(string formulaText, out Token[] tokens)
     {

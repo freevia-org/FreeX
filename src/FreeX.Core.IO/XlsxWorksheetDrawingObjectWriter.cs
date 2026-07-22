@@ -273,6 +273,31 @@ internal static class XlsxWorksheetDrawingObjectWriter
         void AddPictureAnchor(PictureModel picture)
         {
             var currentPictureIndex = nextPictureIndex++;
+
+            if (!string.IsNullOrWhiteSpace(picture.LinkedImageTarget))
+            {
+                // R65-io-image-drawing-6-1: a linked ("Link to File") picture has no raster to embed at
+                // all -- emit the same r:link + External relationship the source package used, instead
+                // of an r:embed + embedded media file. Checked before the "no raster" CellRangeSnapshot
+                // branch below: both have empty ImageBytes, but this one must never be reconstructed as
+                // a vector grpSp -- it has real (external) picture content, just not embedded here.
+                var linkRelId = $"rIdFreeXLinkedPicture{currentPictureIndex}";
+                drawingRelsXml.Root!.Add(new XElement(
+                    packageRelNs + "Relationship",
+                    new XAttribute("Id", linkRelId),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                    new XAttribute("Target", picture.LinkedImageTarget),
+                    new XAttribute("TargetMode", "External")));
+                anchors.Add(ToOneCellLinkedPictureAnchor(
+                    picture,
+                    currentPictureIndex,
+                    linkRelId,
+                    spreadsheetDrawingNs,
+                    drawingNs,
+                    relNs));
+                return;
+            }
+
             if (picture.ImageBytes is not { Length: > 0 })
             {
                 // No raster to embed — an authored CellRangeSnapshot ("camera" / Paste Special >
@@ -391,6 +416,54 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                 new XElement(spreadsheetDrawingNs + "blipFill",
                     new XElement(drawingNs + "blip", new XAttribute(relNs + "embed", imageRelId)),
+                    HasPictureCrop(picture)
+                        ? new XElement(drawingNs + "srcRect",
+                            new XAttribute("l", ToSourceRectanglePercent(picture.CropLeft)),
+                            new XAttribute("t", ToSourceRectanglePercent(picture.CropTop)),
+                            new XAttribute("r", ToSourceRectanglePercent(picture.CropRight)),
+                            new XAttribute("b", ToSourceRectanglePercent(picture.CropBottom)))
+                        : null,
+                    new XElement(drawingNs + "stretch", new XElement(drawingNs + "fillRect"))),
+                new XElement(spreadsheetDrawingNs + "spPr",
+                    ToDrawingTransform(picture.RotationDegrees, picture.FlipHorizontal, picture.FlipVertical, drawingNs),
+                    new XElement(drawingNs + "prstGeom",
+                        new XAttribute("prst", "rect"),
+                        new XElement(drawingNs + "avLst")))),
+            new XElement(spreadsheetDrawingNs + "clientData"));
+
+    /// <summary>
+    /// R65-io-image-drawing-6-1: emits a picture inserted via Excel's "Link to File" -- identical to
+    /// <see cref="ToOneCellPictureAnchor"/> except the <c>&lt;a:blip&gt;</c> carries <c>r:link</c>
+    /// (not <c>r:embed</c>), pointing at the External relationship <paramref name="linkRelId"/> added
+    /// alongside it (see <c>AddPictureAnchor</c>). No embedded raster exists to write, so there is no
+    /// media file and no default-content-type registration for this picture.
+    /// </summary>
+    private static XElement ToOneCellLinkedPictureAnchor(
+        PictureModel picture,
+        int pictureIndex,
+        string linkRelId,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace relNs) =>
+        new(spreadsheetDrawingNs + "oneCellAnchor",
+            new XElement(spreadsheetDrawingNs + "from",
+                new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)picture.Anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
+                new XElement(spreadsheetDrawingNs + "colOff", DrawingMlUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetX)).ToString(CultureInfo.InvariantCulture)),
+                new XElement(spreadsheetDrawingNs + "row", Math.Max(0, (long)picture.Anchor.Row - 1).ToString(CultureInfo.InvariantCulture)),
+                new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetY)).ToString(CultureInfo.InvariantCulture))),
+            new XElement(spreadsheetDrawingNs + "ext",
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(picture.Width)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(picture.Height))),
+            new XElement(spreadsheetDrawingNs + "pic",
+                new XElement(spreadsheetDrawingNs + "nvPicPr",
+                    new XElement(spreadsheetDrawingNs + "cNvPr",
+                        new XAttribute("id", pictureIndex + 1),
+                        new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
+                        string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
+                        string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText)),
+                    new XElement(spreadsheetDrawingNs + "cNvPicPr")),
+                new XElement(spreadsheetDrawingNs + "blipFill",
+                    new XElement(drawingNs + "blip", new XAttribute(relNs + "link", linkRelId)),
                     HasPictureCrop(picture)
                         ? new XElement(drawingNs + "srcRect",
                             new XAttribute("l", ToSourceRectanglePercent(picture.CropLeft)),
@@ -1064,7 +1137,14 @@ internal static class XlsxWorksheetDrawingObjectWriter
         double.IsFinite(picture.Height) &&
         picture.Width > 0 &&
         picture.Height > 0 &&
-        (picture.ImageBytes is { Length: > 0 } || picture.Kind == PictureKind.CellRangeSnapshot);
+        // R65-io-image-drawing-6-1: a linked ("Link to File") picture has no embedded raster --
+        // ImageBytes is always empty for it -- but it still carries a non-null LinkedImageTarget, so it
+        // must be accepted here too; otherwise it would be silently dropped the same way an edited
+        // linked picture used to vanish (the picture is "supported" via its r:link + external
+        // relationship instead of an embedded image part -- see AddPictureAnchor).
+        (picture.ImageBytes is { Length: > 0 } ||
+         picture.Kind == PictureKind.CellRangeSnapshot ||
+         !string.IsNullOrWhiteSpace(picture.LinkedImageTarget));
 
     private static bool IsSupportedTextBox(TextBoxModel textBox) =>
         !textBox.IsSourceLoaded &&

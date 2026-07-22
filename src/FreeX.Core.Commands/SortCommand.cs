@@ -301,10 +301,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                 {
                     // R27-sort-deep-3: with no specific target color chosen, "no fill"/"no font
                     // color" must always sort last, direction-independent — same fixed-last rule
-                    // as blanks above. CompareNullableColor already encodes that ordering as an
-                    // absolute value for the null-vs-non-null case, so it must not be run through
-                    // the ascending/descending negation below (unlike the two-colors-present case,
-                    // which still goes through CompareKey/negation unchanged).
+                    // as blanks above, so it must not be run through the ascending/descending
+                    // negation below. R65-commands-sort-6-2: the remaining two-colors-present case
+                    // still goes through CompareKey/negation unchanged, but CompareKey now treats
+                    // it as a no-op (0) rather than inventing an R/G/B ordering — Excel has no
+                    // ordering between two different colors when no target color was chosen.
                     // R39-commands-sort-custom-2-2: resolve the EFFECTIVE color (static style
                     // overlaid with any matching conditional-formatting rule's color), not just
                     // the cell's stored style, so a CF-only-colored cell isn't wrongly treated
@@ -944,8 +945,14 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
         return sortOn switch
         {
-            SortOn.CellColor => CompareNullableColor(GetEffectiveColor(workbook, sheet, addressA, a, wantFill: true), GetEffectiveColor(workbook, sheet, addressB, b, wantFill: true)),
-            SortOn.FontColor => CompareNullableColor(GetEffectiveColor(workbook, sheet, addressA, a, wantFill: false), GetEffectiveColor(workbook, sheet, addressB, b, wantFill: false)),
+            // R65-commands-sort-6-2: with no target color chosen for this color-sort level,
+            // Excel has no basis to order distinctly-colored cells against each other — the UI
+            // always requires a specific target color per color-sort level. This is therefore a
+            // no-op (the null-vs-non-null "no fill/font color goes last" rule is already enforced
+            // by the caller, before CompareKey is ever reached for this key). Previously this fell
+            // through to CompareNullableColor, which fabricated an R/G/B byte-value ordering Excel
+            // never produces.
+            SortOn.CellColor or SortOn.FontColor => 0,
             _ => CompareScalar(a?.Value ?? BlankValue.Instance, b?.Value ?? BlankValue.Instance, customOrder, caseSensitive)
         };
     }
@@ -1167,22 +1174,6 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         return false;
     }
 
-    private static int CompareNullableColor(CellColor? a, CellColor? b)
-    {
-        if (a is null && b is null)
-            return 0;
-        if (a is null)
-            return 1;
-        if (b is null)
-            return -1;
-
-        var red = a.Value.R.CompareTo(b.Value.R);
-        if (red != 0)
-            return red;
-        var green = a.Value.G.CompareTo(b.Value.G);
-        return green != 0 ? green : a.Value.B.CompareTo(b.Value.B);
-    }
-
     private static int CompareTargetColor(CellColor? a, CellColor? b, CellColor targetColor)
     {
         var aMatches = a == targetColor;
@@ -1205,6 +1196,22 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     /// </summary>
     private static int CompareScalar(ScalarValue a, ScalarValue b, CustomSortOrder? customOrder, bool caseSensitive)
     {
+        // R65-commands-sort-6-1: a custom list ("First key sort order") overrides the default
+        // numbers-before-text type hierarchy entirely — in Excel, EVERY custom-list member (in
+        // list order) comes first, before anything not in the list, including numbers. So custom-
+        // list membership must be checked BEFORE the numeric short-circuit below, not after it
+        // (which used to let numbers slip ahead of custom-list text members).
+        if (customOrder is not null)
+        {
+            bool aMember = a is TextValue textA0 && customOrder.IndexOf(textA0.Value) >= 0;
+            bool bMember = b is TextValue textB0 && customOrder.IndexOf(textB0.Value) >= 0;
+            if (aMember && bMember)
+                return customOrder.Compare(((TextValue)a).Value, ((TextValue)b).Value, caseSensitive);
+            if (aMember) return -1; // list member before any non-member (including numbers)
+            if (bMember) return 1;
+            // Neither is a list member — fall through to the normal type hierarchy below.
+        }
+
         bool aNum = a is NumberValue or DateTimeValue;
         bool bNum = b is NumberValue or DateTimeValue;
         if (aNum && bNum)
@@ -1215,9 +1222,6 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         }
         if (aNum) return -1;  // numbers/dates before text/bool/blank
         if (bNum) return  1;
-        // Custom list ("First key sort order") ranks text by its position in the list.
-        if (customOrder is not null && a is TextValue textA && b is TextValue textB)
-            return customOrder.Compare(textA.Value, textB.Value, caseSensitive);
         return (a, b) switch
         {
             (TextValue ta,   TextValue tb  ) => caseSensitive

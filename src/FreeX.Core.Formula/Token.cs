@@ -28,6 +28,7 @@ public enum TokenType
     Ampersand,     // & (string concatenation)
     Percent,       // % (divide by 100)
     ImplicitIntersection, // @
+    Intersection,  // whitespace between two reference operands, e.g. the space in "A1:C3 B2:D4"
 
     // Comparison
     Equal,

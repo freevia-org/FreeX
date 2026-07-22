@@ -515,6 +515,13 @@ internal static class XlsxChartDataLabelReader
             "inEnd" => ChartDataLabelPosition.InsideEnd,
             "outEnd" => ChartDataLabelPosition.OutsideEnd,
             "inBase" => ChartDataLabelPosition.InsideBase,
+            // R65-default-fallback-swallow-sweep-1: l/r/t/b are the side positions Excel allows for
+            // the line/scatter/bubble family (ISO/IEC 29500 §21.2.2.44); without these cases they fell
+            // through to BestFit, silently losing which side the label was pinned to.
+            "l" => ChartDataLabelPosition.Left,
+            "r" => ChartDataLabelPosition.Right,
+            "t" => ChartDataLabelPosition.Top,
+            "b" => ChartDataLabelPosition.Bottom,
             _ => ChartDataLabelPosition.BestFit
         };
 

@@ -45,6 +45,18 @@ public sealed class PictureModel
     public double CropRight { get; set; }
     public double CropBottom { get; set; }
     public bool IsSourceLoaded { get; set; }
+
+    /// <summary>
+    /// The external relationship target (verbatim, e.g. an absolute path/URI such as
+    /// <c>"file:///C:/Images/photo.png"</c>) for a picture inserted via Excel's "Link to File" — an
+    /// <c>&lt;xdr:pic&gt;</c> whose <c>&lt;a:blip&gt;</c> carries <c>r:link</c> instead of <c>r:embed</c>,
+    /// with no corresponding image part embedded in the package. Null for a normal embedded picture
+    /// (the common case). A non-null value means <see cref="ImageBytes"/> is empty/null — there is
+    /// nothing embedded to load — and this picture must round-trip its <c>r:link</c> + external
+    /// relationship on save instead of being written (or silently dropped) as an embedded picture.
+    /// See R65-io-image-drawing-6-1.
+    /// </summary>
+    public string? LinkedImageTarget { get; set; }
 }
 
 public sealed record PictureCellSnapshot(

@@ -134,7 +134,7 @@ public static class StructuredReferenceResolver
                 if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
                     continue;
 
-                var columnIndex = FindColumnIndex(sheet, table, columnName);
+                var columnIndex = FindColumnIndex(sheet, table, UnwrapCurrentRowSingleColumnBracket(columnName));
                 if (columnIndex < 0)
                     return null;
 
@@ -142,6 +142,72 @@ public static class StructuredReferenceResolver
                     sheet.Id,
                     currentAddress.Value.Row,
                     table.Range.Start.Col + (uint)columnIndex);
+            }
+        }
+
+        return null;
+    }
+
+    // The '@' shorthand's ColumnName is the raw selector text after '@' — for a column name that
+    // needs disambiguating (contains a space, or would otherwise be misread), Excel lets you write
+    // it with an extra bracket wrap, e.g. Table1[@[Sales Amount]], which the parser stores as
+    // ColumnName == "[Sales Amount]" verbatim (see Parser's StructuredCurrentRowReferenceNode
+    // construction) rather than stripping the wrap the way the long-form combined-selector path
+    // (TryParseCombinedSelector, via ParseCombinedSelectorParts's blanket bracket removal) already
+    // does. Without unwrapping here first, FindColumnIndex compares the literal "[Sales Amount]"
+    // against the stored column name "Sales Amount" and never matches, so this shorthand always
+    // failed with #NAME?. Strip exactly one whole-string bracket wrap — detected by the first ']'
+    // being the very last character — so a genuine column-RANGE shorthand ("[Q1]:[Q2]", whose first
+    // ']' closes well before the end) is left untouched and falls through to
+    // ResolveCurrentRowColumnRange instead.
+    private static string UnwrapCurrentRowSingleColumnBracket(string columnName)
+    {
+        var trimmed = columnName.Trim();
+        return trimmed.Length >= 2 && trimmed[0] == '[' && trimmed.IndexOf(']') == trimmed.Length - 1
+            ? trimmed[1..^1]
+            : columnName;
+    }
+
+    // Resolves the '@' shorthand column-RANGE case (Table1[@[Q1]:[Q2]]) — where columnRangeSelector
+    // is the literal bracketed range text "[Q1]:[Q2]" the parser stashed as
+    // StructuredCurrentRowReferenceNode.ColumnName — to the current row's slice across that column
+    // range. Mirrors the long-form "#This Row" combined-range path (ResolveThisRowColumnRange) so
+    // both spellings of a this-row column range behave identically; only called after
+    // ResolveCurrentRowColumn's single-column lookup has already failed to match a literal column
+    // name (e.g. a column genuinely named "Q1:Q2"), so that literal name keeps taking priority here
+    // too.
+    public static GridRange? ResolveCurrentRowColumnRange(
+        Workbook? workbook,
+        Sheet? currentSheet,
+        CellAddress? currentAddress,
+        string? tableName,
+        string columnRangeSelector)
+    {
+        if (currentAddress is null)
+            return null;
+
+        if (!TryParseColumnRangeSelector(columnRangeSelector, out var startColumnName, out var endColumnName))
+            return null;
+
+        var sheets = workbook is not null
+            ? workbook.Sheets
+            : currentSheet is not null ? [currentSheet] : [];
+
+        foreach (var sheet in sheets)
+        {
+            if (!sheet.Id.Equals(currentAddress.Value.Sheet))
+                continue;
+
+            foreach (var table in sheet.StructuredTables)
+            {
+                if (!string.IsNullOrWhiteSpace(tableName) && !StructuredTableNameMatches(table, tableName))
+                    continue;
+                if (!IsDataBodyRow(table, currentAddress.Value.Row))
+                    continue;
+                if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
+                    continue;
+
+                return ResolveThisRowColumnRange(sheet, table, currentAddress, startColumnName, endColumnName);
             }
         }
 

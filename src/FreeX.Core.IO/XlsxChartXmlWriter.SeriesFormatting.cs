@@ -356,6 +356,14 @@ internal static partial class XlsxChartXmlWriter
             ChartMarkerStyle.Square => "square",
             ChartMarkerStyle.Diamond => "diamond",
             ChartMarkerStyle.Triangle => "triangle",
+            // R65-default-fallback-swallow-sweep-2: keep these distinct instead of collapsing to
+            // "circle" on write.
+            ChartMarkerStyle.X => "x",
+            ChartMarkerStyle.Star => "star",
+            ChartMarkerStyle.Plus => "plus",
+            ChartMarkerStyle.Dot => "dot",
+            ChartMarkerStyle.Dash => "dash",
+            ChartMarkerStyle.Auto => "auto",
             _ => "circle"
         };
 

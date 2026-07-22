@@ -448,8 +448,10 @@ public static partial class BuiltInFunctions
         // ── Phase A1: Database functions ─────────────────────────────────────
         ["DSUM"]     = (DSum, 3, 3),
         ["DAVERAGE"] = (DAverage, 3, 3),
-        ["DCOUNT"]   = (DCount, 3, 3),
-        ["DCOUNTA"]  = (DCountA, 3, 3),
+        // field is optional: =DCOUNT(database,criteria)/DCOUNTA(database,criteria) counts ALL
+        // matching records, not just numeric/non-blank ones in a specific field (see DCount/DCountA).
+        ["DCOUNT"]   = (DCount, 2, 3),
+        ["DCOUNTA"]  = (DCountA, 2, 3),
         ["DGET"]     = (DGet, 3, 3),
         ["DMAX"]     = (DMax, 3, 3),
         ["DMIN"]     = (DMin, 3, 3),

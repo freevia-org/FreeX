@@ -471,9 +471,267 @@ public sealed partial class FormulaEvaluator
             : context.GetCellValue(topRow, leftColumn);
     }
 
+    // ── Explicit INTERSECTION operator (a space between two reference operands) ────────────────
+    // and NAME:endpoint ranges (a defined name used as one side of ':') ─────────────────────────
+
+    /// <summary>
+    /// Evaluates a bare <see cref="IntersectionNode"/> used as a scalar (outside any aggregate
+    /// function argument position) -- resolves the overlap rectangle, then applies the same
+    /// current-cell implicit intersection a bare multi-cell <see cref="RangeRefNode"/> would (via
+    /// <see cref="EvaluateRange"/>), so <c>=A1:C3 B2:D4</c> behaves exactly like an equivalent
+    /// plain range reference once the overlap itself is known.
+    /// </summary>
+    private static ScalarValue EvaluateIntersectionNode(IntersectionNode node, IEvalContext context)
+    {
+        TryResolveIntersectionRange(node, context, out var range, out var error);
+        return error is { } err ? err : EvaluateRange(range, context);
+    }
+
+    /// <summary>
+    /// Evaluates a bare <see cref="NamedRangeEndpointNode"/> used as a scalar -- resolves any
+    /// NamedRangeNode endpoint to its defined range's top-left cell, forms the effective range,
+    /// then applies the same current-cell implicit intersection a bare multi-cell
+    /// <see cref="RangeRefNode"/> would (via <see cref="EvaluateRange"/>).
+    /// </summary>
+    private static ScalarValue EvaluateNamedRangeEndpointNode(NamedRangeEndpointNode node, IEvalContext context)
+    {
+        TryResolveNamedRangeEndpointRange(node, context, out var range, out var error);
+        return error is { } err ? err : EvaluateRange(range, context);
+    }
+
+    /// <summary>
+    /// Resolves an <see cref="IntersectionNode"/> to the <see cref="RangeRefNode"/> covering the
+    /// overlap rectangle of its two operands. Always returns true (the out-parameters fully
+    /// describe every outcome): <paramref name="error"/> is non-null when either operand can't be
+    /// resolved to a reference at all (#VALUE!) or the operands don't overlap / live on different
+    /// sheets (#NULL!, matching Excel's error for a genuinely disjoint intersection); otherwise
+    /// <paramref name="range"/> holds the resolved overlap and <paramref name="error"/> is null.
+    /// </summary>
+    private static bool TryResolveIntersectionRange(
+        IntersectionNode node, IEvalContext context, out RangeRefNode range, out ErrorValue? error)
+    {
+        range = null!;
+
+        if (!TryResolveOperandRectangle(node.Left, context, out var leftSheet, out var lr0, out var lc0, out var lr1, out var lc1) ||
+            !TryResolveOperandRectangle(node.Right, context, out var rightSheet, out var rr0, out var rc0, out var rr1, out var rc1))
+        {
+            error = ErrorValue.Value;
+            return true;
+        }
+
+        if (!TryReconcileSheetNames(leftSheet, rightSheet, out var sheetName))
+        {
+            error = ErrorValue.Null;
+            return true;
+        }
+
+        var r0 = Math.Max(lr0, rr0);
+        var r1 = Math.Min(lr1, rr1);
+        var c0 = Math.Max(lc0, rc0);
+        var c1 = Math.Min(lc1, rc1);
+
+        if (r0 > r1 || c0 > c1)
+        {
+            error = ErrorValue.Null;
+            return true;
+        }
+
+        var start = new CellRefNode(FreeX.Core.Model.CellAddress.NumberToColumnName(c0), r0, SheetName: sheetName);
+        var end = new CellRefNode(FreeX.Core.Model.CellAddress.NumberToColumnName(c1), r1, SheetName: sheetName);
+        range = new RangeRefNode(start, end, sheetName);
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves a <see cref="NamedRangeEndpointNode"/> to the effective <see cref="RangeRefNode"/>,
+    /// resolving any <see cref="NamedRangeNode"/> endpoint to its defined range's top-left cell
+    /// first (Excel always anchors on the name's corner). Always returns true; <paramref name="error"/>
+    /// is #NAME? when either endpoint name doesn't resolve, matching Excel for an undefined name.
+    /// </summary>
+    private static bool TryResolveNamedRangeEndpointRange(
+        NamedRangeEndpointNode node, IEvalContext context, out RangeRefNode range, out ErrorValue? error)
+    {
+        range = null!;
+
+        if (!TryResolveEndpointCell(node.Start, context, out var startCell) ||
+            !TryResolveEndpointCell(node.End, context, out var endCell))
+        {
+            error = ErrorValue.Name;
+            return true;
+        }
+
+        error = null;
+        var sheetName = startCell.SheetName ?? endCell.SheetName;
+        range = new RangeRefNode(startCell, endCell, sheetName);
+        return true;
+    }
+
+    /// <summary>Resolves one <see cref="NamedRangeEndpointNode"/> side to a concrete cell.</summary>
+    private static bool TryResolveEndpointCell(FormulaNode node, IEvalContext context, out CellRefNode cell)
+    {
+        if (node is CellRefNode direct)
+        {
+            cell = direct;
+            return true;
+        }
+
+        if (node is NamedRangeNode named)
+        {
+            var resolved = context.TryResolveNamedRange(named.Name);
+            if (resolved is null)
+            {
+                cell = null!;
+                return false;
+            }
+
+            var gridRange = resolved.Value;
+            cell = new CellRefNode(
+                FreeX.Core.Model.CellAddress.NumberToColumnName(gridRange.Start.Col),
+                gridRange.Start.Row,
+                SheetName: context.TryGetSheetName(gridRange.Start.Sheet));
+            return true;
+        }
+
+        cell = null!;
+        return false;
+    }
+
+    /// <summary>
+    /// Resolves an intersection operand (either side of an <see cref="IntersectionNode"/>) to its
+    /// rectangle: a bare cell, a plain bounded range, a full column/row, a defined name (resolved
+    /// via <paramref name="context"/>), or -- for a nested chain like <c>A1:A5 A2:C2 B1:B9</c> --
+    /// another <see cref="IntersectionNode"/>/<see cref="NamedRangeEndpointNode"/>.
+    /// </summary>
+    private static bool TryResolveOperandRectangle(
+        FormulaNode node, IEvalContext context,
+        out string? sheetName, out uint r0, out uint c0, out uint r1, out uint c1)
+    {
+        switch (node)
+        {
+            case CellRefNode cell:
+                sheetName = cell.SheetName;
+                r0 = r1 = cell.Row;
+                c0 = c1 = cell.ColumnNumber;
+                return true;
+
+            case RangeRefNode { EndSheetName: null } rr:
+                sheetName = rr.SheetName;
+                r0 = Math.Min(rr.Start.Row, rr.End.Row);
+                r1 = Math.Max(rr.Start.Row, rr.End.Row);
+                c0 = Math.Min(rr.Start.ColumnNumber, rr.End.ColumnNumber);
+                c1 = Math.Max(rr.Start.ColumnNumber, rr.End.ColumnNumber);
+                return true;
+
+            case FullColumnRangeRefNode fcr:
+                sheetName = fcr.SheetName;
+                r0 = 1;
+                r1 = FreeX.Core.Model.CellAddress.MaxRow;
+                c0 = Math.Min(fcr.StartColumnNumber, fcr.EndColumnNumber);
+                c1 = Math.Max(fcr.StartColumnNumber, fcr.EndColumnNumber);
+                return true;
+
+            case FullRowRangeRefNode frr:
+                sheetName = frr.SheetName;
+                c0 = 1;
+                c1 = FreeX.Core.Model.CellAddress.MaxCol;
+                r0 = Math.Min(frr.StartRow, frr.EndRow);
+                r1 = Math.Max(frr.StartRow, frr.EndRow);
+                return true;
+
+            case NamedRangeNode named:
+            {
+                var resolved = context.TryResolveNamedRange(named.Name);
+                if (resolved is null)
+                {
+                    sheetName = null; r0 = c0 = r1 = c1 = 0;
+                    return false;
+                }
+
+                var gridRange = resolved.Value;
+                sheetName = context.TryGetSheetName(gridRange.Start.Sheet);
+                r0 = gridRange.Start.Row;
+                c0 = gridRange.Start.Col;
+                r1 = gridRange.End.Row;
+                c1 = gridRange.End.Col;
+                return true;
+            }
+
+            case NamedRangeEndpointNode endpoint:
+            {
+                if (!TryResolveNamedRangeEndpointRange(endpoint, context, out var endpointRange, out var endpointError) ||
+                    endpointError is not null)
+                {
+                    sheetName = null; r0 = c0 = r1 = c1 = 0;
+                    return false;
+                }
+
+                sheetName = endpointRange.SheetName;
+                r0 = Math.Min(endpointRange.Start.Row, endpointRange.End.Row);
+                r1 = Math.Max(endpointRange.Start.Row, endpointRange.End.Row);
+                c0 = Math.Min(endpointRange.Start.ColumnNumber, endpointRange.End.ColumnNumber);
+                c1 = Math.Max(endpointRange.Start.ColumnNumber, endpointRange.End.ColumnNumber);
+                return true;
+            }
+
+            case IntersectionNode nested:
+            {
+                if (!TryResolveIntersectionRange(nested, context, out var nestedRange, out var nestedError) ||
+                    nestedError is not null)
+                {
+                    sheetName = null; r0 = c0 = r1 = c1 = 0;
+                    return false;
+                }
+
+                sheetName = nestedRange.SheetName;
+                r0 = Math.Min(nestedRange.Start.Row, nestedRange.End.Row);
+                r1 = Math.Max(nestedRange.Start.Row, nestedRange.End.Row);
+                c0 = Math.Min(nestedRange.Start.ColumnNumber, nestedRange.End.ColumnNumber);
+                c1 = Math.Max(nestedRange.Start.ColumnNumber, nestedRange.End.ColumnNumber);
+                return true;
+            }
+
+            default:
+                sheetName = null; r0 = c0 = r1 = c1 = 0;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Reconciles the two operand sheet names of an intersection: a null side means "the formula's
+    /// own sheet" (implicitly matching whatever the other side names), so only two *different*
+    /// explicit sheet names are a genuine mismatch (-> no possible overlap).
+    /// </summary>
+    private static bool TryReconcileSheetNames(string? a, string? b, out string? sheetName)
+    {
+        if (a is null || b is null || string.Equals(a, b, StringComparison.OrdinalIgnoreCase))
+        {
+            sheetName = a ?? b;
+            return true;
+        }
+
+        sheetName = null;
+        return false;
+    }
 
     private ScalarValue EvaluateArrayOperand(FormulaNode node, IEvalContext context)
     {
+        if (node is IntersectionNode intersection)
+        {
+            TryResolveIntersectionRange(intersection, context, out var intersectionRange, out var intersectionError);
+            return intersectionError is { } intersectionErr
+                ? intersectionErr
+                : BuildRangeValueOrError(intersectionRange, context);
+        }
+
+        if (node is NamedRangeEndpointNode namedEndpoint)
+        {
+            TryResolveNamedRangeEndpointRange(namedEndpoint, context, out var endpointRange, out var endpointError);
+            return endpointError is { } endpointErr
+                ? endpointErr
+                : BuildRangeValueOrError(endpointRange, context);
+        }
+
         if (node is RangeRefNode range)
             return BuildRangeValueOrError(range, context);
 
@@ -559,9 +817,23 @@ public sealed partial class FormulaEvaluator
             context.CurrentCellAddress,
             node.TableName,
             node.ColumnName);
-        return address is null
+        if (address is not null)
+            return context.GetCellValue(address.Value.Row, address.Value.Col);
+
+        // ResolveCurrentRowColumn only ever matches a single literal column name; a '@' shorthand
+        // column-RANGE (Table1[@[Q1]:[Q2]]) falls through here with ColumnName holding the literal
+        // bracketed range text "[Q1]:[Q2]" instead, which no single column is ever named. Route that
+        // shape to the range-aware resolver instead of failing outright, so it evaluates the same
+        // current-row slice its long-form equivalent =SUM(Table1[[#This Row],[Q1]:[Q2]]) does.
+        var range = StructuredReferenceResolver.ResolveCurrentRowColumnRange(
+            context.CurrentWorkbook,
+            context.CurrentSheet,
+            context.CurrentCellAddress,
+            node.TableName,
+            node.ColumnName);
+        return range is null
             ? ErrorValue.Name
-            : context.GetCellValue(address.Value.Row, address.Value.Col);
+            : BuildRangeValueOrError(range.Value, context);
     }
 
 
@@ -793,6 +1065,43 @@ public sealed partial class FormulaEvaluator
             _ => null!
         };
         return range is not null;
+    }
+
+    /// <summary>
+    /// Context-aware superset of <see cref="TryAsRangeRef"/> used by the aggregate/structured
+    /// argument-expansion loop in FormulaEvaluator.Functions.cs. In addition to every plain
+    /// reference shape <see cref="TryAsRangeRef"/> already understands, this also resolves an
+    /// <see cref="IntersectionNode"/> (the space operator -- the overlapping rectangle of both
+    /// operands, or #NULL! when they don't overlap) and a <see cref="NamedRangeEndpointNode"/> (a
+    /// defined NAME used as one endpoint of ':' -- resolved to its top-left cell). Both need
+    /// <paramref name="context"/> for name lookups, unlike the purely syntactic
+    /// <see cref="TryAsRangeRef"/>, which is why they live here rather than there -- the many
+    /// context-free "direct range" fast paths (INDEX/MATCH/VLOOKUP/ROWS/COLUMNS/...) keep calling
+    /// <see cref="TryAsRangeRef"/> directly and simply treat these two shapes as "not a direct
+    /// range", falling back to the slower general per-argument path, which calls this instead.
+    /// Returns false when <paramref name="node"/> isn't any of these reference shapes at all (the
+    /// caller's existing fallback handling applies, unchanged). Returns true with
+    /// <paramref name="error"/> non-null when it IS one of these shapes but couldn't be resolved to
+    /// a usable range (disjoint intersection -> #NULL!; an unresolvable name endpoint -> #NAME?;
+    /// an operand that isn't itself reference-shaped -> #VALUE!) -- the caller should short-circuit
+    /// to that error rather than reading <paramref name="range"/>.
+    /// </summary>
+    private static bool TryResolveReferenceRange(
+        FormulaNode node, IEvalContext context, out RangeRefNode range, out ErrorValue? error)
+    {
+        error = null;
+
+        if (TryAsRangeRef(node, out range))
+            return true;
+
+        if (node is IntersectionNode intersection)
+            return TryResolveIntersectionRange(intersection, context, out range, out error);
+
+        if (node is NamedRangeEndpointNode endpoint)
+            return TryResolveNamedRangeEndpointRange(endpoint, context, out range, out error);
+
+        range = null!;
+        return false;
     }
 
     private static bool TryEvaluateReferenceDimensionFunction(

@@ -176,7 +176,10 @@ public enum ChartAxisDisplayUnit
 
 public enum ChartDrawingAnchorKind { Absolute, OneCell, TwoCell }
 
-public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
+// R65-default-fallback-swallow-sweep-2: X/Star/Plus/Dot/Dash/Auto added so ST_MarkerStyle's
+// remaining values round-trip distinctly instead of collapsing to Circle on read and "circle" on
+// write.
+public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle, X, Star, Plus, Dot, Dash, Auto }
 
 // R41-io-chart-errorbars-trendline-3-1: StdDev (Standard Deviation, with a user-configurable
 // multiplier) added at the end so it round-trips distinctly from StandardError (Standard Error,

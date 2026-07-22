@@ -105,6 +105,28 @@ public sealed record StructuredCurrentRowReferenceNode(string ColumnName, string
 /// <summary>A formula-level error literal produced by reference rewriting (e.g. #REF!).</summary>
 public sealed record ErrorNode(Model.ErrorValue Error) : FormulaNode;
 
+/// <summary>
+/// Excel's explicit INTERSECTION reference operator: a plain space directly between two
+/// reference operands (e.g. the space in <c>A1:C3 B2:D4</c>, which intersects to <c>B2:C3</c>).
+/// Evaluates to the overlapping rectangle of both operands, or <c>#NULL!</c> when they don't
+/// overlap at all. See <see cref="Parser.ParseIntersection"/> for where this is produced
+/// (precedence: tighter than unary/arithmetic, looser than the ':' range operator) and
+/// <c>FormulaEvaluator.References.cs</c>'s intersection-resolution helpers for the rectangle math.
+/// </summary>
+public sealed record IntersectionNode(FormulaNode Left, FormulaNode Right) : FormulaNode;
+
+/// <summary>
+/// A ':' RANGE operator whose start and/or end endpoint is a defined NAME rather than a literal
+/// cell reference (e.g. <c>StartCell:B2</c>, <c>A1:EndName</c>, <c>StartCell:EndName</c>). Each of
+/// <see cref="Start"/>/<see cref="End"/> is either a <see cref="CellRefNode"/> or a
+/// <see cref="NamedRangeNode"/>; the evaluator resolves any <see cref="NamedRangeNode"/> endpoint
+/// to its defined range's top-left cell (matching Excel, which always anchors on the name's
+/// corner) before forming the effective range. See <see cref="Parser"/>'s NamedRange-primary ':'
+/// handling and <see cref="Parser.ParseIndexRangeEndpoint"/>'s NamedRange case for where this is
+/// produced.
+/// </summary>
+public sealed record NamedRangeEndpointNode(FormulaNode Start, FormulaNode End) : FormulaNode;
+
 /// <summary>Binary operators.</summary>
 public enum BinaryOperator
 {

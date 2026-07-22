@@ -43,7 +43,9 @@ public sealed class XlsxStylesThemeIndexedUnderlineReadingOrderTests
 
         var style = XlsxDifferentialStyleReader.ReadDifferentialStyle(dxf, WorkbookNs, WorkbookTheme.Office, indexedColors);
 
-        indexedColors.TryResolveColor(11, out var expected).Should().BeTrue();
+        // OOXML indexed="10" maps to WorkbookIndexedColorPalette's 1-based ColorIndex via
+        // index-7 (see XlsxColorReader.TryReadIndexedColor), i.e. palette entry 3 (Red).
+        indexedColors.TryResolveColor(3, out var expected).Should().BeTrue();
         style.FillColor.Should().Be(expected,
             "a dxf fill color expressed as a legacy indexed color must resolve through the indexed palette, not be left null");
     }
@@ -52,7 +54,7 @@ public sealed class XlsxStylesThemeIndexedUnderlineReadingOrderTests
     public void DifferentialStyleReader_ResolvesIndexedBorderColor_HonoringCustomOverride()
     {
         var indexedColors = new WorkbookIndexedColorPalette();
-        indexedColors.SetColor(11, new CellColor(0x12, 0x34, 0x56)); // authored override for 0-based indexed="10"
+        indexedColors.SetColor(3, new CellColor(0x12, 0x34, 0x56)); // authored override for OOXML indexed="10" (palette index 10-7=3)
         var dxf = XElement.Parse(
             $"""<dxf xmlns="{WorkbookNs}"><border><left style="thin"><color indexed="10"/></left></border></dxf>""");
 

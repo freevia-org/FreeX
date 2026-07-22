@@ -137,7 +137,11 @@ public sealed partial class XlsxFileAdapter
                 CropLeft = picturePart.CropLeft,
                 CropTop = picturePart.CropTop,
                 CropRight = picturePart.CropRight,
-                CropBottom = picturePart.CropBottom
+                CropBottom = picturePart.CropBottom,
+                // R65-io-image-drawing-6-1: a "Link to File" picture part has LinkTarget set instead of
+                // ImageBytes -- carry it onto the model so the picture is materialized as a linked
+                // picture (with a marker other code can check) instead of silently vanishing.
+                LinkedImageTarget = picturePart.LinkTarget
             };
             XlsxDrawingAnchorApplier.ApplyToPicture(picture, picturePart.Anchor, sheet);
             picture.IsSourceLoaded = true;

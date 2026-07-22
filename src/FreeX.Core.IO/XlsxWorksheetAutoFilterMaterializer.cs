@@ -20,9 +20,17 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             return;
         }
 
-        var filters = BuildFilters(sheet, autoFilter, range, out var unfilteredColumnCount);
-        if (filters.Count + unfilteredColumnCount != autoFilter.FilterColumns.Count)
-            return;
+        // R65-services-autofilter-6-1: BuildFilters already skips whatever it cannot represent
+        // (customFilters/dateGroups/colorFilter/iconFilter columns, button-only columns, etc.) --
+        // it must NOT be all-or-nothing here. Bailing the entire sheet out just because ONE column
+        // uses an unsupported filter kind would silently drop every OTHER column's perfectly
+        // supported value-list/Top10/Average filter too, leaving FilterHiddenRows/
+        // ActiveValueFilterColumns/ColumnFilterOwnedRows empty and making Clear Filter and the
+        // dropdown checklist behave as if there were no filter at all. Whatever BuildFilters DID
+        // manage to build is materialized below; unsupported columns are simply left alone (their
+        // raw hidden-row bits loaded from the row XML are untouched, since nothing here un-hides
+        // rows -- it only ever adds to FilterHiddenRows).
+        var filters = BuildFilters(sheet, autoFilter, range, out _);
 
         // G2/G32: sheet.ActiveValueFilterColumns/ValueFilterHiddenRows form an ownership pair that
         // FilterCommand.RecomputeHiddenRows relies on to know which rows it may safely un-hide later
@@ -93,6 +101,17 @@ internal static class XlsxWorksheetAutoFilterMaterializer
     {
         var filters = new List<WorksheetAutoFilterState>();
         unfilteredColumnCount = 0;
+
+        // R65-services-autofilter-6-3: Top10/Average filter columns must rank/average over rows
+        // still visible under every OTHER active column's filter, exactly like the live
+        // TopBottomFilterCommand/AverageFilterCommand apply path scopes via
+        // FilterHiddenRowUpdater.IsHiddenByAnyOtherActiveMechanism -- otherwise a Top-N combined
+        // with a value-list filter on load ranks over the whole column and produces a different
+        // (over-hidden) result than re-applying the same filters live would. Value-list filters are
+        // unambiguous and order-independent, so they are all built first below; the ranked
+        // (Top10/Average) columns are resolved in a second pass against the value-list filters plus
+        // whichever ranked columns were already resolved earlier in that pass.
+        var pendingRanked = new List<(uint Column, WorksheetAutoFilterTop10Model? Top10, bool AverageAbove)>();
         foreach (var filterColumn in autoFilter.FilterColumns)
         {
             if (filterColumn.ColumnId < 0)
@@ -112,11 +131,7 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             var column = range.Start.Col + (uint)filterColumn.ColumnId;
             if (filterColumn.Top10 is { } top10)
             {
-                filters.Add(new WorksheetAutoFilterState(
-                    column,
-                    null,
-                    false,
-                    BuildTop10KeptRows(sheet, range, column, top10)));
+                pendingRanked.Add((column, top10, false));
                 continue;
             }
 
@@ -125,11 +140,7 @@ internal static class XlsxWorksheetAutoFilterMaterializer
                 if (!IsAverageDynamicFilter(dynamicFilter, out var above))
                     continue;
 
-                filters.Add(new WorksheetAutoFilterState(
-                    column,
-                    null,
-                    false,
-                    BuildAverageKeptRows(sheet, range, column, above)));
+                pendingRanked.Add((column, null, above));
                 continue;
             }
 
@@ -152,6 +163,14 @@ internal static class XlsxWorksheetAutoFilterMaterializer
                 null));
         }
 
+        foreach (var (column, top10, averageAbove) in pendingRanked)
+        {
+            var keptRows = top10 is { } top10Model
+                ? BuildTop10KeptRows(sheet, range, column, top10Model, filters)
+                : BuildAverageKeptRows(sheet, range, column, averageAbove, filters);
+            filters.Add(new WorksheetAutoFilterState(column, null, false, keptRows));
+        }
+
         return filters;
     }
 
@@ -169,11 +188,18 @@ internal static class XlsxWorksheetAutoFilterMaterializer
         return false;
     }
 
-    private static HashSet<uint> BuildAverageKeptRows(Sheet sheet, GridRange range, uint column, bool above)
+    private static HashSet<uint> BuildAverageKeptRows(
+        Sheet sheet,
+        GridRange range,
+        uint column,
+        bool above,
+        IReadOnlyList<WorksheetAutoFilterState> otherFilters)
     {
         var numericRows = new List<(uint Row, double Value)>();
         for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
         {
+            if (!RowMatchesAllFilters(sheet, row, otherFilters))
+                continue;
             if (sheet.GetValue(row, column) is NumberValue number)
                 numericRows.Add((row, number.Value));
         }
@@ -188,7 +214,12 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             .ToHashSet();
     }
 
-    private static HashSet<uint> BuildTop10KeptRows(Sheet sheet, GridRange range, uint column, WorksheetAutoFilterTop10Model top10)
+    private static HashSet<uint> BuildTop10KeptRows(
+        Sheet sheet,
+        GridRange range,
+        uint column,
+        WorksheetAutoFilterTop10Model top10,
+        IReadOnlyList<WorksheetAutoFilterState> otherFilters)
     {
         var value = top10.Value ?? 10;
         if (value <= 0)
@@ -197,6 +228,8 @@ internal static class XlsxWorksheetAutoFilterMaterializer
         var rankedRows = new List<(uint Row, double Value)>();
         for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
         {
+            if (!RowMatchesAllFilters(sheet, row, otherFilters))
+                continue;
             if (sheet.GetValue(row, column) is NumberValue number)
                 rankedRows.Add((row, number.Value));
         }

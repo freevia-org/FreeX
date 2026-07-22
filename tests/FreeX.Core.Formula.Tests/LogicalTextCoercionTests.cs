@@ -69,4 +69,45 @@ public class LogicalTextCoercionTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new BoolValue(true));
         _evaluator.Evaluate("=AND(A1:A2)", sheet, wb).Should().Be(new BoolValue(true));
     }
+
+    // R65-formula-logical-6-1: NOT routed through ToBool (no numeric-text case) instead of
+    // TryDirectLogicalBool (the helper AND/OR/XOR use), so NOT("1")/NOT("0") wrongly errored.
+    [Theory]
+    [InlineData("=NOT(\"1\")", false)]
+    [InlineData("=NOT(\"0\")", true)]
+    public void Not_CoercesNumericDirectText(string formula, bool expected) =>
+        Eval(formula).Should().Be(new BoolValue(expected));
+
+    [Fact]
+    public void Not_CellWithNumericText_Coerces()
+    {
+        // A1 holds the numeric-text "0" (not a direct literal) -- must coerce the same way.
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("0"));
+        _evaluator.Evaluate("=NOT(A1)", sheet, wb).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void Not_BlankCell_CoercesToFalseThenNegates()
+    {
+        // Regression guard: TryDirectLogicalBool has no BlankValue case (AND/OR/XOR handle
+        // blank cells via ReferencedScalarValue instead), so NotScalar must special-case blank
+        // explicitly rather than falling through to #VALUE!. NOT(<blank>) = NOT(FALSE) = TRUE.
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        _evaluator.Evaluate("=NOT(A1)", sheet, wb).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void Not_NonNumericText_IsValueError() =>
+        Eval("=NOT(\"abc\")").Should().Be(ErrorValue.Value);
+
+    [Theory]
+    [InlineData("=NOT(TRUE)", false)]
+    [InlineData("=NOT(FALSE)", true)]
+    [InlineData("=NOT(1)", false)]
+    [InlineData("=NOT(0)", true)]
+    public void Not_BooleanAndNumeric_Unaffected(string formula, bool expected) =>
+        Eval(formula).Should().Be(new BoolValue(expected));
 }

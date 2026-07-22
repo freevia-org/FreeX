@@ -899,17 +899,20 @@ public sealed partial class Sheet
         for (int r = 0; r < rows; r++)
             for (int c = 0; c < cols; c++)
             {
-                if (r == 0 && c == 0) continue;
+                bool isAnchor = r == 0 && c == 0;
                 long targetRow = (long)anchor.Row + r;
                 long targetCol = (long)anchor.Col + c;
                 if (targetRow > CellAddress.MaxRow || targetCol > CellAddress.MaxCol) return true;
                 var key = ((uint)targetRow, (uint)targetCol);
                 // Excel refuses to spill into a merged cell ("Spill range has merged cells"),
-                // even when that region is otherwise empty (no _cells/_spillValues entry).
+                // even when that region is otherwise empty (no _cells/_spillValues entry). This
+                // check also applies to the anchor cell itself: if the anchor is part of a merged
+                // region, Excel still refuses the spill ("merged cells") even though the anchor is
+                // the cell holding the formula.
                 if (IsMerged(new CellAddress(anchor.Sheet, key.Item1, key.Item2))) return true;
                 // R20-array-dynamic-spill-2: Excel also refuses to spill into (or through) an Excel
                 // Table's footprint ("Spill range has table"), even for a blank table body cell that
-                // has no _cells/_spillValues entry of its own.
+                // has no _cells/_spillValues entry of its own. This also applies to the anchor cell.
                 if (StructuredTables.Count > 0)
                 {
                     var candidate = new CellAddress(anchor.Sheet, key.Item1, key.Item2);
@@ -918,6 +921,10 @@ public sealed partial class Sheet
                         if (table.Range.Contains(candidate)) return true;
                     }
                 }
+                // The occupied-cell checks below only apply to non-anchor cells: the anchor cell
+                // itself already holds the formula being evaluated, so it is expected to be
+                // "occupied" and must not block its own spill.
+                if (isAnchor) continue;
                 if (_cells.TryGetValue(key, out var occupant))
                 {
                     // A provisional cached spill cell loaded from the XLSX for THIS anchor does not

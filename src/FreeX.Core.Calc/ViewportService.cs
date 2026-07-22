@@ -1348,13 +1348,18 @@ public sealed partial class ViewportService : IViewportService
             return string.Empty;
         }
 
+        // Excel never shows the width-based '#' overflow indicator when ShrinkToFit is on --
+        // the real value shrinks (font-wise, in GridView's render pass) to fit the column
+        // instead. Suppressing the indicator here lets the real formatted text reach that
+        // shrink-font path unmolested; ShrinkToFit off keeps the normal '#' overflow behavior.
         var result = NumberFormatter.FormatWithColor(
             cell.Value,
             style.NumberFormat,
             targetWidthCharacters,
             workbook.IndexedColors,
             workbook.Theme,
-            workbook.Uses1904DateSystem);
+            workbook.Uses1904DateSystem,
+            suppressWidthOverflowIndicator: style.ShrinkToFit);
         if (TryParseHexColor(result.ColorHex, out var color))
         {
             if (style.FontColor != color)

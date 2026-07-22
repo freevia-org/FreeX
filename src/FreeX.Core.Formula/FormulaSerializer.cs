@@ -101,7 +101,16 @@ public static class FormulaSerializer
                 if (!string.IsNullOrWhiteSpace(current.TableName))
                     sb.Append(current.TableName);
                 sb.Append("[@");
-                sb.Append(current.ColumnName.Replace("]", "]]"));
+                // ColumnName for a column-RANGE shorthand (Table1[@[Q1]:[Q2]]) is the literal
+                // bracketed range text "[Q1]:[Q2]" itself, not a bare column name — it must be
+                // written through unescaped (mirrors AppendStructuredReferenceSelector's own
+                // selector.StartsWith('[') guard below). Blindly doubling every ']' here would turn
+                // it into "[Q1]]:[Q2]]" (plus the closing ']' appended after this switch arm),
+                // which re-lexes as an unterminated structured reference. A plain single-column
+                // name (no leading '[') still needs a literal ']' doubled so it round-trips.
+                sb.Append(current.ColumnName.StartsWith('[')
+                    ? current.ColumnName
+                    : current.ColumnName.Replace("]", "]]"));
                 sb.Append(']');
                 break;
 
@@ -188,6 +197,18 @@ public static class FormulaSerializer
                 {
                     WriteNode(u.Operand, sb);
                 }
+                break;
+
+            case IntersectionNode intersection:
+                WriteNode(intersection.Left, sb);
+                sb.Append(' ');
+                WriteNode(intersection.Right, sb);
+                break;
+
+            case NamedRangeEndpointNode endpoint:
+                WriteNode(endpoint.Start, sb);
+                sb.Append(':');
+                WriteNode(endpoint.End, sb);
                 break;
 
             case UnaryOpNode u when u.Operator == UnaryOperator.Percent:

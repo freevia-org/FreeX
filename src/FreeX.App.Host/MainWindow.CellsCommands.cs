@@ -239,6 +239,107 @@ public partial class MainWindow
             ? "=" + cell.FormulaText
             : NumberFormatter.Format(cell.Value, style.NumberFormat, _workbook.Uses1904DateSystem);
     }
+
+    /// <summary>
+    /// Turning on Wrap Text auto-grows each affected row to fit the now-wrapped content, matching
+    /// Excel's "row grows unless you've manually resized it" behavior (mirrors
+    /// WorkbookSession.CreateWrapTextGrowthCommands in the Avalonia shell). Reuses the same
+    /// content-based estimate (RowColumnSizingPlanner/AutoFitSizingService) as the explicit "AutoFit
+    /// Row Height" command above, but since this runs before the WrapText style diff has been
+    /// applied, the display-text lookup is overridden to report WrapText=true for cells in
+    /// <paramref name="range"/>. Only ever grows a row: any row whose estimate doesn't exceed its
+    /// current height (including a row a user previously resized taller by hand) is left untouched,
+    /// matching Excel never shrinking a row just from toggling wrap on.
+    /// </summary>
+    private IReadOnlyList<IWorkbookCommand> CreateWrapTextGrowthCommands(SheetId sheetId, GridRange range)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return [];
+
+        var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
+        var plans = RowColumnSizingPlanner.PlanAutoFitRowHeights(
+            sheet,
+            sheetRange,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitCellTextForPendingWrap(sheet, row, col, sheetRange),
+            sheet.DefaultRowHeight);
+
+        return plans
+            .Where(plan => plan.Size > (sheet.RowHeights.TryGetValue(plan.Index, out var currentHeight) ? currentHeight : sheet.DefaultRowHeight))
+            .Select(plan => (IWorkbookCommand)new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size))
+            .ToList();
+    }
+
+    private AutoFitCellText? GetAutoFitCellTextForPendingWrap(Sheet sheet, uint row, uint col, GridRange pendingWrapRange)
+    {
+        if (GetAutoFitCellText(sheet, row, col) is not { } cellText)
+            return null;
+
+        return pendingWrapRange.Contains(new CellAddress(sheet.Id, row, col))
+            ? cellText with { WrapText = true }
+            : cellText;
+    }
+
+    /// <summary>
+    /// Applies a style diff that may enable Wrap Text, folding the Excel-matching row-height
+    /// auto-grow (<see cref="CreateWrapTextGrowthCommands"/>) into the same undoable/repeatable
+    /// operation as the style change itself -- unlike the generic ApplyStyleDiff (WorkbookUiState.cs),
+    /// which has no notion of row growth. Used by the Wrap Text ribbon toggle and by the Format
+    /// Cells dialog's simple (no border/merge ops) apply path.
+    /// </summary>
+    private void ApplyStyleDiffWithWrapGrowth(StyleDiff diff)
+    {
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteRepeatableApplyStyleWithWrapGrowth(diff, "Apply Style"))
+            return;
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private bool TryExecuteRepeatableApplyStyleWithWrapGrowth(StyleDiff diff, string title)
+    {
+        IWorkbookCommand CreateCommand()
+        {
+            var fallbackRange = new GridRange(
+                new CellAddress(_currentSheetId, 1, 1),
+                new CellAddress(_currentSheetId, 1, 1));
+            var ranges = GetCurrentSelectionRanges(fallbackRange);
+            var groupedSheetIds = CurrentGroupedEditSheetIds();
+            var commands = new List<IWorkbookCommand>
+            {
+                SelectionStyleCommandPlanner.CreateApplyStyleCommand(groupedSheetIds, ranges, diff, title)
+            };
+
+            if (diff.WrapText == true)
+            {
+                foreach (var sheetId in groupedSheetIds)
+                foreach (var range in ranges)
+                    commands.AddRange(CreateWrapTextGrowthCommands(sheetId, range));
+            }
+
+            return commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(title, commands);
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (outcome.Success)
+        {
+            if (outcome.IsNoOp)
+                return true;
+
+            MarkWorkbookDirty();
+            _repeatPostAction = null;
+            InvalidateNavigationCaches();
+            NotifyOtherWindowsOfWorkbookChange();
+            return true;
+        }
+
+        ShowCommandError(outcome, title);
+        return false;
+    }
+
     private void FormatDefaultWidthMenuItem_Click(object sender, RoutedEventArgs e) { FormatColWidthMenuItem_Click(sender, e); }
     private void FormatHideRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -645,7 +746,7 @@ public partial class MainWindow
     {
         if (!borderSelection.HasRangeOperations && mergeCells is null)
         {
-            ApplyStyleDiff(diff);
+            ApplyStyleDiffWithWrapGrowth(diff);
             return;
         }
 
@@ -667,6 +768,11 @@ public partial class MainWindow
                     sheetRange,
                     borderSelection.HasRangeOperations ? nonBorderDiff : diff)
             };
+
+            if (diff.WrapText == true)
+            {
+                commands.AddRange(CreateWrapTextGrowthCommands(sheetId, sheetRange));
+            }
 
             if (borderSelection.Clear)
             {

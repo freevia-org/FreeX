@@ -209,6 +209,14 @@ internal static class XlsxChartSeriesFormatReader
             "square" => ChartMarkerStyle.Square,
             "diamond" => ChartMarkerStyle.Diamond,
             "triangle" => ChartMarkerStyle.Triangle,
+            // R65-default-fallback-swallow-sweep-2: the remaining ST_MarkerStyle values fell through
+            // to Circle, silently losing the shape.
+            "x" => ChartMarkerStyle.X,
+            "star" => ChartMarkerStyle.Star,
+            "plus" => ChartMarkerStyle.Plus,
+            "dot" => ChartMarkerStyle.Dot,
+            "dash" => ChartMarkerStyle.Dash,
+            "auto" => ChartMarkerStyle.Auto,
             _ => ChartMarkerStyle.Circle
         };
 }
