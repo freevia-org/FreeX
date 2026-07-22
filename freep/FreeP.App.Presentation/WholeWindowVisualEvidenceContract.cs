@@ -9,6 +9,7 @@ public enum WholeWindowVisualEvidenceScenarioKind
     ViewState,
     WorkspaceRegion,
     AuxiliaryPane,
+    RichEditorOverlay,
 }
 
 public sealed record WholeWindowVisualEvidenceScenario(
@@ -55,6 +56,9 @@ public static class WholeWindowVisualEvidenceCatalog
         Scenario("workspace.slide-pane", WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion, "slide-pane", "insert", selectionRouteId: "none", slideIndex: 1),
         Scenario("workspace.notes-pane", WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion, "notes-pane", "view", selectionRouteId: "none", slideIndex: 1),
         Scenario("workspace.canvas", WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion, "canvas", "design", selectionRouteId: "chart"),
+
+        Scenario("editor.rich-text-selection", WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay, "selection", selectionRouteId: "shape"),
+        Scenario("editor.rich-text-caret", WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay, "caret", selectionRouteId: "shape"),
 
         Auxiliary("review.comments-pane", "comments", "shape"),
         Auxiliary("review.accessibility-pane", "accessibility", "shape"),
