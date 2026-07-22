@@ -15,6 +15,7 @@ public sealed class DrawingGroupRoundTripTests
     private static readonly XNamespace Wp  = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
     private static readonly XNamespace Wpg = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
     private static readonly XNamespace Wps = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
+    private static readonly XNamespace Pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";
 
     private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47];
 
@@ -35,6 +36,13 @@ public sealed class DrawingGroupRoundTripTests
         var entry = zip.GetEntry("word/document.xml")!;
         using var stream = entry.Open();
         return XDocument.Load(stream);
+    }
+
+    private static byte[] WriteBytes(TextDocument doc)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        return stream.ToArray();
     }
 
     private static DrawingGroup TwoMemberGroup()
@@ -156,6 +164,36 @@ public sealed class DrawingGroupRoundTripTests
 
         children[1].Descendants(A + "glow").Should().NotBeEmpty();
         children[1].Descendants(A + "prstTxWarp").Single().Attribute("prst")?.Value.Should().Be("textWave1");
+    }
+
+    [Fact]
+    public void DrawingGroup_NativeImageChild_EmitsMediaAndRoundTripsPayload()
+    {
+        var imageBytes = Png();
+        var group = new DrawingGroup { WidthPt = 144, HeightPt = 72 };
+        group.Children.Add(new InlineImage(imageBytes, 48, 42));
+        group.ChildOffsets.Add((0, 0));
+        group.Children.Add(new Shape(ShapeKind.Rectangle, 48, 42));
+        group.ChildOffsets.Add((72, 0));
+
+        var document = DocumentWith(group);
+        var bytes = WriteBytes(document);
+        using (var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        {
+            zip.GetEntry("word/media/image1.png").Should().NotBeNull();
+        }
+
+        var xml = DocXml(document);
+        var wgp = xml.Descendants(Wpg + "wgp").Single();
+        wgp.Elements(Pic + "pic").Should().ContainSingle()
+            .Which.Descendants(A + "blip").Should().ContainSingle();
+        wgp.Elements(Wps + "wsp").Should().ContainSingle("the image is native while the shape remains a native wps child");
+
+        var recovered = DocxReader.Read(new MemoryStream(bytes));
+        var roundTripped = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
+        roundTripped.Children.Should().HaveCount(2);
+        roundTripped.Children[0].Should().BeOfType<InlineImage>().Which.Bytes.Should().Equal(imageBytes);
+        roundTripped.Children[1].Should().BeOfType<Shape>();
     }
 
     // ── Two-member round-trip ────────────────────────────────────────────────────────────────────

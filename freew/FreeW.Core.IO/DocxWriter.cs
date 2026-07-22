@@ -480,15 +480,23 @@ public static class DocxWriter
         var images = new List<ImagePart>();
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
+            {
                 if (run.Image is { } image)
-                {
-                    var index = images.Count + 1;
-                    images.Add(new ImagePart(
-                        image,
-                        $"rIdImg{index}",
-                        NextAvailablePartFileName(usedPartNames, "word/media", "image", InlineImage.ExtensionFor(image.Format)),
-                        (uint)index));
-                }
+                    Add(image);
+                if (run.DrawingGroup is { } group)
+                    foreach (var groupedImage in group.Children.OfType<InlineImage>())
+                        Add(groupedImage);
+            }
+
+        void Add(InlineImage image)
+        {
+            var index = images.Count + 1;
+            images.Add(new ImagePart(
+                image,
+                $"rIdImg{index}",
+                NextAvailablePartFileName(usedPartNames, "word/media", "image", InlineImage.ExtensionFor(image.Format)),
+                (uint)index));
+        }
         return images;
     }
 
@@ -1108,6 +1116,7 @@ public static class DocxWriter
         var chartsByRun = new Dictionary<Run, ChartPart>();
         var embeddedByRun = new Dictionary<Run, EmbeddedObjectPart>();
         var smartArtsByRun = new Dictionary<Run, SmartArtPart>();
+        var imagesByGroupChild = new Dictionary<InlineImage, ImagePart>();
         var nextImage = 0;
         var nextChart = 0;
         var nextEmbedded = 0;
@@ -1123,6 +1132,12 @@ public static class DocxWriter
                     embeddedByRun[run] = embeddedObjects[nextEmbedded++];
                 if (run.SmartArt is not null)
                     smartArtsByRun[run] = smartArts[nextSmartArt++];
+                if (run.DrawingGroup is { } group)
+                    foreach (var child in group.Children)
+                    {
+                        if (child is InlineImage image)
+                            imagesByGroupChild[image] = images[nextImage++];
+                    }
             }
 
         // Map each document-referenced preserved part to its assigned rIdPreserved{N} (same order/ids as
@@ -1131,7 +1146,9 @@ public static class DocxWriter
         var preservedDrawingRelIds = PreservedPartRelIds(preservedParts)
             .ToDictionary(pair => pair.Part.PartName, pair => pair.RelId, StringComparer.Ordinal);
 
-        var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, preservedDrawingRelIds);
+        var drawings = new RunDrawings(
+            imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, preservedDrawingRelIds,
+            imagesByGroupChild);
 
         var body = new XElement(W + "body");
         for (var i = 0; i < document.Blocks.Count;)
@@ -1219,14 +1236,17 @@ public static class DocxWriter
         IReadOnlyDictionary<Run, EmbeddedObjectPart> EmbeddedObjects,
         IReadOnlyDictionary<Run, SmartArtPart> SmartArts,
         IdAllocator Ids,
-        IReadOnlyDictionary<string, string>? PreservedDrawingRelIds = null)
+        IReadOnlyDictionary<string, string>? PreservedDrawingRelIds = null,
+        IReadOnlyDictionary<InlineImage, ImagePart>? GroupImages = null)
     {
         public static RunDrawings Empty() => new(
             new Dictionary<Run, ImagePart>(),
             new Dictionary<Run, ChartPart>(),
             new Dictionary<Run, EmbeddedObjectPart>(),
             new Dictionary<Run, SmartArtPart>(),
-            new IdAllocator());
+            new IdAllocator(),
+            null,
+            new Dictionary<InlineImage, ImagePart>());
     }
 
     /// <summary>
@@ -2772,7 +2792,7 @@ public static class DocxWriter
         if (run.PreservedDrawing is { } preservedDrawing)
             r.Add(BuildPreservedDrawing(preservedDrawing, drawings.PreservedDrawingRelIds));
         else if (run.DrawingGroup is not null)
-            r.Add(BuildDrawingGroupDrawing(run.DrawingGroup, drawings.Ids));
+            r.Add(BuildDrawingGroupDrawing(run.DrawingGroup, drawings));
         else if (run.Image is not null && drawings.Images.TryGetValue(run, out var imagePart))
             r.Add(BuildDrawing(imagePart));
         else if (run.Chart is not null && drawings.Charts.TryGetValue(run, out var chartPart))
@@ -4170,12 +4190,13 @@ public static class DocxWriter
 
     /// <summary>
     /// Builds the <c>w:drawing/wp:anchor</c> for a <see cref="DrawingGroup"/>, emitting the group as
-    /// <c>wpg:wgp</c> inside <c>a:graphicData[uri=wpg]</c>. Shape and WordArt children reuse their normal
-    /// DrawingML <c>wps:wsp</c> bodies with a group-local <c>a:xfrm</c>, while unsupported child kinds remain
-    /// lightweight placeholders. Groups are always floating (no inline path).
+    /// <c>wpg:wgp</c> inside <c>a:graphicData[uri=wpg]</c>. Shapes and WordArt use <c>wps:wsp</c>; images use
+    /// their native <c>pic:pic</c> payload. Word rejects chart/SmartArt graphic frames in a wpg group, so
+    /// those unsupported child kinds intentionally retain the existing marker placeholder. Groups float.
     /// </summary>
-    private static XElement BuildDrawingGroupDrawing(DrawingGroup group, IdAllocator ids)
+    private static XElement BuildDrawingGroupDrawing(DrawingGroup group, RunDrawings drawings)
     {
+        var ids = drawings.Ids;
         var cx = PointsToEmu(group.WidthPt);
         var cy = PointsToEmu(group.HeightPt);
 
@@ -4216,6 +4237,8 @@ public static class DocxWriter
             {
                 Shape shape => BuildDrawingGroupShapeChild(shape, xfrm, childName, ids),
                 WordArt wordArt => BuildDrawingGroupWordArtChild(wordArt, xfrm, childName, ids),
+                InlineImage image when drawings.GroupImages?.TryGetValue(image, out var imagePart) == true
+                    => BuildDrawingGroupImageChild(imagePart, xfrm, childName),
                 _ => BuildDrawingGroupPlaceholderChild(xfrm, new XElement(Wp + "docPr",
                     new XAttribute("id", ids.NextShapeDrawingId()),
                     new XAttribute("name", childName)))
@@ -4270,6 +4293,21 @@ public static class DocxWriter
     {
         var drawing = BuildWordArtDrawing(wordArt, ids);
         return BuildDrawingGroupRichWspChild(drawing, xfrm, childName);
+    }
+
+    private static XElement BuildDrawingGroupImageChild(
+        ImagePart part,
+        XElement xfrm,
+        string childName)
+    {
+        var drawing = BuildDrawing(part);
+        var pic = new XElement(drawing.Descendants(Pic + "pic").First());
+        var cNvPr = pic.Element(Pic + "nvPicPr")?.Element(Pic + "cNvPr");
+        if (cNvPr is not null)
+            cNvPr.SetAttributeValue("name", childName);
+        var spPr = pic.Element(Pic + "spPr");
+        spPr?.Element(A + "xfrm")?.ReplaceWith(new XElement(xfrm));
+        return pic;
     }
 
     private static XElement BuildDrawingGroupRichWspChild(
