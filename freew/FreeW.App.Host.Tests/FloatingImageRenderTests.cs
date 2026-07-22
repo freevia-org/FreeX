@@ -200,6 +200,34 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void ImportedEffectImage_UsesItsMeasuredWordOverlayRegistration()
+    {
+        var doc = DocWithFloating(
+            wrapping: ImageWrapping.Square,
+            hOffPt: 150,
+            vOffPt: 34,
+            hAnchor: HorizontalAnchor.Column,
+            vAnchor: VerticalAnchor.Paragraph,
+            zOrder: 5);
+        var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+        image.WidthPt = 126;
+        image.HeightPt = 72;
+        image.AltText = "Floating image with shadow glow reflection and artistic effect";
+        image.ShadowPreset = 2;
+        image.GlowSizePt = 5;
+        image.ReflectionPreset = 1;
+        image.ArtisticEffect = ImageArtisticEffect.GlowDiffused;
+
+        var canvas = new Canvas();
+        var view = new DocumentView();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(doc);
+
+        Canvas.GetTop(canvas.Children.OfType<FrameworkElement>().Single())
+            .Should().BeApproximately(123.3333333333, 0.01);
+    }
+
+    [StaFact]
     public void FloatingImage_WrapModesProduceReservationAndSurviveCommitInOrder()
     {
         foreach (var wrapping in new[] { ImageWrapping.Square, ImageWrapping.Tight, ImageWrapping.TopAndBottom })

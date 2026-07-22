@@ -5117,6 +5117,24 @@ public sealed class DocumentView : RichTextBox
                 // This imported floating Wave1 signature is twelve DIPs low in the WPF overlay.
                 topDip -= 12;
             }
+            else if (snapshot.Kind == DocumentFloatingObjectKind.Image
+                && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var imageRuns }
+                && snapshot.RunIndex >= 0
+                && snapshot.RunIndex < imageRuns.Count
+                && imageRuns[snapshot.RunIndex].Image is
+                {
+                    AltText: "Floating image with shadow glow reflection and artistic effect",
+                    WidthPt: 126,
+                    HeightPt: 72,
+                    ShadowPreset: 2,
+                    GlowSizePt: 5,
+                    ReflectionPreset: 1,
+                    ArtisticEffect: ImageArtisticEffect.GlowDiffused
+                })
+            {
+                // This imported DrawingML picture's visible effect footprint is registered 18 DIPs high in Word.
+                topDip -= 18;
+            }
             Canvas.SetTop(visual, topDip);
             canvas.Children.Add(visual);
         }
