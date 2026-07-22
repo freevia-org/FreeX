@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -6,6 +7,52 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class ConditionalFormatDialogTests
 {
+    [Fact]
+    public void DataBarRule_MinMaxTypePickers_OfferAutomaticAlongsideExplicitEndpointsAndDefaultToIt()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", RangeFor(SheetId.New())));
+
+            var minTypeBox = GetControl<ComboBox>(dialog, "_dataBarMinTypeBox");
+            var maxTypeBox = GetControl<ComboBox>(dialog, "_dataBarMaxTypeBox");
+
+            // Excel's Data Bar dialog offers Automatic, Lowest Value, Highest Value, Number, Percent,
+            // Formula, and Percentile in both the minimum- and maximum-type pickers.
+            minTypeBox.Items.Cast<CfThresholdType>().Should().Contain(
+                [CfThresholdType.AutoMin, CfThresholdType.AutoMax, CfThresholdType.Min, CfThresholdType.Max]);
+            maxTypeBox.Items.Cast<CfThresholdType>().Should().Contain(
+                [CfThresholdType.AutoMin, CfThresholdType.AutoMax, CfThresholdType.Min, CfThresholdType.Max]);
+
+            // A brand-new data bar defaults to Excel's "Automatic" endpoint, not the explicit
+            // Lowest/Highest Value endpoint.
+            minTypeBox.SelectedItem.Should().Be(CfThresholdType.AutoMin);
+            maxTypeBox.SelectedItem.Should().Be(CfThresholdType.AutoMax);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void DataBarRule_AcceptedImmediately_DefaultsToAutomaticMinAndMaxWithoutRequiringAValue()
+    {
+        StaTestRunner.Run(() =>
+        {
+            // A user who opens New Rule > Data Bar and clicks OK without touching anything must get
+            // Excel's "Automatic" endpoint on both sides — and must not be blocked by a spurious
+            // "enter a valid number" validation error on the (intentionally blank) value boxes.
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", RangeFor(SheetId.New())));
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.DataBarMinThresholdType.Should().Be(CfThresholdType.AutoMin);
+            dialog.ResultRule.DataBarMaxThresholdType.Should().Be(CfThresholdType.AutoMax);
+
+            dialog.Close();
+        });
+    }
+
     [Fact]
     public void DataBarRule_CreatesDataBarOptionsWithoutFormatIfTrue()
     {

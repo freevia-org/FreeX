@@ -1346,7 +1346,7 @@ internal static partial class XlsxCorpusFixtureFactory
         sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 4, RuleType = CfRuleType.Top10, TopBottomRank = 3, AboveAverage = true });
         sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 5, RuleType = CfRuleType.DuplicateValues });
         sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 6, RuleType = CfRuleType.ColorScale, UseThreeColorScale = false, MinThresholdType = CfThresholdType.Min, MaxThresholdType = CfThresholdType.Max });
-        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 7, RuleType = CfRuleType.DataBar, DataBarMinThresholdType = CfThresholdType.Min, DataBarMaxThresholdType = CfThresholdType.Max });
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 7, RuleType = CfRuleType.DataBar, DataBarMinThresholdType = CfThresholdType.AutoMin, DataBarMaxThresholdType = CfThresholdType.AutoMax });
         var iconRule = new ConditionalFormat { AppliesTo = Range(sheet, "A1", "A10"), Priority = 8, RuleType = CfRuleType.IconSet, IconSetStyle = "3TrafficLights1" };
         iconRule.IconSetThresholds.AddRange([new CfThresholdModel(CfThresholdType.Number, "0"), new CfThresholdModel(CfThresholdType.Percent, "33"), new CfThresholdModel(CfThresholdType.Percent, "67")]);
         sheet.ConditionalFormats.Add(iconRule);

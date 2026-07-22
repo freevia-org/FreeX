@@ -107,6 +107,28 @@ public sealed class ConditionalFormatRuleSchemaThresholdValueTests
         schema.Validate(input).IsValid.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(CfThresholdType.AutoMin)]
+    [InlineData(CfThresholdType.AutoMax)]
+    public void DataBar_AutoMinMaxThresholdType_IgnoresValue_EvenWhenGarbageOrBlank(CfThresholdType type)
+    {
+        // AutoMin/AutoMax ("Automatic") are the data-bar-only Automatic endpoint and, like the explicit
+        // Min/Max endpoint above, derive their bound from the range data rather than typed text — this
+        // is also what lets a brand-new data bar (which now defaults DataBarMinType/DataBarMaxType to
+        // AutoMin/AutoMax) validate successfully with its value boxes left blank.
+        var schema = ConditionalFormatRuleSchema.ForRuleType(CfRuleType.DataBar);
+        var input = new CfRuleInput
+        {
+            RuleType = CfRuleType.DataBar,
+            DataBarMinType = type,
+            DataBarMinValue = "abc",
+            DataBarMaxType = type,
+            DataBarMaxValue = null
+        };
+
+        schema.Validate(input).IsValid.Should().BeTrue();
+    }
+
     [Fact]
     public void DataBar_FormulaThresholdType_Invalid_WhenBlank()
     {

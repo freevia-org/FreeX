@@ -119,6 +119,20 @@ public sealed class ConditionalFormatRuleBuilderTests
     }
 
     [Fact]
+    public void Build_DataBar_DefaultsToAutomaticMinAndMaxThresholdTypes()
+    {
+        // A brand-new data bar built from an untouched CfRuleInput (as the Avalonia editor and the
+        // quick-preset gallery both do — neither ever assigns DataBarMinType/DataBarMaxType) must match
+        // Excel's own "Automatic" default rather than the explicit Lowest/Highest Value endpoint.
+        var input = new CfRuleInput { RuleType = CfRuleType.DataBar };
+
+        var rule = ConditionalFormatRuleBuilder.Build(input, Range());
+
+        rule.DataBarMinThresholdType.Should().Be(CfThresholdType.AutoMin);
+        rule.DataBarMaxThresholdType.Should().Be(CfThresholdType.AutoMax);
+    }
+
+    [Fact]
     public void Build_IconSet_FillsDefaultOverrideEntriesWhenAnyOverrideIsSelected()
     {
         var input = new CfRuleInput

@@ -15,17 +15,30 @@ public sealed partial class XlsxFileAdapter
     public XlsxSaveResult SaveWithWarnings(Workbook workbook, Stream stream)
     {
         var warnings = new List<string>();
-        SaveCore(workbook, stream, warnings);
+        SaveCore(workbook, stream, warnings, preserveVbaProject: false);
         return warnings.Count == 0 ? XlsxSaveResult.Clean : new XlsxSaveResult(warnings.AsReadOnly());
     }
 
     /// <inheritdoc/>
     public void Save(Workbook workbook, Stream stream)
     {
-        SaveCore(workbook, stream, warnings: null);
+        SaveCore(workbook, stream, warnings: null, preserveVbaProject: false);
     }
 
-    private void SaveCore(Workbook workbook, Stream stream, List<string>? warnings)
+    // R70-io-vba-6-1: internal entry point used ONLY by the macro-enabled save adapters
+    // (XlsmFileAdapter, XltmFileAdapter). Those adapters build their .xlsm/.xltm package by
+    // delegating to this adapter's own save pipeline and then flipping the workbook content-type
+    // in a post-process step, so they need this save to PRESERVE a loaded workbook's
+    // xl/vbaProject.bin (and its relationship/content-type) rather than drop it. Every other
+    // caller of Save/SaveWithWarnings targets a plain, non-macro package (.xlsx/.xltx) and must
+    // DROP the VBA project -- Excel does the same (with a user-facing warning) when a
+    // macro-enabled workbook is saved as a plain format.
+    internal void SavePreservingVbaProject(Workbook workbook, Stream stream)
+    {
+        SaveCore(workbook, stream, warnings: null, preserveVbaProject: true);
+    }
+
+    private void SaveCore(Workbook workbook, Stream stream, List<string>? warnings, bool preserveVbaProject)
     {
         // Serialize with loads/other saves: the full-save path builds a ClosedXML XLWorkbook, which
         // shares process-global static state with the load path.  The cheap patch/source-copy paths
@@ -33,24 +46,38 @@ public sealed partial class XlsxFileAdapter
         // negligible (saves are user-initiated and brief on the patch path).  See ClosedXmlGate.
         lock (ClosedXmlGate)
         {
-            SaveCoreUnlocked(workbook, stream, warnings);
+            SaveCoreUnlocked(workbook, stream, warnings, preserveVbaProject);
         }
     }
 
-    private void SaveCoreUnlocked(Workbook workbook, Stream stream, List<string>? warnings)
+    private void SaveCoreUnlocked(Workbook workbook, Stream stream, List<string>? warnings, bool preserveVbaProject)
     {
         LastSaveDiagnostics = XlsxSaveDiagnostics.NotRun;
         string? currentModelFingerprint = null;
-        if (SourcePackages.TryGetValue(workbook, out var sourcePackage) &&
-            sourcePackage.Matches(workbook, out currentModelFingerprint))
+        var hasSourcePackage = SourcePackages.TryGetValue(workbook, out var sourcePackage);
+
+        // R70-io-vba-6-1: a save that must DROP the source's VBA project (macro-enabled source,
+        // plain target) can never take either fast path below -- both replay the ORIGINAL source
+        // package bytes verbatim (xl/vbaProject.bin, the macroEnabled content-type, and all) --
+        // and must instead go through the full ClosedXML-rebuild + source-package-preservation
+        // path further down, where PreserveSourcePackageParts excludes the VBA project's parts and
+        // MergeContentTypes leaves the plain spreadsheetml content-type ClosedXML wrote in place.
+        // Once that save completes, the new source-package snapshot it captures is VBA-free, so
+        // subsequent unchanged saves of the same workbook safely resume using the fast paths.
+        var mustDropVbaProject = !preserveVbaProject && hasSourcePackage && workbook.HasVbaProjectPackage;
+        var modelUnchanged = hasSourcePackage && sourcePackage!.Matches(workbook, out currentModelFingerprint);
+
+        if (modelUnchanged && !mustDropVbaProject)
         {
-            sourcePackage.CopyTo(stream);
+            sourcePackage!.CopyTo(stream);
             LastSaveDiagnostics = XlsxSaveDiagnostics.SourceCopy("model_unchanged");
             return;
         }
 
-        var patchDiagnostics = XlsxSaveDiagnostics.FullSave("patch_not_attempted");
-        if (sourcePackage is not null)
+        var patchDiagnostics = mustDropVbaProject
+            ? XlsxSaveDiagnostics.FullSave("vba_project_drop_requires_full_save")
+            : XlsxSaveDiagnostics.FullSave("patch_not_attempted");
+        if (sourcePackage is not null && !mustDropVbaProject)
         {
             bool patchSucceeded;
             try
@@ -549,7 +576,8 @@ public sealed partial class XlsxFileAdapter
                 workbook,
                 stream,
                 currentModelFingerprint,
-                removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain);
+                removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain,
+                preserveVbaProject: preserveVbaProject);
             sourcePackage?.RestoreWorkbookDefinedNames(stream, workbook);
             stream.Position = stream.Length;
             return;
@@ -561,7 +589,8 @@ public sealed partial class XlsxFileAdapter
             workbook,
             packageStream,
             currentModelFingerprint,
-            removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain);
+            removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain,
+            preserveVbaProject: preserveVbaProject);
         sourcePackage?.RestoreWorkbookDefinedNames(packageStream, workbook);
         packageStream.Position = 0;
         packageStream.CopyTo(stream);

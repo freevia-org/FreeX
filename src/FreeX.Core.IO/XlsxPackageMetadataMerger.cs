@@ -28,6 +28,9 @@ internal static class XlsxPackageMetadataMerger
     private const string TimelineCacheRelationshipType2011 = "http://schemas.microsoft.com/office/2011/relationships/timelineCache";
     private const string SlicerCachesWorkbookExtensionUri = "{BBE1A952-AA13-448e-AADC-164F8A28A991}";
     private const string TimelineCachesWorkbookExtensionUri = "{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}";
+    // R70-io-vba-6-1: the macro-enabled workbook content-type (.xlsm/.xltm) -- must never be
+    // carried into a plain (non-macro) .xlsx/.xltx target's [Content_Types].xml.
+    private const string MacroEnabledWorkbookContentType = "application/vnd.ms-excel.sheet.macroEnabled.main+xml";
 
     public static IReadOnlySet<string> CopyUnknownPackageParts(
         ZipArchive sourceArchive,
@@ -80,7 +83,8 @@ internal static class XlsxPackageMetadataMerger
     public static void MergeContentTypes(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
-        IReadOnlySet<string>? excludedSourceParts = null)
+        IReadOnlySet<string>? excludedSourceParts = null,
+        bool preserveMacroEnabledWorkbookContentType = true)
     {
         var sourceEntry = sourceArchive.GetEntry("[Content_Types].xml");
         var targetIndex = ArchiveEntryIndex.Create(targetArchive);
@@ -128,6 +132,26 @@ internal static class XlsxPackageMetadataMerger
             var partName = sourceOverride.Attribute("PartName")?.Value;
             if (IsExcludedSourcePart(partName, excludedSourceParts))
                 continue;
+
+            // R70-io-vba-6-1: only carry a macroEnabled workbook content-type override over when
+            // the target must actually stay macro-enabled (.xlsm/.xltm). A plain .xlsx/.xltx target
+            // must keep the plain spreadsheetml content-type ClosedXML already wrote -- carrying
+            // this override through (whether by the wholesale "missing override" copy just below,
+            // or by flipping an existing target override in TryPreserveMacroEnabledWorkbookContentType)
+            // would relabel a package that (correctly) no longer carries a VBA project as if it
+            // still did. A freshly-generated ClosedXML package normally has NO explicit Override
+            // for xl/workbook.xml at all (it relies on the Default Extension="xml" entry, which
+            // already carries the plain type) -- so without this early skip, the wholesale-copy
+            // branch below would freely copy the source's macroEnabled override into the target
+            // since the target has nothing there to say it already has one.
+            if (!preserveMacroEnabledWorkbookContentType &&
+                TryNormalizeContentTypePartName(partName, out var earlyNormalizedPartName) &&
+                string.Equals(earlyNormalizedPartName, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(sourceOverride.Attribute("ContentType")?.Value, MacroEnabledWorkbookContentType, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             if (TryNormalizeContentTypePartName(partName, out var normalizedPartName) &&
                 targetPartNames.Contains(normalizedPartName) &&
                 existingOverrides.Add(normalizedPartName))
@@ -139,7 +163,8 @@ internal static class XlsxPackageMetadataMerger
                 continue;
             }
 
-            if (TryNormalizeContentTypePartName(partName, out normalizedPartName) &&
+            if (preserveMacroEnabledWorkbookContentType &&
+                TryNormalizeContentTypePartName(partName, out normalizedPartName) &&
                 targetPartNames.Contains(normalizedPartName) &&
                 TryPreserveMacroEnabledWorkbookContentType(targetRoot, sourceOverride, normalizedPartName, contentTypeNs))
             {
@@ -903,7 +928,7 @@ internal static class XlsxPackageMetadataMerger
         var sourceContentType = sourceOverride.Attribute("ContentType")?.Value;
         if (!string.Equals(
                 sourceContentType,
-                "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
+                MacroEnabledWorkbookContentType,
                 StringComparison.OrdinalIgnoreCase))
         {
             return false;

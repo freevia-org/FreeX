@@ -126,7 +126,15 @@ internal static class NativeJsonVisualDtoMapper
         FillThemeColor = FromThemeColorReference(textBox.FillThemeColor),
         OutlineThemeColor = FromThemeColorReference(textBox.OutlineThemeColor),
         Title = textBox.Title,
-        AltText = textBox.AltText
+        AltText = textBox.AltText,
+        TextFontFamily = textBox.TextFontFamily,
+        TextFontSizePoints = textBox.TextFontSizePoints,
+        TextBold = textBox.TextBold,
+        TextItalic = textBox.TextItalic,
+        TextColor = textBox.TextColor is { } textColor ? FormatColor(textColor) : null,
+        TextThemeColor = FromThemeColorReference(textBox.TextThemeColor),
+        TextHAlign = ValidEnumOrDefault(textBox.TextHAlign, DrawingShapeTextHAlign.Left),
+        TextVAnchor = ValidEnumOrDefault(textBox.TextVAnchor, DrawingShapeTextVAnchor.Top)
     };
 
     public static bool IsTextBoxOnSheet(TextBoxModel textBox, SheetId sheetId) =>
@@ -157,7 +165,15 @@ internal static class NativeJsonVisualDtoMapper
                 FillThemeColor = ToThemeColorReference(textBoxDto.FillThemeColor),
                 OutlineThemeColor = ToThemeColorReference(textBoxDto.OutlineThemeColor),
                 Title = textBoxDto.Title,
-                AltText = textBoxDto.AltText
+                AltText = textBoxDto.AltText,
+                TextFontFamily = textBoxDto.TextFontFamily,
+                TextFontSizePoints = textBoxDto.TextFontSizePoints,
+                TextBold = textBoxDto.TextBold,
+                TextItalic = textBoxDto.TextItalic,
+                TextColor = textBoxDto.TextColor is { } textColor ? ParseColor(textColor) : null,
+                TextThemeColor = ToThemeColorReference(textBoxDto.TextThemeColor),
+                TextHAlign = ValidEnumOrDefault(textBoxDto.TextHAlign, DrawingShapeTextHAlign.Left),
+                TextVAnchor = ValidEnumOrDefault(textBoxDto.TextVAnchor, DrawingShapeTextVAnchor.Top)
             };
         }
         catch (FormatException)
@@ -396,6 +412,15 @@ internal class TextBoxDto
     public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
     public string? Title { get; set; }
     public string? AltText { get; set; }
+    // ── Text formatting (txBody) — mirrors DrawingShapeDto's ShapeText* fields ──────────────
+    public string? TextFontFamily { get; set; }
+    public double TextFontSizePoints { get; set; }
+    public bool TextBold { get; set; }
+    public bool TextItalic { get; set; }
+    public string? TextColor { get; set; }
+    public ThemeColorReferenceDto? TextThemeColor { get; set; }
+    public DrawingShapeTextHAlign TextHAlign { get; set; } = DrawingShapeTextHAlign.Left;
+    public DrawingShapeTextVAnchor TextVAnchor { get; set; } = DrawingShapeTextVAnchor.Top;
 }
 
 internal class DrawingShapeDto

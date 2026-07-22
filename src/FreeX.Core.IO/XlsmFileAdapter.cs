@@ -12,8 +12,9 @@ namespace FreeX.Core.IO;
 /// structural difference between an .xlsx and an .xlsm (besides the optional vbaProject.bin part).
 /// Loading reuses the .xlsx load pipeline.
 /// If the workbook was opened from a .xlsm that carried a <c>xl/vbaProject.bin</c>, the source-
-/// package preservation layer in <see cref="XlsxFileAdapter"/> carries the part through automatically
-/// on round-trip — this adapter does not need to handle it specially.
+/// package preservation layer in <see cref="XlsxFileAdapter"/> carries the part through
+/// automatically on round-trip via <see cref="XlsxFileAdapter.SavePreservingVbaProject"/> — this
+/// adapter does not need to handle the part itself specially, only request preservation.
 /// </summary>
 public sealed class XlsmFileAdapter : IFileAdapter
 {
@@ -41,8 +42,11 @@ public sealed class XlsmFileAdapter : IFileAdapter
         // Build the .xlsx package in memory first; ClosedXML always writes the worksheet content-type,
         // and the source-copy/patch paths preserve whatever the loaded package carried — so flipping the
         // content-type as a uniform post-process on the finished bytes covers every save path.
+        // R70-io-vba-6-1: use the VBA-preserving entry point -- this format IS macro-enabled, so a
+        // loaded workbook's xl/vbaProject.bin must survive the save (unlike a plain .xlsx/.xltx save,
+        // which must drop it).
         using var package = new MemoryStream();
-        _xlsx.Save(workbook, package);
+        _xlsx.SavePreservingVbaProject(workbook, package);
 
         package.Position = 0;
         using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))

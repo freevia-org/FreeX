@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -6,6 +7,29 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class ConditionalFormatDialogTests
 {
+    [Fact]
+    public void ColorScaleRule_ThresholdTypePickers_ExcludeDataBarOnlyAutomaticEndpoints()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Color Scale", RangeFor(SheetId.New())));
+
+            // AutoMin/AutoMax ("Automatic") are a data-bar-only endpoint; color scales only ever use
+            // the explicit Min/Max ("Lowest Value"/"Highest Value") endpoint, so they must never leak
+            // into these pickers as new, unlabeled options.
+            var minTypes = GetControl<ComboBox>(dialog, "_colorScaleMinTypeBox").Items.Cast<CfThresholdType>().ToArray();
+            var midTypes = GetControl<ComboBox>(dialog, "_colorScaleMidTypeBox").Items.Cast<CfThresholdType>().ToArray();
+            var maxTypes = GetControl<ComboBox>(dialog, "_colorScaleMaxTypeBox").Items.Cast<CfThresholdType>().ToArray();
+
+            minTypes.Should().NotContain([CfThresholdType.AutoMin, CfThresholdType.AutoMax]);
+            midTypes.Should().NotContain([CfThresholdType.AutoMin, CfThresholdType.AutoMax]);
+            maxTypes.Should().NotContain([CfThresholdType.AutoMin, CfThresholdType.AutoMax]);
+            minTypes.Should().Contain([CfThresholdType.Min, CfThresholdType.Max, CfThresholdType.Number]);
+
+            dialog.Close();
+        });
+    }
+
     [Fact]
     public void ColorScaleRule_CreatesThresholdAndColorOptionsWithoutFormatIfTrue()
     {

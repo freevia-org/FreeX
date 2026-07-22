@@ -44,15 +44,17 @@ public static class ConditionalFormatEvaluator
             return null;
         }
 
-        // Excel's automatic ("min"/"max") data-bar threshold always keeps a zero baseline: the
-        // automatic minimum is min(0, actual minimum) and the automatic maximum is max(0, actual
-        // maximum). Without this, an all-positive range (e.g. 10/20/30) would resolve min=10,
-        // giving the smallest cell a zero-length bar instead of Excel's ~1/3-length bar. Explicit
-        // numeric/percent/percentile/formula thresholds are unaffected (see
+        // Excel's automatic (CfThresholdType.AutoMin/AutoMax) data-bar threshold always keeps a zero
+        // baseline: the automatic minimum is min(0, actual minimum) and the automatic maximum is
+        // max(0, actual maximum). Without this, an all-positive range (e.g. 10/20/30) would resolve
+        // min=10, giving the smallest cell a zero-length bar instead of Excel's ~1/3-length bar. An
+        // EXPLICIT Lowest/Highest Value endpoint (CfThresholdType.Min/Max) is deliberately excluded --
+        // Excel does not zero-clamp an explicit endpoint, only Automatic -- as are the genuinely
+        // explicit numeric/percent/percentile/formula thresholds (see
         // ViewportConditionalFormatEvaluator.Thresholds.cs, the engine this mirrors).
-        if (rule.DataBarMinThresholdType == CfThresholdType.Min)
+        if (rule.DataBarMinThresholdType == CfThresholdType.AutoMin)
             min = Math.Min(0d, min);
-        if (rule.DataBarMaxThresholdType == CfThresholdType.Max)
+        if (rule.DataBarMaxThresholdType == CfThresholdType.AutoMax)
             max = Math.Max(0d, max);
 
         if (max <= min)

@@ -12291,8 +12291,14 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
 
+        // R70-io-vba-6-1: the plain Save (used for a genuine .xlsx target) now intentionally DROPS
+        // a source's VBA project -- matching Excel's own Save-As-plain-format behavior -- so this
+        // "preserve the VBA package graph across a model edit" scenario is now exercised via the
+        // VBA-preserving entry point (what XlsmFileAdapter/XltmFileAdapter delegate to) rather than
+        // the plain Save. See XlsmFileAdapterTests' Xlsx_SaveAs_FromMacroEnabledSource_* tests for
+        // the (new) plain-Save drop behavior.
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        adapter.SavePreservingVbaProject(loaded, saved);
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);

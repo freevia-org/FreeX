@@ -404,7 +404,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
         adapterSource.Should().Contain("sourceNeedsPackageGraphNormalization: XlsxDocumentPropertiesPreserver.NeedsPackageGraphNormalization(packageStream)");
         saveSource.Should().Contain("string? currentModelFingerprint = null;");
-        saveSource.Should().Contain("sourcePackage.Matches(workbook, out currentModelFingerprint)");
+        saveSource.Should().Contain("sourcePackage!.Matches(workbook, out currentModelFingerprint)");
         saveSource.Should().Contain("sourcePackage.TrySavePatchedCellValues(");
         saveSource.Should().Contain("ref currentModelFingerprint,");
         saveSource.Should().Contain("out patchDiagnostics");

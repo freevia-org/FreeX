@@ -269,6 +269,11 @@ internal static partial class ViewportConditionalFormatEvaluator
         {
             CfThresholdType.Min when cache is not null => Set(cache.Min, out value),
             CfThresholdType.Max when cache is not null => Set(cache.Max, out value),
+            // AutoMin/AutoMax (data-bar-only "Automatic") resolve to the same actual min/max as
+            // Min/Max -- the zero-baseline clamp that distinguishes Automatic is applied separately
+            // by the data-bar caller (EvaluateDataBar), keyed off the threshold TYPE, not here.
+            CfThresholdType.AutoMin when cache is not null => Set(cache.Min, out value),
+            CfThresholdType.AutoMax when cache is not null => Set(cache.Max, out value),
             CfThresholdType.Number => TryParseDouble(text, out value),
             CfThresholdType.Percent when cache is not null => TryParseDouble(text, out var percent) &&
                                        Set(cache.Min + (cache.Max - cache.Min) * (percent / 100d), out value),
@@ -509,19 +514,23 @@ internal static partial class ViewportConditionalFormatEvaluator
                 continue;
             }
 
-            // Excel's default ("automatic") data bar minimum/maximum -- represented by cfvo
-            // type="min"/"max" in the classic block and its x14 autoMin/autoMax twin, both of
-            // which the reader maps onto CfThresholdType.Min/Max for data bars -- is NOT simply
-            // "use the range's actual minimum/maximum" the way an icon set or color scale
-            // type="min"/"max" threshold is. For data bars specifically, Excel always keeps a
-            // zero baseline: the automatic minimum is min(0, actual minimum) and the automatic
-            // maximum is max(0, actual maximum). Without this, an all-positive range (e.g.
+            // Excel's default ("automatic") data bar minimum/maximum -- CfThresholdType.AutoMin/
+            // AutoMax, read from the x14 extended cfvo's "autoMin"/"autoMax" @type (or defaulted from
+            // a classic-only cfvo's bare "min"/"max", which pre-2010 Excel and files without an x14
+            // extended data bar cannot express any other way -- see ReadDataBarConditionalFormat) --
+            // is NOT simply "use the range's actual minimum/maximum" the way an icon set or color
+            // scale type="min"/"max" threshold is. For data bars specifically, Excel always keeps a
+            // zero baseline for Automatic: the automatic minimum is min(0, actual minimum) and the
+            // automatic maximum is max(0, actual maximum). Without this, an all-positive range (e.g.
             // 10/20/30) would resolve min=10, giving the smallest cell a zero-length bar (no bar
-            // at all) instead of Excel's ~1/3-length bar. A genuinely explicit numeric/percent/
-            // percentile/formula threshold is unaffected since only Min/Max get the zero clamp.
-            if (cf.DataBarMinThresholdType == CfThresholdType.Min)
+            // at all) instead of Excel's ~1/3-length bar. An EXPLICIT Lowest/Highest Value endpoint
+            // (CfThresholdType.Min/Max, read from an x14 cfvo @type of literal "min"/"max") is
+            // deliberately excluded from the clamp -- Excel does not zero-clamp an explicit endpoint,
+            // only Automatic -- as are the genuinely explicit numeric/percent/percentile/formula
+            // thresholds.
+            if (cf.DataBarMinThresholdType == CfThresholdType.AutoMin)
                 min = Math.Min(0d, min);
-            if (cf.DataBarMaxThresholdType == CfThresholdType.Max)
+            if (cf.DataBarMaxThresholdType == CfThresholdType.AutoMax)
                 max = Math.Max(0d, max);
 
             if (max <= min)
@@ -695,6 +704,10 @@ internal static partial class ViewportConditionalFormatEvaluator
         {
             CfThresholdType.Min => Set(cache.Min, out value),
             CfThresholdType.Max => Set(cache.Max, out value),
+            // See TryResolveStaticThreshold above: AutoMin/AutoMax resolve to the same actual
+            // min/max as Min/Max; the zero-baseline clamp is applied by the data-bar caller.
+            CfThresholdType.AutoMin => Set(cache.Min, out value),
+            CfThresholdType.AutoMax => Set(cache.Max, out value),
             CfThresholdType.Number => TryParseDouble(text, out value),
             CfThresholdType.Percent => TryParseDouble(text, out var percent) &&
                                        Set(cache.Min + (cache.Max - cache.Min) * (percent / 100d), out value),

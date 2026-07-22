@@ -137,9 +137,21 @@ public sealed record CfRuleInput
     public IReadOnlyList<CfThresholdModel>? IconSetThresholds { get; init; }
     public IReadOnlyList<CfIconOverride?>? IconOverrides { get; init; }
 
-    public CfThresholdType DataBarMinType { get; init; } = CfThresholdType.Min;
+    /// <summary>
+    /// Defaults to <see cref="CfThresholdType.AutoMin"/> (Excel's "Automatic" default for a brand-new
+    /// data bar), not the explicit <see cref="CfThresholdType.Min"/> ("Lowest Value") — mirrors
+    /// <see cref="ConditionalFormat.DataBarMinThresholdType"/>'s model default so a data bar authored
+    /// via an editor that never touches this field still matches Excel.
+    /// </summary>
+    public CfThresholdType DataBarMinType { get; init; } = CfThresholdType.AutoMin;
     public string? DataBarMinValue { get; init; }
-    public CfThresholdType DataBarMaxType { get; init; } = CfThresholdType.Max;
+    /// <summary>
+    /// Defaults to <see cref="CfThresholdType.AutoMax"/> (Excel's "Automatic" default for a brand-new
+    /// data bar), not the explicit <see cref="CfThresholdType.Max"/> ("Highest Value") — mirrors
+    /// <see cref="ConditionalFormat.DataBarMaxThresholdType"/>'s model default so a data bar authored
+    /// via an editor that never touches this field still matches Excel.
+    /// </summary>
+    public CfThresholdType DataBarMaxType { get; init; } = CfThresholdType.AutoMax;
     public string? DataBarMaxValue { get; init; }
     public RgbColor? DataBarColor { get; init; }
     public bool DataBarShowValue { get; init; } = true;
@@ -360,13 +372,16 @@ public sealed record ConditionalFormatRuleSchema(
 
     /// <summary>
     /// Validates a data-bar/color-scale threshold's typed value against its selected threshold type.
-    /// <see cref="CfThresholdType.Min"/>/<see cref="CfThresholdType.Max"/> are automatic and ignore any
-    /// typed text. <see cref="CfThresholdType.Number"/>/<see cref="CfThresholdType.Percent"/>/
-    /// <see cref="CfThresholdType.Percentile"/> require a value that parses the same way
-    /// <see cref="ConditionalFormatStatistics.TryResolveThreshold"/> parses it at render time — without
-    /// this check, non-numeric text (or a blank box) silently resolves to no bar/scale at all instead of
-    /// being rejected the way real Excel's "Please enter a valid entry" guard rejects it.
-    /// <see cref="CfThresholdType.Formula"/> requires non-blank text (the formula itself).
+    /// <see cref="CfThresholdType.Min"/>/<see cref="CfThresholdType.Max"/> (the explicit "Lowest Value"/
+    /// "Highest Value" endpoint) and the data-bar-only <see cref="CfThresholdType.AutoMin"/>/
+    /// <see cref="CfThresholdType.AutoMax"/> ("Automatic" endpoint) all derive their bound from the
+    /// actual range data and ignore any typed text. <see cref="CfThresholdType.Number"/>/
+    /// <see cref="CfThresholdType.Percent"/>/<see cref="CfThresholdType.Percentile"/> require a value
+    /// that parses the same way <see cref="ConditionalFormatStatistics.TryResolveThreshold"/> parses it
+    /// at render time — without this check, non-numeric text (or a blank box) silently resolves to no
+    /// bar/scale at all instead of being rejected the way real Excel's "Please enter a valid entry"
+    /// guard rejects it. <see cref="CfThresholdType.Formula"/> requires non-blank text (the formula
+    /// itself).
     /// </summary>
     private static void ValidateThresholdValue(
         CfThresholdType type,
@@ -378,6 +393,8 @@ public sealed record ConditionalFormatRuleSchema(
         {
             case CfThresholdType.Min:
             case CfThresholdType.Max:
+            case CfThresholdType.AutoMin:
+            case CfThresholdType.AutoMax:
                 break;
 
             case CfThresholdType.Formula:

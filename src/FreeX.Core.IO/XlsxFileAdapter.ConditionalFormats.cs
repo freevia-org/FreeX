@@ -300,6 +300,7 @@ public sealed partial class XlsxFileAdapter
             return;
 
         XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        XNamespace xmNs = "http://schemas.microsoft.com/office/excel/2006/main";
         const string x14CfUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
 
         var worksheetRoot = worksheetXml.Root;
@@ -326,6 +327,24 @@ public sealed partial class XlsxFileAdapter
                             var x14DataBar = x14CfRule.Element(x14Ns + "dataBar");
                             if (x14DataBar is null)
                                 continue;
+
+                            // The x14 extended cfvo pair is the AUTHORITATIVE source for the min/max
+                            // endpoint type: unlike the classic block (which always writes "min"/"max"
+                            // for both Automatic and explicit Lowest/Highest Value), the x14 cfvo can
+                            // express Automatic ("autoMin"/"autoMax") distinctly from an explicit
+                            // endpoint ("min"/"max"). Override whatever ReadDataBarConditionalFormat
+                            // defaulted from the classic block with the real type/value pair here.
+                            var x14Cfvos = x14DataBar.Elements(x14Ns + "cfvo").ToList();
+                            ApplyX14DataBarCfvo(x14Cfvos.ElementAtOrDefault(0), xmNs, value =>
+                            {
+                                format.DataBarMinThresholdType = value.Type;
+                                format.DataBarMinThresholdValue = value.Value;
+                            });
+                            ApplyX14DataBarCfvo(x14Cfvos.ElementAtOrDefault(1), xmNs, value =>
+                            {
+                                format.DataBarMaxThresholdType = value.Type;
+                                format.DataBarMaxThresholdValue = value.Value;
+                            });
 
                             var gradientVal = x14DataBar.Attribute("gradient")?.Value;
                             if (gradientVal is not null)
@@ -594,14 +613,22 @@ public sealed partial class XlsxFileAdapter
             DataBarMinLength = XlsxXmlAttributeReader.ReadIntAttribute(dataBar, "minLength"),
             DataBarMaxLength = XlsxXmlAttributeReader.ReadIntAttribute(dataBar, "maxLength")
         };
+        // The classic (pre-2010-compatible) cfvo block has no "automatic" concept distinct from an
+        // explicit endpoint: Excel always writes type="min"/"max" there for BOTH Automatic and
+        // explicit Lowest/Highest Value data bars. A bare min/max read from the classic block alone
+        // therefore defaults to the AutoMin/AutoMax ("Automatic") variant here, matching pre-2010
+        // Excel (which had no explicit-endpoint option at all) and Excel's own default. When the file
+        // also carries an x14 extended data bar -- the modern (2010+) case -- ApplyX14DataBarProperties
+        // below overrides this with the AUTHORITATIVE type from the x14 cfvo, which alone can express
+        // an explicit Lowest/Highest Value distinctly from Automatic.
         ApplyThreshold(thresholds.ElementAtOrDefault(0), value =>
         {
-            format.DataBarMinThresholdType = value.Type;
+            format.DataBarMinThresholdType = value.Type == CfThresholdType.Min ? CfThresholdType.AutoMin : value.Type;
             format.DataBarMinThresholdValue = value.Value;
         });
         ApplyThreshold(thresholds.ElementAtOrDefault(1), value =>
         {
-            format.DataBarMaxThresholdType = value.Type;
+            format.DataBarMaxThresholdType = value.Type == CfThresholdType.Max ? CfThresholdType.AutoMax : value.Type;
             format.DataBarMaxThresholdValue = value.Value;
         });
         if (XlsxColorReader.TryReadRgbColorWithSource(dataBar.Element(worksheetNs + "color"), workbookTheme, indexedColors, out var color, out var colorSource))
@@ -637,6 +664,25 @@ public sealed partial class XlsxFileAdapter
             FromCfvoType(element.Attribute("type")?.Value),
             element.Attribute("val")?.Value,
             XlsxXmlAttributeReader.ReadNullableBoolAttribute(element, "gte")));
+    }
+
+    /// <summary>
+    /// Reads one x14 extended data-bar &lt;x14:cfvo&gt; element -- @type maps through
+    /// <see cref="XlsxAdvancedConditionalFormatMetadata.FromX14DataBarCfvoType"/> (which, unlike the
+    /// classic-block <see cref="FromCfvoType"/>, distinguishes Automatic from an explicit endpoint),
+    /// and the value (for num/percent/percentile/formula types) is stored as an &lt;xm:f&gt; child's
+    /// text, not a @val attribute.
+    /// </summary>
+    private static void ApplyX14DataBarCfvo(
+        XElement? element,
+        XNamespace xmNs,
+        Action<(CfThresholdType Type, string? Value)> apply)
+    {
+        if (element is null)
+            return;
+        var type = XlsxAdvancedConditionalFormatMetadata.FromX14DataBarCfvoType(element.Attribute("type")?.Value);
+        var value = element.Element(xmNs + "f")?.Value?.Trim();
+        apply((type, value));
     }
 
     private static IReadOnlyList<CfThresholdModel> ReadCfvoThresholds(XElement parent, XNamespace worksheetNs) =>

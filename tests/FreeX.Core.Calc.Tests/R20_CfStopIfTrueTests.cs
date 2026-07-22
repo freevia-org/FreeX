@@ -92,8 +92,8 @@ public sealed class R20_cf_stopiftrue_Tests
             Priority = 1,
             RuleType = CfRuleType.DataBar,
             DataBarColor = new RgbColor(0, 120, 215),
-            DataBarMinThresholdType = CfThresholdType.Min,
-            DataBarMaxThresholdType = CfThresholdType.Max,
+            DataBarMinThresholdType = CfThresholdType.AutoMin,
+            DataBarMaxThresholdType = CfThresholdType.AutoMax,
             StopIfTrue = true
         });
 

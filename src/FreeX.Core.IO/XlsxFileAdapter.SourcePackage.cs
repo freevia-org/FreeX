@@ -11,8 +11,27 @@ public sealed partial class XlsxFileAdapter
     private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
     private const string QueryTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable";
 
+    // R70-io-vba-6-1: parts making up a source package's VBA project. xl/vbaProject.bin is the
+    // macro project itself; a digitally-signed macro project also carries
+    // xl/vbaProjectSignature.bin (referenced only from vbaProject.bin's own .rels). Both are
+    // excluded together whenever the target must be a plain (non-macro) package -- leaving either
+    // one behind would either resurrect the VBA project or dangle a signature part with no project
+    // to sign.
+    private static readonly string[] VbaProjectPackagePartPaths =
+    [
+        "xl/vbaProject.bin",
+        "xl/vbaProjectSignature.bin"
+    ];
+
     // Source package snapshot and native package-part preservation for loaded workbook saves.
-    private static SourcePackagePartSummary PreserveSourcePackageParts(Workbook workbook, Stream generatedPackage)
+    // preserveVbaProject: when false, a source vbaProject.bin (and its digital-signature sidecar)
+    // is dropped instead of carried through, and the workbook's content-type is left at the plain
+    // spreadsheetml type ClosedXML wrote rather than flipped back to macroEnabled.main -- matching
+    // Excel's own behavior when a macro-enabled workbook is saved as a plain .xlsx/.xltx.
+    private static SourcePackagePartSummary PreserveSourcePackageParts(
+        Workbook workbook,
+        Stream generatedPackage,
+        bool preserveVbaProject = true)
     {
         if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
             return default;
@@ -26,13 +45,18 @@ public sealed partial class XlsxFileAdapter
         var excludedSourceParts = removedWorksheetPackageParts
             .Concat(XlsxWorksheetThreadedCommentMapper.GetSourcePackagePartExclusions(sourceArchive, workbook))
             .Concat(XlsxDigitalSignaturePackagePolicy.GetEditedSaveExclusions(sourceArchive))
+            .Concat(preserveVbaProject ? Array.Empty<string>() : VbaProjectPackagePartPaths)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(
             sourceArchive,
             generatedArchive,
             excludedSourceParts);
 
-        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, generatedArchive, excludedSourceParts);
+        XlsxPackageMetadataMerger.MergeContentTypes(
+            sourceArchive,
+            generatedArchive,
+            excludedSourceParts,
+            preserveMacroEnabledWorkbookContentType: preserveVbaProject);
         PreserveSourceChartExParts(workbook, sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
         XlsxPackageMetadataMerger.MergeRelationshipParts(
             sourceArchive,

@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
@@ -9,6 +10,45 @@ namespace FreeX.App.Host;
 
 public partial class ConditionalFormatDialog : Window
 {
+    /// <summary>
+    /// Threshold types offered by the color-scale and icon-set pickers. Excludes the data-bar-only
+    /// "Automatic" endpoints (<see cref="CfThresholdType.AutoMin"/>/<see cref="CfThresholdType.AutoMax"/>)
+    /// — color scales and icon sets have no Automatic concept and only ever use the explicit Min/Max
+    /// endpoint (see the doc comment on <see cref="CfThresholdType"/>).
+    /// </summary>
+    private static readonly CfThresholdType[] ClassicThresholdTypes =
+    [
+        CfThresholdType.Min,
+        CfThresholdType.Max,
+        CfThresholdType.Number,
+        CfThresholdType.Percent,
+        CfThresholdType.Percentile,
+        CfThresholdType.Formula,
+    ];
+
+    /// <summary>
+    /// Renders <see cref="CfThresholdType.AutoMin"/>/<see cref="CfThresholdType.AutoMax"/> as Excel's
+    /// "Automatic" label in the data-bar minimum/maximum type pickers (the only pickers that offer
+    /// them); every other threshold type keeps its plain enum-name display, matching existing behavior.
+    /// </summary>
+    private sealed class DataBarThresholdTypeDisplayConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) =>
+            value is CfThresholdType.AutoMin or CfThresholdType.AutoMax
+                ? UiText.Get("ConditionalFormatDialog_ThresholdType_Automatic")
+                : value?.ToString() ?? string.Empty;
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) =>
+            throw new NotSupportedException();
+    }
+
+    private static DataTemplate CreateDataBarThresholdTypeItemTemplate()
+    {
+        var text = new FrameworkElementFactory(typeof(TextBlock));
+        text.SetBinding(TextBlock.TextProperty, new Binding { Converter = new DataBarThresholdTypeDisplayConverter() });
+        return new DataTemplate { VisualTree = text };
+    }
+
     public ConditionalFormat? ResultRule { get; private set; }
 
     private string _ruleType;
@@ -419,9 +459,21 @@ public partial class ConditionalFormatDialog : Window
         nameof(_dataBarNegativeBorderColorButton))]
     private void CreateDataBarControls()
     {
-        _dataBarMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
+        _dataBarMinTypeBox = new ComboBox
+        {
+            Margin = new Thickness(0, 4, 0, 8),
+            ItemsSource = Enum.GetValues<CfThresholdType>(),
+            SelectedItem = CfThresholdType.AutoMin,
+            ItemTemplate = CreateDataBarThresholdTypeItemTemplate()
+        };
         _dataBarMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
+        _dataBarMaxTypeBox = new ComboBox
+        {
+            Margin = new Thickness(0, 4, 0, 8),
+            ItemsSource = Enum.GetValues<CfThresholdType>(),
+            SelectedItem = CfThresholdType.AutoMax,
+            ItemTemplate = CreateDataBarThresholdTypeItemTemplate()
+        };
         _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _dataBarShowValueBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ShowBarOnly"), Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
         _dataBarGradientBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_GradientFill"), Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
@@ -456,18 +508,18 @@ public partial class ConditionalFormatDialog : Window
         nameof(_colorScaleMaxColorButton))]
     private void CreateColorScaleControls()
     {
-        _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
+        _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = ClassicThresholdTypes, SelectedItem = CfThresholdType.Min };
         _colorScaleMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _colorScaleMinColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(99, 190, 123)) };
         _colorScaleMinColorButton = CreateColorScaleColorButton(_colorScaleMinColorBox, UiText.Get("ConditionalFormatDialog_ChooseMinimumColorToolTip"));
         _colorScaleUseThreeColorBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_UseThreeColorScale"), Margin = new Thickness(0, 0, 0, 8) };
-        _colorScaleMidTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Percentile };
+        _colorScaleMidTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = ClassicThresholdTypes, SelectedItem = CfThresholdType.Percentile };
         _colorScaleMidValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "50" };
         _colorScaleMidColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(255, 235, 132)) };
         _colorScaleMidColorButton = CreateColorScaleColorButton(_colorScaleMidColorBox, UiText.Get("ConditionalFormatDialog_ChooseMidpointColorToolTip"));
         _colorScaleUseThreeColorBox.Checked += (_, _) => UpdateColorScaleMidpointState();
         _colorScaleUseThreeColorBox.Unchecked += (_, _) => UpdateColorScaleMidpointState();
-        _colorScaleMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
+        _colorScaleMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = ClassicThresholdTypes, SelectedItem = CfThresholdType.Max };
         _colorScaleMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _colorScaleMaxColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12), Text = FormatRgb(new RgbColor(248, 105, 107)) };
         _colorScaleMaxColorButton = CreateColorScaleColorButton(_colorScaleMaxColorBox, UiText.Get("ConditionalFormatDialog_ChooseMaximumColorToolTip"));

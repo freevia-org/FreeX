@@ -73,7 +73,7 @@ public partial class ConditionalFormatDialog
             {
                 Width = 100,
                 Margin = new Thickness(6, 0, 6, 0),
-                ItemsSource = Enum.GetValues<CfThresholdType>(),
+                ItemsSource = ClassicThresholdTypes,
                 SelectedItem = threshold.Type
             };
             if (typeBox.SelectedIndex < 0)

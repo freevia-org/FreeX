@@ -49,6 +49,15 @@ public sealed class ConditionalFormatRuleSchemaTests
     }
 
     [Fact]
+    public void CfRuleInput_Default_DataBarThresholdTypesAreAutomatic()
+    {
+        var input = new CfRuleInput();
+
+        input.DataBarMinType.Should().Be(CfThresholdType.AutoMin);
+        input.DataBarMaxType.Should().Be(CfThresholdType.AutoMax);
+    }
+
+    [Fact]
     public void Formula_Valid_WhenFormulaProvided()
     {
         var schema = ConditionalFormatRuleSchema.ForRuleType(CfRuleType.Formula);

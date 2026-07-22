@@ -37,8 +37,12 @@ public sealed class XlsxVbaProjectSignaturePackageGraphTests
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(42));
 
+        // R70-io-vba-6-1: the plain Save now intentionally DROPS a source's VBA project (matching
+        // Excel's Save-As-plain-format behavior), so this "signed VBA project survives an edited
+        // save" scenario is exercised via the VBA-preserving entry point (what
+        // XlsmFileAdapter/XltmFileAdapter delegate to) rather than plain Save.
         using var saved = new MemoryStream();
-        adapter.Save(workbook, saved);
+        adapter.SavePreservingVbaProject(workbook, saved);
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
@@ -70,8 +74,10 @@ public sealed class XlsxVbaProjectSignaturePackageGraphTests
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("full-save-edit"));
 
+        // R70-io-vba-6-1: see the comment in LoadedWorkbookPatchSave_PreservesVbaProjectSignaturePackageGraph
+        // above -- plain Save now intentionally drops VBA, so use the preserving entry point here.
         using var saved = new MemoryStream();
-        adapter.Save(workbook, saved);
+        adapter.SavePreservingVbaProject(workbook, saved);
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
         ReadPackageEntryBytes(saved, VbaProjectPath).Should().Equal(sourceVbaProjectBytes);
@@ -116,8 +122,12 @@ public sealed class XlsxVbaProjectSignaturePackageGraphTests
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("full-save-edit"));
 
+        // R70-io-vba-6-1: see the comment in LoadedWorkbookPatchSave_PreservesVbaProjectSignaturePackageGraph
+        // above -- plain Save now intentionally drops VBA, so use the preserving entry point here
+        // (this test's own point is the WHOLE-PACKAGE signature, which must still be stripped
+        // regardless of the VBA project's preservation).
         using var saved = new MemoryStream();
-        adapter.Save(workbook, saved);
+        adapter.SavePreservingVbaProject(workbook, saved);
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
 

@@ -202,7 +202,7 @@ public static partial class BuiltInFunctions
         if (singleIndexArgument)
         {
             if (table.RowCount == 1) { colNum = rowNum; rowNum = 1; }
-            else if (table.ColCount == 1) { /* rowNum already correct, colNum = 1 */ }
+            else if (table.ColCount == 1) { colNum = 1; /* rowNum already correct */ }
             else { colNum = 0; }
         }
 

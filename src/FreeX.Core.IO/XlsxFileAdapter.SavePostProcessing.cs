@@ -13,7 +13,8 @@ public sealed partial class XlsxFileAdapter
         Workbook workbook,
         Stream packageStream,
         string? currentModelFingerprint = null,
-        bool removeSourceCalcChain = false)
+        bool removeSourceCalcChain = false,
+        bool preserveVbaProject = true)
     {
         var featurePlan = XlsxPostProcessingFeaturePlan.Create(workbook);
         XlsxWorkbookWorksheetPathMap? worksheetPathMap = null;
@@ -322,7 +323,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         packageStream.Position = 0;
-        var sourceParts = PreserveSourcePackageParts(workbook, packageStream);
+        var sourceParts = PreserveSourcePackageParts(workbook, packageStream, preserveVbaProject);
 
         // Re-apply x14 data validations after source-part preservation. The source package
         // restores the original worksheet XML (which may carry an x14 DV extLst block); we

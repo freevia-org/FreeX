@@ -13,6 +13,11 @@ namespace FreeX.Core.IO.Tests;
 /// type, so the tests assert (a) the content-type flip, (b) that the package is still a readable
 /// workbook whose values round-trip, and (c) that an xl/vbaProject.bin carried by the source
 /// package survives a round-trip save.
+///
+/// R70-io-vba-6-1: also covers the counterpart behavior -- Saving a macro-enabled source AS a
+/// plain, non-macro .xlsx via <see cref="XlsxFileAdapter"/> directly (i.e. NOT through
+/// <see cref="XlsmFileAdapter"/>/<see cref="XltmFileAdapter"/>) must DROP the VBA project and its
+/// content-type entirely, matching Excel's own Save-As-plain-format behavior.
 /// </summary>
 public sealed class XlsmFileAdapterTests
 {
@@ -179,6 +184,108 @@ public sealed class XlsmFileAdapterTests
         hasVbaRelationship.Should().BeTrue("the workbook->vbaProject.bin relationship must survive the save");
     }
 
+    [Fact]
+    public void Xlsm_SaveAs_UnchangedModel_StillPreservesVbaProjectViaFastPath()
+    {
+        // No-regression guard: an UNEDITED macro-enabled workbook Saved-As .xlsm takes the "model
+        // unchanged" fast source-copy path (see Xlsx_SaveAs_FromMacroEnabledSource_
+        // DropsVbaProjectAndContentType below, which exercises the same fast path for the DROP
+        // case) rather than a full rebuild. That fast path must still preserve xl/vbaProject.bin
+        // when the target format actually is macro-enabled -- only a plain (non-macro) target may
+        // ever cause it to be bypassed/dropped.
+        using var source = BuildMacroEnabledPackage(macroEnabled: true);
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        using var saved = new MemoryStream();
+        new XlsmFileAdapter().Save(workbook, saved);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+
+        savedArchive.GetEntry(VbaProjectPath).Should().NotBeNull(
+            "an unedited macro-enabled workbook Saved-As .xlsm must still keep xl/vbaProject.bin");
+
+        var contentTypesXml = LoadZipEntryXml(savedArchive, "[Content_Types].xml");
+        GetContentTypeOverride(contentTypesXml, "xl/workbook.xml")
+            .Should().Be(MacroEnabledMainContentType);
+    }
+
+    // ── XLSX (plain target — VBA must be DROPPED) ──────────────────────────────────────────────────
+    // R70-io-vba-6-1: Excel drops a workbook's VBA project (with a warning) when a macro-enabled
+    // workbook is Saved As a plain, non-macro format. Saving via XlsxFileAdapter directly (i.e. NOT
+    // through XlsmFileAdapter/XltmFileAdapter) is exactly that Save-As-plain-.xlsx case.
+
+    [Fact]
+    public void Xlsx_SaveAs_FromMacroEnabledSource_DropsVbaProjectAndContentType()
+    {
+        // Build a package that has xl/vbaProject.bin (simulating a real .xlsm open), then
+        // Save-As a PLAIN .xlsx with NO edit first -- this exercises the "model unchanged" fast
+        // source-copy path, which (before the fix) replayed the source bytes, vbaProject.bin
+        // included, verbatim regardless of the plain-.xlsx target.
+        using var source = BuildMacroEnabledPackage(macroEnabled: true);
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.HasVbaProjectPackage.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+
+        savedArchive.GetEntry(VbaProjectPath).Should().BeNull(
+            "Save-As a plain .xlsx must drop the source's xl/vbaProject.bin, matching Excel");
+
+        var contentTypesXml = LoadZipEntryXml(savedArchive, "[Content_Types].xml");
+        GetEffectiveWorkbookContentType(contentTypesXml, "xl/workbook.xml")
+            .Should().Be(WorksheetMainContentType);
+
+        ContentTypeOverrideExists(contentTypesXml, VbaProjectPath, VbaProjectContentType)
+            .Should().BeFalse("the vbaProject.bin content-type override must not survive a plain .xlsx save");
+
+        var workbookRelsXml = LoadZipEntryXml(savedArchive, "xl/_rels/workbook.xml.rels");
+        workbookRelsXml.Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Any(e => string.Equals(e.Attribute("Type")?.Value, VbaProjectRelationshipType, StringComparison.OrdinalIgnoreCase))
+            .Should().BeFalse("the workbook->vbaProject.bin relationship must not survive a plain .xlsx save");
+
+        // The package must still be a perfectly ordinary, readable workbook.
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved).GetSheetAt(0);
+        reloaded.GetValue(1, 1).Should().Be(new TextValue("value"));
+    }
+
+    [Fact]
+    public void Xlsx_SaveAs_FromMacroEnabledSource_AfterEdit_StillDropsVbaProject()
+    {
+        // Same as above but with a cell edit first, forcing the full ClosedXML-rebuild +
+        // source-package-preservation path (rather than the "model unchanged" fast path) -- both
+        // paths must drop the VBA project on a plain .xlsx target.
+        using var source = BuildMacroEnabledPackage(macroEnabled: true);
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var editSheet = workbook.GetSheetAt(0);
+        editSheet.SetCell(new CellAddress(editSheet.Id, 3, 1), new NumberValue(99));
+
+        using var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+
+        savedArchive.GetEntry(VbaProjectPath).Should().BeNull(
+            "an edited workbook Saved-As a plain .xlsx must still drop xl/vbaProject.bin");
+
+        var contentTypesXml = LoadZipEntryXml(savedArchive, "[Content_Types].xml");
+        GetEffectiveWorkbookContentType(contentTypesXml, "xl/workbook.xml")
+            .Should().Be(WorksheetMainContentType);
+    }
+
     // ── XLTM ────────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -293,13 +400,28 @@ public sealed class XlsmFileAdapterTests
             var ctXml = LoadZipEntryXml(contentTypesEntry);
             var root = ctXml.Root!;
 
-            // Replace workbook override with macroEnabled type.
+            // Replace workbook override with macroEnabled type. A plain ClosedXML-authored .xlsx
+            // has NO explicit Override for xl/workbook.xml -- it relies on the package-wide
+            // Default Extension="xml" entry (which already equals the plain worksheet type) --
+            // so there is usually nothing to flip in place; ADD the override when it is missing
+            // rather than silently no-op, matching what a genuine .xlsm always carries (Excel must
+            // emit an explicit Override there since the macroEnabled type differs from the Default).
             var existing = root.Elements(ContentTypeNs + "Override")
                 .FirstOrDefault(e => string.Equals(
                     e.Attribute("PartName")?.Value?.TrimStart('/'),
                     "xl/workbook.xml",
                     StringComparison.OrdinalIgnoreCase));
-            existing?.SetAttributeValue("ContentType", MacroEnabledMainContentType);
+            if (existing is not null)
+            {
+                existing.SetAttributeValue("ContentType", MacroEnabledMainContentType);
+            }
+            else
+            {
+                root.Add(new XElement(
+                    ContentTypeNs + "Override",
+                    new XAttribute("PartName", "/xl/workbook.xml"),
+                    new XAttribute("ContentType", MacroEnabledMainContentType)));
+            }
 
             // Add vbaProject content-type override if missing.
             if (!ContentTypeOverrideExists(ctXml, VbaProjectPath, VbaProjectContentType))
@@ -376,5 +498,30 @@ public sealed class XlsmFileAdapterTests
             .Any(e =>
                 string.Equals(e.Attribute("PartName")?.Value, normalizedPartName, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(e.Attribute("ContentType")?.Value, contentType, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Resolves the content-type that actually governs <paramref name="partName"/>: an explicit
+    /// Override for that part if one exists, otherwise the package-wide Default for the part's
+    /// file extension. A plain ClosedXML-authored .xlsx normally has NO explicit Override for
+    /// xl/workbook.xml -- it relies on the Default Extension="xml" entry, which already carries
+    /// the plain worksheet content-type -- so <see cref="GetContentTypeOverride"/> alone (which
+    /// only looks at Override entries) cannot tell "correctly plain via Default" apart from
+    /// "no content-type at all"; this resolves the same effective value Excel/OPC readers do.
+    /// </summary>
+    private static string? GetEffectiveWorkbookContentType(XDocument contentTypesXml, string partName)
+    {
+        var overrideValue = GetContentTypeOverride(contentTypesXml, partName);
+        if (overrideValue is not null)
+            return overrideValue;
+
+        var extension = partName.TrimStart('/').Split('.').LastOrDefault();
+        if (extension is null)
+            return null;
+
+        return contentTypesXml.Root!
+            .Elements(ContentTypeNs + "Default")
+            .FirstOrDefault(e => string.Equals(e.Attribute("Extension")?.Value, extension, StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ContentType")?.Value;
     }
 }

@@ -932,10 +932,16 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     private static string ToX14DataBarCfvoType(CfThresholdType type, bool isMinimum) =>
         type switch
         {
+            // Explicit Lowest/Highest Value -- distinct from Automatic, only expressible here (the
+            // x14 extended block); the classic-compat cfvo written alongside always uses "min"/"max"
+            // for both this case and AutoMin/AutoMax (see XlsxAdvancedConditionalFormatMetadata.ToCfvoType).
+            CfThresholdType.Min => "min",
+            CfThresholdType.Max => "max",
             CfThresholdType.Number => "num",
             CfThresholdType.Percent => "percent",
             CfThresholdType.Percentile => "percentile",
             CfThresholdType.Formula => "formula",
+            // AutoMin/AutoMax (Excel's "Automatic" default) and any unmodeled fallback.
             _ => isMinimum ? "autoMin" : "autoMax"
         };
 

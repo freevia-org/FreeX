@@ -88,6 +88,14 @@ public sealed class ConditionalFormatStatistics
                 return SetFinite(Min, out resolved);
             case CfThresholdType.Max:
                 return SetFinite(Max, out resolved);
+            // AutoMin/AutoMax (data-bar-only "Automatic") resolve to the same actual min/max as
+            // Min/Max -- the zero-baseline clamp that distinguishes Automatic is applied separately
+            // by the data-bar caller (ConditionalFormatEvaluator.EvaluateDataBar), keyed off the
+            // threshold TYPE, not here.
+            case CfThresholdType.AutoMin:
+                return SetFinite(Min, out resolved);
+            case CfThresholdType.AutoMax:
+                return SetFinite(Max, out resolved);
             case CfThresholdType.Number:
                 return TryParseInvariant(value, out resolved);
             case CfThresholdType.Percent:

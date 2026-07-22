@@ -587,7 +587,7 @@ public sealed class XlsxFileAdapterFormatTests
                 StringComparison.Ordinal);
         }
         var sourceReplay = savePostProcessingSource.IndexOf(
-            "var sourceParts = PreserveSourcePackageParts(workbook, packageStream);",
+            "var sourceParts = PreserveSourcePackageParts(workbook, packageStream, preserveVbaProject);",
             StringComparison.Ordinal);
 
         sourcePackageCheck.Should().BeGreaterThanOrEqualTo(0);

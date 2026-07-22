@@ -47,6 +47,19 @@ public enum CfRuleType
     NoErrors
 }
 
+/// <summary>
+/// <see cref="Min"/>/<see cref="Max"/> mean an EXPLICIT endpoint ("Lowest Value"/"Highest Value" in
+/// Excel's Edit Formatting Rule dialog): the axis endpoint is exactly the range's actual minimum/
+/// maximum, with no further adjustment. <see cref="AutoMin"/>/<see cref="AutoMax"/> are the data-bar-
+/// only "Automatic" endpoint (Excel's default): the base value is the same actual minimum/maximum,
+/// but data bars additionally keep a zero baseline for Automatic (the resolved minimum is clamped to
+/// <c>min(0, actual minimum)</c> and the maximum to <c>max(0, actual maximum)</c>) -- see the zero-
+/// clamp logic in ViewportConditionalFormatEvaluator.Thresholds.cs / ConditionalFormatEvaluator.cs.
+/// Excel's OOXML cfvo @type attribute distinguishes them only in the x14 extended data-bar block
+/// ("autoMin"/"autoMax" vs "min"/"max"); the pre-2010-compatible classic cfvo block cannot express
+/// Automatic distinctly and always falls back to "min"/"max" for both cases. Color-scale and icon-set
+/// thresholds have no Automatic concept and only ever use <see cref="Min"/>/<see cref="Max"/>.
+/// </summary>
 public enum CfThresholdType
 {
     Min,
@@ -54,7 +67,12 @@ public enum CfThresholdType
     Number,
     Percent,
     Percentile,
-    Formula
+    Formula,
+
+    // Appended at the end (not inserted above) so existing serialized ordinal values -- the native
+    // JSON (.fxl) format persists this enum by ordinal -- are never shifted.
+    AutoMin,
+    AutoMax
 }
 
 public sealed record CfThresholdModel(CfThresholdType Type, string? Value = null, bool? GreaterThanOrEqual = null);
@@ -162,9 +180,13 @@ public sealed class ConditionalFormat
     /// attributes instead of flattening to sRGB.
     /// </summary>
     public CfColorStopSource? DataBarColorSource { get; set; }
-    public CfThresholdType DataBarMinThresholdType { get; set; } = CfThresholdType.Min;
+    /// <summary>Defaults to <see cref="CfThresholdType.AutoMin"/> (Excel's "Automatic" default), not
+    /// the explicit <see cref="CfThresholdType.Min"/> ("Lowest Value").</summary>
+    public CfThresholdType DataBarMinThresholdType { get; set; } = CfThresholdType.AutoMin;
     public string? DataBarMinThresholdValue { get; set; }
-    public CfThresholdType DataBarMaxThresholdType { get; set; } = CfThresholdType.Max;
+    /// <summary>Defaults to <see cref="CfThresholdType.AutoMax"/> (Excel's "Automatic" default), not
+    /// the explicit <see cref="CfThresholdType.Max"/> ("Highest Value").</summary>
+    public CfThresholdType DataBarMaxThresholdType { get; set; } = CfThresholdType.AutoMax;
     public string? DataBarMaxThresholdValue { get; set; }
     public bool DataBarShowValue { get; set; } = true;
     public int? DataBarMinLength { get; set; }

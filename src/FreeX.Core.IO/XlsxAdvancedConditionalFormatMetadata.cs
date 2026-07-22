@@ -23,7 +23,13 @@ internal static class XlsxAdvancedConditionalFormatMetadata
         cf.DataBarAxisColor is not null ||
         cf.DataBarNegativeFillColor is not null ||
         cf.DataBarNegativeBorderColor is not null ||
-        !string.IsNullOrWhiteSpace(cf.DataBarDirection);
+        !string.IsNullOrWhiteSpace(cf.DataBarDirection) ||
+        // An explicit Lowest/Highest Value endpoint (as opposed to the AutoMin/AutoMax "Automatic"
+        // default) can only be expressed distinctly in the x14 extended cfvo ("min"/"max" vs
+        // "autoMin"/"autoMax"); the classic-only cfvo block always writes "min"/"max" for BOTH cases,
+        // so without the x14 block this choice would silently round-trip back as Automatic.
+        cf.DataBarMinThresholdType == CfThresholdType.Min ||
+        cf.DataBarMaxThresholdType == CfThresholdType.Max;
 
     public static bool RequiresGeneratedOrExistingX14DataBar(ConditionalFormat cf) =>
         RequiresGeneratedX14DataBar(cf) ||
@@ -131,10 +137,18 @@ internal static class XlsxAdvancedConditionalFormatMetadata
             _ => throw new InvalidOperationException("Conditional format is not an advanced rule.")
         };
 
+    /// <summary>
+    /// Maps a threshold type to the classic (pre-2010-compatible) cfvo @type attribute. The classic
+    /// schema has no "automatic" concept distinct from an explicit endpoint, so both
+    /// <see cref="CfThresholdType.Min"/> and <see cref="CfThresholdType.AutoMin"/> write "min" (and
+    /// likewise Max/AutoMax write "max") -- the Automatic-vs-explicit distinction is carried only by
+    /// the x14 extended block (see <see cref="ToX14DataBarCfvoType"/>).
+    /// </summary>
     public static string ToCfvoType(CfThresholdType type) =>
         type switch
         {
             CfThresholdType.Max => "max",
+            CfThresholdType.AutoMax => "max",
             CfThresholdType.Number => "num",
             CfThresholdType.Percent => "percent",
             CfThresholdType.Percentile => "percentile",
@@ -151,6 +165,27 @@ internal static class XlsxAdvancedConditionalFormatMetadata
             "percentile" => CfThresholdType.Percentile,
             "formula" => CfThresholdType.Formula,
             _ => CfThresholdType.Min
+        };
+
+    /// <summary>
+    /// Maps an x14 EXTENDED data-bar cfvo @type attribute -- the only place OOXML carries the
+    /// Automatic-vs-explicit distinction for a data bar's min/max endpoint -- to the model's
+    /// threshold type. Unlike <see cref="FromCfvoType"/> (used for the classic block, color scales,
+    /// and icon sets, none of which have an Automatic concept), "min"/"max" here mean an EXPLICIT
+    /// Lowest/Highest Value, while "automin"/"automax" (and any unrecognized/absent type, matching
+    /// Excel's own default) mean Automatic.
+    /// </summary>
+    public static CfThresholdType FromX14DataBarCfvoType(string? type) =>
+        type?.ToLowerInvariant() switch
+        {
+            "min" => CfThresholdType.Min,
+            "max" => CfThresholdType.Max,
+            "num" => CfThresholdType.Number,
+            "percent" => CfThresholdType.Percent,
+            "percentile" => CfThresholdType.Percentile,
+            "formula" => CfThresholdType.Formula,
+            "automax" => CfThresholdType.AutoMax,
+            _ => CfThresholdType.AutoMin
         };
 
     public static string NormalizeDateOccurringPeriod(string? value)

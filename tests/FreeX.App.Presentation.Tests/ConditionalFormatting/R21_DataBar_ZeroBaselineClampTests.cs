@@ -17,8 +17,8 @@ public sealed class R21_DataBar_ZeroBaselineClampTests
     {
         RuleType = CfRuleType.DataBar,
         DataBarColor = new RgbColor(10, 20, 30),
-        DataBarMinThresholdType = CfThresholdType.Min,
-        DataBarMaxThresholdType = CfThresholdType.Max,
+        DataBarMinThresholdType = CfThresholdType.AutoMin,
+        DataBarMaxThresholdType = CfThresholdType.AutoMax,
     };
 
     [Fact]

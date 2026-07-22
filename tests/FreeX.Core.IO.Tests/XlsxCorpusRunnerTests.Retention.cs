@@ -18,6 +18,14 @@ public partial class XlsxCorpusRunnerTests
             .Where(row => row.ExpectedStatus == "supported-known-gap")
             .Where(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id))
             .Where(row => row.Id != "generated-vba-signature-001")
+            // R70-io-vba-6-1: Save (the plain, non-macro .xlsx entry point exercised by this loop)
+            // now intentionally DROPS a source's VBA project on an ordinary model edit -- matching
+            // Excel's own Save-As-plain-format behavior -- so xl/vbaProject.bin is no longer a
+            // "critical part" this generic retention sweep can expect to survive. Covered instead
+            // by GeneratedVbaMacrosRetentionPackage_LinksWorkbookToVbaProject (fixture shape) and
+            // XlsmFileAdapterTests' Xlsx_SaveAs_FromMacroEnabledSource_* / Xlsm_SaveAs_* tests
+            // (the actual drop-vs-preserve save behavior).
+            .Where(row => row.Id != "generated-vba-macros-001")
             .ToArray();
 
         rows.Should().NotBeEmpty("known-gap retention packages catch XLSX package loss during ordinary model edits");
@@ -180,8 +188,13 @@ public partial class XlsxCorpusRunnerTests
             .BeTrue(blockReason);
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-vba-signature-edit"));
 
+        // R70-io-vba-6-1: Save (the plain, non-macro .xlsx entry point) now intentionally drops a
+        // source's VBA project -- Excel does the same on Save-As to a plain format -- which forces
+        // a full rebuild instead of the byte-preserving patch-save this test exercises. Use the
+        // VBA-preserving entry point (what XlsmFileAdapter/XltmFileAdapter delegate to) to keep
+        // testing the patch-save path's interaction with the signature package graph.
         using var saved = new MemoryStream();
-        adapter.Save(workbook, saved);
+        adapter.SavePreservingVbaProject(workbook, saved);
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-vba-signature-001");

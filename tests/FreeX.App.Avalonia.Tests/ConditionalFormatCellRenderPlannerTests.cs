@@ -65,8 +65,8 @@ public sealed class ConditionalFormatCellRenderPlannerTests
         {
             RuleType = CfRuleType.DataBar,
             DataBarColor = new RgbColor(99, 142, 198),
-            DataBarMinThresholdType = CfThresholdType.Min,
-            DataBarMaxThresholdType = CfThresholdType.Max,
+            DataBarMinThresholdType = CfThresholdType.AutoMin,
+            DataBarMaxThresholdType = CfThresholdType.AutoMax,
         };
         var stats = ConditionalFormatStatistics.FromValues([0d, 100d]);
 

@@ -210,4 +210,78 @@ public sealed class Backlog_TextBox62TextFormattingTests
             "the writer now explicitly emits bodyPr@anchor=\"t\" for TextBoxModel's default (Top), " +
             "matching a plain Excel-authored text box's own default anchor");
     }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTripsTextBoxFontProperties()
+    {
+        // Residual gap flagged by the round-67 textbox-rich-text fixer: TextBoxModel gained the 8
+        // text-format fields (font family/size, bold, italic, color, alignment) and the XLSX
+        // reader/writer round-trip them (see the XlsxAdapter tests above), but the native .fxl
+        // JSON adapter's TextBoxDto/mapper never carried them -- so a .fxl save/reload silently
+        // lost a text box's formatting even though XLSX preserved it. Before the fix, every
+        // assertion below came back at its default (font null, size 0, bold/italic false, etc.).
+        var workbook = new Workbook("TextBoxFormatting");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var textColor = new CellColor(0x11, 0x22, 0x33);
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Text = "Warning",
+            TextFontFamily = "Georgia",
+            TextFontSizePoints = 18,
+            TextBold = true,
+            TextItalic = true,
+            TextColor = textColor,
+            TextHAlign = DrawingShapeTextHAlign.Right,
+            TextVAnchor = DrawingShapeTextVAnchor.Bottom
+        });
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var reloaded = adapter.Load(stream).GetSheetAt(0).TextBoxes.Should().ContainSingle().Subject;
+        reloaded.Text.Should().Be("Warning");
+        reloaded.TextFontFamily.Should().Be("Georgia");
+        reloaded.TextFontSizePoints.Should().Be(18);
+        reloaded.TextBold.Should().BeTrue();
+        reloaded.TextItalic.Should().BeTrue();
+        reloaded.TextColor.Should().Be(textColor);
+        reloaded.TextHAlign.Should().Be(DrawingShapeTextHAlign.Right);
+        reloaded.TextVAnchor.Should().Be(DrawingShapeTextVAnchor.Bottom);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTripsPlainUnformattedTextBox_NoRegression()
+    {
+        // No-regression sibling: a plain text box with no explicit formatting must still round-trip
+        // through the native JSON adapter with its text intact and the new fields at their harmless
+        // defaults.
+        var workbook = new Workbook("PlainTextBox");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Text = "Plain note"
+        });
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var reloaded = adapter.Load(stream).GetSheetAt(0).TextBoxes.Should().ContainSingle().Subject;
+        reloaded.Text.Should().Be("Plain note");
+        reloaded.TextFontFamily.Should().BeNull();
+        reloaded.TextFontSizePoints.Should().Be(0);
+        reloaded.TextBold.Should().BeFalse();
+        reloaded.TextItalic.Should().BeFalse();
+        reloaded.TextColor.Should().BeNull();
+        reloaded.TextThemeColor.Should().BeNull();
+        reloaded.TextHAlign.Should().Be(DrawingShapeTextHAlign.Left);
+        reloaded.TextVAnchor.Should().Be(DrawingShapeTextVAnchor.Top);
+    }
 }

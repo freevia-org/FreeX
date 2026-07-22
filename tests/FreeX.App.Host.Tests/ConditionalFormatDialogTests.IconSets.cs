@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -8,6 +9,33 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class ConditionalFormatDialogTests
 {
+    [Fact]
+    public void IconSetRule_ThresholdTypePickers_ExcludeDataBarOnlyAutomaticEndpoints()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Icon Set", RangeFor(SheetId.New())));
+
+            // Each per-bucket icon threshold row has its own type picker; AutoMin/AutoMax ("Automatic")
+            // is a data-bar-only endpoint and must never leak into icon-set thresholds.
+            var rowsField = typeof(ConditionalFormatDialog).GetField("_iconSetThresholdRows", BindingFlags.Instance | BindingFlags.NonPublic);
+            var rows = (System.Collections.IEnumerable)rowsField!.GetValue(dialog)!;
+
+            var typeBoxes = new List<ComboBox>();
+            foreach (var row in rows)
+                typeBoxes.Add((ComboBox)row.GetType().GetField("Item1")!.GetValue(row)!);
+
+            typeBoxes.Should().NotBeEmpty();
+            foreach (var typeBox in typeBoxes)
+            {
+                typeBox.Items.Cast<CfThresholdType>().Should().NotContain(
+                    [CfThresholdType.AutoMin, CfThresholdType.AutoMax]);
+            }
+
+            dialog.Close();
+        });
+    }
+
     [Fact]
     public void IconSetRule_CreatesIconSetWithoutFormatIfTrue()
     {

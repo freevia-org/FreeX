@@ -15511,6 +15511,9 @@ Continue saving?</value>
   <data name="ConditionalFormatDialog_ThresholdsHeader" xml:space="preserve">
     <value>Thresholds:</value>
   </data>
+  <data name="ConditionalFormatDialog_ThresholdType_Automatic" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
   <data name="ConditionalFormatDialog_EditRuleDescriptionHeader" xml:space="preserve">
     <value>Edit the Rule Description:</value>
   </data>

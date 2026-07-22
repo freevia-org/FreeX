@@ -10,8 +10,8 @@ public sealed class DataBarEvaluatorTests
     {
         RuleType = CfRuleType.DataBar,
         DataBarColor = new RgbColor(10, 20, 30),
-        DataBarMinThresholdType = CfThresholdType.Min,
-        DataBarMaxThresholdType = CfThresholdType.Max,
+        DataBarMinThresholdType = CfThresholdType.AutoMin,
+        DataBarMaxThresholdType = CfThresholdType.AutoMax,
     };
 
     [Theory]
