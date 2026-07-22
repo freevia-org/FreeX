@@ -3202,14 +3202,23 @@ public static partial class ChartRenderPlanner
         ChartPlanRect plot)
     {
         double scaleX = plot.Width / ImportedSurfaceReferencePlotWidth;
-        double scaleY = plot.Height / 189.0;
+        const double referencePlotHeight = 189.0;
+        // Boundary faces are projected from the chart floor. Anchor their
+        // measured reference coordinates to the current plot bottom instead
+        // of stretching the canonical top-origin raster when a default chart
+        // becomes taller.
+        double scaleY = Math.Min(1.0, plot.Height / referencePlotHeight);
+        ChartPlanPoint Point(double x, double y) =>
+            new(
+                plot.X + x * scaleX,
+                plot.Bottom - (referencePlotHeight - y) * scaleY);
         // These six opaque boundary faces are measured in the normalized
         // 360x189 PowerPoint plot used by the imported baseline chart.
         var points = new[]
         {
-            new ChartPlanPoint(plot.X + 144.0 * scaleX, plot.Y + 167.0 * scaleY),
-            new ChartPlanPoint(plot.X + 172.0 * scaleX, plot.Y + 121.0 * scaleY),
-            new ChartPlanPoint(plot.X + 234.0 * scaleX, plot.Y + 153.0 * scaleY),
+            Point(144.0, 167.0),
+            Point(172.0, 121.0),
+            Point(234.0, 153.0),
         };
         var stroke = new ChartStrokePlan(
             new SrgbColor(0x00, 0x00, 0x00),
@@ -3224,9 +3233,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 1.0 * scaleX, plot.Y + 125.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 72.0 * scaleX, plot.Y + 71.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 132.0 * scaleX, plot.Y + 71.0 * scaleY),
+                    Point(1.0, 125.0),
+                    Point(72.0, 71.0),
+                    Point(132.0, 71.0),
                 },
                 new ChartFillPlan(new SrgbColor(0xD5, 0x70, 0x2C), 255),
                 stroke,
@@ -3237,9 +3246,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 1.0 * scaleX, plot.Y + 125.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 132.0 * scaleX, plot.Y + 71.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 174.0 * scaleX, plot.Y + 79.0 * scaleY),
+                    Point(1.0, 125.0),
+                    Point(132.0, 71.0),
+                    Point(174.0, 79.0),
                 },
                 new ChartFillPlan(new SrgbColor(0xD5, 0x70, 0x2C), 255),
                 stroke,
@@ -3250,9 +3259,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 245.0 * scaleX, plot.Y + 99.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 319.0 * scaleX, plot.Y + 119.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 312.0 * scaleX, plot.Y + 137.0 * scaleY),
+                    Point(245.0, 99.0),
+                    Point(319.0, 119.0),
+                    Point(312.0, 137.0),
                 },
                 new ChartFillPlan(new SrgbColor(0xD5, 0x70, 0x2C), 255),
                 stroke,
@@ -3271,9 +3280,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 201.0 * scaleX, plot.Y + 72.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 232.0 * scaleX, plot.Y + 42.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 306.0 * scaleX, plot.Y + 33.0 * scaleY),
+                    Point(201.0, 72.0),
+                    Point(232.0, 42.0),
+                    Point(306.0, 33.0),
                 },
                 new ChartFillPlan(new SrgbColor(0x8B, 0xAB, 0x74), 255),
                 stroke,
@@ -3284,9 +3293,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 301.0 * scaleX, plot.Y + 42.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 360.0 * scaleX, plot.Y + 25.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 349.0 * scaleX, plot.Y + 50.0 * scaleY),
+                    Point(301.0, 42.0),
+                    Point(360.0, 25.0),
+                    Point(349.0, 50.0),
                 },
                 new ChartFillPlan(new SrgbColor(0xE7, 0xAD, 0x00), 255),
                 stroke,
@@ -3297,9 +3306,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 194.0 * scaleX, plot.Y + 76.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 238.0 * scaleX, plot.Y + 98.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 201.0 * scaleX, plot.Y + 72.0 * scaleY),
+                    Point(194.0, 76.0),
+                    Point(238.0, 98.0),
+                    Point(201.0, 72.0),
                 },
                 new ChartFillPlan(new SrgbColor(0x81, 0xA1, 0x6E), 255),
                 stroke,
