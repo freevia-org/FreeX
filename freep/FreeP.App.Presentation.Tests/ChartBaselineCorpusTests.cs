@@ -726,12 +726,18 @@ public sealed class ChartBaselineCorpusTests
         surface.View3D.RotationY.Should().Be(35);
         surface.View3D.Perspective.Should().Be(54);
         surface.View3D.DepthPercent.Should().Be(125);
+        surface.WireframeSpecified.Should().BeTrue();
+        surface.Wireframe.Should().BeFalse();
 
         var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
             surface,
             new ChartPlanRect(0, 0, 360, 189));
         geometry.RenderFacets.Should().HaveCount(4,
             "an authored camera should use the general complete-cell surface mesh");
+        geometry.WireframeSegments.Should().BeEmpty(
+            "an explicit c:wireframe=0 camera must not receive the default mesh overlay");
+        geometry.FrameSegments.Should().HaveCount(5,
+            "an explicit c:wireframe=0 camera keeps the outer frame without the default wall grid");
         geometry.FrameSegments.Select(segment => segment.Stroke.Thickness)
             .Should().OnlyContain(thickness => thickness == 0.7);
     }

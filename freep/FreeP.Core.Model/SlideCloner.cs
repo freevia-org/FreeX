@@ -140,6 +140,8 @@ public static class SlideCloner
                 HeightPercent = src.View3D.HeightPercent,
                 DepthPercent = src.View3D.DepthPercent,
             },
+            Wireframe = src.Wireframe,
+            WireframeSpecified = src.WireframeSpecified,
             DoughnutHolePercent = src.DoughnutHolePercent,
             FirstSliceAngleDegrees = src.FirstSliceAngleDegrees,
             ScatterStyle = src.ScatterStyle,
