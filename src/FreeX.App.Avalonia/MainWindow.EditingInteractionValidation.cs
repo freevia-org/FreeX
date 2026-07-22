@@ -129,7 +129,10 @@ public sealed partial class MainWindow
             dragFormulaEditor.SelectAll();
             await RaiseEditingValidationTextInputAsync(dragFormulaEditor, "=");
             dragPointStarted = TryInsertFormulaPointReference(dragStart);
-            TrackFormulaPointDragAnchor(dragStart);
+            TrackFormulaPointDragAnchor(
+                dragStart,
+                _formulaReferenceStart,
+                _formulaReferenceLength);
             dragAnchorReplayConsumed = TryContinueFormulaRangeSelectionDrag(dragStart);
             dragPointExtended = TryContinueFormulaRangeSelectionDrag(dragEnd);
             dragPointText = _inlineCellEditor?.Text ?? _inlineCellEditText ?? "";

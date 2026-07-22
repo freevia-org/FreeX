@@ -41,6 +41,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _rebuildQuickAccessToolbar;
         private readonly MethodInfo _zoomCustomMenuItemClick;
         private readonly MethodInfo _setActiveCell;
+        private readonly PropertyInfo _selectionAnchorProperty;
+        private readonly FieldInfo _selectionCursorField;
         private readonly MethodInfo _applyPivotFieldListLayout;
         private readonly MethodInfo _movePivotFieldToZone;
         private readonly Type _pivotFieldDropZoneType;
@@ -87,6 +89,10 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "ZoomCustomMenuItem_Click");
             _setActiveCell = typeof(MainWindow).GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
+            _selectionAnchorProperty = typeof(MainWindow).GetProperty("_selectionAnchor", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMemberException(nameof(MainWindow), "_selectionAnchor");
+            _selectionCursorField = typeof(MainWindow).GetField("_selectionCursor", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_selectionCursor");
             _applyPivotFieldListLayout = typeof(MainWindow).GetMethod("ApplyPivotFieldListLayout", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ApplyPivotFieldListLayout");
             _movePivotFieldToZone = typeof(MainWindow).GetMethod("MovePivotFieldToZone", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -335,6 +341,11 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 sheetGrid.SelectedObjectId = Guid.Empty;
                 sheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.None;
                 sheetGrid.SelectedRange = new GridRange(address, address);
+
+                // Keep _selectionAnchor/_selectionCursor consistent with the reset selection so a
+                // prior SelectRange's anchor doesn't linger into the next test (see SelectRange).
+                _selectionAnchorProperty.SetValue(_window, address);
+                _selectionCursorField.SetValue(_window, address);
             }
             PumpDispatcher();
         }
@@ -379,10 +390,19 @@ public sealed partial class MainWindowRibbonKeyTipTests
             var sheet = _workbook.Sheets[0];
             if (_window.FindName("SheetGrid") is SheetGridView sheetGrid)
             {
+                var start = new CellAddress(sheet.Id, startRow, startCol);
+                var end = new CellAddress(sheet.Id, endRow, endCol);
                 sheetGrid.SelectedRanges = null;
-                sheetGrid.SelectedRange = new GridRange(
-                    new CellAddress(sheet.Id, startRow, startCol),
-                    new CellAddress(sheet.Id, endRow, endCol));
+                sheetGrid.SelectedRange = new GridRange(start, end);
+
+                // SheetGrid.SelectedRange is a visual-only DependencyProperty; setting it alone
+                // does NOT update the window's _selectionAnchor/_selectionCursor the way a real
+                // selection (SetActiveCell/SetSelectionRange in MainWindow.Selection.cs) does.
+                // Leaving the anchor stale makes anchor-driven commands -- Freeze Panes and Split
+                // -- resolve their position from the previous active cell (e.g. A1) instead of this
+                // selection, so mirror the anchor/cursor here to model a genuine selection.
+                _selectionAnchorProperty.SetValue(_window, start);
+                _selectionCursorField.SetValue(_window, end);
             }
 
             PumpDispatcher();
@@ -398,6 +418,12 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public GridRange? SelectedRange =>
             (_window.FindName("SheetGrid") as SheetGridView)?.SelectedRange;
+
+        // Mirrors MainWindow's private _selectionAnchor (the true active/anchor cell of the
+        // current selection). Anchor-driven ribbon commands -- Freeze Panes and Split -- resolve
+        // their position from this cell, so tests assert it stays in sync with SelectRange.
+        public (uint Row, uint Col)? SelectionAnchor =>
+            _selectionAnchorProperty.GetValue(_window) is CellAddress addr ? (addr.Row, addr.Col) : null;
 
         public GridRange ActivePivotVisibleRange =>
             PivotUiPlanner.VisiblePivotRange(_workbook.Sheets[0].PivotTables[0]);

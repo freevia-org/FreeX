@@ -109,6 +109,33 @@ public sealed partial class MainWindowRibbonKeyTipTests
         });
     }
 
+    // Regression: a brand-new split must be positioned at the selection's active/anchor cell, not
+    // the viewport-midpoint fallback that Excel reserves ONLY for an A1 active cell (see
+    // SplitViewBtn_Click in MainWindow.ViewCommands.cs). A multi-cell selection whose anchor is
+    // deep in the sheet (C4:E6, anchor C4) must split exactly at that anchor -- proving the Split
+    // handler reads the real selection anchor rather than a stale one left over from A1.
+    [Fact]
+    public void ViewSplit_PositionsNewSplitAtSelectionAnchor_NotViewportMidpoint()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(4, 3, 6, 5);
+            harness.SelectionAnchor.Should().Be((4u, 3u),
+                "SelectRange must keep the window's active/anchor cell in sync with the selection");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.S);
+            harness.HandleKeyTip(Key.P);
+
+            harness.ActiveSheetSplitPanes.Should().Be((4u, 3u),
+                "a new split anchors at the selected cell (row 4, col 3), not the midpoint-of-viewport A1 fallback");
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
     [Fact]
     public void ViewWindowSingleHostState_DisablesMultiWindowCommandsButKeepsResetLive()
     {
