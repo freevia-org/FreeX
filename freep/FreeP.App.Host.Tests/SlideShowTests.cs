@@ -363,6 +363,49 @@ public sealed class SlideShowWindowTests
     }
 
     [StaFact]
+    public void SlideShowWindow_MorphByWord_ExecutesTokenOverlayRoute()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides.Add(new Slide());
+        pres.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 10,
+            Name = "Revenue",
+            TextBody = MakeTextBody("Revenue Q1"),
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 914400,
+        });
+        pres.Slides[1].Shapes.Add(new SlideShape
+        {
+            Id = 99,
+            Name = "Revenue",
+            TextBody = MakeTextBody("Revenue Q2"),
+            OffsetXEmu = 1828800,
+            OffsetYEmu = 1828800,
+            ExtentCxEmu = 5486400,
+            ExtentCyEmu = 914400,
+        });
+        pres.Slides[1].Transition = new SlideTransition
+        {
+            Kind = TransitionKind.Morph,
+            MorphOption = "byWord",
+            DurationMs = 16,
+        };
+
+        var window = new SlideShowWindow(pres, 0);
+        try
+        {
+            window.ExecuteAdvance();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void SlideShowWindow_CustomPlaybackRoute_PlaysOrderedSlides()
     {
         var pres = MakePresentation("Intro", "Deep dive", "Appendix");

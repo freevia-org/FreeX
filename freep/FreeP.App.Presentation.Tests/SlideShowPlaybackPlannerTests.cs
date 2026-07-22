@@ -715,8 +715,60 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.Matches[0].Source.Id.Should().Be(10);
         plan.Matches[0].Target.Id.Should().Be(99);
         plan.Matches[0].MatchKey.Should().Be("byWord:text:1");
+        plan.Matches[0].Tokens.Should().ContainSingle();
+        plan.Matches[0].Tokens[0].SourceText.Should().Be("Revenue");
+        plan.Matches[0].Tokens[0].TargetText.Should().Be("Revenue");
+        plan.Matches[0].Tokens[0].SourceStart.Should().Be(0);
+        plan.Matches[0].Tokens[0].TargetStart.Should().Be(0);
         plan.UnmatchedSourceCount.Should().Be(1);
         plan.UnmatchedTargetCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void MorphPlanner_ByCharExposesOrderedTokenCorrespondence()
+    {
+        var source = new Slide();
+        source.Shapes.Add(new SlideShape { Id = 10, Text = "ABCD", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+        var target = new Slide();
+        target.Shapes.Add(new SlideShape { Id = 99, Text = "ABXCD", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+
+        var plan = SlideShowMorphPlanner.Plan(
+            new SlideTransition { Kind = TransitionKind.Morph, MorphOption = "byChar" },
+            source,
+            target);
+
+        plan.Matches.Should().ContainSingle();
+        plan.Matches[0].Tokens.Select(token => token.SourceText)
+            .Should().Equal("A", "B", "C", "D");
+        plan.Matches[0].Tokens.Select(token => token.TargetText)
+            .Should().Equal("A", "B", "C", "D");
+        plan.Matches[0].Tokens.Select(token => token.TargetStart)
+            .Should().Equal(0, 1, 3, 4);
+    }
+
+    [Fact]
+    public void MorphPlanner_CreateTokenShapePreservesTargetGeometryAndFormats()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            OffsetXEmu = 100,
+            OffsetYEmu = 200,
+            ExtentCxEmu = 300,
+            ExtentCyEmu = 400,
+            TextBody = new TextBody()
+        };
+        shape.TextBody.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "Revenue Q2", Bold = true } }
+        });
+
+        var token = SlideShowMorphPlanner.CreateTokenShape(shape, 0, 7);
+
+        token.OffsetXEmu.Should().Be(100);
+        token.ExtentCyEmu.Should().Be(400);
+        token.PlainText.Should().Be("Revenue");
+        token.TextBody!.Paragraphs[0].Runs[0].Bold.Should().BeTrue();
     }
 
     [Fact]
