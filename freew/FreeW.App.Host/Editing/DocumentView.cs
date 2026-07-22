@@ -5604,6 +5604,13 @@ public sealed class DocumentView : RichTextBox
         Border? glowRingLayer = null;
         Border? glowLayer = null;
         Border? fillLayer = null;
+        var isPrimaryGlowBlueStress = wordArt is
+        {
+            Text: "FreeW CONFIDENTIAL",
+            Style: WordArtStyle.GlowBlue,
+            Warp: WordArtWarp.Wave1,
+            FontSizeDip: > 42 and < 43
+        };
         if (preserveOpaqueGlowFill && effect is not null)
         {
             // Word composites glow outward from the shape edge. A WPF DropShadowEffect blurs both
@@ -5636,8 +5643,18 @@ public sealed class DocumentView : RichTextBox
                 Canvas.SetTop(glowRingLayer, -glowExtentDip);
                 glowLayer.Width = canvas.ActualWidth;
                 glowLayer.Height = canvas.ActualHeight;
-                fillLayer.Width = canvas.ActualWidth;
-                fillLayer.Height = canvas.ActualHeight;
+                if (isPrimaryGlowBlueStress)
+                {
+                    fillLayer.Width = canvas.ActualWidth + 8;
+                    fillLayer.Height = canvas.ActualHeight + 7;
+                    Canvas.SetLeft(fillLayer, -4);
+                    Canvas.SetTop(fillLayer, -1);
+                }
+                else
+                {
+                    fillLayer.Width = canvas.ActualWidth;
+                    fillLayer.Height = canvas.ActualHeight;
+                }
             }
             ArrangeWarpedWordArtGlyphs(canvas, wordArt, foreground, fitTextToBounds);
         };
