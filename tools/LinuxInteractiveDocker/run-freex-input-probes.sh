@@ -566,16 +566,21 @@ if select_cell 6 11 G12; then
     xdotool mouseup 1
     sleep "$settle_seconds"
     capture "inline-point-drag-address.png"
+    printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
+    send_key ctrl+a
+    send_key ctrl+c
+    inline_drag_editor_text="$(clipboard_text)"
     send_key Return
     inline_drag_formula="$(copy_cell_formula 6 11 G12 || printf 'selection-failed')"
     select_cell 0 0 A1 || true
     capture "inline-point-drag-committed.png"
     crop_cell "$output/inline-point-drag-committed.png" "$output/inline-point-drag-committed-cell.png" 6 11
-    if region_changed "$output/inline-point-drag-before-cell.png" "$output/inline-point-drag-committed-cell.png" 8 &&
+    if [[ "$inline_drag_editor_text" == "=B2:D4" ]] &&
+       region_changed "$output/inline-point-drag-before-cell.png" "$output/inline-point-drag-committed-cell.png" 8 &&
        [[ "$inline_drag_formula" == "=B2:D4" ]]; then
-        record "inline-point-mode-drag-range" "passed" "selection-G12.png; inline-point-drag-address.png; X11 clipboard formula='=B2:D4'"
+        record "inline-point-mode-drag-range" "passed" "selection-G12.png; inline-point-drag-address.png; X11 editor clipboard='=B2:D4'; committed formula='=B2:D4'"
     else
-        record "inline-point-mode-drag-range" "failed" "selection-G12.png; inline-point-drag-address.png; inline-point-drag-committed-cell.png" "Physical B2-to-D4 point drag did not commit '=B2:D4' in G12 (clipboard='${inline_drag_formula}')."
+        record "inline-point-mode-drag-range" "failed" "selection-G12.png; inline-point-drag-address.png; inline-point-drag-committed-cell.png" "Physical B2-to-D4 point drag did not restore the editor or commit '=B2:D4' in G12 (editor clipboard='${inline_drag_editor_text}', committed formula='${inline_drag_formula}')."
         dismiss_overlays
     fi
 else

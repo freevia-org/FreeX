@@ -865,6 +865,8 @@ public sealed partial class MainWindow : Window
     // revert it back to the plain range address (R69-render-active-cell-selection-6-2).
     private bool _cellSelectionDragShowedDimensionText;
     private CellAddress? _cellDragFormulaPointCursor;
+    private int? _cellDragFormulaReferenceStart;
+    private int? _cellDragFormulaReferenceLength;
     private Control? _cellDragSelectionCapture;
     private IPointer? _cellDragSelectionPointer;
     private HeaderResizeKind _headerSelectionDragKind;
@@ -6825,6 +6827,8 @@ public sealed partial class MainWindow : Window
         _selectionMoveSourceRange = null;
         _selectionMovePreviewRange = null;
         _cellDragFormulaPointCursor = null;
+        _cellDragFormulaReferenceStart = null;
+        _cellDragFormulaReferenceLength = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
         _cellSelectionDragShowedDimensionText = false;
@@ -6864,6 +6868,8 @@ public sealed partial class MainWindow : Window
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
         _cellDragFormulaPointCursor = null;
+        _cellDragFormulaReferenceStart = null;
+        _cellDragFormulaReferenceLength = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
         _autofillDragging = false;
@@ -6950,6 +6956,8 @@ public sealed partial class MainWindow : Window
         _cellDragSelectionCapture = null;
         _cellDragSelectionPointer = null;
         _cellDragFormulaPointCursor = null;
+        _cellDragFormulaReferenceStart = null;
+        _cellDragFormulaReferenceLength = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
         _autofillDragging = false;
@@ -8317,8 +8325,10 @@ public sealed partial class MainWindow : Window
             if (point.Properties.IsLeftButtonPressed &&
                 TryInsertFormulaPointReference(address))
             {
+                var referenceStart = _formulaReferenceStart;
+                var referenceLength = _formulaReferenceLength;
                 BeginCellSelectionDrag(args, border, address);
-                TrackFormulaPointDragAnchor(address);
+                TrackFormulaPointDragAnchor(address, referenceStart, referenceLength);
                 args.Handled = true;
                 return;
             }
@@ -8454,10 +8464,15 @@ public sealed partial class MainWindow : Window
         };
         editor.TextChanged += (_, _) =>
         {
-            if (!Equals(_inlineCellEditAddress, address))
+            if (!Equals(_inlineCellEditAddress, address) || !ReferenceEquals(_inlineCellEditor, editor))
                 return;
 
             _inlineCellEditText = editor.Text ?? "";
+            if (_isApplyingFormulaBoxText)
+            {
+                return;
+            }
+
             _isApplyingFormulaBoxText = true;
             try
             {
@@ -9325,14 +9340,27 @@ public sealed partial class MainWindow : Window
         if (_cellDragFormulaPointCursor == address)
             return true;
 
+        _formulaReferenceStart = _cellDragFormulaReferenceStart;
+        _formulaReferenceLength = _cellDragFormulaReferenceLength;
         var applied = TryApplyFormulaRangeSelection(address, extendSelection: true);
         if (applied)
+        {
             _cellDragFormulaPointCursor = address;
+            _cellDragFormulaReferenceStart = _formulaReferenceStart;
+            _cellDragFormulaReferenceLength = _formulaReferenceLength;
+        }
         return applied;
     }
 
-    private void TrackFormulaPointDragAnchor(CellAddress address) =>
+    private void TrackFormulaPointDragAnchor(
+        CellAddress address,
+        int? referenceStart,
+        int? referenceLength)
+    {
         _cellDragFormulaPointCursor = address;
+        _cellDragFormulaReferenceStart = referenceStart;
+        _cellDragFormulaReferenceLength = referenceLength;
+    }
 
     private static void RestoreFormulaRangeEditorFocusAfterDrag(TextBox? editor) =>
         editor?.Focus();
@@ -9344,7 +9372,9 @@ public sealed partial class MainWindow : Window
     private void FormulaBox_TextChanged(object? sender, TextChangedEventArgs e)
     {
         if (_isApplyingFormulaBoxText)
+        {
             return;
+        }
 
         ClearFormulaReferenceEntrySpan();
         UpdateFormulaRangeEntryStateAfterTextChanged(_formulaBox.Text);
