@@ -420,6 +420,7 @@ public sealed class FloatingObjectRenderTests
         root.Arrange(new Rect(0, 0, 124, 64));
         root.UpdateLayout();
 
+        Canvas.GetTop(root).Should().BeApproximately(124, 0.01);
         root.Effect.Should().BeNull();
         root.Children.OfType<Border>().Should().HaveCount(3);
         root.Children.OfType<Border>().Single(border => border.Effect is null && border.Opacity == 0.6)
