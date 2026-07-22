@@ -250,6 +250,17 @@ public sealed class WorkbookSession
 
     public CellAddress? FormulaEditAddress { get; private set; }
 
+    /// <summary>
+    /// Optional host hook that resolves a Warning/Information ("AskToContinue") data-validation
+    /// alert for <see cref="CommitCellText"/> -- mirrors the WPF host's
+    /// <c>IUserMessageService.ShowMessage</c> prompt (Warning alert style: Yes/No/Cancel;
+    /// Information alert style: OK/Cancel). <see cref="UserMessageResult.Yes"/> or
+    /// <see cref="UserMessageResult.Ok"/> commits the invalid entry; anything else does not. Left
+    /// null (the default), an AskToContinue violation keeps this session's original pass-through
+    /// behavior -- silently accepted -- so a host that hasn't wired a prompt is unaffected.
+    /// </summary>
+    public Func<DataValidationPromptRequest, UserMessageResult>? DataValidationPromptResolver { get; set; }
+
     public IReadOnlyList<WorkbookSheetTab> SheetTabs { get; private set; }
 
     public bool IsWorkbookGrouped =>
@@ -1937,15 +1948,23 @@ public sealed class WorkbookSession
 
         var cell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle);
 
-        // Enforce Stop-style data validation rules the same way the WPF host's
-        // TryCreateCellFromEntryText does, so a Stop-alert DV rule actually blocks bad entries
-        // on the Avalonia shell instead of being purely decorative. Warning/Information styles
-        // (DataValidationInvalidEntryAction.AskToContinue) need a user-facing prompt with
-        // Yes/No/Cancel semantics that has no seam in this host-agnostic session yet, so those
-        // are intentionally left to pass through unchanged for now -- only Block is enforced here.
-        var blockMessage = TryGetBlockingValidationMessage(cell, address);
-        if (blockMessage != null)
-            return new WorkbookCellEditResult(false, blockMessage, [], RecalcReport: null);
+        // Enforce data validation the same way the WPF host's TryCreateCellFromEntryText does: a
+        // Stop-alert rule blocks the entry outright, while a Warning/Information ("AskToContinue")
+        // rule asks the host via DataValidationPromptResolver (Warning: Yes/No/Cancel;
+        // Information: OK/Cancel) -- Yes/OK still commits the invalid value, anything else does
+        // not. A host that hasn't wired DataValidationPromptResolver keeps this session's
+        // original pass-through behavior for AskToContinue rules (silently accepted).
+        var check = EvaluateDataValidationForEntry(cell, address);
+        if (check.Outcome == DataValidationEntryOutcome.Blocked)
+            return new WorkbookCellEditResult(false, check.Message, [], RecalcReport: null);
+
+        if (check.Outcome == DataValidationEntryOutcome.NeedsConfirmation &&
+            DataValidationPromptResolver is { } resolvePrompt)
+        {
+            var decision = resolvePrompt(new DataValidationPromptRequest(check.Message!, check.Title!, check.AlertStyle));
+            if (decision is not (UserMessageResult.Yes or UserMessageResult.Ok))
+                return new WorkbookCellEditResult(false, check.Message, [], RecalcReport: null);
+        }
 
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
@@ -2024,16 +2043,32 @@ public sealed class WorkbookSession
         }
     }
 
+    private enum DataValidationEntryOutcome { Allowed, Blocked, NeedsConfirmation }
+
+    private readonly record struct DataValidationEntryCheck(
+        DataValidationEntryOutcome Outcome,
+        string? Message,
+        string? Title,
+        DvAlertStyle AlertStyle)
+    {
+        public static readonly DataValidationEntryCheck Allowed =
+            new(DataValidationEntryOutcome.Allowed, null, null, default);
+    }
+
     /// <summary>
-    /// Returns the violation message for the first applicable data-validation rule that
-    /// blocks <paramref name="cell"/> at <paramref name="address"/> (a Stop-alert rule with
-    /// <c>ShowErrorMessage</c> set), or null if no rule blocks the entry.
+    /// Classifies the first applicable data-validation rule that <paramref name="cell"/> violates
+    /// at <paramref name="address"/> (Excel's "first rule wins" behavior): <c>Blocked</c> for a
+    /// Stop-alert rule with <c>ShowErrorMessage</c> set (<see cref="CommitCellText"/> rejects the
+    /// entry outright), <c>NeedsConfirmation</c> for a Warning/Information ("AskToContinue") rule
+    /// (<see cref="CommitCellText"/> consults <see cref="DataValidationPromptResolver"/>), or
+    /// <c>Allowed</c> when no rule is violated, or the violated rule has <c>ShowErrorMessage</c>
+    /// off (Excel treats that as unrestricted).
     /// </summary>
-    private string? TryGetBlockingValidationMessage(Cell cell, CellAddress address)
+    private DataValidationEntryCheck EvaluateDataValidationForEntry(Cell cell, CellAddress address)
     {
         var sheet = Workbook.GetSheet(address.Sheet);
         if (sheet == null)
-            return null;
+            return DataValidationEntryCheck.Allowed;
 
         var value = cell.HasFormula
             ? new FreeX.Core.Formula.FormulaEvaluator().Evaluate(cell.FormulaText!, sheet, Workbook, currentCell: address)
@@ -2045,15 +2080,20 @@ public sealed class WorkbookSession
             if (msg == null)
                 continue;
 
-            if (DataValidationService.GetInvalidEntryAction(dv) == DataValidationInvalidEntryAction.Block)
-                return msg;
+            var action = DataValidationService.GetInvalidEntryAction(dv);
+            var title = dv.ErrorTitle ?? "Validation Error";
+            if (action == DataValidationInvalidEntryAction.Block)
+                return new DataValidationEntryCheck(DataValidationEntryOutcome.Blocked, msg, title, dv.AlertStyle);
 
-            // AskToContinue (Warning/Information) is not enforced yet -- only the first
-            // violated rule matters for Excel's "first rule wins" behavior, so stop here.
+            if (action == DataValidationInvalidEntryAction.AskToContinue)
+                return new DataValidationEntryCheck(DataValidationEntryOutcome.NeedsConfirmation, msg, title, dv.AlertStyle);
+
+            // Allow (ShowErrorMessage off) -- only the first violated rule matters for Excel's
+            // "first rule wins" behavior, so stop here without blocking.
             break;
         }
 
-        return null;
+        return DataValidationEntryCheck.Allowed;
     }
 
     public WorkbookCellEditResult InsertAutoSumFormula(string functionName)

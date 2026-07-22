@@ -1000,6 +1000,8 @@ public sealed partial class MainWindow : Window
             _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
         }
 
+        _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+
         Title = FormatWindowWorkbookTitle();
         ApplyWindowIcon();
         Width = 1120;
@@ -7781,6 +7783,125 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Test-only override for <see cref="ResolveDataValidationPrompt"/> -- headless tests inject a
+    /// canned decision here instead of driving the real <see cref="ShowDataValidationPromptDialog"/>
+    /// window. Not used by production code paths.
+    /// </summary>
+    internal Func<DataValidationPromptRequest, UserMessageResult>? DataValidationPromptOverrideForTest;
+
+    /// <summary>
+    /// Wired to <see cref="WorkbookSession.DataValidationPromptResolver"/> after every
+    /// <c>_session</c> (re)assignment so a Warning/Information ("AskToContinue") data-validation
+    /// alert gets a real owned dialog on this shell (R73-dv-warning-info-avalonia), mirroring the
+    /// WPF host's <c>IUserMessageService.ShowMessage</c> prompt in
+    /// <c>MainWindow.Editing.TryCreateCellFromEntryText</c>.
+    /// </summary>
+    private UserMessageResult ResolveDataValidationPrompt(DataValidationPromptRequest request) =>
+        DataValidationPromptOverrideForTest?.Invoke(request) ?? ShowDataValidationPromptDialog(request);
+
+    /// <summary>
+    /// Owned modal alert for a Warning/Information data-validation violation, mirroring the WPF
+    /// host's <c>ShowOwnedMessage</c> button sets: Warning offers Yes/No/Cancel (Yes commits the
+    /// invalid entry, No leaves it in the editor to fix, Cancel discards it); Information offers
+    /// OK/Cancel (OK commits, Cancel discards). <see cref="WorkbookSession.CommitCellText"/> calls
+    /// <see cref="ResolveDataValidationPrompt"/> synchronously, so -- unlike every other owned
+    /// dialog on this shell, which is awaited via <c>await dialog.ShowDialog(this)</c> -- this one
+    /// is shown non-modally and the calling (UI) thread drains the dispatcher queue until it
+    /// closes, since Avalonia has no synchronous nested-pump equivalent to WPF's blocking
+    /// <c>MessageBox.Show</c>. The owner window is disabled for the duration to emulate modal
+    /// blocking.
+    /// </summary>
+    private UserMessageResult ShowDataValidationPromptDialog(DataValidationPromptRequest request)
+    {
+        var isInformation = request.AlertStyle == DvAlertStyle.Information;
+        var dialog = new Window
+        {
+            Title = request.Title,
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            MinHeight = 150,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var messageText = new TextBlock
+        {
+            Text = request.Message,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 16, 16, 20),
+        };
+
+        var decision = UserMessageResult.Cancel;
+        var done = false;
+        void Finish(UserMessageResult value)
+        {
+            decision = value;
+            done = true;
+            dialog.Close();
+        }
+
+        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
+        {
+            var button = new Button
+            {
+                Content = content,
+                MinWidth = 82,
+                IsDefault = isDefault,
+                IsCancel = isCancel,
+                Margin = new Thickness(8, 0, 0, 0),
+            };
+            button.Click += (_, _) => Finish(value);
+            return button;
+        }
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(16, 0, 16, 16),
+        };
+
+        Button defaultButton;
+        if (isInformation)
+        {
+            defaultButton = MakeButton("OK", UserMessageResult.Ok, isDefault: true, isCancel: false);
+            buttonRow.Children.Add(defaultButton);
+            buttonRow.Children.Add(MakeButton("Cancel", UserMessageResult.Cancel, isDefault: false, isCancel: true));
+        }
+        else
+        {
+            defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
+            buttonRow.Children.Add(defaultButton);
+            buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: false));
+            buttonRow.Children.Add(MakeButton("Cancel", UserMessageResult.Cancel, isDefault: false, isCancel: true));
+        }
+
+        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
+        dialog.Opened += (_, _) => defaultButton.Focus();
+        dialog.Closed += (_, _) => done = true;
+
+        var wasEnabled = IsEnabled;
+        IsEnabled = false;
+        try
+        {
+            dialog.Show(this);
+            while (!done)
+            {
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                if (!done)
+                    System.Threading.Thread.Sleep(1);
+            }
+        }
+        finally
+        {
+            IsEnabled = wasEnabled;
+        }
+
+        return decision;
+    }
+
+    /// <summary>
     /// Reads every sparkline on <paramref name="sheet"/> into a per-cell lookup keyed by its anchor
     /// <see cref="SparklineModel.Location"/>, using the same numeric series read as the Windows host
     /// (<see cref="SparklineRenderPlanner.BuildValues"/>). Empty series are dropped so cells without
@@ -10953,6 +11074,7 @@ public sealed partial class MainWindow : Window
         RefreshViewportSizeForZoom();
         ClearSelectedDrawingObject();
         RefreshShell(_session.StartupStatus);
+        _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
     }
 
     private async Task CloseWorkbookAsync()
@@ -10976,6 +11098,7 @@ public sealed partial class MainWindow : Window
         RefreshViewportSizeForZoom();
         ClearSelectedDrawingObject();
         RefreshShell(status);
+        _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
     }
 
     private async Task RenameActiveSheetAsync()
@@ -24844,6 +24967,7 @@ public sealed partial class MainWindow : Window
             RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
             ClearSelectedDrawingObject();
             RefreshShell(_session.StartupStatus);
+            _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
         {
@@ -24883,6 +25007,7 @@ public sealed partial class MainWindow : Window
 
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             _session = _sessionFactory.Create(source, viewportHeight, viewportWidth, includeObjects: true);
+            _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
             // Mark the recovered session dirty so the user sees the modified indicator and is
             // prompted to save rather than risk silently losing the recovered data — mirrors the
             // WPF host's MarkWorkbookDirtyForRecovery call after a successful recovery load.

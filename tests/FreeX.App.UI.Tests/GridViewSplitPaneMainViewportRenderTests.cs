@@ -166,6 +166,82 @@ public sealed class GridViewSplitPaneMainViewportRenderTests
     }
 
     /// <summary>
+    /// split-topleft-band-scroll verification: reproduces "split at C10 (SplitRow=10,
+    /// SplitColumn=3), then scroll the main pane right/down" and paints all three pinned/synced
+    /// bands in one pass -- TopLeft (row 3, col 1 -- both axes pinned), TopRight (row 5, a
+    /// TopRightColumns entry standing in for the post-scroll column the user scrolled to --
+    /// columns sync horizontally with the main pane, rows stay pinned), and BottomLeft (col 2, a
+    /// BottomLeftRows entry standing in for the post-scroll row -- rows sync vertically with the
+    /// main pane, columns stay pinned). Each band's cell must actually paint (not get clipped
+    /// away) at RenderSplitPaneCells' real DrawingContext output, at the divider-relative axis and
+    /// the pinned axis GridView.SplitPaneCellLayoutPlanner computes from SplitPaneState -- not at
+    /// the plain, un-shifted header origin.
+    /// </summary>
+    [Fact]
+    public void SplitActive_TopRightAndBottomLeftBandsRenderAtDividerRelativeSyncedAxis_TopLeftStaysFullyPinned()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var topRightMarkerRect = new Rect(ExpectedVerticalX + 64, GridView.ColHeaderHeight + 80, 64, 20);
+            var bottomLeftMarkerRect = new Rect(GridView.RowHeaderWidth + 64, ExpectedHorizontalY + 20, 64, 20);
+            var topLeftMarkerRect = new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight + 40, 64, 20);
+
+            var grid = new GridView
+            {
+                Width = 320,
+                Height = 320,
+                ShowHeaders = true,
+                ShowGridLines = false,
+                Viewport = new ViewportModel(
+                    [],
+                    BuildMainRows(),
+                    BuildMainColumns(),
+                    SplitPanes: new SplitPaneState(
+                        10,
+                        3,
+                        BuildTopRows(),
+                        BuildLeftColumns(),
+                        [
+                            // TopLeft corner: fully pinned, never scrolls on either axis.
+                            new DisplayCell(3, 1, null, "", null, default, null, new CellStyle { FillColor = Marker }),
+                            // TopRight: row 5 is a pinned TopRows row; col 53 stands in for whatever
+                            // column the user scrolled the main pane to -- TopRightColumns[1] here.
+                            new DisplayCell(5, 53, null, "", null, default, null, new CellStyle { FillColor = Marker }),
+                            // BottomLeft: col 2 is a pinned LeftColumns column; row 501 stands in for
+                            // whatever row the user scrolled the main pane to -- BottomLeftRows[1] here.
+                            new DisplayCell(501, 2, null, "", null, default, null, new CellStyle { FillColor = Marker }),
+                        ],
+                        // Post-scroll-right column window (mirrors ViewportService always deriving
+                        // TopRightColumns from the CURRENT main LeftCol -- r56 fix).
+                        [new ColMetric(52, 64, 0), new ColMetric(53, 64, 64)],
+                        // Post-scroll-down row window (mirrors ViewportService always deriving
+                        // BottomLeftRows from the CURRENT main TopRow -- r56 fix).
+                        [new RowMetric(500, 20, 0), new RowMetric(501, 20, 20)])),
+            };
+
+            grid.Measure(new Size(320, 320));
+            grid.Arrange(new Rect(0, 0, 320, 320));
+            grid.UpdateLayout();
+            var bitmap = RenderGridToBitmap(grid);
+
+            IsMarkerPixel(bitmap, (int)topRightMarkerRect.X + 10, (int)topRightMarkerRect.Y + 10).Should().BeTrue(
+                "the TopRight band must paint its post-scroll column at the divider-relative X (verticalX + its own LeftOffset), with Y still pinned to its own TopRows row");
+            IsMarkerPixel(bitmap, (int)bottomLeftMarkerRect.X + 10, (int)bottomLeftMarkerRect.Y + 10).Should().BeTrue(
+                "the BottomLeft band must paint its post-scroll row at the divider-relative Y (horizontalY + its own TopOffset), with X still pinned to its own LeftColumns column");
+            IsMarkerPixel(bitmap, (int)topLeftMarkerRect.X + 10, (int)topLeftMarkerRect.Y + 10).Should().BeTrue(
+                "the TopLeft corner must still paint at the plain pinned-band origin, unaffected by either scroll axis");
+
+            // Negative checks: none of the three bands may bleed into a DIFFERENT band's origin --
+            // e.g. the TopRight marker must not also appear pinned at the un-shifted header X, and
+            // the BottomLeft marker must not also appear pinned at the un-shifted header Y.
+            IsMarkerPixel(bitmap, (int)GridView.RowHeaderWidth + 10, (int)topRightMarkerRect.Y + 10).Should().BeFalse(
+                "the TopRight band's column must not render at the un-shifted (pre-divider) X origin");
+            IsMarkerPixel(bitmap, (int)bottomLeftMarkerRect.X + 10, (int)GridView.ColHeaderHeight + 10).Should().BeFalse(
+                "the BottomLeft band's row must not render at the un-shifted (pre-divider) Y origin");
+        });
+    }
+
+    /// <summary>
     /// Invokes the private instance method <c>GridView.RenderHeaderBase</c> directly on a bare
     /// <see cref="DrawingVisual"/>, bypassing <c>OnRender</c> entirely (no layout, no
     /// RenderViewportContinuation, no cell painting) so the header-gutter positions under test are
