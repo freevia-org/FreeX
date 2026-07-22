@@ -8,14 +8,21 @@ namespace Free.Shared.Ribbon.Avalonia;
 /// <summary>Renders the shared SVG drawing model to real cross-platform PNG bytes.</summary>
 public static class SvgIconRasterizer
 {
+    /// <summary>Loads an SVG as a native Avalonia drawing for vector UI presentation.</summary>
+    public static DrawingImage LoadFile(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return SvgIconParser.TryParseFile(path)
+            ?? throw new InvalidDataException($"The selected SVG cannot be rendered: {path}");
+    }
+
     public static byte[] RasterizeFileToPng(string path, int pixelSize = 128)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (pixelSize is < 16 or > 4096)
             throw new ArgumentOutOfRangeException(nameof(pixelSize));
 
-        var drawing = SvgIconParser.TryParseFile(path)
-            ?? throw new InvalidDataException($"The selected SVG cannot be rendered: {path}");
+        var drawing = LoadFile(path);
         var image = new Image
         {
             Source = drawing,
