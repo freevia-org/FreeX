@@ -6,24 +6,62 @@ namespace FreeX.App.Presentation.Consolidate;
 
 public static class ConsolidateApplyPlanner
 {
+    /// <summary>
+    /// Safety cap on the number of cells a single Consolidate source range may dense-allocate, mirroring
+    /// <c>FreeX.Core.Formula.FormulaSafetyLimits.MaxMaterializedRangeCells</c> (not directly referenceable
+    /// here -- that constant is internal to the Core.Formula assembly). Without this cap, a whole-sheet or
+    /// full-column/full-row source reference (e.g. A1:XFD1048576, ~17 billion cells) would attempt to
+    /// allocate a 2-D array of that size and crash.
+    /// </summary>
+    public const long MaxSourceRangeCells = 1_000_000L;
+
     public static ConsolidateCellValue[,] ReadSource(Sheet sheet, GridRange range)
     {
         ArgumentNullException.ThrowIfNull(sheet);
 
-        var rowCount = (int)range.RowCount;
-        var colCount = (int)range.ColCount;
+        var effectiveRange = ClampToSafeSourceRange(sheet, range);
+        var rowCount = (int)effectiveRange.RowCount;
+        var colCount = (int)effectiveRange.ColCount;
         var grid = new ConsolidateCellValue[rowCount, colCount];
 
         for (var row = 0; row < rowCount; row++)
         {
             for (var col = 0; col < colCount; col++)
             {
-                var value = sheet.GetValue(range.Start.Row + (uint)row, range.Start.Col + (uint)col);
+                var value = sheet.GetValue(effectiveRange.Start.Row + (uint)row, effectiveRange.Start.Col + (uint)col);
                 grid[row, col] = ToCellValue(value);
             }
         }
 
         return grid;
+    }
+
+    /// <summary>
+    /// Clamps an oversized Consolidate source range so <see cref="ReadSource"/> never dense-allocates
+    /// past <see cref="MaxSourceRangeCells"/>. A whole-sheet/full-column/full-row source only carries
+    /// meaningful data in the sheet's populated (used) area, mirroring Excel, so the range is first
+    /// clamped to its intersection with <see cref="Sheet.GetUsedRange"/>; if that intersection is still
+    /// too large (an unusually large but genuinely populated sheet) or there is no populated area at all,
+    /// the row extent is truncated as a final safety net so the total cell count never exceeds the cap.
+    /// </summary>
+    private static GridRange ClampToSafeSourceRange(Sheet sheet, GridRange range)
+    {
+        if (range.CellCount <= MaxSourceRangeCells)
+            return range;
+
+        var usedRange = sheet.GetUsedRange();
+        var effectiveRange = usedRange.HasValue && GridRange.TryIntersect(range, usedRange.Value, out var intersection)
+            ? intersection
+            : new GridRange(range.Start, range.Start);
+
+        if (effectiveRange.CellCount <= MaxSourceRangeCells)
+            return effectiveRange;
+
+        var maxRows = Math.Max(1u, (uint)(MaxSourceRangeCells / effectiveRange.ColCount));
+        var clampedEndRow = effectiveRange.Start.Row + Math.Min(maxRows, effectiveRange.RowCount) - 1;
+        return new GridRange(
+            effectiveRange.Start,
+            new CellAddress(effectiveRange.Start.Sheet, clampedEndRow, effectiveRange.End.Col));
     }
 
     public static ConsolidateCellValue ToCellValue(ScalarValue? value) => value switch

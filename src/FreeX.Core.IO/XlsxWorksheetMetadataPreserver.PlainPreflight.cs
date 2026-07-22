@@ -110,16 +110,20 @@ internal static partial class XlsxWorksheetMetadataPreserver
         "dyDescent"
     };
 
+    // "style" and "bestFit" are intentionally NOT listed here: FreeX has no model field for either
+    // (Sheet only tracks ColumnWidths/HiddenCols/ColOutlineLevels), so they must be treated as
+    // native-only preservable attributes - otherwise a column whose only native attribute is style or
+    // bestFit is misclassified as fully modeled, preservation is skipped for that sheet, and the
+    // attribute is silently dropped on save. See MergeWorksheetColumnAttributes, which already copies
+    // any unmodeled source column attribute (including style/bestFit) onto the rebuilt <col>.
     private static readonly HashSet<string> ModeledColumnAttributes = new(StringComparer.Ordinal)
     {
         "min",
         "max",
         "width",
-        "style",
         "hidden",
         "outlineLevel",
         "collapsed",
-        "bestFit",
         "customWidth",
         "phonetic"
     };

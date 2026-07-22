@@ -35,6 +35,48 @@ public sealed class ConsolidateApplyPlannerTests
     }
 
     [Fact]
+    public void ReadSource_WholeSheetSource_ClampsToUsedRangeInsteadOfCrashing()
+    {
+        var (_, sheet) = BuildWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(4));
+
+        // A whole-sheet source (R66-int-overflow-wrap-sweep-3): dense-allocating rowCount x
+        // colCount (up to ~17 billion cells for A1:XFD1048576) must not be attempted -- the read
+        // is clamped to the sheet's populated (used) area instead, mirroring Excel.
+        var wholeSheet = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, CellAddress.MaxCol));
+
+        var grid = ConsolidateApplyPlanner.ReadSource(sheet, wholeSheet);
+
+        (grid.GetLength(0) * (long)grid.GetLength(1)).Should().BeLessThanOrEqualTo(ConsolidateApplyPlanner.MaxSourceRangeCells);
+        grid.GetLength(0).Should().Be(2);
+        grid.GetLength(1).Should().Be(1);
+        grid[0, 0].Number.Should().Be(3);
+        grid[1, 0].Number.Should().Be(4);
+    }
+
+    [Fact]
+    public void ReadSource_NormalSmallSource_StillConsolidatesCorrectly()
+    {
+        var (_, sheet) = BuildWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(4));
+
+        var grid = ConsolidateApplyPlanner.ReadSource(sheet, Range(sheet.Id, 1, 1, 2, 2));
+
+        grid.GetLength(0).Should().Be(2);
+        grid.GetLength(1).Should().Be(2);
+        grid[0, 0].Number.Should().Be(1);
+        grid[0, 1].Number.Should().Be(2);
+        grid[1, 0].Number.Should().Be(3);
+        grid[1, 1].Number.Should().Be(4);
+    }
+
+    [Fact]
     public void ToCellValue_MapsScalarKinds()
     {
         ConsolidateApplyPlanner.ToCellValue(new NumberValue(3.5)).IsNumber.Should().BeTrue();

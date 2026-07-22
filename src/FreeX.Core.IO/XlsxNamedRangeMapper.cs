@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
@@ -7,15 +8,20 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxNamedRangeMapper
 {
+    // R66-io-defined-names-scope-6-1: only the built-ins FreeX has DEDICATED handling for (via
+    // ClosedXML's PageSetup.PrintAreas/PrintTitleRows/PrintTitleColumns for the first two, and the
+    // AutoFilter-derived FilterDatabaseDefinedName const below for the third) belong in this bare
+    // (unprefixed) reserved set. "Criteria"/"Database"/"Extract"/"Consolidate_Area" are NOT Excel
+    // built-ins in their bare form — those are only reserved when Excel itself writes them with the
+    // "_xlnm." prefix (handled by IsExcelReservedDefinedName's prefix check below). A bare user-
+    // created name like "Database" (e.g. for a legacy Data > Consolidate/Advanced-Filter range) is a
+    // perfectly legitimate ordinary defined name and must be loaded/saved like any other — treating
+    // it as reserved silently dropped it on load and refused it on save.
     private static readonly HashSet<string> ExcelReservedDefinedNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "Print_Area",
         "Print_Titles",
         "_FilterDatabase",
-        "Criteria",
-        "Database",
-        "Extract",
-        "Consolidate_Area"
     };
 
     /// <summary>
@@ -79,7 +85,8 @@ internal static class XlsxNamedRangeMapper
                     refersToBody = refersToBody[1..].Trim();
                 if (string.IsNullOrWhiteSpace(refersToBody) ||
                     !(IsFormulaExpression(refersToBody) || IsSheetSpanRefersTo(refersToBody) ||
-                      IsBareDefinedNameAliasRefersTo(workbook, refersToBody)))
+                      IsBareDefinedNameAliasRefersTo(workbook, refersToBody) ||
+                      IsConstantLiteralRefersTo(refersToBody)))
                     continue;
 
                 var localSheetIdText = definedName.Attribute("localSheetId")?.Value;
@@ -130,13 +137,15 @@ internal static class XlsxNamedRangeMapper
                 var refersToBody = refersTo.StartsWith('=') ? refersTo[1..].Trim() : refersTo;
 
                 if (IsFormulaExpression(refersToBody) || IsSheetSpanRefersTo(refersToBody) ||
-                    IsBareDefinedNameAliasRefersTo(workbook, refersToBody))
+                    IsBareDefinedNameAliasRefersTo(workbook, refersToBody) ||
+                    IsConstantLiteralRefersTo(refersToBody))
                 {
-                    // Named formula, a 3-D sheet-span reference (e.g. Sheet1:Sheet3!$A$1), or a bare
-                    // alias to another defined name (e.g. RefersTo="Name1"): store the bare
-                    // expression/opaque refers-to text for on-demand evaluation/round-trip. None of
-                    // these can be represented by the single-rectangle GridRange model below (and
-                    // ClosedXML's own namedRange.Ranges enumerates to zero items for all three), so
+                    // Named formula, a 3-D sheet-span reference (e.g. Sheet1:Sheet3!$A$1), a bare
+                    // alias to another defined name (e.g. RefersTo="Name1"), or a constant literal
+                    // (e.g. RefersTo=0.21 or ="Hello", R66-io-defined-names-scope-6-2): store the
+                    // bare expression/opaque refers-to text for on-demand evaluation/round-trip. None
+                    // of these can be represented by the single-rectangle GridRange model below (and
+                    // ClosedXML's own namedRange.Ranges enumerates to zero items for all of them), so
                     // they must be routed through this opaque-preserving branch instead of falling
                     // into the "plain range" branch, where they would otherwise be silently dropped.
                     if (workbook.ValidateNamedRangeName(namedRange.Name) is null)
@@ -186,6 +195,29 @@ internal static class XlsxNamedRangeMapper
                     {
                         if (scopeSheetId is { } unionScopeId)
                             workbook.DefineNamedFormula(namedRange.Name, refersToBody, unionScopeId);
+                        else
+                            workbook.NamedFormulas[namedRange.Name] = refersToBody;
+                    }
+                    continue;
+                }
+
+                if (HasRelativeReferenceComponent(refersToBody))
+                {
+                    // R66-io-defined-names-scope-6-3: a relative-reference defined name (e.g.
+                    // Sheet1!A1, no $) has Excel's shift-by-using-cell semantics — GridRange is
+                    // absolute-only (a fixed CellAddress pair), so resolving straight into one here
+                    // would silently FREEZE the name to today's absolute address and lose that
+                    // semantics forever on the very next save. Route it through the same opaque
+                    // named-formula-preserving mechanism used for unions/aliases/sheet-spans instead:
+                    // this both round-trips the exact original (relative) refers-to text unchanged
+                    // AND gets genuine per-using-cell relative resolution for free, because
+                    // FormulaEvaluator.ApplyRelativeNameAnchor already re-anchors a named FORMULA's
+                    // non-$ references to whichever cell is using the name — the same mechanism a
+                    // formula-refersTo name already relies on.
+                    if (workbook.ValidateNamedRangeName(namedRange.Name) is null)
+                    {
+                        if (scopeSheetId is { } relativeScopeId)
+                            workbook.DefineNamedFormula(namedRange.Name, refersToBody, relativeScopeId);
                         else
                             workbook.NamedFormulas[namedRange.Name] = refersToBody;
                     }
@@ -286,6 +318,39 @@ internal static class XlsxNamedRangeMapper
         workbook.ValidateNamedRangeName(refersToBody) is null;
 
     /// <summary>
+    /// Returns true when the refers-to expression is a constant literal — a bare number (e.g.
+    /// <c>0.21</c>), a double-quoted text literal (e.g. <c>"Hello"</c>), or a boolean literal
+    /// (<c>TRUE</c>/<c>FALSE</c>) — rather than a range reference or formula. Excel's Name Manager
+    /// allows a defined name's RefersTo to be a plain constant (e.g. a "TaxRate" name whose RefersTo
+    /// is literally <c>=0.21</c>), which formulas then use like <c>=B2*TaxRate</c>.
+    /// <see cref="IsFormulaExpression"/> classifies these as "not a formula" (no operator/paren/
+    /// brace characters), and ClosedXML's <c>IXLDefinedName.Ranges</c> enumerates to zero items for
+    /// them (no exception, nothing to resolve), so without this check they fall all the way into the
+    /// plain-range branch of <see cref="LoadDefinedNames"/> and are silently dropped instead of being
+    /// captured as a named formula/constant (R66-io-defined-names-scope-6-2). A numeric literal
+    /// additionally fails <see cref="Workbook.ValidateNamedRangeName"/> (names can't start with a
+    /// digit), so <see cref="IsBareDefinedNameAliasRefersTo"/> never catches it either.
+    /// </summary>
+    private static bool IsConstantLiteralRefersTo(string refersToBody)
+    {
+        if (string.IsNullOrEmpty(refersToBody))
+            return false;
+
+        if (string.Equals(refersToBody, "TRUE", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(refersToBody, "FALSE", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (refersToBody.Length >= 2 && refersToBody[0] == '"' && refersToBody[^1] == '"')
+            return true;
+
+        return double.TryParse(
+            refersToBody,
+            System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowLeadingSign,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out _);
+    }
+
+    /// <summary>
     /// Returns true when the refers-to expression is a 3-D "sheet span" reference, e.g.
     /// <c>Sheet1:Sheet3!$A$1</c> or the quoted form <c>'Sheet1:Sheet3'!$A$1</c> (both valid inside
     /// e.g. <c>=SUM(MySpan)</c> in Excel). <see cref="IsFormulaExpression"/> classifies these as
@@ -318,6 +383,43 @@ internal static class XlsxNamedRangeMapper
         }
         return false;
     }
+
+    /// <summary>
+    /// Returns true when the (single-area) refers-to address has at least one relative (non-$)
+    /// row or column component, e.g. <c>Sheet1!A1</c>, <c>Sheet1!$A1:$B2</c>, or <c>Sheet1!A:A</c>.
+    /// Excel treats such a reference as relative to whatever cell is USING the name (its implicit
+    /// anchor is A1 of the using cell's sheet), unlike a fully <c>$</c>-anchored reference, which
+    /// always means the same cell no matter where it's used. Used by <see cref="LoadDefinedNames"/>
+    /// to route a relative-reference name through the opaque named-formula-preserving branch instead
+    /// of freezing it into an absolute <see cref="GridRange"/> (R66-io-defined-names-scope-6-3).
+    /// </summary>
+    private static bool HasRelativeReferenceComponent(string refersToBody)
+    {
+        // Only inspect the address portion after the (optional) sheet-name qualifier, so letters
+        // that happen to appear inside the sheet name itself are never mistaken for a column
+        // reference.
+        var bangIndex = refersToBody.LastIndexOf('!');
+        var addressPart = bangIndex >= 0 ? refersToBody[(bangIndex + 1)..].Trim() : refersToBody.Trim();
+        if (addressPart.Length == 0)
+            return false;
+
+        foreach (var bound in addressPart.Split(':'))
+        {
+            if (!IsFullyAbsoluteBound(bound))
+                return true;
+        }
+
+        return false;
+    }
+
+    // Matches a fully $-anchored single-cell address ($A$1), whole-column ($A), or whole-row ($1)
+    // bound. Anything else (missing a $ before the column letters and/or the row digits) has a
+    // relative component.
+    private static readonly Regex FullyAbsoluteBoundPattern =
+        new(@"^(\$[A-Za-z]{1,3}\$\d{1,7}|\$[A-Za-z]{1,3}|\$\d{1,7})$", RegexOptions.Compiled);
+
+    private static bool IsFullyAbsoluteBound(string bound) =>
+        FullyAbsoluteBoundPattern.IsMatch(bound.Trim());
 
     public static void Save(Workbook workbook, XLWorkbook xlWorkbook, List<string>? warnings = null)
     {
@@ -845,13 +947,16 @@ internal static class XlsxNamedRangeMapper
     }
 
     // A defined name's refersTo body never makes it into the model (NamedRanges/
-    // NamedFormulas/ScopedNamedFormulas) when it is a constant literal (e.g. 0.21 or "Hello"),
-    // an external-workbook reference (e.g. [1]Sheet1!$A$1), or a broken reference (#REF!).
-    // IsFormulaExpression treats all three as "not a formula" (no operator/parenthesis characters),
-    // so LoadWorkbookDefinedNameFormulasFromPackage / LoadDefinedNames silently skip them, and they
-    // are equally not a resolvable plain range reference (ClosedXML has nothing to resolve for a
-    // constant, an external workbook index, or a #REF! error). ValidateNamedRangeName only inspects
-    // the NAME text, so it happily passes all three, which would otherwise make a caller's
+    // NamedFormulas/ScopedNamedFormulas) when it is an external-workbook reference (e.g.
+    // [1]Sheet1!$A$1) or a broken reference (#REF!). (R66-io-defined-names-scope-6-2: a constant
+    // literal such as 0.21 or "Hello" USED to be unmodelable for the same reason but is now — see
+    // IsConstantLiteralRefersTo — routed into NamedFormulas/ScopedNamedFormulas, so it is excluded
+    // below rather than being lumped in with the two genuinely-unmodelable cases.) IsFormulaExpression
+    // treats an external reference/broken reference as "not a formula" (no operator/parenthesis
+    // characters), so LoadWorkbookDefinedNameFormulasFromPackage / LoadDefinedNames silently skip
+    // them, and they are equally not a resolvable plain range reference (ClosedXML has nothing to
+    // resolve for an external workbook index or a #REF! error). ValidateNamedRangeName only inspects
+    // the NAME text, so it happily passes both, which would otherwise make a caller's
     // isModelRepresentable check true for content FreeX can never model - the defined-name
     // resurrection gates (RestorePatchWorkbookDefinedNames and XlsxWorkbookMetadataPreserver.
     // MergeDefinedNames) must detect that case directly (matching the same never-loaded-in-the-
@@ -865,6 +970,14 @@ internal static class XlsxNamedRangeMapper
 
         if (body.Length == 0)
             return true;
+
+        // R66-io-defined-names-scope-6-2: a constant literal (bare number, quoted text, or
+        // TRUE/FALSE) IS modeled — LoadDefinedNames / LoadWorkbookDefinedNameFormulasFromPackage
+        // route it into NamedFormulas/ScopedNamedFormulas via IsConstantLiteralRefersTo — so it must
+        // not be treated as unmodelable, even though (being digit-leading or quote-leading) it would
+        // otherwise fail the bare-cell-address heuristic below.
+        if (IsConstantLiteralRefersTo(body))
+            return false;
 
         // Broken reference, anywhere in the body (Excel keeps these; FreeX has no #REF! model).
         if (body.Contains("#REF!", StringComparison.OrdinalIgnoreCase))

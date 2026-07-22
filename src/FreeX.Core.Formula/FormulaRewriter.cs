@@ -152,6 +152,19 @@ public static class FormulaRewriter
             FunctionCallNode f => RewriteFunctionArgs(f, op, hostSheetName, ref changed),
             StructuredReferenceNode sr => RewriteStructuredReference(sr, op, ref changed),
             StructuredCurrentRowReferenceNode scr => RewriteStructuredCurrentRowReference(scr, op, ref changed),
+            IntersectionNode ix => ix with
+            {
+                Left  = RewriteNode(ix.Left,  op, hostSheetName, ref changed),
+                Right = RewriteNode(ix.Right, op, hostSheetName, ref changed)
+            },
+            NamedRangeEndpointNode nre => nre with
+            {
+                // A NamedRangeNode endpoint stays a name (unrewritable), same as a bare
+                // NamedRangeNode falls through the catch-all below unchanged; only a
+                // CellRefNode endpoint carries row/col coordinates to shift.
+                Start = RewriteNode(nre.Start, op, hostSheetName, ref changed),
+                End   = RewriteNode(nre.End,   op, hostSheetName, ref changed)
+            },
             _ => node   // NumberNode, StringNode, BooleanNode, NamedRangeNode, ErrorNode
         };
     }

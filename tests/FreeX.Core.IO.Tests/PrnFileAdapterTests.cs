@@ -230,6 +230,71 @@ public sealed class PrnFileAdapterTests
     }
 
     // -----------------------------------------------------------------------
+    // Save — sparse used-range (must not materialize a dense rowCount*colCount matrix)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Save_SparseCornersOfFullSheetDoNotOverflowOrOom()
+    {
+        // A value in A1 and another in the very last cell (XFD1048576) gives a used-range
+        // bounding box of 1,048,576 rows x 16,384 cols — 17+ billion cells. The writer must
+        // stream line-by-line from the sparse cell set instead of allocating a dense
+        // string?[rowCount, colCount] matrix sized to the bounding box (that allocation
+        // either throws immediately — "Array dimensions exceeded supported range" — or OOMs).
+        var (workbook, sheet) = CreateWorkbookWithSheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("top-left"));
+        sheet.SetCell(new CellAddress(sheet.Id, CellAddress.MaxRow, CellAddress.MaxCol), new TextValue("bottom-right"));
+
+        var adapter = new PrnFileAdapter();
+
+        // Act: must complete without throwing (OutOfMemoryException / overflow) and without
+        // materializing a matrix anywhere near 17 billion elements.
+        var text = SaveToUtf8Text(adapter, workbook);
+
+        var lines = text.Split("\r\n");
+        // Trailing split artifact from the final CRLF.
+        lines.Should().HaveCount((int)CellAddress.MaxRow + 1);
+        lines[^1].Should().BeEmpty();
+
+        // Row 1 contains only "top-left" — nothing else in that row, so the line is exactly
+        // that text (trailing padding on later empty columns is all-space and gets trimmed).
+        lines[0].Should().Be("top-left");
+
+        // A row in between with no content at all is a fully blank (trimmed) line.
+        lines[500_000].Should().BeEmpty();
+
+        // The last row contains only "bottom-right" in the last column — everything before it
+        // on that row is blank padding/separators (leading spaces are NOT trimmed, only
+        // trailing), so the line ends with the value preceded solely by spaces.
+        var lastLine = lines[(int)CellAddress.MaxRow - 1];
+        lastLine.Should().EndWith("bottom-right");
+        lastLine.TrimStart().Should().Be("bottom-right");
+    }
+
+    [Fact]
+    public void Save_NormalDenseSheetOutputUnchangedAfterSparseFix()
+    {
+        // No-regression sibling: a normal small/dense sheet (every used cell populated) must
+        // still produce byte-identical output to before the sparse-storage rewrite.
+        var (workbook, sheet) = CreateWorkbookWithSheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Alice"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Bob"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(1234));
+
+        var adapter = new PrnFileAdapter();
+        var text = SaveToUtf8Text(adapter, workbook);
+
+        // Col 1 ("Name"/"Alice"/"Bob") width=5, left-aligned.
+        // Col 2 ("Value"/42/1234) width=5, left-aligned (contains a text cell, so the whole
+        // column is left-aligned even though 42/1234 are numbers) — trailing padding on the
+        // last column of each row is trimmed away.
+        text.Should().Be("Name  Value\r\nAlice 42\r\nBob   1234\r\n");
+    }
+
+    // -----------------------------------------------------------------------
     // Round-trip: save then open
     // -----------------------------------------------------------------------
 

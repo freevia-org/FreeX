@@ -792,7 +792,8 @@ public static class PageContentRenderModelBuilder
                     width,
                     workbook.IndexedColors,
                     workbook.Theme,
-                    workbook.Uses1904DateSystem).Text
+                    workbook.Uses1904DateSystem,
+                    suppressWidthOverflowIndicator: style.ShrinkToFit).Text
                 : NumberFormatter.FormatWithColor(
                     cell.Value,
                     style.NumberFormat,

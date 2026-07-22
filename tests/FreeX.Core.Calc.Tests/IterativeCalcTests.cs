@@ -111,10 +111,11 @@ public class IterativeCalcTests
 
     /// <summary>
     /// With IterativeCalculation=FALSE (the default), a mutual cycle A1=B1, B1=A1 must
-    /// still produce #CIRCULAR! — the default path must be completely unchanged.
+    /// still be reported circular, but — matching Excel — the cell VALUE seeds to 0 rather
+    /// than a fabricated #CIRCULAR! error, so downstream arithmetic/IFERROR reads a real number.
     /// </summary>
     [Fact]
-    public void NonIterative_Default_CircularReferenceStampsCircularError()
+    public void NonIterative_Default_CircularReferenceSeedsZero()
     {
         var (engine, wb, sheet) = Setup(iterative: false); // default
         var a1 = new CellAddress(sheet.Id, 1, 1);
@@ -126,11 +127,13 @@ public class IterativeCalcTests
         var report = engine.RecalculateAllFormulas(wb);
 
         report.CyclicCells.Should().NotBeEmpty("a plain cycle with IterativeCalculation=false must be reported");
-        // At least one of the two cells must carry #CIRCULAR!
+        // Both cells must seed to 0 (Excel's non-iterative circular-reference behaviour), not a
+        // fabricated error value.
         var a1Val = sheet.GetValue(a1.Row, a1.Col);
         var b1Val = sheet.GetValue(b1.Row, b1.Col);
-        (a1Val == ErrorValue.Circular || b1Val == ErrorValue.Circular)
-            .Should().BeTrue("at least one cell in the cycle must be stamped #CIRCULAR!");
+        var zero = new NumberValue(0);
+        (a1Val == zero && b1Val == zero)
+            .Should().BeTrue("every cell in a non-iterative circular reference must seed to 0, not #CIRCULAR!");
     }
 
     // -------------------------------------------------------------------------

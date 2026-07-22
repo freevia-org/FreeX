@@ -149,6 +149,7 @@ public sealed class R53_PrintedCellDecorationTests
                 0.0,
                 0.0,
                 false,
+                null,
             ]);
         }
 

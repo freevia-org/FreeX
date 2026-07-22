@@ -140,6 +140,7 @@ public sealed class R53_PrintedCellAlignmentTests
                 0.0,
                 0.0,
                 false,
+                null,
             ]);
         }
 

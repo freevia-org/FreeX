@@ -83,6 +83,79 @@ public sealed partial class ChartRendererTests
         series.MarkerStrokeThickness.Should().Be(2);
     }
 
+    // R66-meta-2: X/Star/Plus/Dot/Dash/Auto (added in R65) must not all collapse to Circle in the
+    // OxyPlot renderer the way they did before this fix.
+    [Theory]
+    [InlineData(ChartMarkerStyle.X, MarkerType.Cross)]
+    [InlineData(ChartMarkerStyle.Star, MarkerType.Star)]
+    [InlineData(ChartMarkerStyle.Plus, MarkerType.Plus)]
+    [InlineData(ChartMarkerStyle.Dot, MarkerType.Circle)]
+    [InlineData(ChartMarkerStyle.Dash, MarkerType.Square)]
+    [InlineData(ChartMarkerStyle.Auto, MarkerType.Circle)]
+    public void LineRenderer_MapsNewMarkerStylesToDistinctOxyMarkerTypes(
+        ChartMarkerStyle markerStyle, MarkerType expectedOxyMarkerType)
+    {
+        // Before the fix: every one of these new ChartMarkerStyle members fell through the switch's
+        // default arm and rendered as MarkerType.Circle, regardless of the requested shape.
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            SeriesFormats = [new ChartSeriesFormat(0, MarkerStyle: markerStyle)]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>().Subject;
+        series.MarkerType.Should().Be(expectedOxyMarkerType);
+    }
+
+    // Sibling no-regression test: the five pre-existing marker styles must keep mapping to their
+    // original OxyPlot marker types after the new members were added to the switch.
+    [Theory]
+    [InlineData(ChartMarkerStyle.None, MarkerType.None)]
+    [InlineData(ChartMarkerStyle.Circle, MarkerType.Circle)]
+    [InlineData(ChartMarkerStyle.Square, MarkerType.Square)]
+    [InlineData(ChartMarkerStyle.Diamond, MarkerType.Diamond)]
+    [InlineData(ChartMarkerStyle.Triangle, MarkerType.Triangle)]
+    public void LineRenderer_PreExistingMarkerStylesStillMapUnchanged(
+        ChartMarkerStyle markerStyle, MarkerType expectedOxyMarkerType)
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            SeriesFormats = [new ChartSeriesFormat(0, MarkerStyle: markerStyle)]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>().Subject;
+        series.MarkerType.Should().Be(expectedOxyMarkerType);
+    }
+
     [Fact]
     public void BarRenderer_AppliesSeriesFormatToFillAndOutline()
     {

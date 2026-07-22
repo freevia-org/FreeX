@@ -685,7 +685,13 @@ public sealed class RecalcEngine
         var cell = sheet.GetCell(cyclic);
         if (cell is null) return;
 
-        cell.Value = ErrorValue.Circular;
+        // Excel does not fabricate an error value for a circular reference with iterative calc off:
+        // it shows a warning dialog/status but the cell itself (and everything downstream of it)
+        // computes as 0. Seed the cyclic cell with that same 0 here so IFERROR does not fire and
+        // arithmetic reads a real number instead of propagating a manufactured #CIRCULAR! error.
+        // The "#CIRCULAR!" warning is still recorded via AddError below for callers that surface a
+        // circular-reference notice to the user; only the cell VALUE changes.
+        cell.Value = new NumberValue(0);
         AddError(ref errors, cyclic, "#CIRCULAR!");
     }
 

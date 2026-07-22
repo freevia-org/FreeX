@@ -5887,7 +5887,7 @@ public sealed partial class MainWindow : Window
 
             if (style is { } borderStyle && HasVisibleCellBorder(borderStyle))
             {
-                var borderOverlay = new CellBorderPanel(borderStyle)
+                var borderOverlay = new CellBorderPanel(borderStyle, ResolvePictureCellBorderNeighborEdges(cell, cellLookup))
                 {
                     Width = cellWidth,
                     Height = cellHeight,
@@ -5909,6 +5909,28 @@ public sealed partial class MainWindow : Window
             IsHitTestVisible = false,
             Child = canvas,
         };
+    }
+
+    /// <summary>
+    /// Looks up the four neighboring snapshot cells' touching border edges within the same
+    /// picture grid, mirroring <see cref="ResolveCellBorderNeighborEdges"/> for the interactive
+    /// sheet grid, so a bordered picture-of-a-range snapshot resolves shared edges the same way.
+    /// </summary>
+    private static CellBorderNeighborEdges ResolvePictureCellBorderNeighborEdges(
+        PictureCellSnapshot cell,
+        IReadOnlyDictionary<(uint RowOffset, uint ColumnOffset), PictureCellSnapshot> cellLookup)
+    {
+        CellBorder above = default, below = default, left = default, right = default;
+        if (cell.RowOffset > 0 && cellLookup.TryGetValue((cell.RowOffset - 1, cell.ColumnOffset), out var aboveCell) && aboveCell.Style is { } aboveStyle)
+            above = aboveStyle.BorderBottom;
+        if (cellLookup.TryGetValue((cell.RowOffset + 1, cell.ColumnOffset), out var belowCell) && belowCell.Style is { } belowStyle)
+            below = belowStyle.BorderTop;
+        if (cell.ColumnOffset > 0 && cellLookup.TryGetValue((cell.RowOffset, cell.ColumnOffset - 1), out var leftCell) && leftCell.Style is { } leftStyle)
+            left = leftStyle.BorderRight;
+        if (cellLookup.TryGetValue((cell.RowOffset, cell.ColumnOffset + 1), out var rightCell) && rightCell.Style is { } rightStyle)
+            right = rightStyle.BorderLeft;
+
+        return new CellBorderNeighborEdges(above, below, left, right);
     }
 
     private static Control CreateDrawingTextBoxVisual(
@@ -7904,6 +7926,35 @@ public sealed partial class MainWindow : Window
         return new FontFamily($"{fontName}, {fallback}");
     }
 
+    /// <summary>
+    /// Looks up the four neighboring cells' touching border edges (above's bottom, below's top,
+    /// left's right, right's left) from the active sheet's raw (unmerged/un-CF'd) styles, so
+    /// <see cref="CellBorderPanel"/> can resolve adjacent-edge conflicts via
+    /// <see cref="CellBorderGeometry.ResolveBorderEdgeWinner"/> instead of always drawing its own
+    /// cell's edge unconditionally. Border styles are not affected by conditional formatting (only
+    /// fill/font are), so the raw <see cref="Cell.StyleId"/> lookup mirrors what the neighbor's own
+    /// <see cref="CellBorderPanel"/> would draw for that shared edge. A missing neighbor cell (no
+    /// authored cell at that address, or off the top/left edge of the sheet) yields a default
+    /// (<see cref="BorderStyle.None"/>) edge, which never overrides this cell's own style.
+    /// </summary>
+    private CellBorderNeighborEdges ResolveCellBorderNeighborEdges(CellAddress address)
+    {
+        var sheet = _session.ActiveSheet;
+        var workbook = _session.Workbook;
+
+        CellBorder above = default, below = default, left = default, right = default;
+        if (address.Row > 1 && sheet.GetCell(address.Row - 1, address.Col) is { } aboveCell)
+            above = workbook.GetStyle(aboveCell.StyleId).BorderBottom;
+        if (sheet.GetCell(address.Row + 1, address.Col) is { } belowCell)
+            below = workbook.GetStyle(belowCell.StyleId).BorderTop;
+        if (address.Col > 1 && sheet.GetCell(address.Row, address.Col - 1) is { } leftCell)
+            left = workbook.GetStyle(leftCell.StyleId).BorderRight;
+        if (sheet.GetCell(address.Row, address.Col + 1) is { } rightCell)
+            right = workbook.GetStyle(rightCell.StyleId).BorderLeft;
+
+        return new CellBorderNeighborEdges(above, below, left, right);
+    }
+
     private Border CreateInteractiveCellBorder(
         string text,
         IBrush? background,
@@ -7939,6 +7990,7 @@ public sealed partial class MainWindow : Window
         var applySelectionFill = selected &&
             address != _session.ActiveCell &&
             mergeRegion?.Contains(_session.ActiveCell) != true;
+        var borderNeighbors = ResolveCellBorderNeighborEdges(address);
         var border = CreateCellBorder(
             text,
             background,
@@ -7971,7 +8023,8 @@ public sealed partial class MainWindow : Window
             fontFamily: fontFamily,
             suppressDefaultGridlines: CellSurfaceGridlinePlanner.HasVisibleFill(
                 style,
-                _session.Workbook.Theme));
+                _session.Workbook.Theme),
+            borderNeighbors: borderNeighbors);
 
         // Comment/note corner indicator + hover card: mirrors WPF's GridView.Rendering.cs
         // DrawCommentIndicator (small top-right triangle, red for a legacy note, purple for a
@@ -9452,7 +9505,8 @@ public sealed partial class MainWindow : Window
         FlowDirection flowDirection = FlowDirection.LeftToRight,
         CellCommentDisplay? commentDisplay = null,
         FontFamily? fontFamily = null,
-        bool suppressDefaultGridlines = false)
+        bool suppressDefaultGridlines = false,
+        CellBorderNeighborEdges borderNeighbors = default)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -9565,8 +9619,9 @@ public sealed partial class MainWindow : Window
                 scaledIndentPadding,
                 textRotation,
                 effectiveTextWrapping,
-                style)
-            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer, patternBrush);
+                style,
+                borderNeighbors)
+            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer, patternBrush, borderNeighbors);
 
         // Selected cells get a faint translucent-green wash over their content (matching the WPF grid's
         // SelectionBrush), so a multi-cell selection reads as a light highlight rather than bare green
@@ -9623,7 +9678,8 @@ public sealed partial class MainWindow : Window
         double zoomFactor = 1,
         double scaledIndentPadding = 0,
         Control? sparklineLayer = null,
-        IBrush? patternBrush = null)
+        IBrush? patternBrush = null,
+        CellBorderNeighborEdges borderNeighbors = default)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
 
@@ -9662,7 +9718,7 @@ public sealed partial class MainWindow : Window
         if (conditionalIcon is { } iconGlyph)
             content.Children.Add(CreateConditionalIconLayer(iconGlyph, zoomFactor));
 
-        AddStyledCellBorderOverlay(content, style);
+        AddStyledCellBorderOverlay(content, style, borderNeighbors);
         return content;
     }
 
@@ -9824,7 +9880,8 @@ public sealed partial class MainWindow : Window
         double indentPixels,
         int textRotation,
         TextWrapping textWrapping,
-        CellStyle? style)
+        CellStyle? style,
+        CellBorderNeighborEdges borderNeighbors = default)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
         var canvas = new Canvas { ClipToBounds = true };
@@ -9859,11 +9916,11 @@ public sealed partial class MainWindow : Window
         Canvas.SetTop(textBlock, layout.TextPoint.Y);
         canvas.Children.Add(textBlock);
         content.Children.Add(canvas);
-        AddStyledCellBorderOverlay(content, style);
+        AddStyledCellBorderOverlay(content, style, borderNeighbors);
         return content;
     }
 
-    private static void AddStyledCellBorderOverlay(AvaloniaGrid content, CellStyle? style)
+    private static void AddStyledCellBorderOverlay(AvaloniaGrid content, CellStyle? style, CellBorderNeighborEdges borderNeighbors = default)
     {
         if (style is not { } visibleStyle || !HasVisibleCellBorder(visibleStyle))
             return;
@@ -9871,7 +9928,10 @@ public sealed partial class MainWindow : Window
         // CellBorderPanel draws all four edges plus optional diagonals as stroked Lines,
         // supporting dash patterns and correct per-style thicknesses (replaces the old solid
         // Border-strip approach that could not dash and had incorrect Hair/SlantDashDot thickness).
-        content.Children.Add(new CellBorderPanel(visibleStyle));
+        // borderNeighbors carries the touching neighbor cells' opposing edge styles so a shared
+        // grid edge resolves to the heavier/more-prominent style (CellBorderGeometry.
+        // ResolveBorderEdgeWinner) instead of this cell always winning by paint order.
+        content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors));
     }
 
     private static bool HasVisibleCellBorder(CellStyle? style) =>
@@ -20813,7 +20873,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var result = _session.PasteClipboardTextAtActiveCell(text, clipboardReadFailed: clipboardReadFailed);
+        var html = await TryGetClipboardHtmlAsync(clipboard);
+        var result = _session.PasteClipboardTextAtActiveCell(text, clipboardReadFailed: clipboardReadFailed, html: html);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Paste failed.");
@@ -20841,6 +20902,44 @@ public sealed partial class MainWindow : Window
         {
             return (null, true);
         }
+    }
+
+    /// <summary>
+    /// Reads the OS clipboard's HTML ('text/html' / Windows 'HTML Format') payload, if any, so an
+    /// external-clipboard paste can prefer <c>WorkbookSession.PasteExternalTextAtActiveCell</c>'s
+    /// HTML-table-aware row/column recovery over the plain-text tab/newline splitter -- mirroring the
+    /// WPF host's <c>MainWindow.ClipboardCommands.TryGetClipboardHtml</c> (WPF's <c>Clipboard.GetData</c>),
+    /// which this Avalonia shell never read, so a pasted external HTML table (a wrapped cell, a colspan
+    /// header) misaligned rows/columns (R66-services-clipboard-formats-6-1). Reads the same two formats
+    /// <see cref="AddClipboardTextAndHtml"/> writes on copy.
+    /// </summary>
+    private static async Task<string?> TryGetClipboardHtmlAsync(IClipboard clipboard)
+    {
+        try
+        {
+            using var dataTransfer = await clipboard.TryGetDataAsync();
+            return await TryGetHtmlFromDataTransferAsync(dataTransfer);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Picks the HTML payload back out of an already-read <see cref="IAsyncDataTransfer"/>. Split out
+    /// of <see cref="TryGetClipboardHtmlAsync"/> (which is otherwise untestable: Avalonia's <see
+    /// cref="IClipboard"/> is <c>[NotClientImplementable]</c>, so no fake can be constructed for it,
+    /// while <see cref="IAsyncDataTransfer"/>/<see cref="IAsyncDataTransferItem"/> are ordinary
+    /// interfaces a test double can implement) so this parsing logic still has direct test coverage.
+    /// </summary>
+    internal static async Task<string?> TryGetHtmlFromDataTransferAsync(IAsyncDataTransfer? dataTransfer)
+    {
+        if (dataTransfer is null)
+            return null;
+
+        return await dataTransfer.TryGetValueAsync(HtmlPlatformFormat)
+            ?? await dataTransfer.TryGetValueAsync(HtmlWindowsPlatformFormat);
     }
 
     private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)
@@ -20916,10 +21015,11 @@ public sealed partial class MainWindow : Window
         }
 
         var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
+        var html = await TryGetClipboardHtmlAsync(clipboard);
         var destination = _session.ActiveCell;
         var result = keepSourceColumnWidths
-            ? _session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true, clipboardReadFailed: clipboardReadFailed)
-            : _session.PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed);
+            ? _session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true, clipboardReadFailed: clipboardReadFailed, html: html)
+            : _session.PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed, html: html);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Paste Special failed.");
@@ -21053,8 +21153,9 @@ public sealed partial class MainWindow : Window
         }
 
         var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
+        var html = await TryGetClipboardHtmlAsync(clipboard);
         var destination = _session.ActiveCell;
-        var result = _session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed);
+        var result = _session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed, html: html);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteSpecialTextFailed"));

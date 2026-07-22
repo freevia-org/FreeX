@@ -31,6 +31,20 @@ public static partial class BuiltInFunctions
         return culture;
     }
 
+    // Same two-digit-year pivot as CreateExcelTwoDigitYearCulture, but on an Invariant-culture
+    // clone: TryParseMonthYearDateValueText's "MMM"/"MMMM" formats deliberately only recognize
+    // English month abbreviations/names (matching Excel's DATEVALUE, which accepts these month
+    // names regardless of locale), so it must not otherwise pick up the current locale's date
+    // conventions the way the general free-form parse above does.
+    private static readonly CultureInfo MonthYearDateValueCulture = CreateInvariantExcelTwoDigitYearCulture();
+
+    private static CultureInfo CreateInvariantExcelTwoDigitYearCulture()
+    {
+        var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
+        return culture;
+    }
+
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         new DateTimeValue(DateToSerial(DateTime.Now, ctx.Uses1904DateSystem));
 
@@ -497,8 +511,13 @@ public static partial class BuiltInFunctions
     private static bool TryParseMonthYearDateValueText(string text, out DateTime dt) =>
         DateTime.TryParseExact(
             text.Trim(),
-            ["MMMM yyyy", "MMM yyyy", "MMMM, yyyy", "MMM, yyyy", "MMMM-yyyy", "MMM-yyyy"],
-            CultureInfo.InvariantCulture,
+            [
+                "MMMM yyyy", "MMM yyyy", "MMMM, yyyy", "MMM, yyyy", "MMMM-yyyy", "MMM-yyyy",
+                // Two-digit-year variants: resolved via MonthYearDateValueCulture's Excel pivot
+                // (00-29 -> 2000-2029, 30-99 -> 1930-1999), e.g. "Jan-99" -> Jan 1999.
+                "MMMM yy", "MMM yy", "MMMM, yy", "MMM, yy", "MMMM-yy", "MMM-yy",
+            ],
+            MonthYearDateValueCulture,
             DateTimeStyles.None,
             out dt);
 

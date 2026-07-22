@@ -62,7 +62,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        var significance = SignificanceArgOrDefault(args, 1);
         return MapBinaryMathArgs(args[0], significance, IsoCeilingScalar);
     }
 
@@ -76,6 +76,18 @@ public static partial class BuiltInFunctions
         return NumberResult(CeilingToMultiple(n, multiple));
     }
 
+    // ISO.CEILING/CEILING.PRECISE/CEILING.MATH/FLOOR.PRECISE/FLOOR.MATH default their
+    // significance argument to 1 only when the argument SLOT itself is omitted (i.e. the
+    // call has no second argument at all, so args.Count <= index). A present-but-blank
+    // slot (an explicit trailing comma with nothing after it, or a reference to an empty
+    // cell) still occupies the slot -- args.Count > index -- but Excel coerces that blank
+    // to 0, not 1, so CEILING.MATH(4.3,) etc. evaluate their significance as 0.
+    private static ScalarValue SignificanceArgOrDefault(IReadOnlyList<ScalarValue> args, int index)
+    {
+        if (args.Count <= index) return new NumberValue(1);
+        return args[index] is BlankValue ? new NumberValue(0) : args[index];
+    }
+
     private static ScalarValue CeilingPrecise(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         IsoCeiling(args, ctx);
 
@@ -84,7 +96,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        var significance = SignificanceArgOrDefault(args, 1);
         var mode = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(0);
         return MapTernaryTextArgs(args[0], significance, mode, CeilingMathScalar);
     }
@@ -123,7 +135,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        var significance = SignificanceArgOrDefault(args, 1);
         return MapBinaryMathArgs(args[0], significance, FloorPreciseScalar);
     }
 
@@ -142,7 +154,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        var significance = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        var significance = SignificanceArgOrDefault(args, 1);
         var mode = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(0);
         return MapTernaryTextArgs(args[0], significance, mode, FloorMathScalar);
     }

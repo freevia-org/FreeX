@@ -172,7 +172,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         return hyperlinks;
     }
 
-    private static bool MergeWorksheetColumnAttributes(XElement? sourceColumns, XElement targetRoot, XNamespace workbookNs)
+    internal static bool MergeWorksheetColumnAttributes(XElement? sourceColumns, XElement targetRoot, XNamespace workbookNs)
     {
         if (sourceColumns is null)
             return false;

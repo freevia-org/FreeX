@@ -1731,9 +1731,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await clipboard.TryGetBitmapAsync()");
         source.Should().Contain("bitmap.Save(stream)");
         source.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");
-        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, clipboardReadFailed: clipboardReadFailed)");
-        source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed)");
-        source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true, clipboardReadFailed: clipboardReadFailed)");
+        // R66-services-clipboard-formats-6-1: every external-clipboard paste call site also reads
+        // the OS clipboard's HTML payload (TryGetClipboardHtmlAsync) and forwards it as `html`, so
+        // WorkbookSession.PasteExternalTextAtActiveCell's HTML-table-aware row/column recovery is
+        // actually reachable from this shell (previously only the WPF host read it).
+        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, clipboardReadFailed: clipboardReadFailed, html: html)");
+        source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed, html: html)");
+        source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true, clipboardReadFailed: clipboardReadFailed, html: html)");
         source.Should().Contain("private async Task PasteColumnWidthsFromClipboardAsync(string label)");
         source.Should().Contain("_session.PasteColumnWidthsFromClipboardAtActiveCell(text)");
         source.Should().Contain("private async Task PasteCommentsFromClipboardAsync(string label)");
@@ -1743,7 +1747,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task PasteLinkFromClipboardAsync(string label)");
         source.Should().Contain("_session.PasteLinkFromClipboardAtActiveCell(text)");
         source.Should().Contain("private async Task PasteSpecialExternalTextFromClipboardAsync(string label)");
-        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed)");
+        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed, html: html)");
         source.Should().Contain("private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)");
         source.Should().Contain("_session.PastePictureFromClipboardAtActiveCell(text, linkedPicture)");
         source.Should().Contain("_session.SelectedRanges.Any(range => range.Contains(address))");
@@ -4632,8 +4636,8 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("AddStyledCellBorderOverlay(content, style);");
-        source.Should().Contain("private static void AddStyledCellBorderOverlay(AvaloniaGrid content, CellStyle? style)");
+        source.Should().Contain("AddStyledCellBorderOverlay(content, style, borderNeighbors);");
+        source.Should().Contain("private static void AddStyledCellBorderOverlay(AvaloniaGrid content, CellStyle? style, CellBorderNeighborEdges borderNeighbors = default)");
         source.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         source.Should().Contain("style.BorderTop.Style != BorderStyle.None");
         source.Should().Contain("style.BorderRight.Style != BorderStyle.None");
@@ -4644,7 +4648,9 @@ public sealed class AvaloniaShellSourceTests
         // Border drawing is delegated to CellBorderPanel (stroked Lines with dash + per-style
         // thickness in CellBorderPanel.cs/CellBorderGeometry.cs), replacing the old inline
         // solid-Border-strip approach that could not dash and had wrong Hair/SlantDashDot thickness.
-        source.Should().Contain("content.Children.Add(new CellBorderPanel(visibleStyle));");
+        // borderNeighbors carries the touching neighbor cells' opposing edge styles so a shared grid
+        // edge resolves via CellBorderGeometry.ResolveBorderEdgeWinner (R66-render-gridlines-borders-6-1).
+        source.Should().Contain("content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors));");
     }
 
     [Fact]

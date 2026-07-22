@@ -472,9 +472,31 @@ public partial class MainWindow
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
+    /// <summary>
+    /// Home&gt;Clear&gt;Clear Formats. Matching Excel (and this app's own Clear All), clearing formats
+    /// also removes any conditional-formatting rules on the selection -- CF is itself a form of
+    /// formatting, so a plain <see cref="CellStyleDiffPlanner.ClearFormatsDiff"/> style-only apply
+    /// left stale CF rules behind (R66-commands-clear-delete-6-1). Composed the same way
+    /// <see cref="ClearAllMenuItem_Click"/> combines <c>ApplyStyleCommand</c> with
+    /// <c>ClearConditionalFormatsCommand</c>, minus the contents/validation/comments/hyperlinks
+    /// clears that Clear All (but not Clear Formats) also performs.
+    /// </summary>
     private void ClearFormats()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        ApplyStyleDiff(CellStyleDiffPlanner.ClearFormatsDiff());
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
+                "Clear Formats",
+                range,
+                (sheetId, currentRange) => new CompositeWorkbookCommand(
+                    "Clear Formats",
+                    [
+                        new ApplyStyleCommand(sheetId, currentRange, CellStyleDiffPlanner.ClearFormatsDiff()),
+                        new ClearConditionalFormatsCommand(sheetId, currentRange)
+                    ])))
+            return;
+
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
     }
 }

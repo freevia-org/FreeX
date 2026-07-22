@@ -436,10 +436,11 @@ public class DependencyGraphTests
     }
 
     /// <summary>
-    /// End-to-end regression through RecalcEngine: A1/B1 form a real cycle and must be stamped
-    /// #CIRCULAR!, but C1 (=A1) and D1 (=C1) are only downstream of the cycle and must evaluate
-    /// normally, receiving the propagated #CIRCULAR! error value from A1 rather than being
-    /// classified as circular themselves.
+    /// End-to-end regression through RecalcEngine: A1/B1 form a real cycle and must be reported
+    /// circular, but seed to 0 (Excel's non-iterative circular-reference behaviour) rather than a
+    /// fabricated #CIRCULAR! error. C1 (=A1) and D1 (=C1) are only downstream of the cycle and
+    /// must evaluate normally, receiving the propagated 0 from A1 rather than being classified
+    /// as circular themselves.
     /// </summary>
     [Fact]
     public void RecalcEngine_DownstreamOfCircularReference_EvaluatesInsteadOfBeingMarkedCircular()
@@ -465,12 +466,42 @@ public class DependencyGraphTests
         report.CyclicCells.Should().NotContain(c1, "C1 only depends on the cyclic A1/B1 pair; it is not itself circular");
         report.CyclicCells.Should().NotContain(d1, "D1 is further downstream and must not be classified circular either");
 
-        sheet.GetValue(a1).Should().Be(ErrorValue.Circular);
-        sheet.GetValue(b1).Should().Be(ErrorValue.Circular);
-        // C1 = A1 evaluates normally and inherits A1's propagated error value.
-        sheet.GetValue(c1).Should().Be(ErrorValue.Circular);
-        // D1 = C1 evaluates normally and inherits C1's propagated error value in turn.
-        sheet.GetValue(d1).Should().Be(ErrorValue.Circular);
+        var zero = new NumberValue(0);
+        sheet.GetValue(a1).Should().Be(zero, "Excel seeds a non-iterative circular reference to 0, not a fabricated error");
+        sheet.GetValue(b1).Should().Be(zero);
+        // C1 = A1 evaluates normally and inherits A1's propagated 0.
+        sheet.GetValue(c1).Should().Be(zero);
+        // D1 = C1 evaluates normally and inherits C1's propagated 0 in turn.
+        sheet.GetValue(d1).Should().Be(zero);
+    }
+
+    /// <summary>
+    /// R66-calc-iterative-circular-6-1: the cyclic cell itself must compute as 0, not a fabricated
+    /// #CIRCULAR! error value — so a downstream IFERROR wrapping it must NOT fire (there is no
+    /// error to catch) and must see the real 0, exactly like Excel.
+    /// </summary>
+    [Fact]
+    public void RecalcEngine_CircularCell_SeedsZero_AndIferrorDoesNotFire()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var e1 = new CellAddress(sheet.Id, 1, 5);
+
+        sheet.SetFormula(a1, "B1+1");
+        sheet.SetFormula(b1, "A1");
+        sheet.SetFormula(e1, "IFERROR(A1,\"x\")");
+
+        var report = engine.RecalculateAllFormulas(workbook);
+
+        report.CyclicCells.Should().Contain(a1);
+        sheet.GetValue(a1).Should().Be(new NumberValue(0));
+        // IFERROR must not catch anything: A1 is a real number (0), so E1 must be 0, not "x".
+        sheet.GetValue(e1).Should().Be(new NumberValue(0),
+            "IFERROR must not fire against a circular reference's seeded value, exactly like Excel");
     }
 
     [Fact]
@@ -802,7 +833,8 @@ public class DependencyGraphTests
         var report = engine.Recalculate(workbook, [formula]);
 
         report.CyclicCells.Should().Contain(formula);
-        sheet.GetValue(formula).Should().Be(ErrorValue.Circular);
+        sheet.GetValue(formula).Should().Be(new NumberValue(0),
+            "a self-referencing cycle through a large range must seed to 0, matching Excel's non-iterative circular-reference behaviour");
     }
 
 }

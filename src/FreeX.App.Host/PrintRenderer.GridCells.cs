@@ -37,7 +37,8 @@ public static partial class PrintRenderer
         WorksheetPrintErrorValue printErrorValue,
         double gridLeft,
         double gridTop,
-        bool blackAndWhite = false)
+        bool blackAndWhite = false,
+        Sheet? sheet = null)
     {
         // Multi-pass rendering (fills, then gridlines/borders, then text) mirrors the interactive
         // grid's layering (GridView.Rendering.cs). A single combined per-cell pass would have the
@@ -85,16 +86,27 @@ public static partial class PrintRenderer
                 cellLookup.TryGetValue((row, col), out var cell);
                 var style = cell.Style;
 
+                // Merge membership: suppress the gridline/border edges that fall strictly inside a
+                // merged region (i.e. another cell of the same merge sits on that side) so only the
+                // merge's outer perimeter ever prints -- matching Excel (and the on-screen
+                // GridView.Rendering.cs Pass 2), which never shows an interior line through a merged
+                // range, whether that line comes from the default gridline grid or an explicit
+                // user-authored border.
+                var merge = sheet?.GetMergeRegion(new CellAddress(sheet.Id, row, col));
+                var suppressTop = merge is { } mTop && row > mTop.Start.Row;
+                var suppressBottom = merge is { } mBottom && row < mBottom.End.Row;
+                var suppressLeft = merge is { } mLeft && col > mLeft.Start.Col;
+                var suppressRight = merge is { } mRight && col < mRight.End.Col;
+
                 if (printGridlines)
                 {
-                    dc.DrawRectangle(null,
-                        blackAndWhite ? BlackAndWhiteGridlinePen : new Pen(Brushes.LightGray, 0.5),
-                        cellRect);
+                    var gridlinePen = blackAndWhite ? BlackAndWhiteGridlinePen : new Pen(Brushes.LightGray, 0.5);
+                    DrawPrintedGridlineEdges(dc, cellRect, gridlinePen, suppressTop, suppressBottom, suppressLeft, suppressRight);
                 }
 
                 if (style is not null && HasVisiblePrintedBorder(style))
                 {
-                    DrawPrintedCellBorders(dc, cellRect, style, blackAndWhite);
+                    DrawPrintedCellBorders(dc, cellRect, style, blackAndWhite, suppressTop, suppressBottom, suppressLeft, suppressRight);
                 }
             }
         }
@@ -542,12 +554,50 @@ public static partial class PrintRenderer
         style.BorderDiagonalDown.Style != BorderStyle.None ||
         style.BorderDiagonalUp.Style != BorderStyle.None;
 
-    private static void DrawPrintedCellBorders(DrawingContext dc, Rect rect, CellStyle style, bool blackAndWhite = false)
+    /// <summary>
+    /// Draws the printed default-gridline rectangle for a cell, skipping whichever sides are
+    /// suppressed because they fall strictly inside a merged region (see the merge-membership
+    /// comment in <see cref="DrawPrintedGridCells"/>). A cell fully interior to a merge (all four
+    /// sides suppressed) draws nothing at all, matching Excel's printout, which never shows any
+    /// interior separator line cutting through a merged range.
+    /// </summary>
+    private static void DrawPrintedGridlineEdges(
+        DrawingContext dc,
+        Rect rect,
+        Pen pen,
+        bool suppressTop,
+        bool suppressBottom,
+        bool suppressLeft,
+        bool suppressRight)
     {
-        DrawPrintedBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), blackAndWhite);
-        DrawPrintedBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), blackAndWhite);
-        DrawPrintedBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), blackAndWhite);
-        DrawPrintedBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite);
+        if (!suppressTop)
+            dc.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top));
+        if (!suppressBottom)
+            dc.DrawLine(pen, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
+        if (!suppressLeft)
+            dc.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom));
+        if (!suppressRight)
+            dc.DrawLine(pen, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
+    }
+
+    private static void DrawPrintedCellBorders(
+        DrawingContext dc,
+        Rect rect,
+        CellStyle style,
+        bool blackAndWhite = false,
+        bool suppressTop = false,
+        bool suppressBottom = false,
+        bool suppressLeft = false,
+        bool suppressRight = false)
+    {
+        if (!suppressTop)
+            DrawPrintedBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), blackAndWhite);
+        if (!suppressBottom)
+            DrawPrintedBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), blackAndWhite);
+        if (!suppressLeft)
+            DrawPrintedBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), blackAndWhite);
+        if (!suppressRight)
+            DrawPrintedBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite);
         if (style.BorderDiagonalDown.Style != BorderStyle.None)
             DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite);
         if (style.BorderDiagonalUp.Style != BorderStyle.None)

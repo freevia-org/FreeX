@@ -1945,7 +1945,26 @@ public sealed class WorkbookSession
 
         ApplySuccessfulEditResult(result, address);
         GrowRowHeightForAlreadyWrappedCellIfNeeded(address);
+        CancelPendingCutAfterMutatingEdit();
         return result;
+    }
+
+    /// <summary>
+    /// Excel cancels an active Cut's marching-ants/move semantics as soon as an ordinary edit or
+    /// Clear Contents commits elsewhere on the sheet -- a subsequent Paste must not silently MOVE
+    /// (and blank out) a cut source range the user has since typed over or cleared. Mirrors the WPF
+    /// host's <c>MainWindow.CommandExecution.TryExecuteEditCells</c> cancellation (R54), scoped here
+    /// to the specific "committed a mutating edit that is not the paste itself" call sites
+    /// (<see cref="CommitCellText"/>, <see cref="ClearSelectedRangeContents"/>) that this
+    /// host-agnostic session shares with the Avalonia shell, which never received the R54 fix
+    /// (R66-services-clipboard-formats-6-2). Only cancels a CUT (not a plain Copy) -- Excel still
+    /// lets a subsequent Paste reuse a Copy's marching ants after an unrelated edit, since Copy never
+    /// moves/deletes the source.
+    /// </summary>
+    private void CancelPendingCutAfterMutatingEdit()
+    {
+        if (_internalClipboard is { IsCut: true })
+            _internalClipboard = null;
     }
 
     /// <summary>
@@ -2910,6 +2929,7 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulRangeEditResult(result, range);
+        CancelPendingCutAfterMutatingEdit();
         return result;
     }
 
@@ -2940,8 +2960,22 @@ public sealed class WorkbookSession
         return WorkbookDataValidationMutationResult.FromEditResult(result, mutated: true);
     }
 
-    public WorkbookCellEditResult ClearSelectedRangeFormats() =>
-        ApplySelectedRangeStyle(CellStyleDiffPlanner.ClearFormatsDiff());
+    public WorkbookCellEditResult ClearSelectedRangeFormats()
+    {
+        // Routed through ExecuteRepeatableEditCommand (rather than the generic
+        // ApplySelectedRangeStyle(StyleDiff) used by plain style toggles) because Clear Formats must
+        // also drop conditional-formatting rules, which a bare StyleDiff apply cannot express -- see
+        // CreateClearFormatsCommand. The factory re-reads SelectedRange each time it runs, matching
+        // ApplySelectedRangeStyle's F4/Repeat Last Action semantics.
+        var result = _cellEditService.ExecuteRepeatableEditCommand(
+            Workbook,
+            () => CreateClearFormatsCommand(SelectedRange));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, SelectedRange);
+        return result;
+    }
 
     public WorkbookCellEditResult ClearSelectedRangeComments()
     {
@@ -4162,6 +4196,33 @@ public sealed class WorkbookSession
         }
 
         return ToCommand("Clear All", commands);
+    }
+
+    /// <summary>
+    /// Home&gt;Clear&gt;Clear Formats' command factory. Matching Excel (and this session's own
+    /// <see cref="CreateClearAllCommand"/>), clearing formats also removes any conditional-formatting
+    /// rules on the selection -- CF is itself a form of formatting, so a plain style-only
+    /// <c>ApplyStyleCommand(ClearFormatsDiff)</c> left stale CF rules behind
+    /// (R66-commands-clear-delete-6-1). Mirrors <see cref="CreateClearAllCommand"/>'s composite minus
+    /// the contents/validation/comments/hyperlinks clears that Clear All (but not Clear Formats) also
+    /// performs.
+    /// </summary>
+    private IWorkbookCommand CreateClearFormatsCommand(GridRange range)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = new List<IWorkbookCommand>(targetSheetIds.Count);
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheetRange = RemapRangeToSheet(range, sheetId);
+            commands.Add(new CompositeWorkbookCommand(
+                "Clear Formats",
+                [
+                    new ApplyStyleCommand(sheetId, sheetRange, CellStyleDiffPlanner.ClearFormatsDiff()),
+                    new ClearConditionalFormatsCommand(sheetId, sheetRange)
+                ]));
+        }
+
+        return ToCommand("Clear Formats", commands);
     }
 
     private IWorkbookCommand CreateSetHyperlinkCommand(

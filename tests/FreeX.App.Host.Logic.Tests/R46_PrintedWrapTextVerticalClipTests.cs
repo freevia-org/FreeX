@@ -141,6 +141,7 @@ public sealed class R46_PrintedWrapTextVerticalClipTests
                 0.0,
                 0.0,
                 false,
+                null,
             ]);
         }
 

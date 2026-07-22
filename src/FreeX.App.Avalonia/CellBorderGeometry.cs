@@ -135,10 +135,9 @@ internal static class CellBorderGeometry
     /// <c>GridView.Rendering.cs</c>.
     /// </summary>
     /// <remarks>
-    /// Not yet wired into any caller: <see cref="CellBorderPanel"/> is constructed per-cell from a
-    /// single <see cref="CellStyle"/> with no neighbor-style access (see <c>MainWindow.cs</c>'s
-    /// cell-creation helpers that construct <c>CellBorderPanel</c>), so plumbing the four
-    /// neighboring edge styles through to this resolver is tracked as residual follow-up work.
+    /// Called from <see cref="CellBorderPanel"/>'s <c>Build</c> pass, once per edge, with the
+    /// touching neighbor's border passed in via <see cref="CellBorderNeighborEdges"/> (resolved by
+    /// <c>MainWindow.cs</c>'s cell-creation helpers from the sheet's neighboring cell styles).
     /// </remarks>
     public static CellBorder ResolveBorderEdgeWinner(CellBorder mine, CellBorder neighbor)
     {

@@ -183,6 +183,12 @@ public static partial class ChartRenderer
             ChartMarkerStyle.Square => MarkerType.Square,
             ChartMarkerStyle.Diamond => MarkerType.Diamond,
             ChartMarkerStyle.Triangle => MarkerType.Triangle,
+            ChartMarkerStyle.X => MarkerType.Cross,
+            ChartMarkerStyle.Star => MarkerType.Star,
+            ChartMarkerStyle.Plus => MarkerType.Plus,
+            ChartMarkerStyle.Dot => MarkerType.Circle,
+            ChartMarkerStyle.Dash => MarkerType.Square,
+            ChartMarkerStyle.Auto => MarkerType.Circle,
             _ => MarkerType.Circle
         };
 

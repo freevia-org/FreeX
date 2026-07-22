@@ -170,7 +170,8 @@ public static partial class PrintRenderer
             printErrorValue,
             gridLeft,
             gridTop,
-            blackAndWhite);
+            blackAndWhite,
+            sheet);
 
         if (!draftQuality)
         {

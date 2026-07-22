@@ -8,6 +8,20 @@ using FreeX.Core.Model;
 namespace FreeX.App.Avalonia;
 
 /// <summary>
+/// The four neighboring cells' border edges that touch this cell's own four edges (the neighbor
+/// above's <c>BorderBottom</c> touches this cell's <c>BorderTop</c>, and so on). Passed into
+/// <see cref="CellBorderPanel"/> so it can resolve which of the two conflicting styles describing
+/// a shared grid edge actually gets painted via <see cref="CellBorderGeometry.ResolveBorderEdgeWinner"/>,
+/// instead of drawing its own edge unconditionally and leaving a paint-order-dependent double-draw
+/// wherever both neighboring cells declare a border on the same physical edge.
+/// </summary>
+internal readonly record struct CellBorderNeighborEdges(
+    CellBorder Above = default,
+    CellBorder Below = default,
+    CellBorder Left = default,
+    CellBorder Right = default);
+
+/// <summary>
 /// A binding-free panel that overlays cell border lines (four edges + optional diagonals) on top
 /// of cell content.  It replaces the old solid-<c>Border</c>-strip approach and adds:
 /// <list type="bullet">
@@ -33,11 +47,13 @@ namespace FreeX.App.Avalonia;
 internal sealed class CellBorderPanel : Panel
 {
     private readonly CellStyle _style;
+    private readonly CellBorderNeighborEdges _neighbors;
     private Size _lastArrange = new(-1, -1);
 
-    public CellBorderPanel(CellStyle style)
+    public CellBorderPanel(CellStyle style, CellBorderNeighborEdges neighbors = default)
     {
         _style = style;
+        _neighbors = neighbors;
         IsHitTestVisible = false;
         ClipToBounds = false;
     }
@@ -68,10 +84,20 @@ internal sealed class CellBorderPanel : Panel
         double w = size.Width;
         double h = size.Height;
 
-        AddEdge(_style.BorderTop,    new Point(0, 0),    new Point(w, 0),    isHorizontal: true);
-        AddEdge(_style.BorderBottom, new Point(0, h),    new Point(w, h),    isHorizontal: true);
-        AddEdge(_style.BorderLeft,   new Point(0, 0),    new Point(0, h),    isHorizontal: false);
-        AddEdge(_style.BorderRight,  new Point(w, 0),    new Point(w, h),    isHorizontal: false);
+        // Resolve each edge against the touching neighbor's border (if any) before drawing, so a
+        // shared grid edge described by both adjoining cells always renders with the heavier/more-
+        // prominent style regardless of which cell's panel happens to be built first — mirrors the
+        // WPF GridView.Rendering.cs BorderEdgePrecedence pass. A cell with no neighbor border (the
+        // default, all-None CellBorderNeighborEdges) always yields its own style unchanged.
+        var top    = CellBorderGeometry.ResolveBorderEdgeWinner(_style.BorderTop,    _neighbors.Above);
+        var bottom = CellBorderGeometry.ResolveBorderEdgeWinner(_style.BorderBottom, _neighbors.Below);
+        var left   = CellBorderGeometry.ResolveBorderEdgeWinner(_style.BorderLeft,   _neighbors.Left);
+        var right  = CellBorderGeometry.ResolveBorderEdgeWinner(_style.BorderRight,  _neighbors.Right);
+
+        AddEdge(top,    new Point(0, 0),    new Point(w, 0),    isHorizontal: true);
+        AddEdge(bottom, new Point(0, h),    new Point(w, h),    isHorizontal: true);
+        AddEdge(left,   new Point(0, 0),    new Point(0, h),    isHorizontal: false);
+        AddEdge(right,  new Point(w, 0),    new Point(w, h),    isHorizontal: false);
 
         // Diagonal borders — drawn across the cell interior (not edge-aligned).
         // Down = Top-Left → Bottom-Right  (Excel diagonalDown="1")

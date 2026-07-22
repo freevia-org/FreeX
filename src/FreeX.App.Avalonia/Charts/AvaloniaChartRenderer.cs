@@ -877,7 +877,7 @@ public sealed class AvaloniaChartRenderer
 
     /// <summary>
     /// Builds a single marker control at (cx, cy). Returns null for <see cref="ChartMarkerStyle.None"/>.
-    /// Circle is an Ellipse; Square is a Rectangle; Diamond/Triangle/Cross/Plus/Star use a Path.
+    /// Circle is an Ellipse; Square is a Rectangle; Diamond/Triangle/X/Plus/Star use a Path.
     /// </summary>
     internal static Control? BuildMarker(ChartMarkerStyle style, double cx, double cy, IBrush fill, IBrush stroke)
     {
@@ -886,6 +886,91 @@ public sealed class AvaloniaChartRenderer
         {
             case ChartMarkerStyle.None:
                 return null;
+
+            case ChartMarkerStyle.X:
+            {
+                // "X": two crossing diagonal lines, open (unfilled) path.
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(new AvaloniaPoint(cx - r, cy - r), isFilled: false);
+                    ctx.LineTo(new AvaloniaPoint(cx + r, cy + r));
+                    ctx.EndFigure(isClosed: false);
+                    ctx.BeginFigure(new AvaloniaPoint(cx - r, cy + r), isFilled: false);
+                    ctx.LineTo(new AvaloniaPoint(cx + r, cy - r));
+                    ctx.EndFigure(isClosed: false);
+                }
+                return new AvaloniaPath { Data = geo, Stroke = stroke, StrokeThickness = 1.5 };
+            }
+
+            case ChartMarkerStyle.Plus:
+            {
+                // "+": horizontal and vertical lines, open (unfilled) path.
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(new AvaloniaPoint(cx - r, cy), isFilled: false);
+                    ctx.LineTo(new AvaloniaPoint(cx + r, cy));
+                    ctx.EndFigure(isClosed: false);
+                    ctx.BeginFigure(new AvaloniaPoint(cx, cy - r), isFilled: false);
+                    ctx.LineTo(new AvaloniaPoint(cx, cy + r));
+                    ctx.EndFigure(isClosed: false);
+                }
+                return new AvaloniaPath { Data = geo, Stroke = stroke, StrokeThickness = 1.5 };
+            }
+
+            case ChartMarkerStyle.Star:
+            {
+                // Asterisk: horizontal + vertical + both diagonals (8-point star), open path.
+                var d = r * 0.7071067811865476; // r * cos(45deg): keeps diagonal arm length == r.
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(new AvaloniaPoint(cx - r, cy), isFilled: false);
+                    ctx.LineTo(new AvaloniaPoint(cx + r, cy));
+                    ctx.EndFigure(isClosed: false);
+                    ctx.BeginFigure(new AvaloniaPoint(cx, cy - r), isFilled: false);
+                    ctx.LineTo(new AvaloniaPoint(cx, cy + r));
+                    ctx.EndFigure(isClosed: false);
+                    ctx.BeginFigure(new AvaloniaPoint(cx - d, cy - d), isFilled: false);
+                    ctx.LineTo(new AvaloniaPoint(cx + d, cy + d));
+                    ctx.EndFigure(isClosed: false);
+                    ctx.BeginFigure(new AvaloniaPoint(cx - d, cy + d), isFilled: false);
+                    ctx.LineTo(new AvaloniaPoint(cx + d, cy - d));
+                    ctx.EndFigure(isClosed: false);
+                }
+                return new AvaloniaPath { Data = geo, Stroke = stroke, StrokeThickness = 1.5 };
+            }
+
+            case ChartMarkerStyle.Dot:
+            {
+                // Dot: a smaller filled circle than the default Circle marker.
+                var dotR = r * 0.45;
+                var ellipse = new Ellipse
+                {
+                    Width = dotR * 2,
+                    Height = dotR * 2,
+                    Fill = fill,
+                    Stroke = stroke,
+                    StrokeThickness = 1,
+                };
+                Canvas.SetLeft(ellipse, cx - dotR);
+                Canvas.SetTop(ellipse, cy - dotR);
+                return ellipse;
+            }
+
+            case ChartMarkerStyle.Dash:
+            {
+                // Dash: a single horizontal line segment, open (unfilled) path.
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(new AvaloniaPoint(cx - r, cy), isFilled: false);
+                    ctx.LineTo(new AvaloniaPoint(cx + r, cy));
+                    ctx.EndFigure(isClosed: false);
+                }
+                return new AvaloniaPath { Data = geo, Stroke = stroke, StrokeThickness = 1.5 };
+            }
 
             case ChartMarkerStyle.Square:
             {
@@ -932,6 +1017,7 @@ public sealed class AvaloniaChartRenderer
                 return new AvaloniaPath { Data = geo, Fill = fill, Stroke = stroke, StrokeThickness = 1 };
             }
 
+            case ChartMarkerStyle.Auto: // Auto uses the automatic/default marker (Circle).
             default: // Circle fallback for Circle and any unrecognized value.
             {
                 var ellipse = new Ellipse

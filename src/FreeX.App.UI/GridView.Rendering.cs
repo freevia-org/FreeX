@@ -1057,8 +1057,19 @@ public partial class GridView
             fill = Brushes.White;
         }
 
-        if (fill is not null || isMerged)
-            dc.DrawRectangle(fill, isMerged ? GridPen : null, rect);
+        // A merged cell's gray outline is the default GRIDLINE (the same one an unmerged cell gets
+        // for free from RenderCellBackgroundBase's base grid), not an authored border -- so it must
+        // honor ShowGridLines exactly like every other gridline in the view (see the
+        // "if (!ShowGridLines) return;" guard just below in RenderCellBackgroundBase, and the
+        // "ShowGridLines ? GridPen : null" gate RenderSplitPaneCells already applies), and it must
+        // never draw when the merge has its own explicit fill (gradient or solid FillColor) painted
+        // over it -- an unmerged filled cell never gets a matching gray outline over its fill either,
+        // only the plain "no authored fill" default-white merge fallback above does.
+        var hasExplicitFill = bg?.GradientFill is not null || bg?.FillColor.HasValue == true;
+        var strokeMergeGridline = isMerged && ShowGridLines && !hasExplicitFill;
+
+        if (fill is not null || strokeMergeGridline)
+            dc.DrawRectangle(fill, strokeMergeGridline ? GridPen : null, rect);
         if (bg is not null && bg.GradientFill is null)
             DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache);
     }

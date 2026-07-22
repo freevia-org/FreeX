@@ -340,14 +340,16 @@ public static class FillSeriesPlanner
     }
 
     /// <summary>
-    /// Builds the AutoFill series-type edits for Fill ▸ Series: replays the exact same
-    /// fill-handle text-list detection <see cref="AutofillCommand"/> uses for a fill-handle drag
-    /// (a trailing number, e.g. "Item 1" -&gt; "Item 2", or membership in one of Excel's
-    /// built-in weekday/month lists) instead of routing through the numeric-only Linear builder,
-    /// which silently no-ops on any non-numeric seed. Each line (column, for "Series in
+    /// Builds the AutoFill series-type edits for Fill ▸ Series. Each line (column, for "Series in
     /// Columns"; row, for "Series in Rows") in the selection is its own independent series,
-    /// seeded from that line's own leading cell -- matching how Linear, Growth, and Date all
-    /// treat lines.
+    /// detected from that line's own leading run of already-populated "seed" cells -- exactly
+    /// like a fill-handle drag, where the source cells precede the destination cells being
+    /// filled. A numeric or date seed run (Excel's AutoFill continues a 2+ cell arithmetic/date
+    /// trend, or defaults a lone seed to a +1/+1-day step) is detected first so AutoFill no
+    /// longer silently no-ops on numeric seeds; a text seed run falls back to
+    /// <see cref="AutofillCommand"/>'s own trailing-number / built-in-list detection, replaying
+    /// the exact same logic a fill-handle drag uses for "Item 1" -&gt; "Item 2" or
+    /// weekday/month lists.
     /// </summary>
     public static List<(CellAddress Address, Cell NewCell)> BuildAutoFillSeriesEdits(
         Sheet sheet,
@@ -355,27 +357,126 @@ public static class FillSeriesPlanner
         FillSeriesDirection seriesIn)
     {
         var edits = new List<(CellAddress, Cell)>();
-        Func<int, ScalarValue>? lineSeries = null;
-        var offset = 0;
-        foreach (var address in EnumerateSeriesAddresses(sheet.Id, range, seriesIn))
-        {
-            if (IsSeriesLineStart(address, range, seriesIn))
-            {
-                lineSeries = sheet.GetValue(address.Row, address.Col) is TextValue seed
-                    ? AutofillCommand.TryCreateAutoFillTextSeries([seed.Value])
-                    : null;
-                offset = 1;
-                continue;
-            }
-
-            if (lineSeries is null)
-                continue;
-
-            edits.Add((address, Cell.FromValue(lineSeries(offset))));
-            offset++;
-        }
+        foreach (var line in EnumerateSeriesLines(sheet.Id, range, seriesIn))
+            BuildAutoFillLineEdits(sheet, line, edits);
 
         return edits;
+    }
+
+    /// <summary>
+    /// Builds one line's AutoFill edits: reads the leading contiguous run of populated cells as
+    /// the line's seed(s), detects a numeric/date/text series from them, and fills the remaining
+    /// (blank) cells of the line. A line with no leading seed, or whose seed run doesn't match a
+    /// detectable series, is left untouched -- matching a non-series text seed's existing no-op.
+    /// </summary>
+    private static void BuildAutoFillLineEdits(
+        Sheet sheet,
+        IReadOnlyList<CellAddress> line,
+        List<(CellAddress Address, Cell NewCell)> edits)
+    {
+        var seedValues = new List<ScalarValue>();
+        foreach (var address in line)
+        {
+            var value = sheet.GetValue(address.Row, address.Col);
+            if (value is BlankValue)
+                break;
+
+            seedValues.Add(value);
+        }
+
+        var seedCount = seedValues.Count;
+        if (seedCount == 0)
+            return;
+
+        if (TryCreateNumericOrDateLineSeries(seedValues, out var numericSeries))
+        {
+            for (var i = seedCount; i < line.Count; i++)
+                edits.Add((line[i], Cell.FromValue(numericSeries(i - seedCount + 1))));
+
+            return;
+        }
+
+        if (seedValues.All(value => value is TextValue))
+        {
+            var texts = seedValues.Select(value => ((TextValue)value).Value).ToList();
+            var textSeries = AutofillCommand.TryCreateAutoFillTextSeries(texts);
+            if (textSeries is null)
+                return;
+
+            for (var i = seedCount; i < line.Count; i++)
+                edits.Add((line[i], Cell.FromValue(textSeries(i - seedCount + 1))));
+        }
+    }
+
+    /// <summary>
+    /// Detects a numeric or date AutoFill series from a line's leading seed cells, mirroring the
+    /// fill handle's own numeric/date trend detection (<see cref="AutofillCommand"/>'s
+    /// TryCreateScalarSeries / TryCreateForcedSingleCellSeries): a homogeneous 2+ cell seed run
+    /// continues its arithmetic step (the average step between the first and last seed); a lone
+    /// numeric or date seed defaults to a plain +1 step, since there is no natural trend to fit
+    /// from a single sample. A seed run that mixes types (or holds no numbers/dates at all) is not
+    /// a numeric/date series.
+    /// </summary>
+    private static bool TryCreateNumericOrDateLineSeries(
+        IReadOnlyList<ScalarValue> seedValues,
+        out Func<int, ScalarValue> lineSeries)
+    {
+        Func<double, ScalarValue> createValue;
+        double[] numbers;
+        if (seedValues.All(value => value is NumberValue))
+        {
+            createValue = serial => new NumberValue(serial);
+            numbers = seedValues.Select(value => ((NumberValue)value).Value).ToArray();
+        }
+        else if (seedValues.All(value => value is DateTimeValue))
+        {
+            createValue = serial => new DateTimeValue(serial);
+            numbers = seedValues.Select(value => ((DateTimeValue)value).Value).ToArray();
+        }
+        else
+        {
+            lineSeries = null!;
+            return false;
+        }
+
+        var step = numbers.Length >= 2
+            ? (numbers[^1] - numbers[0]) / (numbers.Length - 1)
+            : 1d;
+        var last = numbers[^1];
+
+        lineSeries = offset => createValue(last + step * offset);
+        return true;
+    }
+
+    /// <summary>
+    /// Groups a range's cells into its independent AutoFill series lines: one line per column
+    /// (top-to-bottom) for "Series in Columns", one per row (left-to-right) for "Series in Rows" --
+    /// the same per-line split <see cref="EnumerateSeriesAddresses"/>'s flat, line-major
+    /// enumeration already implies, but returned as grouped lines so <see cref="BuildAutoFillLineEdits"/>
+    /// can scan each line's own leading seed run in isolation.
+    /// </summary>
+    private static IEnumerable<IReadOnlyList<CellAddress>> EnumerateSeriesLines(SheetId sheetId, GridRange range, FillSeriesDirection seriesIn)
+    {
+        if (seriesIn == FillSeriesDirection.Columns)
+        {
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+            {
+                var line = new List<CellAddress>();
+                for (var row = range.Start.Row; row <= range.End.Row; row++)
+                    line.Add(new CellAddress(sheetId, row, col));
+                yield return line;
+            }
+
+            yield break;
+        }
+
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            var line = new List<CellAddress>();
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+                line.Add(new CellAddress(sheetId, row, col));
+            yield return line;
+        }
     }
 
     private static IEnumerable<CellAddress> EnumerateSeriesAddresses(SheetId sheetId, GridRange range, FillSeriesDirection seriesIn)

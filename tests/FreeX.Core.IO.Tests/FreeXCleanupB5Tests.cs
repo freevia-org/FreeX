@@ -249,21 +249,24 @@ public sealed class FreeXCleanupB5Tests
     }
 
     [Theory]
-    [InlineData("TaxRate", "0.21")]
-    [InlineData("Greeting", "\"Hello\"")]
     [InlineData("BrokenRef", "#REF!")]
     [InlineData("ExternalName", "[1]Sheet1!$A$1")]
     public void Save_LoadedWorkbookWithUnmodelableDefinedNameAndUnrelatedCellEdit_PreservesDefinedName(
         string name,
         string refersToBody)
     {
-        // P110 regression: defined names whose refersTo is a constant literal, a broken (#REF!)
-        // reference, or an external-workbook reference are never loaded into the model at all
-        // (XlsxNamedRangeMapper.IsFormulaExpression treats all of them as "not a formula", and none
-        // resolve as a plain in-workbook range). Before the fix, the resurrection gate keyed only
+        // P110 regression: defined names whose refersTo is a broken (#REF!) reference or an
+        // external-workbook reference are never loaded into the model at all
+        // (XlsxNamedRangeMapper.IsFormulaExpression treats both as "not a formula", and neither
+        // resolves as a plain in-workbook range). Before the fix, the resurrection gate keyed only
         // on ValidateNamedRangeName (which inspects just the name text), so these names were
         // wrongly treated as "model-representable but deleted by the user" and permanently dropped
         // from workbook.xml on every save, turning every formula that referenced them into #NAME?.
+        // NOTE (R66-io-defined-names-scope-6-2): a constant-literal refersTo (e.g. 0.21 or "Hello")
+        // used to be lumped into this same "unmodelable" bucket, but is now actually loaded into
+        // NamedFormulas/ScopedNamedFormulas (see IsConstantLiteralRefersTo) and round-trips through
+        // the ordinary NamedFormulas save path instead — covered by
+        // R66_DefinedNameScopeBareConstantRelativeTests, not this "genuinely unmodelable" test.
         var sourceBytes = AddDefinedName(CreateSourcePackage(), name, refersToBody);
         var adapter = new XlsxFileAdapter();
         Workbook workbook;
@@ -296,8 +299,12 @@ public sealed class FreeXCleanupB5Tests
     public void Save_LoadedWorkbookWithUnmodelableDefinedNameAcrossTwoSaves_StillPreservesDefinedName()
     {
         // Reinforces P110: the name must keep surviving even after a second edit+save cycle (i.e.
-        // the fix is not merely a one-time accident of the first save's code path).
-        var sourceBytes = AddDefinedName(CreateSourcePackage(), "TaxRate", "0.21");
+        // the fix is not merely a one-time accident of the first save's code path). Uses "BrokenRef"
+        // (a genuinely still-unmodelable #REF! refersTo, R66-io-defined-names-scope-6-2) rather than
+        // the "TaxRate" constant-literal case this test originally used, since that one is now
+        // actually modeled (see the NOTE on the sibling parametrized test above) and round-trips via
+        // the ordinary NamedFormulas save path instead of this resurrection-gate path.
+        var sourceBytes = AddDefinedName(CreateSourcePackage(), "BrokenRef", "#REF!");
         var adapter = new XlsxFileAdapter();
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
@@ -309,7 +316,7 @@ public sealed class FreeXCleanupB5Tests
 
         using var firstSave = new MemoryStream();
         adapter.Save(workbook, firstSave);
-        ReadDefinedNames(firstSave.ToArray()).Should().Contain(entry => entry.Name == "TaxRate");
+        ReadDefinedNames(firstSave.ToArray()).Should().Contain(entry => entry.Name == "BrokenRef");
 
         Workbook reloaded;
         using (var reloadStream = new MemoryStream(firstSave.ToArray(), writable: false))
@@ -319,6 +326,6 @@ public sealed class FreeXCleanupB5Tests
 
         using var secondSave = new MemoryStream();
         adapter.Save(reloaded, secondSave);
-        ReadDefinedNames(secondSave.ToArray()).Should().Contain(entry => entry.Name == "TaxRate");
+        ReadDefinedNames(secondSave.ToArray()).Should().Contain(entry => entry.Name == "BrokenRef");
     }
 }

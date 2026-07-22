@@ -519,6 +519,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 0.0,
                 0.0,
                 blackAndWhite,
+                null,
             ]);
         }
 

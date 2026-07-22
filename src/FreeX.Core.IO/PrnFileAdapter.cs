@@ -100,8 +100,15 @@ internal static class PrnWorkbookWriter
         var rowCount = (int)(maxRow - minRow + 1);
         var colCount = (int)(maxCol - minCol + 1);
 
-        // texts[r, c] — row and column indices relative to minRow/minCol
-        var texts = new string?[rowCount, colCount];
+        // rowTexts[r] — sparse map of column -> display text for row r (relative to minRow/minCol).
+        // A sheet's used-range bounding box can be enormous (e.g. a value in A1 and another in
+        // XFD1048576 gives a 1,048,576 x 16,384 box) even though only a handful of cells are
+        // actually populated, so we must NOT materialize a dense rowCount*colCount matrix — that
+        // both overflows practical array-size limits and would OOM. Instead we only keep entries
+        // for cells that actually produced non-empty display text; every other cell defaults to
+        // an empty string when read back in pass 2, exactly as the dense array's null-coalescing
+        // fallback did.
+        var rowTexts = new Dictionary<int, Dictionary<int, string>>();
         // isNumeric[c] — true if column c contains at least one numeric/boolean cell and no
         //               non-numeric non-empty cells; used for right-alignment decision.
         // We track per-column: has any cell? has any non-right-align cell?
@@ -116,17 +123,21 @@ internal static class PrnWorkbookWriter
             if (r < 0 || r >= rowCount || c < 0 || c >= colCount) continue;
 
             var text = GetCellDisplayText(cell);
-            texts[r, c] = text;
+            if (text.Length == 0) continue;
 
-            if (text.Length > 0)
+            if (!rowTexts.TryGetValue(r, out var rowMap))
             {
-                colHasContent[c] = true;
-                if (!IsRightAlignValue(cell))
-                    colHasLeftAlignContent[c] = true;
-
-                if (text.Length > colMaxWidth[c])
-                    colMaxWidth[c] = text.Length;
+                rowMap = new Dictionary<int, string>();
+                rowTexts[r] = rowMap;
             }
+            rowMap[c] = text;
+
+            colHasContent[c] = true;
+            if (!IsRightAlignValue(cell))
+                colHasLeftAlignContent[c] = true;
+
+            if (text.Length > colMaxWidth[c])
+                colMaxWidth[c] = text.Length;
         }
 
         // A column is right-aligned only if it has content and NO left-align content cells.
@@ -139,6 +150,17 @@ internal static class PrnWorkbookWriter
 
         for (var r = 0; r < rowCount; r++)
         {
+            // A row with no populated cells always renders as an entirely blank (trimmed) line,
+            // regardless of other rows' column widths — every position is either width-0 (skipped)
+            // or padding spaces for an empty cell, so the whole line is spaces and gets trimmed to
+            // "". Short-circuit it directly instead of materializing/looping over `colCount`
+            // columns for rows that contributed nothing to the sparse map.
+            if (!rowTexts.TryGetValue(r, out var rowMap))
+            {
+                writer.Write("\r\n");
+                continue;
+            }
+
             // Build the line character-by-character into a StringBuilder so we can right-trim.
             var sb = new StringBuilder();
 
@@ -155,7 +177,7 @@ internal static class PrnWorkbookWriter
                     continue;
                 }
 
-                var text = texts[r, c] ?? string.Empty;
+                var text = rowMap.TryGetValue(c, out var cellText) ? cellText : string.Empty;
                 var rightAlign = colRightAlign[c];
 
                 if (text.Length >= width)

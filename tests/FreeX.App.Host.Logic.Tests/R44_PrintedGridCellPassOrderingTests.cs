@@ -102,6 +102,7 @@ public sealed class R44_PrintedGridCellPassOrderingTests
             [(1u, 2u)] = cellB,
         };
 
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
         var measurement = new PrintGridMeasurement(0, 0, ColumnWidth, RowHeight);
         var pageRows = new uint[] { 1u };
         var pageColumns = new uint[] { 1u, 2u };
@@ -144,6 +145,7 @@ public sealed class R44_PrintedGridCellPassOrderingTests
                 0.0,
                 0.0,
                 false,
+                sheet,
             ]);
         }
 

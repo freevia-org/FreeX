@@ -39,22 +39,25 @@ public class VolatileCircularReferenceTests
         sheet.SetFormula(b1, "A1");
 
         // First full recalc: registers dependencies, discovers the A1<->B1 cycle, marks both
-        // cells #CIRCULAR! (the volatile function in A1 does not change this).
+        // cells circular in the report (Excel-compatible: the cell VALUE seeds to 0, not a
+        // fabricated error, so downstream arithmetic/IFERROR reads a real number).
         var report = engine.RecalculateAllFormulas(wb);
         report.CyclicCells.Should().NotBeEmpty("A1 and B1 form a circular reference");
-        sheet.GetValue(a1.Row, a1.Col).Should().Be(ErrorValue.Circular);
-        sheet.GetValue(b1.Row, b1.Col).Should().Be(ErrorValue.Circular);
+        sheet.GetValue(a1.Row, a1.Col).Should().Be(new NumberValue(0));
+        sheet.GetValue(b1.Row, b1.Col).Should().Be(new NumberValue(0));
 
         // Second recalc pass with an empty changed set: this pass only runs because A1 is
-        // volatile. Before the fix, A1 was re-added to a restricted dirty set that did not
-        // include B1, so the cycle was invisible, IFERROR(B1,0) silently swallowed the stale
-        // #CIRCULAR! value on B1, and A1 was clobbered with a real NOW()-based number.
-        engine.Recalculate(wb, []);
+        // volatile. Before the original fix, A1 was re-added to a restricted dirty set that did
+        // not include B1, so the cycle was invisible and A1 was clobbered with a real
+        // NOW()-based number instead of staying seeded at 0.
+        var secondReport = engine.Recalculate(wb, []);
 
-        sheet.GetValue(a1.Row, a1.Col).Should().Be(ErrorValue.Circular,
-            "a volatile cell that is part of a circular reference must remain #CIRCULAR! " +
+        secondReport.CyclicCells.Should().NotBeEmpty(
+            "a volatile cell that is part of a circular reference must remain classified circular " +
             "on subsequent volatile-driven recalc passes, not be resurrected and recomputed");
-        sheet.GetValue(b1.Row, b1.Col).Should().Be(ErrorValue.Circular);
+        sheet.GetValue(a1.Row, a1.Col).Should().Be(new NumberValue(0),
+            "the cyclic cell must stay seeded at 0, not be resurrected into a real NOW()-based number");
+        sheet.GetValue(b1.Row, b1.Col).Should().Be(new NumberValue(0));
     }
 
     /// <summary>
@@ -74,7 +77,7 @@ public class VolatileCircularReferenceTests
         sheet.SetFormula(c1, "NOW()");
 
         engine.RecalculateAllFormulas(wb);
-        sheet.GetValue(a1.Row, a1.Col).Should().Be(ErrorValue.Circular);
+        sheet.GetValue(a1.Row, a1.Col).Should().Be(new NumberValue(0));
         var firstNow = sheet.GetCell(c1)!.Value;
         firstNow.Should().BeOfType<DateTimeValue>();
 
@@ -82,18 +85,19 @@ public class VolatileCircularReferenceTests
 
         engine.Recalculate(wb, []);
 
-        sheet.GetValue(a1.Row, a1.Col).Should().Be(ErrorValue.Circular,
+        sheet.GetValue(a1.Row, a1.Col).Should().Be(new NumberValue(0),
             "the cycle must remain unaffected by the unrelated volatile cell's recalc");
         var secondNow = sheet.GetCell(c1)!.Value;
         secondNow.Should().BeOfType<DateTimeValue>("the unrelated volatile cell must still recalculate every pass");
     }
 
     /// <summary>
-    /// Sibling case: a plain (non-volatile) circular reference must still be stamped #CIRCULAR!
-    /// and stay that way - the fix must not weaken the existing non-volatile cycle handling.
+    /// Sibling case: a plain (non-volatile) circular reference must still be classified circular
+    /// in the report and seed to 0 - the fix must not weaken the existing non-volatile cycle
+    /// detection, only the fabricated error VALUE it used to stamp onto the cell.
     /// </summary>
     [Fact]
-    public void NonIterative_PlainCyclicPair_StillStampsCircular_NoVolatileInvolved()
+    public void NonIterative_PlainCyclicPair_StillDetectedCircular_NoVolatileInvolved()
     {
         var (engine, wb, sheet) = Setup();
         var a1 = new CellAddress(sheet.Id, 1, 1);
@@ -107,7 +111,8 @@ public class VolatileCircularReferenceTests
         report.CyclicCells.Should().NotBeEmpty();
         var a1Val = sheet.GetValue(a1.Row, a1.Col);
         var b1Val = sheet.GetValue(b1.Row, b1.Col);
-        (a1Val == ErrorValue.Circular || b1Val == ErrorValue.Circular)
-            .Should().BeTrue("at least one cell in the cycle must be stamped #CIRCULAR!");
+        var zero = new NumberValue(0);
+        (a1Val == zero && b1Val == zero)
+            .Should().BeTrue("Excel seeds every cell in a non-iterative circular reference to 0, not a fabricated error");
     }
 }

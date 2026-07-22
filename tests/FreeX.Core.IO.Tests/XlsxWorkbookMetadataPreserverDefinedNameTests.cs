@@ -90,10 +90,16 @@ public sealed class XlsxWorkbookMetadataPreserverDefinedNameTests
         var sourceSheetIdsByLocalId = new[] { data.Id, other.Id };
 
         using var target = BuildTargetPackage(workbook);
+        // R66-io-defined-names-scope-6-2: "#REF!" (a genuinely still-unmodelable refersTo) is used
+        // here rather than a constant literal like "0.0825" - a bare numeric refersTo is now actually
+        // loaded into ScopedNamedFormulas (see XlsxNamedRangeMapper.IsConstantLiteralRefersTo), so it
+        // no longer exercises this test's "unmodelable name" premise; it would instead hit the
+        // liveness gate above (isModelRepresentable=true) and correctly get dropped as a live-model
+        // absence, not resurrected.
         using var sourcePackage = BuildSourcePackage(
             pristineSheetNames: ["Sheet1", "Other"],
             name: "LocalRate",
-            refersTo: "0.0825",
+            refersTo: "#REF!",
             localSheetId: 0);
 
         RunPreserve(sourcePackage, target, workbook, sourceSheetIdsByLocalId);
@@ -120,10 +126,14 @@ public sealed class XlsxWorkbookMetadataPreserverDefinedNameTests
         var sourceSheetIdsByLocalId = new[] { SheetId.New(), other.Id };
 
         using var target = BuildTargetPackage(workbook);
+        // R66-io-defined-names-scope-6-2: kept in sync with the sibling rename test's "#REF!"
+        // choice for the same reason (a bare numeric refersTo is now model-representable), even
+        // though this delete scenario short-circuits (renamedSheetIndex < 0) before the
+        // modelability check would matter either way.
         using var sourcePackage = BuildSourcePackage(
             pristineSheetNames: ["Sheet1", "Other"],
             name: "LocalRate",
-            refersTo: "0.0825",
+            refersTo: "#REF!",
             localSheetId: 0);
 
         RunPreserve(sourcePackage, target, workbook, sourceSheetIdsByLocalId);

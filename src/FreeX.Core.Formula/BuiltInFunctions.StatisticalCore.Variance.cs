@@ -43,7 +43,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue Countblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is not RangeValue range) return ErrorValue.Value;
+        var range = args[0] is RangeValue rv ? rv : SingleCellArray(args[0]);
         int count = 0;
         for (int r = 0; r < range.RowCount; r++)
         {

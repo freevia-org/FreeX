@@ -5,7 +5,6 @@ namespace FreeX.Core.Formula;
 
 internal static class ExcelTextNumberParser
 {
-    private static readonly CultureInfo UsCulture = CreateUsCultureWithExcelTwoDigitYearCutoff();
     private static readonly Regex FakeLeapDayTextRegex = new(
         @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$",
         RegexOptions.IgnoreCase);
@@ -38,16 +37,20 @@ internal static class ExcelTextNumberParser
         NumberStyles.AllowCurrencySymbol;
 
     /// <summary>
-    /// Clones en-US with Excel's fixed two-digit-year pivot (00-29 -> 2000-2029, 30-99 ->
-    /// 1930-1999) instead of .NET's default <see cref="Calendar.TwoDigitYearMax"/>, which trails
-    /// ~50 years ahead of the current date (e.g. 2049 in 2026) and drifts over time. Mirrors
-    /// <c>BuiltInFunctions.DateTime.cs</c>'s <c>CreateExcelTwoDigitYearCulture</c> (same pivot,
-    /// same clone-and-override pattern) so DATEVALUE and this text-to-number path agree.
+    /// Clones <see cref="CultureInfo.CurrentCulture"/> with Excel's fixed two-digit-year pivot
+    /// (00-29 -> 2000-2029, 30-99 -> 1930-1999) instead of .NET's default
+    /// <see cref="Calendar.TwoDigitYearMax"/>, which trails ~50 years ahead of the current date
+    /// (e.g. 2049 in 2026) and drifts over time. Mirrors <c>BuiltInFunctions.DateTime.cs</c>'s
+    /// <c>CreateExcelTwoDigitYearCulture</c> (same pivot, same clone-and-override pattern, and
+    /// likewise using <see cref="CultureInfo.CurrentCulture"/> rather than a fixed en-US culture)
+    /// so VALUE()/implicit-arithmetic text coercion agrees with DATEVALUE and NUMBERVALUE under
+    /// the same system locale. Not cached statically - built fresh on every call - because
+    /// <see cref="CultureInfo.CurrentCulture"/> can change at runtime.
     /// </summary>
-    private static CultureInfo CreateUsCultureWithExcelTwoDigitYearCutoff()
+    private static CultureInfo CreateCurrentCultureWithExcelTwoDigitYearCutoff()
     {
-        var culture = (CultureInfo)CultureInfo.GetCultureInfo("en-US").Clone();
-        culture.Calendar.TwoDigitYearMax = 2029;
+        var culture = (CultureInfo)CultureInfo.CurrentCulture.Clone();
+        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
         return culture;
     }
 
@@ -62,6 +65,9 @@ internal static class ExcelTextNumberParser
     /// </param>
     public static bool TryParse(string text, out double number, bool uses1904DateSystem)
     {
+        // Built once per call (not cached statically) so a change to CultureInfo.CurrentCulture
+        // between calls is always honored - see CreateCurrentCultureWithExcelTwoDigitYearCutoff.
+        var culture = CreateCurrentCultureWithExcelTwoDigitYearCutoff();
         var trimmed = text.Trim();
 
         int pctCount = 0;
@@ -72,7 +78,7 @@ internal static class ExcelTextNumberParser
         }
 
         if (pctCount > 0 &&
-            TryParseNumericStrict(trimmed, out var pct, out _))
+            TryParseNumericStrict(trimmed, culture, out var pct, out _))
         {
             for (int i = 0; i < pctCount; i++)
                 pct /= 100.0;
@@ -81,7 +87,7 @@ internal static class ExcelTextNumberParser
             return true;
         }
 
-        if (TryParseNumericStrict(trimmed, out number, out bool rejectedNumericComma))
+        if (TryParseNumericStrict(trimmed, culture, out number, out bool rejectedNumericComma))
             return true;
 
         // If TryParseNumericStrict identified the input as a malformed numeric (contains commas
@@ -93,14 +99,14 @@ internal static class ExcelTextNumberParser
             return false;
         }
 
-        if (TryParseExcelFakeLeapDayText(trimmed, out number))
+        if (TryParseExcelFakeLeapDayText(trimmed, culture, out number))
             return true;
 
         // Gate: only attempt DateTime.TryParse when the text contains at least one ASCII digit.
         // This blocks bare month names ("March", "Monday") which .NET's DateTime parser accepts
         // as current-year dates, producing a result that changes year-to-year — Excel yields #VALUE!.
         if (ContainsAsciiDigit(trimmed) &&
-            DateTime.TryParse(trimmed, UsCulture, DateTimeStyles.None, out var dt))
+            DateTime.TryParse(trimmed, culture, DateTimeStyles.None, out var dt))
         {
             number = IsTimeOnlyText(trimmed)
                 ? dt.TimeOfDay.TotalDays
@@ -124,17 +130,19 @@ internal static class ExcelTextNumberParser
     /// not then fall through to a date/time parse because "1,2" must not become January 2nd.
     /// </para>
     /// </summary>
-    private static bool TryParseNumericStrict(string text, out double number, out bool rejectedNumericComma)
+    private static bool TryParseNumericStrict(string text, CultureInfo culture, out double number, out bool rejectedNumericComma)
     {
         rejectedNumericComma = false;
 
         // Fast path: no comma → no grouping issue, parse without AllowThousands.
         if (!text.Contains(','))
-            return double.TryParse(text, StylesWithoutThousands, UsCulture, out number);
+            return double.TryParse(text, StylesWithoutThousands, culture, out number);
 
-        // Has commas: first try without AllowThousands.  StylesWithoutThousands rejects commas
-        // in UsCulture so this will typically fail for comma-containing strings.
-        if (double.TryParse(text, StylesWithoutThousands, UsCulture, out number))
+        // Has commas: first try without AllowThousands.  StylesWithoutThousands rejects a comma
+        // that isn't the culture's decimal separator, so this succeeds directly for cultures
+        // (e.g. de-DE) whose decimal separator is a comma, and typically fails for cultures
+        // (e.g. en-US) where the comma is instead a group separator.
+        if (double.TryParse(text, StylesWithoutThousands, culture, out number))
             return true;
 
         // Commas present and didn't parse without AllowThousands.
@@ -148,10 +156,10 @@ internal static class ExcelTextNumberParser
             return false;
         }
 
-        return double.TryParse(text, NumberStyles.Any, UsCulture, out number);
+        return double.TryParse(text, NumberStyles.Any, culture, out number);
     }
 
-    private static bool TryParseExcelFakeLeapDayText(string text, out double serial)
+    private static bool TryParseExcelFakeLeapDayText(string text, CultureInfo culture, out double serial)
     {
         serial = 0;
         var match = FakeLeapDayTextRegex.Match(text);
@@ -160,7 +168,7 @@ internal static class ExcelTextNumberParser
         serial = 60;
         if (match.Groups[1].Success)
         {
-            if (!DateTime.TryParse(match.Groups[1].Value, UsCulture, DateTimeStyles.None, out var time))
+            if (!DateTime.TryParse(match.Groups[1].Value, culture, DateTimeStyles.None, out var time))
                 return false;
             serial += time.TimeOfDay.TotalDays;
         }
