@@ -2472,18 +2472,9 @@ public static class DocxReader
             run.RevisionDateXml = revision.DateXml;
         }
 
-        var image = ReadImage(r, archive, imageRelationships);
-        if (image is not null)
-        {
-            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
-            ApplyRevision(imageRun);
-            paragraph.Runs.Add(imageRun);
-            return;
-        }
-
         // A w:drawing whose anchor references a wpg:wgp group element is a floating drawing group.
-        // Must be checked BEFORE ReadWordArt/ReadShape because wpg:wgp contains nested wps:wsp children
-        // and those readers use Descendants() to find a candidate object.
+        // Must be checked before every generic drawing decoder: native groups can now contain pic:pic,
+        // charts, SmartArt and wps:wsp children that would otherwise claim the enclosing run.
         var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships);
         if (drawingGroup is not null)
         {
@@ -2492,6 +2483,15 @@ public static class DocxReader
             groupRun.HyperlinkAnchor = hyperlinkAnchor;
             ApplyRevision(groupRun);
             paragraph.Runs.Add(groupRun);
+            return;
+        }
+
+        var image = ReadImage(r, archive, imageRelationships);
+        if (image is not null)
+        {
+            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(imageRun);
+            paragraph.Runs.Add(imageRun);
             return;
         }
 
@@ -5367,8 +5367,8 @@ public static class DocxReader
 
     /// <summary>
     /// Reads a <c>wpg:wgp</c> drawing group from a run's <c>w:drawing/wp:anchor</c>, reconstructing a
-    /// <see cref="DrawingGroup"/> with its floating placement and child stubs decoded from each
-    /// <c>wps:wsp</c> child's <c>wp:docPr/@name</c> ("GroupChild:Type:…"). Returns null when the run
+    /// <see cref="DrawingGroup"/> with its floating placement and native child payloads decoded from
+    /// <c>wps:wsp</c>, <c>pic:pic</c>, and <c>wpg:graphicFrame</c> children. Returns null when the run
     /// does not carry a wpg:wgp element.
     /// </summary>
     private static DrawingGroup? ReadDrawingGroup(
@@ -5394,15 +5394,27 @@ public static class DocxReader
             group.HeightPt = EmuToPoints(extent.Attribute("cy")?.Value ?? "0");
         }
 
-        // Reconstruct children from wps:wsp elements inside wpg:wgp.
-        foreach (var wsp in wgp.Elements(Wps + "wsp"))
+        // wpg:wgp permits shape, picture, and graphic-frame children. The latter two retain their real
+        // relationship-bearing payload instead of the old marker-only wps:wsp placeholders.
+        foreach (var groupChild in wgp.Elements().Where(element =>
+            element.Name == Wps + "wsp"
+            || element.Name == Pic + "pic"
+            || element.Name == Wpg + "graphicFrame"))
         {
-            var childDocPr = wsp.Element(Wps + "cNvPr") ?? wsp.Element(Wp + "docPr");
+            var isShape = groupChild.Name == Wps + "wsp";
+            var isPicture = groupChild.Name == Pic + "pic";
+            var childDocPr = isShape
+                ? groupChild.Element(Wps + "cNvPr") ?? groupChild.Element(Wp + "docPr")
+                : isPicture
+                    ? groupChild.Element(Pic + "nvPicPr")?.Element(Pic + "cNvPr")
+                    : groupChild.Element(Wpg + "cNvPr");
             var name = childDocPr?.Attribute("name")?.Value ?? string.Empty;
 
-            // Reconstruct offset from a:xfrm inside the child's wps:spPr.
-            var spPr = wsp.Element(Wps + "spPr");
-            var xfrm = spPr?.Element(A + "xfrm");
+            var xfrm = isShape
+                ? groupChild.Element(Wps + "spPr")?.Element(A + "xfrm")
+                : isPicture
+                    ? groupChild.Element(Pic + "spPr")?.Element(A + "xfrm")
+                    : groupChild.Element(A + "xfrm");
             var off = xfrm?.Element(A + "off");
             var ext = xfrm?.Element(A + "ext");
             var ox = EmuToPoints(off?.Attribute("x")?.Value ?? "0");
@@ -5410,14 +5422,18 @@ public static class DocxReader
             var cw = EmuToPoints(ext?.Attribute("cx")?.Value ?? "36");
             var ch = EmuToPoints(ext?.Attribute("cy")?.Value ?? "36");
 
-            var fakeRun = BuildGroupChildRun(wsp, childDocPr, cw, ch);
-            object? child = null;
-            if (name.StartsWith("GroupChild:Image", StringComparison.Ordinal))
+            var fakeRun = BuildGroupChildRun(groupChild, childDocPr, cw, ch);
+            object? child = isPicture
+                ? ReadImage(fakeRun, archive, imageRelationships)
+                : groupChild.Name == Wpg + "graphicFrame"
+                    ? ReadChart(fakeRun, archive, imageRelationships) ?? (object?)ReadSmartArt(fakeRun, archive, imageRelationships)
+                    : null;
+            if (child is null && name.StartsWith("GroupChild:Image", StringComparison.Ordinal))
             {
-                // Reconstruct a minimal floating InlineImage placeholder.
+                // Backward compatibility for marker-only payloads written before native group pictures.
                 child = new InlineImage([], cw, ch);
             }
-            else if (name.StartsWith("GroupChild:Shape:", StringComparison.Ordinal))
+            else if (child is null && name.StartsWith("GroupChild:Shape:", StringComparison.Ordinal))
             {
                 child = ReadShape(fakeRun, archive, imageRelationships);
                 if (child is null)
@@ -5427,23 +5443,23 @@ public static class DocxReader
                     child = new Shape(kind, cw, ch);
                 }
             }
-            else if (name.StartsWith("GroupChild:Chart:", StringComparison.Ordinal))
+            else if (child is null && name.StartsWith("GroupChild:Chart:", StringComparison.Ordinal))
             {
                 var kindStr = name["GroupChild:Chart:".Length..];
                 var kind = Enum.TryParse<ChartKind>(kindStr, out var k) ? k : ChartKind.Column;
                 child = new Chart { Kind = kind, WidthPt = cw, HeightPt = ch };
             }
-            else if (name.StartsWith("GroupChild:SmartArt", StringComparison.Ordinal))
+            else if (child is null && name.StartsWith("GroupChild:SmartArt", StringComparison.Ordinal))
             {
                 child = new SmartArt { WidthPt = cw, HeightPt = ch };
             }
-            else if (name.StartsWith("GroupChild:WordArt:", StringComparison.Ordinal))
+            else if (child is null && name.StartsWith("GroupChild:WordArt:", StringComparison.Ordinal))
             {
                 var styleStr = name["GroupChild:WordArt:".Length..];
                 var style = Enum.TryParse<WordArtStyle>(styleStr, out var s) ? s : WordArtStyle.FillBlue;
                 child = ReadWordArt(fakeRun) ?? new WordArt { Style = style, Text = "WordArt", FontSizePt = 36 };
             }
-            else
+            else if (child is null)
             {
                 // Unknown child type — try the rich shape/WordArt readers before falling back to a rectangle.
                 child = ReadWordArt(fakeRun)
@@ -5461,8 +5477,28 @@ public static class DocxReader
         return group.Children.Count >= 2 ? group : null;
     }
 
-    private static XElement BuildGroupChildRun(XElement wsp, XElement? childDocPr, double widthPt, double heightPt)
+    private static XElement BuildGroupChildRun(XElement groupChild, XElement? childDocPr, double widthPt, double heightPt)
     {
+        XElement graphic;
+        if (groupChild.Name == Wps + "wsp")
+        {
+            graphic = new XElement(A + "graphic",
+                new XElement(A + "graphicData",
+                    new XAttribute("uri", Wps.NamespaceName),
+                    new XElement(groupChild)));
+        }
+        else if (groupChild.Name == Pic + "pic")
+        {
+            graphic = new XElement(A + "graphic",
+                new XElement(A + "graphicData",
+                    new XAttribute("uri", Pic.NamespaceName),
+                    new XElement(groupChild)));
+        }
+        else
+        {
+            graphic = new XElement(groupChild.Element(A + "graphic")!);
+        }
+
         return new XElement(W + "r",
             new XElement(W + "drawing",
                 new XElement(Wp + "inline",
@@ -5471,10 +5507,7 @@ public static class DocxReader
                         new XAttribute("cy", PointsToEmu(heightPt))),
                     childDocPr is null ? null : new XElement(Wp + "docPr",
                         childDocPr.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration)),
-                    new XElement(A + "graphic",
-                        new XElement(A + "graphicData",
-                            new XAttribute("uri", Wps.NamespaceName),
-                            new XElement(wsp))))));
+                    graphic)));
     }
 
     /// <summary>

@@ -766,6 +766,10 @@ public static partial class ChartRenderPlanner
         UsesImportedTextMetrics(chart) &&
         chart.View3D is null;
 
+    private static bool UsesSurfaceWireframe(ChartShape chart) =>
+        chart.ChartType == ChartType.Surface3D &&
+        (!chart.WireframeSpecified || chart.Wireframe);
+
     private static bool UsesImportedSingleScatterDefaults(ChartShape chart) =>
         chart.ChartType == ChartType.Scatter &&
         UsesImportedTextMetrics(chart) &&
@@ -3162,7 +3166,9 @@ public static partial class ChartRenderPlanner
                 valueAxisRange,
                 chart.View3D)
             : pointsByKey;
-        var wireframe = BuildSurfaceWireframeSegments(renderPointsByKey, seriesCount, categoryCount);
+        var wireframe = UsesSurfaceWireframe(chart)
+            ? BuildSurfaceWireframeSegments(renderPointsByKey, seriesCount, categoryCount)
+            : Array.Empty<ChartLineSegmentPrimitive>();
         var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
         bool rebuildFacetsForRenderPoints = ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Span ||
             chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart);
@@ -3196,7 +3202,10 @@ public static partial class ChartRenderPlanner
             ? Array.Empty<ChartLineSegmentPrimitive>()
             : BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
         var frameSegments = chart.ChartType == ChartType.Surface3D
-            ? BuildSurfaceFrameSegments(plot, UsesImportedSurfaceGeometry(chart))
+            ? BuildSurfaceFrameSegments(
+                plot,
+                UsesImportedSurfaceGeometry(chart),
+                UsesSurfaceWireframe(chart))
             : Array.Empty<ChartLineSegmentPrimitive>();
 
         return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours)
@@ -3546,7 +3555,8 @@ public static partial class ChartRenderPlanner
 
     private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceFrameSegments(
         ChartPlanRect plot,
-        bool usesImportedSurfaceGeometry)
+        bool usesImportedSurfaceGeometry,
+        bool includeGrid)
     {
         double scaleX = plot.Width / 360.0;
         double scaleY = plot.Height / 189.0;
@@ -3579,15 +3589,18 @@ public static partial class ChartRenderPlanner
         AddSurfaceFrameSegment(segments, backTopLeft, backTopRight, stroke);
         AddSurfaceFrameSegment(segments, frontRight, backTopRight, stroke);
 
-        for (int tickIndex = 1; tickIndex < 5; tickIndex++)
+        if (includeGrid)
         {
-            double fraction = tickIndex / 4.0;
-            var leftAxis = InterpolateSurfaceFramePoint(frontLeft, valueTop, fraction);
-            var categoryAxis = InterpolateSurfaceFramePoint(frontRight, backTopRight, fraction);
-            var depthWall = InterpolateSurfaceFramePoint(valueTop, backTopLeft, fraction);
-            var backWall = InterpolateSurfaceFramePoint(backTopLeft, backTopRight, fraction);
-            AddSurfaceFrameSegment(segments, leftAxis, categoryAxis, stroke);
-            AddSurfaceFrameSegment(segments, depthWall, backWall, stroke);
+            for (int tickIndex = 1; tickIndex < 5; tickIndex++)
+            {
+                double fraction = tickIndex / 4.0;
+                var leftAxis = InterpolateSurfaceFramePoint(frontLeft, valueTop, fraction);
+                var categoryAxis = InterpolateSurfaceFramePoint(frontRight, backTopRight, fraction);
+                var depthWall = InterpolateSurfaceFramePoint(valueTop, backTopLeft, fraction);
+                var backWall = InterpolateSurfaceFramePoint(backTopLeft, backTopRight, fraction);
+                AddSurfaceFrameSegment(segments, leftAxis, categoryAxis, stroke);
+                AddSurfaceFrameSegment(segments, depthWall, backWall, stroke);
+            }
         }
 
         if (usesImportedSurfaceGeometry)

@@ -484,10 +484,16 @@ internal static class PptxChartWriter
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId, int serAxId = PrimarySerAxId) =>
         new XElement(C + (chart.ChartType == ChartType.Surface3D ? "surface3DChart" : "surfaceChart"),
             BuildVaryColorsEl(chart),
+            chart.ChartType == ChartType.Surface3D ? BuildWireframeEl(chart) : null,
             seriesEls,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)),
             new XElement(C + "axId", new XAttribute("val", serAxId)));
+
+    private static XElement? BuildWireframeEl(ChartShape chart) =>
+        chart.Wireframe || chart.WireframeSpecified
+            ? new XElement(C + "wireframe", new XAttribute("val", chart.Wireframe ? "1" : "0"))
+            : null;
 
     private static XElement BuildSerAxEl(int axId, int crossAxId) =>
         new XElement(C + "serAx",

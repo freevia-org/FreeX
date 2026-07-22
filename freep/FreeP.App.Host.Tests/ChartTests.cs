@@ -1166,6 +1166,30 @@ public sealed class ChartTests : IDisposable
         rt.Series.Should().HaveCount(2);
     }
 
+    [Fact]
+    public void RoundTrip_Surface3D_WireframeFalsePreservesExplicitTokenAndModel()
+    {
+        var chart = BuildSurfaceChart(ChartType.Surface3D);
+        chart.WireframeSpecified = true;
+        chart.Wireframe = false;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var wireframe = chartDoc.Descendants(ChartNs + "surface3DChart")
+                .Single()
+                .Element(ChartNs + "wireframe");
+            wireframe.Should().NotBeNull();
+            wireframe!.Attribute("val")!.Value.Should().Be("0");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.WireframeSpecified.Should().BeTrue();
+        rt.Wireframe.Should().BeFalse();
+    }
+
     // ── 5f: Compositor emits correct type ────────────────────────────────────
 
     [Fact]

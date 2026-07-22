@@ -408,6 +408,12 @@ internal static class PptxChartReader
         Dictionary<int, ChartSeries> idxMap, bool is3D)
     {
         ReadVaryColors(el, shape);
+        if (is3D)
+        {
+            var wireframe = el.Element(C + "wireframe");
+            shape.WireframeSpecified = wireframe is not null;
+            shape.Wireframe = ParseBoolAttr(wireframe);
+        }
         shape.ChartType = is3D ? ChartType.Surface3D : ChartType.Surface;
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
