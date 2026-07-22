@@ -54,7 +54,19 @@ internal sealed record XlsxTextBoxPackagePart(
     CellColor? OutlineColor,
     WorkbookThemeColorReference? FillThemeColor,
     WorkbookThemeColorReference? OutlineThemeColor,
-    int DrawingOrderIndex);
+    int DrawingOrderIndex,
+    // ── txBody text-formatting fields (backlog textbox-6-2) ──────────────
+    // Mirrors XlsxShapePackagePart's ShapeText* fields -- see ReadShapeTextFormatting.
+    /// <summary>Font family from the first run's &lt;a:latin typeface="..."/&gt;; null = not authored.</summary>
+    string? TextFontFamily = null,
+    /// <summary>Font size in points from &lt;a:rPr sz&gt;; 0 = default.</summary>
+    double TextFontSizePoints = 0,
+    bool TextBold = false,
+    bool TextItalic = false,
+    CellColor? TextColor = null,
+    WorkbookThemeColorReference? TextThemeColor = null,
+    DrawingShapeTextHAlign TextHAlign = DrawingShapeTextHAlign.Left,
+    DrawingShapeTextVAnchor TextVAnchor = DrawingShapeTextVAnchor.Top);
 
 internal sealed record XlsxShapePackagePart(
     DrawingShapeKind Kind,
@@ -503,6 +515,17 @@ internal static partial class XlsxWorksheetDrawingPartReader
             // still carries that marker and Excel authors it with a <a:prstGeom prst="rect"/> just like
             // a populated one, so gating on non-empty text here would misclassify it as a generic
             // Rectangle shape and permanently lose its TextBox identity.
+            //
+            // backlog textbox-6-2: read the txBody's rich-text formatting (font size/bold/italic/
+            // color/alignment) via the same ReadShapeTextFormatting helper the shape branch below
+            // uses -- without this a loaded text box's formatting had nowhere to go (TextBoxModel
+            // carried no fields for it) and was silently lost on Duplicate Sheet / re-save. Font
+            // family isn't part of that helper's return (shapes don't track it either), so it's
+            // read separately from the same first run.
+            var (txBoxFontSizePt, txBoxBold, txBoxItalic, _, txBoxColor, txBoxThemeColor, txBoxHAlign, txBoxVAnchor,
+                 _, _, _, _, _, _, _, _, _) = ReadShapeTextFormatting(txBodyElement, drawingNs);
+            var txBoxFontFamily = ReadShapeTextFontFamily(txBodyElement, drawingNs);
+
             textBoxes.Add(new XlsxTextBoxPackagePart(
                 text,
                 name,
@@ -517,7 +540,15 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 outlineThemeColor is null ? outlineColor : null,
                 fillThemeColor,
                 outlineThemeColor,
-                ReadNearestAnchorOrderIndex(shapeElement)));
+                ReadNearestAnchorOrderIndex(shapeElement),
+                txBoxFontFamily,
+                txBoxFontSizePt,
+                txBoxBold,
+                txBoxItalic,
+                txBoxColor,
+                txBoxThemeColor,
+                txBoxHAlign,
+                txBoxVAnchor));
             return;
         }
 
@@ -762,6 +793,21 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 isWordArt, warpPreset,
                 gradEndColor, gradEndThemeColor, gradAngle,
                 textOutlineColor, textOutlineThemeColor, textOutlineWidthPt);
+    }
+
+    /// <summary>
+    /// Reads the font family/typeface from the first run of a shape/text-box <c>&lt;txBody&gt;</c>
+    /// element, i.e. <c>&lt;a:rPr&gt;&lt;a:latin typeface="..."/&gt;</c>. Not part of
+    /// <see cref="ReadShapeTextFormatting"/>'s return tuple because neither
+    /// <c>DrawingShapeModel</c> nor (previously) <c>TextBoxModel</c> tracked a font family --
+    /// text boxes now do (backlog textbox-6-2), so this is read alongside that helper's other
+    /// first-run fields rather than folded into its already-large tuple.
+    /// </summary>
+    private static string? ReadShapeTextFontFamily(XElement? txBody, XNamespace drawingNs)
+    {
+        var firstRun = txBody?.Element(drawingNs + "p")?.Element(drawingNs + "r");
+        var typeface = firstRun?.Element(drawingNs + "rPr")?.Element(drawingNs + "latin")?.Attribute("typeface")?.Value;
+        return string.IsNullOrWhiteSpace(typeface) ? null : typeface;
     }
 
     /// <summary>

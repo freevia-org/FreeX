@@ -98,6 +98,27 @@ public sealed class StatusBarStatsCacheTests
     }
 
     [Fact]
+    public void GetOrCreate_PreservesAggregateErrorCodeThroughSharedConversionRoundTrip()
+    {
+        // R67 backlog (status-bar-6-2): GetOrCreate round-trips through
+        // StatusBarCalculator.ToShared/ToStats to reuse the shared WorkbookSelectionStatsCache --
+        // that conversion must not drop AggregateErrorCode.
+        var cache = new StatusBarStatsCache();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
+
+        var stats = cache.GetOrCreate(
+            sheet,
+            range,
+            revision: 4,
+            () => new StatusBarCalculator.Stats(30, 3, 2, 15, 10, 20, "#DIV/0!"));
+
+        stats.AggregateErrorCode.Should().Be("#DIV/0!");
+    }
+
+    [Fact]
     public void HostCache_DelegatesExpansionCachingToSharedWorkbookSelectionStatsCache()
     {
         var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "StatusBarStatsCache.cs");

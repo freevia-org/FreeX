@@ -102,6 +102,29 @@ public sealed partial class StatusBarCalculatorTests
     }
 
     [Fact]
+    public void Calculate_ErrorCellAmongNumbers_SurfacesAggregateErrorCodeThroughHostAdapter()
+    {
+        // R67 backlog (status-bar-6-2): the WPF host's Stats adapter must carry the shared
+        // calculator's AggregateErrorCode through, not drop it during the Stats<->shared
+        // conversion -- otherwise the WPF status bar would silently keep showing a
+        // plausible-but-wrong Sum for a selection containing an error cell.
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(ErrorValue.DivByZero));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(new NumberValue(20)));
+
+        var stats = StatusBarCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 3)));
+
+        stats.AggregateErrorCode.Should().Be("#DIV/0!");
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(2);
+    }
+
+    [Fact]
     public void Calculate_LargeSelections_UsesOnlyOccupiedCellsInsideRange()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");

@@ -147,6 +147,17 @@ internal static class DuplicateSheetDrawingCloner
             OutlineColor = textBox.OutlineColor,
             FillThemeColor = textBox.FillThemeColor,
             OutlineThemeColor = textBox.OutlineThemeColor,
+            // backlog textbox-6-2: copy the txBody text-formatting fields too -- without this
+            // Duplicate Sheet silently stripped a text box's font size/bold/italic/color/alignment
+            // even though TextBoxModel now carries them.
+            TextFontFamily = textBox.TextFontFamily,
+            TextFontSizePoints = textBox.TextFontSizePoints,
+            TextBold = textBox.TextBold,
+            TextItalic = textBox.TextItalic,
+            TextColor = textBox.TextColor,
+            TextThemeColor = textBox.TextThemeColor,
+            TextHAlign = textBox.TextHAlign,
+            TextVAnchor = textBox.TextVAnchor,
             // A source-loaded text box's on-disk part is preserved by keying source drawing parts
             // by sheet NAME (XlsxFileAdapter.SavePostProcessing.GetSourceDrawingPathsBySheet); the
             // duplicate always gets a brand-new sheet name (e.g. "Sheet1 (2)") that is absent from

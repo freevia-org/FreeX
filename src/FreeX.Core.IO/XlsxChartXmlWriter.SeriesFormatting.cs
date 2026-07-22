@@ -141,39 +141,63 @@ internal static partial class XlsxChartXmlWriter
         XNamespace drawingNs) =>
         new(chartNs + "dLbl",
             new XElement(chartNs + "idx", new XAttribute("val", format.PointIndex)),
-            format.IsDeleted is { } isDeleted
-                ? new XElement(chartNs + "delete", new XAttribute("val", isDeleted ? "1" : "0"))
-                : null,
-            // Schema order for CT_DLbl/Group_DLbl: idx, delete?, layout?, tx?, numFmt?, spPr?,
-            // txPr?, dLblPos?, show*?, separator?.
-            ToManualLayoutXml(format.Layout, chartNs),
-            TryParseChartXml(format.CustomTextXml),
-            ToPointDataLabelNumberFormatXml(format, chartNs),
-            ToShapeProperties(
-                chartNs,
-                drawingNs,
-                format.FillThemeColor,
-                format.FillColor,
-                format.BorderThemeColor,
-                format.BorderColor,
-                format.BorderThickness),
-            ToPointDataLabelTextProperties(format, chartNs, drawingNs),
-            // R11-xlsx-charts-2: gate the same as the chart-level dLblPos — an ungated per-point
-            // position can survive a chart-type change into a family with no valid dLblPos at all
-            // (e.g. area) or one that only accepts ctr (e.g. stacked column), and Excel repairs/drops
-            // the whole chart on open.
-            format.Position is { } position && GateDataLabelPosition(ToXlsxDataLabelPosition(position), chartType) is { } gatedPosition
-                ? new XElement(chartNs + "dLblPos", new XAttribute("val", gatedPosition))
-                : null,
-            ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs),
-            ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs),
-            ToPointDataLabelBoolXml("showCatName", format.ShowCategoryName, chartNs),
-            ToPointDataLabelBoolXml("showSerName", format.ShowSeriesName, chartNs),
-            ToPointDataLabelBoolXml("showPercent", format.ShowPercentage, chartNs),
-            ToPointDataLabelBoolXml("showBubbleSize", format.ShowBubbleSize, chartNs),
-            format.SeparatorText is { } separator
-                ? new XElement(chartNs + "separator", separator)
-                : null);
+            ToPointDataLabelBodyXml(format, chartType, chartNs, drawingNs));
+
+    /// <summary>
+    /// R64-io-chart-datalabel-point-delete (round 67, completing R62/R63 for the per-point case):
+    /// CT_DLbl's trailing content (after &lt;c:idx&gt;) is a &lt;xsd:choice&gt; between
+    /// &lt;c:delete&gt; and the Group_DLbl defaults (layout, tx, numFmt, spPr, txPr, dLblPos, show*,
+    /// separator) -- they are mutually exclusive per the OOXML schema, exactly like CT_DLbls at the
+    /// series level (see <see cref="ToSeriesDataLabelDefaultsXml"/>, the template for this fix). A
+    /// per-point "delete this point's label" must emit ONLY &lt;c:delete val="1"/&gt; and suppress
+    /// the rest, or Excel rejects the chart part with a repair prompt on reload. Matching the r63
+    /// series-level pattern, an explicit IsDeleted == false is not re-emitted as
+    /// &lt;c:delete val="0"/&gt; -- it is treated the same as IsDeleted == null (no &lt;c:delete&gt;
+    /// at all, just the ordinary Group_DLbl content).
+    /// </summary>
+    private static IEnumerable<XElement?> ToPointDataLabelBodyXml(
+        ChartPointDataLabelFormat format,
+        ChartType chartType,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        if (format.IsDeleted == true)
+        {
+            yield return new XElement(chartNs + "delete", new XAttribute("val", "1"));
+            yield break;
+        }
+
+        // Schema order for CT_DLbl/Group_DLbl: idx, delete?, layout?, tx?, numFmt?, spPr?,
+        // txPr?, dLblPos?, show*?, separator?.
+        yield return ToManualLayoutXml(format.Layout, chartNs);
+        yield return TryParseChartXml(format.CustomTextXml);
+        yield return ToPointDataLabelNumberFormatXml(format, chartNs);
+        yield return ToShapeProperties(
+            chartNs,
+            drawingNs,
+            format.FillThemeColor,
+            format.FillColor,
+            format.BorderThemeColor,
+            format.BorderColor,
+            format.BorderThickness);
+        yield return ToPointDataLabelTextProperties(format, chartNs, drawingNs);
+        // R11-xlsx-charts-2: gate the same as the chart-level dLblPos — an ungated per-point
+        // position can survive a chart-type change into a family with no valid dLblPos at all
+        // (e.g. area) or one that only accepts ctr (e.g. stacked column), and Excel repairs/drops
+        // the whole chart on open.
+        yield return format.Position is { } position && GateDataLabelPosition(ToXlsxDataLabelPosition(position), chartType) is { } gatedPosition
+            ? new XElement(chartNs + "dLblPos", new XAttribute("val", gatedPosition))
+            : null;
+        yield return ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs);
+        yield return ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs);
+        yield return ToPointDataLabelBoolXml("showCatName", format.ShowCategoryName, chartNs);
+        yield return ToPointDataLabelBoolXml("showSerName", format.ShowSeriesName, chartNs);
+        yield return ToPointDataLabelBoolXml("showPercent", format.ShowPercentage, chartNs);
+        yield return ToPointDataLabelBoolXml("showBubbleSize", format.ShowBubbleSize, chartNs);
+        yield return format.SeparatorText is { } separator
+            ? new XElement(chartNs + "separator", separator)
+            : null;
+    }
 
     private static XElement? ToPointDataLabelBoolXml(string name, bool? value, XNamespace chartNs) =>
         value is { } flag

@@ -155,7 +155,11 @@ public sealed record ChartLayoutOptions(
     WorkbookThemeColorReference? ChartTitleTextThemeColor = null,
     WorkbookThemeColorReference? AxisTitleTextThemeColor = null,
     WorkbookThemeColorReference? XAxisLabelTextThemeColor = null,
-    WorkbookThemeColorReference? YAxisLabelTextThemeColor = null);
+    WorkbookThemeColorReference? YAxisLabelTextThemeColor = null,
+    // io-chart-legend-6-3 (round 67): snapshot-only field, restored by RestoreLayout on undo.
+    // Never set as forward input by a caller -- ApplyOptions derives chart.LegendPositionExplicit
+    // itself (from options.LegendPosition being non-null), it does not read this back out of options.
+    bool? LegendPositionExplicit = null);
 
 public sealed partial class SetChartLayoutCommand : IWorkbookCommand
 {
@@ -352,6 +356,7 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
             ChartTitleTextThemeColor: chart.ChartTitleTextThemeColor,
             AxisTitleTextThemeColor: chart.AxisTitleTextThemeColor,
             XAxisLabelTextThemeColor: chart.XAxisLabelTextThemeColor,
-            YAxisLabelTextThemeColor: chart.YAxisLabelTextThemeColor);
+            YAxisLabelTextThemeColor: chart.YAxisLabelTextThemeColor,
+            LegendPositionExplicit: chart.LegendPositionExplicit);
 
 }

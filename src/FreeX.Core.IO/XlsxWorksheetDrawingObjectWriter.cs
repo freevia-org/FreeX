@@ -687,13 +687,62 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     textBox.OutlineColor,
                     spreadsheetDrawingNs,
                     drawingNs),
-                new XElement(spreadsheetDrawingNs + "txBody",
-                    new XElement(drawingNs + "bodyPr"),
-                    new XElement(drawingNs + "lstStyle"),
-                    new XElement(drawingNs + "p",
-                        new XElement(drawingNs + "r",
-                            new XElement(drawingNs + "t", textBox.Text))))),
+                ToTextBoxTxBody(textBox, drawingNs, spreadsheetDrawingNs)),
             new XElement(spreadsheetDrawingNs + "clientData"));
+
+    /// <summary>
+    /// Builds the <c>&lt;xdr:txBody&gt;</c> element for a text box, round-tripping the font
+    /// formatting fields added to <see cref="TextBoxModel"/> for backlog textbox-6-2 (font family,
+    /// size, bold, italic, color, horizontal/vertical alignment). Mirrors <see cref="ToShapeTxBody"/>
+    /// (which does the same for <see cref="DrawingShapeModel"/>) but stays single-run/single-paragraph
+    /// -- unlike shapes, a text box's <see cref="TextBoxModel.Text"/> was never split into one
+    /// <c>&lt;a:p&gt;</c> per line here, and adding that behavior is a separate, unrelated concern
+    /// from round-tripping formatting.
+    /// </summary>
+    private static XElement ToTextBoxTxBody(
+        TextBoxModel textBox,
+        XNamespace drawingNs,
+        XNamespace spreadsheetDrawingNs)
+    {
+        var anchorValue = textBox.TextVAnchor switch
+        {
+            DrawingShapeTextVAnchor.Bottom => "b",
+            DrawingShapeTextVAnchor.Middle => "ctr",
+            _ => "t", // DrawingShapeTextVAnchor.Top (also the TextBoxModel default)
+        };
+        var algnValue = textBox.TextHAlign switch
+        {
+            DrawingShapeTextHAlign.Center => "ctr",
+            DrawingShapeTextHAlign.Right => "r",
+            _ => "l", // DrawingShapeTextHAlign.Left (also the TextBoxModel default)
+        };
+
+        var rPr = new XElement(drawingNs + "rPr",
+            new XAttribute("lang", "en-US"),
+            new XAttribute("dirty", "0"));
+        if (textBox.TextFontSizePoints > 0)
+            rPr.Add(new XAttribute("sz", ((int)Math.Round(textBox.TextFontSizePoints * 100)).ToString(CultureInfo.InvariantCulture)));
+        if (textBox.TextBold)
+            rPr.Add(new XAttribute("b", "1"));
+        if (textBox.TextItalic)
+            rPr.Add(new XAttribute("i", "1"));
+
+        // CT_TextCharacterProperties child order (ECMA-376 §21.1.2.3.9): fill group before latin.
+        var textFill = ToSolidFill(textBox.TextThemeColor, textBox.TextColor, drawingNs);
+        if (textFill is not null)
+            rPr.Add(textFill);
+        if (!string.IsNullOrWhiteSpace(textBox.TextFontFamily))
+            rPr.Add(new XElement(drawingNs + "latin", new XAttribute("typeface", textBox.TextFontFamily)));
+
+        return new XElement(spreadsheetDrawingNs + "txBody",
+            new XElement(drawingNs + "bodyPr", new XAttribute("anchor", anchorValue)),
+            new XElement(drawingNs + "lstStyle"),
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr", new XAttribute("algn", algnValue)),
+                new XElement(drawingNs + "r",
+                    rPr,
+                    new XElement(drawingNs + "t", textBox.Text))));
+    }
 
     private static XElement ToOneCellDrawingShapeAnchor(
         DrawingShapeModel shape,

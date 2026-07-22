@@ -232,6 +232,96 @@ public sealed class WorkbookSelectionStatsCalculatorTests
     }
 
     [Fact]
+    public void Combine_KeepsAggregateErrorFromWhicheverSideHasOne()
+    {
+        var leftErrors = WorkbookSelectionStatsCalculator.Combine(
+            new WorkbookSelectionStats(10, 1, 1, 10, 10, 10, AggregateErrorCode: "#DIV/0!"),
+            new WorkbookSelectionStats(20, 1, 1, 20, 20, 20));
+        var rightErrors = WorkbookSelectionStatsCalculator.Combine(
+            new WorkbookSelectionStats(10, 1, 1, 10, 10, 10),
+            new WorkbookSelectionStats(20, 1, 1, 20, 20, 20, AggregateErrorCode: "#N/A"));
+
+        leftErrors.AggregateErrorCode.Should().Be("#DIV/0!");
+        rightErrors.AggregateErrorCode.Should().Be("#N/A");
+    }
+
+    [Fact]
+    public void Calculate_ErrorCellAmongNumbers_ReflectsErrorInAggregatesInsteadOfSilentlyExcludingIt()
+    {
+        // R67 backlog (status-bar-6-2): Excel's status bar propagates an error cell's error into
+        // Sum/Average/Min/Max instead of quietly excluding it from the numbers -- a selection with
+        // a #DIV/0! cell must not show a plausible-but-wrong Sum.
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(ErrorValue.DivByZero));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(new NumberValue(20)));
+
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 3)));
+
+        stats.HasAggregateError.Should().BeTrue();
+        stats.AggregateErrorCode.Should().Be("#DIV/0!");
+        // Count and Numerical Count still count normally -- Excel keeps counting.
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(2);
+
+        var text = WorkbookSelectionStatsFormatter.Format(stats);
+        text.Should().Contain("Average: #DIV/0!");
+        text.Should().Contain("Sum: #DIV/0!");
+        text.Should().Contain("Min: #DIV/0!");
+        text.Should().Contain("Max: #DIV/0!");
+        text.Should().Contain("Count: 3");
+        text.Should().Contain("Numerical Count: 2");
+        text.Should().NotContain("Sum: 30", "a plausible-but-wrong Sum must not hide the error");
+    }
+
+    [Fact]
+    public void Calculate_SingleErrorCellSelection_ReportsAggregateError()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var address = new CellAddress(sheet.Id, 5, 3);
+        sheet.SetCell(address, Cell.FromValue(ErrorValue.NA));
+
+        var stats = WorkbookSelectionStatsCalculator.Calculate(sheet, new GridRange(address, address));
+
+        stats.HasAggregateError.Should().BeTrue();
+        stats.AggregateErrorCode.Should().Be("#N/A");
+        stats.Count.Should().Be(1);
+        stats.NumericalCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void Calculate_ManuallyHiddenRowsWithNoErrors_HasNoAggregateErrorAndKeepsCorrectAggregates()
+    {
+        // No-regression companion to the error-propagation fix above: a selection with NO error
+        // cell must still show the correct numeric aggregates, and R61's manually-hidden-row
+        // inclusion must still hold (only FilterHiddenRows is excluded).
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(100)));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromValue(new NumberValue(20)));
+        sheet.HiddenRows.Add(2);
+
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 1)));
+
+        stats.HasAggregateError.Should().BeFalse();
+        stats.AggregateErrorCode.Should().BeNull();
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(3);
+        stats.Sum.Should().Be(130);
+        stats.Average.Should().Be(130.0 / 3);
+        stats.Min.Should().Be(10);
+        stats.Max.Should().Be(100);
+    }
+
+    [Fact]
     public void Cache_ReusesStatsWhenSheetRangeAndRevisionAreUnchanged()
     {
         var cache = new WorkbookSelectionStatsCache();

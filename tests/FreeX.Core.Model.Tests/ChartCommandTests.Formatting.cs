@@ -400,6 +400,40 @@ public sealed partial class ChartCommandTests
     }
 
     [Fact]
+    public void SetChartLayoutCommand_ExplicitLegendPosition_SetsProvenanceFlagAndUndoRestores()
+    {
+        // io-chart-legend-6-3 (round 67): the command is the only place that can distinguish a
+        // freshly-authored chart left at the ChartLegendPosition.Right C# default from a user who
+        // explicitly picked Right through the Legend Position command -- it must set
+        // LegendPositionExplicit whenever the caller supplies a LegendPosition, and undo must put
+        // the flag back the way it was.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var range = CreateChartRange(sheet);
+        new AddChartCommand(sheet.Id, range, ChartType.StackedColumn, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+        chart.LegendPositionExplicit.Should().BeNull("a freshly-added chart was never round-tripped or explicitly edited");
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            chart.Id,
+            new ChartLayoutOptions(LegendPosition: ChartLegendPosition.Right));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.LegendPosition.Should().Be(ChartLegendPosition.Right);
+        chart.LegendPositionExplicit.Should().BeTrue(
+            "the user explicitly chose Right through the layout command");
+
+        command.Revert(ctx);
+
+        chart.LegendPosition.Should().Be(ChartLegendPosition.Right);
+        chart.LegendPositionExplicit.Should().BeNull(
+            "undo must restore the pre-command provenance flag, not just the position value");
+    }
+
+    [Fact]
     public void SetChartLayoutCommand_RgbColorsClearThemeRefsAndUndoRestoresThem()
     {
         var wb = new Workbook("test");

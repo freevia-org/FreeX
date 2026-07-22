@@ -37,18 +37,38 @@ public static class StatusBarDisplayModelBuilder
     {
         ArgumentNullException.ThrowIfNull(textProvider);
 
-        var averageNumber = stats.Average.HasValue
-            ? FormatNumber(stats.Average.Value)
-            : null;
-        var sumNumber = stats.HasNumericalValues
-            ? FormatNumberWithReuse(stats.Sum, stats.Average, averageNumber)
-            : null;
-        var minNumber = stats.Min.HasValue
-            ? FormatNumberWithReuse(stats.Min.Value, stats.Average, averageNumber, stats.Sum, sumNumber)
-            : null;
-        var maxNumber = stats.Max.HasValue
-            ? FormatNumberWithReuse(stats.Max.Value, stats.Average, averageNumber, stats.Sum, sumNumber, stats.Min, minNumber)
-            : null;
+        // Real Excel propagates an error cell in the selection into the Average/Sum/Min/Max
+        // status-bar readouts (matching SUM/AVERAGE/MIN/MAX's own error-propagation over a plain
+        // range reference) instead of silently excluding it from the computation. Count/Numerical
+        // Count below are unaffected -- Excel keeps counting normally.
+        var errorCode = stats.AggregateErrorCode;
+
+        string? averageNumber;
+        string? sumNumber;
+        string? minNumber;
+        string? maxNumber;
+        if (errorCode is not null)
+        {
+            averageNumber = errorCode;
+            sumNumber = errorCode;
+            minNumber = errorCode;
+            maxNumber = errorCode;
+        }
+        else
+        {
+            averageNumber = stats.Average.HasValue
+                ? FormatNumber(stats.Average.Value)
+                : null;
+            sumNumber = stats.HasNumericalValues
+                ? FormatNumberWithReuse(stats.Sum, stats.Average, averageNumber)
+                : null;
+            minNumber = stats.Min.HasValue
+                ? FormatNumberWithReuse(stats.Min.Value, stats.Average, averageNumber, stats.Sum, sumNumber)
+                : null;
+            maxNumber = stats.Max.HasValue
+                ? FormatNumberWithReuse(stats.Max.Value, stats.Average, averageNumber, stats.Sum, sumNumber, stats.Min, minNumber)
+                : null;
+        }
 
         var readouts = new List<StatusBarReadoutItem>(6)
         {

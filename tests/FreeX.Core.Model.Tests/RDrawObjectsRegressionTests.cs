@@ -209,6 +209,75 @@ public sealed class RDrawObjectsRegressionTests
         copiedTextBox.FlipVertical.Should().BeTrue();
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // backlog textbox-6-2 -- Duplicate Sheet deep-copies a text box's rich-text formatting
+    // (font size/bold/italic/color/alignment), mirroring the identical DuplicateSheet_
+    // CopiesShapeTextAndWordArtAndOutlineProperties fix already shipped for DrawingShapeModel above.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void DuplicateSheet_CopiesTextBoxTextFormattingProperties()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var textColor = new CellColor(10, 20, 30);
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "Warning",
+            TextFontFamily = "Georgia",
+            TextFontSizePoints = 18,
+            TextBold = true,
+            TextItalic = true,
+            TextColor = textColor,
+            TextHAlign = DrawingShapeTextHAlign.Right,
+            TextVAnchor = DrawingShapeTextVAnchor.Bottom
+        });
+
+        var command = new DuplicateSheetCommand(sheet.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var copiedTextBox = wb.Sheets[1].TextBoxes.Should().ContainSingle().Subject;
+        copiedTextBox.Text.Should().Be("Warning");
+        copiedTextBox.TextFontFamily.Should().Be("Georgia");
+        copiedTextBox.TextFontSizePoints.Should().Be(18);
+        copiedTextBox.TextBold.Should().BeTrue();
+        copiedTextBox.TextItalic.Should().BeTrue();
+        copiedTextBox.TextColor.Should().Be(textColor);
+        copiedTextBox.TextHAlign.Should().Be(DrawingShapeTextHAlign.Right);
+        copiedTextBox.TextVAnchor.Should().Be(DrawingShapeTextVAnchor.Bottom);
+    }
+
+    [Fact]
+    public void DuplicateSheet_CopiesPlainUnformattedTextBox_NoRegression()
+    {
+        // No-regression sibling: a text box that never had any of the new formatting fields set
+        // must still duplicate cleanly, with those fields left at their harmless defaults on the
+        // copy (not e.g. thrown exceptions or garbage values).
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "Plain note"
+        });
+
+        var command = new DuplicateSheetCommand(sheet.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var copiedTextBox = wb.Sheets[1].TextBoxes.Should().ContainSingle().Subject;
+        copiedTextBox.Text.Should().Be("Plain note");
+        copiedTextBox.TextFontFamily.Should().BeNull();
+        copiedTextBox.TextFontSizePoints.Should().Be(0);
+        copiedTextBox.TextBold.Should().BeFalse();
+        copiedTextBox.TextItalic.Should().BeFalse();
+        copiedTextBox.TextColor.Should().BeNull();
+        copiedTextBox.TextHAlign.Should().Be(DrawingShapeTextHAlign.Left);
+        copiedTextBox.TextVAnchor.Should().Be(DrawingShapeTextVAnchor.Top);
+    }
+
     [Fact]
     public void DuplicateSheet_CopiesPictureSubCellOffsetAndFlipState()
     {

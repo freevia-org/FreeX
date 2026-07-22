@@ -171,7 +171,18 @@ public sealed partial class XlsxFileAdapter
                 FillColor = textBoxPart.FillColor,
                 OutlineColor = textBoxPart.OutlineColor,
                 FillThemeColor = textBoxPart.FillThemeColor,
-                OutlineThemeColor = textBoxPart.OutlineThemeColor
+                OutlineThemeColor = textBoxPart.OutlineThemeColor,
+                // backlog textbox-6-2: populate the txBody text-formatting fields read in
+                // XlsxWorksheetDrawingParts.ReadSpElement -- without this the fields added to
+                // TextBoxModel stayed dead code and a real xlsx load never filled them in.
+                TextFontFamily = textBoxPart.TextFontFamily,
+                TextFontSizePoints = textBoxPart.TextFontSizePoints,
+                TextBold = textBoxPart.TextBold,
+                TextItalic = textBoxPart.TextItalic,
+                TextColor = textBoxPart.TextColor,
+                TextThemeColor = textBoxPart.TextThemeColor,
+                TextHAlign = textBoxPart.TextHAlign,
+                TextVAnchor = textBoxPart.TextVAnchor
             };
             XlsxDrawingAnchorApplier.ApplyToTextBox(textBox, textBoxPart.Anchor, sheet);
             textBox.IsSourceLoaded = true;

@@ -104,6 +104,35 @@ public sealed class StatusBarDisplayModelBuilderTests
         model.FindReadout(StatusBarReadoutKind.Maximum)!.Value.Value.Should().Be("Max: 42");
     }
 
+    [Fact]
+    public void Stats_AggregateErrorPropagatesToAverageSumMinMaxButNotCounts()
+    {
+        // R67 backlog (status-bar-6-2): an error cell in the selection must show up in the
+        // Average/Sum/Min/Max readouts instead of being silently excluded from the numbers,
+        // matching Excel's own SUM/AVERAGE/MIN/MAX error propagation. Count/Numerical Count are
+        // unaffected -- Excel keeps counting normally.
+        var stats = new WorkbookSelectionStats(
+            Sum: 30,
+            Count: 3,
+            NumericalCount: 2,
+            Average: 15,
+            Min: 10,
+            Max: 20,
+            AggregateErrorCode: "#DIV/0!");
+
+        var model = StatusBarDisplayModelBuilder.Stats(StatusBarViewMode.Normal, zoomPercent: 100, stats, Text);
+
+        model.FindReadout(StatusBarReadoutKind.Average)!.Value.Value.Should().Be("Average: #DIV/0!");
+        model.FindReadout(StatusBarReadoutKind.Sum)!.Value.Value.Should().Be("Sum: #DIV/0!");
+        model.FindReadout(StatusBarReadoutKind.Minimum)!.Value.Value.Should().Be("Min: #DIV/0!");
+        model.FindReadout(StatusBarReadoutKind.Maximum)!.Value.Value.Should().Be("Max: #DIV/0!");
+        model.FindReadout(StatusBarReadoutKind.Count)!.Value.Value.Should().Be("Count: 3");
+        model.FindReadout(StatusBarReadoutKind.NumericalCount)!.Value.Value.Should().Be("Numerical Count: 2");
+
+        foreach (var item in model.Readouts)
+            item.IsVisible.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(12.5, "12.5")]
     [InlineData(12.0000000001, "12")]

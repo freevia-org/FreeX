@@ -26,6 +26,7 @@ public static class WorkbookSelectionStatsCalculator
         int count = 0;
         int numericalCount = 0;
         double? min = null, max = null;
+        string? aggregateError = null;
 
         var scanRange = Intersect(range, usedRange);
         long totalCells = scanRange.CellCount;
@@ -38,7 +39,7 @@ public static class WorkbookSelectionStatsCalculator
                 if (Contains(scanRange, row, col) &&
                     IsVisibleCell(sheet, row))
                 {
-                    Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
+                    Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
                 }
             }
         }
@@ -51,12 +52,12 @@ public static class WorkbookSelectionStatsCalculator
 
                 for (var col = scanRange.Start.Col; col <= scanRange.End.Col; col++)
                 {
-                    Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max);
+                    Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
                 }
             }
         }
 
-        return CreateStats(sum, count, numericalCount, min, max);
+        return CreateStats(sum, count, numericalCount, min, max, aggregateError);
     }
 
     public static WorkbookSelectionStats Calculate(Sheet sheet, IReadOnlyList<GridRange> ranges)
@@ -91,6 +92,7 @@ public static class WorkbookSelectionStatsCalculator
         int count = 0;
         int numericalCount = 0;
         double? min = null, max = null;
+        string? aggregateError = null;
 
         if (sheet.CellCount < totalCells)
         {
@@ -100,7 +102,7 @@ public static class WorkbookSelectionStatsCalculator
                 if (ContainsAny(scanRanges, row, col) &&
                     IsVisibleCell(sheet, row))
                 {
-                    Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max);
+                    Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
                 }
             }
         }
@@ -118,13 +120,13 @@ public static class WorkbookSelectionStatsCalculator
                     for (var col = range.Start.Col; col <= range.End.Col; col++)
                     {
                         if (visited.Add(CreateAddressKey(row, col)))
-                            Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max);
+                            Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
                     }
                 }
             }
         }
 
-        return CreateStats(sum, count, numericalCount, min, max);
+        return CreateStats(sum, count, numericalCount, min, max, aggregateError);
     }
 
     public static WorkbookSelectionStats Combine(WorkbookSelectionStats left, WorkbookSelectionStats right)
@@ -134,7 +136,8 @@ public static class WorkbookSelectionStatsCalculator
         var numericalCount = left.NumericalCount + right.NumericalCount;
         var min = Min(left.Min, right.Min);
         var max = Max(left.Max, right.Max);
-        return CreateStats(sum, count, numericalCount, min, max);
+        var aggregateError = left.AggregateErrorCode ?? right.AggregateErrorCode;
+        return CreateStats(sum, count, numericalCount, min, max, aggregateError);
     }
 
     private static WorkbookSelectionStats CalculateSingleCell(ScalarValue value) =>
@@ -155,6 +158,10 @@ public static class WorkbookSelectionStatsCalculator
                 Average: dateTime.Value,
                 Min: dateTime.Value,
                 Max: dateTime.Value),
+            // A lone selected error cell still reports as non-empty (Count=1), and Excel's
+            // status-bar Sum/Average/Min/Max propagate the error rather than showing nothing --
+            // mirrored here via AggregateErrorCode so the formatter/model builder can render it.
+            ErrorValue errorValue => new WorkbookSelectionStats(0, 1, 0, null, null, null, errorValue.Code),
             _ => new WorkbookSelectionStats(0, 1, 0, null, null, null)
         };
 
@@ -208,10 +215,11 @@ public static class WorkbookSelectionStatsCalculator
         int count,
         int numericalCount,
         double? min,
-        double? max)
+        double? max,
+        string? aggregateError)
     {
         double? average = numericalCount > 0 ? sum / numericalCount : null;
-        return new WorkbookSelectionStats(sum, count, numericalCount, average, min, max);
+        return new WorkbookSelectionStats(sum, count, numericalCount, average, min, max, aggregateError);
     }
 
     private static void Accumulate(
@@ -220,10 +228,19 @@ public static class WorkbookSelectionStatsCalculator
         ref int count,
         ref int numericalCount,
         ref double? min,
-        ref double? max)
+        ref double? max,
+        ref string? aggregateError)
     {
         if (value is not BlankValue)
             count++;
+
+        // Real Excel's status-bar Sum/Average/Min/Max propagate an error cell within the
+        // selection instead of silently skipping it (matching SUM/AVERAGE/MIN/MAX's own
+        // error-propagation over a plain range reference). Numerical Count still only counts
+        // genuinely numeric cells below, so it is unaffected. Keep the first error encountered
+        // as the representative one, mirroring Excel's left-to-right/top-to-bottom scan order.
+        if (value is ErrorValue errorValue)
+            aggregateError ??= errorValue.Code;
 
         double? numericValue = value switch
         {

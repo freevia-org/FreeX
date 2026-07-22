@@ -213,7 +213,15 @@ public sealed partial class SetChartLayoutCommand
         if (options.YAxisLineThickness is not null)
             chart.YAxisLineThickness = ClampFinite(options.YAxisLineThickness.Value, 0.5, 10);
         if (options.LegendPosition is not null)
+        {
             chart.LegendPosition = ValidEnumOrDefault(options.LegendPosition.Value, ChartLegendPosition.Right);
+            // io-chart-legend-6-3 (round 67): mark this as a genuine user choice (including an
+            // explicit "None"/remove-legend pick through the same Legend Position control) so the
+            // writer's ToEffectiveLegendPosition (XlsxChartXmlWriter.Format.cs) never mistakes it
+            // for an untouched chart left at the ChartLegendPosition.Right C# default and silently
+            // rewrites it to Excel's classic-stacked-chart "bottom" default on save.
+            chart.LegendPositionExplicit = true;
+        }
         if (options.LegendOverlay is not null)
             chart.LegendOverlay = options.LegendOverlay.Value;
         if (options.ShowLegend is not null)

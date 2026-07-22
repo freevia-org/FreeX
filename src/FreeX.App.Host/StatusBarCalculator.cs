@@ -16,16 +16,23 @@ public static class StatusBarCalculator
     internal static readonly IStatusBarTextProvider TextProvider =
         new ResourceKeyStatusBarTextProvider(UiText.Get);
 
-    public readonly record struct Stats(double Sum, int Count, int NumericalCount, double? Average, double? Min, double? Max);
+    public readonly record struct Stats(
+        double Sum,
+        int Count,
+        int NumericalCount,
+        double? Average,
+        double? Min,
+        double? Max,
+        string? AggregateErrorCode = null);
 
     public static Stats Calculate(Sheet sheet, GridRange range) =>
         ToStats(WorkbookSelectionStatsCalculator.Calculate(sheet, range));
 
     internal static Stats ToStats(WorkbookSelectionStats stats) =>
-        new(stats.Sum, stats.Count, stats.NumericalCount, stats.Average, stats.Min, stats.Max);
+        new(stats.Sum, stats.Count, stats.NumericalCount, stats.Average, stats.Min, stats.Max, stats.AggregateErrorCode);
 
     internal static WorkbookSelectionStats ToShared(Stats stats) =>
-        new(stats.Sum, stats.Count, stats.NumericalCount, stats.Average, stats.Min, stats.Max);
+        new(stats.Sum, stats.Count, stats.NumericalCount, stats.Average, stats.Min, stats.Max, stats.AggregateErrorCode);
 
     public static string FormatNumber(double value) =>
         StatusBarDisplayModelBuilder.FormatNumber(value);

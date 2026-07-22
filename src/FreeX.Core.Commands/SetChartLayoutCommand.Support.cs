@@ -347,6 +347,10 @@ public sealed partial class SetChartLayoutCommand
         chart.YAxisLineColor = snapshot.YAxisLineColor;
         chart.YAxisLineThickness = snapshot.YAxisLineThickness ?? 1;
         chart.LegendPosition = snapshot.LegendPosition ?? ChartLegendPosition.Right;
+        // io-chart-legend-6-3 (round 67): restore the provenance flag captured in Capture() too, or
+        // an undo would leave a freshly-explicit chart's legend position looking like it was never
+        // touched (or vice versa), corrupting the writer's classic-default heuristic on the next save.
+        chart.LegendPositionExplicit = snapshot.LegendPositionExplicit;
         chart.LegendOverlay = snapshot.LegendOverlay ?? false;
         chart.ShowLegend = snapshot.ShowLegend ?? true;
         chart.ShowDataLabels = snapshot.ShowDataLabels ?? false;
