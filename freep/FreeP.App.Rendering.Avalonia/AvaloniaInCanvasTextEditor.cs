@@ -38,6 +38,28 @@ public sealed class AvaloniaInCanvasTextEditor
     /// <summary>The id of the shape currently being edited, or 0 if not active.</summary>
     public uint ActiveShapeId => _editingShapeId;
 
+    /// <summary>True when the active editor owns keyboard focus.</summary>
+    public bool IsEditorFocused => _textBox?.InputBox.IsFocused == true;
+
+    /// <summary>The text selected by the active editor.</summary>
+    public string SelectedText => _textBox is null
+        ? string.Empty
+        : _textBox.Text[
+            Math.Min(_textBox.SelectionStart, _textBox.SelectionEnd)..
+            Math.Max(_textBox.SelectionStart, _textBox.SelectionEnd)];
+
+    /// <summary>Selects a logical model-text range in the active editor.</summary>
+    public bool TrySelectTextRange(int start, int end)
+    {
+        if (_textBox is null || start < 0 || end < start || end > _textBox.Text.Length)
+            return false;
+
+        _textBox.SelectionStart = start;
+        _textBox.SelectionEnd = end;
+        _textBox.FocusEditor();
+        return true;
+    }
+
     /// <summary>True while a table cell is being edited in the rich overlay editor.</summary>
     public bool IsCellEditActive => _cellEditActive;
 

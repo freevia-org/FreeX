@@ -276,6 +276,9 @@ public sealed class SlideCanvasAvaloniaTests
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.Activate(shape!.Id);
+            textEditor.TrySelectTextRange(1, 7).Should().BeTrue();
+            textEditor.SelectedText.Should().Be("ello w");
+            textEditor.IsEditorFocused.Should().BeTrue();
             var box = RichInput(overlay);
             box.Text.Should().Be("Hello world");
 

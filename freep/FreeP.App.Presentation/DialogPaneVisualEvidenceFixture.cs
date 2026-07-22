@@ -25,6 +25,10 @@ public static class DialogPaneVisualEvidenceFixtureFactory
     public const uint ChartShapeId = 20;
     public const uint MediaShapeId = 30;
     public const uint SmartArtShapeId = 40;
+    public const int RichEditorSelectionStart = 10;
+    public const int RichEditorSelectionEnd = 35;
+    public const int RichEditorCaretPosition = 67;
+    public const string RichEditorSelectedText = "revenue review highlights";
 
     public static DialogPaneVisualEvidenceFixture Create()
     {
@@ -172,6 +176,38 @@ public static class DialogPaneVisualEvidenceFixtureFactory
             ChartShapeId,
             MediaShapeId,
             SmartArtShapeId);
+    }
+
+    public static TextBody CreateRichEditorBody()
+    {
+        var body = new TextBody { Wrap = true };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run
+        {
+            Text = "Quarterly ",
+            FontFamily = "Arial",
+            FontSizePt = 18,
+            Bold = true,
+            BoldSet = true,
+        });
+        paragraph.Runs.Add(new Run
+        {
+            Text = RichEditorSelectedText,
+            FontFamily = "Calibri",
+            FontSizePt = 14,
+            Italic = true,
+            ItalicSet = true,
+            Color = new ThemeAwareColor(new SrgbColor(0x2F, 0x55, 0x97)),
+        });
+        paragraph.Runs.Add(new Run
+        {
+            Text = " and next-step ownership need a careful second-line check before Friday.",
+            FontFamily = "Arial",
+            FontSizePt = 12,
+            Underline = true,
+        });
+        body.Paragraphs.Add(paragraph);
+        return body;
     }
 
     private static TextBody Body(string text)

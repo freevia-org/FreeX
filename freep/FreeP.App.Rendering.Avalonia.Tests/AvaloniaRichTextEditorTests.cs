@@ -47,6 +47,8 @@ public sealed class AvaloniaRichTextEditorTests
                 editor.InputBox.SelectionBrush.Should().Be(Brushes.Transparent);
                 editor.InputBox.SelectionForegroundBrush.Should().Be(Brushes.Transparent);
                 editor.InputBox.Foreground.Should().Be(Brushes.Transparent);
+                editor.InputBox.Opacity.Should().Be(0,
+                    "the native TextBox template must not obscure the custom rich-text raster");
 
                 editor.InputBox.SelectionStart = 1;
                 editor.InputBox.SelectionEnd = 5;

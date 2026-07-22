@@ -19,6 +19,7 @@ public sealed partial class MainWindow
         WholeWindowVisualEvidenceScenario scenario,
         DialogPaneVisualEvidenceFixture fixture)
     {
+        PrepareRichEditorFixture(scenario, fixture);
         var cleanStartupState = scenario.Kind == WholeWindowVisualEvidenceScenarioKind.Startup && scenario.ActivationId == "slide";
         if (!cleanStartupState)
             LoadPresentationContent(fixture.Presentation);
@@ -59,8 +60,8 @@ public sealed partial class MainWindow
         UpdateStatus();
         NormalizeWholeWindowVisualEvidenceShellState(scenario);
 
-        return
-        [
+        var assertions = new List<DialogPaneVisualEvidenceAssertion>
+        {
             new(
                 "fixture-loaded",
                 Editor.Presentation.Slides.Count == (cleanStartupState ? 1 : 3),
@@ -75,6 +76,62 @@ public sealed partial class MainWindow
                 "selection-activated",
                 selectionPrepared,
                 $"Selected shape ids: {string.Join(",", Editor.SelectedShapeIds)}."),
+        };
+        assertions.AddRange(PrepareRichEditorOverlayForVisualEvidence(scenario, fixture));
+        return assertions;
+    }
+
+    private static void PrepareRichEditorFixture(
+        WholeWindowVisualEvidenceScenario scenario,
+        DialogPaneVisualEvidenceFixture fixture)
+    {
+        if (scenario.Kind != WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay)
+            return;
+
+        var shape = fixture.Presentation.Slides[scenario.SlideIndex].Shapes
+            .Single(candidate => candidate.Id == fixture.TextShapeId);
+        shape.TextBody = DialogPaneVisualEvidenceFixtureFactory.CreateRichEditorBody();
+    }
+
+    private IReadOnlyList<DialogPaneVisualEvidenceAssertion> PrepareRichEditorOverlayForVisualEvidence(
+        WholeWindowVisualEvidenceScenario scenario,
+        DialogPaneVisualEvidenceFixture fixture)
+    {
+        if (scenario.Kind != WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay)
+            return [];
+
+        _textEditor?.Activate(fixture.TextShapeId);
+        int start = scenario.ActivationId == "selection"
+            ? DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionStart
+            : DialogPaneVisualEvidenceFixtureFactory.RichEditorCaretPosition;
+        int end = scenario.ActivationId == "selection"
+            ? DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionEnd
+            : start;
+        bool selectionSet = _textEditor?.TrySelectTextRange(start, end) == true;
+        string expectedText = scenario.ActivationId == "selection"
+            ? DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectedText
+            : string.Empty;
+        var body = Editor.CurrentSlide?.Shapes.Single(shape => shape.Id == fixture.TextShapeId).TextBody;
+        int runCount = body?.Paragraphs.SelectMany(paragraph => paragraph.Runs).Count() ?? 0;
+
+        return
+        [
+            new(
+                "rich-editor-activated",
+                _textEditor is { IsActive: true, ActiveShapeId: var activeId } && activeId == fixture.TextShapeId,
+                $"Active rich-editor shape id is {_textEditor?.ActiveShapeId ?? 0}; expected {fixture.TextShapeId}."),
+            new(
+                "rich-editor-selection",
+                selectionSet && StringComparer.Ordinal.Equals(_textEditor?.SelectedText, expectedText),
+                $"Selected '{_textEditor?.SelectedText ?? string.Empty}' at logical range {start}..{end}."),
+            new(
+                "rich-editor-focus",
+                _textEditor?.IsEditorFocused == true,
+                "The production Avalonia rich-text input owns keyboard focus."),
+            new(
+                "rich-editor-mixed-runs",
+                runCount == 3,
+                $"The production overlay contains {runCount} model runs; expected 3 mixed-format runs."),
         ];
     }
 
