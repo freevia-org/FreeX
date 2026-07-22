@@ -411,13 +411,20 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             // T7 restore: CF/DV formula text
             if (_cfFormulaRenameSnapshot is not null)
             {
+                var cfSheetsRestored = new HashSet<SheetId>();
                 foreach (var (ruleId, oldValue, sheetId) in _cfFormulaRenameSnapshot)
                 {
                     var sh = ctx.Workbook.GetSheet(sheetId);
                     if (sh is null) continue;
                     foreach (var cf in sh.ConditionalFormats)
-                        if (cf.Id == ruleId) { cf.FormulaText = oldValue; break; }
+                        if (cf.Id == ruleId) { cf.FormulaText = oldValue; cfSheetsRestored.Add(sheetId); break; }
                 }
+                // Mirror the Do-path cache invalidation (see the comment above the forward
+                // rewrite loop): restoring cf.FormulaText in place does not by itself bump
+                // ConditionalFormats.Version, so the viewport CF cache would keep serving the
+                // stale post-rename precompiled AST after Undo unless we notify here too.
+                foreach (var sheetId in cfSheetsRestored)
+                    ctx.Workbook.GetSheet(sheetId)?.ConditionalFormats.NotifyRulesChanged();
             }
 
             if (_dvFormulaRenameSnapshot is not null)
@@ -739,13 +746,20 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             // X3 restore: CF/DV formula text rewritten to #REF! must be restored
             if (_cfFormulaDeleteSnapshot is not null)
             {
+                var cfSheetsRestored = new HashSet<SheetId>();
                 foreach (var (ruleId, oldValue, sheetId) in _cfFormulaDeleteSnapshot)
                 {
                     var sh = ctx.Workbook.GetSheet(sheetId);
                     if (sh is null) continue;
                     foreach (var cf in sh.ConditionalFormats)
-                        if (cf.Id == ruleId) { cf.FormulaText = oldValue; break; }
+                        if (cf.Id == ruleId) { cf.FormulaText = oldValue; cfSheetsRestored.Add(sheetId); break; }
                 }
+                // Mirror the Do-path cache invalidation above (X3 pass): restoring
+                // cf.FormulaText in place does not bump ConditionalFormats.Version on its
+                // own, so the viewport CF cache would keep serving the stale #REF!-rewritten
+                // precompiled AST after Undo unless we notify here too.
+                foreach (var sheetId in cfSheetsRestored)
+                    ctx.Workbook.GetSheet(sheetId)?.ConditionalFormats.NotifyRulesChanged();
             }
             if (_dvFormulaDeleteSnapshot is not null)
             {

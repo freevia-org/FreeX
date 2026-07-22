@@ -603,9 +603,23 @@ public sealed partial class FormulaEvaluator
         // '#' spill-anchor operator (A1# / A1#:B5, see Parser.cs's WrapSpillAnchor) — a genuine
         // worksheet reference to a spill range, not a computed array, so it belongs in this whitelist
         // alongside the other reference node kinds.
-        bool isReferenceLikeOperand = operandNode is RangeRefNode or FullColumnRangeRefNode or FullRowRangeRefNode
-            or NamedRangeNode or StructuredReferenceNode or StructuredCurrentRowReferenceNode
-            or FunctionCallNode { FunctionName: "ANCHORARRAY" };
+        //
+        // NamedRangeNode is special-cased separately below rather than folded into this static
+        // whitelist: a bare name (=@MySeq, or a LAMBDA parameter such as =LAMBDA(x,@x)(...)) is
+        // ambiguous from AST shape alone — it can resolve to a genuine worksheet reference (a name
+        // bound to =Sheet1!$A$1:$A$3, or a LAMBDA parameter bound to such a range) or to a computed
+        // array (a name bound to =SEQUENCE(3), or a LAMBDA parameter bound to a computed-array
+        // argument). Only the resolved RangeValue's IsSheetReference provenance flag (already
+        // computed by EvaluateArrayOperand into `range` above) can tell the two apart, mirroring the
+        // FunctionCallNode ANCHORARRAY-vs-plain-computed-array distinction made here already.
+        bool isReferenceLikeOperand = operandNode switch
+        {
+            RangeRefNode or FullColumnRangeRefNode or FullRowRangeRefNode
+                or StructuredReferenceNode or StructuredCurrentRowReferenceNode
+                or FunctionCallNode { FunctionName: "ANCHORARRAY" } => true,
+            NamedRangeNode => range.IsSheetReference,
+            _ => false,
+        };
 
         if (!isReferenceLikeOperand)
         {

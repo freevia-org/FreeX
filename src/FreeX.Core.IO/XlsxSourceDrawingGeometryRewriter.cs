@@ -119,7 +119,9 @@ internal static class XlsxSourceDrawingGeometryRewriter
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
         var sourcePictures = sheet.Pictures.Where(picture => picture.IsSourceLoaded).ToList();
-        var pictureElements = drawingRoot.Descendants(SpreadsheetDrawingNs + "pic").ToList();
+        var pictureElements = drawingRoot.Descendants(SpreadsheetDrawingNs + "pic")
+            .Where(element => !IsWithinGroupShape(element))
+            .ToList();
         foreach (var (pictureElement, picture) in MatchPictureElementsToModels(pictureElements, sourcePictures))
         {
             var anchor = FindNearestAnchorElement(pictureElement);
@@ -141,6 +143,12 @@ internal static class XlsxSourceDrawingGeometryRewriter
         foreach (var shapeElement in drawingRoot.Descendants(SpreadsheetDrawingNs + "sp"))
         {
             if (shapeElement.Ancestors(MarkupCompatNs + "Fallback").Any())
+                continue;
+
+            // R72-io-drawing-anchors-4-1: a shape nested inside an xdr:grpSp is positioned relative to
+            // the group's own xdr:xfrm, not by its own top-level anchor -- it must never be matched
+            // against (and have its geometry rewritten into) the group's shared anchor.
+            if (IsWithinGroupShape(shapeElement))
                 continue;
 
             var isTextBox = shapeElement
@@ -170,6 +178,10 @@ internal static class XlsxSourceDrawingGeometryRewriter
         foreach (var connectorElement in drawingRoot.Descendants(SpreadsheetDrawingNs + "cxnSp"))
         {
             if (connectorElement.Ancestors(MarkupCompatNs + "Fallback").Any())
+                continue;
+
+            // R72-io-drawing-anchors-4-1: same group-boundary check as the xdr:sp loop above.
+            if (IsWithinGroupShape(connectorElement))
                 continue;
 
             shapeElements.Add(connectorElement);
@@ -452,6 +464,18 @@ internal static class XlsxSourceDrawingGeometryRewriter
         element.Name == SpreadsheetDrawingNs + "absoluteAnchor";
 
     /// <summary>
+    /// R72-io-drawing-anchors-4-1 fix: true when <paramref name="element"/> sits inside an
+    /// <c>xdr:grpSp</c> group. A grouped pic/sp/cxnSp's geometry is expressed relative to the group's
+    /// own <c>xdr:xfrm</c> (chOff/chExt vs. off/ext), not by an anchor of its own -- ascending past the
+    /// group to the shared anchor (as <see cref="FindNearestAnchorElement"/> does with no boundary
+    /// check) and rewriting that anchor from a single child's model geometry would silently move/resize
+    /// the WHOLE group from one child's edit, and the next matched child would then overwrite it again.
+    /// Elements nested in a group must be skipped entirely rather than matched against the group anchor.
+    /// </summary>
+    private static bool IsWithinGroupShape(XElement element) =>
+        element.Ancestors(SpreadsheetDrawingNs + "grpSp").Any();
+
+    /// <summary>
     /// Rewrites one anchor's <c>from</c> sub-cell offset and size (<c>ext</c> for oneCell/absolute anchors,
     /// or the <c>to</c> marker for twoCell anchors) to match the current model geometry. The <c>from</c>
     /// cell itself is left untouched — a change of anchor CELL already fails the patch-safe geometry check
@@ -466,6 +490,12 @@ internal static class XlsxSourceDrawingGeometryRewriter
         double offsetXPixels,
         double offsetYPixels)
     {
+        // R72-io-drawing-anchors-4-2: an absoluteAnchor has xdr:pos/xdr:ext, never xdr:from/xdr:to, so it
+        // must be handled independently of (and before) the from-null guard below -- that guard is only
+        // meaningful for the twoCellAnchor path, which genuinely needs from/to markers.
+        if (anchor.Name == SpreadsheetDrawingNs + "absoluteAnchor")
+            return RewriteAbsoluteAnchorGeometry(anchor, widthPixels, heightPixels, offsetXPixels, offsetYPixels);
+
         var from = anchor.Element(SpreadsheetDrawingNs + "from");
         if (from is null)
             return false;
@@ -474,8 +504,7 @@ internal static class XlsxSourceDrawingGeometryRewriter
         changed |= SetOffsetElement(from, "colOff", offsetXPixels);
         changed |= SetOffsetElement(from, "rowOff", offsetYPixels);
 
-        if (anchor.Name == SpreadsheetDrawingNs + "oneCellAnchor" ||
-            anchor.Name == SpreadsheetDrawingNs + "absoluteAnchor")
+        if (anchor.Name == SpreadsheetDrawingNs + "oneCellAnchor")
         {
             var ext = anchor.Element(SpreadsheetDrawingNs + "ext");
             if (ext is not null)
@@ -522,6 +551,39 @@ internal static class XlsxSourceDrawingGeometryRewriter
             changed |= SetOffsetElement(to, "colOff", toColOffset);
             changed |= SetIndexElement(to, "row", toRow);
             changed |= SetOffsetElement(to, "rowOff", toRowOffset);
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// R72-io-drawing-anchors-4-2 fix: an <c>xdr:absoluteAnchor</c> positions and sizes its child purely
+    /// via <c>xdr:pos</c> (absolute x/y in EMU) and <c>xdr:ext</c> (cx/cy in EMU) -- it has no
+    /// <c>xdr:from</c>/<c>xdr:to</c> markers at all, so it must be rewritten independently of the
+    /// from/to-marker math <see cref="RewriteAnchorGeometry"/> uses for the other anchor kinds. Returns
+    /// true when the XML was modified.
+    /// </summary>
+    private static bool RewriteAbsoluteAnchorGeometry(
+        XElement anchor,
+        double widthPixels,
+        double heightPixels,
+        double offsetXPixels,
+        double offsetYPixels)
+    {
+        var changed = false;
+
+        var pos = anchor.Element(SpreadsheetDrawingNs + "pos");
+        if (pos is not null)
+        {
+            changed |= SetExtentAttribute(pos, "x", offsetXPixels);
+            changed |= SetExtentAttribute(pos, "y", offsetYPixels);
+        }
+
+        var ext = anchor.Element(SpreadsheetDrawingNs + "ext");
+        if (ext is not null)
+        {
+            changed |= SetExtentAttribute(ext, "cx", widthPixels);
+            changed |= SetExtentAttribute(ext, "cy", heightPixels);
         }
 
         return changed;

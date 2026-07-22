@@ -56,6 +56,16 @@ public sealed class RecalcEngine
     /// <summary>Test-only: current volatile-cell registration count (see <see cref="_volatileCells"/>).</summary>
     internal int VolatileCellCountForTests => _volatileCells.Count;
 
+    /// <summary>Test-only: current dependency-plan cache dictionary entry count.</summary>
+    internal int DependencyPlanCacheCountForTests => _dependencyPlanCache.Count;
+
+    /// <summary>Test-only: current dependency-plan cache FIFO order queue entry count.</summary>
+    internal int DependencyPlanCacheOrderCountForTests => _dependencyPlanCacheOrder.Count;
+
+    /// <summary>Test-only: how many of the FIFO order queue's entries belong to <paramref name="sheetId"/>.</summary>
+    internal int DependencyPlanCacheOrderCountForSheetForTests(SheetId sheetId) =>
+        _dependencyPlanCacheOrder.Count(key => key.SheetId.Equals(sheetId));
+
     public RecalcEngine(DependencyGraph graph, FormulaEvaluator evaluator)
     {
         _graph = graph;
@@ -1204,8 +1214,11 @@ public sealed class RecalcEngine
         FormulaDependencySet refs,
         bool containsVolatileFunction)
     {
-        if (_dependencyPlanCache.Count >= MaxDependencyPlanCacheEntries &&
-            _dependencyPlanCacheOrder.TryDequeue(out var oldest))
+        // Keep dequeuing until an actual dictionary entry is evicted (skipping over any phantom
+        // keys left behind by RetireWorkbook) so the cache stays truly bounded even if the FIFO
+        // order queue ever falls out of sync with the dictionary.
+        while (_dependencyPlanCache.Count >= MaxDependencyPlanCacheEntries &&
+               _dependencyPlanCacheOrder.TryDequeue(out var oldest))
         {
             _dependencyPlanCache.Remove(oldest);
         }
@@ -1322,6 +1335,19 @@ public sealed class RecalcEngine
 
         foreach (var key in staleKeys)
             _dependencyPlanCache.Remove(key);
+
+        // The FIFO order queue is a companion structure that mirrors the dictionary's keys so
+        // AddDependencyPlanToCache's eviction stays bounded; rebuild it here (preserving the
+        // surviving keys' relative order) so it doesn't keep phantom entries for this retired
+        // workbook's sheets indefinitely.
+        var staleKeySet = new HashSet<DependencyPlanCacheKey>(staleKeys);
+        var orderCount = _dependencyPlanCacheOrder.Count;
+        for (var i = 0; i < orderCount; i++)
+        {
+            var key = _dependencyPlanCacheOrder.Dequeue();
+            if (!staleKeySet.Contains(key))
+                _dependencyPlanCacheOrder.Enqueue(key);
+        }
     }
 
     /// <summary>Rebuild dependencies and evaluate every formula cell in the workbook.</summary>

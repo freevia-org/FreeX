@@ -807,6 +807,9 @@ public static partial class ChartRenderer
             ChartLegendPosition.Left => overlay ? OxyPlot.Legends.LegendPosition.LeftTop : OxyPlot.Legends.LegendPosition.LeftMiddle,
             ChartLegendPosition.Top => OxyPlot.Legends.LegendPosition.TopCenter,
             ChartLegendPosition.Bottom => OxyPlot.Legends.LegendPosition.BottomCenter,
+            // Distinct from the plain-Right fallback below -- OxyPlot has a dedicated corner
+            // placement so TopRight actually renders top-right instead of collapsing to Right.
+            ChartLegendPosition.TopRight => OxyPlot.Legends.LegendPosition.TopRight,
             _ => overlay ? OxyPlot.Legends.LegendPosition.RightTop : OxyPlot.Legends.LegendPosition.RightMiddle
         };
 

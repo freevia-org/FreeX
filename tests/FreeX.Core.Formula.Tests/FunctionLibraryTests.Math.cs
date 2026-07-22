@@ -502,7 +502,18 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=RANDARRAY(0,1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=RANDARRAY(-1,1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Randarray_ZeroDimension_ReturnsCalcError()
+    {
+        // R72-formula-dynamic-array-4-2: a zero-sized dimension is a valid (empty) request in
+        // Excel's eyes, distinct from a negative one -- it returns #CALC! ("empty arrays are
+        // not allowed"), not #VALUE!.
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=RANDARRAY(0,1)", sheet).Should().Be(ErrorValue.Calc);
     }
 
     [Fact]

@@ -70,7 +70,11 @@ public static class ClipboardHtmlSerializer
                 }
 
                 cellLookup.TryGetValue((row, col), out var displayCell);
-                var css = displayCell.Style is { } style ? BuildCellCss(style, theme) : string.Empty;
+                var css = new StringBuilder();
+                if (displayCell.Style is { } style)
+                    css.Append(BuildCellCss(style, theme));
+                if (RequiresTextFormatMarker(displayCell))
+                    css.Append("mso-number-format:'\\@';");
                 var styleAttribute = css.Length == 0 ? string.Empty : $" style=\"{css}\"";
                 var display = EscapeHtml(displayCell.DisplayText ?? string.Empty);
                 body.Append($"<td{spanAttributes}{styleAttribute}>{display}</td>");
@@ -105,6 +109,24 @@ public static class ClipboardHtmlSerializer
             $"StartFragment:{startFragment:D10}\r\n" +
             $"EndFragment:{endFragment:D10}\r\n";
         return header + htmlStart + fragment + htmlEnd;
+    }
+
+    /// <summary>Returns true when <paramref name="cell"/> must carry an explicit
+    /// "mso-number-format" text marker on its &lt;td&gt; so a paste that prefers the HTML
+    /// clipboard fragment over the plain-text sibling (see the external-clipboard fallback in
+    /// WorkbookSession/MainWindow.ClipboardCommands) does not re-coerce a Text-typed
+    /// leading-zero-significant value such as "00501" into the number 501. Mirrors the same
+    /// TextValue signal ClipboardSerializer.GetSerializedFieldText uses for the plain-text path's
+    /// leading-apostrophe escape, plus an explicit "@" (Text) number format.</summary>
+    private static bool RequiresTextFormatMarker(DisplayCell cell)
+    {
+        if (string.IsNullOrEmpty(cell.DisplayText))
+            return false;
+
+        if (cell.RawValue is TextValue)
+            return true;
+
+        return cell.Style?.NumberFormat == "@";
     }
 
     private static bool RangesOverlap(GridRange first, GridRange second) =>

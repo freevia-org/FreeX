@@ -18,7 +18,8 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(start) || !double.IsFinite(step)) return ErrorValue.Num;
         int rows = (int)rawRows;
         int cols = (int)rawCols;
-        if (rows < 1 || cols < 1) return ErrorValue.Value;
+        if (rows == 0 || cols == 0) return ErrorValue.Calc;
+        if (rows < 0 || cols < 0) return ErrorValue.Value;
         if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
         var cells = new ScalarValue[rows, cols];
         double val = start;
@@ -49,7 +50,8 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rowsD) || !double.IsFinite(colsD)) return ErrorValue.Value;
         int rows = (int)rowsD;
         int cols = (int)colsD;
-        if (rows < 1 || cols < 1) return ErrorValue.Value;
+        if (rows == 0 || cols == 0) return ErrorValue.Calc;
+        if (rows < 0 || cols < 0) return ErrorValue.Value;
         if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
         if (!double.IsFinite(min) || !double.IsFinite(max) || min > max) return ErrorValue.Value;
 

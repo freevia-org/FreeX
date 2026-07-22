@@ -6350,6 +6350,17 @@ public sealed partial class MainWindow : Window
                 Brushes.Black);
             var textWidth = formatted.Width;
             var textHeight = formatted.Height;
+            // R72-meta-3: a rich-text cell's true rendered width can exceed this single uniform
+            // FormattedText estimate (built from the CELL's overall style, e.g. non-bold) once any
+            // run carries its own bold/italic/size (e.g. a bold run measures wider than the whole
+            // string assumed non-bold) -- CellRichTextInlinesBuilder renders each run with its own
+            // font/weight/style/size, so the overflow CLIP EXTENT below must be measured the same
+            // per-run way instead of reusing this uniform width, otherwise the host Canvas's
+            // Width=clipRight-clipLeft (ClipToBounds=true) visually clips the tail of a rich-text
+            // overflow even into an empty neighbor cell.
+            var overflowExtentWidth = CellRichTextInlinesBuilder.HasRuns(richRuns)
+                ? MeasureRichRunsWidth(richRuns!, flowDirection)
+                : textWidth;
             var indent = GetCellIndentPadding(style) * zoomFactor;
             var horizontalPadding = 8 * zoomFactor;
             var effectiveAlignment = CellTextOrientationLayoutPlanner.ResolveEffectiveHorizontalAlignment(
@@ -6395,7 +6406,7 @@ public sealed partial class MainWindow : Window
                     top,
                     rowHeight,
                     Math.Max(cellRight, textLeft),
-                    Math.Min(rightLimit, textLeft + textWidth),
+                    Math.Min(rightLimit, textLeft + overflowExtentWidth),
                     richRuns);
             }
 
@@ -6423,7 +6434,7 @@ public sealed partial class MainWindow : Window
                     top,
                     rowHeight,
                     Math.Max(leftLimit, textLeft),
-                    Math.Min(left, textLeft + textWidth),
+                    Math.Min(left, textLeft + overflowExtentWidth),
                     richRuns);
             }
         }
@@ -6526,6 +6537,39 @@ public sealed partial class MainWindow : Window
             CellTextOverflowPlanner.IsOverflowOccupied(cell, _inlineCellEditAddress);
     }
 
+    /// <summary>
+    /// R72-meta-3: sums each resolved rich-text run's own <see cref="FormattedText"/> width, using
+    /// the identical per-run font family/size/weight/style <see cref="CellRichTextInlinesBuilder.Build"/>
+    /// applies to the rendered <c>Run</c> inlines -- so the overflow extent computed from this total
+    /// matches what actually renders instead of a single uniform-style estimate over the whole
+    /// <c>DisplayText</c> (which under-measures once any run is bolder/larger than the cell's base
+    /// style).
+    /// </summary>
+    private static double MeasureRichRunsWidth(IReadOnlyList<ResolvedCellTextRun> runs, FlowDirection flowDirection)
+    {
+        var total = 0.0;
+        foreach (var run in runs)
+        {
+            if (string.IsNullOrEmpty(run.Text))
+                continue;
+
+            var typeface = new Typeface(
+                new FontFamily(run.FontName),
+                run.Italic ? FontStyle.Italic : FontStyle.Normal,
+                run.Bold ? FontWeight.Bold : FontWeight.Normal);
+            var runFormatted = new FormattedText(
+                run.Text,
+                CultureInfo.CurrentCulture,
+                flowDirection,
+                typeface,
+                run.RenderedFontSize,
+                Brushes.Black);
+            total += runFormatted.Width;
+        }
+
+        return total;
+    }
+
     private static void AddCellTextOverflowExtension(
         Canvas layer,
         DisplayCell cell,
@@ -6567,11 +6611,10 @@ public sealed partial class MainWindow : Window
         };
 
         // Per-run rich text: populate Inlines (one Run per resolved run), matching the primary
-        // cell content path in BuildCellContent/CreateInteractiveCellBorder. The extent (clipLeft/
-        // clipRight) is still computed by the caller from the plain display-text width, since
-        // measuring the true multi-run width would require duplicating FormattedText per run;
-        // this only affects how far a rich-text cell overflows, not whether the runs render
-        // correctly once inside that extent.
+        // cell content path in BuildCellContent/CreateInteractiveCellBorder. R72-meta-3: the extent
+        // (clipLeft/clipRight) is now computed by the caller from MeasureRichRunsWidth's per-run
+        // total instead of the plain display-text width, so this Width=clipRight-clipLeft,
+        // ClipToBounds=true host no longer clips a bolder/larger run's tail short.
         if (CellRichTextInlinesBuilder.HasRuns(richRuns))
         {
             CellRichTextInlinesBuilder.Build(richRuns!, text.Inlines!, color => Brush(color));

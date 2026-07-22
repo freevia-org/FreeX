@@ -13,6 +13,21 @@ public partial class MainWindow
     private GridRange? _lastAutoFilterRange;
 
     /// <summary>
+    /// R72-commands-sort-filter-4-3: remembers the list/criteria ranges of the most recently applied
+    /// IN-PLACE Advanced Filter (Data &gt; Advanced with no "Copy to another location" destination),
+    /// set from <c>ApplyAdvancedFilterResult</c> (MainWindow.DataCommands.cs), so
+    /// <see cref="ReapplyAutoFilter"/> can re-run it here too. A "copy to another location" Advanced
+    /// Filter is a one-time extraction, not a persistent in-place filter, so that case is never
+    /// remembered.
+    /// </summary>
+    private AdvancedFilterReapplyState? _lastInPlaceAdvancedFilter;
+
+    private readonly record struct AdvancedFilterReapplyState(
+        GridRange ListRange,
+        GridRange CriteriaRange,
+        bool UniqueRecordsOnly);
+
+    /// <summary>
     /// R65-services-autofilter-6-2: remembers the command factory for EVERY currently active
     /// AutoFilter column, keyed by that column's ABSOLUTE index (range.Start.Col + filterColOffset)
     /// -- not just a single "last applied" slot. Excel's Data &gt; Reapply re-evaluates every active
@@ -203,10 +218,19 @@ public partial class MainWindow
     /// filter happened to be applied most recently. Rebuild one fresh command per remembered column
     /// (see <see cref="_activeAutoFilterColumnFactories"/>), in column order, and run them together
     /// as a single undoable operation.
+    ///
+    /// R72-commands-sort-filter-4-3: Reapply must ALSO re-run an active in-place Advanced Filter
+    /// (see <see cref="_lastInPlaceAdvancedFilter"/>) -- before this fix, Reapply was blind to it, so
+    /// an edited row that no longer matched the stored criteria stayed visible until the user
+    /// manually re-ran Data &gt; Advanced. Both mechanisms are independent (a sheet can have an
+    /// AutoFilter and, separately, an in-place Advanced Filter was last run on it) so both are
+    /// re-applied together as a single undoable operation when active.
     /// </summary>
     private void ReapplyAutoFilter()
     {
-        if (_lastAutoFilterRange is not { } range || _activeAutoFilterColumnFactories.Count == 0)
+        var hasAutoFilter = _lastAutoFilterRange is not null && _activeAutoFilterColumnFactories.Count > 0;
+        var hasAdvancedFilter = _lastInPlaceAdvancedFilter is not null;
+        if (!hasAutoFilter && !hasAdvancedFilter)
         {
             _messageService.ShowInfo(
                 UiText.Get("MainWindowMessage_ReapplyFilterNoFilter"),
@@ -214,15 +238,40 @@ public partial class MainWindow
             return;
         }
 
+        // The AutoFilter range (when present) is what drives the selection restore/status-bar
+        // refresh below, matching the pre-existing AutoFilter-only behavior; an in-place-Advanced-
+        // Filter-only Reapply falls back to that filter's own list range.
+        var range = _lastAutoFilterRange ?? _lastInPlaceAdvancedFilter!.Value.ListRange;
+
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Reapply Filter",
                 range,
-                _ => BuildReapplyAllActiveAutoFilterColumnsCommand(range)))
+                _ => BuildReapplyFilterCommand(hasAutoFilter, hasAdvancedFilter)))
             return;
 
         RecalculateAfterFilterOrSort();
         RestoreAutoFilterRangeSelection(range);
         UpdateFilterViewportAndStatusBar();
+    }
+
+    private IWorkbookCommand BuildReapplyFilterCommand(bool hasAutoFilter, bool hasAdvancedFilter)
+    {
+        var commands = new List<IWorkbookCommand>();
+        if (hasAutoFilter)
+            commands.Add(BuildReapplyAllActiveAutoFilterColumnsCommand(_lastAutoFilterRange!.Value));
+        if (hasAdvancedFilter)
+        {
+            var advanced = _lastInPlaceAdvancedFilter!.Value;
+            commands.Add(new AdvancedFilterCommand(
+                advanced.ListRange,
+                advanced.CriteriaRange,
+                CopyTo: null,
+                advanced.UniqueRecordsOnly));
+        }
+
+        return commands.Count == 1
+            ? commands[0]
+            : new CompositeWorkbookCommand("Reapply Filter", commands);
     }
 
     private IWorkbookCommand BuildReapplyAllActiveAutoFilterColumnsCommand(GridRange range)

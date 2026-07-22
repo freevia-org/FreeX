@@ -282,6 +282,7 @@ public sealed class ChartPageSetupModel
     public int? Copies { get; set; }
     public bool? UsePrinterDefaults { get; set; }
     public int? FirstPageNumber { get; set; }
+    public bool? UseFirstPageNumber { get; set; }
     public int? HorizontalDpi { get; set; }
     public int? VerticalDpi { get; set; }
     public bool? BlackAndWhite { get; set; }

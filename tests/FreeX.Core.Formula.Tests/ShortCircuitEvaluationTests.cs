@@ -503,9 +503,13 @@ public class ShortCircuitEvaluationTests
     [Fact]
     public void DeeplyNested_FunctionCall_ReturnsNumErrorInsteadOfStackOverflow()
     {
-        // Construct a 300-level deep IF(TRUE, IF(TRUE, ... 1 ...)) AST directly
-        // to avoid any parser stack-overflow and test only the evaluator depth guard.
-        const int depth = 300;
+        // Construct a very deep IF(TRUE, IF(TRUE, ... 1 ...)) AST directly to avoid any
+        // parser stack-overflow and test only the evaluator depth guard. 5000 nesting levels
+        // (each consuming multiple EvaluateNode levels: the FunctionCallNode itself plus its
+        // condition) comfortably exceeds MaxEvalDepth (1024) regardless of the exact per-level
+        // unit cost, so this still exercises the guard after MaxEvalDepth was raised from 256
+        // to 1024 to accommodate deep recursive LAMBDA (see LambdaRecursionDepthTests).
+        const int depth = 5000;
         FormulaNode body = new NumberNode(1);
         for (int i = 0; i < depth; i++)
         {
@@ -517,7 +521,7 @@ public class ShortCircuitEvaluationTests
         // Should return #NUM! (depth exceeded), not throw StackOverflowException
         var result = _evaluator.Evaluate(body, sheet);
         result.Should().Be(ErrorValue.Num,
-            "a 300-level nested formula must return #NUM! rather than causing a stack overflow");
+            "a 5000-level nested formula must return #NUM! rather than causing a stack overflow");
     }
 
     [Fact]

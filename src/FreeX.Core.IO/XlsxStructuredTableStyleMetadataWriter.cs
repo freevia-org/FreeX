@@ -156,18 +156,39 @@ internal static class XlsxStructuredTableStyleMetadataWriter
         }
     }
 
+    // A dxf numFmt's numFmtId only needs to disambiguate format codes within that single dxf element
+    // (it is never looked up against the workbook's shared <numFmts> collection), so a fixed
+    // custom-range id is safe here -- mirrors XlsxAdvancedConditionalFormatWriter's MinCustomNumFmtId.
+    private const int TableStyleDxfNumFmtId = 164;
+
     private static XElement BuildDxfElement(StyleDiff diff, XNamespace workbookNs)
     {
         XElement? font = null;
-        if (diff.Bold is true || diff.FontColor is not null)
+        if (diff.Bold is true || diff.Italic is true || diff.Underline is true ||
+            diff.FontColor is not null || diff.FontName is not null || diff.FontSize is not null)
         {
             font = new XElement(
                 workbookNs + "font",
                 diff.Bold is true ? new XElement(workbookNs + "b") : null,
+                diff.Italic is true ? new XElement(workbookNs + "i") : null,
+                diff.Underline is true ? new XElement(workbookNs + "u") : null,
+                diff.FontSize is { } fontSize
+                    ? new XElement(workbookNs + "sz", new XAttribute("val", fontSize.ToString(CultureInfo.InvariantCulture)))
+                    : null,
                 diff.FontColor is { } fontColor
                     ? new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(fontColor)))
+                    : null,
+                diff.FontName is { } fontName
+                    ? new XElement(workbookNs + "name", new XAttribute("val", fontName))
                     : null);
         }
+
+        XElement? numFmt = diff.NumberFormat is { } numberFormat
+            ? new XElement(
+                workbookNs + "numFmt",
+                new XAttribute("numFmtId", TableStyleDxfNumFmtId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("formatCode", numberFormat))
+            : null;
 
         XElement? fill = null;
         if (diff.FillColor is not null || diff.FillPatternStyle is not null || diff.FillPatternColor is not null)
@@ -194,8 +215,50 @@ internal static class XlsxStructuredTableStyleMetadataWriter
             fill = new XElement(workbookNs + "fill", patternFill);
         }
 
-        return new XElement(workbookNs + "dxf", font, fill);
+        XElement? border = null;
+        if (diff.BorderTop is not null || diff.BorderRight is not null ||
+            diff.BorderBottom is not null || diff.BorderLeft is not null)
+        {
+            border = new XElement(
+                workbookNs + "border",
+                BuildBorderEdgeElement("top", diff.BorderTop, workbookNs),
+                BuildBorderEdgeElement("right", diff.BorderRight, workbookNs),
+                BuildBorderEdgeElement("bottom", diff.BorderBottom, workbookNs),
+                BuildBorderEdgeElement("left", diff.BorderLeft, workbookNs));
+        }
+
+        return new XElement(workbookNs + "dxf", font, numFmt, fill, border);
     }
+
+    private static XElement? BuildBorderEdgeElement(string edgeName, CellBorder? edge, XNamespace workbookNs)
+    {
+        if (edge is not { Style: not BorderStyle.None } border)
+            return null;
+
+        return new XElement(
+            workbookNs + edgeName,
+            new XAttribute("style", ToBorderStyle(border.Style)),
+            new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(border.Color))));
+    }
+
+    private static string ToBorderStyle(BorderStyle style) =>
+        style switch
+        {
+            BorderStyle.Thin => "thin",
+            BorderStyle.Medium => "medium",
+            BorderStyle.Thick => "thick",
+            BorderStyle.Dashed => "dashed",
+            BorderStyle.Dotted => "dotted",
+            BorderStyle.Double => "double",
+            BorderStyle.Hair => "hair",
+            BorderStyle.SlantDashDot => "slantDashDot",
+            BorderStyle.MediumDashed => "mediumDashed",
+            BorderStyle.DashDot => "dashDot",
+            BorderStyle.MediumDashDot => "mediumDashDot",
+            BorderStyle.DashDotDot => "dashDotDot",
+            BorderStyle.MediumDashDotDot => "mediumDashDotDot",
+            _ => "none"
+        };
 
     private static string ToArgb(CellColor color) =>
         $"FF{color.R:X2}{color.G:X2}{color.B:X2}";

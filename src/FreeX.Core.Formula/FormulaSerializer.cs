@@ -87,7 +87,7 @@ public static class FormulaSerializer
                 break;
 
             case NamedRangeNode nr:
-                sb.Append(nr.Name);
+                WriteNamedRangeName(nr, sb);
                 break;
 
             case StructuredReferenceNode sr:
@@ -359,6 +359,28 @@ public static class FormulaSerializer
 
     private static void WriteSheetName(string sheetName, StringBuilder sb) =>
         sb.Append(SheetNameFormatter.QuoteIfNeeded(sheetName));
+
+    // R72-io-external-links-4-2: a sheet-qualified defined-name reference (e.g. the "Sheet2" in
+    // Sheet2!MyRange, or the bracketed external-link form "[1]Sheet1" in [1]Sheet1!ExchangeRate)
+    // must round-trip its NamedRangeNode.SheetQualifier the same way WriteCellRef/WriteRangeRef
+    // round-trip a CellRefNode/RangeRefNode's sheet name — dropping it here (the previous
+    // behavior) silently deletes the external/sheet prefix whenever FormulaRewriter reserializes
+    // the whole formula (e.g. because an unrelated cell reference elsewhere in the SAME formula
+    // shifted), turning =[1]Sheet1!ExchangeRate*A1 into =ExchangeRate*A2 — a different, silently
+    // wrong local name lookup. Reuses WriteSheetName's quoting rules; a bracketed qualifier always
+    // needs quoting (SheetNameFormatter.NeedsQuoting rejects '[') so this naturally emits the
+    // quoted "'[1]Sheet1'!ExchangeRate" form, which the Lexer's ReadQuotedSheetQualifier accepts
+    // and reduces back to the identical "[1]Sheet1" SheetQualifier text on the next parse.
+    private static void WriteNamedRangeName(NamedRangeNode nr, StringBuilder sb)
+    {
+        if (!string.IsNullOrEmpty(nr.SheetQualifier))
+        {
+            WriteSheetName(nr.SheetQualifier, sb);
+            sb.Append('!');
+        }
+
+        sb.Append(nr.Name);
+    }
 
     // R26-table-structured-ref-deep-1: sr.ColumnName is whatever selector text the parser produced
     // (Lexer.ReadStructuredReferenceSelectorSlow already stripped any apostrophe-escapes), so a bare

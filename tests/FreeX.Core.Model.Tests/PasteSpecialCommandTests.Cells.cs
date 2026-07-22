@@ -222,4 +222,110 @@ public sealed partial class PasteSpecialCommandTests
         sheet.GetValue(dest).Should().Be(new NumberValue(10));
     }
 
+    // R72-commands-paste-operations-4-1: an arithmetic Operation must coerce a numeric-looking
+    // TextValue operand to its number (matching Excel's documented "multiply by 1 to convert
+    // text-numbers to real numbers" trick), on both the destination and the source side, while a
+    // genuinely non-numeric text destination is still left untouched.
+
+    [Fact]
+    public void PasteSpecialCellsCommand_MultiplyOperationConvertsNumericTextDestinationToNumber()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(dest, new TextValue("123"));
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(1)))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Multiply));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(dest).Should().Be(new NumberValue(123));
+    }
+
+    [Fact]
+    public void PasteSpecialCellsCommand_AddOperationConvertsNumericTextSourceOntoNumberDestination()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(dest, new NumberValue(10));
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("5")))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(dest).Should().Be(new NumberValue(15));
+    }
+
+    [Fact]
+    public void PasteSpecialCellsCommand_MultiplyOperationLeavesNonNumericTextDestinationUnchanged()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(dest, new TextValue("abc"));
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(1)))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Multiply));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(dest).Should().Be(new TextValue("abc"));
+    }
+
+    [Fact]
+    public void PasteSpecialCellsCommand_AddOperationStillCombinesPlainNumbers()
+    {
+        // No-regression sibling for the TextValue coercion above: a normal number+number Add must
+        // still behave exactly as before.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(dest, new NumberValue(10));
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(7)))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(dest).Should().Be(new NumberValue(17));
+    }
 }

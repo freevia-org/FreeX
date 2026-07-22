@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -267,7 +268,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
 
         var existing = sheet.GetCell(destination)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
         existing.StyleId = sheet.GetStyleOnly(destination.Row, destination.Col) ?? existing.StyleId;
-        var result = ApplyOperation(existing.Value, sourceCell.Value, _options.Operation);
+        var result = ApplyOperation(existing.Value, sourceCell.Value, _options.Operation, workbook.Uses1904DateSystem);
         if (result is null)
         {
             cell = existing;
@@ -293,8 +294,8 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
     private static bool IsBlank(Cell cell) =>
         cell.FormulaText is null && cell.Value is BlankValue;
 
-    private static ScalarValue? ApplyOperation(ScalarValue destination, ScalarValue source, PasteSpecialOperation operation) =>
-        PasteArithmetic.ApplyOperation(destination, source, operation);
+    private static ScalarValue? ApplyOperation(ScalarValue destination, ScalarValue source, PasteSpecialOperation operation, bool uses1904DateSystem) =>
+        PasteArithmetic.ApplyOperation(destination, source, operation, uses1904DateSystem);
 }
 
 /// <summary>
@@ -315,14 +316,14 @@ internal static class PasteArithmetic
     /// order) rather than being treated as a no-op. Returns null to signal "leave the destination
     /// cell unchanged".
     /// </summary>
-    public static ScalarValue? ApplyOperation(ScalarValue destination, ScalarValue source, PasteSpecialOperation operation)
+    public static ScalarValue? ApplyOperation(ScalarValue destination, ScalarValue source, PasteSpecialOperation operation, bool uses1904DateSystem)
     {
         if (destination is ErrorValue destinationError)
             return destinationError;
         if (source is ErrorValue sourceError)
             return sourceError;
 
-        if (!TryNumber(destination, out var left) || !TryNumber(source, out var right))
+        if (!TryNumber(destination, uses1904DateSystem, out var left) || !TryNumber(source, uses1904DateSystem, out var right))
             return null;
 
         if (destination is BlankValue && source is BlankValue)
@@ -356,7 +357,7 @@ internal static class PasteArithmetic
             : new NumberValue(result);
     }
 
-    private static bool TryNumber(ScalarValue value, out double number)
+    private static bool TryNumber(ScalarValue value, bool uses1904DateSystem, out double number)
     {
         if (value is NumberValue n)
         {
@@ -379,6 +380,18 @@ internal static class PasteArithmetic
         if (value is BlankValue)
         {
             number = 0;
+            return true;
+        }
+
+        // A numeric-looking TextValue (e.g. a Text-formatted "123", or a plain literal "5") is
+        // coerced to its number the same way the rest of the app parses text-as-number (Excel's
+        // documented "multiply by 1" text-to-number trick, and the reverse: a numeric text operand
+        // combined onto a real number), matching ExcelTextNumberParser's Excel-parity parse used by
+        // FindReplaceService's own text-to-number coercion. A non-numeric text still fails here,
+        // leaving ApplyOperation's caller to treat the whole operation as a no-op.
+        if (value is TextValue text && ExcelTextNumberParser.TryParse(text.Value, out var parsed, uses1904DateSystem))
+        {
+            number = parsed;
             return true;
         }
 

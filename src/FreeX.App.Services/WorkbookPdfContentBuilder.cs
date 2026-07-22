@@ -150,7 +150,11 @@ public static class WorkbookPdfContentBuilder
             var y = rowYs[rowIndex];  // bottom of this row in PDF y-up
 
             var style = workbook.GetStyle(cell.StyleId);
-            var fill  = style.ResolveFillColor(workbook.Theme);
+            // R72-render-cf-visual-4-1: a conditional-format fill (color scale or a matched
+            // highlight/AboveAverage rule) overrides the cell's raw style fill, matching the WPF PDF
+            // path (which reads DisplayCell.Style already merged with CF by the viewport) and the
+            // Avalonia print-preview path (PageContentRenderModelBuilder).
+            var fill = cell.ConditionalFillColor ?? style.ResolveFillColor(workbook.Theme);
 
             // B&W mode: suppress colored cell fills (treat as white / transparent).
             // The page background is already white so simply omitting the fill rect is correct.
@@ -368,7 +372,9 @@ public static class WorkbookPdfContentBuilder
             var x = gridLeft + (columnIndex * columnWidth);
             var y = gridTop - ((rowIndex + 1) * options.RowHeightPoints);
             var style = workbook.GetStyle(cell.StyleId);
-            var fill = style.ResolveFillColor(workbook.Theme);
+            // R72-render-cf-visual-4-1: same conditional-format fill override as the page-setup-aware
+            // path above.
+            var fill = cell.ConditionalFillColor ?? style.ResolveFillColor(workbook.Theme);
             if (fill is not null || cell.IsTitle)
                 ops.Add(new PdfFillRect(x, y, columnWidth, options.RowHeightPoints, fill is { } fillColor ? ToPdfColor(fillColor) : TitleFillColor));
 

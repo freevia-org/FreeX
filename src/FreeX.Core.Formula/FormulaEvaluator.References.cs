@@ -261,6 +261,20 @@ public sealed partial class FormulaEvaluator
         var qualifiedSheet = workbook?.GetSheet(sheetQualifier);
         if (workbook is null || qualifiedSheet is null)
         {
+            // workbook.GetSheet only ever matches a real LOCAL sheet name -- a bracket-prefixed
+            // external-workbook qualifier (e.g. "[1]Sheet1", the on-disk shape for
+            // =[1]Sheet1!TaxRate) can never match it and always lands here. Route those through
+            // the same external-link resolver the plain-cell path (SheetEvalContext.GetCellValue)
+            // already consults instead of concluding outright that the qualifying sheet is gone --
+            // only genuinely unresolvable qualifiers (real missing local sheet, or an external
+            // link/sheet/name that doesn't exist) fall through to #REF!.
+            if (workbook is not null &&
+                TryResolveExternalSheetQualifiedDefinedName(workbook, sheetQualifier, node.Name, context, out var externalResult))
+            {
+                result = externalResult;
+                return true;
+            }
+
             result = ErrorValue.Ref;
             return true;
         }
@@ -299,6 +313,43 @@ public sealed partial class FormulaEvaluator
         }
 
         result = ErrorValue.Name;
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves a bracket-prefixed external-workbook sheet qualifier (e.g. the "[1]Sheet1" in
+    /// <c>=[1]Sheet1!TaxRate</c>) against that external link's cached
+    /// <see cref="FreeX.Core.Model.ExternalLinkModel.DefinedNames"/>, returning the cached value
+    /// Excel captured at last refresh -- mirroring <see cref="ExternalSheetReferenceResolver.TryResolveExternalDefinedName"/>,
+    /// which already handles the sheet-less <c>[n]!Name</c> shape, but reached from the
+    /// sheet-qualified shape instead. Returns <see langword="false"/> when
+    /// <paramref name="sheetQualifier"/> isn't a resolvable external sheet reference at all (not a
+    /// bracketed external qualifier, an unknown link, or an unknown sheet within it) or the named
+    /// external link doesn't define <paramref name="name"/> -- callers should fall back to #REF! in
+    /// either case, exactly as a genuinely missing local sheet would.
+    /// </summary>
+    private static bool TryResolveExternalSheetQualifiedDefinedName(
+        FreeX.Core.Model.Workbook workbook, string sheetQualifier, string name, IEvalContext context, out ScalarValue result)
+    {
+        result = ErrorValue.Ref;
+
+        var resolved = ExternalSheetReferenceResolver.TryResolve(workbook, sheetQualifier);
+        if (resolved is not { } external)
+            return false;
+
+        // TryResolve identifies the link/sheet by matching the bracketed qualifier text, but the
+        // opaque "[n]!Name" shape TryResolveExternalDefinedName expects needs the link's own
+        // 1-based position in workbook.ExternalLinks (the same "n" the on-disk/serialized
+        // reference form addresses it by) -- re-derive it from the resolved link instance.
+        var externalIndex = workbook.ExternalLinks.IndexOf(external.Link) + 1;
+        if (externalIndex < 1)
+            return false;
+
+        var opaqueName = "[" + externalIndex.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]!" + name;
+        if (!ExternalSheetReferenceResolver.TryResolveExternalDefinedName(workbook, opaqueName, out var formulaText))
+            return false;
+
+        result = EvaluateNamedFormulaText(name, formulaText, context, scopeSheetId: null);
         return true;
     }
 

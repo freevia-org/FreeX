@@ -86,6 +86,20 @@ public partial class MainWindow
         // box IS `range` itself, so behavior is unchanged.
         var areas = GetCurrentSelectionRanges(range);
         var boundingRange = GetSelectionBoundingRange(areas, range);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+
+        // R72-services-clipboard-interop-4-1: Ctrl+C on a column/row header selects the FULL
+        // 1..MaxRow or 1..MaxCol extent, not just the sheet's actual data. Without clamping, every
+        // step below -- the viewport build, the plain-text/CSV serialization, and the CF_HTML table
+        // -- would materialize up to 1,048,576 rows worth of DisplayCells, a multi-second/multi-MB
+        // stall for a single-column copy. Real Excel (and FreeX's own export paths, e.g.
+        // WorksheetPrintRenderPlanner.ResolveUsedRange/HtmlTableWriter) bound a whole-column/row
+        // operation to the sheet's used-range extent instead. Only the ordinary single-area
+        // selection is clamped here -- a multi-area (Ctrl+click) whole-column/row selection is rare
+        // enough, and its per-area SourceAreas/gap bookkeeping (R49-render-multiarea-selection-3-1)
+        // intricate enough, that it is left unclamped, matching its pre-existing behavior.
+        var copyRange = areas.Count == 1 ? ClampCopyRangeToUsedRange(sheet, boundingRange) : boundingRange;
+        IReadOnlyList<GridRange> copyAreas = areas.Count == 1 ? [copyRange] : areas;
 
         // P41: SheetGrid.Viewport only materializes the on-screen scroll position (see
         // ViewportService.Metrics BuildFrozenAwareRowMetrics, which stops once it has covered the
@@ -96,10 +110,9 @@ public partial class MainWindow
         // clip.Cells fallback captured further below. Build a viewport request sized to the actual
         // copied range instead, so external copy/paste (and CF_HTML) always reflects the full
         // selection regardless of what is currently scrolled into view.
-        var fullRangeViewport = BuildFullRangeViewportForClipboard(boundingRange) ?? viewport;
+        var fullRangeViewport = BuildFullRangeViewportForClipboard(copyRange) ?? viewport;
 
-        var text = ClipboardSerializer.Serialize(fullRangeViewport, boundingRange);
-        var sheetForHtml = _workbook.GetSheet(_currentSheetId);
+        var text = ClipboardSerializer.Serialize(fullRangeViewport, copyRange);
         try
         {
             // Place plain text AND an HTML table fragment (CF_HTML) on the OS clipboard together,
@@ -108,7 +121,7 @@ public partial class MainWindow
             // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
             var data = new DataObject();
             data.SetText(text);
-            var html = BuildHtmlClipboardFragment(fullRangeViewport, sheetForHtml, boundingRange, _workbook.Theme);
+            var html = BuildHtmlClipboardFragment(fullRangeViewport, sheet, copyRange, _workbook.Theme);
             if (!string.IsNullOrEmpty(html))
                 data.SetData(System.Windows.DataFormats.Html, html);
 
@@ -134,15 +147,17 @@ public partial class MainWindow
         // rectangle (no multi-area marching-ants rendering), so a disjoint selection's visual
         // indicator is the bounding box -- a pre-existing GridView (App.UI) limitation outside this
         // file's scope; it does not affect what actually gets copied/pasted below.
-        SheetGrid.ClipboardRange = boundingRange;
+        SheetGrid.ClipboardRange = copyRange;
         SheetGrid.ClipboardIsCut = isCut;
 
         // Capture raw cells (including formulas) for paste formula adjustment -- from EVERY
         // selected area, not just the active one, de-duplicating in case areas ever overlap.
-        var sheet = _workbook.GetSheet(_currentSheetId);
+        // copyAreas (not the raw areas) is used here too, so a whole-column/row copy's internal
+        // clipboard is bounded by the same used-range clamp as the OS-clipboard payload above,
+        // instead of materializing a blank Cell for every one of up to 1,048,576 rows.
         var clipCells = new List<(CellAddress, Cell)>();
         var seenAddresses = new HashSet<CellAddress>();
-        foreach (var area in areas)
+        foreach (var area in copyAreas)
         {
             for (uint r = area.Start.Row; r <= area.End.Row; r++)
             {
@@ -156,14 +171,49 @@ public partial class MainWindow
                 }
             }
         }
-        var pictureCells = CapturePictureCells(fullRangeViewport, sheet, boundingRange);
+        var pictureCells = CapturePictureCells(fullRangeViewport, sheet, copyRange);
         _internalClipboard = new InternalClipboard(
-            boundingRange,
+            copyRange,
             clipCells,
             pictureCells,
             text,
             isCut,
             areas.Count > 1 ? areas : null);
+    }
+
+    /// <summary>
+    /// R72-services-clipboard-interop-4-1: clamps a whole-column (<paramref name="range"/> spans
+    /// every row, 1..<see cref="CellAddress.MaxRow"/>) or whole-row (spans every column,
+    /// 1..<see cref="CellAddress.MaxCol"/>) copy selection down to the sheet's used-range extent on
+    /// that axis, mirroring <c>WorksheetPrintRenderPlanner.ResolveUsedRange</c>'s identical
+    /// whole-sheet-extent clamp for print/export. An explicit, already-bounded selection (the
+    /// overwhelmingly common case, e.g. A1:C3) is returned unchanged. An empty sheet (no used range)
+    /// clamps down to the single top-left cell of the selection, since there is nothing to copy.
+    /// </summary>
+    private static GridRange ClampCopyRangeToUsedRange(Sheet? sheet, GridRange range)
+    {
+        var isWholeColumn = range.RowCount == CellAddress.MaxRow;
+        var isWholeRow = range.ColCount == CellAddress.MaxCol;
+        if (!isWholeColumn && !isWholeRow)
+            return range;
+
+        if (sheet?.GetUsedRange() is not { } used)
+            return new GridRange(range.Start, range.Start);
+
+        var startRow = isWholeColumn ? Math.Max(range.Start.Row, used.Start.Row) : range.Start.Row;
+        var endRow = isWholeColumn ? Math.Min(range.End.Row, used.End.Row) : range.End.Row;
+        var startCol = isWholeRow ? Math.Max(range.Start.Col, used.Start.Col) : range.Start.Col;
+        var endCol = isWholeRow ? Math.Min(range.End.Col, used.End.Col) : range.End.Col;
+
+        // Defensive: a whole-column/row selection always spans 1..Max on its own axis, so it can
+        // never actually fail to overlap the used range on that axis -- but keep the result
+        // well-formed if that invariant is ever violated by a future caller.
+        if (startRow > endRow) { startRow = range.Start.Row; endRow = range.Start.Row; }
+        if (startCol > endCol) { startCol = range.Start.Col; endCol = range.Start.Col; }
+
+        return new GridRange(
+            new CellAddress(range.Start.Sheet, startRow, startCol),
+            new CellAddress(range.Start.Sheet, endRow, endCol));
     }
 
     // Smallest GridRange enclosing every area in `areas` (all assumed to be on the same sheet).

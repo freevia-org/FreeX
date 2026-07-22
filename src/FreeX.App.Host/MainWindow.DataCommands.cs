@@ -14,6 +14,7 @@ using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using AdvancedFilterDialogResult = FreeX.App.Presentation.Filtering.AdvancedFilterDialogResult;
 using AdvancedFilterPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterPlanner;
 using AdvancedFilterRangeSelectionRequest = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionRequest;
 
@@ -319,7 +320,17 @@ public partial class MainWindow
             request => ApplyAdvancedFilterRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
-        var result = dialog.Result;
+        ApplyAdvancedFilterResult(dialog.Result);
+    }
+
+    /// <summary>
+    /// Applies a completed Advanced Filter dialog result: runs the command, remembers an in-place
+    /// (no copy destination) filter for Data &gt; Reapply, and refreshes the UI. Split out of
+    /// AdvancedFilterBtn_Click so the R72-commands-sort-filter-4-3 remember-for-Reapply behavior is
+    /// directly testable without driving the real modal AdvancedFilterDialog.
+    /// </summary>
+    private void ApplyAdvancedFilterResult(AdvancedFilterDialogResult result)
+    {
         var outcome = _commandBus.ExecuteRepeatable(
             _workbook.Id,
             () => new AdvancedFilterCommand(
@@ -332,6 +343,20 @@ public partial class MainWindow
         {
             ShowCommandError(outcome, "Advanced Filter");
             return;
+        }
+
+        // R72-commands-sort-filter-4-3: remember an IN-PLACE Advanced Filter (no "Copy to another
+        // location" destination) so Data > Reapply (MainWindow.DataFilterCommands.cs
+        // ReapplyAutoFilter) can re-run it after the underlying data changes, exactly like the
+        // AutoFilter column factories it already remembers there. A "copy to another location"
+        // Advanced Filter is a one-time extraction, not a persistent in-place filter, so that case is
+        // intentionally left unremembered (and does not clear a previously remembered in-place one).
+        if (result.CopyToCell is null)
+        {
+            _lastInPlaceAdvancedFilter = new AdvancedFilterReapplyState(
+                result.ListRange,
+                result.CriteriaRange,
+                result.UniqueRecordsOnly);
         }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);

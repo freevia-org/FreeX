@@ -56,6 +56,60 @@ public sealed class ClipboardHtmlSerializerTests
         payload.Fragment.Should().Contain("B2");
     }
 
+    [Fact]
+    public void Serialize_TextValueCell_EmitsMsoNumberFormatTextMarker()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var viewport = new ViewportModel(
+            [new DisplayCell(1, 1, new TextValue("00501"), "00501", null, default, null)],
+            [],
+            []);
+
+        var payload = ClipboardHtmlSerializer.Serialize(viewport, sheet, new GridRange(address, address), workbook.Theme);
+
+        payload.Should().NotBeNull();
+        payload!.Fragment.Should().Contain("mso-number-format:'\\@';");
+        payload.Fragment.Should().Contain("00501");
+    }
+
+    [Fact]
+    public void Serialize_TextNumberFormatCell_EmitsMsoNumberFormatTextMarkerEvenWithNumberValue()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var style = new CellStyle { NumberFormat = "@" };
+        var viewport = new ViewportModel(
+            [new DisplayCell(1, 1, new NumberValue(501), "501", null, default, null, style)],
+            [],
+            []);
+
+        var payload = ClipboardHtmlSerializer.Serialize(viewport, sheet, new GridRange(address, address), workbook.Theme);
+
+        payload.Should().NotBeNull();
+        payload!.Fragment.Should().Contain("mso-number-format:'\\@';");
+    }
+
+    [Fact]
+    public void Serialize_PlainNumberCell_DoesNotEmitTextFormatMarker()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var viewport = new ViewportModel(
+            [new DisplayCell(1, 1, new NumberValue(501), "501", null, default, null)],
+            [],
+            []);
+
+        var payload = ClipboardHtmlSerializer.Serialize(viewport, sheet, new GridRange(address, address), workbook.Theme);
+
+        payload.Should().NotBeNull();
+        payload!.Fragment.Should().NotContain("mso-number-format");
+        payload.Fragment.Should().Contain("501");
+    }
+
     private static int ParseOffset(string payload, string field)
     {
         var start = payload.IndexOf(field, StringComparison.Ordinal) + field.Length;

@@ -305,7 +305,10 @@ internal static partial class XlsxChartXmlWriter
             element.SetAttributeValue("orientation", pageSetup.Orientation);
         if (pageSetup.Copies is { } copies)
             element.SetAttributeValue("copies", copies.ToString(CultureInfo.InvariantCulture));
+        AddOptionalBoolAttribute(element, "usePrinterDefaults", pageSetup.UsePrinterDefaults);
         AddOptionalIntAttribute(element, "firstPageNumber", pageSetup.FirstPageNumber);
+        if (pageSetup.FirstPageNumber is not null && pageSetup.UseFirstPageNumber == true)
+            element.SetAttributeValue("useFirstPageNumber", "1");
         AddOptionalIntAttribute(element, "horizontalDpi", pageSetup.HorizontalDpi);
         AddOptionalIntAttribute(element, "verticalDpi", pageSetup.VerticalDpi);
         AddOptionalBoolAttribute(element, "blackAndWhite", pageSetup.BlackAndWhite);

@@ -30,7 +30,9 @@ public sealed partial class NativeJsonSchemaTests
         using var document = JsonDocument.Parse(stream.ToArray());
         var root = document.RootElement;
         root.GetProperty("FileFormat").GetString().Should().Be("FreeX.NativeJsonWorkbook");
-        root.GetProperty("SchemaVersion").GetInt32().Should().Be(1);
+        // Bumped 1 -> 2 in R72-meta-1 to gate the legacy data-bar Min/Max -> AutoMin/AutoMax
+        // migration so it applies only to genuinely pre-r70 files, not to an explicit user choice.
+        root.GetProperty("SchemaVersion").GetInt32().Should().Be(2);
         root.GetProperty("MinimumReaderVersion").GetInt32().Should().Be(1);
     }
 
@@ -58,7 +60,7 @@ public sealed partial class NativeJsonSchemaTests
         adapter.Save(workbook, migratedStream);
         using var migratedDocument = JsonDocument.Parse(migratedStream.ToArray());
 
-        migratedDocument.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(1);
+        migratedDocument.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(2);
         migratedDocument.RootElement.GetProperty("FileFormat").GetString().Should().Be("FreeX.NativeJsonWorkbook");
     }
 

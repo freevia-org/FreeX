@@ -483,7 +483,7 @@ public static class PasteCommandFactory
         }
 
         var destinationValue = targetSheet?.GetCell(destinationAddress)?.Value ?? BlankValue.Instance;
-        if (PasteArithmetic.ApplyOperation(destinationValue, sourceCell.Value, operation) is null)
+        if (PasteArithmetic.ApplyOperation(destinationValue, sourceCell.Value, operation, workbook.Uses1904DateSystem) is null)
         {
             styleId = default;
             return false;
@@ -1268,7 +1268,7 @@ internal sealed class ExternalTextPasteSpecialCommand : IWorkbookCommand, IAffec
             var sourceValue = PasteCommandFactory.ParseClipboardValue(text);
             var existing = sheet.GetCell(address)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
             existing.StyleId = sheet.GetStyleOnly(address.Row, address.Col) ?? existing.StyleId;
-            var result = PasteArithmetic.ApplyOperation(existing.Value, sourceValue, _operation);
+            var result = PasteArithmetic.ApplyOperation(existing.Value, sourceValue, _operation, ctx.Workbook.Uses1904DateSystem);
             if (result is null)
                 continue;
 

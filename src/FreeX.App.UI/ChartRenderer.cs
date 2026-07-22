@@ -67,6 +67,18 @@ public static partial class ChartRenderer
     private static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport) =>
         BuildPlotModel(chart, viewport, WorkbookTheme.Office);
 
+    /// <summary>
+    /// True when the pie/doughnut slice at <paramref name="sliceIndex"/> (series 0 -- the only
+    /// series a pie ever plots) should render exploded. Honors BOTH the legacy scalar
+    /// <see cref="ChartModel.ExplodedSliceIndex"/> (single-slice explosion) AND every entry in
+    /// <see cref="ChartModel.ExplodedSlices"/> (per-point <c>&lt;c:dPt&gt;/&lt;c:explosion&gt;</c>
+    /// overrides), so a chart where several slices are individually exploded renders ALL of them
+    /// exploded rather than collapsing to just the first.
+    /// </summary>
+    private static bool IsPieSliceExploded(ChartModel chart, int sliceIndex) =>
+        chart.ExplodedSliceIndex == sliceIndex ||
+        chart.ExplodedSlices.Any(slice => slice.SeriesIndex == 0 && slice.PointIndex == sliceIndex);
+
     private static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
     {
         if (!ChartTypeSupport.IsRenderable(chart.Type))
@@ -138,7 +150,7 @@ public static partial class ChartRenderer
                 var sliceIndex = pieSeries.Slices.Count;
                 var slice = new PieSlice(label, v)
                 {
-                    IsExploded = chart.ExplodedSliceIndex == sliceIndex
+                    IsExploded = IsPieSliceExploded(chart, sliceIndex)
                 };
                 // Per-point fill (from <c:dPt> in chart XML) takes highest priority;
                 // fall back to series-level fill, then palette.

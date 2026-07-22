@@ -10,7 +10,11 @@ namespace FreeX.Core.IO;
 public sealed partial class NativeJsonAdapter : IFileAdapter
 {
     private const string NativeFileFormat = "FreeX.NativeJsonWorkbook";
-    private const int CurrentSchemaVersion = 1;
+    // Bumped 1 -> 2 (R72-meta-1): schema version 2 marks the point at which an explicit data-bar
+    // Min/Max threshold type is trusted as-is on load. Only a file whose loaded schema version is
+    // still < 2 (a genuine pre-r70/legacy save) has its legacy Min/Max data-bar endpoint migrated
+    // to AutoMin/AutoMax -- see ToConditionalFormat in NativeJsonAdapter.ConditionalFormat.cs.
+    private const int CurrentSchemaVersion = 2;
     private const int CurrentMinimumReaderVersion = 1;
     private const string NumberStoredAsTextCode = "NumberStoredAsText";
     private const string FormulaRefersToBlankCellsCode = "FormulaRefersToBlankCells";
@@ -33,6 +37,9 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             ?? throw new InvalidDataException("Invalid FreeX file");
 
         ValidateSchemaHeader(dto);
+        // A missing SchemaVersion field (pre-schema-version legacy file) is treated as version 1,
+        // the same as an explicit "SchemaVersion": 1 -- both predate the r70 AutoMin/AutoMax split.
+        var loadedSchemaVersion = dto.SchemaVersion ?? 1;
 
         var workbook = ToCellStyle(dto.DefaultStyle) is { } customizedDefaultStyle
             ? new Workbook(dto.Name, customizedDefaultStyle)
@@ -405,7 +412,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     sheet.DataValidations.Add(validation);
             }
 
-            LoadConditionalFormats(sheet, sDto.ConditionalFormats);
+            LoadConditionalFormats(sheet, sDto.ConditionalFormats, loadedSchemaVersion);
 
             var cellDtos = sDto.Cells ?? CellDtoSequence.Empty;
             sheet.EnsureCellCapacity(cellDtos.Count);
