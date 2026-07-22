@@ -195,6 +195,46 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
     }
 
     [Fact]
+    public async Task RawInlinePointModeDrag_ReplacesAnchorAndKeepsEditorFocus()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateShownWindow(out _);
+            try
+            {
+                var formulaAddress = window.Session.ActiveCell;
+                window.ActiveCellBorderForTest!.Focus();
+                Press(window, Key.F2, PhysicalKey.F2);
+                await DrainInputAsync();
+
+                var editor = FindByAutomationId<TextBox>(window, "WorksheetInlineCellEditor");
+                RaiseRawTextInput(editor, "=");
+                await DrainInputAsync();
+
+                DragCells(
+                    window,
+                    "Cell_B2",
+                    "Cell_D4",
+                    () =>
+                    {
+                        SetPrivateField(window, "_formulaReferenceStart", null);
+                        SetPrivateField(window, "_formulaReferenceLength", null);
+                    });
+                await DrainInputAsync();
+
+                window.InlineCellEditorTextForTest.Should().Be("=B2:D4");
+                editor.IsFocused.Should().BeTrue();
+                window.Session.SelectedRange.Should().Be(new GridRange(formulaAddress, formulaAddress));
+                FormulaReferenceHighlights(window).Should().ContainSingle();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task RawFormulaBarPointModeClick_AfterF2Toggle_InsertsReferenceAndCommitsFormula()
     {
         await Session.Dispatch(async () =>
@@ -318,6 +358,35 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
         window.MouseDown(point, MouseButton.Left, RawInputModifiers.LeftMouseButton);
         window.MouseUp(point, MouseButton.Left, RawInputModifiers.None);
     }
+
+    private static void DragCells(
+        MainWindow window,
+        string startAutomationId,
+        string endAutomationId,
+        Action? afterPointerDown = null)
+    {
+        var start = FindByAutomationId<Border>(window, startAutomationId);
+        var end = FindByAutomationId<Border>(window, endAutomationId);
+        var startPoint = start.TranslatePoint(
+            new Point(start.Bounds.Width / 2, start.Bounds.Height / 2),
+            window);
+        var endPoint = end.TranslatePoint(
+            new Point(end.Bounds.Width / 2, end.Bounds.Height / 2),
+            window);
+        startPoint.Should().NotBeNull();
+        endPoint.Should().NotBeNull();
+
+        window.MouseMove(startPoint!.Value, RawInputModifiers.None);
+        window.MouseDown(startPoint.Value, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+        afterPointerDown?.Invoke();
+        window.MouseMove(endPoint!.Value, RawInputModifiers.LeftMouseButton);
+        window.MouseUp(endPoint.Value, MouseButton.Left, RawInputModifiers.None);
+    }
+
+    private static void SetPrivateField(MainWindow window, string name, object? value) =>
+        typeof(MainWindow)
+            .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(window, value);
 
     private static T FindByAutomationId<T>(MainWindow window, string automationId)
         where T : Control =>
