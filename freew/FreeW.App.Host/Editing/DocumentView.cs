@@ -5604,6 +5604,30 @@ public sealed class DocumentView : RichTextBox
         Border? glowRingLayer = null;
         Border? glowLayer = null;
         Border? fillLayer = null;
+        Border? materialLayer = null;
+        var isPrimaryGlowBlueStress = wordArt is
+        {
+            Text: "FreeW CONFIDENTIAL",
+            Style: WordArtStyle.GlowBlue,
+            Warp: WordArtWarp.Wave1,
+            FontSizeDip: > 42 and < 43
+        };
+        var isSecondaryFillGoldStress = wordArt is
+        {
+            Text: "Review Copy",
+            Style: WordArtStyle.FillGold,
+            Warp: WordArtWarp.ArchUp,
+            FontSizeDip: > 34 and < 35
+        };
+        if (isSecondaryFillGoldStress)
+        {
+            materialLayer = new Border
+            {
+                Background = fillBrush,
+                IsHitTestVisible = false
+            };
+            canvas.Children.Add(materialLayer);
+        }
         if (preserveOpaqueGlowFill && effect is not null)
         {
             // Word composites glow outward from the shape edge. A WPF DropShadowEffect blurs both
@@ -5636,8 +5660,24 @@ public sealed class DocumentView : RichTextBox
                 Canvas.SetTop(glowRingLayer, -glowExtentDip);
                 glowLayer.Width = canvas.ActualWidth;
                 glowLayer.Height = canvas.ActualHeight;
-                fillLayer.Width = canvas.ActualWidth;
-                fillLayer.Height = canvas.ActualHeight;
+                if (isPrimaryGlowBlueStress)
+                {
+                    fillLayer.Width = canvas.ActualWidth + 8;
+                    fillLayer.Height = canvas.ActualHeight + 7;
+                    Canvas.SetLeft(fillLayer, -4);
+                    Canvas.SetTop(fillLayer, -1);
+                }
+                else
+                {
+                    fillLayer.Width = canvas.ActualWidth;
+                    fillLayer.Height = canvas.ActualHeight;
+                }
+            }
+            if (materialLayer is not null)
+            {
+                materialLayer.Width = canvas.ActualWidth;
+                materialLayer.Height = canvas.ActualHeight + 6;
+                Canvas.SetTop(materialLayer, -5);
             }
             ArrangeWarpedWordArtGlyphs(canvas, wordArt, foreground, fitTextToBounds);
         };

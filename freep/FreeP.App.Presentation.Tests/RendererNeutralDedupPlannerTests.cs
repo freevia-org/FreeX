@@ -477,6 +477,21 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfRadarLowerLabelRegistration_IsHostLocalAndImportedScoped()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+
+        wpf.Should().Contain("plan.Rings.Count == 9");
+        wpf.Should().Contain("plan.CategoryLabels.Count == 5");
+        wpf.Should().Contain("ImportedRadarAgilityLabelOffsetX");
+        wpf.Should().Contain("ImportedRadarStaminaLabelOffsetX");
+        wpf.Should().Contain("ImportedRadarLowerLabelOffsetY");
+        avalonia.Should().NotContain("ImportedRadarAgilityLabelOffsetX");
+        avalonia.Should().NotContain("ImportedRadarStaminaLabelOffsetX");
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_KeepChartMathOutOfPlatformSources()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");

@@ -30,6 +30,9 @@ public sealed class SlideCanvas : FrameworkElement
     private const double ImportedAptosBodyWpfRasterScale = 0.957;
     private const double ImportedAptosDisplayWpfRasterScaleY = 0.86;
     private const double ImportedAptosBodyOriginOffsetY = 6.0;
+    private const double ImportedRadarAgilityLabelOffsetX = 35.0;
+    private const double ImportedRadarStaminaLabelOffsetX = -51.0;
+    private const double ImportedRadarLowerLabelOffsetY = -2.0;
 
     // WPF has no native blur filter for glyph geometry. Keep its translated
     // shadow rings tighter while preserving shared authored offsets for Avalonia.
@@ -1615,8 +1618,30 @@ public sealed class SlideCanvas : FrameworkElement
         foreach (var label in plan.ValueLabels)
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
 
-        foreach (var label in plan.CategoryLabels)
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+        for (int labelIndex = 0; labelIndex < plan.CategoryLabels.Count; labelIndex++)
+        {
+            var label = plan.CategoryLabels[labelIndex];
+            var labelBounds = ToRect(label.Bounds);
+            if (plan.Rings.Count == 9 &&
+                plan.CategoryLabels.Count == 5 &&
+                plan.Series.Count == 2 &&
+                labelIndex is 2 or 3)
+            {
+                // Imported PowerPoint keeps the lower radar labels in the
+                // same vertical band but registers their WPF text boxes farther
+                // along the angled spokes. Avalonia retains the shared plan;
+                // this is WPF-only host registration.
+                double horizontalOffset = labelIndex == 2
+                    ? ImportedRadarAgilityLabelOffsetX
+                    : ImportedRadarStaminaLabelOffsetX;
+                labelBounds = new Rect(
+                    labelBounds.X + horizontalOffset,
+                    labelBounds.Y + ImportedRadarLowerLabelOffsetY,
+                    labelBounds.Width,
+                    labelBounds.Height);
+            }
+            DrawChartLabel(dc, label.Text, labelBounds, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+        }
 
         foreach (var primitive in plan.Series)
         {
