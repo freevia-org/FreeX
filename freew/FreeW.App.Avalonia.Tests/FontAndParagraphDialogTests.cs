@@ -327,6 +327,50 @@ public sealed class FontAndParagraphDialogTests
     // ── ParagraphDialog.ApplyResult: apply changes to the editor model ────────
 
     [Fact]
+    public void FontDialog_apply_sets_advanced_typography_fields()
+    {
+        var doc = MakeDoc("Advanced typography");
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.SelectAll();
+
+        var original = RunFormatting.Default;
+        var result = new FontDialog.FontDialogResult(
+            Family: null,
+            SizePt: null,
+            Bold: false,
+            Italic: false,
+            Underline: false,
+            Strikethrough: false,
+            VerticalAlign: VerticalAlign.Baseline,
+            SmallCaps: false,
+            AllCaps: false,
+            ColorHex: null,
+            HighlightHex: null,
+            FamilyChanged: false,
+            SizeChanged: false,
+            CharacterSpacingPt: 1.5,
+            KerningMinSizePt: 12,
+            PositionPt: 2,
+            Ligatures: LigatureMode.StandardContextual,
+            StylisticSet: 4,
+            NumberForm: NumberForm.OldStyle,
+            NumberSpacing: NumberSpacing.Tabular,
+            AdvancedChanged: true);
+
+        FontDialog.ApplyResult(view, result, original);
+
+        var formatting = ((Paragraph)view.Document.Blocks[0]).Runs.Single().Formatting;
+        formatting.CharacterSpacingPt.Should().Be(1.5);
+        formatting.KerningMinSizePt.Should().Be(12);
+        formatting.PositionPt.Should().Be(2);
+        formatting.Ligatures.Should().Be(LigatureMode.StandardContextual);
+        formatting.StylisticSet.Should().Be(4);
+        formatting.NumberForm.Should().Be(NumberForm.OldStyle);
+        formatting.NumberSpacing.Should().Be(NumberSpacing.Tabular);
+    }
+
+    [Fact]
     public void ParagraphDialog_apply_sets_alignment()
     {
         var doc = MakeDoc("Center me");

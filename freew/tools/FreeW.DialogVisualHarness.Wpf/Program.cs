@@ -109,6 +109,11 @@ static bool TryCaptureStaticPrompt(Scenario scenario, string output, Window owne
         var dialog = Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window != owner && window.IsVisible);
         if (dialog is null) return;
         dialog.UpdateLayout();
+        if (scenario.RouteId == "font")
+        {
+            Populate(dialog, scenario);
+            dialog.UpdateLayout();
+        }
         captured = CaptureRenderedWindow(scenario, output, dialog, out result);
         dialog.Close();
     }));

@@ -39,10 +39,10 @@ public sealed class DialogChromeDedupSourceGuardTests
             ("FontDialog.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
-                "AvaloniaCompactDialogChrome.ApplyComboBox(_familyBox, DialogChromeStyle);",
-                "AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);",
                 "AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle",
-                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0))",
+                "AvaloniaCompactDialogChrome.CreateOkCancelRow(",
             ]),
             ("InsertDialogs.cs",
             [

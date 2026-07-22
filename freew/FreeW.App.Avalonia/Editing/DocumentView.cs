@@ -11362,6 +11362,22 @@ public sealed class DocumentView : Control
     public void SetSelectionFontSize(double points) => ApplyRunFormatting(f => f with { FontSizePt = points });
 
     /// <summary>
+    /// Applies the model-backed typography fields exposed by the Font dialog's Advanced tab while
+    /// preserving every basic run-formatting property. The caller owns the surrounding undo group.
+    /// </summary>
+    public void ApplyAdvancedFontFormatting(RunFormatting formatting) =>
+        ApplyRunFormatting(current => current with
+        {
+            CharacterSpacingPt = formatting.CharacterSpacingPt,
+            KerningMinSizePt = formatting.KerningMinSizePt,
+            PositionPt = formatting.PositionPt,
+            Ligatures = formatting.Ligatures,
+            StylisticSet = formatting.StylisticSet,
+            NumberForm = formatting.NumberForm,
+            NumberSpacing = formatting.NumberSpacing,
+        });
+
+    /// <summary>
     /// Apply <paramref name="settings"/> to the document's page geometry in a single undoable step
     /// (AV-PAGE). The command snapshots the prior values and restores them on Undo. Triggers a
     /// relayout so the page chrome (size, margins) updates immediately in Print Layout mode.
