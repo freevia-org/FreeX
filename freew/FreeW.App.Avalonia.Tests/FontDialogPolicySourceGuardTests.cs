@@ -5,19 +5,20 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class FontDialogPolicySourceGuardTests
 {
     [Fact]
-    public void FontDialog_DelegatesBasicCatalogsStateValidationAndResultConstructionToPresentationPlanner()
+    public void FontDialog_DelegatesFullCatalogsStateValidationAndResultConstructionToPresentationPlanner()
     {
         var source = ReadAvaloniaSource("FontDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("FontDialogPlanner.BuildBasicInitialState(");
-        source.Should().Contain("FontDialogPlanner.BasicFamilyChoices");
-        source.Should().Contain("FontDialogPlanner.BasicSizeChoices");
-        source.Should().Contain("FontDialogPlanner.BasicColorChoices");
-        source.Should().Contain("FontDialogPlanner.HighlightColorChoices");
-        source.Should().Contain("new FontDialogBasicInput(");
-        source.Should().Contain("FontDialogPlanner.TryBuildBasicResult(");
-        source.Should().Contain("ToDialogResult(plannedResult!)");
+        source.Should().Contain("FontDialogPlanner.BuildInitialState(");
+        source.Should().Contain("FontDialogPlanner.SizeChoices");
+        source.Should().Contain("FontDialogPlanner.ColorChoices");
+        source.Should().Contain("FontDialogPlanner.LigatureChoices");
+        source.Should().Contain("FontDialogPlanner.NumberFormChoices");
+        source.Should().Contain("FontDialogPlanner.NumberSpacingChoices");
+        source.Should().Contain("new FontDialogInput(");
+        source.Should().Contain("FontDialogPlanner.TryBuildResult(");
+        source.Should().Contain("ToDialogResult(planned!)");
     }
 
     [Fact]
