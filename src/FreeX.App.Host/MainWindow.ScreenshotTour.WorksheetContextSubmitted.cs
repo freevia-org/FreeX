@@ -99,19 +99,19 @@ public partial class MainWindow
                 context.HyperlinkCell,
                 new GridRange(context.HyperlinkCell, context.HyperlinkCell),
                 "Remove Hyperlink",
-                "ExecuteWorksheetContextMenuAction(RemoveHyperlinks) -> RemoveHyperlinks -> RemoveHyperlinksCommand",
+                "ExecuteWorksheetContextMenuAction(RemoveHyperlinks) -> RemoveHyperlinkMenuItem_Click -> ClearHyperlinksCommand",
                 commandOutcomes);
             captures.Add(await CaptureWorksheetContextSubmittedWindowAsync(
                 outputDir,
                 context,
                 "remove-hyperlink-result",
                 "freex_worksheet_context_submitted_remove_hyperlink_result",
-                "Remove Hyperlink result clears the link target and resets visible hyperlink styling while preserving display text.",
-                "ExecuteWorksheetContextMenuAction(RemoveHyperlinks) -> RemoveHyperlinksCommand",
+                "Remove Hyperlink result clears the link target and preserves the cell's visible hyperlink styling (blue/underline) while preserving display text.",
+                "ExecuteWorksheetContextMenuAction(RemoveHyperlinks) -> RemoveHyperlinkMenuItem_Click -> ClearHyperlinksCommand",
                 new GridRange(context.HyperlinkCell, context.HyperlinkCell)));
             workflows.Add(CreateWorksheetContextSubmittedWorkflow(
                 "Remove Hyperlink submitted result",
-                "ExecuteWorksheetContextMenuAction(RemoveHyperlinks) -> RemoveHyperlinksCommand",
+                "ExecuteWorksheetContextMenuAction(RemoveHyperlinks) -> RemoveHyperlinkMenuItem_Click -> ClearHyperlinksCommand",
                 "remove-hyperlink-result"));
 
             ExecuteWorksheetContextSubmittedAction(
