@@ -267,10 +267,14 @@ internal static partial class RowColumnShiftHelpers
             }
             sheet.DataValidations.NotifyRulesChanged();
         }
-        foreach (var rule in sheet.ConditionalFormats)
+        if (sheet.ConditionalFormats.Count != 0)
         {
-            rule.AppliesTo = ShiftRangeRowsUp(rule.AppliesTo, start, count);
-            ShiftCfAdditionalRanges(rule, range => ShiftRangeRowsUp(range, start, count));
+            foreach (var rule in sheet.ConditionalFormats)
+            {
+                rule.AppliesTo = ShiftRangeRowsUp(rule.AppliesTo, start, count);
+                ShiftCfAdditionalRanges(rule, range => ShiftRangeRowsUp(range, start, count));
+            }
+            sheet.ConditionalFormats.NotifyRulesChanged();
         }
     }
 
@@ -298,20 +302,24 @@ internal static partial class RowColumnShiftHelpers
             }
             sheet.DataValidations.NotifyRulesChanged();
         }
-        for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
+        if (sheet.ConditionalFormats.Count != 0)
         {
-            var rule = sheet.ConditionalFormats[i];
-            var shifted = ShiftRangeRowsDown(rule.AppliesTo, start, count);
-            ShiftCfAdditionalRanges(rule, range => ShiftRangeRowsDown(range, start, count));
-            if (shifted is null)
+            for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
             {
-                if (PromoteCfSurvivorOrRemove(rule))
-                    sheet.ConditionalFormats.RemoveAt(i);
+                var rule = sheet.ConditionalFormats[i];
+                var shifted = ShiftRangeRowsDown(rule.AppliesTo, start, count);
+                ShiftCfAdditionalRanges(rule, range => ShiftRangeRowsDown(range, start, count));
+                if (shifted is null)
+                {
+                    if (PromoteCfSurvivorOrRemove(rule))
+                        sheet.ConditionalFormats.RemoveAt(i);
+                }
+                else
+                {
+                    rule.AppliesTo = shifted.Value;
+                }
             }
-            else
-            {
-                rule.AppliesTo = shifted.Value;
-            }
+            sheet.ConditionalFormats.NotifyRulesChanged();
         }
     }
 
@@ -326,10 +334,14 @@ internal static partial class RowColumnShiftHelpers
             }
             sheet.DataValidations.NotifyRulesChanged();
         }
-        foreach (var rule in sheet.ConditionalFormats)
+        if (sheet.ConditionalFormats.Count != 0)
         {
-            rule.AppliesTo = ShiftRangeColumnsUp(rule.AppliesTo, start, count);
-            ShiftCfAdditionalRanges(rule, range => ShiftRangeColumnsUp(range, start, count));
+            foreach (var rule in sheet.ConditionalFormats)
+            {
+                rule.AppliesTo = ShiftRangeColumnsUp(rule.AppliesTo, start, count);
+                ShiftCfAdditionalRanges(rule, range => ShiftRangeColumnsUp(range, start, count));
+            }
+            sheet.ConditionalFormats.NotifyRulesChanged();
         }
     }
 
@@ -356,20 +368,24 @@ internal static partial class RowColumnShiftHelpers
             }
             sheet.DataValidations.NotifyRulesChanged();
         }
-        for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
+        if (sheet.ConditionalFormats.Count != 0)
         {
-            var rule = sheet.ConditionalFormats[i];
-            var shifted = ShiftRangeColumnsDown(rule.AppliesTo, start, count);
-            ShiftCfAdditionalRanges(rule, range => ShiftRangeColumnsDown(range, start, count));
-            if (shifted is null)
+            for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
             {
-                if (PromoteCfSurvivorOrRemove(rule))
-                    sheet.ConditionalFormats.RemoveAt(i);
+                var rule = sheet.ConditionalFormats[i];
+                var shifted = ShiftRangeColumnsDown(rule.AppliesTo, start, count);
+                ShiftCfAdditionalRanges(rule, range => ShiftRangeColumnsDown(range, start, count));
+                if (shifted is null)
+                {
+                    if (PromoteCfSurvivorOrRemove(rule))
+                        sheet.ConditionalFormats.RemoveAt(i);
+                }
+                else
+                {
+                    rule.AppliesTo = shifted.Value;
+                }
             }
-            else
-            {
-                rule.AppliesTo = shifted.Value;
-            }
+            sheet.ConditionalFormats.NotifyRulesChanged();
         }
     }
 

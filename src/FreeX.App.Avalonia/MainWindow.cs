@@ -15989,7 +15989,7 @@ public sealed partial class MainWindow : Window
                 name => _session.Workbook.Sheets.FirstOrDefault(sheet =>
                     string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
                 _session.Workbook.NamedRanges,
-                name => _session.Workbook.TryGetNamedRange(name, _session.ActiveSheet.Id, out var scoped) ? scoped : null,
+                (name, sheetId) => _session.Workbook.TryGetNamedRange(name, sheetId, out var scoped) ? scoped : null,
                 out range))
         {
             return true;

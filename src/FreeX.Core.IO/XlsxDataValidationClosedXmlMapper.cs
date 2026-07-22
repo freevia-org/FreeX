@@ -1,3 +1,4 @@
+using System.Globalization;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
 
@@ -161,8 +162,8 @@ internal static class XlsxDataValidationClosedXmlMapper
                 // For x14 rules the real formula lives in the worksheet extLst x14 block;
                 // the legacy <dataValidation> intentionally carries an empty formula1 so
                 // that older readers gracefully ignore it. Pass empty strings here.
-                var f1 = dv.IsX14 ? "" : (dv.Formula1 ?? "");
-                var f2 = dv.IsX14 ? "" : (dv.Formula2 ?? "");
+                var f1 = dv.IsX14 ? "" : (NormalizeNumericFormulaForSave(dv.Type, dv.Formula1) ?? "");
+                var f2 = dv.IsX14 ? "" : (NormalizeNumericFormulaForSave(dv.Type, dv.Formula2) ?? "");
 
                 switch (dv.Type)
                 {
@@ -230,8 +231,102 @@ internal static class XlsxDataValidationClosedXmlMapper
         return $"\"{trimmed.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
     }
 
+    /// <summary>
+    /// Canonicalizes a Date/Time/Decimal/WholeNumber data-validation bound before it is written to
+    /// formula1/formula2. Excel always stores Date/Time bounds as the OLE Automation date serial
+    /// (e.g. "45292" for 1/1/2024, not the human text "1/1/2024" -- which Excel itself would parse
+    /// as (1/1)/2024, a near-zero number) and stores Decimal/WholeNumber bounds using an
+    /// invariant dot-decimal separator regardless of the authoring locale. A value that already
+    /// looks like a serial/invariant number is normalized in place (never reinterpreted as a
+    /// date/time string), and a formula or cell/range reference (anything that fails to parse as
+    /// either) is left completely untouched.
+    /// </summary>
+    internal static string? NormalizeNumericFormulaForSave(DvType type, string? formula)
+    {
+        if (string.IsNullOrWhiteSpace(formula))
+            return formula;
+
+        var trimmed = formula.Trim();
+
+        // A bare number is already meant to be the on-disk form for every one of these types --
+        // normalize its decimal separator and stop, without ever trying to reinterpret it as a
+        // date/time string (e.g. a Date bound already saved as "45292").
+        if (TryParseInvariantOrCurrentCultureNumber(trimmed, out var numericText))
+            return numericText;
+
+        return type switch
+        {
+            DvType.Date => TryParseDateOnly(trimmed, out var dateSerial) ? dateSerial : formula,
+            DvType.Time => TryParseTimeOnly(trimmed, out var timeSerial) ? timeSerial : formula,
+            _ => formula,
+        };
+    }
+
+    private static bool TryParseInvariantOrCurrentCultureNumber(string trimmed, out string invariantText)
+    {
+        const NumberStyles styles = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint |
+                                     NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite;
+
+        if (decimal.TryParse(trimmed, styles, CultureInfo.InvariantCulture, out var invariantValue))
+        {
+            invariantText = invariantValue.ToString(CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        if (!CultureInfo.CurrentCulture.Equals(CultureInfo.InvariantCulture) &&
+            decimal.TryParse(trimmed, styles, CultureInfo.CurrentCulture, out var currentValue))
+        {
+            invariantText = currentValue.ToString(CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        invariantText = "";
+        return false;
+    }
+
+    private static bool TryParseDateOnly(string trimmed, out string serialText)
+    {
+        if (DateTime.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed) ||
+            DateTime.TryParse(trimmed, CultureInfo.CurrentCulture, DateTimeStyles.None, out parsed))
+        {
+            serialText = FormatSerial(parsed.ToOADate());
+            return true;
+        }
+
+        serialText = "";
+        return false;
+    }
+
+    private static bool TryParseTimeOnly(string trimmed, out string serialText)
+    {
+        if (DateTime.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.NoCurrentDateDefault, out var parsed) ||
+            DateTime.TryParse(trimmed, CultureInfo.CurrentCulture, DateTimeStyles.NoCurrentDateDefault, out parsed))
+        {
+            serialText = FormatSerial(parsed.TimeOfDay.TotalDays);
+            return true;
+        }
+
+        serialText = "";
+        return false;
+    }
+
+    private static string FormatSerial(double value)
+    {
+        // Round away floating-point noise before formatting -- Excel's own serial resolution is
+        // roughly 1 second (1/86400 of a day), so 8 decimal places is far more than enough.
+        var rounded = Math.Round(value, 8, MidpointRounding.AwayFromZero);
+        return rounded == Math.Floor(rounded)
+            ? rounded.ToString("F0", CultureInfo.InvariantCulture)
+            : rounded.ToString("0.########", CultureInfo.InvariantCulture);
+    }
+
+    // Only treat `candidate` as covered by an already-loaded rule when BOTH the range AND the rule
+    // content match -- ClosedXML sometimes surfaces one multi-area Excel rule as several separate
+    // IXLDataValidation entries (one per area, all sharing the same content), and those split
+    // artifacts are the only case this should collapse. Two independent rules that merely happen to
+    // target the same range (e.g. a List rule and a Custom rule both on A1:A10) must both be kept.
     private static bool IsDuplicateCoveredValidation(IEnumerable<DataValidation> existingRules, DataValidation candidate) =>
-        CandidateRanges(candidate).All(range => existingRules.Any(existing => CoversRange(existing, range)));
+        CandidateRanges(candidate).All(range => existingRules.Any(existing => CoversRange(existing, range, candidate)));
 
     private static IEnumerable<GridRange> CandidateRanges(DataValidation validation)
     {
@@ -240,9 +335,33 @@ internal static class XlsxDataValidationClosedXmlMapper
             yield return range;
     }
 
-    private static bool CoversRange(DataValidation validation, GridRange range) =>
-        IsSameRange(validation.AppliesTo, range) ||
-        validation.AdditionalRanges.Any(additionalRange => IsSameRange(additionalRange, range));
+    private static bool CoversRange(DataValidation validation, GridRange range, DataValidation candidate) =>
+        (IsSameRange(validation.AppliesTo, range) ||
+            validation.AdditionalRanges.Any(additionalRange => IsSameRange(additionalRange, range))) &&
+        HasSameRuleContent(validation, candidate);
+
+    /// <summary>
+    /// True when two <see cref="DataValidation"/> rules represent the same underlying Excel rule
+    /// rather than two independent rules that merely happen to cover the same range. Type/Operator
+    /// must always agree. Formula1/Formula2 must agree too, EXCEPT that a blank Formula on one side
+    /// is treated as matching any Formula on the other -- this is what lets an x14 cross-sheet List
+    /// rule's inert legacy echo (same range/type, but an intentionally empty formula1 before the
+    /// x14 merge fills it in) collapse into its formula-bearing counterpart, without ever letting
+    /// two genuinely different, both-populated rules (e.g. a List "Yes,No" and a Custom
+    /// "ISNUMBER(A1)" on the same range) collapse into one another.
+    /// </summary>
+    private static bool HasSameRuleContent(DataValidation left, DataValidation right) =>
+        left.Type == right.Type &&
+        left.Operator == right.Operator &&
+        FormulaMatchesOrEitherBlank(left.Formula1, right.Formula1) &&
+        FormulaMatchesOrEitherBlank(left.Formula2, right.Formula2) &&
+        string.Equals(left.ErrorTitle, right.ErrorTitle, StringComparison.Ordinal) &&
+        string.Equals(left.ErrorMessage, right.ErrorMessage, StringComparison.Ordinal) &&
+        string.Equals(left.PromptTitle, right.PromptTitle, StringComparison.Ordinal) &&
+        string.Equals(left.PromptMessage, right.PromptMessage, StringComparison.Ordinal);
+
+    private static bool FormulaMatchesOrEitherBlank(string? left, string? right) =>
+        string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right) || string.Equals(left, right, StringComparison.Ordinal);
 
     private static bool IsSameRange(GridRange left, GridRange right) =>
         left.Start.Sheet == right.Start.Sheet &&

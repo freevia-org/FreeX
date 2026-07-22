@@ -207,6 +207,28 @@ public sealed class AutoSumFormulaPlannerTests
     }
 
     [Fact]
+    public void TryCreatePlan_TwoDimensionalBlockWithBlankCorner_DoesNotMisplaceSingleColumnSumIntoBlankCorner()
+    {
+        // R64-meta-1: A1:C4 is a genuine 2-D block (RowCount=4, ColCount=3) where only column A has
+        // numbers (A1=10, A2=20, A3=30) and the block's own trailing corner cell C4 is blank. The
+        // vertical blank-trailing branch must NOT fire here (that would wrongly write =SUM(A1:A3)
+        // into C4, a column-A formula stuffed into column C, dropping columns B/C entirely) -- it
+        // must fall through to the normal multi-column/whole-block AutoSum behavior instead.
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10)); // A1
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20)); // A2
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30)); // A3
+        var selection = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3));
+
+        AutoSumFormulaPlanner.TryCreatePlan(sheet, "SUM", selection, out var plan)
+            .Should()
+            .BeTrue();
+
+        plan.Target.Should().Be(new CellAddress(sheet.Id, 5, 1), "the fallthrough appends below the whole block, it does not target the blank corner C4");
+        plan.Formula.Should().Be("SUM(A1:C4)", "a true 2-D selection sums the whole block rather than a single column");
+    }
+
+    [Fact]
     public void TryCreatePlan_MultiCellSelectionWithoutBlankTrailingCell_StillAppendsBelowSelection()
     {
         // Sibling no-regression case: when the selection's own trailing cell already has data (no

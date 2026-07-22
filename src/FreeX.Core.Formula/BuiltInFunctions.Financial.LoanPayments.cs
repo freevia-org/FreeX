@@ -136,6 +136,34 @@ public static partial class BuiltInFunctions
         return NumberResult(pmt - ipmt);
     }
 
+    /// <summary>
+    /// Closed-form outstanding-principal balance after <paramref name="k"/> payments (k = 0..nper)
+    /// for a standard amortization schedule with payment <paramref name="pmt"/> (as produced by
+    /// CalcPmt with fv = 0). Used by CUMIPMT/CUMPRINC to avoid an O(nper) per-period loop, which
+    /// would hang for a bounds-valid-but-huge nper (e.g. billions of periods) even though the
+    /// requested start/end span is small.
+    /// For type = 0 (ordinary annuity) this is the standard TVM balance recurrence:
+    ///   Balance(k) = pv*(1+rate)^k + pmt*((1+rate)^k - 1)/rate.
+    /// For type = 1 (annuity-due) payment 1 is pure principal with no interest accrued before it
+    /// (mirrors CalcIpmt's per &lt;= 1 special case), so the same recurrence applies starting from
+    /// Balance(1) = pv + pmt instead of Balance(0) = pv.
+    /// Because PPMT(per) = pmt - IPMT(per) for every period by construction (see PpmtScalar), and
+    /// Balance(per) = Balance(per-1) + PPMT(per) telescopes, the cumulative principal paid over
+    /// [start, end] is simply CumulativeBalance(end) - CumulativeBalance(start-1).
+    /// </summary>
+    private static double CumulativeBalance(double rate, double pmt, double pv, int type, int k)
+    {
+        if (k <= 0) return pv;
+        double g = 1 + rate;
+        if (type == 1)
+        {
+            double gp = Math.Pow(g, k - 1);
+            return (pv + pmt) * gp + pmt * (gp - 1) / rate;
+        }
+        double gpOrdinary = Math.Pow(g, k);
+        return pv * gpOrdinary + pmt * (gpOrdinary - 1) / rate;
+    }
+
     private static ScalarValue Cumipmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
@@ -165,10 +193,14 @@ public static partial class BuiltInFunctions
         if (rate <= 0 || nper <= 0 || pv <= 0) return ErrorValue.Num;
         int is_ = (int)Math.Truncate(start), ie = (int)Math.Truncate(end);
         if (is_ < 1 || ie < is_ || ie > (int)Math.Truncate(nper)) return ErrorValue.Num;
-        double sum = 0;
-        for (int per = is_; per <= ie; per++)
-            sum += CalcIpmt(rate, per, nper, pv, 0, itype);
-        return NumberResult(sum);
+        // Closed form: IPMT(per) + PPMT(per) = pmt for every period by construction, so the
+        // cumulative interest over [is_, ie] is just the total payments over the span minus the
+        // cumulative principal (see CumulativeBalance) -- this avoids an O(nper) loop that would
+        // hang for a bounds-valid-but-huge nper.
+        double pmt = CalcPmt(rate, nper, pv, 0, itype);
+        double cumPrinc = CumulativeBalance(rate, pmt, pv, itype, ie) - CumulativeBalance(rate, pmt, pv, itype, is_ - 1);
+        double count = ie - is_ + 1;
+        return NumberResult(count * pmt - cumPrinc);
     }
 
     private static ScalarValue Cumprinc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -200,10 +232,10 @@ public static partial class BuiltInFunctions
         if (rate <= 0 || nper <= 0 || pv <= 0) return ErrorValue.Num;
         int is_ = (int)Math.Truncate(start), ie = (int)Math.Truncate(end);
         if (is_ < 1 || ie < is_ || ie > (int)Math.Truncate(nper)) return ErrorValue.Num;
+        // Closed form via CumulativeBalance (see its doc comment) -- avoids an O(nper) loop that
+        // would hang for a bounds-valid-but-huge nper.
         double pmt = CalcPmt(rate, nper, pv, 0, itype);
-        double sum = 0;
-        for (int per = is_; per <= ie; per++)
-            sum += pmt - CalcIpmt(rate, per, nper, pv, 0, itype);
+        double sum = CumulativeBalance(rate, pmt, pv, itype, ie) - CumulativeBalance(rate, pmt, pv, itype, is_ - 1);
         return NumberResult(sum);
     }
 }

@@ -181,7 +181,12 @@ public sealed partial class FormulaEvaluator
                 return true;
             }
 
-            if (guessValue is not BlankValue && !TryCoerceToNumberValue(guessValue, out guess))
+            // An explicitly-supplied guess argument that evaluates to blank (e.g. a reference to
+            // an empty cell) must coerce to 0.0, not silently keep the omitted-argument default
+            // of 0.1 -- TryCoerceToNumberValue already maps BlankValue to 0.0/true, so it must
+            // run unconditionally here rather than being skipped for BlankValue (mirrors the
+            // slow-path Irr fix in BuiltInFunctions.Financial.CashFlow.cs).
+            if (!TryCoerceToNumberValue(guessValue, out guess))
             {
                 result = ErrorValue.Value;
                 return true;

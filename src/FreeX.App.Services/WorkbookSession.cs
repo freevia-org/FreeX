@@ -907,8 +907,11 @@ public sealed class WorkbookSession
         bool matchCase = false,
         bool matchEntireCell = false)
     {
-        var text = searchText ?? _lastFindText;
-        if (string.IsNullOrEmpty(text))
+        var text = searchText ?? _lastFindText ?? string.Empty;
+        // Excel allows a blank "Find what" as long as a Format criterion narrows the search (Find
+        // All by format only); only reject the empty search when no format criterion was supplied
+        // either (R64-commands-find-replace-6-1).
+        if (string.IsNullOrEmpty(text) && options?.RequiredFormat is null)
             return WorkbookNavigationResult.Failed("Find text is required.");
 
         if (searchText is null && options is null)
@@ -958,7 +961,8 @@ public sealed class WorkbookSession
     {
         ArgumentNullException.ThrowIfNull(searchText);
 
-        if (string.IsNullOrEmpty(searchText))
+        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
+        if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
             return WorkbookFindAllResult.Failed("Find text is required.");
 
         var effectiveOptions = ResolveFindOptions(options, FindLookIn.Formulas);
@@ -988,7 +992,8 @@ public sealed class WorkbookSession
         ArgumentNullException.ThrowIfNull(searchText);
         ArgumentNullException.ThrowIfNull(replaceText);
 
-        if (string.IsNullOrEmpty(searchText))
+        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
+        if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
             return WorkbookReplaceResult.Failed("Find text is required.");
 
         var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
@@ -1057,7 +1062,8 @@ public sealed class WorkbookSession
         ArgumentNullException.ThrowIfNull(searchText);
         ArgumentNullException.ThrowIfNull(replaceText);
 
-        if (string.IsNullOrEmpty(searchText))
+        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
+        if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
             return WorkbookReplaceResult.Failed("Find text is required.");
 
         var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);

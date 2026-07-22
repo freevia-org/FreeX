@@ -436,21 +436,25 @@ public static partial class NumberFormatter
         // Which bracket is the "lead" elapsed unit?
         long leadValue;
         string leadToken;
+        int leadWidth; // count of the repeated bracket letter, e.g. "hh" in "[hh]" -> 2
         if (elapsedMatch.Groups[1].Success)       // [h] or [H]
         {
             leadValue = totalHours;
             leadToken = elapsedMatch.Value;        // e.g. "[h]"
+            leadWidth = elapsedMatch.Groups[1].Length;
         }
         else if (elapsedMatch.Groups[2].Success)  // [m] or [M]
         {
             leadValue = totalMinutes;
             leadToken = elapsedMatch.Value;
+            leadWidth = elapsedMatch.Groups[2].Length;
             remMinutes = (int)(totalSeconds % 60);  // remSeconds stands; remMinutes not used here
         }
         else                                      // [s] or [S]
         {
             leadValue = totalSeconds;
             leadToken = elapsedMatch.Value;
+            leadWidth = elapsedMatch.Groups[3].Length;
         }
 
         // Build output: replace the lead bracket with its numeric value,
@@ -477,7 +481,11 @@ public static partial class NumberFormatter
             // Skip the bracket token we already handled
             else if (string.Compare(format, i, leadToken, 0, leadToken.Length, StringComparison.OrdinalIgnoreCase) == 0)
             {
-                sb.Append(leadValue);
+                // A doubled (or longer) bracket letter, e.g. "[hh]", zero-pads the lead unit
+                // to that width; a single letter, e.g. "[h]", is left unpadded.
+                sb.Append(leadValue.ToString(
+                    "D" + leadWidth.ToString(CultureInfo.InvariantCulture),
+                    CultureInfo.InvariantCulture));
                 i += leadToken.Length;
             }
             // Skip any other bracket content (locale, color, etc.)

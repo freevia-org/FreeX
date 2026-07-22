@@ -48,6 +48,14 @@ public static partial class BuiltInFunctions
         var dateRange = args[1] is RangeValue datesRange
             ? datesRange
             : SingleCellArray(args[1]);
+        // A genuinely-omitted guess argument defaults to 0.1 (Excel's XIRR default guess), but
+        // an explicitly-supplied argument that merely evaluates to blank (e.g. a reference to
+        // an empty cell) must flow through normal numeric coercion instead -- BlankValue
+        // coerces to 0.0 (ToNumber), matching Excel's blank-cell-as-0 rule and mirroring RATE's
+        // guessArg handling in BuiltInFunctions.Financial.LoanValues.cs. Defaulting guessArg to
+        // NumberValue(0.1) when omitted (rather than leaving it BlankValue) means the single
+        // ToNumber(guessValue) below naturally yields 0.1 for "omitted" and 0.0 for "explicit
+        // blank".
         var guessArg = args.Count > 2 ? args[2] : new NumberValue(0.1);
         if (guessArg is RangeValue guessRange)
             return MapUnaryTextRange(guessRange, guessValue => XirrScalar(valRange, dateRange, guessValue));
@@ -57,7 +65,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue XirrScalar(RangeValue valRange, RangeValue dateRange, ScalarValue guessValue)
     {
         if (guessValue is ErrorValue guessError) return guessError;
-        double guess = guessValue is not BlankValue ? ToNumber(guessValue) : 0.1;
+        double guess = ToNumber(guessValue);
         // 1 + guess must be > 0 for the Newton iteration to make sense (mirrors IRR's guard).
         if (!double.IsFinite(guess) || guess <= -1) return ErrorValue.Num;
         var (vals, ve) = CollectRangeNumbers(valRange);
@@ -229,7 +237,12 @@ public static partial class BuiltInFunctions
         var valRange = args[0] is RangeValue valuesRange
             ? valuesRange
             : SingleCellArray(args[0]);
-        double guess = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 0.1;
+        // A genuinely-omitted guess argument defaults to 0.1 (Excel's IRR default guess), but an
+        // explicitly-supplied argument that merely evaluates to blank (e.g. a reference to an
+        // empty cell) must flow through normal numeric coercion instead -- BlankValue coerces to
+        // 0.0 (ToNumber), matching Excel's blank-cell-as-0 rule and mirroring RATE's guessArg
+        // handling in BuiltInFunctions.Financial.LoanValues.cs.
+        double guess = args.Count > 1 ? ToNumber(args[1]) : 0.1;
         if (!double.IsFinite(guess) || guess <= -1) return ErrorValue.Num;
         var (values, err) = CollectRangeNumbers(valRange);
         if (err is not null) return err;

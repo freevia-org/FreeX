@@ -165,7 +165,10 @@ public sealed partial class FindReplaceDialog : Window
     private void FindNext()
     {
         var search = SearchText;
-        if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
+        // Excel allows a blank "Find what" as long as a Format criterion is set (Find All by
+        // format only); only warn/block on an empty search when there is ALSO no format criterion
+        // (R64-commands-find-replace-6-1).
+        if (string.IsNullOrEmpty(search) && _findFormatDiff is null && ShowBlankSearchWarning()) return;
 
         var options = CreateFindOptions();
         var matchCase = MatchCaseBox.IsChecked == true;
@@ -269,7 +272,8 @@ public sealed partial class FindReplaceDialog : Window
     private void FindAll()
     {
         var search = SearchText;
-        if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
+        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
+        if (string.IsNullOrEmpty(search) && _findFormatDiff is null && ShowBlankSearchWarning()) return;
 
         _lastSearch = search;
         _currentIndex = -1;
@@ -288,7 +292,8 @@ public sealed partial class FindReplaceDialog : Window
     private void ReplaceAll_Click(object sender, RoutedEventArgs e)
     {
         var search = SearchText;
-        if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
+        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
+        if (string.IsNullOrEmpty(search) && _findFormatDiff is null && ShowBlankSearchWarning()) return;
 
         var result = FindReplaceService.TryReplaceAll(
             _getWorkbook(), _commandBus, search, ReplaceBox.Text,

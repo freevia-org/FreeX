@@ -72,19 +72,23 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue NetworkdaysIntlScalar(ScalarValue startDate, ScalarValue endDate, bool[] mask, HashSet<DateTime> holidays, bool uses1904DateSystem)
     {
-        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var startRaw)) return ErrorValue.Num;
-        if (!TrySerialToDateTime(endDate, uses1904DateSystem, out var endRaw)) return ErrorValue.Num;
-        var startDt = startRaw.Date;
-        var endDt = endRaw.Date;
-        int sign = startDt <= endDt ? 1 : -1;
-        var lo = startDt <= endDt ? startDt : endDt;
-        var hi = startDt <= endDt ? endDt : startDt;
+        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out _)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(endDate, uses1904DateSystem, out _)) return ErrorValue.Num;
+        // Walk in Excel-serial space rather than via DateTime.AddDays: DateTime collapses the
+        // 1900 phantom leap day (serial 60, "1900-02-29") onto the same real date as serial 59
+        // ("1900-02-28"), so a day-by-day DateTime walk across that boundary would silently
+        // skip serial 60 entirely (a single AddDays(1) from serial 59 lands on serial 61).
+        double startSerial = Math.Floor(ToNumber(startDate));
+        double endSerial = Math.Floor(ToNumber(endDate));
+        int sign = startSerial <= endSerial ? 1 : -1;
+        double lo = Math.Min(startSerial, endSerial);
+        double hi = Math.Max(startSerial, endSerial);
 
         int count = 0;
-        for (var d = lo; d <= hi; d = d.AddDays(1))
+        for (double serial = lo; serial <= hi; serial++)
         {
-            if (mask[ExcelDowToMonIndex(d, uses1904DateSystem)]) continue;
-            if (holidays.Contains(d.Date)) continue;
+            if (mask[ExcelDowToMonIndex(serial, uses1904DateSystem)]) continue;
+            if (holidays.Contains(SerialToDate(serial, uses1904DateSystem).Date)) continue;
             count++;
         }
         return new NumberValue(sign * count);
@@ -107,10 +111,15 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue WorkdayIntlScalar(ScalarValue startDate, ScalarValue daysValue, bool[] mask, HashSet<DateTime> holidays, bool uses1904DateSystem)
     {
-        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var current)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out _)) return ErrorValue.Num;
         // WORKDAY.INTL always returns a whole-day serial — Excel discards any time-of-day
         // fraction carried by the start date before walking forward/back.
-        current = current.Date;
+        //
+        // Walk in Excel-serial space rather than via DateTime.AddDays: DateTime collapses the
+        // 1900 phantom leap day (serial 60, "1900-02-29") onto the same real date as serial 59
+        // ("1900-02-28"), so stepping across that boundary via DateTime would silently skip
+        // serial 60 entirely (a single AddDays(1) from serial 59 lands on serial 61).
+        double serial = Math.Floor(ToNumber(startDate));
         double rawDays = ToNumber(daysValue);
         if (!double.IsFinite(rawDays)) return ErrorValue.Num;
         if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
@@ -120,11 +129,11 @@ public static partial class BuiltInFunctions
         int remaining = Math.Abs(days);
         while (remaining > 0)
         {
-            current = current.AddDays(sign);
-            if (mask[ExcelDowToMonIndex(current, uses1904DateSystem)]) continue;
-            if (holidays.Contains(current.Date)) continue;
+            serial += sign;
+            if (mask[ExcelDowToMonIndex(serial, uses1904DateSystem)]) continue;
+            if (holidays.Contains(SerialToDate(serial, uses1904DateSystem).Date)) continue;
             remaining--;
         }
-        return new NumberValue(DateToSerial(current, uses1904DateSystem));
+        return new NumberValue(serial);
     }
 }

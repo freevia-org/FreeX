@@ -296,8 +296,8 @@ internal static class XlsxDataValidationNativeMetadataMapper
         {
             formula1 = validation.Type == DvType.List
                 ? XlsxDataValidationClosedXmlMapper.NormalizeListFormulaForSave(validation.Formula1 ?? "")
-                : validation.Formula1;
-            formula2 = validation.Formula2;
+                : XlsxDataValidationClosedXmlMapper.NormalizeNumericFormulaForSave(validation.Type, validation.Formula1);
+            formula2 = XlsxDataValidationClosedXmlMapper.NormalizeNumericFormulaForSave(validation.Type, validation.Formula2);
         }
 
         if (!string.IsNullOrEmpty(formula1))
@@ -476,8 +476,14 @@ internal static class XlsxDataValidationNativeMetadataMapper
                 for (var validationIndex = 0; validationIndex < sheet.DataValidations.Count; validationIndex++)
                 {
                     var validation = sheet.DataValidations[validationIndex];
+                    // Range-only equality is not enough: a genuinely different rule that merely
+                    // happens to also target this exact range (e.g. a separate <dataValidation
+                    // sqref="C1:C10"> with different type/formula) must never be mistaken for the
+                    // redundant per-area split entry that ClosedXML produces for one multi-area
+                    // rule -- only remove it when its content matches the multi-area rule's own.
                     if (!RangesEqual(validation.AppliesTo, duplicateRange) ||
-                        validation.AdditionalRanges.Count != 0)
+                        validation.AdditionalRanges.Count != 0 ||
+                        !MatchesMetadataContent(validation, metadata))
                     {
                         continue;
                     }
@@ -487,6 +493,29 @@ internal static class XlsxDataValidationNativeMetadataMapper
                 }
             }
         }
+    }
+
+    private static bool MatchesMetadataContent(DataValidation validation, DataValidationNativeMetadata metadata)
+    {
+        var expectedType = metadata.ModeledAttributes.TryGetValue("type", out var typeValue) ? typeValue : "none";
+        if (!string.Equals(expectedType, ToDataValidationType(validation.Type), StringComparison.Ordinal))
+            return false;
+
+        if (ShouldWriteOperator(validation.Type))
+        {
+            var expectedOperator = metadata.ModeledAttributes.TryGetValue("operator", out var operatorValue) ? operatorValue : "between";
+            if (!string.Equals(expectedOperator, ToDataValidationOperator(validation.Operator), StringComparison.Ordinal))
+                return false;
+        }
+
+        var actualFormula1 = validation.Type == DvType.List
+            ? XlsxDataValidationClosedXmlMapper.NormalizeListFormulaForSave(validation.Formula1 ?? "")
+            : validation.Formula1 ?? "";
+        if (!string.Equals(metadata.Formula1 ?? "", actualFormula1, StringComparison.Ordinal))
+            return false;
+
+        var actualFormula2 = validation.Formula2 ?? "";
+        return string.Equals(metadata.Formula2 ?? "", actualFormula2, StringComparison.Ordinal);
     }
 
     private static DataValidationNativeMetadata? FindNativeMetadata(

@@ -1164,15 +1164,22 @@ public partial class MainWindow
         if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
+        // R64-commands-paste-special-6-1: pass the full selected destination range (remapped per
+        // grouped sheet), not just its top-left CellAddress, to the GridRange-tiling overload of
+        // PasteCommentsCommand -- mirroring WorkbookSession.PasteCommentsFromClipboardAtActiveCell
+        // (GetSinglePasteDestinationRange) -- so copying a comment/validation block and pasting into
+        // a whole-multiple-sized selection tiles across the whole destination instead of only ever
+        // filling the selection's top-left quadrant.
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Paste Comments",
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
+                    var destinationRange = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId);
                     return new PasteCommentsCommand(
                         sheetId,
                         clip.SourceRange,
-                        new CellAddress(sheetId, currentRange.Start.Row, currentRange.Start.Col),
+                        destinationRange,
                         transpose);
                 },
                 out var outcome))
@@ -1184,7 +1191,8 @@ public partial class MainWindow
         CompletePasteSelection(
             clip.SourceRange,
             new PasteSpecialOptions(Transpose: transpose),
-            ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut));
+            ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut),
+            expandToSelectedRange: true);
         if (clip.IsCut)
             _internalClipboard = null;
         UpdateViewport();
@@ -1196,15 +1204,19 @@ public partial class MainWindow
         if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
+        // R64-commands-paste-special-6-1: same destination-range tiling fix as
+        // ExecutePasteComments above, applied to the GridRange-tiling overload of
+        // PasteDataValidationCommand.
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Paste Validation",
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
+                    var destinationRange = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId);
                     return new PasteDataValidationCommand(
                         sheetId,
                         clip.SourceRange,
-                        new CellAddress(sheetId, currentRange.Start.Row, currentRange.Start.Col),
+                        destinationRange,
                         transpose);
                 },
                 out var outcome))
@@ -1216,7 +1228,8 @@ public partial class MainWindow
         CompletePasteSelection(
             clip.SourceRange,
             new PasteSpecialOptions(Transpose: transpose),
-            ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut));
+            ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut),
+            expandToSelectedRange: true);
         if (clip.IsCut)
             _internalClipboard = null;
         UpdateViewport();
@@ -1276,9 +1289,16 @@ public partial class MainWindow
         IWorkbookCommand CreatePasteLinkCommand()
         {
             var currentRange = SheetGrid.SelectedRange ?? range;
+            // R64-commands-paste-special-6-2: pass the full selected destination range to the
+            // tiling overload of PasteLinkService.CreateLinkedCells (not the 4-arg overload, which
+            // forwards destinationRange: null) -- mirroring
+            // WorkbookSession.PasteLinkFromClipboardAtActiveCell/CreatePasteLinkCommand -- so a
+            // copied source tiles its linked formulas across the whole destination selection
+            // instead of only ever filling the source range's own footprint.
             var linkedCells = PasteLinkService.CreateLinkedCells(
                 clip.SourceRange,
                 currentRange.Start,
+                currentRange,
                 sourceSheet.Name,
                 transpose);
             var targetSheetIds = CurrentGroupedEditSheetIds();

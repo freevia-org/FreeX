@@ -54,7 +54,8 @@ public sealed class RecalcEngine
     private RecalcReport Recalculate(
         Workbook workbook,
         IReadOnlyList<CellAddress> changedCells,
-        bool resolveSpillDependents)
+        bool resolveSpillDependents,
+        SheetId? restrictWritesToSheet = null)
     {
         if (changedCells.Count == 0 &&
             _volatileCells.Count == 0 &&
@@ -116,12 +117,12 @@ public sealed class RecalcEngine
             if (workbook.IterativeCalculation)
             {
                 seenIterativeCells = [.. plan.CyclicCells];
-                RunIterativeCalc(workbook, plan.CyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors);
+                RunIterativeCalc(workbook, plan.CyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, restrictWritesToSheet);
             }
             else
             {
                 foreach (var cyclic in plan.CyclicCells)
-                    AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
+                    AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors, restrictWritesToSheet);
             }
         }
 
@@ -198,12 +199,12 @@ public sealed class RecalcEngine
                             }
                         }
                         if (newCyclicCells is not null)
-                            RunIterativeCalc(workbook, newCyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors);
+                            RunIterativeCalc(workbook, newCyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, restrictWritesToSheet);
                     }
                     else
                     {
                         foreach (var cyclic in evaluationPlan.CyclicCells)
-                            AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
+                            AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors, restrictWritesToSheet);
                     }
                 }
             }
@@ -211,6 +212,15 @@ public sealed class RecalcEngine
 
         foreach (var addr in directFormulaRoots ?? evaluationPlan.OrderedCells)
         {
+            // Shift+F9 "Calculate Sheet" (RecalculateSheetFormulas) restricts writes to the target
+            // sheet: the dependency traversal above still crosses sheet boundaries to keep the
+            // topological order correct, but a cross-sheet dependent must not be mutated here.
+            // Leave it exactly as it was -- Excel shows it stale until its own sheet is calculated
+            // (a later Shift+F9 on that sheet, or a full F9, which always re-evaluates every
+            // formula cell in the workbook regardless of this pass).
+            if (restrictWritesToSheet is { } restrictSheet0 && !addr.Sheet.Equals(restrictSheet0))
+                continue;
+
             var sheet = workbook.GetSheet(addr.Sheet);
             if (sheet is null) continue;
 
@@ -387,7 +397,7 @@ public sealed class RecalcEngine
         // (bounded by MaxSpillDependentPasses as a sane guard against runaway chains).
         if (resolveSpillDependents && spillTargetsMayHaveChanged)
         {
-            ResolveSpillTargetDependentsFixpoint(workbook, ref report, vacatedSpillCells);
+            ResolveSpillTargetDependentsFixpoint(workbook, ref report, restrictWritesToSheet, vacatedSpillCells);
         }
 
         // Retry anchors that were showing #SPILL! as of some earlier pass. Excel re-spills the
@@ -436,7 +446,7 @@ public sealed class RecalcEngine
 
             if (retryAnchors is not null)
             {
-                var retryReport = Recalculate(workbook, retryAnchors, resolveSpillDependents: false);
+                var retryReport = Recalculate(workbook, retryAnchors, resolveSpillDependents: false, restrictWritesToSheet: restrictWritesToSheet);
                 report = MergeRecalcReports(report, retryReport);
 
                 // If a retried anchor actually re-spilled (its #SPILL! cleared because the blocker
@@ -452,7 +462,7 @@ public sealed class RecalcEngine
                 });
 
                 if (anyReSpilled)
-                    ResolveSpillTargetDependentsFixpoint(workbook, ref report);
+                    ResolveSpillTargetDependentsFixpoint(workbook, ref report, restrictWritesToSheet);
             }
         }
 
@@ -654,10 +664,17 @@ public sealed class RecalcEngine
         CellAddress cyclic,
         ref List<CellAddress>? cyclicCells,
         ref HashSet<CellAddress>? seenCyclicCells,
-        ref List<(CellAddress Cell, string Error)>? errors)
+        ref List<(CellAddress Cell, string Error)>? errors,
+        SheetId? restrictWritesToSheet = null)
     {
         seenCyclicCells ??= [];
         if (!seenCyclicCells.Add(cyclic))
+            return;
+
+        // Shift+F9 "Calculate Sheet": a cyclic cell on another sheet must not be flagged/mutated by
+        // this pass -- leave it exactly as it was until its own sheet is calculated (see the
+        // matching restriction in the main evaluation loop above).
+        if (restrictWritesToSheet is { } restrictSheet1 && !cyclic.Sheet.Equals(restrictSheet1))
             return;
 
         (cyclicCells ??= []).Add(cyclic);
@@ -726,7 +743,8 @@ public sealed class RecalcEngine
         ref int recalculatedCount,
         ref CellAddress singleRecalculated,
         ref List<CellAddress>? recalculated,
-        ref List<(CellAddress Cell, string Error)>? errors)
+        ref List<(CellAddress Cell, string Error)>? errors,
+        SheetId? restrictWritesToSheet = null)
     {
         const int DefaultMaxIterations = 100;
         const double DefaultMaxChange = 0.001;
@@ -738,9 +756,14 @@ public sealed class RecalcEngine
         var maxChange = workbook.MaxCalculationChange ?? DefaultMaxChange;
 
         // Seed: cells that previously received #CIRCULAR! get reset to 0 (blank) so the first
-        // iteration starts from the Excel-compatible seed value, not from a prior error.
+        // iteration starts from the Excel-compatible seed value, not from a prior error. Shift+F9
+        // "Calculate Sheet": skip cells on another sheet entirely -- they must stay untouched (see
+        // the matching restriction in the main evaluation loop above).
         for (var i = 0; i < cyclicAddresses.Count; i++)
         {
+            if (restrictWritesToSheet is { } restrictSheet2 && !cyclicAddresses[i].Sheet.Equals(restrictSheet2))
+                continue;
+
             var addr = cyclicAddresses[i];
             var seedSheet = workbook.GetSheet(addr.Sheet);
             var seedCell = seedSheet?.GetCell(addr);
@@ -755,6 +778,9 @@ public sealed class RecalcEngine
             for (var i = 0; i < cyclicAddresses.Count; i++)
             {
                 var addr = cyclicAddresses[i];
+                if (restrictWritesToSheet is { } restrictSheet3 && !addr.Sheet.Equals(restrictSheet3))
+                    continue;
+
                 var sheet = workbook.GetSheet(addr.Sheet);
                 if (sheet is null) continue;
 
@@ -819,9 +845,15 @@ public sealed class RecalcEngine
                 break;
         }
 
-        // Record the cyclic cells as recalculated (not as errors/cyclic).
+        // Record the cyclic cells as recalculated (not as errors/cyclic). Cells on another sheet
+        // were never touched above (restrictWritesToSheet) and must not be reported either.
         for (var i = 0; i < cyclicAddresses.Count; i++)
+        {
+            if (restrictWritesToSheet is { } restrictSheet4 && !cyclicAddresses[i].Sheet.Equals(restrictSheet4))
+                continue;
+
             AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, cyclicAddresses[i]);
+        }
     }
 
     /// <summary>
@@ -1242,6 +1274,7 @@ public sealed class RecalcEngine
     private void ResolveSpillTargetDependentsFixpoint(
         Workbook workbook,
         ref RecalcReport report,
+        SheetId? restrictWritesToSheet = null,
         IReadOnlyList<CellAddress>? vacatedSpillCells = null)
     {
         // Track, per dependent cell, how many distinct spill-target precedents it read the
@@ -1272,7 +1305,7 @@ public sealed class RecalcEngine
             if (spillDependents.Count == 0)
                 break;
 
-            var spillReport = Recalculate(workbook, spillDependents, resolveSpillDependents: false);
+            var spillReport = Recalculate(workbook, spillDependents, resolveSpillDependents: false, restrictWritesToSheet: restrictWritesToSheet);
             report = MergeRecalcReports(report, spillReport);
         }
     }
@@ -1453,7 +1486,15 @@ public sealed class RecalcEngine
 
         try
         {
-            var report = Recalculate(workbook, formulaCells);
+            // Restrict every write inside this pass to sheetId's own cells: the dependency
+            // traversal still crosses sheet boundaries (needed to keep the target sheet's own
+            // formulas correctly ordered against their precedents), but Excel's Shift+F9 "Calculate
+            // Sheet" must never mutate a cross-sheet dependent -- it stays exactly as it was until
+            // its own sheet is calculated (a later Shift+F9 there, or a full F9, which always
+            // re-evaluates every formula cell in the workbook regardless of this pass). See the
+            // matching restriction checks throughout Recalculate/AddCyclicCell/RunIterativeCalc/
+            // ResolveSpillTargetDependentsFixpoint.
+            var report = Recalculate(workbook, formulaCells, resolveSpillDependents: true, restrictWritesToSheet: sheetId);
             return FilterReportForSheet(report, sheetId);
         }
         finally

@@ -304,6 +304,14 @@ public static partial class BuiltInFunctions
         if (end < start) return ErrorValue.Num;
         var unit  = ToText(unitValue).ToUpperInvariant();
 
+        // start/end (above) collapse the 1900 phantom leap day (serial 60, "1900-02-29") onto
+        // the same DateTime as serial 59 ("1900-02-28"), so start.Day/end.Day would read 28
+        // instead of Excel's 29 for that exact date. Substitute the correct day-of-month
+        // wherever the M/Y/YM/MD/YD arms below read it. (The "D" arm just below already
+        // avoids this by diffing raw serials directly instead of DateTime day-of-month.)
+        int startDay = !uses1904DateSystem && IsExcelFakeLeapDay(startValue) ? 29 : start.Day;
+        int endDay   = !uses1904DateSystem && IsExcelFakeLeapDay(endValue) ? 29 : end.Day;
+
         return unit switch
         {
             // Compute directly in serial space rather than round-tripping through DateTime:
@@ -314,42 +322,43 @@ public static partial class BuiltInFunctions
             // (time-of-day is discarded), then diff the raw serials directly.
             "D"  => new NumberValue(ExcelDateSystem.SerialDayDifference(
                         Math.Floor(ToNumber(startValue)), Math.Floor(ToNumber(endValue)))),
-            "M"  => new NumberValue(MonthDiff(start, end)),
-            "Y"  => new NumberValue(YearDiff(start, end)),
-            "YM" => new NumberValue((int)MonthDiff(start, end) % 12),
-            "YD" => DateDifYD(start, end, uses1904DateSystem),
-            "MD" => DateDifMD(start, end),
+            "M"  => new NumberValue(MonthDiff(start, end, startDay, endDay)),
+            "Y"  => new NumberValue(YearDiff(start, end, startDay, endDay)),
+            "YM" => new NumberValue((int)MonthDiff(start, end, startDay, endDay) % 12),
+            "YD" => DateDifYD(start, end, startDay, uses1904DateSystem),
+            "MD" => DateDifMD(end, startDay, endDay),
             _    => ErrorValue.Num
         };
     }
 
-    private static double MonthDiff(DateTime start, DateTime end)
+    private static double MonthDiff(DateTime start, DateTime end, int startDay, int endDay)
     {
         int months = (end.Year - start.Year) * 12 + (end.Month - start.Month);
-        if (end.Day < start.Day) months--;
+        if (endDay < startDay) months--;
         return months;
     }
 
-    private static double YearDiff(DateTime start, DateTime end)
+    private static double YearDiff(DateTime start, DateTime end, int startDay, int endDay)
     {
         int years = end.Year - start.Year;
-        if (end.Month < start.Month || (end.Month == start.Month && end.Day < start.Day))
+        if (end.Month < start.Month || (end.Month == start.Month && endDay < startDay))
             years--;
         return years;
     }
 
-    private static ScalarValue DateDifYD(DateTime start, DateTime end, bool uses1904DateSystem)
+    private static ScalarValue DateDifYD(DateTime start, DateTime end, int startDay, bool uses1904DateSystem)
     {
         try
         {
-            // Clamp start.Day in case start is Feb 29 (leap) and anchor year is non-leap.
+            // Clamp startDay in case start is Feb 29 (leap, or the 1900 phantom leap day) and
+            // the anchor year is non-leap.
             int anchorYear = end.Year;
-            int clampedDay = Math.Min(start.Day, DateTime.DaysInMonth(anchorYear, start.Month));
+            int clampedDay = Math.Min(startDay, DateTime.DaysInMonth(anchorYear, start.Month));
             var anchor = new DateTime(anchorYear, start.Month, clampedDay);
             if (anchor > end)
             {
                 int prevYear = anchorYear - 1;
-                clampedDay = Math.Min(start.Day, DateTime.DaysInMonth(prevYear, start.Month));
+                clampedDay = Math.Min(startDay, DateTime.DaysInMonth(prevYear, start.Month));
                 anchor = new DateTime(prevYear, start.Month, clampedDay);
             }
             return new NumberValue(DateToSerial(end, uses1904DateSystem) - DateToSerial(anchor, uses1904DateSystem));
@@ -357,18 +366,18 @@ public static partial class BuiltInFunctions
         catch (ArgumentOutOfRangeException) { return ErrorValue.Num; }
     }
 
-    private static ScalarValue DateDifMD(DateTime start, DateTime end)
+    private static ScalarValue DateDifMD(DateTime end, int startDay, int endDay)
     {
         // Pure integer arithmetic — never constructs a DateTime, so it can never throw
-        // ArgumentOutOfRangeException and start.Day never needs clamping against any month's
+        // ArgumentOutOfRangeException and startDay never needs clamping against any month's
         // length (that clamp was copy-pasted from DateDifYD, which genuinely needs it because
         // it builds a real DateTime anchor). Clamping here just silently corrupted ordinary
-        // MD pairs whenever start.Day is 29/30/31 and end's month is shorter.
-        if (end.Day >= start.Day)
-            return new NumberValue(end.Day - start.Day);
+        // MD pairs whenever startDay is 29/30/31 and end's month is shorter.
+        if (endDay >= startDay)
+            return new NumberValue(endDay - startDay);
         int prevYear  = end.Month == 1 ? end.Year - 1 : end.Year;
         int prevMonth = end.Month == 1 ? 12 : end.Month - 1;
-        return new NumberValue(end.Day + DaysInExcelMonth(prevYear, prevMonth) - start.Day);
+        return new NumberValue(endDay + DaysInExcelMonth(prevYear, prevMonth) - startDay);
     }
 
     private static int DaysInExcelMonth(int year, int month) =>
@@ -651,27 +660,33 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue WorkdayScalar(ScalarValue startDate, int days, HashSet<DateTime> holidays, bool uses1904DateSystem)
     {
-        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var current)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out _)) return ErrorValue.Num;
         // WORKDAY always returns a whole-day serial — Excel discards any time-of-day
         // fraction carried by the start date before walking forward/back.
-        current = current.Date;
+        //
+        // Walk in Excel-serial space rather than via DateTime.AddDays: ExcelDateSystem
+        // collapses the 1900 phantom leap day (serial 60, "1900-02-29") onto the same real
+        // DateTime as serial 59 ("1900-02-28"), so re-deriving the serial from a DateTime
+        // after stepping through that boundary would silently skip serial 60 (a single
+        // AddDays(1) from serial 59 lands straight on serial 61).
+        double serial = Math.Floor(ToNumber(startDate));
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
         // Skip full weeks when there are no holidays — 5 workdays = 7 calendar days
         if (remaining > 5 && holidays.Count == 0)
         {
             int fullWeeks = (remaining - 1) / 5; // keep ≥5 left so day-of-week boundary is handled correctly
-            current = current.AddDays((long)sign * fullWeeks * 7);
+            serial += (double)sign * fullWeeks * 7;
             remaining -= fullWeeks * 5;
         }
         while (remaining > 0)
         {
-            current = current.AddDays(sign);
-            if (ExcelDowToMonIndex(current, uses1904DateSystem) < 5 &&
-                !holidays.Contains(current.Date))
+            serial += sign;
+            if (ExcelDowToMonIndex(serial, uses1904DateSystem) < 5 &&
+                !holidays.Contains(SerialToDate(serial, uses1904DateSystem).Date))
                 remaining--;
         }
-        return new NumberValue(DateToSerial(current, uses1904DateSystem));
+        return new NumberValue(serial);
     }
 
     private static ScalarValue Networkdays(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -687,17 +702,24 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue NetworkdaysScalar(ScalarValue startDate, ScalarValue endDate, HashSet<DateTime> holidays, bool uses1904DateSystem)
     {
-        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out var startRaw)) return ErrorValue.Num;
-        if (!TrySerialToDateTime(endDate, uses1904DateSystem, out var endRaw)) return ErrorValue.Num;
-        var startDt = startRaw.Date;
-        var endDt   = endRaw.Date;
-        int sign = startDt <= endDt ? 1 : -1;
-        var lo = startDt <= endDt ? startDt : endDt;
-        var hi = startDt <= endDt ? endDt   : startDt;
+        if (!TrySerialToDateTime(startDate, uses1904DateSystem, out _)) return ErrorValue.Num;
+        if (!TrySerialToDateTime(endDate, uses1904DateSystem, out _)) return ErrorValue.Num;
+        // Count in Excel-serial space rather than via DateTime subtraction: DateTime collapses
+        // the 1900 phantom leap day (serial 60, "1900-02-29") onto the same real date as serial
+        // 59 ("1900-02-28"), so a span whose endpoints straddle that boundary would otherwise
+        // be undercounted by one distinct day.
+        double startSerial = Math.Floor(ToNumber(startDate));
+        double endSerial   = Math.Floor(ToNumber(endDate));
+        int sign = startSerial <= endSerial ? 1 : -1;
+        double lo = Math.Min(startSerial, endSerial);
+        double hi = Math.Max(startSerial, endSerial);
         int count = CountExcelWeekdaysInclusive(lo, hi, uses1904DateSystem);
         foreach (var h in holidays)
-            if (h >= lo && h <= hi && ExcelDowToMonIndex(h, uses1904DateSystem) < 5)
+        {
+            double hSerial = DateToSerial(h, uses1904DateSystem);
+            if (hSerial >= lo && hSerial <= hi && ExcelDowToMonIndex(hSerial, uses1904DateSystem) < 5)
                 count--;
+        }
         return new NumberValue(sign * count);
     }
 
@@ -715,12 +737,12 @@ public static partial class BuiltInFunctions
         return count;
     }
 
-    private static int CountExcelWeekdaysInclusive(DateTime lo, DateTime hi, bool uses1904DateSystem)
+    private static int CountExcelWeekdaysInclusive(double loSerial, double hiSerial, bool uses1904DateSystem)
     {
-        int totalDays = (int)(hi - lo).TotalDays + 1;
+        int totalDays = (int)(hiSerial - loSerial) + 1;
         int fullWeeks = totalDays / 7;
         int count = fullWeeks * 5;
-        int startDow = ExcelDowToMonIndex(lo, uses1904DateSystem);
+        int startDow = ExcelDowToMonIndex(loSerial, uses1904DateSystem);
         for (int i = 0; i < totalDays % 7; i++)
         {
             int dow = (startDow + i) % 7;
@@ -942,6 +964,17 @@ public static partial class BuiltInFunctions
     }
 
     private static int ExcelDowToMonIndex(int serial) => ((serial + 5) % 7 + 7) % 7;
+
+    // Weekday from a raw Excel serial rather than a (possibly already-collapsed) DateTime.
+    // For the 1900 date system this is pure modular arithmetic on the serial itself, so it
+    // correctly distinguishes the phantom leap-day serial 60 ("1900-02-29") from serial 59
+    // ("1900-02-28") even though both map to the same real DateTime — unlike going through
+    // ExcelDowToMonIndex(DateTime, bool), which re-derives the serial from that DateTime and
+    // so cannot tell 59 and 60 apart.
+    private static int ExcelDowToMonIndex(double serial, bool uses1904DateSystem) =>
+        uses1904DateSystem
+            ? DowToMonIndex(SerialToDate(serial, true).DayOfWeek)
+            : ExcelDowToMonIndex((int)Math.Floor(serial));
 
     private static int ExcelIsoWeeknum(DateTime date, bool uses1904DateSystem = false)
     {

@@ -257,11 +257,14 @@ public partial class MainWindow
                 name => _workbook.Sheets.FirstOrDefault(sheet =>
                     string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
                 _workbook.NamedRanges,
-                name => _workbook.TryGetNamedRange(name, _currentSheetId, out var scoped) ? scoped : null,
+                (name, sheetId) => _workbook.TryGetNamedRange(name, sheetId, out var scoped) ? scoped : null,
                 out var range))
             return false;
 
-        NavigateToCell(range.Start);
+        // A hyperlink target can be a multi-cell range (e.g. "Sheet2!B2:D5"); select the whole
+        // range - not just its top-left cell - to match the WPF host's own Name-Box navigation
+        // (NavigateNameBoxTo) and the shared WorkbookSession.GoToReference->GoToRange behavior.
+        NavigateNameBoxTo(range);
         return true;
     }
 

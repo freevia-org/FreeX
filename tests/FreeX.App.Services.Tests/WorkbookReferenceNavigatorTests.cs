@@ -166,6 +166,80 @@ public sealed class WorkbookReferenceNavigatorTests
     }
 
     [Fact]
+    public void TryParseReferenceRange_ScopedNameLookupUsesQualifierSheet_NotActiveSheet()
+    {
+        // R64-meta-2: "Sheet2!Rate" strips the sheet prefix and resolves the RESOLVED qualifier
+        // sheet (Sheet2) into the scoped-name lookup, not the caller's active sheet (Sheet1) --
+        // otherwise a name scoped to Sheet2 would fail (or resolve the wrong sheet's Rate) because
+        // the lookup ran against Sheet1 instead of the sheet the user explicitly qualified.
+        var activeSheetId = SheetId.New();
+        var dataSheetId = SheetId.New();
+        var sheet2Rate = new GridRange(new CellAddress(dataSheetId, 2, 2), new CellAddress(dataSheetId, 2, 2));
+        var scoped = new Dictionary<(SheetId Sheet, string Name), GridRange>
+        {
+            [(dataSheetId, "Rate")] = sheet2Rate
+        };
+
+        WorkbookReferenceNavigator.TryParseReferenceRange(
+            "Sheet2!Rate",
+            activeSheetId,
+            sheetName => string.Equals(sheetName, "Sheet2", StringComparison.OrdinalIgnoreCase) ? dataSheetId : null,
+            definedNames: null,
+            resolveScopedName: (name, sheetId) => scoped.TryGetValue((sheetId, name), out var found) ? found : null,
+            out var range).Should().BeTrue();
+
+        range.Should().Be(sheet2Rate);
+    }
+
+    [Fact]
+    public void TryParseReferenceRange_UnqualifiedScopedNameResolvesAgainstActiveSheet()
+    {
+        // Sibling no-regression case: without a sheet prefix, the scoped-name lookup still uses the
+        // caller's active/default sheet, exactly as before this fix.
+        var activeSheetId = SheetId.New();
+        var otherSheetId = SheetId.New();
+        var activeSheetRate = new GridRange(new CellAddress(activeSheetId, 3, 3), new CellAddress(activeSheetId, 3, 3));
+        var scoped = new Dictionary<(SheetId Sheet, string Name), GridRange>
+        {
+            [(activeSheetId, "Rate")] = activeSheetRate,
+            [(otherSheetId, "Rate")] = new GridRange(new CellAddress(otherSheetId, 9, 9), new CellAddress(otherSheetId, 9, 9))
+        };
+
+        WorkbookReferenceNavigator.TryParseReferenceRange(
+            "Rate",
+            activeSheetId,
+            static _ => null,
+            definedNames: null,
+            resolveScopedName: (name, sheetId) => scoped.TryGetValue((sheetId, name), out var found) ? found : null,
+            out var range).Should().BeTrue();
+
+        range.Should().Be(activeSheetRate);
+    }
+
+    [Fact]
+    public void TryParseReferenceRange_FallsBackToGlobalDefinedNameWhenNoScopedNameMatches()
+    {
+        // Sibling no-regression case: a workbook-global defined name (not present in the
+        // sheet-scoped lookup at all) must still resolve via the definedNames dictionary fallback.
+        var activeSheetId = SheetId.New();
+        var namedRange = new GridRange(new CellAddress(activeSheetId, 10, 2), new CellAddress(activeSheetId, 12, 4));
+        var names = new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Sales_Total"] = namedRange
+        };
+
+        WorkbookReferenceNavigator.TryParseReferenceRange(
+            "Sales_Total",
+            activeSheetId,
+            static _ => null,
+            names,
+            resolveScopedName: static (_, _) => null,
+            out var range).Should().BeTrue();
+
+        range.Should().Be(namedRange);
+    }
+
+    [Fact]
     public void BuildReferenceChoices_PutsDefaultThenRecentThenSortedNamesWithoutDuplicates()
     {
         var choices = WorkbookReferenceNavigator.BuildReferenceChoices(

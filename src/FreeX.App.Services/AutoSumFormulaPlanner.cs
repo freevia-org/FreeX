@@ -142,7 +142,7 @@ public static class AutoSumFormulaPlanner
             return true;
         }
 
-        if (sheet is not null && TryGetBlankTrailingSumRange(
+        if (selection.ColCount == 1 && sheet is not null && TryGetBlankTrailingSumRange(
                 sheet,
                 selection,
                 new CellAddress(selection.Start.Sheet, selection.End.Row - 1, selection.Start.Col),

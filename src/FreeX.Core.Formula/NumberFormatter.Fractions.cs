@@ -45,9 +45,19 @@ public static partial class NumberFormatter
         var (numeratorWidth, denominatorWidth) = GetFractionPlaceholderWidths(stripped, fixedDenominator);
 
         double absValue = Math.Abs(value);
-        bool hasWholeSection = stripped.Contains('#') || stripped.Contains('0');
+        // '0' (always-show) and '#' (suppress-if-zero) are both "there is a whole-number
+        // section", but they render a zero whole part differently: "0 ?/?" on 0.5 must show
+        // the "0" digit, while "# ?/?" on 0.5 suppresses it (leaving only the separator space).
+        bool hasZeroWholePlaceholder = stripped.Contains('0');
+        bool hasWholeSection = stripped.Contains('#') || hasZeroWholePlaceholder;
         int whole = hasWholeSection ? (int)Math.Floor(absValue) : 0;
         double fractional = absValue - whole;
+        // A ',' grouping separator in the integer section (e.g. "#,##0 ?/?") applies to the
+        // whole-number part the same way it would for a plain number format.
+        bool useThousandsGrouping = stripped.Contains(',');
+        string FormatWhole(int w) => useThousandsGrouping
+            ? w.ToString("N0", CultureInfo.InvariantCulture)
+            : w.ToString(CultureInfo.InvariantCulture);
 
         var (numerator, denominator) = fixedDenominator is { } denominatorValue
             ? ((int)Math.Round(fractional * denominatorValue, MidpointRounding.AwayFromZero), denominatorValue)
@@ -74,7 +84,7 @@ public static partial class NumberFormatter
                 return prefix + sign + numStr + "/" + denStr + suffix;
             }
 
-            string wholeText = whole == 0 ? "0" : whole.ToString(CultureInfo.InvariantCulture);
+            string wholeText = whole == 0 ? "0" : FormatWhole(whole);
             // Excel pads the fraction field with spaces to preserve column alignment.
             // Only applies when the format has an explicit whole-number section (# or 0 before the fraction).
             // Padding: one separator space + spaces(numeratorWidth) + "/" + spaces(denominatorWidth).
@@ -97,9 +107,9 @@ public static partial class NumberFormatter
         // space that sits between the whole and the fraction.  Include that one space so
         // the fraction aligns in the same column as non-zero whole values.
         string number = whole > 0
-            ? sign + whole.ToString(CultureInfo.InvariantCulture) + " " + fraction
+            ? sign + FormatWhole(whole) + " " + fraction
             : hasWholeSection
-                ? sign + " " + fraction
+                ? sign + (hasZeroWholePlaceholder ? "0" : "") + " " + fraction
                 : sign + fraction;
         return prefix + number + suffix;
     }

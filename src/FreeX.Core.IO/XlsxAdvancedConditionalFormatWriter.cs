@@ -20,9 +20,20 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
     public static bool HasAdvancedConditionalFormats(Sheet sheet)
     {
+        var classicCount = 0;
         foreach (var conditionalFormat in sheet.ConditionalFormats)
         {
             if (XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(conditionalFormat))
+                return true;
+
+            // R64-io-conditional-format-6-1: two or more classic (CellIs/Expression) rules risk being
+            // coalesced by ClosedXML into a single physical <cfRule> when their criteria+style end up
+            // byte-identical, losing their distinct ranges/priorities. Save's SplitAndRealignClassicRules
+            // pass below must still run to detect and undo that even when the sheet has no advanced
+            // (ColorScale/DataBar/IconSet/long-tail) rule at all -- so this must report "true" (i.e. this
+            // sheet needs the post-processing pass) whenever that risk exists.
+            classicCount++;
+            if (classicCount >= 2)
                 return true;
         }
 
@@ -53,10 +64,17 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         {
             List<ConditionalFormat>? advancedRules = null;
             List<ConditionalFormat>? rawX14PassthroughRules = null;
+            var classicRuleCount = 0;
             foreach (var conditionalFormat in sheet.ConditionalFormats)
             {
                 if (!XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(conditionalFormat))
+                {
+                    // R64-io-conditional-format-6-1: counted so a sheet with no advanced rule but 2+
+                    // classic rules (coalescing risk) still gets the SplitAndRealignClassicRules pass
+                    // below instead of being skipped outright.
+                    classicRuleCount++;
                     continue;
+                }
 
                 // A synthetic rule created by ReadX14UnhandledConditionalFormatRules to carry an
                 // x14-only cfRule (e.g. a cross-sheet expression rule) that has no classic
@@ -74,7 +92,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 advancedRules.Add(conditionalFormat);
             }
 
-            if ((advancedRules is null && rawX14PassthroughRules is null) ||
+            if ((advancedRules is null && rawX14PassthroughRules is null && classicRuleCount < 2) ||
                 !worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
             {
                 continue;
@@ -114,7 +132,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             if (newX14DataBars is not null || newX14IconSets is not null || rawX14PassthroughRules is not null)
                 AppendX14ConditionalFormattingsExt(root, newX14DataBars, newX14IconSets, rawX14PassthroughRules, workbookNs);
 
-            RealignClassicRulePriorities(root, workbookNs, sheet);
+            SplitAndRealignClassicRules(root, workbookNs, sheet);
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
@@ -126,30 +144,75 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     /// (cellIs/expression) <c>cfRule</c> it writes 1..N in add order, discarding the rule's real
     /// original <see cref="ConditionalFormat.Priority"/>. That collides/inverts against the advanced
     /// (colorScale/dataBar/iconSet/long-tail) rules just written above with their true priority
-    /// verbatim, changing the file's rule evaluation order on round-trip (P52). Fix up by walking the
-    /// classic cfRule elements ClosedXML wrote, in document order, and reassigning each one's priority
-    /// attribute to the matching classic <see cref="ConditionalFormat"/>'s real (file-order) priority --
-    /// ClosedXML preserves the relative order rules were added in, and the model's classic rules were
-    /// added to <c>xlSheet</c> in that same relative order, so a positional match is safe.
+    /// verbatim, changing the file's rule evaluation order on round-trip (P52).
+    /// <para>
+    /// Separately (R64-io-conditional-format-6-1), ClosedXML also actively COALESCES two or more
+    /// separately-added classic rules whose criteria+style end up byte-identical into a single
+    /// physical &lt;conditionalFormatting sqref="..."&gt;&lt;cfRule&gt; -- the container's sqref becomes
+    /// the UNION of every contributing rule's ranges, and only ONE &lt;cfRule&gt; (and priority) survives.
+    /// This was verified empirically: ClosedXML re-uses the FIRST physical block whose criteria+style
+    /// matches a later rule instead of appending a new block for it, so the resulting block ORDER is the
+    /// order each distinct criteria+style signature first appears among the model's classic rules -- even
+    /// when a different-signature rule was added in between (interleaved) in the model.
+    /// </para>
+    /// <para>
+    /// This method walks the classic cfRule elements ClosedXML actually wrote, in document order, groups
+    /// the model's classic rules by that same signature (preserving first-occurrence order), and for any
+    /// group with more than one member SPLITS the shared physical block back into one physical
+    /// &lt;conditionalFormatting&gt; element per contributing model rule -- each with that rule's own
+    /// sqref (built straight from the model, never by guessing at the shared sqref text) and its own real
+    /// Priority. A rule that was never coalesced (the overwhelmingly common case) is a group of size one,
+    /// so this same pass also replaces the old (fragile) positional-zip priority-only fixup.
+    /// </para>
+    /// <para>
+    /// R64-io-conditional-format-6-2 GUARD: the split assumes physical classic cfRule elements pair up
+    /// 1:1 with the model's signature groups, in the same order, and that each block's own sqref
+    /// range-token count matches the sum of its group members' range counts. If either count ever
+    /// disagrees (an unexpected ClosedXML write shape this pass doesn't recognize), skip that block/group
+    /// entirely rather than risk mis-assigning one rule's range/priority onto an unrelated one.
+    /// </para>
     /// </summary>
-    private static void RealignClassicRulePriorities(XElement root, XNamespace worksheetNs, Sheet sheet)
+    private static void SplitAndRealignClassicRules(XElement root, XNamespace worksheetNs, Sheet sheet)
     {
-        List<int>? classicPriorities = null;
+        var classicRules = new List<ConditionalFormat>();
         foreach (var cf in sheet.ConditionalFormats)
         {
-            if (XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(cf))
-                continue;
-
-            classicPriorities ??= [];
-            classicPriorities.Add(cf.Priority);
+            if (!XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(cf))
+                classicRules.Add(cf);
         }
 
-        if (classicPriorities is null)
+        if (classicRules.Count == 0)
             return;
 
-        var index = 0;
+        // Group the model's classic rules by ClosedXML's own coalescing signature, preserving each
+        // signature's first-occurrence order -- that is also the order ClosedXML's physical
+        // <conditionalFormatting> blocks appear in (see method remarks).
+        var groups = new List<List<ConditionalFormat>>();
+        var groupsBySignature = new Dictionary<ClassicRuleSignature, List<ConditionalFormat>>();
+        foreach (var cf in classicRules)
+        {
+            var signature = new ClassicRuleSignature(cf);
+            if (!groupsBySignature.TryGetValue(signature, out var group))
+            {
+                group = [];
+                groupsBySignature[signature] = group;
+                groups.Add(group);
+            }
+
+            group.Add(cf);
+        }
+
+        // The classic cfRule elements ClosedXML actually wrote, in document order, each paired with its
+        // owning <conditionalFormatting> container (so it can be replaced) and the container's already-
+        // parsed sqref range-token count (used only as a cross-check guard -- the real per-rule ranges
+        // always come straight from the model).
+        var physicalBlocks = new List<(XElement Container, XElement CfRule, int RangeTokenCount)>();
         foreach (var conditionalFormatting in root.Elements(worksheetNs + "conditionalFormatting"))
         {
+            var sqref = conditionalFormatting.Attribute("sqref")?.Value;
+            if (string.IsNullOrWhiteSpace(sqref))
+                continue;
+
             foreach (var rule in conditionalFormatting.Elements(worksheetNs + "cfRule"))
             {
                 var type = rule.Attribute("type")?.Value;
@@ -159,12 +222,62 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     continue;
                 }
 
-                if (index >= classicPriorities.Count)
-                    break;
-
-                rule.SetAttributeValue("priority", classicPriorities[index]);
-                index++;
+                var tokenCount = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length;
+                physicalBlocks.Add((conditionalFormatting, rule, tokenCount));
             }
+        }
+
+        if (physicalBlocks.Count != groups.Count)
+            return;
+
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var group = groups[i];
+            var (container, cfRule, tokenCount) = physicalBlocks[i];
+
+            var expectedTokenCount = group.Sum(cf => cf.AllRanges.Count());
+            if (tokenCount != expectedTokenCount)
+                continue;
+
+            if (group.Count == 1)
+            {
+                // Not actually coalesced (the common case) -- just fix up the priority in place.
+                cfRule.SetAttributeValue("priority", group[0].Priority);
+                continue;
+            }
+
+            var replacements = new List<XElement>(group.Count);
+            foreach (var cf in group)
+            {
+                var clonedRule = new XElement(cfRule);
+                clonedRule.SetAttributeValue("priority", cf.Priority);
+                replacements.Add(new XElement(
+                    worksheetNs + "conditionalFormatting",
+                    new XAttribute("sqref", BuildSqref(cf)),
+                    clonedRule));
+            }
+
+            container.ReplaceWith(replacements);
+        }
+    }
+
+    /// <summary>
+    /// The criteria+style signature ClosedXML itself coalesces separately-added classic (cellIs/
+    /// expression) rules on, used by <see cref="SplitAndRealignClassicRules"/> to group the model's
+    /// classic rules the same way ClosedXML groups their physical output.
+    /// </summary>
+    private readonly record struct ClassicRuleSignature(
+        CfRuleType RuleType,
+        CfOperator Operator,
+        string? Value1,
+        string? Value2,
+        string? FormulaText,
+        bool StopIfTrue,
+        CellStyle? FormatIfTrue)
+    {
+        public ClassicRuleSignature(ConditionalFormat cf)
+            : this(cf.RuleType, cf.Operator, cf.Value1, cf.Value2, cf.FormulaText, cf.StopIfTrue, cf.FormatIfTrue)
+        {
         }
     }
 

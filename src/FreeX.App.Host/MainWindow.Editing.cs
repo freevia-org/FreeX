@@ -879,7 +879,7 @@ public partial class MainWindow
                 name => _workbook.Sheets.FirstOrDefault(sheet =>
                     string.Equals(sheet.Name, name, StringComparison.OrdinalIgnoreCase))?.Id,
                 _workbook.NamedRanges,
-                name => _workbook.TryGetNamedRange(name, _currentSheetId, out var scoped) ? scoped : null,
+                (name, sheetId) => _workbook.TryGetNamedRange(name, sheetId, out var scoped) ? scoped : null,
                 out range))
         {
             return true;

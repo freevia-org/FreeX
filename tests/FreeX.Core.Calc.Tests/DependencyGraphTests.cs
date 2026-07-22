@@ -1058,7 +1058,49 @@ public class VolatileFunctionTests
         report.RecalculatedCells.Should().Contain(s1b1);
         report.RecalculatedCells.Should().NotContain(s2b1);
         sheet1.GetValue(s1b1).Should().Be(new NumberValue(10));
+        // Shift+F9 "Calculate Sheet" must never mutate a cross-sheet dependent -- Sheet2!B1 has
+        // never been evaluated at all (no prior full recalc), so it must be left exactly as it
+        // was (blank), not silently computed as a side effect of recalculating Sheet1.
+        sheet2.GetValue(s2b1).Should().BeOfType<BlankValue>();
+    }
+
+    [Fact]
+    public void RecalculateSheetFormulas_LeavesCrossSheetDependentStaleUntilFullRecalc()
+    {
+        // Sheet1!A1=5, B1=A1*2; Sheet2!B1=Sheet1!B1+1. A full recalc first establishes Sheet2!B1's
+        // prior value (11). Editing Sheet1!A1 and running Shift+F9 "Calculate Sheet" on Sheet1 only
+        // must recalc Sheet1!B1 (200) while leaving Sheet2!B1 at its stale prior value (11) --
+        // matching Excel, which only recalculates the active sheet and shows other sheets' formulas
+        // referencing it as stale until they are themselves calculated. A subsequent full recalc
+        // (F9 / RecalculateAllFormulas) must then bring Sheet2!B1 up to date (201).
+        var wb = new Workbook("Test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var s1a1 = new CellAddress(sheet1.Id, 1, 1);
+        var s1b1 = new CellAddress(sheet1.Id, 1, 2);
+        var s2b1 = new CellAddress(sheet2.Id, 1, 2);
+
+        sheet1.SetCell(s1a1, new NumberValue(5));
+        sheet1.SetFormula(s1b1, "A1*2");
+        sheet2.SetFormula(s2b1, "Sheet1!B1+1");
+
+        engine.RecalculateAllFormulas(wb);
+        sheet1.GetValue(s1b1).Should().Be(new NumberValue(10));
         sheet2.GetValue(s2b1).Should().Be(new NumberValue(11));
+
+        sheet1.SetCell(s1a1, new NumberValue(100));
+        var sheetReport = engine.RecalculateSheetFormulas(wb, sheet1.Id);
+
+        sheetReport.RecalculatedCells.Should().Contain(s1b1);
+        sheetReport.RecalculatedCells.Should().NotContain(s2b1);
+        sheet1.GetValue(s1b1).Should().Be(new NumberValue(200));
+        sheet2.GetValue(s2b1).Should().Be(new NumberValue(11), "Shift+F9 on Sheet1 must not recalculate Sheet2's cross-sheet dependent");
+
+        var fullReport = engine.RecalculateAllFormulas(wb);
+
+        fullReport.RecalculatedCells.Should().Contain(s2b1);
+        sheet2.GetValue(s2b1).Should().Be(new NumberValue(201), "a subsequent full recalc must bring the stale cross-sheet dependent up to date");
     }
 
     [Fact]

@@ -1822,7 +1822,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 }
 
                 byRef ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                byRef[reference] = location;
+                // R64-io-hyperlink-6-2: a hyperlink's "ref" may span multiple cells (e.g. "A1:B1"), but
+                // the per-cell recovery lookup below keys by a single cell's A1 address. Expand the
+                // range so every cell it covers recovers the same shared bookmark/location.
+                foreach (var cellKey in ExpandHyperlinkReferenceToCellKeys(reference))
+                {
+                    byRef[cellKey] = location;
+                }
             }
 
             if (byRef is not null)
@@ -1830,6 +1836,41 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Expands a hyperlink "ref" attribute -- either a single cell ("A1") or a rectangular range
+    /// ("A1:B1") -- into its individual A1-notation cell keys. Falls back to yielding the raw
+    /// reference unchanged if it cannot be parsed as either form.
+    /// </summary>
+    private static IEnumerable<string> ExpandHyperlinkReferenceToCellKeys(string reference)
+    {
+        var colonIndex = reference.IndexOf(':');
+        if (colonIndex < 0)
+        {
+            yield return reference;
+            yield break;
+        }
+
+        if (!CellAddress.TryParse(reference[..colonIndex], default, out var start) ||
+            !CellAddress.TryParse(reference[(colonIndex + 1)..], default, out var end))
+        {
+            yield return reference;
+            yield break;
+        }
+
+        var minRow = Math.Min(start.Row, end.Row);
+        var maxRow = Math.Max(start.Row, end.Row);
+        var minCol = Math.Min(start.Col, end.Col);
+        var maxCol = Math.Max(start.Col, end.Col);
+
+        for (var row = minRow; row <= maxRow; row++)
+        {
+            for (var col = minCol; col <= maxCol; col++)
+            {
+                yield return new CellAddress(default, row, col).ToA1();
+            }
+        }
     }
 
     private static void ThrowIfPasswordEncrypted(MemoryStream packageStream)

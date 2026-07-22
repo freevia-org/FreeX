@@ -73,14 +73,18 @@ public static class WorkbookReferenceNavigator
     /// Sheet-scope-aware overload matching formula evaluation's name-resolution precedence
     /// (<c>Workbook.TryGetNamedRange(name, contextSheetId, out range)</c>): a name scoped to
     /// <paramref name="defaultSheetId"/> takes precedence over a same-named workbook-global name.
-    /// Pass <paramref name="resolveScopedName"/> as e.g. <c>n =&gt; workbook.TryGetNamedRange(n, defaultSheetId, out var r) ? r : null</c>.
+    /// Pass <paramref name="resolveScopedName"/> as e.g. <c>(n, sheetId) =&gt; workbook.TryGetNamedRange(n, sheetId, out var r) ? r : null</c>.
+    /// The <c>sheetId</c> argument passed to <paramref name="resolveScopedName"/> is the QUALIFIER's
+    /// sheet when <paramref name="text"/> carries an explicit sheet prefix (e.g. "Sheet2!Rate" looks
+    /// up the scoped name on Sheet2, not on <paramref name="defaultSheetId"/>), falling back to
+    /// <paramref name="defaultSheetId"/> when the input had no sheet prefix.
     /// </summary>
     public static bool TryParseReferenceRange(
         string text,
         SheetId defaultSheetId,
         Func<string, SheetId?> resolveSheetId,
         IReadOnlyDictionary<string, GridRange>? definedNames,
-        Func<string, GridRange?>? resolveScopedName,
+        Func<string, SheetId, GridRange?>? resolveScopedName,
         out GridRange range)
     {
         if (TryParseAddress(text, defaultSheetId, out var address))
@@ -101,13 +105,19 @@ public static class WorkbookReferenceNavigator
         // back to the plain name lookup, so "Sheet2!Rate" resolves the same as "Rate" instead of
         // silently failing to match any key.
         var nameLookupText = trimmedName;
-        if (TryResolveReferenceSheet(defaultSheetId, trimmedName, resolveSheetId, out _, out var strippedRemainder) &&
-            !string.IsNullOrWhiteSpace(strippedRemainder))
+        var scopedNameSheetId = defaultSheetId;
+        if (TryResolveReferenceSheet(defaultSheetId, trimmedName, resolveSheetId, out var resolvedSheetId, out var strippedRemainder))
         {
-            nameLookupText = strippedRemainder;
+            // The qualifier's sheet (e.g. "Sheet2" in "Sheet2!Rate") is the scope a sheet-scoped name
+            // lookup must use, not the caller's active/default sheet -- otherwise a name scoped to
+            // Sheet2 would be looked up against the wrong sheet whenever the Name Box's active sheet
+            // differs from the one the user explicitly qualified.
+            scopedNameSheetId = resolvedSheetId;
+            if (!string.IsNullOrWhiteSpace(strippedRemainder))
+                nameLookupText = strippedRemainder;
         }
 
-        if (resolveScopedName?.Invoke(nameLookupText) is { } scopedRange)
+        if (resolveScopedName?.Invoke(nameLookupText, scopedNameSheetId) is { } scopedRange)
         {
             range = scopedRange;
             return true;

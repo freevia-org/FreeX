@@ -181,69 +181,82 @@ public static partial class BuiltInFunctions
         bool needsReshape = lookupIsVertical ? returnArr.ColCount > 1 : returnArr.RowCount > 1;
         if (!hasRangeResult && !needsReshape) return new RangeValue(results);
 
-        if (lookupValues.ColCount == 1)
+        // The SHAPE each per-hit result comes back in (a row vs. a column) is decided by
+        // lookupIsVertical/XlookupReturnAt -- the lookup_ARRAY's own orientation -- not by the
+        // lookup_VALUE's orientation. A horizontal lookup_value queried against a vertical
+        // lookup_array (or vice versa) still yields row-shaped (lookupIsVertical) or
+        // column-shaped (!lookupIsVertical) hits; only the number/arrangement of query "slots"
+        // comes from lookupValues' shape. Reshape using lookupIsVertical to decide the expected
+        // hit orientation, independent of whether lookupValues itself is a row or a column.
+        if (lookupValues.ColCount == 1 || lookupValues.RowCount == 1)
         {
-            // Rows whose lookup missed (or errored) come back as a bare scalar rather than a
-            // RangeValue shaped like the multi-column return array; broadcast that scalar across
-            // every output column for that row instead of failing the whole array formula.
-            int outputCols = -1;
-            for (int r = 0; r < lookupValues.RowCount; r++)
+            int queryCount = lookupValues.ColCount == 1 ? lookupValues.RowCount : lookupValues.ColCount;
+            ScalarValue ResultAt(int i) => lookupValues.ColCount == 1 ? results[i, 0] : results[0, i];
+
+            if (lookupIsVertical)
             {
-                if (results[r, 0] is not RangeValue rv) continue;
-                if (rv.RowCount != 1) return ErrorValue.Value;
-                if (outputCols < 0) outputCols = rv.ColCount;
-                else if (rv.ColCount != outputCols) return ErrorValue.Value;
-            }
-            if (outputCols < 0) outputCols = returnArr.ColCount;
+                // Each hit is a ROW (or a scalar when returnArr has a single column); stack one
+                // row per query.
+                int outputCols = -1;
+                for (int i = 0; i < queryCount; i++)
+                {
+                    if (ResultAt(i) is not RangeValue rv) continue;
+                    if (rv.RowCount != 1) return ErrorValue.Value;
+                    if (outputCols < 0) outputCols = rv.ColCount;
+                    else if (rv.ColCount != outputCols) return ErrorValue.Value;
+                }
+                if (outputCols < 0) outputCols = returnArr.ColCount;
 
-            var cells = new ScalarValue[lookupValues.RowCount, outputCols];
-            for (int r = 0; r < lookupValues.RowCount; r++)
+                var cells = new ScalarValue[queryCount, outputCols];
+                for (int i = 0; i < queryCount; i++)
+                {
+                    var cellResult = ResultAt(i);
+                    if (cellResult is RangeValue rv)
+                    {
+                        for (int c = 0; c < outputCols; c++)
+                            cells[i, c] = rv.Cells[0, c];
+                    }
+                    else
+                    {
+                        for (int c = 0; c < outputCols; c++)
+                            cells[i, c] = cellResult;
+                    }
+                }
+
+                return new RangeValue(cells);
+            }
+            else
             {
-                if (results[r, 0] is RangeValue rv)
+                // Each hit is a COLUMN (or a scalar when returnArr has a single row); stack one
+                // column per query.
+                int outputRows = -1;
+                for (int i = 0; i < queryCount; i++)
                 {
-                    for (int c = 0; c < outputCols; c++)
-                        cells[r, c] = rv.Cells[0, c];
+                    if (ResultAt(i) is not RangeValue rv) continue;
+                    if (rv.ColCount != 1) return ErrorValue.Value;
+                    if (outputRows < 0) outputRows = rv.RowCount;
+                    else if (rv.RowCount != outputRows) return ErrorValue.Value;
                 }
-                else
+                if (outputRows < 0) outputRows = returnArr.RowCount;
+
+                var cells = new ScalarValue[outputRows, queryCount];
+                for (int i = 0; i < queryCount; i++)
                 {
-                    var scalar = results[r, 0];
-                    for (int c = 0; c < outputCols; c++)
-                        cells[r, c] = scalar;
+                    var cellResult = ResultAt(i);
+                    if (cellResult is RangeValue rv)
+                    {
+                        for (int r = 0; r < outputRows; r++)
+                            cells[r, i] = rv.Cells[r, 0];
+                    }
+                    else
+                    {
+                        for (int r = 0; r < outputRows; r++)
+                            cells[r, i] = cellResult;
+                    }
                 }
+
+                return new RangeValue(cells);
             }
-
-            return new RangeValue(cells);
-        }
-
-        if (lookupValues.RowCount == 1)
-        {
-            int outputRows = -1;
-            for (int c = 0; c < lookupValues.ColCount; c++)
-            {
-                if (results[0, c] is not RangeValue rv) continue;
-                if (rv.ColCount != 1) return ErrorValue.Value;
-                if (outputRows < 0) outputRows = rv.RowCount;
-                else if (rv.RowCount != outputRows) return ErrorValue.Value;
-            }
-            if (outputRows < 0) outputRows = returnArr.RowCount;
-
-            var cells = new ScalarValue[outputRows, lookupValues.ColCount];
-            for (int c = 0; c < lookupValues.ColCount; c++)
-            {
-                if (results[0, c] is RangeValue rv)
-                {
-                    for (int r = 0; r < outputRows; r++)
-                        cells[r, c] = rv.Cells[r, 0];
-                }
-                else
-                {
-                    var scalar = results[0, c];
-                    for (int r = 0; r < outputRows; r++)
-                        cells[r, c] = scalar;
-                }
-            }
-
-            return new RangeValue(cells);
         }
 
         return ErrorValue.Value;
