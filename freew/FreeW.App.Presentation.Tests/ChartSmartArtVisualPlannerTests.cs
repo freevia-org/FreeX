@@ -230,6 +230,29 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartScene_ImportedDefaultQuarterlyRevenueUsesMeasuredWordLegend()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"],
+            [1.2, 1.7, 1.4, 2.1], seriesName: "Revenue", title: "Quarterly revenue");
+        chart.WidthPt = 210;
+        chart.HeightPt = 126;
+        chart.ShowLegend = true;
+        chart.CategoryAxisTitle = "Quarter";
+        chart.ValueAxisTitle = "USD";
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 280, 168);
+
+        scene.PaletteHex.Should().Equal("#000000", "#2F5496", "#1F3864", "#FFC000");
+        scene.Legend.Should().BeEquivalentTo(
+        [
+            new ChartSceneLegendEntry("Q1", 76, 144, 9, 82, 144),
+            new ChartSceneLegendEntry("Q2", 111, 144, 9, 117, 144),
+            new ChartSceneLegendEntry("Q3", 146, 144, 9, 152, 144),
+            new ChartSceneLegendEntry("Q4", 181, 144, 9, 187, 144)
+        ]);
+    }
+
+    [Fact]
     public void ChartScene_WordAxisTitleLayoutReservesCompactPlotBand()
     {
         var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"],

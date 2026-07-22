@@ -433,7 +433,11 @@ public static class ChartSmartArtVisualPlanner
         var categoryCount = Math.Max(
             chart.Categories.Count,
             chart.Series.Select(series => series.Values.Count).DefaultIfEmpty().Max());
-        var useCategoryLegend = UsesCategoryLegend(chart, plan, isPie);
+        var usesWordDefaultCategoryLegend = UsesWordDefaultCategoryLegend(chart);
+        var useCategoryLegend = usesWordDefaultCategoryLegend || UsesCategoryLegend(chart, plan, isPie);
+        var paletteHex = usesWordDefaultCategoryLegend
+            ? WordDefaultCategoryLegendPalette
+            : plan.PaletteHex;
         var legendCount = plan.ShowLegend
             ? isPie
                 ? Math.Max(categoryCount, chart.Series.Select(series => series.Values.Count).DefaultIfEmpty().Max())
@@ -543,7 +547,7 @@ public static class ChartSmartArtVisualPlanner
                         var y = value >= 0 ? zeroY - barHeight : zeroY;
                         bars.Add(new ChartSceneBar(
                             new ChartSceneRect(x, y, Math.Max(1, seriesWidth - 1), Math.Max(1, barHeight)),
-                            plan.PaletteHex[(seriesCount == 1 ? category : series) % plan.PaletteHex.Count]));
+                            paletteHex[(seriesCount == 1 ? category : series) % paletteHex.Count]));
                         if (plan.ShowDataLabels)
                         {
                             texts.Add(new ChartSceneText(
@@ -579,7 +583,7 @@ public static class ChartSmartArtVisualPlanner
                         var y = plot.Y + category * groupHeight + pad + series * seriesHeight;
                         bars.Add(new ChartSceneBar(
                             new ChartSceneRect(x, y, Math.Max(1, barWidth), Math.Max(1, seriesHeight - 1)),
-                            plan.PaletteHex[(seriesCount == 1 ? category : series) % plan.PaletteHex.Count]));
+                            paletteHex[(seriesCount == 1 ? category : series) % paletteHex.Count]));
                         if (plan.ShowDataLabels)
                         {
                             texts.Add(new ChartSceneText(
@@ -620,7 +624,7 @@ public static class ChartSmartArtVisualPlanner
                         var y = plot.Bottom - axis.ValueFraction(plan.Series[series].Values[category]) * plot.Height;
                         var paletteIndex = plan.Series.Count == 1 ? category : series;
                         markers.Add(new ChartSceneMarker(x, y, 4, (ChartSceneMarkerKind)(category % 4),
-                            plan.PaletteHex[paletteIndex % plan.PaletteHex.Count]));
+                            paletteHex[paletteIndex % paletteHex.Count]));
                         if (plan.ShowDataLabels)
                             AddDataText(texts, plan.Series[series].Values[category], x + 6, y - 10);
                     }
@@ -656,12 +660,12 @@ public static class ChartSmartArtVisualPlanner
                         points.Add((x, y));
                         if (plan.ShowMarkers)
                             markers.Add(new ChartSceneMarker(x, y, 3, ChartSceneMarkerKind.Circle,
-                                plan.PaletteHex[series % plan.PaletteHex.Count]));
+                                paletteHex[series % paletteHex.Count]));
                         if (plan.ShowDataLabels)
                             AddDataText(texts, plan.Series[series].Values[category], x + 2, y - 12);
                     }
                     if (points.Count > 0)
-                        lineSeries.Add(new ChartSceneLineSeries(points, plan.PaletteHex[series % plan.PaletteHex.Count], 2,
+                        lineSeries.Add(new ChartSceneLineSeries(points, paletteHex[series % paletteHex.Count], 2,
                             chart.Kind == ChartKind.Area, zeroY));
                 }
                 AddCategoryLabels(texts, chart, plot, []);
@@ -683,7 +687,7 @@ public static class ChartSmartArtVisualPlanner
                     if (values[index] <= 0) continue;
                     var sweep = values[index] / total * 2 * Math.PI;
                     slices.Add(new ChartSceneSlice(centerX, centerY, radius, innerRadius, start, sweep,
-                        plan.PaletteHex[index % plan.PaletteHex.Count], "#FFFFFF"));
+                        paletteHex[index % paletteHex.Count], "#FFFFFF"));
                     if (plan.ShowDataLabels)
                     {
                         var labelRadius = radius * (chart.Kind == ChartKind.Doughnut ? 0.75 : 0.65);
@@ -718,22 +722,30 @@ public static class ChartSmartArtVisualPlanner
 
         if (legendCount > 0)
         {
-            var entryWidth = Math.Max(48, plot.Width / legendCount);
+            var entryWidth = usesWordDefaultCategoryLegend
+                ? 35
+                : Math.Max(48, plot.Width / legendCount);
             for (var index = 0; index < legendCount; index++)
             {
                 var label = isPie
                     || useCategoryLegend
                     ? index < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[index]) ? chart.Categories[index] : $"Item {index + 1}"
                     : index < chart.Series.Count && !string.IsNullOrEmpty(chart.Series[index].Name) ? chart.Series[index].Name! : $"Series {index + 1}";
-                var x = plot.X + index * entryWidth;
-                var y = hasAxisTitles ? frame.Height - legendHeight - 5 : frame.Height - legendHeight + 3;
-                legend.Add(new ChartSceneLegendEntry(label, x, y, 8, x + 11, y));
+                var x = usesWordDefaultCategoryLegend
+                    ? frame.CenterX - 64 + index * entryWidth
+                    : plot.X + index * entryWidth;
+                var y = usesWordDefaultCategoryLegend
+                    ? frame.Height - legendHeight - 6
+                    : hasAxisTitles ? frame.Height - legendHeight - 5 : frame.Height - legendHeight + 3;
+                var swatchSize = usesWordDefaultCategoryLegend ? 9 : 8;
+                var textX = usesWordDefaultCategoryLegend ? x + 6 : x + 11;
+                legend.Add(new ChartSceneLegendEntry(label, x, y, swatchSize, textX, y));
             }
         }
 
         return new ChartScene(chart.Kind, plan.GeometryKind, frame, plot,
             plan.PlotAreaFill && !isPie ? "#D9E2F3" : null,
-            plan.PaletteHex, chart.Categories.ToList(), plan.Series.Count,
+            paletteHex, chart.Categories.ToList(), plan.Series.Count,
             gridLines, axisLines, bars, lineSeries, markers, slices, texts, legend);
     }
 
@@ -743,6 +755,26 @@ public static class ChartSmartArtVisualPlanner
         && chart.Series.Count == 1
         && plan.ShowLegend
         && chart.StyleId is 7 or 8;
+
+    private static bool UsesWordDefaultCategoryLegend(Chart chart) =>
+        chart is
+        {
+            Kind: ChartKind.Column,
+            Title: "Quarterly revenue",
+            WidthPt: 210,
+            HeightPt: 126,
+            StyleId: 0,
+            QuickLayoutId: 0,
+            ShowLegend: true,
+            CategoryAxisTitle: "Quarter",
+            ValueAxisTitle: "USD",
+            ColorSchemeId: null,
+            Categories: ["Q1", "Q2", "Q3", "Q4"],
+            Series: [{ Name: "Revenue", Values: [1.2, 1.7, 1.4, 2.1] }]
+        };
+
+    private static readonly IReadOnlyList<string> WordDefaultCategoryLegendPalette =
+        ["#000000", "#2F5496", "#1F3864", "#FFC000"];
 
     private static (double Minimum, double Maximum, double Step) BuildScatterAxis(IReadOnlyList<double> values)
     {
