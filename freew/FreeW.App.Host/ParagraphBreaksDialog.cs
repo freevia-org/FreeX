@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -40,6 +41,7 @@ internal static class ParagraphBreaksDialog
         var spaceBefore = NumberBox(state.SpaceBeforeText);
         var spaceAfter = NumberBox(state.SpaceAfterText);
         var lineSpacing = NumberBox(state.LineSpacingText);
+        AutomationProperties.SetAutomationId(leftBox, "paragraph-left-indent");
 
         var specialAmtBox = NumberBox(state.SpecialAmountText);
         var specialBox = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 0, 8) };

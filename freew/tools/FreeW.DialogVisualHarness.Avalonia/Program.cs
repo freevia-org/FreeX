@@ -74,7 +74,7 @@ static Capture? CaptureOne(Scenario scenario, string output, Capture? authorityC
     var dialog = AvaloniaDialogRouteFactory.Create(scenario.RouteId, scenario.State, scenario.Tab);
     if (dialog is null) return null;
     var useAuthoritySize = authorityCapture is { Status: "captured" }
-        && scenario.RouteId is "font" or "paste-special" or "style" or "manage-styles";
+        && scenario.RouteId is "font" or "paragraph" or "paste-special" or "style" or "manage-styles";
     var width = useAuthoritySize
         ? authorityCapture!.LogicalWidth
         : Math.Max(560, (int)Math.Ceiling(dialog.MinWidth));
