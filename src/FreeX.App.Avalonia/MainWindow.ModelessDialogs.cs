@@ -19,7 +19,6 @@ public sealed partial class MainWindow
         bool closeOnDeactivate = false)
     {
         var ownerFocusBeforeOpen = FocusManager?.GetFocusedElement();
-        dialog.Focusable = true;
         KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
 
         var focusEstablished = false;
@@ -42,13 +41,13 @@ public sealed partial class MainWindow
                 dialog.UpdateLayout();
                 focusInitialControl();
                 if (dialog.FocusManager?.GetFocusedElement() is Visual focused &&
+                    !ReferenceEquals(focused, dialog) &&
                     ReferenceEquals(TopLevel.GetTopLevel(focused), dialog))
                 {
                     focusEstablished = true;
                     return true;
                 }
 
-                dialog.Focus();
                 return false;
             }
             finally
