@@ -5084,6 +5084,7 @@ public sealed partial class MainWindow : Window
                 FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
                 FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 2, 0, 0),
             });
         }
 
