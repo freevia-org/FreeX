@@ -182,6 +182,24 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void FloatingImage_ReflectionPresetTwo_UsesTheSameReflectionContainerAsInlinePictures()
+    {
+        var doc = DocWithFloating();
+        var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+        image.ReflectionPreset = 2;
+
+        var canvas = new Canvas();
+        var view = new DocumentView();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(doc);
+
+        var reflection = canvas.Children.OfType<StackPanel>().Should().ContainSingle().Which;
+        reflection.Children.Count.Should().Be(2);
+        reflection.Children[1].Should().BeOfType<System.Windows.Shapes.Rectangle>();
+        ((System.Windows.Shapes.Rectangle)reflection.Children[1]).Margin.Top.Should().BeGreaterThan(0);
+    }
+
+    [StaFact]
     public void FloatingImage_WrapModesProduceReservationAndSurviveCommitInOrder()
     {
         foreach (var wrapping in new[] { ImageWrapping.Square, ImageWrapping.Tight, ImageWrapping.TopAndBottom })

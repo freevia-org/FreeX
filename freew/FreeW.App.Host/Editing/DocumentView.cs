@@ -5249,15 +5249,17 @@ public sealed class DocumentView : RichTextBox
         // Apply WPF visual effects (shadow/glow/soft-edge/bevel) on the root element.
         ApplyImageWpfEffects(root, image);
 
-        // Floating overlays need the same measured touching reflection as inline pictures.
-        if (image.ReflectionPreset == 1)
+        // Floating overlays use the same preset-specific reflection geometry as inline pictures.
+        if (image.ReflectionPreset > 0)
         {
+            var reflOpacity = image.ReflectionPreset <= 3 ? 0.5 : 1.0;
+            var reflDistPx = image.ReflectionPreset switch { 2 => 4.0, 3 => 8.0, 5 => 4.0, _ => 0.0 } * PxPerPoint;
             root = BuildReflectionContainer(
                 root,
                 widthPx,
                 heightPx,
-                reflOpacity: 0.5,
-                distPx: 0,
+                reflOpacity,
+                reflDistPx,
                 borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
             root.Tag = image;
         }
