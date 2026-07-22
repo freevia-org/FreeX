@@ -17,14 +17,24 @@ internal static class PageLayoutDialogChrome
 {
     internal static readonly AvaloniaCompactDialogChromeStyle Style = new(FontFamily.Default);
 
-    internal static TextBox NumberBox(string text, double width = 110)
+    internal static TextBox NumberBox(
+        string text,
+        double width = 110,
+        AvaloniaCompactDialogChromeStyle? style = null,
+        bool stretch = false)
     {
-        var box = new TextBox { Text = text, Width = width };
-        AvaloniaCompactDialogChrome.ApplyTextBox(box, Style);
+        var box = stretch
+            ? new TextBox { Text = text, MinWidth = width }
+            : new TextBox { Text = text, Width = width };
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, style ?? Style);
         return box;
     }
 
-    internal static ComboBox Combo(IEnumerable<string> items, int selectedIndex, double minWidth = 150)
+    internal static ComboBox Combo(
+        IEnumerable<string> items,
+        int selectedIndex,
+        double minWidth = 150,
+        AvaloniaCompactDialogChromeStyle? style = null)
     {
         var combo = new ComboBox
         {
@@ -32,21 +42,26 @@ internal static class PageLayoutDialogChrome
             SelectedIndex = selectedIndex,
             MinWidth = minWidth
         };
-        AvaloniaCompactDialogChrome.ApplyComboBox(combo, Style);
+        AvaloniaCompactDialogChrome.ApplyComboBox(combo, style ?? Style);
         return combo;
     }
 
     internal static TextBlock Status() => new() { IsVisible = false };
 
-    internal static Control Actions(Action accept, Action cancel)
+    internal static Control Actions(
+        Action accept,
+        Action cancel,
+        AvaloniaCompactDialogChromeStyle? style = null,
+        double buttonWidth = 84)
     {
+        style ??= Style;
         var ok = new Button { Content = LocalizedUiText.Ok, IsDefault = true };
         var cancelButton = new Button { Content = LocalizedUiText.Cancel, IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(ok, Style, minWidth: 84, isDefault: true);
-        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, Style, minWidth: 84);
+        AvaloniaCompactDialogChrome.ApplyButton(ok, style, minWidth: buttonWidth, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, style, minWidth: buttonWidth);
         ok.Click += (_, _) => accept();
         cancelButton.Click += (_, _) => cancel();
-        return AvaloniaCompactDialogChrome.CreateActionRow([ok, cancelButton], new Thickness(0, 14, 0, 0));
+        return AvaloniaCompactDialogChrome.CreateActionRow([ok, cancelButton], new Thickness(0, 14, 0, 0), style);
     }
 
     internal static void Configure(Window window, string title, double width)

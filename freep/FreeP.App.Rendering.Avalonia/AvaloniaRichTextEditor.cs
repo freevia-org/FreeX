@@ -39,6 +39,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
             CaretBrush = Brushes.Transparent,
             SelectionBrush = Brushes.Transparent,
             SelectionForegroundBrush = Brushes.Transparent,
+            Opacity = 0,
         };
         AutomationProperties.SetAutomationId(InputBox, "FreePRichTextEditorInput");
 

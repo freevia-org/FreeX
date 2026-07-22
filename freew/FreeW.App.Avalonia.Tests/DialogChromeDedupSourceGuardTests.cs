@@ -92,9 +92,9 @@ public sealed class DialogChromeDedupSourceGuardTests
             ("PageLayoutDialogs.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
-                "AvaloniaCompactDialogChrome.ApplyTextBox(box, Style);",
-                "AvaloniaCompactDialogChrome.ApplyComboBox(combo, Style);",
-                "AvaloniaCompactDialogChrome.ApplyButton(ok, Style, minWidth: 84, isDefault: true);",
+                "AvaloniaCompactDialogChrome.ApplyTextBox(box, style ?? Style);",
+                "AvaloniaCompactDialogChrome.ApplyComboBox(combo, style ?? Style);",
+                "AvaloniaCompactDialogChrome.ApplyButton(ok, style, minWidth: buttonWidth, isDefault: true);",
                 "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancelButton]",
             ]),
             ("WordCountDialog.cs",

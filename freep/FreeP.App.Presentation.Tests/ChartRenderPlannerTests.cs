@@ -859,6 +859,32 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceGeometryPlan_ImportedBoundaryFacesAnchorToPlotFloorOnTallDefaultFrames()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.VaryColors = true;
+        chart.Series.Add(new ChartSeries { Name = "Third Band", Values = { 28, 24, 35 } });
+
+        var canonical = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 360, 189));
+        var tall = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 280, 221));
+
+        var canonicalYellow = canonical.RenderFacets.Single(facet =>
+            facet.Fill.Color == new SrgbColor(0xE7, 0xAD, 0x00));
+        canonicalYellow.Points.Select(point => point.Y)
+            .Should().Equal(42.0, 25.0, 50.0);
+
+        var tallYellow = tall.RenderFacets.Single(facet =>
+            facet.Fill.Color == new SrgbColor(0xE7, 0xAD, 0x00));
+        tallYellow.Points.Select(point => point.Y)
+            .Should().Equal(74.0, 57.0, 82.0);
+    }
+
+    [Fact]
     public void BuildSurfaceGeometryPlan_UsesAuthoredView3DForSurfaceProjection()
     {
         var chart = MakeSurfaceChart(ChartType.Surface3D);
@@ -1840,6 +1866,22 @@ public sealed class ChartRenderPlannerTests
         second.Bounds.Height.Should().BeApproximately(60, 0.0001);
         second.Fill.Should().Be(new ChartFillPlan(
             new SrgbColor(0xC0, 0x50, 0x4D), ChartRenderPlanner.RectSeriesFillAlpha));
+    }
+
+    [Fact]
+    public void BuildColumnPrimitives_ImportedLabeledStyle2ColumnsUseFullSeriesSlot()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.StyleId = 2;
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18 };
+        chart.DataLabels = new ChartDataLabels { ShowValue = true };
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        first.Bounds.Width.Should().BeApproximately(28.5714, 0.0001);
     }
 
     [Fact]

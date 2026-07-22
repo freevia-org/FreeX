@@ -202,6 +202,7 @@ internal static class WholeWindowVisualEvidence
                     ? "FreeP currently declares zero contextual ribbon tabs, so the evidence contract contains no invented contextual-tab scenarios."
                     : $"Observed {declaredContextualTabs} contextual ribbon tab id(s).",
                 "Gridline/guide scenarios use the runtime ribbon command path; both current canvas renderers apply those flags to snapping and do not paint gridline/guide canvas raster.",
+                "Rich-editor overlay scenarios use each host's production editor with shared mixed runs and deterministic selection/caret offsets. They prove visible layout, focus, selection, and caret state; they do not claim physical pointer hit-testing, IME, clipboard, undo, or commit behavior.",
             ],
             limitations);
     }

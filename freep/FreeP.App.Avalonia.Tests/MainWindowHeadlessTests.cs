@@ -15,6 +15,7 @@ using Free.Shared.AppServices;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Avalonia.Smoke;
@@ -3178,6 +3179,49 @@ public sealed class MainWindowHeadlessTests
 
         if (!ran) return;
         selectedItemMargin.Should().Be(new Thickness(0, 2, 0, 0));
+    }
+
+    [Fact]
+    public async Task AccessibilityCheckerPane_card_chrome_matches_Wpf_authority()
+    {
+        Button? actionButton = null;
+        TextBlock? selectedIssue = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            try
+            {
+                window.Editor.CurrentSlide!.Shapes.Add(new SlideShape
+                {
+                    Id = 700,
+                    Name = "Missing alt text",
+                    AlternativeText = string.Empty,
+                });
+                window.Editor.Select(700);
+                window.ShowAccessibilityCheckerPane();
+
+                actionButton = window.GetLogicalDescendants()
+                    .OfType<Button>()
+                    .Single(button => Equals(button.Content, "Open Alt Text"));
+                selectedIssue = window.GetLogicalDescendants()
+                    .OfType<TextBlock>()
+                    .Single(text => text.Text == "Selected issue");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        if (!ran) return;
+        actionButton.Should().NotBeNull();
+        actionButton!.Height.Should().Be(20);
+        actionButton.CornerRadius.Should().Be(new CornerRadius(0));
+        actionButton.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
+        selectedIssue.Should().NotBeNull();
+        selectedIssue!.Margin.Should().Be(new Thickness(0, 2, 0, 0));
+        selectedIssue.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
     }
 
     [Fact]
