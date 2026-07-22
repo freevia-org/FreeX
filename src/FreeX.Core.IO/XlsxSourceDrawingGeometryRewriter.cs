@@ -213,10 +213,58 @@ internal static class XlsxSourceDrawingGeometryRewriter
 
             if (RewriteShapeAltTextAndTitle(shapeElement, shape.AltText, shape.Title))
                 changed = true;
+
+            if (RewriteShapeXfrmExtent(shapeElement, shape, drawingNs))
+                changed = true;
         }
 
         return changed;
     }
+
+    /// <summary>
+    /// Backlog "shape-xfrm-ext-stale" fix: a source-loaded shape's own
+    /// <c>&lt;xdr:spPr&gt;&lt;a:xfrm&gt;&lt;a:ext cx cy/&gt;</c> holds its (pre-rotation) size, and the loader
+    /// (<see cref="XlsxDrawingAnchorApplier.ApplyToShape"/>) PREFERS that xfrm extent over the anchor's
+    /// cell-span-derived size when both are present (the anchor is the ROTATED bounding box, not the shape's
+    /// own unrotated dimensions). Until this fix, <see cref="RewriteDrawingGeometry"/>'s shape loop only
+    /// rewrote the anchor's <c>to</c> marker (via <see cref="RewriteAnchorGeometry"/>) and left this internal
+    /// <c>ext</c> stale, so a resized shape reverted to its ORIGINAL size after a single save+reload: the
+    /// next load read the stale, still-positive <c>ext</c> back and it took priority over the correctly
+    /// rewritten anchor. This patches the <c>ext</c> cx/cy to the model's current Width/Height so the anchor
+    /// bounding box and the internal xfrm stay consistent, mirroring how
+    /// <see cref="RewritePictureVisualProperties"/>/<see cref="SetPictureTransform"/> patch a picture's xfrm.
+    /// <para>
+    /// Only an <c>ext</c> that is already present is touched: an absent xfrm means the loader used the
+    /// anchor-derived size, which <see cref="RewriteAnchorGeometry"/> already handles. And an individual axis
+    /// is rewritten ONLY when its SOURCE value is already positive -- this both mirrors <c>ApplyToShape</c>'s
+    /// trust condition (it copies the xfrm size into the model only for a positive axis) and protects the
+    /// intentional zero axis of a line-like shape (a horizontal Line/ElbowConnector/CurvedConnector has
+    /// cy=0, a vertical one cx=0): the zero axis is never faithfully captured in the model (the shape keeps
+    /// its default Width/Height there -- see <see cref="DrawingShapeModel"/>), so rewriting it from the model
+    /// would clobber that intentional zero with a bogus default-derived size. Returns true when modified.
+    /// </para>
+    /// </summary>
+    private static bool RewriteShapeXfrmExtent(XElement shapeElement, DrawingShapeModel shape, XNamespace drawingNs)
+    {
+        var ext = shapeElement
+            .Element(SpreadsheetDrawingNs + "spPr")?
+            .Element(drawingNs + "xfrm")?
+            .Element(drawingNs + "ext");
+        if (ext is null)
+            return false;
+
+        var changed = false;
+        if (ParsesPositive(ext.Attribute("cx")))
+            changed |= SetExtentAttribute(ext, "cx", shape.Width);
+        if (ParsesPositive(ext.Attribute("cy")))
+            changed |= SetExtentAttribute(ext, "cy", shape.Height);
+        return changed;
+    }
+
+    private static bool ParsesPositive(XAttribute? attribute) =>
+        attribute is not null &&
+        double.TryParse(attribute.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) &&
+        value > 0;
 
     /// <summary>
     /// R65-io-image-drawing-6-2 fix: pairs each SOURCE-LOADED <see cref="PictureModel"/> with its
