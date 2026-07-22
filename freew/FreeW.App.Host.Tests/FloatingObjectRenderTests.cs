@@ -38,6 +38,37 @@ public sealed class FloatingObjectRenderTests
         return doc;
     }
 
+    private static TextDocument DocWithImportedFloatingChart()
+    {
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["Q1", "Q2", "Q3", "Q4"],
+            [1.2, 1.7, 1.4, 2.1],
+            seriesName: "Revenue",
+            title: "Quarterly revenue");
+        chart.WidthPt = 210;
+        chart.HeightPt = 126;
+        chart.ShowLegend = true;
+        chart.CategoryAxisTitle = "Quarter";
+        chart.ValueAxisTitle = "USD";
+        chart.Placement = new FloatingPlacement
+        {
+            Wrapping = ImageWrapping.TopAndBottom,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            HorizontalOffsetPt = 210,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+            VerticalOffsetPt = 120,
+            ZOrderIndex = 4
+        };
+
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
     private static TextDocument DocWithMixedFloatingBands(out Shape behindShape, out Shape frontShape)
     {
         behindShape = new Shape(ShapeKind.Rectangle, 72, 36)
@@ -166,6 +197,18 @@ public sealed class FloatingObjectRenderTests
 
         var rendered = canvas.Children.OfType<FrameworkElement>().Single();
         Canvas.GetTop(rendered).Should().BeGreaterThan(0);
+    }
+
+    [StaFact]
+    public void ImportedFloatingChart_UsesItsMeasuredWordOverlayRegistration()
+    {
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(DocWithImportedFloatingChart());
+
+        Canvas.GetTop(canvas.Children.OfType<FrameworkElement>().Single())
+            .Should().BeApproximately(241, 0.01);
     }
 
     [StaFact]
