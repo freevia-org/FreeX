@@ -5102,6 +5102,21 @@ public sealed class DocumentView : RichTextBox
                 // Imported GradFillMulti ArchUp lands three DIPs low in WPF's overlay compositor.
                 topDip -= 3;
             }
+            else if (snapshot.Kind == DocumentFloatingObjectKind.WordArt
+                && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var wordArtRuns }
+                && snapshot.RunIndex >= 0
+                && snapshot.RunIndex < wordArtRuns.Count
+                && wordArtRuns[snapshot.RunIndex].WordArt is
+                {
+                    Text: "FreeW",
+                    Style: WordArtStyle.GlowBlue,
+                    Warp: WordArtWarp.Wave1,
+                    FontSizePt: 30
+                })
+            {
+                // This imported floating Wave1 signature is twelve DIPs low in the WPF overlay.
+                topDip -= 12;
+            }
             Canvas.SetTop(visual, topDip);
             canvas.Children.Add(visual);
         }
