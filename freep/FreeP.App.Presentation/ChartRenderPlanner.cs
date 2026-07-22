@@ -809,6 +809,12 @@ public static partial class ChartRenderPlanner
         UsesImportedTextMetrics(chart) &&
         chart.ChartType is ChartType.ColumnClustered or ChartType.BarClustered;
 
+    private static bool UsesImportedLabeledColumnWidth(ChartShape chart) =>
+        chart.StyleId == 2 &&
+        UsesImportedTextMetrics(chart) &&
+        chart.ChartType == ChartType.ColumnClustered &&
+        chart.DataLabels is not null;
+
     /// <summary>
     /// Chart parts without an authored style use PowerPoint's classic default
     /// appearance. Newer Office chart styles carry an explicit style id.
@@ -2646,6 +2652,8 @@ public static partial class ChartRenderPlanner
                     1,
                     slot.SeriesSize - (stacked && !importedPercentStackedCluster ? 0 : 1));
                 if (importedPercentStackedCluster)
+                    drawWidth = slot.SeriesSize;
+                else if (UsesImportedLabeledColumnWidth(chart))
                     drawWidth = slot.SeriesSize;
                 if (stacked)
                 {

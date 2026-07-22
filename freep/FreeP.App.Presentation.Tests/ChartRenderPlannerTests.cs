@@ -1869,6 +1869,22 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildColumnPrimitives_ImportedLabeledStyle2ColumnsUseFullSeriesSlot()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.StyleId = 2;
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18 };
+        chart.DataLabels = new ChartDataLabels { ShowValue = true };
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        first.Bounds.Width.Should().BeApproximately(28.5714, 0.0001);
+    }
+
+    [Fact]
     public void BuildColumnPrimitives_ExcludesInterleavedComboLineFromClusterGeometry()
     {
         var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
