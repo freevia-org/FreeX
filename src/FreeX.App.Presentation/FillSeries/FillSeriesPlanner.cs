@@ -212,6 +212,7 @@ public static class FillSeriesPlanner
         var edits = new List<(CellAddress, Cell)>();
         var value = 0d;
         var hasValue = false;
+        var lineStopped = false;
         foreach (var address in EnumerateSeriesAddresses(sheet.Id, range, seriesIn))
         {
             // Excel treats every row/column in the selection as its own series line: each
@@ -224,19 +225,28 @@ public static class FillSeriesPlanner
             // running value has already been established by an earlier line in the selection it
             // keeps chaining forward (matching a fill-handle drag across the whole rectangle),
             // and if no value has been established yet the line is left untouched until one is.
-            if (IsSeriesLineStart(address, range, seriesIn) &&
-                TryGetLinearOrGrowthSeriesSeed(sheet.GetValue(address.Row, address.Col), out var lineSeedValue))
+            // Reaching a line's own leading cell also resets the Stop Value clamp for that line:
+            // a stop reached on an earlier line/column must not suppress a later, independent
+            // line's fill.
+            if (IsSeriesLineStart(address, range, seriesIn))
             {
-                value = lineSeedValue + step;
-                hasValue = true;
-                continue;
+                lineStopped = false;
+                if (TryGetLinearOrGrowthSeriesSeed(sheet.GetValue(address.Row, address.Col), out var lineSeedValue))
+                {
+                    value = lineSeedValue + step;
+                    hasValue = true;
+                    continue;
+                }
             }
 
-            if (!hasValue)
+            if (lineStopped || !hasValue)
                 continue;
 
             if (IsPastStopValue(value, step, stopValue))
-                break;
+            {
+                lineStopped = true;
+                continue;
+            }
 
             edits.Add((address, Cell.FromValue(new NumberValue(value))));
             value += step;
@@ -256,6 +266,7 @@ public static class FillSeriesPlanner
         var value = 0d;
         var ascending = false;
         var hasValue = false;
+        var lineStopped = false;
         foreach (var address in EnumerateSeriesAddresses(sheet.Id, range, seriesIn))
         {
             // Same per-line-seed handling as BuildLinearSeriesEdits: every row/column in the
@@ -267,21 +278,29 @@ public static class FillSeriesPlanner
             // seed can never wipe out another column's valid one. A line whose leading cell is
             // not numeric does not reseed: an already-established running value keeps chaining
             // forward into it, and if no value has been established yet the line is left
-            // untouched until one is.
-            if (IsSeriesLineStart(address, range, seriesIn) &&
-                TryGetLinearOrGrowthSeriesSeed(sheet.GetValue(address.Row, address.Col), out var lineSeedValue))
+            // untouched until one is. Reaching a line's own leading cell also resets the Stop
+            // Value clamp for that line: a stop reached on an earlier line/column must not
+            // suppress a later, independent line's fill.
+            if (IsSeriesLineStart(address, range, seriesIn))
             {
-                ascending = IsGrowthAscending(lineSeedValue, step);
-                value = lineSeedValue * step;
-                hasValue = true;
-                continue;
+                lineStopped = false;
+                if (TryGetLinearOrGrowthSeriesSeed(sheet.GetValue(address.Row, address.Col), out var lineSeedValue))
+                {
+                    ascending = IsGrowthAscending(lineSeedValue, step);
+                    value = lineSeedValue * step;
+                    hasValue = true;
+                    continue;
+                }
             }
 
-            if (!hasValue)
+            if (lineStopped || !hasValue)
                 continue;
 
             if (IsPastStopValue(value, ascending, stopValue))
-                break;
+            {
+                lineStopped = true;
+                continue;
+            }
 
             edits.Add((address, Cell.FromValue(new NumberValue(value))));
             value *= step;
@@ -304,6 +323,7 @@ public static class FillSeriesPlanner
         var preserveEndOfMonth = false;
         var stepIndex = 0;
         var hasValue = false;
+        var lineStopped = false;
         foreach (var address in EnumerateSeriesAddresses(sheet.Id, range, seriesIn))
         {
             // Same per-line-seed handling as BuildLinearSeriesEdits/BuildGrowthSeriesEdits: a
@@ -313,23 +333,31 @@ public static class FillSeriesPlanner
             // first, so one column's invalid seed can never wipe out another column's valid one.
             // A line whose leading cell is not a date does not reseed: an already-established
             // running value keeps chaining forward into it, and if no value has been established
-            // yet the line is left untouched until one is.
-            if (IsSeriesLineStart(address, range, seriesIn) &&
-                sheet.GetValue(address.Row, address.Col) is DateTimeValue lineSeed)
+            // yet the line is left untouched until one is. Reaching a line's own leading cell
+            // also resets the Stop Value clamp for that line: a stop reached on an earlier
+            // line/column must not suppress a later, independent line's fill.
+            if (IsSeriesLineStart(address, range, seriesIn))
             {
-                seed = lineSeed.Value;
-                preserveEndOfMonth = IsLastDayOfMonth(lineSeed.ToDateTime());
-                stepIndex = 1;
-                value = NextDateSerial(seed, seed, step, dateUnit, preserveEndOfMonth, stepIndex);
-                hasValue = true;
-                continue;
+                lineStopped = false;
+                if (sheet.GetValue(address.Row, address.Col) is DateTimeValue lineSeed)
+                {
+                    seed = lineSeed.Value;
+                    preserveEndOfMonth = IsLastDayOfMonth(lineSeed.ToDateTime());
+                    stepIndex = 1;
+                    value = NextDateSerial(seed, seed, step, dateUnit, preserveEndOfMonth, stepIndex);
+                    hasValue = true;
+                    continue;
+                }
             }
 
-            if (!hasValue)
+            if (lineStopped || !hasValue)
                 continue;
 
             if (IsPastStopValue(value, step, stopValue))
-                break;
+            {
+                lineStopped = true;
+                continue;
+            }
 
             edits.Add((address, Cell.FromValue(new DateTimeValue(value))));
             stepIndex++;

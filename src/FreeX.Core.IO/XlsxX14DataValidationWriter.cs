@@ -252,7 +252,7 @@ internal static class XlsxX14DataValidationWriter
             XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(x14Dv, nativeAttributes);
 
         // <x14:formula1><xm:f>…</xm:f></x14:formula1>
-        var formula1 = dv.Formula1;
+        var formula1 = NormalizeFormulaForWrite(dv.Type, dv.Formula1);
         if (!string.IsNullOrEmpty(formula1))
         {
             x14Dv.Add(new XElement(X14Ns + "formula1",
@@ -260,16 +260,42 @@ internal static class XlsxX14DataValidationWriter
         }
 
         // <x14:formula2><xm:f>…</xm:f></x14:formula2>
-        if (!string.IsNullOrEmpty(dv.Formula2))
+        var formula2 = NormalizeFormulaForWrite(dv.Type, dv.Formula2);
+        if (!string.IsNullOrEmpty(formula2))
         {
             x14Dv.Add(new XElement(X14Ns + "formula2",
-                new XElement(XmNs + "f", dv.Formula2)));
+                new XElement(XmNs + "f", formula2)));
         }
 
         // <xm:sqref>…</xm:sqref> — MUST be last child per schema.
         x14Dv.Add(new XElement(XmNs + "sqref", BuildSqref(dv)));
 
         return x14Dv;
+    }
+
+    /// <summary>
+    /// Canonicalizes a formula bound before it is written into an x14 &lt;xm:f&gt; element, mirroring
+    /// the normalization <see cref="XlsxDataValidationClosedXmlMapper.Save"/> applies to the legacy
+    /// &lt;dataValidation&gt; formula1/formula2. Without this, a Date/Time/Decimal/WholeNumber bound
+    /// (e.g. a Date bound authored as "1/1/2024") would be saved literally into the x14 block and
+    /// Excel would reparse it as an arithmetic expression instead of a date, and a List range
+    /// reference carrying the in-memory '=' marker (added by <see cref="XlsxX14DataValidationReader"/>
+    /// so DataValidationService's ListSources resolver treats it as a range, not a literal item)
+    /// would leak that marker onto disk, which real Excel never writes for x14. A List/Custom
+    /// formula that is a genuine formula/reference is otherwise left untouched.
+    /// </summary>
+    private static string? NormalizeFormulaForWrite(DvType type, string? formula)
+    {
+        if (string.IsNullOrEmpty(formula))
+            return formula;
+
+        return type switch
+        {
+            DvType.List => XlsxDataValidationClosedXmlMapper.NormalizeListFormulaForSave(formula),
+            DvType.WholeNumber or DvType.Decimal or DvType.Date or DvType.Time =>
+                XlsxDataValidationClosedXmlMapper.NormalizeNumericFormulaForSave(type, formula),
+            _ => formula,
+        };
     }
 
     /// <summary>

@@ -142,7 +142,11 @@ internal static class XlsxX14DataValidationReader
             {
                 // Merge: populate Formula1 from the x14 block (legacy had empty formula1).
                 if (!string.IsNullOrEmpty(metadata.Formula1))
-                    existing.Formula1 = metadata.Formula1;
+                {
+                    existing.Formula1 = existing.Type == DvType.List
+                        ? NormalizeX14ListFormula1(metadata.Formula1)
+                        : metadata.Formula1;
+                }
                 if (!string.IsNullOrEmpty(metadata.Formula2))
                     existing.Formula2 = metadata.Formula2;
                 existing.IsX14 = true;
@@ -156,12 +160,17 @@ internal static class XlsxX14DataValidationReader
                     new CellAddress(sheet.Id, ranges[0].Start.Row, ranges[0].Start.Col),
                     new CellAddress(sheet.Id, ranges[0].End.Row, ranges[0].End.Col));
 
+                var dvType = ParseDvType(metadata.TypeStr);
+                var formula1 = dvType == DvType.List
+                    ? NormalizeX14ListFormula1(metadata.Formula1)
+                    : metadata.Formula1;
+
                 var dv = new DataValidation
                 {
                     AppliesTo = appliesTo,
-                    Type = ParseDvType(metadata.TypeStr),
+                    Type = dvType,
                     Operator = ParseDvOperator(metadata.OperatorStr),
-                    Formula1 = string.IsNullOrEmpty(metadata.Formula1) ? null : metadata.Formula1,
+                    Formula1 = string.IsNullOrEmpty(formula1) ? null : formula1,
                     Formula2 = string.IsNullOrEmpty(metadata.Formula2) ? null : metadata.Formula2,
                     // OOXML default for allowBlank is FALSE; emit "1" only when true.
                     // The old default of true silently enabled "ignore blank" for every x14-only rule
@@ -170,8 +179,12 @@ internal static class XlsxX14DataValidationReader
                     // showDropDown="1" means the dropdown is HIDDEN (inverted flag in OOXML).
                     ShowDropdown = !ParseBool(metadata.ShowDropDownStr, defaultValue: false),
                     AlertStyle = ParseAlertStyle(metadata.ErrorStyleStr),
-                    ShowInputMessage = ParseBool(metadata.ShowInputMessageStr, defaultValue: true),
-                    ShowErrorMessage = ParseBool(metadata.ShowErrorMessageStr, defaultValue: true),
+                    // OOXML default for showInputMessage/showErrorMessage is FALSE; emit "1" only
+                    // when true. The old default of true inverted the intended Excel behaviour for
+                    // every x14-only rule that had no showInputMessage/showErrorMessage attribute
+                    // (the same bug already fixed above for AllowBlank).
+                    ShowInputMessage = ParseBool(metadata.ShowInputMessageStr, defaultValue: false),
+                    ShowErrorMessage = ParseBool(metadata.ShowErrorMessageStr, defaultValue: false),
                     ErrorTitle = string.IsNullOrEmpty(metadata.ErrorTitle) ? null : metadata.ErrorTitle,
                     ErrorMessage = string.IsNullOrEmpty(metadata.Error) ? null : metadata.Error,
                     PromptTitle = string.IsNullOrEmpty(metadata.PromptTitle) ? null : metadata.PromptTitle,
@@ -318,6 +331,32 @@ internal static class XlsxX14DataValidationReader
         "information" => DvAlertStyle.Information,
         _ => DvAlertStyle.Stop,
     };
+
+    /// <summary>
+    /// Mirrors <see cref="XlsxDataValidationClosedXmlMapper"/>'s legacy-loader List handling
+    /// (~line 78-100) for an x14 List rule's raw <c>&lt;xm:f&gt;</c> text: an inline quoted
+    /// literal (e.g. <c>"Red,Green,Blue"</c>) has its quotes stripped and is kept as-is (no '=');
+    /// anything else is a range/defined-name/cross-sheet reference (e.g.
+    /// <c>Sheet2!$A$1:$A$5</c>) that real Excel never prefixes with '=' on disk, but
+    /// <see cref="FreeX.Core.Commands.DataValidationService"/>'s ListSources resolver gates
+    /// range/name resolution strictly on "Formula1 starts with '='" (DataValidationService's
+    /// ListSources helper) -- so the marker is re-added here, exactly like the legacy loader
+    /// does, to make the x14 path behave identically.
+    /// </summary>
+    private static string? NormalizeX14ListFormula1(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw))
+            return raw;
+
+        if (raw.StartsWith('"') && raw.EndsWith('"') && raw.Length > 1)
+        {
+            // Inline literal list, e.g. "Yes,No,Maybe" -- strip the quotes and keep as a literal
+            // comma-separated item list (no '=').
+            return raw.Substring(1, raw.Length - 2).Replace("\"\"", "\"");
+        }
+
+        return raw.StartsWith('=') ? raw : "=" + raw;
+    }
 
     private static bool ParseBool(string? value, bool defaultValue)
     {

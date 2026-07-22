@@ -521,9 +521,11 @@ public partial class GridView
     /// edge (one owned by each neighboring cell) should actually be painted, matching Excel's
     /// deterministic "heavier style wins" rule instead of whichever cell happens to be drawn
     /// last. Symmetric in its two arguments, so both neighboring cells compute the identical
-    /// winner regardless of render/iteration order.
+    /// winner regardless of render/iteration order. Public (rather than private) so the printed/
+    /// PDF render path (PrintRenderer.GridCells.cs, a different assembly) can resolve shared
+    /// edges with this exact same precedence rule instead of duplicating or drifting from it.
     /// </summary>
-    private static CellBorder ResolveBorderEdgeWinner(CellBorder mine, CellBorder neighbor)
+    public static CellBorder ResolveBorderEdgeWinner(CellBorder mine, CellBorder neighbor)
     {
         if (mine.Style == BorderStyle.None) return neighbor;
         if (neighbor.Style == BorderStyle.None) return mine;

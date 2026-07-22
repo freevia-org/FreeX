@@ -135,6 +135,29 @@ public sealed class AutosaveServiceTests
     }
 
     [Fact]
+    public void TryEmergencySnapshot_WhenNotDirty_DoesNotWriteSnapshot()
+    {
+        // R74-services-autosave-recovery-4-2: an emergency crash-handler snapshot bypasses the
+        // GENERATION gate (so it always tries to capture the latest state), but must still honor
+        // the underlying dirty check. A clean (IsDirty=false) workbook has no unsaved changes to
+        // recover, and Excel never offers Document Recovery for a document that was clean at
+        // crash time — so no snapshot (and later no recovery offer) should be produced for it.
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+        var service = new AutosaveService(store);
+        service.Attach(new StubSource(), "emergency-clean-placeholder");
+
+        var source = new StubSource(dirty: false, generation: 7, filePath: @"C:\work.xlsx", name: "work");
+
+        var act = () => service.TryEmergencySnapshot(source);
+        act.Should().NotThrow();
+
+        File.Exists(store.GetSnapshotPath("emergency-clean-placeholder")).Should().BeFalse(
+            "a clean workbook has nothing unsaved to recover, so an emergency snapshot must not be written for it");
+        File.Exists(store.GetSidecarPath("emergency-clean-placeholder")).Should().BeFalse();
+    }
+
+    [Fact]
     public void Dispose_PreventsSubsequentTicks()
     {
         using var dir = new TestTemporaryDirectory();

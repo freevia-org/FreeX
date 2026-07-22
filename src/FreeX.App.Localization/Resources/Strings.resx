@@ -14903,6 +14903,9 @@ Saved XPS file:&#xD;
   <data name="NameDefinition_InvalidRangeFormatMessage" xml:space="preserve">
     <value>Invalid range format. Use: SheetName!A1:B10 or A1:B10</value>
   </data>
+  <data name="NameDefinition_NameConflictsMessage" xml:space="preserve">
+    <value>A name conflicts with an existing name. Please try again with a different name.</value>
+  </data>
   <data name="FormatCells_PurpleBorder" xml:space="preserve">
     <value>Purple border</value>
   </data>

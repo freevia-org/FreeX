@@ -74,6 +74,15 @@ public static partial class NumberFormatter
         var sign = value < 0 ? "-" : "";
         if (numerator == 0)
         {
+            // The whole part (if any) is the only remaining magnitude once the fraction has
+            // rounded away to nothing (numerator == 0). When that whole part is also 0 -- e.g.
+            // a tiny negative like -0.001 that rounds down to nothing -- the FULL displayed
+            // value is zero, and Excel never shows a sign on a displayed zero (mirroring the
+            // IsNegativeZeroRepresentation/IsAllZeroText guard NumberFormatter.cs already
+            // applies for plain numeric formats). Only suppress the sign in that all-zero
+            // case; a genuine non-zero whole part (e.g. -2 with "# ?/?") still shows its "-".
+            var displaySign = whole == 0 ? "" : sign;
+
             if (!hasWholeSection)
             {
                 // Pure fraction format with no whole-number section (e.g. "?/8" or "?/?").
@@ -81,7 +90,7 @@ public static partial class NumberFormatter
                 // "0/1") so the denominator stays visible, matching Excel's display.
                 string numStr = FormatFractionPart(0, numeratorWidth, padLeft: true);
                 string denStr = FormatFractionPart(denominator, denominatorWidth, padLeft: false);
-                return prefix + sign + numStr + "/" + denStr + suffix;
+                return prefix + displaySign + numStr + "/" + denStr + suffix;
             }
 
             string wholeText = whole == 0 ? "0" : FormatWhole(whole);
@@ -95,9 +104,9 @@ public static partial class NumberFormatter
                 // spaces when the fractional value is zero, so columns stay aligned.
                 // Width = 1 (separator) + numeratorWidth + 1 (slash→space) + denominatorWidth.
                 string padding = new string(' ', 1 + numeratorWidth + 1 + denominatorWidth);
-                return prefix + sign + wholeText + padding + suffix;
+                return prefix + displaySign + wholeText + padding + suffix;
             }
-            return prefix + sign + wholeText + suffix;
+            return prefix + displaySign + wholeText + suffix;
         }
 
         string fraction = FormatFractionPart(numerator, numeratorWidth, padLeft: true) + "/" +

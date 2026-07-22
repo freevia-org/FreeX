@@ -254,11 +254,11 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
     private static readonly Dictionary<int, string> SubtotalNumberToTotalsRowFunction = new()
     {
         [101] = "average",
-        [102] = "countnums",
+        [102] = "countNums",
         [103] = "count",
         [104] = "max",
         [105] = "min",
-        [107] = "stddev",
+        [107] = "stdDev",
         [109] = "sum",
         [110] = "var",
     };

@@ -133,6 +133,38 @@ public static partial class BuiltInFunctions
         if (sheetName is null && FormulaEvaluator.TryResolveIndirectNamedFormula(refText, ctx, out var namedFormulaRange, out error))
             return CompleteIndirectRangeFromNamedFormula(ctx, namedFormulaRange, out range, out error);
 
+        // R74-formula-reference-fns-4-1: none of the address parses above ever match plain name
+        // text (e.g. "Rate" has no digits/colon), so a sheet-qualified name reference like
+        // INDIRECT("Sheet2!Rate") reached this point and fell straight through to the raw-address
+        // parse in IndirectCore, which also fails and returns #REF! -- even though a sheet-scoped
+        // name used off its own sheet is exactly what Excel's own "SheetName!Name" syntax denotes
+        // (mirrors how a direct =Sheet2!Rate formula reference resolves via
+        // FormulaEvaluator.TryResolveSheetQualifiedName). Resolve refText as a named range scoped
+        // to the qualifying sheet, falling back to the workbook-global range of that name --
+        // Workbook.TryGetNamedRange(name, sheetId) already implements exactly that precedence.
+        if (sheetName is not null &&
+            ctx.CurrentWorkbook is { } qualifiedWorkbook &&
+            qualifiedWorkbook.GetSheet(sheetName) is { } qualifiedSheet &&
+            qualifiedWorkbook.TryGetNamedRange(refText, qualifiedSheet.Id, out var qualifiedNamedRange))
+        {
+            var qualifiedRangeSheetName = ctx.TryGetSheetName(qualifiedNamedRange.Start.Sheet);
+            if (qualifiedRangeSheetName is null)
+            {
+                error = ErrorValue.Ref;
+                return false;
+            }
+
+            return CompleteIndirectRange(
+                ctx,
+                qualifiedRangeSheetName,
+                qualifiedNamedRange.Start.Row,
+                qualifiedNamedRange.Start.Col,
+                qualifiedNamedRange.End.Row,
+                qualifiedNamedRange.End.Col,
+                out range,
+                out error);
+        }
+
         return false;
     }
 

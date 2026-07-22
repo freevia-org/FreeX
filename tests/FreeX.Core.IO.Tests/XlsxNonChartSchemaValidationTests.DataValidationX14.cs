@@ -126,8 +126,14 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         var dv = sheet1.DataValidations[0];
         dv.Type.Should().Be(DvType.List);
-        dv.Formula1.Should().Be("Sheet2!$A$1:$A$5",
-            "x14 formula1 from <xm:f> must override the empty legacy formula1");
+        // The x14 <xm:f> text (no leading '=' on disk) must override the empty legacy formula1,
+        // AND gain FreeX's in-memory '=' marker (mirroring XlsxDataValidationClosedXmlMapper.Load's
+        // legacy-path convention, R74-io-data-validation-xml-4-1) so
+        // DataValidationService.ListSources resolves the cross-sheet range instead of treating the
+        // raw reference text as one literal dropdown item.
+        dv.Formula1.Should().Be("=Sheet2!$A$1:$A$5",
+            "x14 formula1 from <xm:f> must override the empty legacy formula1 and carry the same " +
+            "in-memory '=' marker the legacy List loader adds for a range/name source");
         dv.IsX14.Should().BeTrue("rule read from x14 block must be flagged IsX14");
         dv.AllowBlank.Should().BeTrue();
     }
@@ -266,7 +272,9 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var reloadedSheet1 = reloaded.GetSheet("Sheet1")!;
         var reloadedDv = reloadedSheet1.DataValidations.Should().ContainSingle().Subject;
         reloadedDv.Type.Should().Be(DvType.List);
-        reloadedDv.Formula1.Should().Be("Sheet2!$A$1:$A$5");
+        // Reloading re-adds the in-memory '=' marker (see the Load assertion above); the on-disk
+        // <xm:f> text checked just above stays marker-free.
+        reloadedDv.Formula1.Should().Be("=Sheet2!$A$1:$A$5");
         reloadedDv.IsX14.Should().BeTrue();
     }
 

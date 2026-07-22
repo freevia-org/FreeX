@@ -82,7 +82,7 @@ public partial class GridView
             {
                 BorderStyle.Hair => 0.25,
                 BorderStyle.Thin => 0.5,
-                BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot => 1.5,
+                BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot or BorderStyle.SlantDashDot => 1.5,
                 BorderStyle.Thick => 2.5,
                 _ => 0.5
             };

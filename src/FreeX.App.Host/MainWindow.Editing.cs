@@ -953,6 +953,22 @@ public partial class MainWindow
         {
             return false;
         }
+        // R74-commands-name-manager-4-2: never silently redefine an existing named FORMULA/constant
+        // (e.g. "TaxRate" = "0.08") as a range just because it doesn't resolve to one --
+        // TryParseNameBoxReferenceRange only ever recognizes NamedRanges/ScopedNamedRanges as
+        // navigable, so an existing formula-name falls through to here exactly like a brand-new
+        // name would, and without this guard would gain a colliding NamedRanges entry that wins over
+        // the stale NamedFormulas one at evaluation time.
+        if (WorkbookReferenceNavigator.NameExistsAsFormula(
+                name,
+                _currentSheetId,
+                sheetName => _workbook.Sheets.FirstOrDefault(sheet =>
+                    string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id,
+                _workbook.NamedFormulas,
+                (formulaName, sheetId) => _workbook.TryGetNamedFormulaText(formulaName, sheetId)))
+        {
+            return false;
+        }
         if (SheetGrid.SelectedRange is not { } range)
             return false;
 

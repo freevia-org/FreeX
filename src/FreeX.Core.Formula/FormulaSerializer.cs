@@ -129,7 +129,7 @@ public static class FormulaSerializer
 
             case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
                                          f.Arguments is [NamedRangeNode anchorName]:
-                sb.Append(anchorName.Name);
+                WriteNamedRangeName(anchorName, sb);
                 sb.Append('#');
                 break;
 
@@ -146,7 +146,7 @@ public static class FormulaSerializer
 
             case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
                                          f.Arguments is [NamedRangeNode rangeAnchorName, CellRefNode namedRangeEnd]:
-                sb.Append(rangeAnchorName.Name);
+                WriteNamedRangeName(rangeAnchorName, sb);
                 sb.Append("#:");
                 WriteCellRef(namedRangeEnd, sb);
                 break;

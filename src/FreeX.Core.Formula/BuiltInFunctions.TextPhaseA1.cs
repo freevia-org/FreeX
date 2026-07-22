@@ -257,6 +257,17 @@ public static partial class BuiltInFunctions
             .Replace("\t", "")
             .Replace("\n", "")
             .Replace("\r", "");
+
+        // A literal '.' that is neither the declared decimal_separator nor the declared
+        // group_separator is not a valid character in NUMBERVALUE's input text -- e.g.
+        // NUMBERVALUE("3.5","X","Y") must reject the stray '.' as #VALUE!, not silently
+        // parse it as a decimal point via the later InvariantCulture double.TryParse (which
+        // treats "." as a decimal point regardless of what decSep/grpSep were declared).
+        // Only check when neither separator IS "." -- when either one legitimately uses '.'
+        // the normal group-strip/decSep-substitution below handles it correctly.
+        if (decSep != "." && grpSep != "." && text.Contains('.', StringComparison.Ordinal))
+            return ErrorValue.Value;
+
         bool accountingNegative = text.StartsWith('(') && text.EndsWith(')');
         if (accountingNegative)
             text = text[1..^1];

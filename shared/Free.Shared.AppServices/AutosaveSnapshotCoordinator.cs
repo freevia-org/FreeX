@@ -82,9 +82,12 @@ public sealed class AutosaveSnapshotCoordinator
     /// <summary>
     /// Performs an emergency best-effort snapshot — used from crash handlers. Must never throw.
     /// Bypasses generation gating: a crash handler always tries to capture the latest state,
-    /// even when the source is not currently dirty or its generation has not advanced since the
-    /// last periodic snapshot (e.g. a fault that occurs before any edit bumps the generation
-    /// again after a prior autosave tick).
+    /// even when its generation has not advanced since the last periodic snapshot (e.g. a fault
+    /// that occurs before any edit bumps the generation again after a prior autosave tick). It
+    /// still requires the source to be dirty — a clean (unmodified) document has nothing an
+    /// emergency snapshot would recover, and writing one anyway would later offer Document
+    /// Recovery for a workbook that never had any unsaved changes at crash time, which Excel
+    /// itself never does.
     /// </summary>
     public void TryEmergencySnapshot(IAutosaveSnapshotSource source)
     {
@@ -110,7 +113,18 @@ public sealed class AutosaveSnapshotCoordinator
     {
         try
         {
-            if (!bypassGenerationGate && !AutosaveSnapshotStore.ShouldSnapshot(
+            // bypassGenerationGate only skips the GENERATION comparison (so a crash handler still
+            // captures state even when the generation has not advanced since the last periodic
+            // snapshot) — it must never skip the underlying dirty check. A clean document has no
+            // unsaved changes to recover, and writing (and later offering) a snapshot for one would
+            // mean Document Recovery could resurrect a workbook that had nothing to lose at crash
+            // time, which Excel never does.
+            if (bypassGenerationGate)
+            {
+                if (!source.IsDirty)
+                    return;
+            }
+            else if (!AutosaveSnapshotStore.ShouldSnapshot(
                     source.IsDirty,
                     source.DirtyGeneration,
                     _lastSnapshotGeneration))

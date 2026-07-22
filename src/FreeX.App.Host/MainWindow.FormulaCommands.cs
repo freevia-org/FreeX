@@ -101,6 +101,24 @@ public partial class MainWindow
         if (ShowOwnedDialog(dialog) != true)
             return;
 
+        // The ribbon "Define Name" dialog only ever creates a BRAND NEW name (unlike the Name
+        // Manager's New/Edit dialog, which reuses NameDefinitionDialog for both and has its own
+        // isSameEntry-aware duplicate check in NamedRangeDialog.xaml.cs), so any name that already
+        // exists anywhere in the target scope is unconditionally a conflict here. Without this,
+        // redefining an existing NamedFormula/constant (e.g. "Revenue" = 0.08) as a range via this
+        // dialog would silently add a NamedRanges entry alongside the stale NamedFormulas one, and
+        // NamedRanges wins at evaluation time -- every formula using the name would silently change
+        // value. Excel's own New Name dialog rejects this outright.
+        if (NameConflictsWithExistingDefinition(dialog.Result.Name, dialog.Result.Scope.Trim()))
+        {
+            ShowOwnedMessage(
+                UiText.Get("NameDefinition_NameConflictsMessage"),
+                UiText.Get("NameDefinition_NewNameTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         if (!NamedRangeInputParser.TryParseRange(_workbook, dialog.Result.RefersTo, out var namedRange))
         {
             ShowOwnedMessage(
@@ -717,6 +735,34 @@ public partial class MainWindow
             .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    // R74-commands-name-manager-4-1: whether "name" is already defined -- as a range, a
+    // formula/constant, or a structured table -- in the given target scope. Structured-table names
+    // share the same namespace as defined names workbook-wide in Excel, so a table-name collision is
+    // checked regardless of scope; NamedRanges/NamedFormulas are workbook-scoped storage, and
+    // ScopedNamedRanges/ScopedNamedFormulas are sheet-scoped storage keyed by (name, sheetId).
+    private bool NameConflictsWithExistingDefinition(string name, string scope)
+    {
+        if (_workbook.Sheets.Any(sheet => sheet.StructuredTables.Any(t =>
+                string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase))))
+        {
+            return true;
+        }
+
+        if (string.Equals(scope, "Workbook", StringComparison.OrdinalIgnoreCase))
+        {
+            return _workbook.NamedRanges.ContainsKey(name) || _workbook.NamedFormulas.ContainsKey(name);
+        }
+
+        var scopeSheetId = _workbook.Sheets.FirstOrDefault(sheet =>
+            string.Equals(sheet.Name, scope, StringComparison.OrdinalIgnoreCase))?.Id;
+        if (scopeSheetId is not { } sheetId)
+            return false;
+
+        return _workbook.ScopedNamedRanges.ContainsKey((name, sheetId)) ||
+               _workbook.ScopedNamedFormulas.ContainsKey((name, sheetId));
+    }
 
     private void ApplyNamedRangeSelection(
         NamedRangeDialog? dialog,

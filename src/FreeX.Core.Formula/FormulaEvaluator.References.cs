@@ -1166,7 +1166,20 @@ public sealed partial class FormulaEvaluator
             return false;
 
         if (!TryAsRangeRef(node.Arguments[0], out var range))
-            return false;
+        {
+            // R74-formula-reference-fns-4-2: ROW/COLUMN additionally accept a NamedRangeNode
+            // argument (e.g. =ROW(AllA) where AllA = Sheet1!$A:$A) -- TryAsRangeRef only knows the
+            // syntactic RangeRefNode/FullColumnRangeRefNode/FullRowRangeRefNode shapes a literal
+            // token can be, so a name never reaches it and would otherwise fall through to the
+            // slow general per-argument path, which clamps the open end to the sheet's used range
+            // (unlike the direct =ROW(A:A) form this fast path handles). ROWS/COLUMNS/AREAS are
+            // deliberately excluded -- clamping is harmless for those (they only count cells) and
+            // this fast path must not change their existing clamped behavior for a named range.
+            if (functionName is not ("ROW" or "COLUMN") ||
+                node.Arguments[0] is not NamedRangeNode named ||
+                !TryResolveNamedRangeNodeToRawRangeRef(named, context, out range))
+                return false;
+        }
 
         if (range.SheetName is not null && !context.SheetExists(range.SheetName))
         {
@@ -1206,6 +1219,50 @@ public sealed partial class FormulaEvaluator
         result = functionName == "ROWS"
             ? new NumberValue(r1 - r0 + 1)
             : new NumberValue(c1 - c0 + 1);
+        return true;
+    }
+
+    // R74-formula-reference-fns-4-2: resolves a NamedRangeNode to its RAW (unclamped) underlying
+    // range for the ROW/COLUMN fast path above, mirroring context.TryResolveNamedRange's own
+    // scoped-then-global precedence (the same lookup EvaluateNamedRange uses for a plain-range-kind
+    // name) rather than duplicating it. GridRange already stores the unclamped MaxRow/MaxCol
+    // sentinel for a full-column/full-row named range, so no separate "raw" representation is
+    // needed -- only the CellRefNode/RangeRefNode wrapping the caller's fast path already expects.
+    // Deliberately narrower than full name resolution: a sheet-scoped LAMBDA/LET binding or a
+    // formula-kind name (dynamic OFFSET-based range, etc.) has no raw GridRange to hand back, so
+    // both are left to return false here and fall through to the slower general per-argument path,
+    // which still evaluates them correctly (just with the pre-existing clamped behavior).
+    private static bool TryResolveNamedRangeNodeToRawRangeRef(NamedRangeNode node, IEvalContext context, out RangeRefNode range)
+    {
+        range = null!;
+        if (context.TryResolveLambdaBinding(node.Name) is not null)
+            return false;
+
+        FreeX.Core.Model.GridRange? gridRange;
+        if (node.SheetQualifier is { } sheetQualifier)
+        {
+            var workbook = context.CurrentWorkbook;
+            var qualifiedSheet = workbook?.GetSheet(sheetQualifier);
+            if (workbook is null || qualifiedSheet is null || !workbook.TryGetNamedRange(node.Name, qualifiedSheet.Id, out var qualifiedRange))
+                return false;
+
+            gridRange = qualifiedRange;
+        }
+        else
+        {
+            if (IsSheetScopedName(node.Name, context, out var isFormula) && isFormula)
+                return false;
+
+            gridRange = context.TryResolveNamedRange(node.Name);
+        }
+
+        if (gridRange is not { } resolved)
+            return false;
+
+        var sheetName = context.TryGetSheetName(resolved.Start.Sheet);
+        var start = new CellRefNode(FreeX.Core.Model.CellAddress.NumberToColumnName(resolved.Start.Col), resolved.Start.Row, SheetName: sheetName);
+        var end = new CellRefNode(FreeX.Core.Model.CellAddress.NumberToColumnName(resolved.End.Col), resolved.End.Row, SheetName: sheetName);
+        range = new RangeRefNode(start, end, sheetName);
         return true;
     }
 

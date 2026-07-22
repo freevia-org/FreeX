@@ -153,13 +153,19 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    /// <summary>Pastes the selected defined name's reference text into the active cell through the session command path.</summary>
+    /// <summary>
+    /// Pastes the selected defined name as a live "=Name" FORMULA into the active cell (matching
+    /// Excel's Paste Name, which inserts a reference that re-evaluates if the name's target
+    /// changes) through the session command path. Previously this wrote the name's current
+    /// RefersTo address as static text, so the pasted cell never updated when the name was
+    /// redefined and displayed a raw address instead of evaluating like a formula.
+    /// </summary>
     private bool ApplyPasteNameReference(PasteNamesItem item)
     {
         var address = _session.SelectedRange.Start;
         var edits = new (CellAddress Address, Cell NewCell)[]
         {
-            (address, Cell.FromValue(new TextValue(item.RefersTo))),
+            (address, Cell.FromFormula(item.Name)),
         };
 
         var command = new EditCellsCommand(_session.ActiveSheet.Id, edits);

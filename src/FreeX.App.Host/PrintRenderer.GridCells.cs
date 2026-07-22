@@ -106,7 +106,50 @@ public static partial class PrintRenderer
 
                 if (style is not null && HasVisiblePrintedBorder(style))
                 {
-                    DrawPrintedCellBorders(dc, cellRect, style, blackAndWhite, suppressTop, suppressBottom, suppressLeft, suppressRight);
+                    // Shared-edge precedence: resolve each edge against the ACTUAL neighboring
+                    // cell's opposing border via the same heaviest-wins rule the interactive grid
+                    // uses (GridView.Rendering.cs's borderStyleLookup + ResolveBorderEdgeWinner),
+                    // instead of always painting this cell's own border last-drawn-wins-over --
+                    // otherwise draw order (later column/row overwrites the earlier one) would
+                    // silently downgrade e.g. a Double edge to a neighbor's plain Thin.
+                    var topWinner = GridView.ResolveBorderEdgeWinner(
+                        style.BorderTop, ResolvePrintedNeighborBorder(cellLookup, row - 1, col, s => s.BorderBottom));
+                    var bottomWinner = GridView.ResolveBorderEdgeWinner(
+                        style.BorderBottom, ResolvePrintedNeighborBorder(cellLookup, row + 1, col, s => s.BorderTop));
+                    var leftWinner = GridView.ResolveBorderEdgeWinner(
+                        style.BorderLeft, ResolvePrintedNeighborBorder(cellLookup, row, col - 1, s => s.BorderRight));
+                    var rightWinner = GridView.ResolveBorderEdgeWinner(
+                        style.BorderRight, ResolvePrintedNeighborBorder(cellLookup, row, col + 1, s => s.BorderLeft));
+
+                    // Diagonal-on-merge: a diagonal border must span the full merged rectangle,
+                    // not just the anchor's own un-merged footprint (mirrors GridView.Rendering.cs's
+                    // diagonalW/diagonalH widening). Only the merge's anchor cell ever draws it.
+                    var isMergeAnchor = merge is not { } anchorMerge || (row == anchorMerge.Start.Row && col == anchorMerge.Start.Col);
+                    var diagonalWidth = colWidth;
+                    var diagonalHeight = rowHeight;
+                    if (isMergeAnchor && merge is { } diagonalMerge &&
+                        (style.BorderDiagonalDown.Style != BorderStyle.None || style.BorderDiagonalUp.Style != BorderStyle.None))
+                    {
+                        diagonalWidth = SumPrintedMergedColumnWidth(measurement, pageColumns, colIndex, diagonalMerge.End.Col);
+                        diagonalHeight = SumPrintedMergedRowHeight(measurement, pageRows, rowIndex, diagonalMerge.End.Row);
+                    }
+
+                    DrawPrintedCellBorders(
+                        dc,
+                        cellRect,
+                        style,
+                        blackAndWhite,
+                        suppressTop,
+                        suppressBottom,
+                        suppressLeft,
+                        suppressRight,
+                        topWinner,
+                        bottomWinner,
+                        leftWinner,
+                        rightWinner,
+                        isMergeAnchor,
+                        diagonalWidth,
+                        diagonalHeight);
                 }
             }
         }
@@ -624,28 +667,89 @@ public static partial class PrintRenderer
             dc.DrawLine(pen, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
     }
 
+    /// <summary>
+    /// Looks up the border a neighboring page cell contributes to a shared edge (e.g. the LEFT
+    /// cell's BorderRight, when resolving THIS cell's BorderLeft), for feeding into
+    /// <see cref="GridView.ResolveBorderEdgeWinner"/>. Returns the default (BorderStyle.None)
+    /// border when there is no neighbor cell in <paramref name="cellLookup"/> (page edge) or the
+    /// neighbor has no style, exactly as if that neighbor simply didn't contribute an edge.
+    /// </summary>
+    private static CellBorder ResolvePrintedNeighborBorder(
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        uint row,
+        uint col,
+        Func<CellStyle, CellBorder> selector) =>
+        cellLookup.TryGetValue((row, col), out var neighborCell) && neighborCell.Style is { } neighborStyle
+            ? selector(neighborStyle)
+            : default;
+
+    /// <summary>
+    /// Sums the printed width of a merge's member columns from <paramref name="colIndex"/> (the
+    /// anchor's own page-column position) up to <paramref name="mergeEndCol"/> — mirrors
+    /// GridView.Rendering.cs's diagonalW widening — so a diagonal border on a merged cell spans
+    /// the merge's true extent instead of just the anchor's single-cell footprint.
+    /// </summary>
+    private static double SumPrintedMergedColumnWidth(
+        PrintGridMeasurement measurement, IReadOnlyList<uint> pageColumns, int colIndex, uint mergeEndCol)
+    {
+        var width = measurement.ColumnWidthAt(colIndex);
+        var nextIndex = colIndex + 1;
+        while (nextIndex < pageColumns.Count && pageColumns[nextIndex] <= mergeEndCol)
+        {
+            width += measurement.ColumnWidthAt(nextIndex);
+            nextIndex++;
+        }
+        return width;
+    }
+
+    /// <summary>
+    /// Sums the printed height of a merge's member rows from <paramref name="rowIndex"/> up to
+    /// <paramref name="mergeEndRow"/> — the row-axis mirror of
+    /// <see cref="SumPrintedMergedColumnWidth"/> — so a diagonal border on a merged cell spans
+    /// the merge's true extent instead of just the anchor's single-cell footprint.
+    /// </summary>
+    private static double SumPrintedMergedRowHeight(
+        PrintGridMeasurement measurement, IReadOnlyList<uint> pageRows, int rowIndex, uint mergeEndRow)
+    {
+        var height = measurement.RowHeightAt(rowIndex);
+        var nextIndex = rowIndex + 1;
+        while (nextIndex < pageRows.Count && pageRows[nextIndex] <= mergeEndRow)
+        {
+            height += measurement.RowHeightAt(nextIndex);
+            nextIndex++;
+        }
+        return height;
+    }
+
     private static void DrawPrintedCellBorders(
         DrawingContext dc,
         Rect rect,
         CellStyle style,
-        bool blackAndWhite = false,
-        bool suppressTop = false,
-        bool suppressBottom = false,
-        bool suppressLeft = false,
-        bool suppressRight = false)
+        bool blackAndWhite,
+        bool suppressTop,
+        bool suppressBottom,
+        bool suppressLeft,
+        bool suppressRight,
+        CellBorder topBorder,
+        CellBorder bottomBorder,
+        CellBorder leftBorder,
+        CellBorder rightBorder,
+        bool drawDiagonal,
+        double diagonalWidth,
+        double diagonalHeight)
     {
         if (!suppressTop)
-            DrawPrintedBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), blackAndWhite);
+            DrawPrintedBorderEdge(dc, topBorder, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), blackAndWhite);
         if (!suppressBottom)
-            DrawPrintedBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), blackAndWhite);
+            DrawPrintedBorderEdge(dc, bottomBorder, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), blackAndWhite);
         if (!suppressLeft)
-            DrawPrintedBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), blackAndWhite);
+            DrawPrintedBorderEdge(dc, leftBorder, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), blackAndWhite);
         if (!suppressRight)
-            DrawPrintedBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite);
-        if (style.BorderDiagonalDown.Style != BorderStyle.None)
-            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite);
-        if (style.BorderDiagonalUp.Style != BorderStyle.None)
-            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top), blackAndWhite);
+            DrawPrintedBorderEdge(dc, rightBorder, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite);
+        if (drawDiagonal && style.BorderDiagonalDown.Style != BorderStyle.None)
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Left + diagonalWidth, rect.Top + diagonalHeight), blackAndWhite);
+        if (drawDiagonal && style.BorderDiagonalUp.Style != BorderStyle.None)
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Top + diagonalHeight), new Point(rect.Left + diagonalWidth, rect.Top), blackAndWhite);
     }
 
     private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2, bool blackAndWhite = false)
@@ -656,7 +760,7 @@ public static partial class PrintRenderer
         {
             BorderStyle.Hair => 0.25,
             BorderStyle.Thin => 0.5,
-            BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot => 1.5,
+            BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot or BorderStyle.SlantDashDot => 1.5,
             BorderStyle.Thick => 2.5,
             _ => 0.5
         };

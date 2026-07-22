@@ -39,8 +39,11 @@ public static partial class BuiltInFunctions
     {
         // Numbers and dates format through the same Excel number-format engine the grid uses, so TEXT() and
         // cell display stay consistent — including the '?' digit placeholder, grouping, and scaling that a
-        // naive .NET ToString renders as literal characters. Other values pass through as text.
-        if (val is NumberValue or DateTimeValue)
+        // naive .NET ToString renders as literal characters. A TextValue also goes through the engine: Excel
+        // applies the format's text section ('@' placeholder plus any literal/escaped text) to a text input
+        // (e.g. TEXT("A1","\"SKU \"@") = "SKU A1"); a purely numeric format with no '@' leaves the text
+        // unchanged, which NumberFormatter.Format already implements (see FormatTextWithColor).
+        if (val is NumberValue or DateTimeValue or TextValue)
             return TextResult(NumberFormatter.Format(val, fmt, uses1904DateSystem));
         return TextResult(ToText(val));
     }
@@ -120,9 +123,24 @@ public static partial class BuiltInFunctions
         double n = ToNumber(value);
         var numberText = FormatRoundedNumber(Math.Abs(n), dec, useCommas: true);
         var currencySymbol = CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol;
-        var formatted = currencySymbol + numberText;
+        var formatted = ApplyCurrencyPositivePattern(
+            currencySymbol, numberText, CultureInfo.CurrentCulture.NumberFormat.CurrencyPositivePattern);
         return TextResult(n < 0 && (dec >= 0 || numberText != "0") ? "(" + formatted + ")" : formatted);
     }
+
+    // DOLLAR() must place the currency symbol per the current culture's CurrencyPositivePattern
+    // (0="$n", 1="n$", 2="$ n", 3="n $") instead of always prepending it -- e.g. fr-FR/de-DE (both
+    // pattern 3) show the symbol after the amount with a separating space ("1 234,57 €"), not
+    // "€1 234,57". A negative amount reuses this same locale-aware layout, wrapped in the accounting
+    // parentheses Excel's DOLLAR always uses for negatives (regardless of the OS's own
+    // CurrencyNegativePattern, which -- unlike the positive pattern -- DOLLAR does not follow).
+    private static string ApplyCurrencyPositivePattern(string symbol, string number, int pattern) => pattern switch
+    {
+        1 => number + symbol,
+        2 => symbol + " " + number,
+        3 => number + " " + symbol,
+        _ => symbol + number, // 0 ("$n"), and the fallback for any unrecognized pattern index
+    };
 
     private static string FormatRoundedNumber(double value, int decimals, bool useCommas)
     {

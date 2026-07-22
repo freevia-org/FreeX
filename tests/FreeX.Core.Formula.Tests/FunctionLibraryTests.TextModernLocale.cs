@@ -36,8 +36,11 @@ public partial class FunctionLibraryTests
     {
         using var culture = new TestCultureScope("de-DE");
 
+        // de-DE's CurrencyPositivePattern is 3 ("n $": symbol AFTER the amount with a
+        // separating space, e.g. real German currency display "1.234,50 €") -- R74-formula-
+        // text-format-4-2 fixed DOLLAR() to honor that instead of always prepending the symbol.
         _eval.Evaluate("=DOLLAR(1234.5,2)", MakeSheet())
-            .Should().Be(new TextValue("€1.234,50"));
+            .Should().Be(new TextValue("1.234,50 €"));
     }
 
     [Fact]
@@ -46,7 +49,7 @@ public partial class FunctionLibraryTests
         using var culture = new TestCultureScope("de-DE");
 
         _eval.Evaluate("=DOLLAR(-1234.5,2)", MakeSheet())
-            .Should().Be(new TextValue("(€1.234,50)"));
+            .Should().Be(new TextValue("(1.234,50 €)"));
     }
 
     [Fact]

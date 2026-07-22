@@ -8,6 +8,16 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
 
+/// <summary>
+/// R74-io-comments-threaded-4-2: a source-package <c>&lt;person&gt;</c> record's full identity, as
+/// read by <see cref="XlsxWorksheetThreadedCommentMapper.ReadPersonRecords"/> -- <c>UserId</c>/
+/// <c>ProviderId</c>/<c>ExtLstXml</c> are captured in ADDITION to <c>DisplayName</c> (which
+/// <see cref="XlsxWorksheetThreadedCommentMapper"/>'s own person-id resolution already needs) so a
+/// caller can round-trip them through <see cref="XlsxWorksheetThreadedCommentMapper.Save"/>'s
+/// optional <c>sourcePersonRecordsById</c> parameter.
+/// </summary>
+internal readonly record struct PersonRecord(string DisplayName, string? UserId, string? ProviderId, string? ExtLstXml);
+
 internal static class XlsxWorksheetThreadedCommentMapper
 {
     private const string ThreadedCommentsContentType = "application/vnd.ms-excel.threadedcomments+xml";
@@ -68,7 +78,8 @@ internal static class XlsxWorksheetThreadedCommentMapper
     public static void Save(
         Stream xlsxStream,
         Workbook workbook,
-        XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+        XlsxWorkbookWorksheetPathMap? worksheetPathMap,
+        IReadOnlyDictionary<string, PersonRecord>? sourcePersonRecordsById = null)
     {
         if (worksheetPathMap is null || !workbook.Sheets.Any(HasThreadedComments))
             return;
@@ -83,7 +94,15 @@ internal static class XlsxWorksheetThreadedCommentMapper
         // distinct real authors sharing a displayName each still get their own <person> record
         // (see ResolvePersonIdentitiesById).
         var personIdentitiesById = ResolvePersonIdentitiesById(workbook, authorsByName);
-        WritePersonsPart(archive, personIdentitiesById, GetNonAuthoringMentionedPersons(workbook, personIdentitiesById.Keys));
+        // R74-io-comments-threaded-4-2: sourcePersonRecordsById (see ReadPersonRecords), when the
+        // caller supplies it, lets WritePersonsPart re-emit each surviving person's ORIGINAL
+        // userId/providerId/extLst instead of silently dropping them on every save that rewrites
+        // this part.
+        WritePersonsPart(
+            archive,
+            personIdentitiesById,
+            GetNonAuthoringMentionedPersons(workbook, personIdentitiesById.Keys),
+            sourcePersonRecordsById);
         EnsureWorkbookPersonRelationship(archive);
 
         // Allocate next-free threaded comment part indices, checking existing archive entries to
@@ -363,13 +382,31 @@ internal static class XlsxWorksheetThreadedCommentMapper
         }
     }
 
-    private static IReadOnlyDictionary<string, string> ReadPersons(ZipArchive archive)
+    private static IReadOnlyDictionary<string, string> ReadPersons(ZipArchive archive) =>
+        ReadPersonRecords(archive).ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.DisplayName,
+            StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// R74-io-comments-threaded-4-2: reads each <c>&lt;person&gt;</c> record's full identity --
+    /// not just its displayName (see <see cref="ReadPersons"/>, which now delegates here) -- so a
+    /// caller with access to the ORIGINAL source package (e.g. via the loaded workbook's captured
+    /// source package) can pass the result to <see cref="Save"/>'s optional
+    /// <c>sourcePersonRecordsById</c> parameter and have <see cref="WritePersonsPart"/> preserve
+    /// each surviving person's <c>userId</c>/<c>providerId</c>/<c>extLst</c> across a save that
+    /// rewrites <c>xl/persons/person.xml</c>. Excel uses <c>userId</c>/<c>providerId</c> to
+    /// resolve @mentions to a real account; without this, <see cref="WritePersonsPart"/>
+    /// previously re-emitted only <c>displayName</c>+<c>id</c> on every such save, silently
+    /// discarding both attributes (and any <c>extLst</c>) for every threaded-comment workbook.
+    /// </summary>
+    public static IReadOnlyDictionary<string, PersonRecord> ReadPersonRecords(ZipArchive archive)
     {
         var personPartPaths = ReadPersonPartPaths(archive);
         if (personPartPaths.Count == 0 && archive.GetEntry(PersonsPath) is not null)
             personPartPaths = [PersonsPath];
 
-        var authorsByPersonId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var recordsById = new Dictionary<string, PersonRecord>(StringComparer.OrdinalIgnoreCase);
         foreach (var personPartPath in personPartPaths)
         {
             var entry = archive.GetEntry(personPartPath);
@@ -383,8 +420,14 @@ internal static class XlsxWorksheetThreadedCommentMapper
                 {
                     var id = person.Attribute("id")?.Value;
                     var displayName = person.Attribute("displayName")?.Value;
-                    if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(displayName))
-                        authorsByPersonId[id] = displayName;
+                    if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(displayName))
+                        continue;
+
+                    recordsById[id] = new PersonRecord(
+                        displayName,
+                        person.Attribute("userId")?.Value,
+                        person.Attribute("providerId")?.Value,
+                        person.Element(ThreadedCommentNs + "extLst")?.ToString(SaveOptions.DisableFormatting));
                 }
             }
             catch
@@ -393,7 +436,7 @@ internal static class XlsxWorksheetThreadedCommentMapper
             }
         }
 
-        return authorsByPersonId;
+        return recordsById;
     }
 
     private static IReadOnlyList<string> ReadPersonPartPaths(ZipArchive archive)
@@ -579,23 +622,57 @@ internal static class XlsxWorksheetThreadedCommentMapper
     private static void WritePersonsPart(
         ZipArchive archive,
         IReadOnlyDictionary<string, string> personIdentitiesById,
-        IReadOnlyDictionary<string, string> nonAuthoringMentionedPersonsById)
+        IReadOnlyDictionary<string, string> nonAuthoringMentionedPersonsById,
+        IReadOnlyDictionary<string, PersonRecord>? sourceRecordsById = null)
     {
         var personsXml = new XDocument(
             new XElement(
                 ThreadedCommentNs + "personList",
                 personIdentitiesById
-                    .Select(pair => new XElement(
-                        ThreadedCommentNs + "person",
-                        new XAttribute("displayName", pair.Value),
-                        new XAttribute("id", pair.Key)))
-                    .Concat(nonAuthoringMentionedPersonsById.Select(pair => new XElement(
-                        ThreadedCommentNs + "person",
-                        new XAttribute("displayName", pair.Value),
-                        new XAttribute("id", pair.Key))))));
+                    .Select(pair => BuildPersonElement(pair.Key, pair.Value, sourceRecordsById))
+                    .Concat(nonAuthoringMentionedPersonsById.Select(pair =>
+                        BuildPersonElement(pair.Key, pair.Value, sourceRecordsById)))));
 
         XlsxPackageXmlEditor.ReplaceXml(archive, PersonsPath, personsXml);
         XlsxPackageXmlEditor.EnsureSpecificContentType(archive, PersonsPath, PersonContentType);
+    }
+
+    /// <summary>
+    /// R74-io-comments-threaded-4-2: builds one <c>&lt;person&gt;</c> element, preserving the
+    /// ORIGINAL <c>userId</c>/<c>providerId</c>/<c>extLst</c> from <paramref name="sourceRecordsById"/>
+    /// when the caller supplied a matching record for this <paramref name="id"/> and that record
+    /// actually carries the attribute -- never emitting a spurious empty attribute otherwise.
+    /// </summary>
+    private static XElement BuildPersonElement(
+        string id,
+        string displayName,
+        IReadOnlyDictionary<string, PersonRecord>? sourceRecordsById)
+    {
+        var element = new XElement(
+            ThreadedCommentNs + "person",
+            new XAttribute("displayName", displayName),
+            new XAttribute("id", id));
+
+        if (sourceRecordsById is null || !sourceRecordsById.TryGetValue(id, out var sourceRecord))
+            return element;
+
+        if (!string.IsNullOrEmpty(sourceRecord.UserId))
+            element.SetAttributeValue("userId", sourceRecord.UserId);
+        if (!string.IsNullOrEmpty(sourceRecord.ProviderId))
+            element.SetAttributeValue("providerId", sourceRecord.ProviderId);
+        if (!string.IsNullOrEmpty(sourceRecord.ExtLstXml))
+        {
+            try
+            {
+                element.Add(XElement.Parse(sourceRecord.ExtLstXml, LoadOptions.PreserveWhitespace));
+            }
+            catch (XmlException)
+            {
+                // Keep saves resilient if the preserved extLst fragment is somehow malformed.
+            }
+        }
+
+        return element;
     }
 
     private static void EnsureWorkbookPersonRelationship(ZipArchive archive)

@@ -572,11 +572,17 @@ internal static class XlsxSourceDrawingGeometryRewriter
     {
         var changed = false;
 
+        // R74-units-mismatch-sweep-1 fix: absoluteAnchor's xdr:pos x/y is CT_Point2D
+        // (ST_AdjCoordinate/ST_Coordinate), which is genuinely signed -- a picture positioned to the
+        // left of/above the sheet origin has a negative EMU pos. SetExtentAttribute clamps to
+        // Math.Max(0, pixels), which would silently snap such a picture back to the origin on every
+        // save. Use the signed pixel->EMU conversion here (matching XlsxWorksheetChartWriter's
+        // absoluteAnchor pos handling), while ext (a size) still legitimately clamps to non-negative.
         var pos = anchor.Element(SpreadsheetDrawingNs + "pos");
         if (pos is not null)
         {
-            changed |= SetExtentAttribute(pos, "x", offsetXPixels);
-            changed |= SetExtentAttribute(pos, "y", offsetYPixels);
+            changed |= SetSignedExtentAttribute(pos, "x", offsetXPixels);
+            changed |= SetSignedExtentAttribute(pos, "y", offsetYPixels);
         }
 
         var ext = anchor.Element(SpreadsheetDrawingNs + "ext");
@@ -753,6 +759,26 @@ internal static class XlsxSourceDrawingGeometryRewriter
             return false;
 
         var emu = DrawingMlUnits.PixelsToEmu(Math.Max(0, pixels)).ToString(CultureInfo.InvariantCulture);
+        if (string.Equals(attribute.Value, emu, StringComparison.Ordinal))
+            return false;
+
+        attribute.Value = emu;
+        return true;
+    }
+
+    /// <summary>
+    /// R74-units-mismatch-sweep-1 fix: like <see cref="SetExtentAttribute"/> but preserves negative
+    /// values, for the absoluteAnchor xdr:pos x/y attributes -- the only coordinates this rewriter
+    /// touches that are genuinely signed in the OOXML schema (see
+    /// <see cref="DrawingMlCoordinateUnits.PixelsToEmuSigned"/>).
+    /// </summary>
+    private static bool SetSignedExtentAttribute(XElement pos, string attributeName, double pixels)
+    {
+        var attribute = pos.Attribute(attributeName);
+        if (attribute is null)
+            return false;
+
+        var emu = DrawingMlCoordinateUnits.PixelsToEmuSigned(pixels).ToString(CultureInfo.InvariantCulture);
         if (string.Equals(attribute.Value, emu, StringComparison.Ordinal))
             return false;
 

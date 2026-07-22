@@ -100,7 +100,7 @@ internal static class XlsxLegacyCommentPreserver
                     // shim(s) that still need preserving; only fall back to the full purge when none
                     // exist to protect.
                     var shimsOnlyCommentsXml = TryBuildShimsOnlyCommentsXml(
-                        sourceCommentsXml, workbookNs, sheet, out var keptShimAddresses);
+                        sourceCommentsXml, workbookNs, sheet, sourceArchive, sourceWorksheetPath, out var keptShimAddresses);
                     if (shimsOnlyCommentsXml is not null)
                     {
                         XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(shimsOnlyCommentsXml);
@@ -150,7 +150,9 @@ internal static class XlsxLegacyCommentPreserver
                 sheet,
                 workbookNs,
                 targetArchive,
-                targetCommentsPath);
+                targetCommentsPath,
+                sourceArchive,
+                sourceWorksheetPath);
             if (reconciledCommentsXml is null)
                 continue;
 
@@ -183,7 +185,8 @@ internal static class XlsxLegacyCommentPreserver
                 targetWorksheetRelsXml,
                 sheet,
                 sourceCommentsXml,
-                workbookNs);
+                workbookNs,
+                ReadSourceThreadedCommentsByCell(sourceArchive, sourceWorksheetPath));
 
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
 
@@ -233,11 +236,18 @@ internal static class XlsxLegacyCommentPreserver
         Sheet sheet,
         XNamespace workbookNs,
         ZipArchive targetArchive,
-        string? targetCommentsPath)
+        string? targetCommentsPath,
+        ZipArchive sourceArchive,
+        string sourceWorksheetPath)
     {
         var sourceCommentElements = ReadLegacyCommentElementsByReference(sourceCommentsXml, workbookNs);
         if (sourceCommentElements.Count == 0)
             return null;
+
+        // R74-io-comments-threaded-4-1: shift-aware lookup for the live-threaded-comment shim
+        // check below -- a row/column insert/delete may have relocated a shim's thread to a NEW
+        // address since the source package was written.
+        var sourceThreadsByCell = ReadSourceThreadedCommentsByCell(sourceArchive, sourceWorksheetPath);
 
         // Read the source authors list (index → name).
         var sourceAuthors = sourceCommentsXml.Root?
@@ -277,11 +287,17 @@ internal static class XlsxLegacyCommentPreserver
                 // R32-io-hyperlink-comment-deep-1: Excel's legacy threaded-comment compatibility
                 // shim is by design never modeled into Sheet.Comments even when its thread is
                 // still alive (XlsxWorksheetCommentReader.IsLegacyThreadedCommentShim) -- keep it
-                // untouched rather than treating it as a deleted note.
+                // untouched rather than treating it as a deleted note. R74-io-comments-threaded-
+                // 4-1: shift-aware -- also keep it (re-anchored to the new address) when the
+                // thread survived a row/column insert/delete instead of staying at this exact
+                // (now stale) address.
                 if (IsLegacyThreadedCommentShimEntry(sourceElement, workbookNs, sourceAuthors) &&
-                    sheet.ThreadedComments.ContainsKey(address))
+                    TryResolveShiftedThreadedCommentAddress(sourceThreadsByCell, address, sheet, out var shimAddress))
                 {
-                    reconciledEntries.Add(new XElement(sourceElement));
+                    var shimEntry = new XElement(sourceElement);
+                    if (shimAddress != address)
+                        shimEntry.SetAttributeValue("ref", shimAddress.ToA1());
+                    reconciledEntries.Add(shimEntry);
                     matchedCount++;
                     continue;
                 }
@@ -545,6 +561,67 @@ internal static class XlsxLegacyCommentPreserver
     }
 
     /// <summary>
+    /// R74-io-comments-threaded-4-1: reads every threaded-comment thread as it existed in the
+    /// ORIGINAL source package, indexed by its (1-based) <c>(Row, Col)</c> cell -- used by
+    /// <see cref="TryResolveShiftedThreadedCommentAddress"/> to find the stable
+    /// <see cref="ThreadedComment.Id"/> a legacy compatibility shim's thread had BEFORE a
+    /// row/column insert/delete may have shifted it. A no-op read (returns empty) when the
+    /// worksheet has no threaded-comments part at all.
+    /// </summary>
+    private static Dictionary<(uint Row, uint Col), ThreadedComment> ReadSourceThreadedCommentsByCell(
+        ZipArchive sourceArchive,
+        string sourceWorksheetPath) =>
+        XlsxWorksheetThreadedCommentMapper.Read(sourceArchive, sourceWorksheetPath)
+            .ToDictionary(t => (t.Row, t.Col), t => t.Comment);
+
+    /// <summary>
+    /// R74-io-comments-threaded-4-1: resolves the address a legacy threaded-comment compatibility
+    /// shim's thread NOW lives at. <paramref name="oldAddress"/> is the shim's own <c>ref</c>
+    /// address (parsed straight from the source comments part, i.e. the address it had when the
+    /// source package was written). When <see cref="Sheet.ThreadedComments"/> still has the thread
+    /// at that SAME address, this is a same-address match (the common case). Otherwise -- a
+    /// row/column insert/delete may have shifted it, since RowColumnShiftHelpers.ShiftCommentRows*/
+    /// Columns* already relocated <see cref="Sheet.ThreadedComments"/>' key but this shim's own
+    /// <c>ref</c> still names the OLD address -- match by the thread's stable
+    /// <see cref="ThreadedComment.Id"/> instead (captured unconditionally from the source's own
+    /// id/personId on load, so it survives the shift and, unlike matching by text, can never
+    /// collide with a distinct thread that merely happens to share the same text). Returns
+    /// <c>false</c> only when no thread with that id survives anywhere on the sheet -- i.e. the
+    /// whole thread was genuinely deleted.
+    /// </summary>
+    private static bool TryResolveShiftedThreadedCommentAddress(
+        IReadOnlyDictionary<(uint Row, uint Col), ThreadedComment> sourceThreadsByCell,
+        CellAddress oldAddress,
+        Sheet sheet,
+        out CellAddress resolvedAddress)
+    {
+        if (sheet.ThreadedComments.ContainsKey(oldAddress))
+        {
+            resolvedAddress = oldAddress;
+            return true;
+        }
+
+        if (!sourceThreadsByCell.TryGetValue((oldAddress.Row, oldAddress.Col), out var sourceThread) ||
+            string.IsNullOrEmpty(sourceThread.Id))
+        {
+            resolvedAddress = default;
+            return false;
+        }
+
+        foreach (var (address, comment) in sheet.ThreadedComments)
+        {
+            if (string.Equals(comment.Id, sourceThread.Id, StringComparison.Ordinal))
+            {
+                resolvedAddress = address;
+                return true;
+            }
+        }
+
+        resolvedAddress = default;
+        return false;
+    }
+
+    /// <summary>
     /// True when EVERY entry in the source comments part is one that
     /// <c>XlsxWorksheetCommentReader</c> would never surface into <see cref="Sheet.Comments"/> in
     /// the first place: Excel's legacy threaded-comment compatibility shim (mirrors
@@ -586,7 +663,7 @@ internal static class XlsxLegacyCommentPreserver
             .Select(a => a.Value)
             .ToList() ?? [];
 
-        HashSet<(uint Row, uint Col)>? sourceThreadedCellKeys = null;
+        Dictionary<(uint Row, uint Col), ThreadedComment>? sourceThreadsByCell = null;
 
         foreach (var comment in commentElements)
         {
@@ -610,11 +687,16 @@ internal static class XlsxLegacyCommentPreserver
             if (string.IsNullOrEmpty(reference) || !CellAddress.TryParse(reference, sheet.Id, out var address))
                 continue;
 
-            sourceThreadedCellKeys ??= XlsxWorksheetThreadedCommentMapper.Read(sourceArchive, sourceWorksheetPath)
-                .Select(t => (t.Row, t.Col))
-                .ToHashSet();
+            sourceThreadsByCell ??= ReadSourceThreadedCommentsByCell(sourceArchive, sourceWorksheetPath);
 
-            var sourceThreadOnceExisted = sourceThreadedCellKeys.Contains((address.Row, address.Col));
+            // R74-io-comments-threaded-4-1: deliberately NOT shift-aware here -- this is only the
+            // gate that decides whether the shims-only reconciliation pass below (Preserve's
+            // TryBuildShimsOnlyCommentsXml, which IS shift-aware) needs to run at all. Returning
+            // "true" (only-unmodeled, no purge) whenever the thread is simply not at its own
+            // (source-file) address any more -- whether it was shifted OR genuinely deleted --
+            // would skip that pass entirely and leave a shifted shim's `ref` stale at its pre-shift
+            // address, since Preserve() only calls it when this method returns false.
+            var sourceThreadOnceExisted = sourceThreadsByCell.ContainsKey((address.Row, address.Col));
             if (sourceThreadOnceExisted && !sheet.ThreadedComments.ContainsKey(address))
                 return false;
         }
@@ -637,13 +719,16 @@ internal static class XlsxLegacyCommentPreserver
         XDocument sourceCommentsXml,
         XNamespace workbookNs,
         Sheet sheet,
-        out List<CellAddress> keptShimAddresses)
+        ZipArchive sourceArchive,
+        string sourceWorksheetPath,
+        out List<(CellAddress OldAddress, CellAddress NewAddress)> keptShimAddresses)
     {
         var sourceAuthors = sourceCommentsXml.Root?
             .Element(workbookNs + "authors")?
             .Elements(workbookNs + "author")
             .Select(a => a.Value)
             .ToList() ?? [];
+        var sourceThreadsByCell = ReadSourceThreadedCommentsByCell(sourceArchive, sourceWorksheetPath);
 
         var keptEntries = new List<XElement>();
         var keptAuthors = new List<string>();
@@ -654,13 +739,18 @@ internal static class XlsxLegacyCommentPreserver
             if (!CellAddress.TryParse(sourceRef, sheet.Id, out var address))
                 continue;
 
+            // R74-io-comments-threaded-4-1: shift-aware -- keep (and re-anchor) the shim when its
+            // thread survives at a NEW address after a row/column insert/delete, not only when it
+            // is still exactly at its own OLD `ref` address.
             if (!IsLegacyThreadedCommentShimEntry(sourceElement, workbookNs, sourceAuthors) ||
-                !sheet.ThreadedComments.ContainsKey(address))
+                !TryResolveShiftedThreadedCommentAddress(sourceThreadsByCell, address, sheet, out var shimAddress))
             {
                 continue; // deleted note, dead shim, or unmodeled blank entry -- drop it
             }
 
             var entryToAdd = new XElement(sourceElement); // deep-clone
+            if (shimAddress != address)
+                entryToAdd.SetAttributeValue("ref", shimAddress.ToA1());
 
             var sourceAuthorName = "";
             if (int.TryParse(entryToAdd.Attribute("authorId")?.Value, out var sourceAuthorIdx) &&
@@ -678,7 +768,7 @@ internal static class XlsxLegacyCommentPreserver
             entryToAdd.SetAttributeValue("authorId", newAuthorIdx.ToString());
 
             keptEntries.Add(entryToAdd);
-            keptShimAddresses.Add(address);
+            keptShimAddresses.Add((address, shimAddress));
         }
 
         if (keptEntries.Count == 0)
@@ -727,7 +817,7 @@ internal static class XlsxLegacyCommentPreserver
         XNamespace workbookNs,
         XNamespace relNs,
         XNamespace packageRelNs,
-        IReadOnlyList<CellAddress> keptShimAddresses)
+        IReadOnlyList<(CellAddress OldAddress, CellAddress NewAddress)> keptShimAddresses)
     {
         var sourceLegacyDrawing = sourceWorksheetXml.Root?.Element(workbookNs + "legacyDrawing");
         var sourceVmlRelId = sourceLegacyDrawing?.Attribute(relNs + "id")?.Value;
@@ -760,11 +850,19 @@ internal static class XlsxLegacyCommentPreserver
 
         var shapesByCell = IndexNoteShapesByCell(sourceVml);
         var keptShapes = new List<XElement>();
-        foreach (var address in keptShimAddresses)
+        foreach (var (oldAddress, newAddress) in keptShimAddresses)
         {
-            var key = (Row: address.Row - 1, Col: address.Col - 1);
-            if (shapesByCell.TryGetValue(key, out var shape))
-                keptShapes.Add(new XElement(shape)); // deep-clone; preserves geometry
+            // The VML shape itself was never shifted -- it is still anchored at the shim's OLD
+            // cell in the source VML -- so look it up there, then retarget the clone to the NEW
+            // (possibly shifted) cell so it renders at the thread's current location.
+            var oldKey = (Row: oldAddress.Row - 1, Col: oldAddress.Col - 1);
+            if (!shapesByCell.TryGetValue(oldKey, out var shape))
+                continue;
+
+            var clonedShape = new XElement(shape); // deep-clone; preserves geometry
+            if (newAddress != oldAddress)
+                RetargetNoteShapeToCell(clonedShape, newAddress.Row - 1, newAddress.Col - 1);
+            keptShapes.Add(clonedShape);
         }
 
         var reconciledVml = BuildReconciledVml(sourceVml, keptShapes);
@@ -988,7 +1086,8 @@ internal static class XlsxLegacyCommentPreserver
         XDocument targetWorksheetRelsXml,
         Sheet sheet,
         XDocument sourceCommentsXml,
-        XNamespace workbookNs)
+        XNamespace workbookNs,
+        IReadOnlyDictionary<(uint Row, uint Col), ThreadedComment> sourceThreadsByCell)
     {
         // Resolve source VML path.
         var sourceVmlRelId = sourceLegacyDrawing?.Attribute(relNs + "id")?.Value;
@@ -1144,19 +1243,26 @@ internal static class XlsxLegacyCommentPreserver
             .ToList() ?? [];
         foreach (var (sourceRef, sourceCommentElement) in ReadLegacyCommentElementsByReference(sourceCommentsXml, workbookNs))
         {
-            if (!CellAddress.TryParse(sourceRef, sheet.Id, out var shimAddress) ||
-                !sheet.ThreadedComments.ContainsKey(shimAddress) ||
-                !IsLegacyThreadedCommentShimEntry(sourceCommentElement, workbookNs, sourceCommentAuthorsForShim))
+            // R74-io-comments-threaded-4-1: shift-aware -- the shim's thread may have moved to a
+            // NEW address since the source package was written (a row/column insert/delete); its
+            // VML shape is still anchored at the OLD cell in the source VML (looked up below via
+            // oldShimKey) but must be retargeted to the NEW cell when the two differ.
+            if (!CellAddress.TryParse(sourceRef, sheet.Id, out var oldShimAddress) ||
+                !IsLegacyThreadedCommentShimEntry(sourceCommentElement, workbookNs, sourceCommentAuthorsForShim) ||
+                !TryResolveShiftedThreadedCommentAddress(sourceThreadsByCell, oldShimAddress, sheet, out var shimAddress))
             {
                 continue;
             }
 
-            var shimKey = (Row: shimAddress.Row - 1, Col: shimAddress.Col - 1);
-            if (consumedSourceCells.Contains(shimKey) || !sourceShapesByCell.TryGetValue(shimKey, out var shimShape))
+            var oldShimKey = (Row: oldShimAddress.Row - 1, Col: oldShimAddress.Col - 1);
+            if (consumedSourceCells.Contains(oldShimKey) || !sourceShapesByCell.TryGetValue(oldShimKey, out var shimShape))
                 continue;
 
-            consumedSourceCells.Add(shimKey);
-            reconciledShapes.Add(new XElement(shimShape)); // deep-clone; left untouched (no Visible-flag rewrite)
+            consumedSourceCells.Add(oldShimKey);
+            var clonedShimShape = new XElement(shimShape); // deep-clone; geometry preserved, retargeted below if shifted
+            if (shimAddress != oldShimAddress)
+                RetargetNoteShapeToCell(clonedShimShape, shimAddress.Row - 1, shimAddress.Col - 1);
+            reconciledShapes.Add(clonedShimShape); // no Visible-flag rewrite, matching prior behavior
         }
 
         // Build the reconciled VML document: keep source header boilerplate (shapelayout,

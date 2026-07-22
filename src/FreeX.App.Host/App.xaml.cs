@@ -585,6 +585,63 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// Drops any candidate whose ORIGINAL on-disk file was saved more recently than the crash
+    /// snapshot itself (R74-services-autosave-recovery-4-1). This happens when the user saved the
+    /// document normally after the crash that produced the snapshot (e.g. reopened the file by
+    /// hand and saved over it, or another window/session saved it) — offering that snapshot would
+    /// let the user unknowingly clobber their own newer manual save with stale recovered content.
+    /// Excel never offers recovery in this situation. A candidate whose original file is missing
+    /// (never saved, moved, or deleted) or whose on-disk timestamp is older than or equal to the
+    /// snapshot is unaffected and still offered exactly as before. Filtered candidates are deleted
+    /// outright rather than left on disk to be silently re-checked (and re-skipped) forever —
+    /// their content is already superseded by the newer file on disk, so nothing of value would be
+    /// recovered by keeping them.
+    /// </summary>
+    private static IReadOnlyList<AutosaveRecoveryCandidate> FilterCandidatesWithNewerOriginal(
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
+    {
+        if (candidates.Count == 0)
+            return candidates;
+
+        List<AutosaveRecoveryCandidate>? kept = null;
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var candidate = candidates[i];
+            if (IsOriginalNewerThanSnapshot(candidate))
+            {
+                kept ??= new List<AutosaveRecoveryCandidate>(candidates.Take(i));
+                try { AutosaveSnapshotStore.DeleteCandidate(candidate); } catch { /* best-effort */ }
+                continue;
+            }
+
+            kept?.Add(candidate);
+        }
+
+        return kept ?? candidates;
+    }
+
+    private static bool IsOriginalNewerThanSnapshot(AutosaveRecoveryCandidate candidate)
+    {
+        var originalPath = candidate.Sidecar.OriginalFilePath;
+        if (string.IsNullOrWhiteSpace(originalPath))
+            return false;
+
+        try
+        {
+            if (!File.Exists(originalPath))
+                return false;
+
+            var originalWriteTimeUtc = File.GetLastWriteTimeUtc(originalPath);
+            return originalWriteTimeUtc > GetCandidateTimestamp(candidate).UtcDateTime;
+        }
+        catch
+        {
+            // If the original's timestamp cannot be determined, do not block recovery on it.
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Checks for recovery snapshots from previous crashed sessions and offers restore/discard.
     /// Must be called after the main window is shown (it owns any dialogs).
     /// Stale or corrupt snapshots are silently deleted.
@@ -600,7 +657,9 @@ public partial class App : Application
     /// Candidates are deduplicated by document identity before being offered (see
     /// <see cref="DeduplicateCandidatesByDocument"/>), so a workbook that was shared across
     /// multiple "New Window" views before the crash is only ever offered — and recovered — once
-    /// (K4).
+    /// (K4). Candidates whose original on-disk file was saved more recently than the snapshot are
+    /// then dropped (see <see cref="FilterCandidatesWithNewerOriginal"/>), so recovery never
+    /// offers to overwrite a newer manual save with stale snapshot content (R74-4-1).
     /// </para>
     /// </summary>
     /// <returns>
@@ -612,7 +671,8 @@ public partial class App : Application
     {
         try
         {
-            var candidates = DeduplicateCandidatesByDocument(snapshotStore.EnumerateCandidates());
+            var candidates = FilterCandidatesWithNewerOriginal(
+                DeduplicateCandidatesByDocument(snapshotStore.EnumerateCandidates()));
             if (candidates.Count == 0)
                 return false;
 

@@ -464,7 +464,12 @@ public static partial class NumberFormatter
         // literals is copied verbatim (quote marks dropped, matching Excel's rendering) and never
         // treated as a token, so a literal such as "mm" or "ss" is not mistaken for a substitution.
         var sb = new System.Text.StringBuilder();
-        if (value < 0) sb.Append('-');
+        // Excel never shows a sign on a displayed zero: a tiny negative like -0.0000005 rounds
+        // (via totalSecondsD above, which already applied the format's requested precision) to
+        // an all-zero elapsed time, so the leading '-' must be suppressed in that case -- mirrors
+        // the negative-zero guards elsewhere in NumberFormatter (IsNegativeZeroRepresentation /
+        // IsAllZeroText). A genuine non-zero negative elapsed value still shows its '-'.
+        if (value < 0 && totalSecondsD != 0) sb.Append('-');
         int i = 0;
         bool inQuote = false;
         while (i < format.Length)

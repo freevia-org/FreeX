@@ -87,7 +87,7 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Energy, "kJ", 1000);
         Add(UnitCategory.Energy, "e", 1e-7);
         Add(UnitCategory.Energy, "c", 4.184);
-        Add(UnitCategory.Energy, "cal", 4.184);
+        Add(UnitCategory.Energy, "cal", 4.1868);
         Add(UnitCategory.Energy, "eV", 1.60218e-19);
         Add(UnitCategory.Energy, "HPh", 2684519.54);
         Add(UnitCategory.Energy, "Wh", 3600);
@@ -158,6 +158,7 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Speed, "m/h", 1.0 / 3600);
         Add(UnitCategory.Speed, "mph", 0.44704);
         Add(UnitCategory.Speed, "kn", 0.514444);
+        Add(UnitCategory.Speed, "admkn", 6080.0 * 0.3048 / 3600);
 
         // Information (base = bit)
         Add(UnitCategory.Information, "bit", 1);
@@ -539,17 +540,6 @@ public static partial class BuiltInFunctions
         _ => throw new ArgumentOutOfRangeException(nameof(toBase), toBase, null)
     };
 
-    private static bool TryGetEngineeringInteger(ScalarValue arg, out long value)
-    {
-        value = 0;
-        if (arg is ErrorValue) return false;
-        double number = ToNumber(arg);
-        if (!double.IsFinite(number) || Math.Truncate(number) != number) return false;
-        if (number < long.MinValue || number > long.MaxValue) return false;
-        value = (long)number;
-        return true;
-    }
-
     private const long MaxBitFunctionValue = 281474976710655L;
 
     private static ScalarValue BitAnd(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
@@ -591,7 +581,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue BitShiftScalar(ScalarValue numberValue, ScalarValue shiftValue, bool leftShift)
     {
         if (!TryGetBitInteger(numberValue, out var number)) return ErrorValue.Num;
-        if (!TryGetEngineeringInteger(shiftValue, out var shift) || Math.Abs(shift) > 53) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(shiftValue, out var shift) || Math.Abs(shift) > 53) return ErrorValue.Num;
 
         bool effectiveLeft = leftShift ? shift >= 0 : shift < 0;
         int bits = (int)Math.Abs(shift);
@@ -604,7 +594,7 @@ public static partial class BuiltInFunctions
 
     private static bool TryGetBitInteger(ScalarValue arg, out long value)
     {
-        if (!TryGetEngineeringInteger(arg, out value)) return false;
+        if (!TryGetEngineeringTruncatedInteger(arg, out value)) return false;
         return value >= 0 && value <= MaxBitFunctionValue;
     }
 

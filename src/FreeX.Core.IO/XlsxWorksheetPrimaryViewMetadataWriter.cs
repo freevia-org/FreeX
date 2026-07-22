@@ -104,9 +104,13 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
         name is "pane" or "selection";
 
     // Mirrors the same workbook-view-index -> Sheet resolution XlsxWorkbookMetadataWriter uses for
-    // bookViews/workbookView/@activeTab (ClampToVisibleSheetIndex), minus the hidden-sheet redirect:
-    // an out-of-range or absent ActiveSheetIndex falls back to the first sheet, matching Excel's own
-    // "always exactly one selected tab" invariant.
+    // bookViews/workbookView/@activeTab (ClampToVisibleSheetIndex), INCLUDING the hidden-sheet
+    // redirect: an out-of-range or absent ActiveSheetIndex falls back to the first sheet, and an
+    // in-range index that names a hidden/veryHidden sheet is redirected to the first VISIBLE sheet
+    // in document order, matching Excel's own "always exactly one selected tab, and it is visible"
+    // invariant. This must stay in lockstep with bookViews/@activeTab -- otherwise a hidden sheet
+    // ends up with sheetView/@tabSelected="1" while no visible sheet has it, a self-contradictory
+    // state Excel never writes.
     private static Sheet? ResolveActiveSheet(Workbook workbook)
     {
         if (workbook.Sheets.Count == 0)
@@ -118,7 +122,19 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
         else if (index >= workbook.Sheets.Count)
             index = workbook.Sheets.Count - 1;
 
-        return workbook.Sheets[index];
+        var target = workbook.Sheets[index];
+        if (!target.IsHidden && !target.IsVeryHidden)
+            return target;
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (!sheet.IsHidden && !sheet.IsVeryHidden)
+                return sheet;
+        }
+
+        // No visible sheet at all -- shouldn't happen in a valid workbook, but fall back to the
+        // originally clamped index rather than leaving no sheet marked selected.
+        return target;
     }
 
     private static readonly string[] PerViewModeZoomAttributeNames =

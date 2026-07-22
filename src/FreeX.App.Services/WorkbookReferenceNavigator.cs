@@ -134,6 +134,40 @@ public static class WorkbookReferenceNavigator
         return false;
     }
 
+    /// <summary>
+    /// Whether <paramref name="text"/> already names an existing named FORMULA/constant (e.g.
+    /// "TaxRate" = "0.08") rather than a plain named range -- used by a Name Box "define on Enter"
+    /// path to refuse silently redefining that name as a range. A named formula/constant has no
+    /// <c>GridRange</c> to navigate to, so <see cref="TryParseReferenceRange(string,SheetId,Func{string,SheetId?},IReadOnlyDictionary{string,GridRange},Func{string,SheetId,GridRange?},out GridRange)"/>
+    /// always falls through for one (correctly, since there is nothing to select); this method gives
+    /// the create path a way to distinguish "no such name at all" (safe to create) from "a
+    /// formula/constant already owns this name" (must not silently clobber it with a range). Applies
+    /// the same sheet-qualifier stripping and scope-then-global fallback as the range overload so
+    /// "Sheet2!Rate" resolves against Sheet2's scope exactly like the range lookup does.
+    /// </summary>
+    public static bool NameExistsAsFormula(
+        string text,
+        SheetId defaultSheetId,
+        Func<string, SheetId?> resolveSheetId,
+        IReadOnlyDictionary<string, string>? namedFormulas,
+        Func<string, SheetId, string?>? resolveScopedFormula = null)
+    {
+        var trimmedName = text.Trim();
+        var nameLookupText = trimmedName;
+        var scopedNameSheetId = defaultSheetId;
+        if (TryResolveReferenceSheet(defaultSheetId, trimmedName, resolveSheetId, out var resolvedSheetId, out var strippedRemainder))
+        {
+            scopedNameSheetId = resolvedSheetId;
+            if (!string.IsNullOrWhiteSpace(strippedRemainder))
+                nameLookupText = strippedRemainder;
+        }
+
+        if (resolveScopedFormula?.Invoke(nameLookupText, scopedNameSheetId) is not null)
+            return true;
+
+        return namedFormulas is not null && namedFormulas.ContainsKey(nameLookupText);
+    }
+
     public static string Format(GridRange range, SheetId currentSheetId, Func<SheetId, string?> resolveSheetName)
     {
         var reference = $"{range.Start.ToA1()}:{range.End.ToA1()}";
