@@ -1276,12 +1276,15 @@ public sealed partial class MainWindow : Window
         _accessibilityCheckerPaneHeading = new TextBlock
         {
             Text = "Accessibility",
+            FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
         };
         _accessibilityCheckerPaneMessage = new TextBlock
         {
+            FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
+            FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
             Margin = new Thickness(12, 0, 12, 8),
@@ -4251,9 +4254,18 @@ public sealed partial class MainWindow : Window
         var action = new Button
         {
             Content = row.ActionLabel,
+            FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
             FontSize = 12,
             Tag = row.RowIndex,
+            Height = 20,
             MinWidth = 96,
+            Padding = new Thickness(8, 0),
+            CornerRadius = new CornerRadius(0),
+            Background = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xAD, 0xAD, 0xAD)),
+            BorderThickness = new Thickness(1),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 8, 0, 0),
         };
@@ -4263,12 +4275,12 @@ public sealed partial class MainWindow : Window
         var panel = new StackPanel
         {
             Orientation = Orientation.Vertical,
-            Spacing = 2,
             Children =
             {
                 new TextBlock
                 {
                     Text = $"{row.SlideDisplay} - {row.Title}",
+                    FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                     FontSize = 12,
                     FontWeight = FontWeight.SemiBold,
                     TextWrapping = TextWrapping.Wrap,
@@ -4278,6 +4290,7 @@ public sealed partial class MainWindow : Window
                     Text = string.IsNullOrWhiteSpace(row.ShapeName)
                         ? $"{row.Severity} - {row.Category}"
                         : $"{row.Severity} - {row.Category} - {row.ShapeName}",
+                    FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                     FontSize = 12,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
                     TextWrapping = TextWrapping.Wrap,
@@ -4285,6 +4298,7 @@ public sealed partial class MainWindow : Window
                 new TextBlock
                 {
                     Text = row.Detail,
+                    FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                     FontSize = 12,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
                     TextWrapping = TextWrapping.Wrap,
@@ -4298,9 +4312,11 @@ public sealed partial class MainWindow : Window
             panel.Children.Insert(1, new TextBlock
             {
                 Text = "Selected issue",
+                FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                 FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
                 FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 2, 0, 0),
             });
         }
 
