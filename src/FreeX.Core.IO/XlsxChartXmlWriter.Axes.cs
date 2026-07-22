@@ -54,7 +54,8 @@ internal static partial class XlsxChartXmlWriter
                 chartNs,
                 drawingNs,
                 verbatimTitle: TryParseVerbatimAxisTitleXml(chart.XAxisTitleVerbatimXml),
-                showDisplayUnitLabel: chart.ShowXAxisDisplayUnitLabel);
+                showDisplayUnitLabel: chart.ShowXAxisDisplayUnitLabel,
+                axisTitleRotation: chart.XAxisTitleRotation);
             yield return ToValueAxisXml(
                 chart.YAxisTitle,
                 chart.YAxisTitleLayout,
@@ -98,7 +99,8 @@ internal static partial class XlsxChartXmlWriter
                 chartNs,
                 drawingNs,
                 verbatimTitle: TryParseVerbatimAxisTitleXml(chart.YAxisTitleVerbatimXml),
-                showDisplayUnitLabel: chart.ShowYAxisDisplayUnitLabel);
+                showDisplayUnitLabel: chart.ShowYAxisDisplayUnitLabel,
+                axisTitleRotation: chart.YAxisTitleRotation);
             var scatterSecondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
             if (chart.Type == ChartType.Scatter && scatterSecondaryIndexes.Count > 0)
             {
@@ -151,12 +153,16 @@ internal static partial class XlsxChartXmlWriter
 
         yield return ToCategoryAxisXml(chart, chartNs, drawingNs);
         var valueAxisNumberFormat = ToEffectiveValueAxisNumberFormat(chart);
-        var valueAxisCrossBetween = ToEffectiveValueAxisCrossBetween(chart);
         // For bar-direction charts the value axis is HORIZONTAL (rendered at the bottom / X), so its
         // scaling (min/max/major/minor unit, log scale) is read from the X* fields
         // (XlsxChartAxisReader.ApplyValueAxisProperties(useXAxis: valueAxisOnX), SupportsXAxisBounds(Bar)==true).
         // Mirror that routing on write, otherwise a fixed bar-chart value range (e.g. 0..1) is silently dropped.
         var valueAxisOnX = IsHorizontalBarChart(chart.Type);
+        // R71-io-chart-axis-4-4: crossBetween must follow the same valueAxisOnX routing as every other
+        // value-axis property here -- for a horizontal Bar chart the value axis's own <c:crossBetween>
+        // was captured into chart.XAxisCrossBetween (not YAxisCrossBetween), so reading only YAxisCrossBetween
+        // silently discarded it on save.
+        var valueAxisCrossBetween = ToEffectiveValueAxisCrossBetween(chart, valueAxisOnX);
         // R62-io-chart-axis-6-3: same routing, extended to the value axis's own tick-mark styles and
         // spPr line (XlsxChartAxisReader.ApplyValueAxisProperties(useXAxis: valueAxisOnX) captures
         // these into X* for bar-family charts) -- hardcoding these to Y* below silently dropped the
@@ -239,7 +245,8 @@ internal static partial class XlsxChartXmlWriter
             drawingNs,
             useExcelNativeMajorGridlineStyle: ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart, valueAxisOnX),
             verbatimTitle: TryParseVerbatimAxisTitleXml(chart.YAxisTitleVerbatimXml),
-            showDisplayUnitLabel: valueAxisShowDisplayUnitLabel);
+            showDisplayUnitLabel: valueAxisShowDisplayUnitLabel,
+            axisTitleRotation: chart.YAxisTitleRotation);
 
         var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
         if (secondaryIndexes.Count > 0)
@@ -273,6 +280,13 @@ internal static partial class XlsxChartXmlWriter
             // whatever the primary axis's current majorUnit/minorUnit happened to be (e.g. 20).
             var secondaryAxisMajorUnit = chart.SecondaryAxisMajorUnit ?? chart.YAxisMajorUnit;
             var secondaryAxisMinorUnit = chart.SecondaryAxisMinorUnit ?? chart.YAxisMinorUnit;
+            // R71-io-chart-axis-4-2: unlike every other Secondary* fallback above, the secondary axis's
+            // display unit must NOT fall back to the primary (Y) axis's -- Excel's own secondary-axis
+            // default is "no display unit" regardless of what the primary axis has, so cloning it here
+            // silently invented a display unit the source file never had on the secondary axis.
+            var secondaryAxisDisplayUnit = chart.SecondaryAxisDisplayUnit;
+            var secondaryAxisCustomDisplayUnit = chart.SecondaryAxisCustomDisplayUnit;
+            var secondaryAxisShowDisplayUnitLabel = chart.ShowSecondaryAxisDisplayUnitLabel;
             yield return ToValueAxisXml(
                 chart.SecondaryAxisTitle,
                 null,
@@ -311,11 +325,11 @@ internal static partial class XlsxChartXmlWriter
                 secondaryAxisCrosses,
                 secondaryAxisCrossesAt,
                 secondaryAxisCrossBetween,
-                chart.YAxisDisplayUnit,
-                chart.YAxisCustomDisplayUnit,
+                secondaryAxisDisplayUnit,
+                secondaryAxisCustomDisplayUnit,
                 chartNs,
                 drawingNs,
-                showDisplayUnitLabel: chart.ShowYAxisDisplayUnitLabel);
+                showDisplayUnitLabel: secondaryAxisShowDisplayUnitLabel);
         }
 
         if (UsesSeriesAxis(chart.Type))
@@ -356,7 +370,13 @@ internal static partial class XlsxChartXmlWriter
         return new XElement(chartNs + (isDateAxis ? "dateAx" : "catAx"),
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "scaling",
-                new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(categoryAxisReverseOrder)))),
+                new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(categoryAxisReverseOrder))),
+                // R71-io-chart-axis-4-1: a date axis's own explicit min/max (a pinned date range) must
+                // be re-emitted, matching XlsxChartAxisReader.ApplyCategoryAxisProperties's dateAx-only
+                // read above. A plain text category axis never had bounds to begin with, so gating this
+                // to isDateAxis leaves it unaffected.
+                isDateAxis ? ToAxisBoundXml("max", chart.XAxisMaximum, chartNs) : null,
+                isDateAxis ? ToAxisBoundXml("min", chart.XAxisMinimum, chartNs) : null),
             new XElement(chartNs + "delete", new XAttribute("val", chart.HideXAxis ? "1" : "0")),
             new XElement(chartNs + "axPos", new XAttribute("val", categoryAxisPosition)),
             ToAxisGridlinesXml("majorGridlines", categoryAxisShowMajorGridlines, categoryAxisMajorGridlineColor, categoryAxisGridlineThickness, chartNs, drawingNs),
@@ -370,7 +390,8 @@ internal static partial class XlsxChartXmlWriter
                     chart.XAxisTitleFontSize ?? chart.AxisTitleFontSize,
                     chartNs,
                     drawingNs,
-                    vertical: IsVerticalAxisPosition(categoryAxisPosition)),
+                    vertical: IsVerticalAxisPosition(categoryAxisPosition),
+                    rotationOverride: chart.XAxisTitleRotation),
             // R43-io-chart-axis-title-numfmt-3-1: category/date axes carry their OWN <c:numFmt>
             // (e.g. a date axis's custom "mmm-yy"), independent of the value axis's numFmt emitted
             // below in ToValueAxisXml. Without this, a round-tripped custom category/date axis
@@ -441,7 +462,8 @@ internal static partial class XlsxChartXmlWriter
         XNamespace drawingNs,
         bool useExcelNativeMajorGridlineStyle = false,
         XElement? verbatimTitle = null,
-        bool showDisplayUnitLabel = false) =>
+        bool showDisplayUnitLabel = false,
+        double? axisTitleRotation = null) =>
         new(chartNs + "valAx",
             new XElement(chartNs + "axId", new XAttribute("val", axisId)),
             new XElement(chartNs + "scaling",
@@ -453,7 +475,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "axPos", new XAttribute("val", axisPosition)),
             ToAxisGridlinesXml("majorGridlines", showMajorGridlines, majorGridlineColor, gridlineThickness, chartNs, drawingNs, useExcelNativeMajorGridlineStyle),
             ToAxisGridlinesXml("minorGridlines", showMinorGridlines, minorGridlineColor, gridlineThickness, chartNs, drawingNs),
-            verbatimTitle ?? ToAxisTitleXml(title, titleLayout, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs, vertical: IsVerticalAxisPosition(axisPosition)),
+            verbatimTitle ?? ToAxisTitleXml(title, titleLayout, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs, vertical: IsVerticalAxisPosition(axisPosition), rotationOverride: axisTitleRotation),
             new XElement(chartNs + "numFmt",
                 new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat, numberFormatCode)),
                 new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(numberFormat, numberFormatSourceLinked))),
@@ -641,8 +663,15 @@ internal static partial class XlsxChartXmlWriter
     private static bool HasAnyExplicitAxisMajorTickStyle(ChartModel chart) =>
         chart.XAxisMajorTickStyle != ChartAxisTickStyle.Outside || chart.YAxisMajorTickStyle != ChartAxisTickStyle.Outside;
 
-    private static ChartAxisCrossBetween? ToEffectiveValueAxisCrossBetween(ChartModel chart) =>
-        chart.YAxisCrossBetween ?? (IsClassicStackedBarOrColumnChart(chart.Type) ? ChartAxisCrossBetween.Between : null);
+    // R71-io-chart-axis-4-4: routed by valueAxisOnX exactly like every other value-axis property in
+    // ToChartAxesXml (see the comment above this method's only call site) -- for a horizontal
+    // Bar-family chart the value axis's own <c:crossBetween> lives in XAxisCrossBetween, not
+    // YAxisCrossBetween.
+    private static ChartAxisCrossBetween? ToEffectiveValueAxisCrossBetween(ChartModel chart, bool valueAxisOnX)
+    {
+        var crossBetween = valueAxisOnX ? chart.XAxisCrossBetween : chart.YAxisCrossBetween;
+        return crossBetween ?? (IsClassicStackedBarOrColumnChart(chart.Type) ? ChartAxisCrossBetween.Between : null);
+    }
 
     private static string ToXlsxTickLabelPosition(bool showLabels, ChartAxisTickLabelPosition position)
     {

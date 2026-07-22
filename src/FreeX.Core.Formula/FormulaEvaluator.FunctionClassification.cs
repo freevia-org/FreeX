@@ -40,6 +40,18 @@ public sealed partial class FormulaEvaluator
         "GCD", "LCM"
     };
 
+    // R71-formula-logical-info-4-1: the error-inspecting IS*/N/TYPE/ERROR.TYPE family must be able
+    // to see a RangeMaterializationErrorValue argument (e.g. a disjoint intersection's #NULL!, or a
+    // named-range endpoint's #NAME?) and report on it -- ISERROR(A1:A2 C1:C2)=TRUE,
+    // ERROR.TYPE(A1:A2 C1:C2)=1 -- rather than having it short-circuit the whole call the way every
+    // other function (SUM, VLOOKUP, ...) must. ISREF is included for documentation even though the
+    // evaluator already dispatches it to an AST-aware path before this classification is consulted.
+    private static readonly HashSet<string> ErrorInspectingFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ISERROR", "ISERR", "ISNA", "ISBLANK", "ISNUMBER", "ISTEXT", "ISNONTEXT", "ISLOGICAL", "ISREF",
+        "N", "TYPE", "ERROR.TYPE"
+    };
+
     private static readonly HashSet<string> StructuredRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
         "VLOOKUP", "HLOOKUP", "INDEX", "MATCH", "XMATCH",
@@ -150,6 +162,9 @@ public sealed partial class FormulaEvaluator
 
     private static bool IsAggregateFunction(string name) =>
         AggregateFunctions.Contains(name);
+
+    private static bool IsErrorInspectingFunction(string name) =>
+        ErrorInspectingFunctions.Contains(name);
 
     private static bool IsDirectTextCoercingAggregate(string name) =>
         DirectTextCoercingAggregates.Contains(name);

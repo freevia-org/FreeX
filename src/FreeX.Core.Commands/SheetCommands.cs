@@ -230,6 +230,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
         _dvFormulaRenameSnapshot = [];
         foreach (var s in ctx.Workbook.Sheets)
         {
+            bool sheetCfChanged = false;
             foreach (var cf in s.ConditionalFormats)
             {
                 if (cf.FormulaText is { } ft)
@@ -239,9 +240,17 @@ public sealed class RenameSheetCommand : IWorkbookCommand
                     {
                         _cfFormulaRenameSnapshot.Add((cf.Id, ft, s.Id));
                         cf.FormulaText = rewritten;
+                        sheetCfChanged = true;
                     }
                 }
             }
+            // The CF viewport context cache is keyed on (sheet.Id, sheet.ContentVersion,
+            // sheet.ConditionalFormats.Version) and caches a precompiled AST per CF object
+            // reference, so mutating cf.FormulaText in place above never invalidates it —
+            // bump Version explicitly so a stale cache hit doesn't keep evaluating the old
+            // sheet name after the rename.
+            if (sheetCfChanged)
+                s.ConditionalFormats.NotifyRulesChanged();
             foreach (var dv in s.DataValidations)
             {
                 if (dv.Formula1 is { } f1)
@@ -552,6 +561,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         _dvFormulaDeleteSnapshot = [];
         foreach (var s in ctx.Workbook.Sheets)
         {
+            bool sheetCfChanged = false;
             foreach (var cf in s.ConditionalFormats)
             {
                 if (cf.FormulaText is { } ft)
@@ -561,9 +571,16 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
                     {
                         _cfFormulaDeleteSnapshot.Add((cf.Id, ft, s.Id));
                         cf.FormulaText = rewritten;
+                        sheetCfChanged = true;
                     }
                 }
             }
+            // See RenameSheetCommand's T7 pass: mutating cf.FormulaText in place never
+            // invalidates the (sheet.Id, ContentVersion, ConditionalFormats.Version)-keyed CF
+            // viewport cache on its own, so bump Version explicitly for surviving sheets whose
+            // rules were rewritten to #REF!.
+            if (sheetCfChanged)
+                s.ConditionalFormats.NotifyRulesChanged();
             foreach (var dv in s.DataValidations)
             {
                 if (dv.Formula1 is { } f1)

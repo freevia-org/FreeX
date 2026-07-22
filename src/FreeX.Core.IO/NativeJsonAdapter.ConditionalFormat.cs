@@ -74,9 +74,19 @@ public sealed partial class NativeJsonAdapter
             MaxThresholdValue = formatDto.MaxThresholdValue,
             MaxThresholdGreaterThanOrEqual = formatDto.MaxThresholdGreaterThanOrEqual,
             DataBarColor = formatDto.DataBarColor,
-            DataBarMinThresholdType = ValidCfThresholdTypeOrDefault(formatDto.DataBarMinThresholdType, CfThresholdType.Min),
+            // Pre-r70 .fxl files persisted a data-bar "Automatic" default min/max as the plain
+            // Min/Max ordinal (AutoMin/AutoMax did not exist yet), so on load a legacy Min/Max
+            // must be migrated to AutoMin/AutoMax to preserve the zero-baseline clamp -- matching
+            // the XLSX read path's Min->AutoMin / Max->AutoMax migration in
+            // XlsxFileAdapter.ConditionalFormats.cs. New .fxl files already serialize AutoMin/AutoMax
+            // by their own (distinct) ordinal, so this remap cannot affect files saved after r70.
+            DataBarMinThresholdType = MigrateLegacyDataBarThresholdType(
+                ValidCfThresholdTypeOrDefault(formatDto.DataBarMinThresholdType, CfThresholdType.Min),
+                CfThresholdType.Min, CfThresholdType.AutoMin),
             DataBarMinThresholdValue = formatDto.DataBarMinThresholdValue,
-            DataBarMaxThresholdType = ValidCfThresholdTypeOrDefault(formatDto.DataBarMaxThresholdType, CfThresholdType.Max),
+            DataBarMaxThresholdType = MigrateLegacyDataBarThresholdType(
+                ValidCfThresholdTypeOrDefault(formatDto.DataBarMaxThresholdType, CfThresholdType.Max),
+                CfThresholdType.Max, CfThresholdType.AutoMax),
             DataBarMaxThresholdValue = formatDto.DataBarMaxThresholdValue,
             DataBarShowValue = formatDto.DataBarShowValue,
             DataBarMinLength = ValidDataBarLengthOrNull(formatDto.DataBarMinLength),
@@ -188,6 +198,18 @@ public sealed partial class NativeJsonAdapter
 
     private static CfThresholdType ValidCfThresholdTypeOrDefault(CfThresholdType value, CfThresholdType fallback) =>
         Enum.IsDefined(value) ? value : fallback;
+
+    /// <summary>
+    /// Migrates a legacy data-bar min/max threshold type read from a pre-r70 .fxl file: only the
+    /// specific legacy value (Min for the min threshold, Max for the max threshold) is remapped to
+    /// its Automatic equivalent (AutoMin/AutoMax); any other threshold type (including an already-
+    /// migrated AutoMin/AutoMax, or a genuinely explicit Number/Percent/Percentile/Formula) passes
+    /// through unchanged. Color-scale and icon-set thresholds never call this -- they have no
+    /// Automatic concept and always use Min/Max literally.
+    /// </summary>
+    private static CfThresholdType MigrateLegacyDataBarThresholdType(
+        CfThresholdType value, CfThresholdType legacyValue, CfThresholdType migratedValue) =>
+        value == legacyValue ? migratedValue : value;
 
     private static bool IsValidCfIconOverride(CfIconOverride icon) =>
         !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;

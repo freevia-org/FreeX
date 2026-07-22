@@ -240,11 +240,36 @@ public static partial class PrintRenderer
         if (CellTextDecorationPlanner.Build(style) is { } decorations)
             ft.SetTextDecorations(decorations);
 
+        // Mirror GridView.Rendering.cs's alignment resolution (hAlign/isNumeric/indentPx feeding
+        // CalculateCellTextRenderLayout) for BOTH the rotated and non-rotated branches, so a printed
+        // cell's Horizontal/VerticalAlignment and Indent match exactly what's on screen instead of
+        // the non-rotated branch hardcoding a flush-left, vertically-centered position regardless of
+        // style. (Reading-order/RTL mirroring is not threaded here: DrawPrintedGridCells's caller,
+        // PrintRenderer.HeaderFooter.cs, is owned by a different fix bucket and doesn't pass the
+        // sheet's IsRightToLeft flag down to this method.) Resolved up-front (rather than only just
+        // before the layout call below) because the overflow-direction decision right below also
+        // needs it.
+        var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
+        var resolvedHAlign = ResolvePrintedGeneralAlignment(style?.HorizontalAlignment ?? CellHAlign.General, cell.RawValue);
+        var indentPx = (style?.IndentLevel ?? 0) * 8.0;
+
         var canOverflow = !hasOrientation &&
             GridView.CanOverflowCellText(style, cell.RawValue, displayText, merge: null);
+        // Mirror GridView.Rendering.cs's direction-aware overflow: a Right-aligned cell's text is
+        // anchored to the cell's right edge, so a too-wide value spills LEFTWARD into empty
+        // neighbor cells; Center spills both ways; Left/General (the common case) spills
+        // rightward, as before.
         if (canOverflow && ft.Width > maxTextWidth)
         {
-            var overflowWidth = ComputePrintedOverflowWidth(measurement, pageColumns, colIndex, row, cellLookup) - 4;
+            var overflowWidth = resolvedHAlign switch
+            {
+                CellHAlign.Right => ComputePrintedOverflowWidthLeft(measurement, pageColumns, colIndex, row, cellLookup),
+                CellHAlign.Center => ComputePrintedOverflowWidth(measurement, pageColumns, colIndex, row, cellLookup)
+                    + ComputePrintedOverflowWidthLeft(measurement, pageColumns, colIndex, row, cellLookup)
+                    - measurement.ColumnWidthAt(colIndex),
+                _ => ComputePrintedOverflowWidth(measurement, pageColumns, colIndex, row, cellLookup),
+            };
+            overflowWidth -= 4;
             if (overflowWidth > maxTextWidth)
                 maxTextWidth = overflowWidth;
         }
@@ -263,17 +288,6 @@ public static partial class PrintRenderer
                 ft.MaxLineCount = 1;
             ft.Trimming = TextTrimming.CharacterEllipsis;
         }
-
-        // Mirror GridView.Rendering.cs's alignment resolution (hAlign/isNumeric/indentPx feeding
-        // CalculateCellTextRenderLayout) for BOTH the rotated and non-rotated branches, so a printed
-        // cell's Horizontal/VerticalAlignment and Indent match exactly what's on screen instead of
-        // the non-rotated branch hardcoding a flush-left, vertically-centered position regardless of
-        // style. (Reading-order/RTL mirroring is not threaded here: DrawPrintedGridCells's caller,
-        // PrintRenderer.HeaderFooter.cs, is owned by a different fix bucket and doesn't pass the
-        // sheet's IsRightToLeft flag down to this method.)
-        var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
-        var resolvedHAlign = ResolvePrintedGeneralAlignment(style?.HorizontalAlignment ?? CellHAlign.General, cell.RawValue);
-        var indentPx = (style?.IndentLevel ?? 0) * 8.0;
 
         Point textPoint;
         double rotationAngle = 0;
@@ -381,6 +395,36 @@ public static partial class PrintRenderer
 
             width += measurement.ColumnWidthAt(nextIndex);
             nextIndex++;
+        }
+
+        return width;
+    }
+
+    /// <summary>
+    /// Extends the available draw width for a cell's text into consecutive blank columns to its
+    /// LEFT on the same printed page — the mirror image of <see cref="ComputePrintedOverflowWidth"/>
+    /// — so a Right- or Center-aligned value (whose text is anchored to the cell's right edge, or
+    /// centered, respectively) can spill into empty neighbor cells on its left instead of being
+    /// hard-cut with an ellipsis at its own column boundary, matching GridView.Rendering.cs's own
+    /// leftward overflow scan and Excel's printout.
+    /// </summary>
+    private static double ComputePrintedOverflowWidthLeft(
+        PrintGridMeasurement measurement,
+        IReadOnlyList<uint> pageColumns,
+        int colIndex,
+        uint row,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup)
+    {
+        var width = measurement.ColumnWidthAt(colIndex);
+        var prevIndex = colIndex - 1;
+        while (prevIndex >= 0)
+        {
+            var prevCol = pageColumns[prevIndex];
+            if (cellLookup.TryGetValue((row, prevCol), out var prevCell) && !string.IsNullOrEmpty(prevCell.DisplayText))
+                break;
+
+            width += measurement.ColumnWidthAt(prevIndex);
+            prevIndex--;
         }
 
         return width;

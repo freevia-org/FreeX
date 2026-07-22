@@ -53,6 +53,9 @@ public sealed class RecalcEngine
     /// </summary>
     public IReadOnlyCollection<CellAddress> CyclicCells => _cyclicCells;
 
+    /// <summary>Test-only: current volatile-cell registration count (see <see cref="_volatileCells"/>).</summary>
+    internal int VolatileCellCountForTests => _volatileCells.Count;
+
     public RecalcEngine(DependencyGraph graph, FormulaEvaluator evaluator)
     {
         _graph = graph;
@@ -1279,6 +1282,48 @@ public sealed class RecalcEngine
         }
     }
 
+    /// <summary>
+    /// Purge a closed/replaced workbook's sheets from this engine's shared per-sheet tracking:
+    /// dependency graph edges, volatile-cell registrations, spill-blocked anchors, cached
+    /// dependency plans, and cyclic-cell markers. This engine is an app-lifetime singleton shared
+    /// by every open workbook (see the class remarks on <see cref="RebuildFormulaDependencies"/>),
+    /// so a workbook that is closed or replaced (File &gt; Open / File &gt; New / final window
+    /// close) must have its SheetId-keyed state released here — otherwise it leaks forever and
+    /// every subsequent recalc keeps folding the growing stale entries into its dirty-cell scan.
+    /// Call this BEFORE the caller drops its last reference to <paramref name="workbook"/>, and
+    /// only when no other window still shares that same workbook instance.
+    /// </summary>
+    public void RetireWorkbook(Workbook workbook)
+    {
+        var sheetIds = new HashSet<SheetId>(workbook.Sheets.Count);
+        foreach (var sheet in workbook.Sheets)
+            sheetIds.Add(sheet.Id);
+
+        if (sheetIds.Count == 0)
+            return;
+
+        _graph.ClearForSheets(sheetIds);
+        _volatileCells.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
+        _spillBlockedAnchors.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
+        _cyclicCells.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
+
+        if (_dependencyPlanCache.Count == 0)
+            return;
+
+        List<DependencyPlanCacheKey>? staleKeys = null;
+        foreach (var key in _dependencyPlanCache.Keys)
+        {
+            if (sheetIds.Contains(key.SheetId))
+                (staleKeys ??= []).Add(key);
+        }
+
+        if (staleKeys is null)
+            return;
+
+        foreach (var key in staleKeys)
+            _dependencyPlanCache.Remove(key);
+    }
+
     /// <summary>Rebuild dependencies and evaluate every formula cell in the workbook.</summary>
     public RecalcReport RecalculateAllFormulas(Workbook workbook)
     {
@@ -1869,7 +1914,7 @@ public sealed class RecalcEngine
 
             case FunctionCallNode func:
             {
-                var containsVolatileFunction = IsVolatileFunctionName(func.FunctionName);
+                var containsVolatileFunction = IsVolatileFunctionName(func.FunctionName) && !IsNonVolatileCellOrInfoCall(func);
                 var arguments = func.Arguments;
                 for (var i = 0; i < arguments.Count; i++)
                 {
@@ -1886,6 +1931,30 @@ public sealed class RecalcEngine
 
     private static bool IsVolatileFunctionName(string name) =>
         name is "NOW" or "TODAY" or "RAND" or "RANDBETWEEN" or "RANDARRAY" or "INDIRECT" or "OFFSET" or "CELL" or "INFO";
+
+    // CELL and INFO are only SOMETIMES volatile in Excel: CELL("width", ...) reports static layout
+    // metadata (not live state) so it never needs to recalc on unrelated edits, and INFO(...) is
+    // non-volatile for a fixed set of constant info-types (directory/numfile/origin/osversion/recalc/
+    // release/system) that don't change without an explicit recalc trigger elsewhere. When the first
+    // argument isn't a compile-time constant string (e.g. a cell reference or nested expression) we
+    // can't tell which case Excel would apply, so we conservatively leave the call volatile, same as
+    // every other name in IsVolatileFunctionName.
+    private static bool IsNonVolatileCellOrInfoCall(FunctionCallNode func)
+    {
+        if (func.Arguments.Count == 0 || func.Arguments[0] is not StringNode { Value: var infoTypeArg })
+            return false;
+
+        var infoType = infoTypeArg.Trim();
+        return func.FunctionName switch
+        {
+            "CELL" => string.Equals(infoType, "width", StringComparison.OrdinalIgnoreCase),
+            "INFO" => NonVolatileInfoTypes.Contains(infoType.ToLowerInvariant()),
+            _ => false,
+        };
+    }
+
+    private static readonly HashSet<string> NonVolatileInfoTypes =
+        ["directory", "numfile", "origin", "osversion", "recalc", "release", "system"];
 
     /// <summary>
     /// Resolves an ANCHORARRAY anchor argument to the concrete (sheet, row, col) cell it points at,
@@ -2001,6 +2070,8 @@ public sealed class RecalcEngine
             _ast = ast;
             _sheetId = sheetId;
         }
+
+        public SheetId SheetId => _sheetId;
 
         public bool Equals(DependencyPlanCacheKey other) =>
             ReferenceEquals(_ast, other._ast) && _sheetId.Equals(other._sheetId);

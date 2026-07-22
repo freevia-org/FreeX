@@ -105,8 +105,15 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             // past the sheet edge instead of blocking the insert the way Excel does for any content
             // — including merges — that would be pushed past the last column.
             var mergeMaxCol = MaxAffectedMergeEndColForShiftRight(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col);
+            // R71-commands-insert-delete-cells-4-1: a comment/hyperlink/rich-text-run/style-only
+            // cell anchored at the last column carries no Cell entry (invisible to capture.MaxCol)
+            // and is not a merge (invisible to mergeMaxCol), so without this it would sail past
+            // this guard and then be silently relocated past CellAddress.MaxCol by
+            // ShiftAnnotationsInBandRight/ShiftStyleOnlyInBandRight below.
+            var annotationMaxCol = MaxAnnotationColInBandForShiftRight(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col);
             if ((capture.MaxCol > 0 && capture.MaxCol + width > CellAddress.MaxCol) ||
-                (mergeMaxCol > 0 && mergeMaxCol + width > CellAddress.MaxCol))
+                (mergeMaxCol > 0 && mergeMaxCol + width > CellAddress.MaxCol) ||
+                (annotationMaxCol > 0 && annotationMaxCol + width > CellAddress.MaxCol))
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last column ({CellAddress.MaxCol}).");
 
             _snapshot = capture.Snapshot;
@@ -152,6 +159,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             ShiftNamedRangesInBandRight(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
 
             InsertShiftRight(sheet, capture.Cells);
+            // R71-commands-insert-delete-cells-4-2: Excel's Insert Cells default ("Insert Options"
+            // smart-tag) copies the formatting of the cell immediately to the LEFT into the
+            // newly-vacated band instead of leaving it at General/default formatting.
+            InheritVacatedFormatShiftRight(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col);
             // R21-undo-redo-deep-1: record the shifted-to address of every moved cell so a moved
             // dynamic-array anchor whose formula text is unchanged by the shift (e.g. SEQUENCE with
             // no cell references) still gets queued for recalculation — RewriteAllFormulas below only
@@ -207,8 +218,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             // R38-commands-insert-delete-shift-2-2: see the Shift-Right branch above — a blank
             // merged region abutting the last row is likewise invisible to capture.MaxRow.
             var mergeMaxRow = MaxAffectedMergeEndRowForShiftDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row);
+            // R71-commands-insert-delete-cells-4-1: see the Shift-Right branch above.
+            var annotationMaxRow = MaxAnnotationRowInBandForShiftDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row);
             if ((capture.MaxRow > 0 && capture.MaxRow + height > CellAddress.MaxRow) ||
-                (mergeMaxRow > 0 && mergeMaxRow + height > CellAddress.MaxRow))
+                (mergeMaxRow > 0 && mergeMaxRow + height > CellAddress.MaxRow) ||
+                (annotationMaxRow > 0 && annotationMaxRow + height > CellAddress.MaxRow))
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last row ({CellAddress.MaxRow}).");
 
             _snapshot = capture.Snapshot;
@@ -249,6 +263,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             ShiftNamedRangesInBandDown(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
 
             InsertShiftDown(sheet, capture.Cells);
+            // R71-commands-insert-delete-cells-4-2: see the Shift-Right branch above.
+            InheritVacatedFormatShiftDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row);
             // R21-undo-redo-deep-1: see the Shift-Right branch above.
             _movedDestinationCells = capture.Cells.Count == 0
                 ? null
@@ -384,6 +400,66 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         {
             ReturnOriginalCells(originalCells);
         }
+    }
+
+    // ── Vacated-band format inheritance (R71-commands-insert-delete-cells-4-2) ───────────────
+    // Excel's Insert Cells default ("Insert Options" smart-tag) copies the formatting of the cell
+    // immediately to the left (Shift-Right) or above (Shift-Down) of the newly-vacated band into
+    // every new blank cell, instead of leaving it at General/default formatting. Each row
+    // (Shift-Right) / column (Shift-Down) has its own neighbor, so a multi-row/column insert can
+    // pick up a different inherited format per row/column.
+
+    /// <summary>
+    /// For each row in [bandStartRow..bandEndRow], applies the StyleId of the cell one column to
+    /// the left of <paramref name="startCol"/> to every new blank cell in [startCol..endCol] on
+    /// that row (a no-op if there is no column to the left, i.e. the band starts at column A, or
+    /// the neighbor is unformatted).
+    /// </summary>
+    private static void InheritVacatedFormatShiftRight(Sheet sheet, uint bandStartRow, uint bandEndRow, uint startCol, uint endCol)
+    {
+        if (startCol <= 1)
+            return;
+
+        var neighborCol = startCol - 1;
+        for (var row = bandStartRow; row <= bandEndRow; row++)
+        {
+            if (GetEffectiveStyleId(sheet, row, neighborCol) is not { } style)
+                continue;
+
+            for (var col = startCol; col <= endCol; col++)
+                sheet.SetStyleOnly(row, col, style);
+        }
+    }
+
+    /// <summary>Shift-Down analogue of <see cref="InheritVacatedFormatShiftRight"/>: inherits from the row above.</summary>
+    private static void InheritVacatedFormatShiftDown(Sheet sheet, uint bandStartCol, uint bandEndCol, uint startRow, uint endRow)
+    {
+        if (startRow <= 1)
+            return;
+
+        var neighborRow = startRow - 1;
+        for (var col = bandStartCol; col <= bandEndCol; col++)
+        {
+            if (GetEffectiveStyleId(sheet, neighborRow, col) is not { } style)
+                continue;
+
+            for (var row = startRow; row <= endRow; row++)
+                sheet.SetStyleOnly(row, col, style);
+        }
+    }
+
+    /// <summary>
+    /// Returns the effective StyleId of a cell for format-inheritance purposes: its live
+    /// Cell.StyleId if occupied (unless that is the default style), else its style-only override
+    /// if any, else null (fully default — nothing to propagate).
+    /// </summary>
+    private static StyleId? GetEffectiveStyleId(Sheet sheet, uint row, uint col)
+    {
+        var cell = sheet.GetCell(row, col);
+        if (cell is not null)
+            return cell.StyleId == StyleId.Default ? null : cell.StyleId;
+
+        return sheet.GetStyleOnly(row, col);
     }
 
     /// <summary>
@@ -596,6 +672,81 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         return maxEndRow;
     }
 
+    /// <summary>
+    /// R71-commands-insert-delete-cells-4-1: returns the maximum anchored column, among
+    /// Comments/CommentAuthors/ShownComments/ThreadedComments/Hyperlinks/HyperlinkMetadata/
+    /// RichTextRuns and style-only (formatted-but-empty) cells, that
+    /// <see cref="ShiftAnnotationsInBandRight{TValue}"/>/<see cref="ShiftStyleOnlyInBandRight"/>
+    /// below would actually relocate (row in [bandStartRow..bandEndRow], col &gt;= fromCol) — or 0
+    /// if none. These entries carry no Cell object and so are invisible to both
+    /// CaptureCellsForMove's MaxCol (value-bearing cells only) and
+    /// MaxAffectedMergeEndColForShiftRight (merges only); without this, one anchored at the last
+    /// column would sail past the overflow guard in <see cref="InsertCellsCommand.Apply"/> and
+    /// then be silently relocated past CellAddress.MaxCol.
+    /// </summary>
+    private static uint MaxAnnotationColInBandForShiftRight(
+        Sheet sheet, uint bandStartRow, uint bandEndRow, uint fromCol)
+    {
+        uint maxCol = 0;
+
+        void Consider(CellAddress addr)
+        {
+            if (addr.Row >= bandStartRow && addr.Row <= bandEndRow && addr.Col >= fromCol && addr.Col > maxCol)
+                maxCol = addr.Col;
+        }
+
+        foreach (var addr in sheet.Comments.Keys) Consider(addr);
+        foreach (var addr in sheet.CommentAuthors.Keys) Consider(addr);
+        foreach (var addr in sheet.ShownComments) Consider(addr);
+        foreach (var addr in sheet.ThreadedComments.Keys) Consider(addr);
+        foreach (var addr in sheet.Hyperlinks.Keys) Consider(addr);
+        foreach (var addr in sheet.HyperlinkMetadata.Keys) Consider(addr);
+        foreach (var addr in sheet.RichTextRuns.Keys) Consider(addr);
+
+        if (sheet.HasStyleOnlyCells)
+        {
+            foreach (var (key, _) in sheet.GetStyleOnlyEntries())
+            {
+                if (key.Row >= bandStartRow && key.Row <= bandEndRow && key.Col >= fromCol && key.Col > maxCol)
+                    maxCol = key.Col;
+            }
+        }
+
+        return maxCol;
+    }
+
+    /// <summary>Shift-Down analogue of <see cref="MaxAnnotationColInBandForShiftRight"/> for rows.</summary>
+    private static uint MaxAnnotationRowInBandForShiftDown(
+        Sheet sheet, uint bandStartCol, uint bandEndCol, uint fromRow)
+    {
+        uint maxRow = 0;
+
+        void Consider(CellAddress addr)
+        {
+            if (addr.Col >= bandStartCol && addr.Col <= bandEndCol && addr.Row >= fromRow && addr.Row > maxRow)
+                maxRow = addr.Row;
+        }
+
+        foreach (var addr in sheet.Comments.Keys) Consider(addr);
+        foreach (var addr in sheet.CommentAuthors.Keys) Consider(addr);
+        foreach (var addr in sheet.ShownComments) Consider(addr);
+        foreach (var addr in sheet.ThreadedComments.Keys) Consider(addr);
+        foreach (var addr in sheet.Hyperlinks.Keys) Consider(addr);
+        foreach (var addr in sheet.HyperlinkMetadata.Keys) Consider(addr);
+        foreach (var addr in sheet.RichTextRuns.Keys) Consider(addr);
+
+        if (sheet.HasStyleOnlyCells)
+        {
+            foreach (var (key, _) in sheet.GetStyleOnlyEntries())
+            {
+                if (key.Col >= bandStartCol && key.Col <= bandEndCol && key.Row >= fromRow && key.Row > maxRow)
+                    maxRow = key.Row;
+            }
+        }
+
+        return maxRow;
+    }
+
     // ── Merge adjustment for shift-right ─────────────────────────────────────
 
     private static IReadOnlyList<GridRange> AdjustMergesShiftRight(
@@ -722,7 +873,17 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         foreach (var (addr, _) in shifted)
             dict.Remove(addr);
         foreach (var (addr, value) in shifted)
-            dict[new CellAddress(addr.Sheet, addr.Row, addr.Col + count)] = value;
+        {
+            // R71-commands-insert-delete-cells-4-1: belt-and-suspenders — the Apply-time overflow
+            // guard (MaxAnnotationColInBandForShiftRight) should already have rejected any insert
+            // that would push one of these past the last column, but skip rather than store an
+            // unreachable/un-saveable entry past CellAddress.MaxCol if that guard is ever bypassed,
+            // mirroring AdjustMergesShiftRight's "if (shifted.Start.Col > CellAddress.MaxCol) continue;".
+            var shiftedCol = addr.Col + count;
+            if (shiftedCol > CellAddress.MaxCol)
+                continue;
+            dict[new CellAddress(addr.Sheet, addr.Row, shiftedCol)] = value;
+        }
     }
 
     /// <summary>Shift-down: move annotations in cols [bandStartCol..bandEndCol] at row >= fromRow downward by count.</summary>
@@ -744,7 +905,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         foreach (var (addr, _) in shifted)
             dict.Remove(addr);
         foreach (var (addr, value) in shifted)
-            dict[new CellAddress(addr.Sheet, addr.Row + count, addr.Col)] = value;
+        {
+            // R71-commands-insert-delete-cells-4-1: see ShiftAnnotationsInBandRight above.
+            var shiftedRow = addr.Row + count;
+            if (shiftedRow > CellAddress.MaxRow)
+                continue;
+            dict[new CellAddress(addr.Sheet, shiftedRow, addr.Col)] = value;
+        }
     }
 
     // J17: HashSet<CellAddress> counterparts of ShiftAnnotationsInBandRight/Down above, used for
@@ -769,7 +936,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         foreach (var addr in shifted)
             addresses.Remove(addr);
         foreach (var addr in shifted)
-            addresses.Add(new CellAddress(addr.Sheet, addr.Row, addr.Col + count));
+        {
+            // R71-commands-insert-delete-cells-4-1: see ShiftAnnotationsInBandRight above.
+            var shiftedCol = addr.Col + count;
+            if (shiftedCol > CellAddress.MaxCol)
+                continue;
+            addresses.Add(new CellAddress(addr.Sheet, addr.Row, shiftedCol));
+        }
     }
 
     /// <summary>Shift-down: move set entries in cols [bandStartCol..bandEndCol] at row >= fromRow downward by count.</summary>
@@ -790,7 +963,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         foreach (var addr in shifted)
             addresses.Remove(addr);
         foreach (var addr in shifted)
-            addresses.Add(new CellAddress(addr.Sheet, addr.Row + count, addr.Col));
+        {
+            // R71-commands-insert-delete-cells-4-1: see ShiftAnnotationsInBandRight above.
+            var shiftedRow = addr.Row + count;
+            if (shiftedRow > CellAddress.MaxRow)
+                continue;
+            addresses.Add(new CellAddress(addr.Sheet, shiftedRow, addr.Col));
+        }
     }
 
     // ── Style-only (formatted-but-empty) cell shift helpers (R52-commands-clear-delete-3-1) ──
@@ -844,7 +1023,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         foreach (var (row, col, _) in shifted)
             sheet.ClearStyleOnly(row, col);
         foreach (var (row, col, styleId) in shifted)
-            sheet.SetStyleOnly(row, col + count, styleId);
+        {
+            // R71-commands-insert-delete-cells-4-1: see ShiftAnnotationsInBandRight above.
+            var shiftedCol = col + count;
+            if (shiftedCol > CellAddress.MaxCol)
+                continue;
+            sheet.SetStyleOnly(row, shiftedCol, styleId);
+        }
     }
 
     /// <summary>Shift-down: move style-only entries in cols [bandStartCol..bandEndCol] at row >= fromRow downward by count.</summary>
@@ -865,7 +1050,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         foreach (var (row, col, _) in shifted)
             sheet.ClearStyleOnly(row, col);
         foreach (var (row, col, styleId) in shifted)
-            sheet.SetStyleOnly(row + count, col, styleId);
+        {
+            // R71-commands-insert-delete-cells-4-1: see ShiftAnnotationsInBandRight above.
+            var shiftedRow = row + count;
+            if (shiftedRow > CellAddress.MaxRow)
+                continue;
+            sheet.SetStyleOnly(shiftedRow, col, styleId);
+        }
     }
 
     // ── AutoFilter / structured-table guard (finding G3) ───────────────────────

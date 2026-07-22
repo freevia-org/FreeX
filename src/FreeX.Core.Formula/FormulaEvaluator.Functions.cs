@@ -384,10 +384,27 @@ public sealed partial class FormulaEvaluator
             }
         }
 
-        foreach (var expandedArg in expandedArgs)
+        if (IsErrorInspectingFunction(functionName))
         {
-            if (expandedArg is RangeMaterializationErrorValue rangeError)
-                return rangeError.Error;
+            // The IS*/N/TYPE/ERROR.TYPE family's CONTRACT is to inspect an erroring argument, not
+            // propagate it (e.g. =ISERROR(A1:A2 C1:C2) with disjoint ranges must return TRUE, not
+            // re-surface the #NULL! that TryResolveReferenceRange wrapped as a
+            // RangeMaterializationErrorValue). Unwrap to the inner ErrorValue so the function body
+            // (which already special-cases ErrorValue args) can see and report on it, instead of
+            // short-circuiting the whole call below like every other function must.
+            for (var i = 0; i < expandedArgs.Count; i++)
+            {
+                if (expandedArgs[i] is RangeMaterializationErrorValue errorInspectRangeError)
+                    expandedArgs[i] = errorInspectRangeError.Error;
+            }
+        }
+        else
+        {
+            foreach (var expandedArg in expandedArgs)
+            {
+                if (expandedArg is RangeMaterializationErrorValue rangeError)
+                    return rangeError.Error;
+            }
         }
 
         try

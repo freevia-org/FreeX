@@ -87,9 +87,10 @@ public static partial class BuiltInFunctions
         int k1 = (int)Math.Truncate(ToNumber(successStartValue));
         int k2 = successEndValue is BlankValue ? k1 : (int)Math.Truncate(ToNumber(successEndValue));
         if (n < 0 || p < 0 || p > 1 || k1 < 0 || k2 < k1 || k2 > n) return ErrorValue.Num;
-        double sum = 0;
-        for (int k = k1; k <= k2; k++) sum += BinomPmf(k, n, p);
-        return NumberResult(sum);
+        // Sum of the range = CDF(k2) - CDF(k1-1); BinomCdf is O(1) (closed-form via BetaInc)
+        // so this avoids an O(range) term-by-term walk for wide [k1,k2] windows. BinomCdf
+        // already treats any k < 0 as a 0 lower tail, so k1=0 (=> k1-1=-1) needs no extra guard.
+        return NumberResult(BinomCdf(k2, n, p) - BinomCdf(k1 - 1, n, p));
     }
 
     private static ScalarValue BinomInv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -111,13 +112,19 @@ public static partial class BuiltInFunctions
     {
         double alpha = ToNumber(alphaValue);
         if (n < 0 || p < 0 || p > 1 || alpha < 0 || alpha > 1) return ErrorValue.Num;
-        double cumP = 0;
-        for (int k = 0; k <= n; k++)
+        // Find the smallest k in [0,n] with BinomCdf(k,n,p) >= alpha via binary search.
+        // BinomCdf is monotone non-decreasing in k (it's a cumulative distribution), so this
+        // lands on exactly the same k the old term-by-term accumulation would have stopped
+        // at, but in O(log n) closed-form BinomCdf calls instead of an O(n) PMF walk — the
+        // difference between instant and ~1e9 iterations when n is in the billions.
+        int lo = 0, hi = n;
+        while (lo < hi)
         {
-            cumP += BinomPmf(k, n, p);
-            if (cumP >= alpha) return new NumberValue(k);
+            int mid = lo + (hi - lo) / 2;
+            if (BinomCdf(mid, n, p) >= alpha) hi = mid;
+            else lo = mid + 1;
         }
-        return new NumberValue(n);
+        return new NumberValue(lo);
     }
 
     private static ScalarValue NegbinomDist(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -236,9 +243,33 @@ public static partial class BuiltInFunctions
             double pmf = Math.Exp(LogBinom(M, s) + LogBinom(N - M, n - s) - LogBinom(N, n));
             return NumberResult(pmf);
         }
+
+        int kMin = Math.Max(0, n - (N - M));
+        int kMax = Math.Min(Math.Min(n, M), s);
+        long span = (long)kMax - kMin + 1;
+        if (span > MaxHypergeomCdfTerms)
+        {
+            // Term-by-term summation over the actual support [kMin, kMax] would take up to
+            // ~O(min(n,M,N)) iterations, which freezes the calc thread for astronomically
+            // large population/sample sizes. Beyond the safety limit, fall back to the
+            // continuity-corrected normal approximation to the hypergeometric CDF (the
+            // hypergeometric converges to normal as N grows, same as Excel is consistent
+            // with for its own huge-parameter behavior).
+            double mean = (double)n * M / N;
+            double variance = mean * (1.0 - (double)M / N) * (N - n) / (double)(N - 1);
+            double z = variance > 0
+                ? (s + 0.5 - mean) / Math.Sqrt(variance)
+                : (s >= mean ? double.PositiveInfinity : double.NegativeInfinity);
+            return NumberResult(Math.Clamp(NormSCdf(z), 0.0, 1.0));
+        }
+
         double cdf = 0;
-        for (int k = Math.Max(0, n - (N - M)); k <= Math.Min(n, M) && k <= s; k++)
+        for (int k = kMin; k <= kMax; k++)
             cdf += Math.Exp(LogBinom(M, k) + LogBinom(N - M, n - k) - LogBinom(N, n));
         return NumberResult(cdf);
     }
+
+    // Beyond this many terms, HYPGEOM.DIST's cumulative branch switches from an exact
+    // term-by-term PMF sum to a normal approximation — see HypergeomDistScalar above.
+    private const int MaxHypergeomCdfTerms = 1_000_000;
 }

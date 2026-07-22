@@ -442,6 +442,16 @@ public partial class MainWindow
 
     private void ExecuteRepeatLast()
     {
+        // R71-services-undo-redo-4-1: Excel treats F4/Ctrl+Y as REDO whenever a redo is pending
+        // (redo takes priority over repeat). Without this gate, F4 after an Undo would re-invoke
+        // the stale repeatable factory against whatever is now selected AND destroy the pending
+        // redo entry (Execute clears the redo stack), permanently losing the undone change.
+        if (_commandBus.CanRedo(_workbook.Id))
+        {
+            ExecuteRedo();
+            return;
+        }
+
         var postAction = _repeatPostAction;
         var outcome = _commandBus.RepeatLast(_workbook.Id);
         if (!outcome.Success) return;

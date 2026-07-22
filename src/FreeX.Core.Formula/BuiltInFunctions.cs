@@ -635,6 +635,38 @@ public static partial class BuiltInFunctions
     /// <summary>True if the function recalculates on every pass regardless of input changes.</summary>
     public static bool IsVolatile(string name) => VolatileFunctions.Contains(name);
 
+    /// <summary>
+    /// Argument-aware refinement of <see cref="IsVolatile(string)"/>: CELL and INFO are only
+    /// SOMETIMES volatile in Excel. CELL("width", ...) reports static layout metadata (not live
+    /// state), and INFO(...) is non-volatile for a fixed set of constant info-types (directory/
+    /// numfile/origin/osversion/recalc/release/system). Every other volatile name -- and CELL/INFO
+    /// calls whose first argument isn't a compile-time constant string -- stay unconditionally
+    /// volatile, matching <see cref="IsVolatile(string)"/>.
+    /// </summary>
+    public static bool IsVolatile(FunctionCallNode func)
+    {
+        if (!VolatileFunctions.Contains(func.FunctionName))
+            return false;
+
+        if (func.FunctionName is not ("CELL" or "INFO") ||
+            func.Arguments.Count == 0 ||
+            func.Arguments[0] is not StringNode { Value: var infoTypeArg })
+        {
+            return true;
+        }
+
+        var infoType = infoTypeArg.Trim();
+        return func.FunctionName switch
+        {
+            "CELL" => !string.Equals(infoType, "width", StringComparison.OrdinalIgnoreCase),
+            "INFO" => !NonVolatileInfoTypes.Contains(infoType.ToLowerInvariant()),
+            _ => true,
+        };
+    }
+
+    private static readonly HashSet<string> NonVolatileInfoTypes =
+        ["directory", "numfile", "origin", "osversion", "recalc", "release", "system"];
+
     /// <summary>Check if a function name is registered.</summary>
     public static bool Exists(string name) => Functions.ContainsKey(name);
 

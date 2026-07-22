@@ -8937,7 +8937,13 @@ public sealed partial class XlsxFileAdapter
                     break;
                 case TextValue text:
                     cell.SetAttributeValue("t", "str");
-                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", XlsxXmlTextEscaper.EscapeForXml(text.Value)));
+                    var textValueElement = new XElement(worksheetNs + "v", XlsxXmlTextEscaper.EscapeForXml(text.Value));
+                    if (text.Value.Length > 0 &&
+                        (char.IsWhiteSpace(text.Value[0]) || char.IsWhiteSpace(text.Value[^1])))
+                    {
+                        textValueElement.SetAttributeValue(XNamespace.Xml + "space", "preserve");
+                    }
+                    AddCellValueElement(cell, worksheetNs, textValueElement);
                     break;
                 case BoolValue boolean:
                     cell.SetAttributeValue("t", "b");

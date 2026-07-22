@@ -5992,8 +5992,11 @@ public partial class FileAdapterSmokeTests
         rule.MinThresholdType.Should().Be(CfThresholdType.Min);
         rule.MidThresholdType.Should().Be(CfThresholdType.Percentile);
         rule.MaxThresholdType.Should().Be(CfThresholdType.Max);
-        rule.DataBarMinThresholdType.Should().Be(CfThresholdType.Min);
-        rule.DataBarMaxThresholdType.Should().Be(CfThresholdType.Max);
+        // An invalid data-bar min/max threshold type falls back to the same Min/Max value the
+        // legacy-migration remap (R71-meta-2) then upgrades to Automatic, matching the model's own
+        // AutoMin/AutoMax default -- not the explicit Min/Max used for color-scale/icon-set fields.
+        rule.DataBarMinThresholdType.Should().Be(CfThresholdType.AutoMin);
+        rule.DataBarMaxThresholdType.Should().Be(CfThresholdType.AutoMax);
         rule.IconSetThresholds.Should().ContainSingle()
             .Which.Should().Be(new CfThresholdModel(CfThresholdType.Percent, "50"));
     }

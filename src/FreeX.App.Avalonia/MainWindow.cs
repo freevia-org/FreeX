@@ -6300,7 +6300,6 @@ public sealed partial class MainWindow : Window
         {
             var address = new CellAddress(_session.ActiveSheet.Id, cell.Row, cell.Col);
             if (Equals(_inlineCellEditAddress, address) ||
-                _session.ActiveSheet.RichTextRuns.ContainsKey(address) ||
                 !CellTextOverflowPlanner.CanOverflowCellText(
                     cell.Style,
                     cell.RawValue,
@@ -6319,6 +6318,14 @@ public sealed partial class MainWindow : Window
                 continue;
 
             var style = cell.Style;
+            // Per-run rich text: resolve raw runs the same way the primary cell content builder
+            // does, so an overflowed rich-text cell renders its bold/italic/color runs in the
+            // overlay instead of falling back to a single uniformly-styled string.
+            IReadOnlyList<ResolvedCellTextRun>? richRuns = null;
+            if (_session.ActiveSheet.RichTextRuns.TryGetValue(address, out var rawOverflowRuns))
+            {
+                richRuns = CellRichRunLayoutPlanner.Resolve(rawOverflowRuns, style ?? CellStyle.Default);
+            }
             var rowHeight = GetDisplayedRowHeight(rowMetrics[rowIndex], zoomFactor);
             var colWidth = GetDisplayedColumnWidth(colMetrics[colIndex], zoomFactor);
             var fontFamily = ResolveAvaloniaCellFontFamily(style, _session.Workbook.Theme);
@@ -6388,7 +6395,8 @@ public sealed partial class MainWindow : Window
                     top,
                     rowHeight,
                     Math.Max(cellRight, textLeft),
-                    Math.Min(rightLimit, textLeft + textWidth));
+                    Math.Min(rightLimit, textLeft + textWidth),
+                    richRuns);
             }
 
             if (effectiveAlignment is CellHAlign.Right or CellHAlign.Center)
@@ -6415,7 +6423,8 @@ public sealed partial class MainWindow : Window
                     top,
                     rowHeight,
                     Math.Max(leftLimit, textLeft),
-                    Math.Min(left, textLeft + textWidth));
+                    Math.Min(left, textLeft + textWidth),
+                    richRuns);
             }
         }
 
@@ -6532,7 +6541,8 @@ public sealed partial class MainWindow : Window
         double rowTop,
         double rowHeight,
         double clipLeft,
-        double clipRight)
+        double clipRight,
+        IReadOnlyList<ResolvedCellTextRun>? richRuns = null)
     {
         if (clipRight - clipLeft <= 0.5)
             return;
@@ -6546,17 +6556,32 @@ public sealed partial class MainWindow : Window
         };
         var text = new TextBlock
         {
-            Text = cell.DisplayText,
             FontFamily = fontFamily,
             FontSize = fontSize,
             FontWeight = fontWeight,
             FontStyle = fontStyle,
             Foreground = foreground,
-            TextDecorations = BuildTextDecorations(style),
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.None,
             FlowDirection = flowDirection,
         };
+
+        // Per-run rich text: populate Inlines (one Run per resolved run), matching the primary
+        // cell content path in BuildCellContent/CreateInteractiveCellBorder. The extent (clipLeft/
+        // clipRight) is still computed by the caller from the plain display-text width, since
+        // measuring the true multi-run width would require duplicating FormattedText per run;
+        // this only affects how far a rich-text cell overflows, not whether the runs render
+        // correctly once inside that extent.
+        if (CellRichTextInlinesBuilder.HasRuns(richRuns))
+        {
+            CellRichTextInlinesBuilder.Build(richRuns!, text.Inlines!, color => Brush(color));
+        }
+        else
+        {
+            text.Text = cell.DisplayText;
+            text.TextDecorations = BuildTextDecorations(style);
+        }
+
         Canvas.SetLeft(text, textLeft - clipLeft);
         Canvas.SetTop(text, textTop - rowTop);
         host.Children.Add(text);
@@ -21631,6 +21656,11 @@ public sealed partial class MainWindow : Window
     /// F4 / Repeat Last Action: replays the last repeatable command against the current
     /// selection, matching Excel and the WPF host's KeyboardCommandShortcut.RepeatLastAction ->
     /// ExecuteRepeatLast -> CommandBus.RepeatLast.
+    ///
+    /// R71-services-undo-redo-4-1: Excel treats F4/Ctrl+Y as REDO whenever a redo is pending
+    /// (redo takes priority over repeat). Without this gate, F4 after an Undo would re-invoke the
+    /// stale repeatable factory against whatever is now selected AND destroy the pending redo
+    /// entry (Execute clears the redo stack), permanently losing the undone change.
     /// </summary>
     private void ExecuteRepeatLastAction()
     {
@@ -21639,6 +21669,12 @@ public sealed partial class MainWindow : Window
 
         if (!TryCommitPendingFormulaEdit())
             return;
+
+        if (_session.CanRedo)
+        {
+            RedoLastEdit();
+            return;
+        }
 
         if (!_session.CanRepeatLastAction)
             return;

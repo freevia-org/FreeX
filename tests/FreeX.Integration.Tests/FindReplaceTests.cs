@@ -116,6 +116,71 @@ public class FindReplaceTests
         commentResults.Select(result => result.ReplyIndex).Should().Equal(null, 0);
     }
 
+    // R71-commands-find-replace-4-3: a SelectionScope pinned to the sheet that was active
+    // when Find & Replace was opened must only constrain the search while Within == Sheet.
+    // Excel treats selection-scoping as a within-sheet concept: switching Within to Workbook
+    // must search every sheet, ignoring the stale, sheet-pinned selection entirely.
+    [Fact]
+    public void Find_WithinWorkbook_IgnoresSheetPinnedSelectionScope_FindsAllSheets()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+        var s1Match = new CellAddress(sheet1.Id, 1, 1); // A1, inside the captured scope
+        var s1OutsideScope = new CellAddress(sheet1.Id, 10, 1); // A10, outside the captured scope
+        var s2Match = new CellAddress(sheet2.Id, 1, 1); // Sheet2!A1
+        sheet1.SetCell(s1Match, new TextValue("cat"));
+        sheet1.SetCell(s1OutsideScope, new TextValue("cat"));
+        sheet2.SetCell(s2Match, new TextValue("cat"));
+
+        // A Sheet1 A1:A5 selection, captured at dialog-open time and pinned to Sheet1.
+        var selectionScope = new[] { new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 5, 1)) };
+
+        var workbookResults = FindReplaceService.Find(
+            workbook,
+            "cat",
+            new FindOptions(Within: FindWithin.Workbook, SelectionScope: selectionScope));
+
+        // The stale Sheet1-pinned selection scope must be ignored entirely: every "cat" on
+        // both sheets is found, including the Sheet1 cell outside the selection.
+        workbookResults.Select(r => r.Address).Should().BeEquivalentTo([s1Match, s1OutsideScope, s2Match]);
+    }
+
+    [Fact]
+    public void Find_WithinSheet_StillHonorsSelectionScope()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+        var s1Match = new CellAddress(sheet1.Id, 1, 1); // A1, inside the captured scope
+        var s1OutsideScope = new CellAddress(sheet1.Id, 10, 1); // A10, outside the captured scope
+        var s2Match = new CellAddress(sheet2.Id, 1, 1); // Sheet2!A1
+        sheet1.SetCell(s1Match, new TextValue("cat"));
+        sheet1.SetCell(s1OutsideScope, new TextValue("cat"));
+        sheet2.SetCell(s2Match, new TextValue("cat"));
+
+        var selectionScope = new[] { new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 5, 1)) };
+
+        var sheetResults = FindReplaceService.Find(
+            workbook,
+            "cat",
+            new FindOptions(Within: FindWithin.Sheet, CurrentSheetId: sheet1.Id, SelectionScope: selectionScope));
+
+        // Within=Sheet keeps the selection-scope restriction: only the in-range Sheet1 match.
+        sheetResults.Select(r => r.Address).Should().Equal(s1Match);
+
+        // An empty scope list (Count<=1, i.e. the "no restricting selection" case the pattern
+        // match "{ Count: > 0 }" guards) is not a restricting selection at all -- Excel: a lone
+        // active cell with no multi-cell selection searches the whole sheet. This path is
+        // unaffected by the Within-gated fix and must remain unchanged.
+        var emptyScopeResults = FindReplaceService.Find(
+            workbook,
+            "cat",
+            new FindOptions(Within: FindWithin.Sheet, CurrentSheetId: sheet1.Id, SelectionScope: Array.Empty<GridRange>()));
+
+        emptyScopeResults.Select(r => r.Address).Should().Equal(s1Match, s1OutsideScope);
+    }
+
     [Fact]
     public void Find_OptionsCanRequireMatchingCellFormat()
     {

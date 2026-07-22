@@ -104,6 +104,16 @@ public sealed class ChartModel
     public WorkbookThemeColorReference? XAxisTitleTextThemeColor { get; set; }
 
     /// <summary>
+    /// R71-io-chart-axis-4-3: the X (category) axis title's captured &lt;a:bodyPr&gt;@rot value
+    /// (raw 60,000ths-of-a-degree units, not converted to degrees), read verbatim from a plain
+    /// (single-run) axis title so a non-default rotation (e.g. rot="0" forcing a vertical axis's
+    /// title horizontal) survives round-trip instead of always reverting to the writer's hardcoded
+    /// default. Null means "no explicit rotation was captured" — the writer falls back to its
+    /// existing vertical/horizontal default.
+    /// </summary>
+    public double? XAxisTitleRotation { get; set; }
+
+    /// <summary>
     /// R43-io-chart-axis-title-numfmt-3-3: per-axis overrides for the Y (value) axis title's
     /// font size/color/theme-color. Also used as the fallback for the secondary value axis title,
     /// mirroring the existing "own captured value, else clone primary Y axis" pattern used for
@@ -112,6 +122,9 @@ public sealed class ChartModel
     public double? YAxisTitleFontSize { get; set; }
     public CellColor? YAxisTitleTextColor { get; set; }
     public WorkbookThemeColorReference? YAxisTitleTextThemeColor { get; set; }
+
+    /// <summary>See <see cref="XAxisTitleRotation"/>; same capture for the Y (value) axis title.</summary>
+    public double? YAxisTitleRotation { get; set; }
     public CellColor? ChartAreaFillColor { get; set; }
     public WorkbookThemeColorReference? ChartAreaFillThemeColor { get; set; }
     public CellColor? ChartAreaBorderColor { get; set; }
@@ -303,6 +316,19 @@ public sealed class ChartModel
     public ChartAxisCrosses? SecondaryAxisCrosses { get; set; }
     public double? SecondaryAxisCrossesAt { get; set; }
     public ChartAxisCrossBetween? SecondaryAxisCrossBetween { get; set; }
+
+    /// <summary>
+    /// R71-io-chart-axis-4-2: the secondary value axis's OWN &lt;c:dispUnits&gt; (e.g. "Millions"),
+    /// captured separately from the primary (Y) axis's <see cref="YAxisDisplayUnit"/>/
+    /// <see cref="YAxisCustomDisplayUnit"/> so the writer never clones the primary axis's display
+    /// unit onto the secondary axis. Unlike the other Secondary* fields above, a null value here
+    /// means "the secondary axis genuinely has no display unit" — the writer must NOT fall back to
+    /// the primary axis's setting, since Excel's own secondary-axis default is "no display unit"
+    /// regardless of what the primary axis has.
+    /// </summary>
+    public ChartAxisDisplayUnit? SecondaryAxisDisplayUnit { get; set; }
+    public double? SecondaryAxisCustomDisplayUnit { get; set; }
+    public bool ShowSecondaryAxisDisplayUnitLabel { get; set; }
     public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
 
     /// <summary>

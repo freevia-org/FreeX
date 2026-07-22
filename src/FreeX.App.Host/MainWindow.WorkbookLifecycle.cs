@@ -168,6 +168,12 @@ public partial class MainWindow
         _sparklineValueCache.Clear();
         _toolbarVisualStateCache.Clear();
 
+        // This is definitively the last live window over the outgoing workbook (the
+        // IsFinalWorkbookWindowClose() check above returned true), so its sheets can never be
+        // recalculated again: release them from the shared app-lifetime RecalcEngine's
+        // volatile-cell tracking, dependency graph, and dependency-plan cache before dropping the
+        // reference, or that state leaks for the life of the app (see RecalcEngine.RetireWorkbook).
+        _recalcEngine.RetireWorkbook(_workbook);
         var replacement = NewWorkbookFactory.Create(_options);
         _workbook = replacement;
         _workbookRef.Current = replacement;

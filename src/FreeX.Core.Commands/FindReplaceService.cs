@@ -105,7 +105,13 @@ public static class FindReplaceService
             {
                 // A selection-scoped search (Excel: Replace All within an active multi-cell
                 // selection) only considers candidates inside one of the scope's ranges.
-                if (options.SelectionScope is { Count: > 0 } scope &&
+                // Excel treats selection-scoping as a within-SHEET concept only: once the user
+                // switches Within to Workbook, the search must cover every sheet, not just the
+                // sheet the selection was captured on (GridRange.Contains requires
+                // addr.Sheet == Start.Sheet, so an unconditional check here would silently drop
+                // every match on other sheets).
+                if (options.Within == FindWithin.Sheet &&
+                    options.SelectionScope is { Count: > 0 } scope &&
                     !ContainsAddress(scope, candidate.Address))
                     continue;
 

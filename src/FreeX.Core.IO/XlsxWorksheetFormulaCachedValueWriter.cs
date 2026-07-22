@@ -142,7 +142,13 @@ internal static class XlsxWorksheetFormulaCachedValueWriter
                 return true;
             case TextValue text:
                 cell.SetAttributeValue("t", "str");
-                formula.AddAfterSelf(new XElement(worksheetNs + "v", XlsxXmlTextEscaper.EscapeForXml(text.Value)));
+                var textValueElement = new XElement(worksheetNs + "v", XlsxXmlTextEscaper.EscapeForXml(text.Value));
+                if (text.Value.Length > 0 &&
+                    (char.IsWhiteSpace(text.Value[0]) || char.IsWhiteSpace(text.Value[^1])))
+                {
+                    textValueElement.SetAttributeValue(XNamespace.Xml + "space", "preserve");
+                }
+                formula.AddAfterSelf(textValueElement);
                 return true;
             case BoolValue boolean:
                 cell.SetAttributeValue("t", "b");
@@ -203,8 +209,13 @@ internal static class XlsxWorksheetFormulaCachedValueWriter
                 return false;
             case TextValue text:
                 cell.SetAttributeValue("t", "inlineStr");
-                cell.Add(new XElement(worksheetNs + "is",
-                    new XElement(worksheetNs + "t", XlsxXmlTextEscaper.EscapeForXml(text.Value))));
+                var textElement = new XElement(worksheetNs + "t", XlsxXmlTextEscaper.EscapeForXml(text.Value));
+                if (text.Value.Length > 0 &&
+                    (char.IsWhiteSpace(text.Value[0]) || char.IsWhiteSpace(text.Value[^1])))
+                {
+                    textElement.SetAttributeValue(XNamespace.Xml + "space", "preserve");
+                }
+                cell.Add(new XElement(worksheetNs + "is", textElement));
                 return true;
             case BoolValue boolean:
                 cell.SetAttributeValue("t", "b");

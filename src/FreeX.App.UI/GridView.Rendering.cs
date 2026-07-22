@@ -540,6 +540,20 @@ public partial class GridView
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var rowHeaderWidth = ActualRowHeaderWidth;
         var columnHeaderHeight = EffectiveColHeaderHeight;
+        // View>Split: viewport.Cells/RowMetrics/ColMetrics describe the scrollable BottomRight
+        // pane, whose true top-left corner sits at the split divider -- not right under the
+        // header -- once a split is active (mirrors HitTestViewportCell's rowOrigin/colOrigin,
+        // which already use horizontalY/verticalX for this same region). Route through the same
+        // divider-layout helper the hit-test uses so the two stay in lockstep. A non-split
+        // viewport has SplitPanes == null, so this block is skipped and rendering is unchanged.
+        if (viewport.SplitPanes is not null)
+        {
+            var dividerLayout = CalculateSplitDividerLayout(viewport);
+            if (dividerLayout.HorizontalY is { } horizontalY)
+                columnHeaderHeight = horizontalY;
+            if (dividerLayout.VerticalX is { } verticalX)
+                rowHeaderWidth = verticalX;
+        }
         var visibleLeft = rowHeaderWidth;
         var visibleTop = columnHeaderHeight;
         var visibleRight = GetLogicalViewportWidth();

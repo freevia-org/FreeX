@@ -37,6 +37,32 @@ public sealed class CommandBusRepeatTests
     }
 
     [Fact]
+    public void Undo_ClearsRepeatableFactory_SoCanRepeatReportsNothingPending()
+    {
+        // R71-services-undo-redo-4-1: once an Undo has run, CanRepeat/RepeatLast must not
+        // resurrect a stale factory describing a command that is no longer "the last thing the
+        // user did" -- the shells gate F4/Repeat-Last on CanRedo first (redo takes priority), but
+        // CommandBus.Undo also clears the factory itself so RepeatLast is well-defined even if a
+        // caller bypasses that gate.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var bus = new CommandBus(_ => new TestCommandContext(workbook));
+        var target = new CellAddress(sheet.Id, 1, 1);
+
+        bus.ExecuteRepeatable(workbook.Id, () => new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(target, target),
+            new StyleDiff(Bold: true))).Success.Should().BeTrue();
+
+        bus.CanRepeat(workbook.Id).Should().BeTrue();
+
+        bus.Undo(workbook.Id).Success.Should().BeTrue();
+
+        bus.CanRepeat(workbook.Id).Should().BeFalse();
+        bus.RepeatLast(workbook.Id).Should().Be(new CommandOutcome(false, "Nothing to repeat"));
+    }
+
+    [Fact]
     public void RepeatLast_ReturnsFailureWhenThereIsNoRepeatableCommand()
     {
         var workbook = new Workbook("test");

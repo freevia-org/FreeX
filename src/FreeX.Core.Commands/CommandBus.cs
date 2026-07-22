@@ -97,6 +97,14 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
             return new CommandOutcome(false, CommandFailureMessages.FormatExceptionFailure("Undo failed", ex));
         }
 
+        // R71-services-undo-redo-4-1: once an Undo has run, the primary defense against RepeatLast
+        // resurrecting a stale factory is the CanRedo gate in the shells' F4/Repeat-Last entry
+        // points (Redo takes priority over Repeat). Clearing the factory here too means that if a
+        // caller ever bypasses that gate, or the pending redo is later consumed by a fresh Execute,
+        // CanRepeat/RepeatLast correctly report "nothing to repeat" instead of silently replaying a
+        // command that no longer describes "the last thing the user did".
+        _repeatableCommandFactories.Remove(workbookId);
+
         NotifyStackChanged(workbookId);
         return new CommandOutcome(true, AffectedCells: entry.Payload ?? GetAffectedCells(command));
     }

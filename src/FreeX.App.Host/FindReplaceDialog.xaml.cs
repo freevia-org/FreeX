@@ -230,10 +230,24 @@ public sealed partial class FindReplaceDialog : Window
         if (activeCell is null)
             return 0;
 
+        return FindFirstResultIndexAfterAddress(results, activeCell.Value, searchOrder);
+    }
+
+    /// <summary>
+    /// Mirrors the Avalonia shell's WorkbookSession.FindNextResultIndexAtSameAddress /
+    /// GetReplaceTargetIndex fallback: the first result (in the given search order) that sorts
+    /// strictly after <paramref name="address"/>, or index 0 (wrap to the first sheet-order match)
+    /// when none do. Used after a successful single Replace to advance past the just-replaced cell
+    /// instead of unconditionally jumping back to match #1 -- otherwise a replacement whose result
+    /// still matches the search (e.g. "Report" -> "Report_v2") would re-edit the same cell on every
+    /// Replace click instead of advancing to the next distinct match (R71-commands-find-replace-4-2).
+    /// </summary>
+    private int FindFirstResultIndexAfterAddress(IReadOnlyList<FindResult> results, CellAddress address, FindSearchOrder searchOrder)
+    {
         var workbook = _getWorkbook();
         for (var index = 0; index < results.Count; index++)
         {
-            if (CompareFindOrder(workbook, results[index].Address, activeCell.Value, searchOrder) > 0)
+            if (CompareFindOrder(workbook, results[index].Address, address, searchOrder) > 0)
                 return index;
         }
 
@@ -358,6 +372,7 @@ public sealed partial class FindReplaceDialog : Window
 
             if (result.Replaced)
             {
+                var replacedAddress = match.Address;
                 SetStatusText(UiText.Get("FindReplace_ReplacedOneCell"));
                 _onWorkbookChanged();
                 _results = FindReplaceService.Find(
@@ -369,9 +384,13 @@ public sealed partial class FindReplaceDialog : Window
                 UpdateResultsGrid();
                 if (_results.Count > 0)
                 {
-                    _currentIndex = 0;
+                    // Advance past the cell we just replaced (which may still match the search,
+                    // e.g. "Report" -> "Report_v2") instead of unconditionally jumping back to
+                    // match #1, which would re-replace the same cell forever
+                    // (R71-commands-find-replace-4-2).
+                    _currentIndex = FindFirstResultIndexAfterAddress(_results, replacedAddress, options.SearchOrder);
                     _navigateTo(_results[_currentIndex].Address);
-                    SetStatusText(UiText.Format("FindReplace_MatchStatus", 1, _results.Count));
+                    SetStatusText(UiText.Format("FindReplace_MatchStatus", _currentIndex + 1, _results.Count));
                 }
                 return;
             }

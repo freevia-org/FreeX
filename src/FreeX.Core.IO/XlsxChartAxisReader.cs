@@ -150,6 +150,22 @@ internal static class XlsxChartAxisReader
         chart.SecondaryAxisMajorUnit = ReadDouble(axisElement.Element(ChartNs + "majorUnit")?.Attribute("val")?.Value);
         chart.SecondaryAxisMinorUnit = ReadDouble(axisElement.Element(ChartNs + "minorUnit")?.Attribute("val")?.Value);
 
+        // R71-io-chart-axis-4-2: capture the secondary axis's OWN <c:dispUnits> — without this, the
+        // writer has no per-secondary-axis display unit to read and always clones the primary (Y)
+        // axis's display unit onto the secondary axis on every save.
+        var secondaryDispUnitsElement = axisElement.Element(ChartNs + "dispUnits");
+        chart.SecondaryAxisDisplayUnit = FromXlsxAxisDisplayUnit(
+            secondaryDispUnitsElement?
+                .Element(ChartNs + "builtInUnit")?
+                .Attribute("val")?
+                .Value);
+        chart.SecondaryAxisCustomDisplayUnit = ReadDouble(
+            secondaryDispUnitsElement?
+                .Element(ChartNs + "custUnit")?
+                .Attribute("val")?
+                .Value);
+        chart.ShowSecondaryAxisDisplayUnitLabel = secondaryDispUnitsElement?.Element(ChartNs + "dispUnitsLbl") is not null;
+
         // R36-io-chart-axis-scaling-2-2: capture the secondary axis's OWN orientation/log-scale/
         // tick-style/crossing — these must not be conflated with the primary (Y) axis's fields
         // (chart.YAxis*), otherwise the writer silently overwrites this axis's settings with the
@@ -209,6 +225,29 @@ internal static class XlsxChartAxisReader
     private static string? ReadAxisTitle(XElement? axisElement) =>
         FirstNonBlankTitleText(AxisTitle(axisElement));
 
+    /// <summary>
+    /// R71-io-chart-axis-4-3: captures a plain axis title's explicit &lt;a:bodyPr&gt;@rot (e.g.
+    /// rot="0" to force a vertical axis's title horizontal), stored raw (60,000ths-of-a-degree,
+    /// same units as the XML attribute) so the writer can reproduce it exactly instead of always
+    /// falling back to its hardcoded vertical/horizontal default.
+    /// </summary>
+    private static void ApplyAxisTitleRotation(XElement? titleElement, ChartModel chart, bool isXAxis)
+    {
+        var rotationValue = titleElement?
+            .Element(ChartNs + "tx")?
+            .Element(ChartNs + "rich")?
+            .Element(DrawingNs + "bodyPr")?
+            .Attribute("rot")?
+            .Value;
+        if (!int.TryParse(rotationValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotation))
+            return;
+
+        if (isXAxis)
+            chart.XAxisTitleRotation = rotation;
+        else
+            chart.YAxisTitleRotation = rotation;
+    }
+
     private static string? FirstNonBlankTitleText(XElement? titleElement)
     {
         if (titleElement is null)
@@ -227,6 +266,8 @@ internal static class XlsxChartAxisReader
     private static void ApplyAxisTitleFormatting(XElement? axisElement, ChartModel chart, bool isXAxis)
     {
         var titleElement = AxisTitle(axisElement);
+        ApplyAxisTitleRotation(titleElement, chart, isXAxis);
+
         var runProperties = FirstRunProperties(titleElement);
         if (runProperties is null)
             return;
@@ -592,6 +633,15 @@ internal static class XlsxChartAxisReader
             // back too, otherwise a round-tripped date axis loses its explicit major/minor unit count.
             chart.XAxisMajorUnit = ReadDouble(axisElement.Element(ChartNs + "majorUnit")?.Attribute("val")?.Value);
             chart.XAxisMinorUnit = ReadDouble(axisElement.Element(ChartNs + "minorUnit")?.Attribute("val")?.Value);
+
+            // R71-io-chart-axis-4-1: a date axis's own explicit <c:scaling>/<c:min>/<c:max> (a pinned
+            // date range, e.g. min="43831" max="44926") was never read — ApplyCategoryAxisProperties
+            // only ever inspected <c:scaling> for its <c:orientation> above — so the writer (which never
+            // emitted <c:min>/<c:max> for catAx/dateAx either) silently dropped the pinned range on
+            // every round-trip.
+            var dateAxisScaling = axisElement.Element(ChartNs + "scaling");
+            chart.XAxisMinimum = ReadDouble(dateAxisScaling?.Element(ChartNs + "min")?.Attribute("val")?.Value);
+            chart.XAxisMaximum = ReadDouble(dateAxisScaling?.Element(ChartNs + "max")?.Attribute("val")?.Value);
         }
         // R62-io-chart-axis-6-3: same routing as the tick-mark styles above — the category axis's own
         // spPr line color/thickness must land on Y* for bar-family charts, not clobber (and then be

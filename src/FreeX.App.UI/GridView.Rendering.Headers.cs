@@ -324,11 +324,34 @@ public partial class GridView
 
         DrawOutlineHeaderSurfaces(dc, viewport, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight);
 
+        // View>Split: the header gutter must show Excel's two stacked header blocks -- the
+        // pinned TopRows/LeftColumns bands' own labels (at the un-shifted origin, exactly like
+        // RenderSplitPaneCells draws their cell content) PLUS the main (BottomRight) pane's
+        // labels, shifted past the divider so they stay aligned with that pane's now
+        // divider-relative cell positions (see RenderCells in GridView.Rendering.cs). Route
+        // through the same divider-layout helper the hit-test and cell renderer both use.
+        var mainColumnOriginX = rowHeaderWidth;
+        var mainRowOriginY = columnHeaderHeight;
+        if (viewport.SplitPanes is { } splitPanes)
+        {
+            var dividerLayout = CalculateSplitDividerLayout(viewport);
+            if (dividerLayout.VerticalX is { } verticalX)
+                mainColumnOriginX = verticalX;
+            if (dividerLayout.HorizontalY is { } horizontalY)
+                mainRowOriginY = horizontalY;
+
+            foreach (var col in splitPanes.LeftColumns ?? [])
+                DrawColumnHeader(dc, col, rowHeaderWidth, columnOutlineHeight, HeaderBackgroundBrush, pixelsPerDip);
+
+            foreach (var row in splitPanes.TopRows ?? [])
+                DrawRowHeader(dc, row, rowHeaderWidth, rowOutlineWidth, columnHeaderHeight, visibleBottom, HeaderBackgroundBrush, pixelsPerDip);
+        }
+
         foreach (var col in viewport.ColMetrics)
-            DrawColumnHeader(dc, col, rowHeaderWidth, columnOutlineHeight, HeaderBackgroundBrush, pixelsPerDip);
+            DrawColumnHeader(dc, col, mainColumnOriginX, columnOutlineHeight, HeaderBackgroundBrush, pixelsPerDip);
 
         foreach (var row in viewport.RowMetrics)
-            DrawRowHeader(dc, row, rowHeaderWidth, rowOutlineWidth, columnHeaderHeight, visibleBottom, HeaderBackgroundBrush, pixelsPerDip);
+            DrawRowHeader(dc, row, rowHeaderWidth, rowOutlineWidth, mainRowOriginY, visibleBottom, HeaderBackgroundBrush, pixelsPerDip);
 
         DrawOutlineGroups(dc, viewport, rowHeaderWidth, columnHeaderHeight, rowOutlineWidth, columnOutlineHeight, visibleBottom, pixelsPerDip);
     }

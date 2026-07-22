@@ -350,6 +350,13 @@ public partial class MainWindow
 
     private void UpdateInfoView()
     {
+        // Under Manual calculation, a freshly-typed circular formula is never recalculated until
+        // F9/save/an automatic-mode edit, so _recalcEngine.CyclicCells would otherwise still be
+        // empty here and File > Info would report zero circular references while Formulas >
+        // Error Checking (which recalculates first — see ErrorCheckBtn_Click) reports the real
+        // count for the identical workbook state. Recalculate here too so both surfaces agree.
+        RecalculateWorkbook();
+
         var activeSheet = _workbook.GetSheet(_currentSheetId);
         var info = BackstageInfoPlanner.Build(
             _workbook,
@@ -548,8 +555,19 @@ public partial class MainWindow
         // When "New Window" siblings still view the current document, leave their context
         // (workbook ref / command bus / dirty state) untouched and continue on a fresh one:
         // File > New replaces the document in THIS window only (H39).
+        var outgoingWorkbook = _workbook;
         if (DocumentSharedWithOtherWindows())
+        {
             DetachFromSharedDocumentContext();
+        }
+        else
+        {
+            // No sibling window still shares the outgoing workbook, so it is fully replaced here:
+            // release its sheets from the shared app-lifetime RecalcEngine's volatile-cell
+            // tracking, dependency graph, and dependency-plan cache before dropping the reference,
+            // or that state leaks for the life of the app (see RecalcEngine.RetireWorkbook).
+            _recalcEngine.RetireWorkbook(outgoingWorkbook);
+        }
         _workbook = wb;
         _workbookRef.Current = wb;
         InvalidateToolbarVisualState();
@@ -642,8 +660,20 @@ public partial class MainWindow
             // When "New Window" siblings still view the current document, leave their context
             // (workbook ref / command bus / dirty state) untouched and continue on a fresh one:
             // File > Open loads into THIS window only, the siblings keep their document (H39).
+            var outgoingWorkbook = _workbook;
             if (DocumentSharedWithOtherWindows())
+            {
                 DetachFromSharedDocumentContext();
+            }
+            else
+            {
+                // No sibling window still shares the outgoing workbook, so it is fully replaced
+                // here: release its sheets from the shared app-lifetime RecalcEngine's
+                // volatile-cell tracking, dependency graph, and dependency-plan cache before
+                // dropping the reference, or that state leaks for the life of the app (see
+                // RecalcEngine.RetireWorkbook).
+                _recalcEngine.RetireWorkbook(outgoingWorkbook);
+            }
             _currentXlsxFeatureReport = plan.FeatureReport;
             _workbook = plan.Workbook;
             _workbookRef.Current = plan.Workbook;

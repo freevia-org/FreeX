@@ -98,20 +98,40 @@ internal static partial class XlsxChartXmlWriter
         double fontSize,
         XNamespace chartNs,
         XNamespace drawingNs,
-        bool vertical = false) =>
+        bool vertical = false,
+        double? rotationOverride = null) =>
         string.IsNullOrWhiteSpace(title)
             ? null
             : new XElement(chartNs + "title",
                 new XElement(chartNs + "tx",
                     new XElement(chartNs + "rich",
-                        vertical
-                            ? new XElement(drawingNs + "bodyPr", new XAttribute("rot", -5400000), new XAttribute("vert", "horz"))
-                            : new XElement(drawingNs + "bodyPr"),
+                        ToAxisTitleBodyPr(vertical, rotationOverride, drawingNs),
                         new XElement(drawingNs + "p",
                             new XElement(drawingNs + "r",
                                 ToTextRunProperties(textThemeColor, textColor, fontSize, drawingNs),
                                 new XElement(drawingNs + "t", title))))),
                 ToManualLayoutXml(layout, chartNs));
+
+    /// <summary>
+    /// R71-io-chart-axis-4-3: when the source file's plain axis title carried an explicit
+    /// &lt;a:bodyPr&gt;@rot (<paramref name="rotationOverride"/>, e.g. rot="0" to force a vertical
+    /// axis's title horizontal), reproduce that captured value exactly instead of Excel's hardcoded
+    /// -5400000/none default.
+    /// </summary>
+    private static XElement ToAxisTitleBodyPr(bool vertical, double? rotationOverride, XNamespace drawingNs)
+    {
+        if (rotationOverride is { } rotation && double.IsFinite(rotation))
+        {
+            var rotationAttribute = (long)Math.Round(rotation);
+            return vertical
+                ? new XElement(drawingNs + "bodyPr", new XAttribute("rot", rotationAttribute), new XAttribute("vert", "horz"))
+                : new XElement(drawingNs + "bodyPr", new XAttribute("rot", rotationAttribute));
+        }
+
+        return vertical
+            ? new XElement(drawingNs + "bodyPr", new XAttribute("rot", -5400000), new XAttribute("vert", "horz"))
+            : new XElement(drawingNs + "bodyPr");
+    }
 
     /// <summary>
     /// Returns a verbatim <c:title> element parsed from the stored string, or null if

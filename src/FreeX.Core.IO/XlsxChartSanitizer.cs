@@ -69,8 +69,17 @@ internal static class XlsxChartSanitizer
 
     private static void ClearXAxisValueBounds(ChartModel chart, bool keepDateAxisUnits = false)
     {
-        chart.XAxisMinimum = null;
-        chart.XAxisMaximum = null;
+        // R71-io-chart-axis-4-1: on a date (category) X axis, an explicit min/max is a pinned DATE
+        // RANGE (e.g. Jan 2020..Dec 2022 as date serials) captured by
+        // XlsxChartAxisReader.ApplyCategoryAxisProperties -- not a value-axis bound -- so it must
+        // survive here exactly like the date-unit majorUnit/minorUnit multiplier below, even though
+        // the chart type has no genuine value axis on X. Only strip bounds when the X axis is a plain
+        // (non-date) category axis or a genuine value axis.
+        if (!keepDateAxisUnits)
+        {
+            chart.XAxisMinimum = null;
+            chart.XAxisMaximum = null;
+        }
         // On a date (category) X axis the numeric major/minor unit is the date-unit multiplier
         // ("every 2 months"), not a value-axis bound — so it must survive even though the chart type
         // has no value axis on X. Only strip them when the X axis is genuinely a value axis.
