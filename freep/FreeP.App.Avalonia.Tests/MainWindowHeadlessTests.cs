@@ -3148,6 +3148,39 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ReadingOrderPane_selected_item_inset_matches_Wpf_authority()
+    {
+        Thickness selectedItemMargin = default;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            try
+            {
+                window.Editor.CurrentSlide!.Shapes.Add(new SlideShape
+                {
+                    Id = 699,
+                    Name = "Selected shape",
+                });
+                window.Editor.Select(699);
+                window.ShowReadingOrderPane();
+
+                selectedItemMargin = window.GetLogicalDescendants()
+                    .OfType<TextBlock>()
+                    .Single(text => text.Text == "Selected item")
+                    .Margin;
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        if (!ran) return;
+        selectedItemMargin.Should().Be(new Thickness(0, 2, 0, 0));
+    }
+
+    [Fact]
     public async Task ReadingOrderPane_moves_nested_group_child_through_shared_plan()
     {
         PresentationReadingOrderPlan? initialPlan = null;

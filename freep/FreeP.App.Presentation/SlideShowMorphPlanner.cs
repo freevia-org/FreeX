@@ -10,7 +10,24 @@ namespace FreeP.App.Compositor;
 public sealed record SlideShowMorphShapeMatch(
     SlideShape Source,
     SlideShape Target,
-    string MatchKey);
+    string MatchKey)
+{
+    /// <summary>
+    /// Ordered text correspondences used by byWord/byChar playback. Empty for
+    /// byObject and for shapes without a usable text overlap.
+    /// </summary>
+    public IReadOnlyList<SlideShowMorphTokenMatch> Tokens { get; init; } =
+        Array.Empty<SlideShowMorphTokenMatch>();
+}
+
+/// <summary>One source/target text token correspondence inside a Morph shape match.</summary>
+public sealed record SlideShowMorphTokenMatch(
+    int SourceStart,
+    int SourceLength,
+    int TargetStart,
+    int TargetLength,
+    string SourceText,
+    string TargetText);
 
 /// <summary>Renderer-neutral Morph matching result.</summary>
 public sealed record SlideShowMorphPlan(
@@ -116,8 +133,54 @@ public static class SlideShowMorphPlanner
         {
             usedSource.Add(sourceShape);
             usedTarget.Add(targetShape);
-            matches.Add(new SlideShowMorphShapeMatch(sourceShape, targetShape, key));
+            matches.Add(new SlideShowMorphShapeMatch(sourceShape, targetShape, key)
+            {
+                Tokens = option is "byWord" or "byChar"
+                    ? BuildTokenMatches(sourceShape.PlainText, targetShape.PlainText, option)
+                    : Array.Empty<SlideShowMorphTokenMatch>()
+            });
         }
+    }
+
+    /// <summary>
+    /// Creates a renderable copy containing one target token while preserving
+    /// the target shape geometry and formatting context.
+    /// </summary>
+    public static SlideShape CreateTokenShape(SlideShape shape, int targetStart, int targetLength)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+        var copy = SlideCloner.CloneShape(shape);
+        if (copy.TextBody is null)
+            return copy;
+
+        // Token overlays are composited above the separately animated shape
+        // background. Remove shape-owned paint so each overlay contributes
+        // text only instead of repeatedly repainting the full shape.
+        copy.Fill = null;
+        copy.Outline = null;
+        copy.Effects = null;
+
+        string text = shape.PlainText;
+        int start = Math.Clamp(targetStart, 0, text.Length);
+        int length = Math.Clamp(targetLength, 0, text.Length - start);
+        string token = text.Substring(start, length);
+        var paragraph = copy.TextBody.Paragraphs.FirstOrDefault();
+        var run = paragraph?.Runs.FirstOrDefault();
+        if (paragraph is null || run is null)
+        {
+            copy.TextBody.Paragraphs.Clear();
+            paragraph = new Paragraph();
+            run = new Run();
+            paragraph.Runs.Add(run);
+            copy.TextBody.Paragraphs.Add(paragraph);
+        }
+
+        paragraph.Runs.Clear();
+        run.Text = token;
+        paragraph.Runs.Add(run);
+        for (int index = copy.TextBody.Paragraphs.Count - 1; index > 0; index--)
+            copy.TextBody.Paragraphs.RemoveAt(index);
+        return copy;
     }
 
     private static string NormalizeOption(string? option) =>
@@ -134,50 +197,104 @@ public static class SlideShowMorphPlanner
             .ToLowerInvariant();
 
     private static int TextMatchScore(string source, string target, string option) =>
-        option == "byWord"
-            ? LongestCommonSubsequence(
-                TokenizeWords(source),
-                TokenizeWords(target),
-                StringComparer.OrdinalIgnoreCase)
-            : LongestCommonSubsequence(
-                TokenizeCharacters(source),
-                TokenizeCharacters(target),
-                EqualityComparer<string>.Default);
+        BuildTokenMatches(source, target, option).Count;
 
-    private static IReadOnlyList<string> TokenizeWords(string text) =>
-        text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-            .Select(word => new string(word.Where(char.IsLetterOrDigit).ToArray()))
-            .Where(word => word.Length > 0)
-            .ToArray();
-
-    private static IReadOnlyList<string> TokenizeCharacters(string text) =>
-        text.Where(character => !char.IsWhiteSpace(character))
-            .Select(character => character.ToString().ToUpperInvariant())
-            .ToArray();
-
-    private static int LongestCommonSubsequence(
-        IReadOnlyList<string> source,
-        IReadOnlyList<string> target,
-        IEqualityComparer<string> comparer)
+    private static IReadOnlyList<SlideShowMorphTokenMatch> BuildTokenMatches(
+        string source,
+        string target,
+        string option)
     {
-        if (source.Count == 0 || target.Count == 0)
-            return 0;
+        var sourceTokens = Tokenize(source, option);
+        var targetTokens = Tokenize(target, option);
+        if (sourceTokens.Count == 0 || targetTokens.Count == 0)
+            return Array.Empty<SlideShowMorphTokenMatch>();
 
-        var previous = new int[target.Count + 1];
-        var current = new int[target.Count + 1];
-        for (int sourceIndex = 1; sourceIndex <= source.Count; sourceIndex++)
+        var pairs = LongestCommonSubsequencePairs(sourceTokens, targetTokens);
+        return pairs
+            .Select(pair => new SlideShowMorphTokenMatch(
+                pair.Source.Start,
+                pair.Source.Length,
+                pair.Target.Start,
+                pair.Target.Length,
+                pair.Source.Value,
+                pair.Target.Value))
+            .ToArray();
+    }
+
+    private sealed record TextToken(string Value, int Start, int Length, string Key);
+
+    private static IReadOnlyList<TextToken> Tokenize(string text, string option) =>
+        option == "byWord"
+            ? TokenizeWords(text)
+            : text.Select((character, index) => (character, index))
+                .Where(item => !char.IsWhiteSpace(item.character))
+                .Select(item => new TextToken(
+                    item.character.ToString(),
+                    item.index,
+                    1,
+                    item.character.ToString().ToUpperInvariant()))
+                .ToArray();
+
+    private static IReadOnlyList<TextToken> TokenizeWords(string text)
+    {
+        var tokens = new List<TextToken>();
+        int index = 0;
+        while (index < text.Length)
         {
-            Array.Clear(current);
-            for (int targetIndex = 1; targetIndex <= target.Count; targetIndex++)
+            while (index < text.Length && !char.IsLetterOrDigit(text[index]))
+                index++;
+            int start = index;
+            while (index < text.Length && char.IsLetterOrDigit(text[index]))
+                index++;
+            if (index > start)
             {
-                current[targetIndex] = comparer.Equals(source[sourceIndex - 1], target[targetIndex - 1])
-                    ? previous[targetIndex - 1] + 1
-                    : Math.Max(previous[targetIndex], current[targetIndex - 1]);
+                string value = text[start..index];
+                tokens.Add(new TextToken(
+                    value,
+                    start,
+                    index - start,
+                    value.ToUpperInvariant()));
             }
-
-            (previous, current) = (current, previous);
         }
 
-        return previous[target.Count];
+        return tokens;
+    }
+
+    private static IReadOnlyList<(TextToken Source, TextToken Target)> LongestCommonSubsequencePairs(
+        IReadOnlyList<TextToken> source,
+        IReadOnlyList<TextToken> target)
+    {
+        var lengths = new int[source.Count + 1, target.Count + 1];
+        for (int sourceIndex = source.Count - 1; sourceIndex >= 0; sourceIndex--)
+        {
+            for (int targetIndex = target.Count - 1; targetIndex >= 0; targetIndex--)
+            {
+                lengths[sourceIndex, targetIndex] = string.Equals(
+                    source[sourceIndex].Key,
+                    target[targetIndex].Key,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? lengths[sourceIndex + 1, targetIndex + 1] + 1
+                    : Math.Max(lengths[sourceIndex + 1, targetIndex], lengths[sourceIndex, targetIndex + 1]);
+            }
+        }
+
+        var pairs = new List<(TextToken Source, TextToken Target)>();
+        int sourceCursor = 0;
+        int targetCursor = 0;
+        while (sourceCursor < source.Count && targetCursor < target.Count)
+        {
+            if (string.Equals(source[sourceCursor].Key, target[targetCursor].Key, StringComparison.OrdinalIgnoreCase))
+            {
+                pairs.Add((source[sourceCursor], target[targetCursor]));
+                sourceCursor++;
+                targetCursor++;
+            }
+            else if (lengths[sourceCursor + 1, targetCursor] >= lengths[sourceCursor, targetCursor + 1])
+                sourceCursor++;
+            else
+                targetCursor++;
+        }
+
+        return pairs;
     }
 }
