@@ -150,6 +150,64 @@ public sealed class RowColumnSizingPlannerTests
     }
 
     [Fact]
+    public void PlanColumnWidths_StackedRotatedCell_ProducesNarrowerEstimateThanUnrotatedSameText()
+    {
+        // R69-commands-autofit-6-2: CollectColumnTexts must carry each cell's AutoFitCellText
+        // (including TextRotation) through to AutoFitSizingService.EstimateColumnWidth instead of
+        // collapsing to a bare string -- otherwise a stacked (255) cell is measured at its full
+        // unrotated string length instead of narrowing like Excel.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sheetId = sheet.Id;
+        var selection = Range(sheetId, row1: 1, col1: 1, row2: 1, col2: 2);
+
+        var plan = RowColumnSizingPlanner.PlanAutoFitColumnWidths(
+            sheet,
+            selection,
+            usedRange: selection,
+            (row, col) => (row, col) switch
+            {
+                (1, 1) => new AutoFitCellText("PRODUCT CATEGORY"),
+                (1, 2) => new AutoFitCellText("PRODUCT CATEGORY", TextRotation: 255),
+                _ => null
+            },
+            defaultWidth: 3.0);
+
+        plan.Should().HaveCount(2);
+        plan[0].Index.Should().Be(1u);
+        plan[0].Size.Should().BeApproximately(18.0, 0.01); // 16 chars + 2.0 padding
+        plan[1].Index.Should().Be(2u);
+        plan[1].Size.Should().BeApproximately(3.0, 0.01); // stacked: ~1 char + padding, clamped to defaultWidth
+        plan[1].Size.Should().BeLessThan(plan[0].Size);
+    }
+
+    [Fact]
+    public void PlanColumnWidths_AngledRotatedCell_ProducesNarrowerEstimateThanUnrotatedSameText()
+    {
+        // Sibling coverage of the same fix for an angled (non-stacked) rotation: the projected
+        // horizontal footprint of a 45-degree run must be shorter than the unrotated string length.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sheetId = sheet.Id;
+        var selection = Range(sheetId, row1: 1, col1: 1, row2: 1, col2: 2);
+
+        var plan = RowColumnSizingPlanner.PlanAutoFitColumnWidths(
+            sheet,
+            selection,
+            usedRange: selection,
+            (row, col) => (row, col) switch
+            {
+                (1, 1) => new AutoFitCellText("PRODUCT CATEGORY"),
+                (1, 2) => new AutoFitCellText("PRODUCT CATEGORY", TextRotation: 45),
+                _ => null
+            },
+            defaultWidth: 3.0);
+
+        plan[0].Size.Should().BeApproximately(18.0, 0.01);
+        plan[1].Size.Should().BeLessThan(plan[0].Size);
+    }
+
+    [Fact]
     public void PlanColumnWidths_ForWholeColumnSelection_BoundsMeasurementsToUsedRows()
     {
         var workbook = new Workbook("test");

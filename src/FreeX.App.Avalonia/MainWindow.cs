@@ -860,6 +860,10 @@ public sealed partial class MainWindow : Window
     private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
     private CellAddress? _cellDragSelectionAnchor;
+    // Set whenever SelectRangeFromAnchor switches the Name Box to the live "{rows}R x {cols}C"
+    // dimension readout during a plain mouse-drag selection, so the drag-end handlers know to
+    // revert it back to the plain range address (R69-render-active-cell-selection-6-2).
+    private bool _cellSelectionDragShowedDimensionText;
     private CellAddress? _cellDragFormulaPointCursor;
     private Control? _cellDragSelectionCapture;
     private IPointer? _cellDragSelectionPointer;
@@ -4498,6 +4502,12 @@ public sealed partial class MainWindow : Window
             colMetrics,
             headerOffset,
             zoomFactor);
+        AddActiveCellBoxOverlayToGrid(
+            grid,
+            rowMetrics,
+            colMetrics,
+            headerOffset,
+            zoomFactor);
 
         var formulaReferenceOverlay = BuildFormulaReferenceGridOverlay(viewport, showHeadings, zoomFactor);
         AvaloniaGrid.SetRowSpan(formulaReferenceOverlay, grid.RowDefinitions.Count);
@@ -6747,6 +6757,7 @@ public sealed partial class MainWindow : Window
         _cellDragFormulaPointCursor = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
+        _cellSelectionDragShowedDimensionText = false;
 
         _cellDragSelectionAnchor = address;
         // Keep _cellDragSelectionCapture for Focus() — the per-cell border is the right focus target.
@@ -6791,6 +6802,22 @@ public sealed partial class MainWindow : Window
         _selectionMoveDragging = false;
         _selectionMoveSourceRange = null;
         _selectionMovePreviewRange = null;
+        RevertNameBoxAfterCellSelectionDragEnd();
+    }
+
+    // While a plain mouse-drag selection was in progress, the Name Box showed a live dimension
+    // readout instead of the range address (see SelectRangeFromAnchor); now that the drag has
+    // ended (release or an interrupted capture loss), revert it to the plain range address,
+    // matching Excel and the WPF host's CompleteDragSelectionStatusRefresh
+    // (R69-render-active-cell-selection-6-2).
+    private void RevertNameBoxAfterCellSelectionDragEnd()
+    {
+        if (!_cellSelectionDragShowedDimensionText)
+            return;
+
+        _cellSelectionDragShowedDimensionText = false;
+        if (!_cellAddressBoxHasPendingEdit)
+            _cellAddressText.Text = FormatRangeReference(_session.SelectedRange);
     }
 
     private void DetachCellSelectionDragHandlers()
@@ -6861,6 +6888,7 @@ public sealed partial class MainWindow : Window
         _selectionMoveDragging = false;
         _selectionMoveSourceRange = null;
         _selectionMovePreviewRange = null;
+        RevertNameBoxAfterCellSelectionDragEnd();
 
         // In Draw Border mode the drag-release triggers the border apply (mirrors WPF MouseUp behaviour).
         if (_borderDrawModeActive)
@@ -7083,6 +7111,16 @@ public sealed partial class MainWindow : Window
         ClearSelectedDrawingObject();
         _session.SelectRange(new GridRange(anchor, address));
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
+        // While a mouse-drag selection is in progress (this method is only ever invoked from
+        // ContinueCellSelectionDrag), Excel's Name Box shows a live "{rows}R x {cols}C" dimension
+        // readout instead of the range address, reverting to the address once the drag ends (see
+        // EndCellSelectionDragAsync/CellSelectionCapturePointerCaptureLost) -- mirrors the WPF
+        // host's ExtendSelection (R69-render-active-cell-selection-6-2).
+        if (!_cellAddressBoxHasPendingEdit)
+        {
+            _cellAddressText.Text = FormatDragSelectionDimensionText(_session.SelectedRange);
+            _cellSelectionDragShowedDimensionText = true;
+        }
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
     }
@@ -8935,6 +8973,61 @@ public sealed partial class MainWindow : Window
             grid.Children.Add(handle);
             _autofillHandleVisual = handle;
         }
+    }
+
+    // Excel always draws a dedicated, crisp box tightly around the active cell, independent of
+    // the selection outline drawn above: AddSelectionOverlayToGrid only turns on a perimeter edge
+    // (BorderThickness side) where the *whole selected range's* Start/End row or column happens to
+    // be visible, so once the range's own perimeter is off-screen (e.g. after Select All, scrolled
+    // away from A1/the last cell) or the active cell sits at an interior position of the selected
+    // range, no border was drawn around it at all. Draw the active cell's own box independently,
+    // on top of the selection fill/outline, whenever the active cell resolves to a visible span.
+    private void AddActiveCellBoxOverlayToGrid(
+        AvaloniaGrid grid,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        int headerOffset,
+        double zoomFactor)
+    {
+        if (_session.ActiveCell.Sheet != _session.ActiveSheet.Id)
+            return;
+
+        var activeCellRange = _session.ActiveSheet.GetMergeRegion(_session.ActiveCell)
+            ?? new GridRange(_session.ActiveCell, _session.ActiveCell);
+
+        if (!TryResolveVisibleSelectionGridSpan(
+                activeCellRange,
+                rowMetrics,
+                colMetrics,
+                out var rowIndex,
+                out var rowSpan,
+                out var colIndex,
+                out var colSpan,
+                out _,
+                out _,
+                out _,
+                out _))
+        {
+            return;
+        }
+
+        var thickness = Math.Max(SelectionOutlineThickness, SelectionOutlineThickness * zoomFactor);
+        var halfThickness = thickness / 2;
+        var activeCellBox = new Border
+        {
+            BorderBrush = SelectionBorder,
+            BorderThickness = new Thickness(thickness),
+            Margin = new Thickness(-halfThickness),
+            IsHitTestVisible = false,
+            ClipToBounds = false,
+            ZIndex = 100,
+        };
+        AutomationProperties.SetAutomationId(activeCellBox, "WorksheetActiveCellBox");
+        AvaloniaGrid.SetRow(activeCellBox, rowIndex + headerOffset);
+        AvaloniaGrid.SetRowSpan(activeCellBox, rowSpan);
+        AvaloniaGrid.SetColumn(activeCellBox, colIndex + headerOffset);
+        AvaloniaGrid.SetColumnSpan(activeCellBox, colSpan);
+        grid.Children.Add(activeCellBox);
     }
 
     private static bool TryResolveVisibleSelectionGridSpan(
@@ -21851,41 +21944,41 @@ public sealed partial class MainWindow : Window
             return;
 
         var range = _session.SelectedRange;
+        var rangeReference = FormatRangeReference(range);
 
-        // Excel/WPF toggle: Merge & Center on a selection that is already merged un-merges it
-        // instead of erroring with "Range overlaps an existing merged region." (MergeCellsCommand
-        // rejects re-merging an overlapping region, so without this check the button would just
-        // fail on an already-merged selection).
-        if (_session.IsSelectedRangeMerged)
-        {
-            var unmergeResult = _session.UnmergeSelectedRange();
-            if (!unmergeResult.Success)
-            {
-                ShowEditIssue(unmergeResult.ErrorMessage ?? "Merge & Center failed.");
-                return;
-            }
-
-            RefreshShell($"Unmerged cells in {FormatRangeReference(range)}");
-            return;
-        }
+        // Excel/WPF toggle: Merge & Center on a selection that is fully covered by one existing merged
+        // region (including the degenerate case where the selection IS that merge) un-merges it instead
+        // of erroring with "Range overlaps an existing merged region." A selection that only PARTIALLY
+        // overlaps an existing merge (straddles its boundary without being fully covered by it) is a
+        // genuine conflict and must NOT be treated as the toggle gesture -- it has to fall through to
+        // the normal merge path below, which rejects it via MergeCellsCommand. Using the broader
+        // "any overlap" check (WorkbookSession.IsSelectedRangeMerged) here would wrongly unmerge that
+        // straddling case instead of rejecting it, so this asks CellMergePlanner.FindCoveringRegion --
+        // the same full-containment test CreateMergeAndCenterCommands uses internally (and that the WPF
+        // host drives through via MainWindow.HomeFormatting.cs's CreateMergeAndCenterCommand) -- purely
+        // to pick the right status message; the actual merge/unmerge decision is made by that same
+        // shared CellMergePlanner path inside WorkbookSession.MergeAndCenterSelectedRange below.
+        var isUnmergeToggle = CellMergePlanner.FindCoveringRegion(_session.ActiveSheet, range) is not null;
 
         var contentResolution = MergeCellContentResolution.KeepFirstCell;
-        var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range);
-        if (contentPlan.WouldLoseContent)
+        if (!isUnmergeToggle)
         {
-            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-            if (choice == MergeCellsWarningChoice.Cancel)
+            var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range);
+            if (contentPlan.WouldLoseContent)
             {
-                RefreshShell(_statusText.Text ?? "Ready");
-                return;
-            }
+                var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
+                if (choice == MergeCellsWarningChoice.Cancel)
+                {
+                    RefreshShell(_statusText.Text ?? "Ready");
+                    return;
+                }
 
-            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                ? MergeCellContentResolution.ConcatenateAllCells
-                : MergeCellContentResolution.KeepFirstCell;
+                contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
+                    ? MergeCellContentResolution.ConcatenateAllCells
+                    : MergeCellContentResolution.KeepFirstCell;
+            }
         }
 
-        var rangeReference = FormatRangeReference(range);
         var result = _session.MergeAndCenterSelectedRange(contentResolution);
         if (!result.Success)
         {
@@ -21894,7 +21987,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell($"Merged and centered {rangeReference}");
+        RefreshShell(isUnmergeToggle
+            ? $"Unmerged cells in {rangeReference}"
+            : $"Merged and centered {rangeReference}");
     }
 
     private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)
@@ -26205,6 +26300,17 @@ public sealed partial class MainWindow : Window
         return string.Equals(start, end, StringComparison.Ordinal)
             ? start
             : $"{start}:{end}";
+    }
+
+    // Live dimension readout Excel shows in the Name Box while a mouse-drag selection is in
+    // progress (e.g. "4R x 3C" for a 4-row-by-3-column drag from B2 to D5), reverting to the plain
+    // range address once the drag ends -- mirrors the WPF host's FormatDragSelectionDimensionText
+    // (R69-render-active-cell-selection-6-2).
+    private static string FormatDragSelectionDimensionText(GridRange range)
+    {
+        var rowCount = range.End.Row - range.Start.Row + 1;
+        var colCount = range.End.Col - range.Start.Col + 1;
+        return $"{rowCount}R x {colCount}C";
     }
 
     private static string FormatFillCellsAction(FillCellsDirection direction) =>

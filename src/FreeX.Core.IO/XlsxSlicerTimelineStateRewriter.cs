@@ -730,6 +730,7 @@ internal static class XlsxSlicerTimelineStateRewriter
 
             var changed = RewriteSlicerCacheSelection(root, model);
             changed |= RewriteNativeCacheItemSelection(archive, root, model, workbook);
+            changed |= RewriteCachePivotTableBinding(root, model.SourcePivotTableName);
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, cacheXml);
         }
@@ -795,6 +796,41 @@ internal static class XlsxSlicerTimelineStateRewriter
                 string.Equals(element.Attribute("uri")?.Value, SlicerSelectionExtensionUri, StringComparison.OrdinalIgnoreCase) &&
                 !element.HasElements)
             .Remove();
+    }
+
+    /// <summary>
+    /// R69-io-slicer-timeline-6-2: rewrites the persisted <c>&lt;pivotTables&gt;&lt;pivotTable name=".."/&gt;</c>
+    /// binding inside a slicerCache/timelineCache definition to match the model's CURRENT
+    /// <see cref="SlicerModel.SourcePivotTableName"/>/<see cref="TimelineModel.SourcePivotTableName"/> value.
+    /// Renaming a connected pivot table (<c>RenamePivotTableCommand</c>) updates only the in-memory model's
+    /// source name; on the hasSourcePackage save path the cache part is otherwise preserved verbatim, so the
+    /// saved <c>&lt;pivotTable name="..."/&gt;</c> would keep naming the OLD pivot table, breaking the
+    /// slicer/timeline-to-pivot connection on reopen. Shared by both <see cref="RewriteSlicerSelections"/>
+    /// and <see cref="RewriteTimelineState"/> since a slicerCacheDefinition and a timelineCacheDefinition
+    /// both carry the binding in the identical <c>&lt;pivotTables&gt;&lt;pivotTable name="..."/&gt;</c> shape.
+    /// No-op when the model carries no pivot binding (e.g. a table slicer's cache has no
+    /// <c>&lt;pivotTables&gt;</c> element at all) or when the preserved name already matches the model
+    /// (idempotent re-save of an un-renamed pivot table stays byte-stable).
+    /// </summary>
+    private static bool RewriteCachePivotTableBinding(XElement cacheRoot, string? currentPivotTableName)
+    {
+        if (string.IsNullOrWhiteSpace(currentPivotTableName))
+            return false;
+
+        var pivotTablesElement = cacheRoot
+            .Elements()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "pivotTables", StringComparison.OrdinalIgnoreCase));
+        if (pivotTablesElement is null)
+            return false;
+
+        var changed = false;
+        foreach (var pivotTableElement in pivotTablesElement.Elements()
+                     .Where(element => string.Equals(element.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase)))
+        {
+            changed |= SetOptionalAttribute(pivotTableElement, "name", currentPivotTableName);
+        }
+
+        return changed;
     }
 
     /// <summary>
@@ -1223,7 +1259,9 @@ internal static class XlsxSlicerTimelineStateRewriter
             if (model is null)
                 continue;
 
-            if (RewriteTimelineCacheSelection(root, model))
+            var changed = RewriteTimelineCacheSelection(root, model);
+            changed |= RewriteCachePivotTableBinding(root, model.SourcePivotTableName);
+            if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, cacheXml);
         }
     }

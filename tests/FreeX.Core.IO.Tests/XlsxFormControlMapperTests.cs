@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
@@ -9,6 +10,9 @@ public class XlsxFormControlMapperTests
 {
     private static readonly XNamespace FormControlNs =
         "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+    private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
     [Fact]
     public void ReadControlProperties_CheckBoxChecked_ParsesTypeCheckedAndLinkedCell()
@@ -263,5 +267,87 @@ public class XlsxFormControlMapperTests
         control.SelectedIndex.Should().Be(2);
         control.ListFillRange.Should().Be("high.choices");
         control.LinkedCell.Should().Be("$M$5");
+    }
+
+    [Fact]
+    public void ReadWorksheet_ControlPrFallbackWithNoCtrlProp_RecoversLinkedCellAndListFillRange()
+    {
+        // R69-io-form-controls-6-1: when the control's ctrlProp rel is absent/broken, the worksheet
+        // controlPr fallback must read the CT_ControlPr attribute names ("linkedCell"/"listFillRange"),
+        // not the ctrlProps-only formControlPr names ("fmlaLink"/"fmlaRange").
+        var worksheetXml = XDocument.Parse(
+            $$"""
+            <worksheet xmlns="{{WorksheetNs}}" xmlns:r="{{RelNs}}">
+              <controls>
+                <control shapeId="1025" name="List Box 1">
+                  <controlPr defaultSize="0" linkedCell="$B$2" listFillRange="Sheet1!$A$1:$A$3" />
+                </control>
+              </controls>
+            </worksheet>
+            """);
+
+        using var archiveStream = new MemoryStream();
+        using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            // No ctrlProps part and no worksheet _rels part: the control's r:id is absent, so the
+            // ctrlProp lookup must short-circuit and fall through to the controlPr attributes.
+        }
+        archiveStream.Position = 0;
+        using var readArchive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
+
+        var controls = XlsxFormControlMapper.ReadWorksheet(readArchive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+        controls.Should().ContainSingle();
+        controls[0].LinkedCell.Should().Be("$B$2");
+        controls[0].ListFillRange.Should().Be("Sheet1!$A$1:$A$3");
+    }
+
+    [Fact]
+    public void ReadWorksheet_ControlWithCtrlProp_UsesCtrlPropValuesNotControlPrFallback()
+    {
+        // No-regression sibling: when a valid ctrlProp part IS resolved, its fmlaLink/fmlaRange
+        // values must win -- the controlPr linkedCell/listFillRange fallback (now read for the
+        // no-ctrlProp case above) must not override an already-populated value.
+        const string worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetXml = XDocument.Parse(
+            $$"""
+            <worksheet xmlns="{{WorksheetNs}}" xmlns:r="{{RelNs}}">
+              <controls>
+                <control shapeId="1026" r:id="rIdCtrl" name="List Box 2">
+                  <controlPr defaultSize="0" linkedCell="$Z$99" listFillRange="Sheet1!$Z$1:$Z$9" />
+                </control>
+              </controls>
+            </worksheet>
+            """);
+
+        using var archiveStream = new MemoryStream();
+        using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var ctrlPropXml = new XDocument(new XElement(FormControlNs + "formControlPr",
+                new XAttribute("objectType", "List"),
+                new XAttribute("fmlaLink", "$B$2"),
+                new XAttribute("fmlaRange", "Sheet1!$A$1:$A$3")));
+            var ctrlPropEntry = archive.CreateEntry("xl/ctrlProps/ctrlProp1.xml");
+            using (var stream = ctrlPropEntry.Open())
+                ctrlPropXml.Save(stream, SaveOptions.DisableFormatting);
+
+            var relsXml = new XDocument(
+                new XElement(PackageRelNs + "Relationships",
+                    new XElement(PackageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdCtrl"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp"),
+                        new XAttribute("Target", "../ctrlProps/ctrlProp1.xml"))));
+            var relsEntry = archive.CreateEntry("xl/worksheets/_rels/sheet1.xml.rels");
+            using (var stream = relsEntry.Open())
+                relsXml.Save(stream, SaveOptions.DisableFormatting);
+        }
+        archiveStream.Position = 0;
+        using var readArchive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
+
+        var controls = XlsxFormControlMapper.ReadWorksheet(readArchive, worksheetPath, worksheetXml);
+
+        controls.Should().ContainSingle();
+        controls[0].LinkedCell.Should().Be("$B$2");
+        controls[0].ListFillRange.Should().Be("Sheet1!$A$1:$A$3");
     }
 }

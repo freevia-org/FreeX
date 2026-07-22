@@ -224,6 +224,16 @@ public sealed class WorkbookSession
 
     public Workbook Workbook { get; }
 
+    /// <summary>
+    /// Cells the session's <c>RecalcEngine</c> most recently classified as part of a non-iterative
+    /// circular reference. Reflects the state as of the last recalculation (<see cref="RecalculateWorkbook"/>
+    /// / <see cref="RecalculateActiveSheet"/> / any edit that triggered automatic recalculation) --
+    /// callers that need this up to date should recalculate first. Feed straight into
+    /// <c>FormulaAuditingService.FindFormulaErrors</c>/<c>FindFormulaErrorIssues</c>'s
+    /// <c>cyclicCells</c> parameter to surface the "Formulas with circular references" Error-Checking rule.
+    /// </summary>
+    public IReadOnlyCollection<CellAddress> CyclicCells => _cellEditService.CyclicCells;
+
     public Sheet ActiveSheet { get; private set; }
 
     public ViewportModel Viewport { get; private set; }
@@ -1540,12 +1550,13 @@ public sealed class WorkbookSession
         if (ActiveSheet.GetCell(row, col) is not { } cell)
             return null;
 
-        if (ActiveSheet.ShowFormulas && cell.FormulaText is not null)
-            return new AutoFitCellText("=" + cell.FormulaText);
-
         var style = Workbook.GetStyle(cell.StyleId);
+
+        if (ActiveSheet.ShowFormulas && cell.FormulaText is not null)
+            return new AutoFitCellText("=" + cell.FormulaText, style.WrapText, TextRotation: style.TextRotation);
+
         var text = FreeX.Core.Formula.NumberFormatter.Format(cell.Value, style.NumberFormat);
-        return new AutoFitCellText(text, style.WrapText);
+        return new AutoFitCellText(text, style.WrapText, TextRotation: style.TextRotation);
     }
 
     private static WorkbookCellEditResult SucceededWithoutEdit() =>

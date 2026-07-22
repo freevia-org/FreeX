@@ -227,9 +227,11 @@ public partial class MainWindow
 
     private AutoFitCellText? GetAutoFitCellText(Sheet sheet, uint row, uint col)
     {
-        return sheet.GetCell(row, col) is { } cell
-            ? new AutoFitCellText(GetAutoFitDisplayText(sheet, cell), _workbook.GetStyle(cell.StyleId).WrapText)
-            : null;
+        if (sheet.GetCell(row, col) is not { } cell)
+            return null;
+
+        var style = _workbook.GetStyle(cell.StyleId);
+        return new AutoFitCellText(GetAutoFitDisplayText(sheet, cell), style.WrapText, TextRotation: style.TextRotation);
     }
 
     private string GetAutoFitDisplayText(Sheet sheet, Cell cell)

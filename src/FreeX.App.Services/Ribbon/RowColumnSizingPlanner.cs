@@ -177,9 +177,9 @@ public static class RowColumnSizingPlanner
         return texts;
     }
 
-    private static List<string> CollectColumnTexts(Sheet sheet, uint col, GridRange bounds, Func<uint, uint, AutoFitCellText?> getDisplayText)
+    private static List<AutoFitCellText> CollectColumnTexts(Sheet sheet, uint col, GridRange bounds, Func<uint, uint, AutoFitCellText?> getDisplayText)
     {
-        var texts = new List<string>();
+        var texts = new List<AutoFitCellText>();
         for (var row = bounds.Start.Row; row <= bounds.End.Row; row++)
         {
             if (sheet.IsRowEffectivelyHidden(row))
@@ -187,7 +187,7 @@ public static class RowColumnSizingPlanner
             if (sheet.IsMerged(new CellAddress(bounds.Start.Sheet, row, col)))
                 continue;
             if (getDisplayText(row, col) is { } cellText)
-                texts.Add(cellText.Text);
+                texts.Add(cellText);
         }
 
         return texts;

@@ -356,7 +356,8 @@ public partial class MainWindow
             _currentFilePath,
             BackstageInfoResources.Strings,
             activeSheet,
-            hasSelection: SheetGrid.SelectedRange is not null);
+            hasSelection: SheetGrid.SelectedRange is not null,
+            cyclicCells: _recalcEngine.CyclicCells);
         var pane = FreeXBackstageInfoPanePlanner.Build(
             FreeXBackstageInfoSurface.WpfInfoPane,
             CreateBackstageInfoPaneRequest(info));
@@ -557,6 +558,7 @@ public partial class MainWindow
         InvalidateNavigationCaches();
         _currentFilePath = null;
         _currentXlsxFeatureReport = null;
+        _isWorkbookReadOnly = false;
         UpdateTitleBar();
         RecalculateWorkbook();
         SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
@@ -687,6 +689,7 @@ public partial class MainWindow
             ShowOpenProgress(CreateOpenProgress("done", TimeSpan.Zero, 100));
             ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();
             ShowXlsxLoadWarningsIfNeeded(result.LoadWarnings);
+            ApplyReadOnlyRecommendedPromptIfNeeded(_workbook);
             RecordDiagnosticEvent("workbook_opened", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
@@ -1193,6 +1196,17 @@ public partial class MainWindow
         if (ext == ".xlsx" && !ConfirmUnsupportedXlsxFeatureSave())
             return false;
 
+        // Save-As to a plain/single-sheet lossy format (CSV/TXT/PRN/SLK/DIF/DBF, ...) has no gate at
+        // all otherwise: a multi-sheet workbook or one with charts would write silently, dropping
+        // every sheet but the current one plus any charts, with no warning the .xlsx path already
+        // gives via ConfirmUnsupportedXlsxFeatureSave above.
+        if (ext != ".xlsx" &&
+            LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(_workbook, ext) &&
+            !ConfirmLossyFormatFeatureLossSave(ext))
+        {
+            return false;
+        }
+
         // Capture identity/generation before any await so we can detect edits or
         // workbook replacement that occur while the serialization is running.
         var generationAtSaveStart = _workbookDirtyGeneration;
@@ -1320,6 +1334,50 @@ public partial class MainWindow
             MessageBoxImage.Warning);
 
         return result == MessageBoxResult.Yes;
+    }
+
+    private bool ConfirmLossyFormatFeatureLossSave(string extension)
+    {
+        var formatLabel = FileFormatResolver.SafeFileTypeFromExtension(extension).ToUpperInvariant();
+        var body = UiText.Format("MainWindowMessage_LossyFormatFeatureLossBodyFormat", formatLabel);
+
+        var result = ShowOwnedMessage(
+            body,
+            UiText.Get("MainWindowMessage_LossyFormatFeatureLossTitle"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        return result == MessageBoxResult.Yes;
+    }
+
+    /// <summary>
+    /// A workbook saved with "Read-Only Recommended" (<c>WorkbookFileSharingModel.ReadOnlyRecommended</c>)
+    /// or a write-reservation password (<c>ReservationPassword</c>) used to open fully editable with no
+    /// prompt at all -- the metadata round-tripped on Save but was never enforced. Mirrors Excel: prompt
+    /// once on open and, if the user accepts read-only (or -- since a modify-password unlock isn't
+    /// implemented yet -- simply doesn't decline), mark this session's <see cref="_isWorkbookReadOnly"/>
+    /// flag. This is the minimal fix scope noted where <c>_isWorkbookReadOnly</c> is declared: the flag
+    /// itself does not yet block Save-over or individual edit commands.
+    /// </summary>
+    private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
+    {
+        _isWorkbookReadOnly = false;
+
+        var sharing = workbook.FileSharing;
+        if (sharing is null ||
+            (sharing.ReadOnlyRecommended != true && string.IsNullOrEmpty(sharing.ReservationPassword)))
+        {
+            return;
+        }
+
+        var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", workbook.Name);
+        var result = ShowOwnedMessage(
+            body,
+            UiText.Get("MainWindowMessage_ReadOnlyRecommendedTitle"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        _isWorkbookReadOnly = result == MessageBoxResult.Yes;
     }
 
     private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()

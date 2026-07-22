@@ -72,6 +72,40 @@ public sealed class BackstageInfoPlannerTests
         plan.FormulaErrorSummary.Should().Be("2 issues");
     }
 
+    // R69-meta-1: FormulaAuditingService.FindFormulaErrorIssues gained an optional cyclicCells
+    // parameter in r68, but BackstageInfoPlanner.Build never threaded it through, so File > Info's
+    // formula-error summary silently never counted circular-reference issues (a cyclic cell's Value
+    // seeds to a plain 0 since r66, not ErrorValue.Circular, so the plain cell-value scan can't find
+    // it on its own). This must count the circular issue once the caller passes the engine's cyclic set.
+    [Fact]
+    public void Build_SummarizesCircularReferenceIssue_WhenCyclicCellsThreadedThrough()
+    {
+        var workbook = new Workbook("Audit");
+        var sheet = workbook.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(a1, "A1");
+
+        var plan = BackstageInfoPlanner.Build(workbook, null, Strings(), cyclicCells: [a1]);
+
+        plan.FormulaErrorSummary.Should().Be("one issue");
+    }
+
+    // Sibling/no-regression: omitting cyclicCells (every other existing caller's default) must keep
+    // behaving exactly as before -- the circular reference stays invisible to the summary rather than
+    // throwing or double-counting.
+    [Fact]
+    public void Build_DoesNotSummarizeCircularReferenceIssue_WhenCyclicCellsOmitted()
+    {
+        var workbook = new Workbook("Audit");
+        var sheet = workbook.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(a1, "A1");
+
+        var plan = BackstageInfoPlanner.Build(workbook, null, Strings());
+
+        plan.FormulaErrorSummary.Should().Be("no formula errors");
+    }
+
     [Fact]
     public void Build_IncludesSavedFileSizeAndLastModifiedMetadata()
     {

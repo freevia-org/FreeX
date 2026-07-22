@@ -151,6 +151,14 @@ public sealed class Round56_IoABucketTests
 
         var workbook = new Workbook("Untitled");
         workbook.NumberFormatCatalog[170] = "0.0000%";
+        // R69-io-numfmt-styles-6-1: BuildNumberFormatCatalog now prunes catalog entries that no
+        // live cell/style-only/dxf style references, so a live cell using this exact format code is
+        // required for the id-170 catalog entry to survive into the remap logic under test here.
+        var sheet = workbook.AddSheet("Sheet1");
+        var styleId = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.0000%" });
+        var cell = Cell.FromValue(new NumberValue(0.1));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
 
         var remap = XlsxNumberFormatCatalogWriter.Save(stream, workbook);
 
@@ -177,6 +185,13 @@ public sealed class Round56_IoABucketTests
 
         var workbook = new Workbook("Untitled");
         workbook.NumberFormatCatalog[171] = "0.0000%";
+        // R69-io-numfmt-styles-6-1: a live cell using this exact format code is required for the
+        // id-171 catalog entry to survive the liveness prune (see sibling test above).
+        var sheet = workbook.AddSheet("Sheet1");
+        var styleId = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.0000%" });
+        var cell = Cell.FromValue(new NumberValue(0.1));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
 
         var remap = XlsxNumberFormatCatalogWriter.Save(stream, workbook);
 

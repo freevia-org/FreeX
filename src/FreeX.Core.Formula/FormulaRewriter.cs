@@ -629,6 +629,7 @@ public static class FormulaRewriter
             InsertColsOp ins => RewriteFullColumnRangeInsertCols(range, ins, ref changed),
             DeleteColsOp del => RewriteFullColumnRangeDeleteCols(range, del, ref changed),
             PasteOffsetOp paste => RewriteFullColumnRangePaste(range, paste, ref changed),
+            PasteTransposeOp transpose => RewriteFullColumnRangeTranspose(range, transpose, ref changed),
             RenameSheetOp rename => RewriteFullColumnRangeRenameSheet(range, rename, ref changed),
             DeleteSheetOp => RewriteSheetQualifiedRefDeleteSheet(ref changed),
             _ => range
@@ -646,6 +647,7 @@ public static class FormulaRewriter
             InsertRowsOp ins => RewriteFullRowRangeInsertRows(range, ins, ref changed),
             DeleteRowsOp del => RewriteFullRowRangeDeleteRows(range, del, ref changed),
             PasteOffsetOp paste => RewriteFullRowRangePaste(range, paste, ref changed),
+            PasteTransposeOp transpose => RewriteFullRowRangeTranspose(range, transpose, ref changed),
             RenameSheetOp rename => RewriteFullRowRangeRenameSheet(range, rename, ref changed),
             DeleteSheetOp => RewriteSheetQualifiedRefDeleteSheet(ref changed),
             _ => range
@@ -1082,6 +1084,46 @@ public static class FormulaRewriter
         };
     }
 
+    /// <summary>
+    /// Paste Special &gt; Transpose on a full-column reference (e.g. B:B): a whole-column ref
+    /// carries no row of its own, so transposing swaps axes the same way
+    /// <see cref="RewriteCellRefTranspose"/>'s ROW branch does -- the column's own position
+    /// becomes a ROW position, derived from its offset from <see cref="PasteTransposeOp.SourceAnchorCol"/>
+    /// re-anchored at <see cref="PasteTransposeOp.DestAnchorRow"/>. An absolute column endpoint
+    /// ($ on that side) keeps its literal numeric value unchanged, mirroring how
+    /// RewriteCellRefTranspose leaves an absolute axis' literal value untouched instead of
+    /// recomputing it from the offset.
+    /// </summary>
+    private static FormulaNode RewriteFullColumnRangeTranspose(
+        FullColumnRangeRefNode range, PasteTransposeOp op, ref bool changed)
+    {
+        var startRow = TransposeColumnNumberToRow(range.StartColumnNumber, range.IsStartAbsolute, op);
+        var endRow = TransposeColumnNumberToRow(range.EndColumnNumber, range.IsEndAbsolute, op);
+        if (startRow is null || endRow is null)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        changed = true;
+        return new FullRowRangeRefNode(
+            startRow.Value,
+            endRow.Value,
+            IsStartAbsolute: range.IsStartAbsolute,
+            IsEndAbsolute: range.IsEndAbsolute,
+            SheetName: range.SheetName);
+    }
+
+    private static uint? TransposeColumnNumberToRow(uint columnNumber, bool isAbsolute, PasteTransposeOp op)
+    {
+        if (isAbsolute)
+            return columnNumber <= CellAddress.MaxRow ? columnNumber : null;
+
+        long colOffsetFromSourceAnchor = (long)columnNumber - op.SourceAnchorCol;
+        long r = (long)op.DestAnchorRow + colOffsetFromSourceAnchor;
+        return r >= 1 && r <= CellAddress.MaxRow ? (uint?)r : null;
+    }
+
     private static FormulaNode RewriteFullColumnRangeRenameSheet(
         FullColumnRangeRefNode range, RenameSheetOp op, ref bool changed)
     {
@@ -1149,6 +1191,44 @@ public static class FormulaRewriter
         }
 
         return range with { StartRow = start.Value, EndRow = end.Value };
+    }
+
+    /// <summary>
+    /// Paste Special &gt; Transpose on a full-row reference (e.g. 1:1): the mirror image of
+    /// <see cref="RewriteFullColumnRangeTranspose"/> -- the row's own position becomes a COLUMN
+    /// position, derived from its offset from <see cref="PasteTransposeOp.SourceAnchorRow"/>
+    /// re-anchored at <see cref="PasteTransposeOp.DestAnchorCol"/>. Unlike the column→row
+    /// direction, row numbers routinely exceed <see cref="CellAddress.MaxCol"/>, so the overflow
+    /// check below is the common case, not just a defensive guard.
+    /// </summary>
+    private static FormulaNode RewriteFullRowRangeTranspose(
+        FullRowRangeRefNode range, PasteTransposeOp op, ref bool changed)
+    {
+        var startCol = TransposeRowNumberToColumn(range.StartRow, range.IsStartAbsolute, op);
+        var endCol = TransposeRowNumberToColumn(range.EndRow, range.IsEndAbsolute, op);
+        if (startCol is null || endCol is null)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        changed = true;
+        return new FullColumnRangeRefNode(
+            CellAddress.NumberToColumnName(startCol.Value),
+            CellAddress.NumberToColumnName(endCol.Value),
+            IsStartAbsolute: range.IsStartAbsolute,
+            IsEndAbsolute: range.IsEndAbsolute,
+            SheetName: range.SheetName);
+    }
+
+    private static uint? TransposeRowNumberToColumn(uint rowNumber, bool isAbsolute, PasteTransposeOp op)
+    {
+        if (isAbsolute)
+            return rowNumber <= CellAddress.MaxCol ? rowNumber : null;
+
+        long rowOffsetFromSourceAnchor = (long)rowNumber - op.SourceAnchorRow;
+        long c = (long)op.DestAnchorCol + rowOffsetFromSourceAnchor;
+        return c >= 1 && c <= CellAddress.MaxCol ? (uint?)c : null;
     }
 
     private static FormulaNode RewriteFullRowRangeRenameSheet(

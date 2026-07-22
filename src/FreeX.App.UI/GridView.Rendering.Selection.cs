@@ -1079,6 +1079,7 @@ public partial class GridView
 
             if (SelectedRange is { } activeRange)
                 RenderSelectionHandle(dc, activeRange);
+            RenderActiveCellBox(dc);
             return;
         }
 
@@ -1086,6 +1087,25 @@ public partial class GridView
 
         RenderSelectionRange(dc, SelectedRange.Value, drawHandle: true);
         RenderSelectionMovePreview(dc, SelectedRange.Value);
+        RenderActiveCellBox(dc);
+    }
+
+    // Excel always draws a dedicated, crisp box tightly around the active cell, independent of
+    // the selection outline: after Select All (or any selection whose outer perimeter is off-
+    // screen), or when the active cell sits at an interior position within the selected range
+    // (e.g. after Tab/Enter wraps to a new row), the active cell still needs its own locator box
+    // even though none of the range's own top/bottom/left/right edges are drawn. Draw this box on
+    // top of the selection fill whenever the active cell resolves to a visible pixel rect.
+    private void RenderActiveCellBox(DrawingContext dc)
+    {
+        if (Viewport == null) return;
+        var activeAddress = ActiveCell ?? SelectedRange?.Start;
+        if (activeAddress is not { } address) return;
+
+        var rowHeaderWidth = ActualRowHeaderWidth;
+        var columnHeaderHeight = EffectiveColHeaderHeight;
+        if (GetActiveCellRect(Viewport, address, rowHeaderWidth, columnHeaderHeight) is { } rect)
+            dc.DrawRectangle(null, SelectionPen, rect);
     }
 
     private void RenderSelectionRange(DrawingContext dc, GridRange range, bool drawHandle)
@@ -1140,10 +1160,20 @@ public partial class GridView
         if (activeAddress is not { } address || !range.Contains(address))
             return null;
 
-        // If the active cell is a merged cell (anchor or otherwise), the fill "hole" must cover the
-        // merge's full footprint - matching Excel, which never tints any part of the active cell -
-        // instead of just the single active-cell address, or the rest of the merge would be wrongly
-        // tinted by the surrounding selection fill.
+        return GetActiveCellRect(viewport, address, rowHeaderWidth, columnHeaderHeight);
+    }
+
+    // Resolves the pixel rect of the active cell (or, if the active cell is a merged cell, its
+    // full merge footprint - matching Excel, which never tints/splits any part of the active
+    // cell's merge) regardless of which selection range it logically belongs to. Shared by the
+    // fill-hole punch (GetActiveCellFillHole) and the dedicated active-cell locator box
+    // (RenderActiveCellBox). Returns null if the active cell isn't currently visible.
+    private Rect? GetActiveCellRect(
+        ViewportModel viewport,
+        CellAddress address,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
         var activeCellRange = FindMerge(address.Row, address.Col) is { } merge
             ? merge
             : new GridRange(address, address);

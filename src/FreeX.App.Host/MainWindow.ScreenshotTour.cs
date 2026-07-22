@@ -5271,7 +5271,7 @@ public partial class MainWindow
                 "window-full",
                 "Remove Arrows clears the in-memory formula trace arrows and returns the sheet to value display mode."));
 
-            var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId);
+            var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _recalcEngine.CyclicCells);
             if (issues.Count == 0)
                 throw new InvalidOperationException("Formula diagnostics tour expected at least one formula error issue.");
 

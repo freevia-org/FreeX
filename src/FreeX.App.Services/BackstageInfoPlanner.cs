@@ -28,12 +28,13 @@ public static class BackstageInfoPlanner
         Sheet? activeSheet = null,
         CultureInfo? culture = null,
         Func<string, bool>? fileExists = null,
-        bool hasSelection = false)
+        bool hasSelection = false,
+        IReadOnlyCollection<CellAddress>? cyclicCells = null)
     {
         ArgumentNullException.ThrowIfNull(strings);
         culture ??= CultureInfo.CurrentCulture;
         var accessibilityIssues = AccessibilityCheckerService.FindIssues(workbook);
-        var formulaIssues = FormulaAuditingService.FindFormulaErrorIssues(workbook);
+        var formulaIssues = FormulaAuditingService.FindFormulaErrorIssues(workbook, sheetId: null, cyclicCells);
         var summary = InfoPanelSummaryPlanner.Create(workbook, activeSheet, culture);
         var sharingStatus = WorkbookShareReadinessPlanner.FormatStatus(
             WorkbookShareReadinessPlanner.CreatePlan(

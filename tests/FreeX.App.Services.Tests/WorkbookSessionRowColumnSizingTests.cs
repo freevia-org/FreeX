@@ -77,6 +77,87 @@ public sealed class WorkbookSessionRowColumnSizingTests
     }
 
     [Fact]
+    public void AutoFitRowHeight_StackedVerticalText_GrowsRowFromRotation()
+    {
+        // R69-commands-autofit-6-1: AutoFit Row Height must thread the cell's TextRotation into
+        // the shared estimate, not just its WrapText flag -- otherwise a stacked/vertical-text
+        // cell (Orientation 255) never reaches AutoFitSizingService.EstimateRotatedHeightUnits
+        // and is measured as an ordinary single unrotated line.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.DefaultRowHeight = 20;
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new TextValue(new string('A', 20)));
+        sheet.GetCell(address)!.StyleId = workbook.RegisterStyle(new CellStyle { TextRotation = 255 });
+        var session = CreateSession(workbook);
+
+        session.SelectRange(Range(sheet.Id, 1, 1, 1, 1));
+        session.AutoFitSelectedRowHeight().Success.Should().BeTrue();
+
+        sheet.RowHeights.Should().ContainKey(1u);
+        // Stacked text needs one line-height per character (20 chars), clamped to the service's
+        // ceiling -- far taller than the unrotated single-line height would ever grow to.
+        sheet.RowHeights[1].Should().BeGreaterThan(sheet.DefaultRowHeight * 2);
+    }
+
+    [Fact]
+    public void AutoFitRowHeight_HorizontalSingleLineText_StaysAtDefaultHeight()
+    {
+        // Sibling no-regression: a normal (unrotated) single-line cell must still autofit to the
+        // default row height, exactly as before the TextRotation wiring fix.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.DefaultRowHeight = 20;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(new string('A', 20)));
+        var session = CreateSession(workbook);
+
+        session.SelectRange(Range(sheet.Id, 1, 1, 1, 1));
+        session.AutoFitSelectedRowHeight().Success.Should().BeTrue();
+
+        sheet.RowHeights.Should().ContainKey(1u);
+        sheet.RowHeights[1].Should().Be(sheet.DefaultRowHeight);
+    }
+
+    [Fact]
+    public void AutoFitColumnWidth_StackedVerticalText_NarrowsInsteadOfWideningToFullTextLength()
+    {
+        // R69-commands-autofit-6-2: AutoFit Column Width must narrow for stacked/vertical text
+        // instead of measuring the unrotated string length -- Excel only needs ~1 glyph's width
+        // per column for stacked text, not the full 16-character run.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.DefaultColumnWidth = 3.0;
+        var address = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(address, new TextValue("PRODUCT CATEGORY"));
+        sheet.GetCell(address)!.StyleId = workbook.RegisterStyle(new CellStyle { TextRotation = 255 });
+        var session = CreateSession(workbook);
+
+        session.SelectRange(Range(sheet.Id, 1, 2, 1, 2));
+        session.AutoFitSelectedColumnWidth().Success.Should().BeTrue();
+
+        sheet.ColumnWidths.Should().ContainKey(2u);
+        sheet.ColumnWidths[2].Should().BeApproximately(3.0, 0.01);
+    }
+
+    [Fact]
+    public void AutoFitColumnWidth_HorizontalText_StillWidensToFullTextLength()
+    {
+        // Sibling no-regression: an unrotated cell with the same text must still widen the column
+        // to its full character length, exactly as before the rotation-aware estimate was added.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.DefaultColumnWidth = 3.0;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("PRODUCT CATEGORY"));
+        var session = CreateSession(workbook);
+
+        session.SelectRange(Range(sheet.Id, 1, 2, 1, 2));
+        session.AutoFitSelectedColumnWidth().Success.Should().BeTrue();
+
+        sheet.ColumnWidths.Should().ContainKey(2u);
+        sheet.ColumnWidths[2].Should().BeApproximately(18.0, 0.01); // 16 chars + 2.0 padding
+    }
+
+    [Fact]
     public void AutoFit_OnEmptySelectionWithoutContent_IsSuccessfulNoOp()
     {
         var workbook = CreateWorkbook();

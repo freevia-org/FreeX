@@ -30,21 +30,39 @@ public static class AutoFitSizingService
     /// </summary>
     private const double CharacterWidthToLineHeightRatio = 0.6;
 
-    public static double EstimateColumnWidth(IEnumerable<string> displayTexts, double defaultWidth)
+    /// <summary>
+    /// Estimates AutoFit column width from each cell's display text, narrowing the estimate for
+    /// cells with a non-zero <see cref="AutoFitCellText.TextRotation"/> (255 for stacked/vertical
+    /// text, or an angled -90..90 orientation) instead of measuring the unrotated string length --
+    /// stacked text only needs one glyph's width per column, and an angled run's horizontal
+    /// footprint is shorter than its full character count, matching Excel narrowing columns for
+    /// rotated/stacked content rather than over-widening them.
+    /// </summary>
+    public static double EstimateColumnWidth(IEnumerable<AutoFitCellText> displayTexts, double defaultWidth)
     {
-        var longestLine = 0;
-        foreach (var text in displayTexts)
+        var longestUnits = 0.0;
+        foreach (var cellText in displayTexts)
         {
-            foreach (var line in EnumerateLines(text))
+            var longestLine = 0;
+            foreach (var line in EnumerateLines(cellText.Text))
                 longestLine = Math.Max(longestLine, line.Length);
+
+            var widthUnits = cellText.TextRotation == 0
+                ? longestLine
+                : EstimateRotatedWidthUnits(longestLine, cellText.TextRotation);
+            longestUnits = Math.Max(longestUnits, widthUnits);
         }
 
-        var estimate = longestLine == 0
+        var estimate = longestUnits <= 0
             ? defaultWidth
-            : Math.Max(defaultWidth, longestLine + ColumnWidthPadding);
+            : Math.Max(defaultWidth, longestUnits + ColumnWidthPadding);
 
         return Math.Clamp(estimate, MinimumColumnWidth, MaximumColumnWidth);
     }
+
+    /// <summary>Back-compat overload for callers without rotation information (no rotation applied).</summary>
+    public static double EstimateColumnWidth(IEnumerable<string> displayTexts, double defaultWidth) =>
+        EstimateColumnWidth(displayTexts.Select(text => new AutoFitCellText(text)), defaultWidth);
 
     /// <summary>
     /// Estimates AutoFit row height from each cell's display text and line count. When a cell has
@@ -147,6 +165,36 @@ public static class AutoFitSizingService
         var runWidthUnits = longestLine * CharacterWidthToLineHeightRatio;
         var projectedHeightUnits = runWidthUnits * Math.Sin(radians) + Math.Cos(radians);
         return Math.Max(1, projectedHeightUnits);
+    }
+
+    /// <summary>
+    /// Estimates the column-width contribution (in the same character-count unit as
+    /// <see cref="EstimateColumnWidth"/>) of a rotated or stacked cell's longest logical line --
+    /// the horizontal counterpart of <see cref="EstimateRotatedHeightUnits"/>.
+    /// </summary>
+    private static double EstimateRotatedWidthUnits(int longestLine, int textRotation)
+    {
+        if (longestLine <= 0)
+            return 0;
+
+        // Stacked/vertical text (raw rotation 255): Excel stacks one glyph per line (see
+        // CellTextOrientationLayoutPlanner.PrepareDisplayText), so the column only needs to be as
+        // wide as a single character, regardless of the string's length.
+        if (textRotation == 255)
+            return 1;
+
+        // Any other out-of-range value (shouldn't occur for normalized model data) renders
+        // unrotated, matching CellTextOrientationLayoutPlanner.NormalizeRotationForDisplay.
+        if (textRotation is < -90 or > 90)
+            return longestLine;
+
+        // Angled text (Format Cells > Alignment > Angle, -90..90 degrees): project the run's
+        // rotated bounding box onto the horizontal axis -- the inverse of
+        // EstimateRotatedHeightUnits's vertical projection, using the same trig and
+        // character/line-height ratio.
+        var radians = Math.Abs(textRotation) * Math.PI / 180.0;
+        var projectedWidthUnits = longestLine * Math.Cos(radians) + Math.Sin(radians) / CharacterWidthToLineHeightRatio;
+        return Math.Max(1, projectedWidthUnits);
     }
 
     private static IEnumerable<string> EnumerateLines(string? text)

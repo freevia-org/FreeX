@@ -1323,7 +1323,12 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var range = ExpandRangeToFullyContainMerges(sheet, rawRange);
         SheetGrid.SelectedRange = range;
-        SetCellAddressBoxSelectionText(FormatRangeReference(range.Start, range.End));
+        // While a mouse-drag selection is in progress, Excel's Name Box shows a live "{rows}R x
+        // {cols}C" dimension readout instead of the range address, reverting to the address once
+        // the drag ends (CompleteDragSelectionStatusRefresh) (R69-render-active-cell-selection-6-2).
+        SetCellAddressBoxSelectionText(_dragSelectActive
+            ? FormatDragSelectionDimensionText(range)
+            : FormatRangeReference(range.Start, range.End));
         if (!_dragSelectActive)
             RefreshPivotFieldListPaneAfterSelectionChange();
         RefreshStatusBarAfterDragSelectionChange();
@@ -1358,6 +1363,16 @@ public partial class MainWindow
         } while (expanded);
 
         return range;
+    }
+
+    // Live dimension readout Excel shows in the Name Box while a mouse-drag selection is in
+    // progress (e.g. "4R x 3C" for a 4-row-by-3-column drag from B2 to D5), reverting to the plain
+    // range address once the drag ends (R69-render-active-cell-selection-6-2).
+    private static string FormatDragSelectionDimensionText(GridRange range)
+    {
+        var rowCount = range.End.Row - range.Start.Row + 1;
+        var colCount = range.End.Col - range.Start.Col + 1;
+        return $"{rowCount}R x {colCount}C";
     }
 
     // Excel's Ctrl+Home jumps to the top-left cell of the *scrollable* region -- the first
@@ -1508,6 +1523,12 @@ public partial class MainWindow
 
     private void CompleteDragSelectionStatusRefresh()
     {
+        // The Name Box shows a live "{rows}R x {cols}C" dimension readout while the drag was in
+        // progress (ExtendSelection); now that the drag has ended, revert it to the plain range
+        // address, matching Excel (R69-render-active-cell-selection-6-2).
+        if (SheetGrid.SelectedRange is { } activeRange)
+            SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));
+
         if (!_dragSelectStatusRefreshPending)
             return;
 

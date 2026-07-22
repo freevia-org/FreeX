@@ -371,7 +371,7 @@ public partial class MainWindow
     {
         RecalculateWorkbook();
 
-        var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId);
+        var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _recalcEngine.CyclicCells);
         if (issues.Count == 0)
         {
             _messageService.ShowInfo(UiText.Get("MainWindowMessage_ErrorCheckingNoIssues"), UiText.Get("MainWindowMessage_ErrorCheckingTitle"));

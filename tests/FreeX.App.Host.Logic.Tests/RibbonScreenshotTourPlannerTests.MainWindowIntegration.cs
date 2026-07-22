@@ -1070,7 +1070,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("TraceDependentsBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("ShowFormulasBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("RemoveTraceArrows(kind: null, \"Remove Arrows\")");
-        source.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId)");
+        source.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _recalcEngine.CyclicCells)");
         source.Should().Contain("new ErrorCheckingDialog(");
         source.Should().Contain("new EvaluateFormulaDialog(resultSummary)");
         source.Should().Contain("FindDescendantButtonByContent(evaluateFormulaDialog, UiText.Get(\"EvaluateFormula_EvaluateButton\"))");

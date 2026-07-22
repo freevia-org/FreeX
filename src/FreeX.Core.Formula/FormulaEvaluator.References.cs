@@ -1223,6 +1223,12 @@ public sealed partial class FormulaEvaluator
             return true;
         }
 
+        // If row_num or column_num itself evaluated to an array (e.g. MATCH({...}, ...) or a
+        // literal array constant), defer to the generic Index path, which broadcasts the array
+        // across the table and spills -- the fast path only handles a single scalar result.
+        if (rowValue is RangeValue || columnValue is RangeValue)
+            return false;
+
         var rowCoerced = CoerceToNumber(rowValue);
         if (rowCoerced is ErrorValue rowCoerceError)
         {

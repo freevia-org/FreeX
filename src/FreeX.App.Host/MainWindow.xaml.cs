@@ -152,6 +152,12 @@ public partial class MainWindow : Window, IWorkbookWindow
     private FreeXOptions _options;
     // _currentFilePath is declared as a delegating property in the dirty/save-state cluster above.
     private XlsxFeatureReport? _currentXlsxFeatureReport;
+    // Set after OpenFileAsync prompts on a workbook.FileSharing.ReadOnlyRecommended/ReservationPassword
+    // file and the user accepts opening it read-only (see ApplyReadOnlyRecommendedPromptIfNeeded in
+    // MainWindow.Backstage.cs). This is the minimal fix scope: it currently only surfaces the prompt and
+    // records the session's read-only intent -- it does not yet block Save-over or individual edit
+    // commands (residual enforcement work).
+    private bool _isWorkbookReadOnly;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
     private bool _suppressZoomSync;

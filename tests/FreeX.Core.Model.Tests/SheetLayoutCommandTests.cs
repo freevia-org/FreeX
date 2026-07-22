@@ -33,7 +33,7 @@ public class SheetLayoutCommandTests
     [Fact]
     public void AutoFitSizingService_ColumnWidthKeepsEmptyInputAtLeastDefaultWidth()
     {
-        AutoFitSizingService.EstimateColumnWidth([], defaultWidth: 8.43)
+        AutoFitSizingService.EstimateColumnWidth(Array.Empty<string>(), defaultWidth: 8.43)
             .Should().BeApproximately(8.43, 0.01);
 
         AutoFitSizingService.EstimateColumnWidth([""], defaultWidth: 8.43)

@@ -38,10 +38,36 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 // XlsxAllowEditRangeMapper.Save, so it must not also be copied verbatim below (that
                 // would duplicate it). A single-area sqref additionally has a 1:1 matching target
                 // element whose native-only attributes (custom name, extra attributes/children) can
-                // be merged back onto it; a multi-area sqref is represented by several separate
-                // target elements with no single element to merge onto, so it is simply left as-is.
+                // be merged back onto it.
                 if (!IsFullyModeledSqref(sourceSqref, modeledSqrefs))
                     continue;
+
+                var areas = sourceSqref.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (areas.Length > 1)
+                {
+                    // A multi-area sqref (e.g. "B2:B10 D2:D10") is represented by several separate
+                    // rebuilt target elements (one per area, each auto-named "FreeXAllowEditRange{n}"
+                    // by XlsxAllowEditRangeMapper.BuildProtectedRangeElement) with no single element
+                    // to merge full native metadata onto. Still restore the original multi-area NAME
+                    // (e.g. a VBA-visible "PayrollCells") onto every rebuilt area-element belonging to
+                    // this source range, matched by per-area sqref, so it survives resave instead of
+                    // being silently replaced by the auto-generated placeholder name.
+                    var sourceName = sourceRange.Attribute("name")?.Value;
+                    if (!string.IsNullOrWhiteSpace(sourceName))
+                    {
+                        foreach (var area in areas)
+                        {
+                            if (targetBySqref.TryGetValue(area, out var targetArea) &&
+                                !string.Equals(targetArea.Attribute("name")?.Value, sourceName, StringComparison.Ordinal))
+                            {
+                                targetArea.SetAttributeValue("name", sourceName);
+                                changed = true;
+                            }
+                        }
+                    }
+
+                    continue;
+                }
 
                 if (targetBySqref.TryGetValue(sourceSqref, out var targetRange) &&
                     MergeProtectedRangeMetadata(sourceRange, targetRange))

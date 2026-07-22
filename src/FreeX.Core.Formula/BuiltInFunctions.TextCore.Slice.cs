@@ -16,8 +16,7 @@ public static partial class BuiltInFunctions
                 for (int c = 0; c < range.ColCount; c++)
                 {
                     var value = range.Cells[r, c];
-                    if (value is ErrorValue e) return e;
-                    cells[r, c] = LenScalar(value);
+                    cells[r, c] = value is ErrorValue e ? e : LenScalar(value);
                 }
 
             return new RangeValue(cells);

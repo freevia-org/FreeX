@@ -2525,7 +2525,7 @@ public sealed class AvaloniaShellSourceTests
         evaluateFormulaSource.Should().Contain("Height = 360");
         evaluateFormulaSource.Should().NotContain("\"Evaluate Formula\"");
         errorCheckingSource.Should().Contain("private async Task CheckFormulaErrorsAsync()");
-        errorCheckingSource.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_session.Workbook, _session.ActiveSheet.Id)");
+        errorCheckingSource.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_session.Workbook, _session.ActiveSheet.Id, _session.CyclicCells)");
         errorCheckingSource.Should().Contain("SetFormulaErrorIgnoredCommand(issue.SheetId, issue.Address, ignored: true)");
         errorCheckingSource.Should().Contain("FormulaEvaluationSummaryService.GetSummary(_session.Workbook, issue.Address)");
         errorCheckingSource.Should().Contain("TraceFormulaPrecedents();");
@@ -4137,7 +4137,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(concatenateButton, \"MergeCellsConcatenateButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"MergeCellsCancelButton\");");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Merge & Center failed.\");");
-        source.Should().Contain("RefreshShell($\"Merged and centered {rangeReference}\");");
+        source.Should().Contain("RefreshShell(isUnmergeToggle");
+        source.Should().Contain("? $\"Unmerged cells in {rangeReference}\"");
+        source.Should().Contain(": $\"Merged and centered {rangeReference}\");");
         source.Should().Contain("private void UnmergeSelectedRange()");
         source.Should().Contain("var result = _session.UnmergeSelectedRange();");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Unmerge Cells failed.\");");

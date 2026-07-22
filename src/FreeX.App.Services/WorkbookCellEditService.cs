@@ -139,6 +139,15 @@ public sealed class WorkbookCellEditService
         return _recalcEngine.RecalculateSheetFormulas(workbook, sheetId);
     }
 
+    /// <summary>
+    /// Cells the engine's most recent recalculation classified as part of a non-iterative circular
+    /// reference (see <see cref="RecalcEngine.CyclicCells"/>). Exposed so callers can feed
+    /// <c>FormulaAuditingService.FindFormulaErrors</c>/<c>FindFormulaErrorIssues</c>'s
+    /// <c>cyclicCells</c> parameter and surface the "Formulas with circular references"
+    /// Error-Checking rule.
+    /// </summary>
+    public IReadOnlyCollection<CellAddress> CyclicCells => _recalcEngine.CyclicCells;
+
     public WorkbookGoalSeekResult ExecuteGoalSeek(Workbook workbook, GoalSeekRequest request)
     {
         ArgumentNullException.ThrowIfNull(workbook);

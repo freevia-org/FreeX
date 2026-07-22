@@ -7702,6 +7702,18 @@ Changing cell value: {2}</value>
   <data name="MainWindowMessage_SaveChangesBeforeOpeningWorkbook" xml:space="preserve">
     <value>Save changes before opening another workbook?</value>
   </data>
+  <data name="MainWindowMessage_ReadOnlyRecommendedTitle" xml:space="preserve">
+    <value>Read-Only Recommended</value>
+  </data>
+  <data name="MainWindowMessage_ReadOnlyRecommendedBodyFormat" xml:space="preserve">
+    <value>The author of '{0}' recommends opening this file as read-only, unless you need to make changes. Open as read-only?</value>
+  </data>
+  <data name="MainWindowMessage_LossyFormatFeatureLossTitle" xml:space="preserve">
+    <value>Possible Data Loss</value>
+  </data>
+  <data name="MainWindowMessage_LossyFormatFeatureLossBodyFormat" xml:space="preserve">
+    <value>{0} files don't support workbook features such as multiple worksheets or charts. If you continue, only the current worksheet's data will be saved, and other worksheets, charts, and formatting will be lost. Keep this format?</value>
+  </data>
   <data name="MainWindow_TooltipTitle_BringForward" xml:space="preserve">
     <value>Bring Forward</value>
   </data>

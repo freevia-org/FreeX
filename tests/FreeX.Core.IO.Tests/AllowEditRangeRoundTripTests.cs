@@ -165,6 +165,102 @@ public partial class FileAdapterSmokeTests
         range.Contains(cellInRow1).Should().BeTrue();
     }
 
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MultiAreaProtectedRange_PreservesOriginalName()
+    {
+        // R69-io-workbook-protection-6-1: a multi-area "Allow Users to Edit Ranges" entry (e.g. a
+        // VBA-visible name like "PayrollCells") used to lose its original name on resave --
+        // XlsxAllowEditRangeMapper.BuildProtectedRangeElement always assigns an auto-generated
+        // "FreeXAllowEditRange{n}" name to each re-emitted per-area element, and
+        // XlsxWorksheetMetadataPreserver.MergeWorksheetProtectedRanges only restored the original
+        // name for a single-area sqref (a multi-area sqref has no single 1:1 target element to merge
+        // onto, so it was simply left as-is, silently dropping the name).
+        var workbook = new Workbook("ProtectedRangeMultiAreaNameTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "protectedRanges",
+                new XElement(
+                    worksheetNs + "protectedRange",
+                    new XAttribute("name", "PayrollCells"),
+                    new XAttribute("sqref", "B2:B10 D2:D10"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.AllowEditRanges.Should().HaveCount(2);
+
+        // Edit an unrelated cell so the save goes through the real save/merge pipeline instead of
+        // the unchanged-model source-copy fast path.
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 20, 20), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive2 = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var savedWorksheetXml = LoadPackageXml(archive2.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var savedRanges = savedWorksheetXml.Root!
+            .Element(ns + "protectedRanges")!
+            .Elements(ns + "protectedRange")
+            .ToList();
+
+        savedRanges.Should().HaveCount(2);
+        savedRanges.Should().OnlyContain(
+            range => range.Attribute("name")!.Value == "PayrollCells",
+            "the original multi-area protectedRange name must survive resave rather than being " +
+            "replaced by the auto-generated \"FreeXAllowEditRange{n}\" placeholder name");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_SingleAreaProtectedRange_NameStillRoundTrips()
+    {
+        // Sibling no-regression case for R69-io-workbook-protection-6-1: the single-area name-merge
+        // path (unaffected by the multi-area fix) must still restore the original name.
+        var workbook = new Workbook("ProtectedRangeSingleAreaNameTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddProtectedRangeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.AllowEditRanges.Should().ContainSingle();
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 4, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var protectedRange = worksheetXml.Root!
+            .Element(worksheetNs + "protectedRanges")!
+            .Element(worksheetNs + "protectedRange");
+
+        protectedRange.Should().NotBeNull();
+        protectedRange!.Attribute("name")!.Value.Should().Be("NativeEditableRange");
+    }
+
     private static void AddWholeColumnProtectedRangeMetadata(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))

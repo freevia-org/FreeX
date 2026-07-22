@@ -100,8 +100,11 @@ internal static class XlsxFormControlMapper
         }
 
         // controlPr can also carry the linked cell / list fill range when no ctrlProp part exists.
-        model.LinkedCell ??= NullIfWhiteSpace(controlPr?.Attribute("fmlaLink")?.Value);
-        model.ListFillRange ??= NullIfWhiteSpace(controlPr?.Attribute("fmlaRange")?.Value);
+        // Unlike ctrlProps' formControlPr (which uses fmlaLink/fmlaRange), the worksheet-level
+        // CT_ControlPr element uses linkedCell/listFillRange -- see the same attribute names
+        // whitelisted by XlsxWorksheetOleControlNormalizer (R69-io-form-controls-6-1).
+        model.LinkedCell ??= NullIfWhiteSpace(controlPr?.Attribute("linkedCell")?.Value);
+        model.ListFillRange ??= NullIfWhiteSpace(controlPr?.Attribute("listFillRange")?.Value);
 
         return model;
     }

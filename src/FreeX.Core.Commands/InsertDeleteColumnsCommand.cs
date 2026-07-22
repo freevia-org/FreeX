@@ -150,8 +150,33 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         return new CommandOutcome(
             true,
             AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                Enumerable.Empty<CellAddress>(),
+                RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot),
                 _formulaSnapshot));
+    }
+
+    // R69-calc-dependency-insert-6-1: mirror InsertRowsCommand's
+    // RelocatedFormulaCellsPendingDependencyRefresh fix (InsertDeleteRowsCommand.cs) on the
+    // insert-columns side. A relocated formula cell whose text needs no rewrite (its cell
+    // references are unaffected by the column shift, e.g. a volatile 0-arg function or a formula
+    // referencing a column outside the shifted band) is never added to _formulaSnapshot by
+    // RewriteAllFormulas, so it would otherwise be absent from AffectedCells and the dependency
+    // graph would never re-register it at its new, shifted-right address -- orphaning it so an edit
+    // to its precedent never triggers a recalc of the (stale) relocated cell.
+    private static IEnumerable<CellAddress> RelocatedFormulaCellsPendingDependencyRefresh(
+        SheetId sheetId,
+        List<CellStateSnapshot> movedSnapshot,
+        uint count,
+        Dictionary<CellAddress, string> formulaSnapshot)
+    {
+        foreach (var snapshot in movedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            var newAddr = new CellAddress(sheetId, snapshot.Row, snapshot.Col + count);
+            if (!formulaSnapshot.ContainsKey(newAddr))
+                yield return newAddr;
+        }
     }
 
     public void Revert(ICommandContext ctx)
@@ -378,12 +403,14 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
 
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
-        (_deletedSnapshot, _shiftedSnapshot) = CaptureDeletedAndShiftedCells(sheet, endCol);
+        var (deletedSnapshot, shiftedSnapshot) = CaptureDeletedAndShiftedCells(sheet, endCol);
+        _deletedSnapshot = deletedSnapshot;
+        _shiftedSnapshot = shiftedSnapshot;
 
-        foreach (var snapshot in _deletedSnapshot)
+        foreach (var snapshot in deletedSnapshot)
             sheet.ClearCell(snapshot.Row, snapshot.Col);
 
-        MoveCellsForDelete(sheet, _shiftedSnapshot, _count);
+        MoveCellsForDelete(sheet, shiftedSnapshot, _count);
 
         _hiddenColsSnapshot = RowColumnShiftHelpers.CaptureSet(sheet.HiddenCols);
         RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.HiddenCols, _startCol, _count);
@@ -458,8 +485,33 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         return new CommandOutcome(
             true,
             AffectedCells: RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-                Enumerable.Empty<CellAddress>(),
+                RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot),
                 _formulaSnapshot));
+    }
+
+    // R69-calc-dependency-insert-6-1: mirror InsertRowsCommand's
+    // RelocatedFormulaCellsPendingDependencyRefresh fix (InsertDeleteRowsCommand.cs) on the
+    // delete-columns side. A relocated formula cell whose text needs no rewrite (its cell
+    // references are unaffected by the column shift, e.g. a volatile 0-arg function or a formula
+    // referencing a column outside the shifted band) is never added to _formulaSnapshot by
+    // RewriteAllFormulas, so it would otherwise be absent from AffectedCells and the dependency
+    // graph would never re-register it at its new, shifted-left address -- orphaning it so an edit
+    // to its precedent never triggers a recalc of the (stale) relocated cell.
+    private static IEnumerable<CellAddress> RelocatedFormulaCellsPendingDependencyRefresh(
+        SheetId sheetId,
+        List<CellStateSnapshot> shiftedSnapshot,
+        uint count,
+        Dictionary<CellAddress, string> formulaSnapshot)
+    {
+        foreach (var snapshot in shiftedSnapshot)
+        {
+            if (snapshot.FormulaText is null)
+                continue;
+
+            var newAddr = new CellAddress(sheetId, snapshot.Row, snapshot.Col - count);
+            if (!formulaSnapshot.ContainsKey(newAddr))
+                yield return newAddr;
+        }
     }
 
     public void Revert(ICommandContext ctx)

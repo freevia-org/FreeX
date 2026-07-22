@@ -23,7 +23,7 @@ public sealed partial class MainWindow
     {
         _session.RecalculateWorkbook();
 
-        var issues = FormulaAuditingService.FindFormulaErrorIssues(_session.Workbook, _session.ActiveSheet.Id);
+        var issues = FormulaAuditingService.FindFormulaErrorIssues(_session.Workbook, _session.ActiveSheet.Id, _session.CyclicCells);
         if (issues.Count == 0)
         {
             ShowEditIssue(UiText.Get(ErrorCheckingDialogPlanner.NoIssuesMessageKey));

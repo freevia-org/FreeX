@@ -132,7 +132,11 @@ public sealed partial class MainWindowMouseSelectionSourceTests
 
         setActiveCell.Should().Contain("SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(selectionRange));");
         setActiveCell.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(cell, addr));");
-        extendSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(anchor, to));");
+        // R69-render-active-cell-selection-6-2: while a mouse-drag is in progress, the Name Box
+        // shows a live "{rows}R x {cols}C" dimension readout instead of the plain range address.
+        extendSelection.Should().Contain("SetCellAddressBoxSelectionText(_dragSelectActive");
+        extendSelection.Should().Contain("? FormatDragSelectionDimensionText(range)");
+        extendSelection.Should().Contain(": FormatRangeReference(range.Start, range.End));");
         addSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));");
         addSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(target), target));");
         helper.Should().Contain("CellAddressBox.IsKeyboardFocusWithin");

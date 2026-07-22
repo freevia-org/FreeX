@@ -106,8 +106,13 @@ public static class CellMergePlanner
     /// Finds the existing merged region (if any) that fully covers <paramref name="range"/> -- i.e. the
     /// selection is entirely inside one existing merge (including the degenerate case where the
     /// selection IS that merge). Used by the merge commands' Excel-parity toggle-to-unmerge gesture.
+    /// Public so callers that need to decide UI messaging (e.g. whether a Merge &amp; Center click is
+    /// about to toggle to an unmerge) ahead of dispatching the actual command can ask the same question
+    /// this class already answers internally, instead of re-deriving it (or approximating it with the
+    /// looser "any overlap" <see cref="IsSelectionMerged"/> check, which wrongly matches a selection that
+    /// only partially straddles a merge).
     /// </summary>
-    private static GridRange? FindCoveringRegion(Sheet sheet, GridRange range)
+    public static GridRange? FindCoveringRegion(Sheet sheet, GridRange range)
     {
         foreach (var region in sheet.MergedRegions)
         {

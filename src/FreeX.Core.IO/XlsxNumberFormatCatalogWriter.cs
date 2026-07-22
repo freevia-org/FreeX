@@ -132,11 +132,29 @@ internal static class XlsxNumberFormatCatalogWriter
 
     private static Dictionary<int, string> BuildNumberFormatCatalog(Workbook workbook)
     {
-        var catalog = new Dictionary<int, string>();
+        // workbook.NumberFormatCatalog carries every custom numFmt that was present in the
+        // ORIGINAL file (loaded wholesale by XlsxWorkbookMetadataReader.LoadNumberFormatCatalog),
+        // including ones no longer referenced by any live cell style once the in-app edit session
+        // cleared or reassigned a cell's format. Re-emitting the raw dictionary verbatim on every
+        // save would resurrect those dead entries as orphaned numFmts forever. Only carry an entry
+        // through when its format code is still referenced by a live cell/style-only style or a
+        // conditional-format dxf style (R69-io-numfmt-styles-6-1).
+        var candidates = new Dictionary<int, string>();
         foreach (var (numberFormatId, formatCode) in workbook.NumberFormatCatalog)
         {
             if (numberFormatId >= 164 && !string.IsNullOrWhiteSpace(formatCode))
-                catalog[numberFormatId] = formatCode;
+                candidates[numberFormatId] = formatCode;
+        }
+
+        var catalog = new Dictionary<int, string>();
+        if (candidates.Count > 0)
+        {
+            var liveFormatCodes = CollectLiveNumberFormatCodes(workbook);
+            foreach (var (numberFormatId, formatCode) in candidates)
+            {
+                if (liveFormatCodes.Contains(formatCode))
+                    catalog[numberFormatId] = formatCode;
+            }
         }
 
         foreach (var sheet in workbook.Sheets)
@@ -148,6 +166,8 @@ internal static class XlsxNumberFormatCatalogWriter
                     if (field.NumberFormatId is >= 164 and var numberFormatId &&
                         !string.IsNullOrWhiteSpace(field.NumberFormatCode))
                     {
+                        // Referenced directly by a live pivot data field -- always live, no liveness
+                        // check needed (unlike the workbook-wide catalog above).
                         catalog[numberFormatId] = field.NumberFormatCode;
                     }
                 }
@@ -155,6 +175,39 @@ internal static class XlsxNumberFormatCatalogWriter
         }
 
         return catalog;
+    }
+
+    /// <summary>
+    /// Collects every custom number-format CODE (not id) still referenced by a live cell style,
+    /// style-only run, or conditional-format ("dxf") style anywhere in the workbook. Used to prune
+    /// <see cref="Workbook.NumberFormatCatalog"/> down to formats that are still actually in use.
+    /// </summary>
+    private static HashSet<string> CollectLiveNumberFormatCodes(Workbook workbook)
+    {
+        var liveStyleIds = new HashSet<StyleId>();
+        var liveFormatCodes = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var (_, cell) in sheet.EnumerateCells())
+                liveStyleIds.Add(cell.StyleId);
+
+            foreach (var (_, styleId) in sheet.GetStyleOnlyEntries())
+                liveStyleIds.Add(styleId);
+
+            // Conditional-format "dxf" styles carry their own CellStyle instance directly (not a
+            // pooled StyleId), so their format code is read straight off the rule.
+            foreach (var conditionalFormat in sheet.ConditionalFormats)
+            {
+                if (conditionalFormat.FormatIfTrue?.NumberFormat is { } numberFormat)
+                    liveFormatCodes.Add(numberFormat);
+            }
+        }
+
+        foreach (var styleId in liveStyleIds)
+            liveFormatCodes.Add(workbook.GetStyle(styleId).NumberFormat);
+
+        return liveFormatCodes;
     }
 
     private static XElement? FindFirstFormatPeer(XElement root, XNamespace workbookNs)
