@@ -417,7 +417,11 @@ function Assert-ManifestResultShape {
             }
         }
         "editing" {
-            $expected = @("cell-inline-edit", "cell-inline-formula-edit-point-mode", "formula-bar-edit-point-mode")
+            $expected = @(
+                "cell-inline-edit",
+                "cell-inline-formula-edit-point-mode",
+                "formula-bar-edit-point-mode",
+                "cell-inline-formula-point-range-drag")
             $actual = @($results | Where-Object category -eq "worksheet-editing" | ForEach-Object id | Sort-Object)
             if (($actual -join "`n") -ne (@($expected | Sort-Object) -join "`n")) {
                 throw "Editing section result IDs are not authoritative."
