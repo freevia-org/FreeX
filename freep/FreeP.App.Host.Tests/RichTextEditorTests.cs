@@ -325,6 +325,8 @@ public sealed class RichTextEditorTests
 
         canvas.TextEditor!.IsActive.Should().BeTrue();
         canvas.TextEditor.ActiveShapeId.Should().Be(shape.Id);
+        canvas.TextEditor.TrySelectTextRange(1, 7).Should().BeTrue();
+        canvas.TextEditor.SelectedText.Should().Be("ello w");
 
         var box = overlay.Children
             .OfType<System.Windows.Controls.RichTextBox>()

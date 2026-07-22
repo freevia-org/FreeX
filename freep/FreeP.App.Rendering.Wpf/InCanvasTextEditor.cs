@@ -37,6 +37,28 @@ public sealed class InCanvasTextEditor
     /// <summary>The id of the shape currently being edited, or 0 if not active.</summary>
     public uint ActiveShapeId => _editingShapeId;
 
+    /// <summary>True when the active editor owns keyboard focus.</summary>
+    public bool IsEditorFocused => _richBox?.IsKeyboardFocusWithin == true;
+
+    /// <summary>The text selected by the active editor.</summary>
+    public string SelectedText => _richBox?.Selection.Text ?? string.Empty;
+
+    /// <summary>Selects a logical model-text range in the active editor.</summary>
+    public bool TrySelectTextRange(int start, int end)
+    {
+        if (_richBox is null || start < 0 || end < start)
+            return false;
+
+        var startPointer = TextPointerAtLogicalOffset(_richBox.Document, start);
+        var endPointer = TextPointerAtLogicalOffset(_richBox.Document, end);
+        if (startPointer is null || endPointer is null)
+            return false;
+
+        _richBox.Selection.Select(startPointer, endPointer);
+        _richBox.Focus();
+        return true;
+    }
+
     /// <summary>Activates the rich-text editor for the given shape.</summary>
     public void Activate(uint shapeId)
     {
@@ -241,6 +263,41 @@ public sealed class InCanvasTextEditor
 
         Activate(hitId.Value);
         e.Handled = true;
+    }
+
+    private static TextPointer? TextPointerAtLogicalOffset(FlowDocument document, int logicalOffset)
+    {
+        int remaining = logicalOffset;
+        bool firstParagraph = true;
+        foreach (var paragraph in document.Blocks.OfType<System.Windows.Documents.Paragraph>())
+        {
+            if (!firstParagraph)
+            {
+                if (remaining == 0)
+                    return paragraph.ContentStart;
+                remaining--;
+            }
+            firstParagraph = false;
+
+            foreach (var inline in TextBodyFlowDocumentConverter.EnumerateLeafInlines(paragraph.Inlines))
+            {
+                if (inline is System.Windows.Documents.Run run)
+                {
+                    int length = run.Text?.Length ?? 0;
+                    if (remaining <= length)
+                        return run.ContentStart.GetPositionAtOffset(remaining) ?? run.ContentEnd;
+                    remaining -= length;
+                }
+                else if (inline is LineBreak)
+                {
+                    if (remaining == 0)
+                        return inline.ElementStart;
+                    remaining--;
+                }
+            }
+        }
+
+        return remaining == 0 ? document.ContentEnd : null;
     }
 
     private void OnRichBoxKeyDown(object sender, KeyEventArgs e)
