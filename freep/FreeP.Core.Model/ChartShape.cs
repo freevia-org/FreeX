@@ -530,6 +530,12 @@ public sealed class ChartShape
     /// <summary>True when OOXML <c>c:varyColors</c> asks chart points to use independent fallback colors.</summary>
     public bool VaryColors { get; set; }
 
+    /// <summary>Authored OOXML <c>c:wireframe</c> value for Surface3D charts.</summary>
+    public bool Wireframe { get; set; }
+
+    /// <summary>True when the source package contained an explicit <c>c:wireframe</c> token.</summary>
+    public bool WireframeSpecified { get; set; }
+
     /// <summary>Authored chart-level blank-cell display behavior from <c>c:chart/c:dispBlanksAs</c>.</summary>
     public ChartDisplayBlanksAs? DisplayBlanksAs { get; set; }
 
