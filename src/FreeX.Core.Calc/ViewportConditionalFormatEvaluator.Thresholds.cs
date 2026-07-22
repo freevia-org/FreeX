@@ -223,11 +223,14 @@ internal static partial class ViewportConditionalFormatEvaluator
                     cf.MidThresholdValue,
                     cache,
                     staticThresholdFormulaValues,
-                    out var resolvedMid) &&
-                resolvedMid > min &&
-                resolvedMid < max)
+                    out var resolvedMid))
             {
-                mid = resolvedMid;
+                // R68-render-conditional-format-6-2: a degenerate resolved midpoint (e.g. a
+                // skewed dataset where percentile-50 lands exactly on min or max) must still keep
+                // the 3-stop MidColor in the gradient -- clamp into [min,max] instead of dropping
+                // mid to null, which used to collapse the WHOLE range to a plain Min->Max lerp and
+                // silently erase MidColor everywhere, not just at the degenerate point.
+                mid = Math.Clamp(resolvedMid, min, max);
             }
 
             result ??= new Dictionary<ConditionalFormat, CfColorScaleThresholdCache>(ReferenceEqualityComparer.Instance);
@@ -398,6 +401,10 @@ internal static partial class ViewportConditionalFormatEvaluator
         }
         else
         {
+            // R68-render-conditional-format-6-2: keep a degenerate resolved midpoint (== min or
+            // == max, e.g. a skewed dataset where percentile-50 lands exactly on the min) clamped
+            // into [min,max] instead of nulling it out -- nulling collapsed the WHOLE range to a
+            // plain Min->Max lerp and erased MidColor everywhere, not just at the degenerate point.
             mid = cf.UseThreeColorScale &&
                   TryResolveThreshold(
                       cf.MidThresholdType,
@@ -409,10 +416,8 @@ internal static partial class ViewportConditionalFormatEvaluator
                       cf.AppliesTo.Start,
                       GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid),
                       GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid),
-                      out var resolvedMid) &&
-                  resolvedMid > min &&
-                  resolvedMid < max
-                ? resolvedMid
+                      out var resolvedMid)
+                ? Math.Clamp(resolvedMid, min, max)
                 : null;
         }
 
@@ -420,8 +425,12 @@ internal static partial class ViewportConditionalFormatEvaluator
 
         var interpolated = mid.HasValue
             ? cellVal <= mid.Value
-                ? Lerp(cf.MinColor, cf.MidColor, Math.Clamp((cellVal - min) / (mid.Value - min), 0d, 1d))
-                : Lerp(cf.MidColor, cf.MaxColor, Math.Clamp((cellVal - mid.Value) / (max - mid.Value), 0d, 1d))
+                ? mid.Value > min
+                    ? Lerp(cf.MinColor, cf.MidColor, Math.Clamp((cellVal - min) / (mid.Value - min), 0d, 1d))
+                    : cf.MidColor.ToCellColor()
+                : mid.Value < max
+                    ? Lerp(cf.MidColor, cf.MaxColor, Math.Clamp((cellVal - mid.Value) / (max - mid.Value), 0d, 1d))
+                    : cf.MidColor.ToCellColor()
             : Lerp(cf.MinColor, cf.MaxColor, Math.Clamp((cellVal - min) / (max - min), 0d, 1d));
 
         return GetColorScaleStyle(cfContext, interpolated);
@@ -528,18 +537,26 @@ internal static partial class ViewportConditionalFormatEvaluator
             // Negative-axis path: when the range straddles zero (or is entirely negative, which
             // the zero clamp above pins to max == 0 -- i.e. the axis sits at the right edge) and
             // axisPosition is not "none", place the axis. "Middle" pins the axis at Excel's fixed
-            // 50% position regardless of the min/max skew; "Automatic" (unset) places it
-            // proportionally at the zero crossing. Positive bars extend rightward from the axis;
-            // negative bars extend leftward from the axis using the negative fill color. An
-            // all-negative range (max <= 0) has no positive bars to draw, but every value must
-            // still go through the negative branch below so the longest (most negative) bar is
-            // the most negative value, growing leftward from the axis in the negative color --
-            // not the positive-path fallthrough, which would invert both length and color.
+            // 50% position regardless of the min/max skew -- including an all-positive (or
+            // all-negative) range that would otherwise never straddle zero, since the user
+            // explicitly asked for the cell-center axis rather than the automatic zero-crossing
+            // one; "Automatic" (unset) places it proportionally at the zero crossing, which only
+            // exists when the range genuinely straddles zero. Positive bars extend rightward from
+            // the axis; negative bars extend leftward from the axis using the negative fill
+            // color. An all-negative range (max <= 0) has no positive bars to draw, but every
+            // value must still go through the negative branch below so the longest (most
+            // negative) bar is the most negative value, growing leftward from the axis in the
+            // negative color -- not the positive-path fallthrough, which would invert both length
+            // and color.
             var axisAtNone = string.Equals(cf.DataBarAxisPosition, "none", StringComparison.OrdinalIgnoreCase);
             var axisAtMiddle = string.Equals(cf.DataBarAxisPosition, "middle", StringComparison.OrdinalIgnoreCase);
-            if (!axisAtNone && min < 0 && max >= 0)
+            if (!axisAtNone && (axisAtMiddle || (min < 0 && max >= 0)))
             {
-                // min < 0 <= max here, so max - min > 0 always; no divide-by-zero guard needed.
+                // Division-by-zero guard: with axisAtMiddle forcing entry here, min/max need not
+                // straddle zero any more (e.g. an all-positive range has min == 0 after the
+                // automatic-minimum zero clamp above) -- unlike the "Automatic" ternary branch
+                // below, which is only ever reached when min < 0 <= max (see the outer condition),
+                // guaranteeing max - min > 0 there.
                 var axisFraction = axisAtMiddle ? 0.5d : (0d - min) / (max - min);
                 if (cellValue >= 0)
                 {
@@ -575,7 +592,12 @@ internal static partial class ViewportConditionalFormatEvaluator
                 }
                 else
                 {
-                    var t = Math.Clamp((0d - cellValue) / (0d - min), 0d, 1d);
+                    // min can be exactly 0 here too (axisAtMiddle forcing entry with an explicit,
+                    // non-auto-clamped non-negative min threshold while an actual cell value is
+                    // still negative -- see the division-by-zero guard comment above); treat a
+                    // negative value below a zero-or-positive min as a zero-length negative
+                    // segment from the axis rather than dividing by zero.
+                    var t = min < 0d ? Math.Clamp((0d - cellValue) / (0d - min), 0d, 1d) : 0d;
                     var length = (minLength + (maxLength - minLength) * t) * axisFraction;
                     if (length <= 0)
                     {

@@ -25,7 +25,8 @@ internal sealed record CfEvaluationContext(
     Dictionary<ConditionalFormat, CellStyle> DefaultMergedFormatStyles,
     IReadOnlyList<GridRange> StyleRuleRanges,
     CfColorScaleStyleCache? ColorScaleStyles,
-    CfStackedStyleCache? StackedStyles);
+    CfStackedStyleCache? StackedStyles,
+    CfFormulaResultCache FormulaResults);
 
 internal sealed record CfColorScaleThresholdCache(double Min, double Max, double? Mid);
 internal sealed record CfIconSetThresholdCache(double[] Values, bool[] GreaterThanOrEqual);
@@ -84,6 +85,53 @@ internal readonly struct CfStackedStyleKey : IEquatable<CfStackedStyleKey>
         HashCode.Combine(
             RuntimeHelpers.GetHashCode(_accumulatedStyle),
             RuntimeHelpers.GetHashCode(_cfStyle));
+}
+
+/// <summary>
+/// Caches the evaluated boolean result of a Formula-type conditional-format rule per (rule, cell).
+/// A rule's formula (e.g. "=RAND()&gt;0.5") is otherwise re-evaluated on every <see cref="ViewportService.GetViewport"/>
+/// call, including pure re-renders (scroll/resize) that touch no content — which makes a rule built on a
+/// volatile function like RAND()/NOW() flicker on every render instead of only on a genuine recalc. This
+/// cache lives on <see cref="CfEvaluationContext"/>, which is itself rebuilt only when
+/// Sheet.ContentVersion or the conditional-format rule set actually changes (see
+/// ViewportService.BuildConditionalFormatContext), so the cached result is invalidated exactly on a real
+/// recalc/content change and reused across render-only viewport requests in between.
+/// </summary>
+internal sealed class CfFormulaResultCache
+{
+    private Dictionary<CfFormulaResultKey, bool>? _results;
+
+    public bool TryGet(ConditionalFormat rule, CellAddress address, out bool result)
+    {
+        if (_results is not null)
+            return _results.TryGetValue(new CfFormulaResultKey(rule, address), out result);
+
+        result = false;
+        return false;
+    }
+
+    public void Set(ConditionalFormat rule, CellAddress address, bool result) =>
+        (_results ??= new Dictionary<CfFormulaResultKey, bool>(64))[new CfFormulaResultKey(rule, address)] = result;
+}
+
+internal readonly struct CfFormulaResultKey : IEquatable<CfFormulaResultKey>
+{
+    private readonly ConditionalFormat _rule;
+    private readonly CellAddress _address;
+
+    public CfFormulaResultKey(ConditionalFormat rule, CellAddress address)
+    {
+        _rule = rule;
+        _address = address;
+    }
+
+    public bool Equals(CfFormulaResultKey other) =>
+        ReferenceEquals(_rule, other._rule) && _address.Equals(other._address);
+
+    public override bool Equals(object? obj) => obj is CfFormulaResultKey other && Equals(other);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(RuntimeHelpers.GetHashCode(_rule), _address);
 }
 
 internal sealed record CfFormulaCache(
@@ -157,7 +205,8 @@ internal static partial class ViewportConditionalFormatEvaluator
         EmptyDefaultMergedFormatStyles,
         EmptyStyleRuleRanges,
         null,
-        null);
+        null,
+        new CfFormulaResultCache());
 
     public static CfEvaluationContext BuildContext(Sheet sheet, Workbook workbook)
     {
@@ -182,7 +231,8 @@ internal static partial class ViewportConditionalFormatEvaluator
             PrecomputeDefaultMergedFormatStyles(rulesByPriority),
             PrecomputeStyleRuleRanges(rulesByPriority),
             CreateColorScaleStyleCache(rulesByPriority),
-            CreateStackedStyleCache(rulesByPriority));
+            CreateStackedStyleCache(rulesByPriority),
+            new CfFormulaResultCache());
     }
 
     // Flattened ranges of every rule that can produce a conditional style. Blank viewport slots

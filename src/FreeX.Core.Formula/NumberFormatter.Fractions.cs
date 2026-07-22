@@ -145,24 +145,68 @@ public static partial class NumberFormatter
 
     private static (int Numerator, int Denominator) ApproximateFraction(double value, int maxDenominator)
     {
-        int bestNumerator = 0;
-        int bestDenominator = 1;
-        double bestError = double.MaxValue;
+        if (maxDenominator < 1) maxDenominator = 1;
+        if (!double.IsFinite(value) || value <= 0) return (0, 1);
 
-        for (int denominator = 1; denominator <= maxDenominator; denominator++)
+        // Continued-fraction / Stern-Brocot best-rational-approximation search bounded by
+        // maxDenominator. This finds the same closest p/q (q <= maxDenominator) that a
+        // brute-force scan over every candidate denominator would, but in O(number of
+        // continued-fraction terms) rather than O(maxDenominator) — essential for wide "?"
+        // denominator placeholders (e.g. "?????????/?????????" => maxDenominator ~ 10^9),
+        // which would otherwise hang the evaluator for seconds at a time.
+        long hPrev2 = 0, kPrev2 = 1;
+        long hPrev1 = 1, kPrev1 = 0;
+        long bestNumerator = 0, bestDenominator = 1;
+        double x = value;
+
+        for (int i = 0; i < 64; i++)
         {
-            int numerator = (int)Math.Round(value * denominator, MidpointRounding.AwayFromZero);
-            double error = Math.Abs(value - numerator / (double)denominator);
-            if (error < bestError)
+            // Cap the partial quotient before it's used in arithmetic: once kPrev1 >= 1 (true
+            // from the second iteration on), any term this large is already guaranteed to push
+            // k past maxDenominator, so clamping avoids flooring a huge/overflowing double into
+            // a long while still detecting the overshoot correctly below.
+            long a = x > maxDenominator + 2 ? maxDenominator + 2 : (long)Math.Floor(x);
+            long h = a * hPrev1 + hPrev2;
+            long k = a * kPrev1 + kPrev2;
+
+            if (k > maxDenominator || k <= 0)
             {
-                bestError = error;
-                bestNumerator = numerator;
-                bestDenominator = denominator;
+                // The full convergent overshoots the bound. Fall back to the best
+                // semiconvergent (the largest partial term that still fits) and compare it
+                // against the previous convergent, keeping whichever is numerically closer.
+                long remainingA = kPrev1 > 0 ? (maxDenominator - kPrev2) / kPrev1 : 0;
+                if (remainingA > 0)
+                {
+                    long semiNumerator = remainingA * hPrev1 + hPrev2;
+                    long semiDenominator = remainingA * kPrev1 + kPrev2;
+                    double semiError = Math.Abs(value - semiNumerator / (double)semiDenominator);
+                    double prevError = kPrev1 > 0 ? Math.Abs(value - hPrev1 / (double)kPrev1) : double.MaxValue;
+                    (bestNumerator, bestDenominator) = semiError <= prevError
+                        ? (semiNumerator, semiDenominator)
+                        : (hPrev1, kPrev1);
+                }
+                else if (kPrev1 > 0)
+                {
+                    bestNumerator = hPrev1;
+                    bestDenominator = kPrev1;
+                }
+                break;
             }
+
+            bestNumerator = h;
+            bestDenominator = k;
+            hPrev2 = hPrev1; kPrev2 = kPrev1;
+            hPrev1 = h; kPrev1 = k;
+
+            double remainder = x - a;
+            if (remainder < 1e-12) break;
+            x = 1.0 / remainder;
         }
 
-        int gcd = GreatestCommonDivisor(bestNumerator, bestDenominator);
-        return (bestNumerator / gcd, bestDenominator / gcd);
+        if (bestDenominator <= 0) bestDenominator = 1;
+        int gcd = GreatestCommonDivisor((int)bestNumerator, (int)bestDenominator);
+        if (gcd == 0) gcd = 1;
+        return ((int)(bestNumerator / gcd), (int)(bestDenominator / gcd));
     }
 
     private static int GreatestCommonDivisor(int a, int b)

@@ -69,17 +69,28 @@ public static class ConditionalFormatEvaluator
 
         // Automatic axis: when the value range straddles zero (and the rule does not pin the axis
         // to an edge via "none"), the axis sits at the proportional zero position and negative
-        // values fill to its left. Otherwise the engine's left-anchored layout is reproduced
-        // exactly (axis at 0, bar from 0 to length).
+        // values fill to its left. "Middle" pins the axis at Excel's fixed 50% (cell-center)
+        // position regardless of the min/max skew -- including an all-positive (or all-negative)
+        // range that would otherwise never straddle zero, since the user explicitly asked for the
+        // cell-center axis rather than the automatic zero-crossing one (see
+        // ViewportConditionalFormatEvaluator.Thresholds.cs, the engine this mirrors). Otherwise
+        // (axis "none", or "Automatic" outside a zero-straddling range) the engine's left-anchored
+        // layout is reproduced exactly (axis at 0, bar from 0 to length).
         var axisAtNone = string.Equals(rule.DataBarAxisPosition, "none", StringComparison.OrdinalIgnoreCase);
+        var axisAtMiddle = string.Equals(rule.DataBarAxisPosition, "middle", StringComparison.OrdinalIgnoreCase);
         // min < 0 <= max: matches the engine's negative-axis condition (see
         // ViewportConditionalFormatEvaluator.Thresholds.cs), which must also accept max == 0 so an
         // all-negative range (whose automatic maximum clamps to zero upstream) still resolves the
         // axis at the right edge with bars growing leftward in the negative fill color, rather than
         // falling through to the left-anchored positive-only path below.
-        if (!axisAtNone && min < 0 && max >= 0)
+        if (!axisAtNone && (axisAtMiddle || (min < 0 && max >= 0)))
         {
-            var axisFraction = (0 - min) / (max - min);
+            // Division-by-zero guard: with axisAtMiddle forcing entry here, min/max need not
+            // straddle zero any more (e.g. an all-positive range has min == 0 after the
+            // automatic-minimum zero clamp above) -- the "Automatic" ternary branch below is only
+            // ever reached when min < 0 <= max (see the outer condition), guaranteeing
+            // max - min > 0 there.
+            var axisFraction = axisAtMiddle ? 0.5d : (0 - min) / (max - min);
             var negativeFill = rule.DataBarNegativeFillColor.HasValue
                 ? PresentationRgb.FromRgbColor(rule.DataBarNegativeFillColor.Value)
                 : PresentationRgb.FromRgbColor(ExcelAutomaticNegativeDataBarColor);
@@ -94,7 +105,11 @@ public static class ConditionalFormatEvaluator
             }
             else
             {
-                var t = Math.Clamp((0 - cellValue) / (0 - min), 0d, 1d);
+                // min can be exactly 0 here too (axisAtMiddle forcing entry with an explicit,
+                // non-auto-clamped non-negative min threshold while an actual cell value is still
+                // negative); treat that as a zero-length negative segment from the axis instead of
+                // dividing by zero.
+                var t = min < 0d ? Math.Clamp((0 - cellValue) / (0 - min), 0d, 1d) : 0d;
                 var length = (minLength + (maxLength - minLength) * t) * axisFraction;
                 if (length <= 0)
                     return null;
@@ -138,13 +153,17 @@ public static class ConditionalFormatEvaluator
             return null;
         }
 
+        // A degenerate resolved midpoint (== min or == max, e.g. a skewed dataset where
+        // percentile-50 lands exactly on the min) must still keep the 3-stop MidColor in the
+        // gradient -- clamp into [min,max] instead of dropping mid to null, which used to collapse
+        // the WHOLE range to a plain Min->Max lerp and erase MidColor everywhere, not just at the
+        // degenerate point (see ViewportConditionalFormatEvaluator.Thresholds.cs, the engine this
+        // mirrors).
         double? mid = null;
         if (rule.UseThreeColorScale &&
-            ResolveThreshold(rule.MidThresholdType, rule.MidThresholdValue, stats, midOverride, out var resolvedMid) &&
-            resolvedMid > min &&
-            resolvedMid < max)
+            ResolveThreshold(rule.MidThresholdType, rule.MidThresholdValue, stats, midOverride, out var resolvedMid))
         {
-            mid = resolvedMid;
+            mid = Math.Clamp(resolvedMid, min, max);
         }
 
         if (max <= min)
@@ -152,8 +171,12 @@ public static class ConditionalFormatEvaluator
 
         var color = mid.HasValue
             ? cellValue <= mid.Value
-                ? Lerp(rule.MinColor, rule.MidColor, Math.Clamp((cellValue - min) / (mid.Value - min), 0d, 1d))
-                : Lerp(rule.MidColor, rule.MaxColor, Math.Clamp((cellValue - mid.Value) / (max - mid.Value), 0d, 1d))
+                ? mid.Value > min
+                    ? Lerp(rule.MinColor, rule.MidColor, Math.Clamp((cellValue - min) / (mid.Value - min), 0d, 1d))
+                    : PresentationRgb.FromRgbColor(rule.MidColor)
+                : mid.Value < max
+                    ? Lerp(rule.MidColor, rule.MaxColor, Math.Clamp((cellValue - mid.Value) / (max - mid.Value), 0d, 1d))
+                    : PresentationRgb.FromRgbColor(rule.MidColor)
             : Lerp(rule.MinColor, rule.MaxColor, Math.Clamp((cellValue - min) / (max - min), 0d, 1d));
 
         return new ColorScaleResult(color);

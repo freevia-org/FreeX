@@ -16,6 +16,14 @@ public static partial class ChartRenderer
     private const string PieAnnotationYAxisKey = "PieAnnotationY";
     private const int PointDataLabelFormatLookupThreshold = 16;
 
+    /// <summary>
+    /// The "Dot" marker style maps to the same <see cref="MarkerType.Circle"/> glyph as "Auto"/"Circle" --
+    /// OxyPlot has no smaller dedicated dot marker type -- so it is distinguished by size instead, mirroring
+    /// the Avalonia chart renderer's own Dot marker (<c>dotR = r * 0.45</c>, a filled circle at 45% of the
+    /// full marker radius).
+    /// </summary>
+    private const double DotMarkerSizeScale = 0.45;
+
     private sealed record PieDataLabelPoint(string CategoryName, double Value);
 
     private readonly struct ChartPointDataLabelFormatLookup
@@ -256,6 +264,8 @@ public static partial class ChartRenderer
             series.MarkerType = ToOxyMarkerType(markerStyle);
         if (format.MarkerSize is { } markerSize)
             series.MarkerSize = Math.Clamp(markerSize, 1, 20);
+        if (format.MarkerStyle == ChartMarkerStyle.Dot)
+            series.MarkerSize *= DotMarkerSizeScale;
         if (format.ResolveFillColor(theme) is { } markerFill)
             series.MarkerFill = OxyColor.FromRgb(markerFill.R, markerFill.G, markerFill.B);
         if (format.ResolveStrokeColor(theme) is { } markerStroke)
@@ -561,6 +571,8 @@ public static partial class ChartRenderer
             series.MarkerType = ToOxyMarkerType(markerStyle);
         if (format.MarkerSize is { } markerSize)
             series.MarkerSize = Math.Clamp(markerSize, 1, 30);
+        if (format.MarkerStyle == ChartMarkerStyle.Dot)
+            series.MarkerSize *= DotMarkerSizeScale;
     }
 
     private static bool ShouldUseNativeValueLabels(ChartModel chart) =>

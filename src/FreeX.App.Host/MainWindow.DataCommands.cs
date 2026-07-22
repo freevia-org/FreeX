@@ -23,6 +23,13 @@ public partial class MainWindow
 {
     private ConsolidateRangePickerSession? _consolidateRangePickerSession;
 
+    // Guards GetDataBtn_Click's background import so a concurrent File > Open (which can swap
+    // _workbook/_workbookRef.Current and _currentSheetId out from under the awaited Task.Run) is
+    // detected: the import always captures its target workbook/sheet/destination before the await
+    // and executes the ImportSheetCommand directly against that captured workbook id, so the data
+    // never lands in a different (newly opened) workbook (R68-async-ordering-race-sweep-2).
+    private bool _isImportingData;
+
     private async void GetDataBtn_Click(object sender, RoutedEventArgs e)
     {
         var plan = ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters);
@@ -56,9 +63,37 @@ public partial class MainWindow
             return;
         }
 
+        await ImportDataFromFileAsync(result.FileName!, adapter, ext, format);
+    }
+
+    /// <summary>
+    /// Runs the Get Data background import (adapter.Load off the UI thread, then materializing an
+    /// ImportSheetCommand) for a file already chosen by the caller. Split out of GetDataBtn_Click so
+    /// the ordering-race guard below is directly testable without driving a real WPF OpenFileDialog.
+    /// </summary>
+    private async Task ImportDataFromFileAsync(string importPath, IFileAdapter adapter, string ext, FileFormatDescriptor? format)
+    {
+        if (_isImportingData) return;
+
         try
         {
-            var importPath = result.FileName!;
+            _isImportingData = true;
+            // Block input for the duration of the import (mirrors ExportAsPdf's RootGrid.IsEnabled
+            // guard) so File > Open cannot be reached from the ribbon/menus while the import is in
+            // flight -- matching Excel's modal Get Data behavior.
+            RootGrid.IsEnabled = false;
+
+            // Capture the target workbook/sheet/destination BEFORE the await: a concurrent File >
+            // Open reachable via a keyboard shortcut (not gated by RootGrid.IsEnabled above) can
+            // still swap _workbook/_workbookRef.Current and _currentSheetId out from under this
+            // await. Executing the import command directly against the captured workbook id below
+            // (instead of TryExecuteCommand, which always reads the CURRENT _workbook.Id) guarantees
+            // the imported data lands in the workbook Get Data was invoked on, never in a workbook
+            // opened afterward (R68-async-ordering-race-sweep-2).
+            var targetWorkbook = _workbook;
+            var targetSheetId = _currentSheetId;
+            var destination = SheetGrid.SelectedRange?.Start ?? new CellAddress(targetSheetId, 1, 1);
+
             var imported = await Task.Run(() =>
             {
                 using var stream = System.IO.File.OpenRead(importPath);
@@ -71,19 +106,42 @@ public partial class MainWindow
                 return;
             }
 
-            var destination = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
-            if (!TryExecuteCommand(new ImportSheetCommand(_currentSheetId, destination, imported.Sheets[0]), "Get Data", out var outcome))
+            var outcome = _commandBus.Execute(targetWorkbook.Id, new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0]));
+            RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
             {
+                ["command"] = "Get Data",
+                ["status"] = outcome.Success ? "succeeded" : "failed"
+            });
+            if (!outcome.Success)
+            {
+                if (ReferenceEquals(_workbook, targetWorkbook))
+                    ShowCommandError(outcome, "Get Data");
                 RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "command_failed", imported.Sheets.Count));
                 return;
             }
 
-            RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-            SetActiveCell(destination);
-            EnsureCellVisible(destination);
-            UpdateViewport();
-            PruneCorrectedValidationCircles();
-            RefreshStatusBar();
+            // A concurrent File > Open replaced this window's workbook while the import was in
+            // flight. The data above still landed correctly in the originally-targeted workbook (via
+            // the captured id), but that workbook is no longer the one this window displays, so the
+            // window-level follow-up below -- which all key off the CURRENT _workbook/_currentSheetId
+            // -- must be skipped or it would incorrectly touch the NEW workbook instead.
+            if (ReferenceEquals(_workbook, targetWorkbook))
+            {
+                if (!outcome.IsNoOp)
+                {
+                    MarkWorkbookDirty();
+                    InvalidateNavigationCaches();
+                    NotifyOtherWindowsOfWorkbookChange();
+                }
+
+                RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+                SetActiveCell(destination);
+                EnsureCellVisible(destination);
+                UpdateViewport();
+                PruneCorrectedValidationCircles();
+                RefreshStatusBar();
+            }
+
             RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, null, imported.Sheets.Count));
         }
         catch (Exception ex)
@@ -97,6 +155,11 @@ public partial class MainWindow
                     diagnostic.Reason,
                     errorDetail: diagnostic.Detail));
             ShowOwnedMessage(diagnostic.UserMessage, UiText.Get("MainWindowMessage_GetDataTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _isImportingData = false;
+            RootGrid.IsEnabled = true;
         }
     }
 
@@ -670,21 +733,7 @@ public partial class MainWindow
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Subtotal",
-                sheetId =>
-                {
-                    var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId);
-                    var subtotalCommand = new SubtotalCommand(
-                        sheetId,
-                        sheetRange,
-                        groupByColumnOffset: dialog.Result.GroupColumnOffset,
-                        subtotalColumnOffsets: dialog.Result.SubtotalColumnOffsets,
-                        functionNumber: dialog.Result.FunctionNumber,
-                        pageBreakBetweenGroups: dialog.Result.PageBreakBetweenGroups,
-                        summaryBelowData: dialog.Result.SummaryBelowData);
-                    return dialog.Result.ReplaceCurrentSubtotals
-                        ? new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(sheetId, sheetRange), subtotalCommand])
-                        : subtotalCommand;
-                },
+                sheetId => CreateSubtotalApplyCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId), dialog.Result),
                 out var outcome))
             return;
 
@@ -693,6 +742,83 @@ public partial class MainWindow
             SubtotalPlanner.ExpandRangeForInsertedSubtotalRows(sourceRange, outcome.AffectedCells));
         UpdateViewport();
         PruneCorrectedValidationCircles();
+    }
+
+    /// <summary>
+    /// Builds the command for one grouped sheet's "Apply" pass of the Subtotal dialog (as opposed to
+    /// "Remove All", handled separately). Split out of SubtotalBtn_Click so the "Replace current
+    /// subtotals" range-correction fix (R68-commands-group-outline-6-1) is directly testable without
+    /// driving the real SubtotalDialog.
+    /// </summary>
+    private IWorkbookCommand CreateSubtotalApplyCommand(SheetId sheetId, GridRange sheetRange, SubtotalDialogResult result)
+    {
+        if (!result.ReplaceCurrentSubtotals)
+        {
+            return new SubtotalCommand(
+                sheetId,
+                sheetRange,
+                groupByColumnOffset: result.GroupColumnOffset,
+                subtotalColumnOffsets: result.SubtotalColumnOffsets,
+                functionNumber: result.FunctionNumber,
+                pageBreakBetweenGroups: result.PageBreakBetweenGroups,
+                summaryBelowData: result.SummaryBelowData);
+        }
+
+        // "Replace current subtotals": RemoveSubtotalRowsCommand deletes the previous pass's
+        // subtotal rows first, shifting every row below them up. The new SubtotalCommand must
+        // therefore scan the shrunk post-removal extent, not the stale (larger) sheetRange, or it
+        // folds unrelated rows that shifted up into the vacated space into the new subtotal pass.
+        // Predict the shrinkage from the CURRENT (pre-removal) sheet -- this factory runs before
+        // either command applies, so the count below mirrors exactly what
+        // RemoveSubtotalRowsCommand.Apply is about to delete.
+        var removedRowCount = CountSubtotalFormulaRows(_workbook.GetSheet(sheetId), sheetId, sheetRange);
+        var correctedRange = removedRowCount > 0
+            ? new GridRange(
+                sheetRange.Start,
+                new CellAddress(
+                    sheetRange.End.Sheet,
+                    sheetRange.End.Row - (uint)Math.Min(removedRowCount, (int)sheetRange.RowCount - 1),
+                    sheetRange.End.Col))
+            : sheetRange;
+        var subtotalCommand = new SubtotalCommand(
+            sheetId,
+            correctedRange,
+            groupByColumnOffset: result.GroupColumnOffset,
+            subtotalColumnOffsets: result.SubtotalColumnOffsets,
+            functionNumber: result.FunctionNumber,
+            pageBreakBetweenGroups: result.PageBreakBetweenGroups,
+            summaryBelowData: result.SummaryBelowData);
+        return new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(sheetId, sheetRange), subtotalCommand]);
+    }
+
+    /// <summary>
+    /// Counts the rows within <paramref name="range"/> that currently carry a SUBTOTAL(...) formula
+    /// in any column -- i.e. the rows RemoveSubtotalRowsCommand is about to delete for this same
+    /// range. Mirrors the row-scan half of the internal FreeX.Core.Commands.SubtotalRowFinder (which
+    /// RemoveSubtotalRowsCommand itself uses) so the "Replace current subtotals" composite can shrink
+    /// the new SubtotalCommand's range by the exact number of rows the removal pass will delete.
+    /// </summary>
+    private static int CountSubtotalFormulaRows(Sheet? sheet, SheetId sheetId, GridRange range)
+    {
+        if (sheet is null)
+            return 0;
+
+        var count = 0;
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+            {
+                var formula = sheet.GetCell(new CellAddress(sheetId, row, col))?.FormulaText;
+                if (formula is not null &&
+                    formula.AsSpan().TrimStart().StartsWith("SUBTOTAL(", StringComparison.OrdinalIgnoreCase))
+                {
+                    count++;
+                    break;
+                }
+            }
+        }
+
+        return count;
     }
 
     private void SelectSubtotalResultRange(GridRange range)

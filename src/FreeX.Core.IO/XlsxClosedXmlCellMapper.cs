@@ -21,6 +21,18 @@ internal static class XlsxClosedXmlCellMapper
     // OADate), and do the mirror-image conversion in MapValueInverse.
     private const double Date1904EpochOADate = 1462;
 
+    // Excel's documented largest/smallest representable cell number (±9.99999999999999E+307;
+    // see Microsoft's "Excel specifications and limits"). A finite double whose magnitude exceeds this
+    // is not a value Excel itself could ever hold in a numeric cell -- and, separately, ClosedXML's own
+    // numeric writer only round-trips ~15 significant digits, so a value this close to the true
+    // double.MaxValue/MinValue boundary (e.g. double.MaxValue itself, serialized as
+    // "1.79769313486232E+308") re-parses on load as +/-Infinity, which ClosedXML's XLCellValue
+    // constructor then rejects outright. Gating MapValueInverse's DateTimeValue-fallback numeric path
+    // on this bound keeps the fix scoped to genuinely Excel-representable out-of-range date serials
+    // (e.g. a Paste-Special-Add result like DateTimeValue(10045306)) while still falling back to the
+    // safe string form for values Excel could never represent as a number anyway.
+    private const double MaxExcelRepresentableNumber = 9.99999999999999E+307;
+
     public static ScalarValue MapValue(IXLCell xlCell, bool uses1904DateSystem = false)
     {
         if (xlCell.Value.IsDateTime)
@@ -129,6 +141,15 @@ internal static class XlsxClosedXmlCellMapper
         TextValue t => t.Value,
         BoolValue b => b.Value,
         DateTimeValue dt when TryMapDateTimeValue(dt, uses1904DateSystem, out var dateTime) => dateTime,
+        // TryMapDateTimeValue fails either because the serial is non-finite (NaN/Infinity -- cannot be
+        // written as valid XML in any form), or because it is finite but outside DateTime.FromOADate's
+        // representable range (e.g. a Paste-Special-Add result like DateTimeValue(10045306)), or because
+        // it is finite but beyond even Excel's own representable number range (MaxExcelRepresentableNumber
+        // -- see its comment: values this close to double.MaxValue/MinValue re-parse as +/-Infinity after
+        // ClosedXML's own numeric round-trip, which would crash on reload). A date is just a number with a
+        // display format in Excel/OOXML, so a merely out-of-DateTime-range-but-Excel-representable serial
+        // must still round-trip as a NUMBER cell (ISNUMBER/SUM-compatible), not degrade to a TEXT cell.
+        DateTimeValue dt when double.IsFinite(dt.Value) && Math.Abs(dt.Value) <= MaxExcelRepresentableNumber => dt.Value,
         DateTimeValue dt => dt.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         // #CIRCULAR! is a FreeX-only sentinel (RecalcEngine.AddCyclicCell), not a valid OOXML error
         // code at all. Real Excel never writes "#CIRCULAR!" to disk: with iterative calculation off

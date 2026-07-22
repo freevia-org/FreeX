@@ -104,15 +104,35 @@ public sealed class ColorScaleEvaluatorTests
     }
 
     [Fact]
-    public void ThreeColor_MidOutsideRange_FallsBackToTwoColor()
+    public void ThreeColor_MidOutsideRange_ClampsToBoundaryAndKeepsThreeStopPath()
     {
+        // R68-render-conditional-format-6-2: a resolved midpoint outside [min,max] (here 999 vs a
+        // 0..100 range) used to null out `mid` entirely, silently falling back to a two-color
+        // Min->Max lerp for every value and erasing MidColor everywhere. It is now clamped to the
+        // nearest boundary (max, here) and the 3-stop path is kept, so a value below the clamped
+        // midpoint still blends Min->Mid (not Min->Max) using the resolvedMid==max degenerate case.
         var rule = ThreeColorRule();
         rule.MidThresholdType = CfThresholdType.Number;
-        rule.MidThresholdValue = "999"; // not strictly between min and max → ignored
+        rule.MidThresholdValue = "999"; // clamps to max (100)
         var stats = ConditionalFormatStatistics.FromValues([0, 100]);
 
-        // value 50 interpolates min→max directly: halfway between (0,0,0) and (200,200,200)
+        // value 50 interpolates min(0,0,0) -> mid(100,100,100) at t=(50-0)/(100-0)=0.5, NOT
+        // min(0,0,0) -> max(200,200,200) at the same t (which would give (100,100,100)).
         var result = ConditionalFormatEvaluator.EvaluateColorScale(rule, 50, stats);
-        result!.Value.Fill.Should().Be(new PresentationRgb(100, 100, 100));
+        result!.Value.Fill.Should().Be(new PresentationRgb(50, 50, 50));
+    }
+
+    [Fact]
+    public void ThreeColor_MidOutsideRange_AtClampedBoundary_UsesMidColorExactly()
+    {
+        // Sibling: the clamped-max degenerate point itself (cellValue == max == clamped mid) must
+        // render as MidColor exactly, mirroring the resolvedMid==min degenerate case.
+        var rule = ThreeColorRule();
+        rule.MidThresholdType = CfThresholdType.Number;
+        rule.MidThresholdValue = "999";
+        var stats = ConditionalFormatStatistics.FromValues([0, 100]);
+
+        var result = ConditionalFormatEvaluator.EvaluateColorScale(rule, 100, stats);
+        result!.Value.Fill.Should().Be(new PresentationRgb(100, 100, 100), "the clamped mid==max boundary renders as MidColor");
     }
 }

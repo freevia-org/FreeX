@@ -43,6 +43,17 @@ public sealed class XlsxWorksheetViewWriterSplitPaneTests
             .Element(ns + "pane");
     }
 
+    private static List<XElement> GetSelections(XDocument document)
+    {
+        XNamespace ns = WorksheetNs;
+        return document.Root!
+            .Element(ns + "sheetViews")!
+            .Elements(ns + "sheetView")
+            .Single()
+            .Elements(ns + "selection")
+            .ToList();
+    }
+
     private static Sheet CreateSheetWithSplit(uint splitRow)
     {
         var sheet = new Sheet(SheetId.New(), "S")
@@ -150,5 +161,106 @@ public sealed class XlsxWorksheetViewWriterSplitPaneTests
 
         var pane = GetPane(document);
         pane!.Attribute("activePane").Should().BeNull();
+    }
+
+    /// <summary>
+    /// R68-io-workbook-view-6-2: the FIRST save that introduces a brand-new window split (no
+    /// freeze, no pre-existing &lt;pane&gt;) must tag the active cell's pane/selection with the
+    /// pane it is geometrically in, computed from the split geometry being introduced this same
+    /// save, instead of hardcoding "topLeft".
+    /// </summary>
+    [Fact]
+    public void UpdateSheetView_FirstSplitSave_ComputesActivePaneFromGeometry()
+    {
+        var sheet = new Sheet(SheetId.New(), "S")
+        {
+            DefaultRowHeight = 20.0,
+            DefaultColumnWidth = 8.43,
+            SplitRow = 10u,
+            SplitColumn = 3u,
+            FrozenRows = 0,
+            FrozenCols = 0,
+            ActiveRow = 30u,
+            ActiveCol = 6u // F
+        };
+        sheet.RowHeights.Clear();
+        sheet.ColumnWidths.Clear();
+
+        var document = CreateWorksheetXmlWithPane(pane: null);
+        var changed = XlsxWorksheetViewWriter.UpdateSheetView(document, sheet);
+
+        changed.Should().BeTrue();
+        var pane = GetPane(document);
+        pane.Should().NotBeNull();
+        pane!.Attribute("activePane")?.Value.Should().Be("bottomRight",
+            "the active cell F30 is below and right of the split boundary introduced by this save");
+
+        var selections = GetSelections(document);
+        var bottomRightSelection = selections.SingleOrDefault(s => s.Attribute("pane")?.Value == "bottomRight");
+        bottomRightSelection.Should().NotBeNull("the active cell's selection must be keyed to the pane it actually falls in");
+        bottomRightSelection!.Attribute("activeCell")!.Value.Should().Be("F30");
+    }
+
+    /// <summary>
+    /// No-regression sibling for the fix above: once a &lt;pane&gt; already exists (a subsequent
+    /// save, not the one introducing the split), the pre-existing "paneElement is not null" branch
+    /// -- unchanged by this fix -- still computes the active pane correctly.
+    /// </summary>
+    [Fact]
+    public void UpdateSheetView_SubsequentSplitSave_PaneAlreadyExists_ActivePaneStillComputed()
+    {
+        XNamespace ns = WorksheetNs;
+        var existingPane = new XElement(
+            ns + "pane",
+            new XAttribute("xSplit", "1920"),
+            new XAttribute("ySplit", "600"),
+            new XAttribute("state", "split"));
+
+        var document = CreateWorksheetXmlWithPane(existingPane);
+        var sheet = new Sheet(SheetId.New(), "S")
+        {
+            DefaultRowHeight = 20.0,
+            DefaultColumnWidth = 8.43,
+            SplitRow = 10u,
+            SplitColumn = 3u,
+            FrozenRows = 0,
+            FrozenCols = 0,
+            ActiveRow = 30u,
+            ActiveCol = 6u
+        };
+        sheet.RowHeights.Clear();
+        sheet.ColumnWidths.Clear();
+
+        XlsxWorksheetViewWriter.UpdateSheetView(document, sheet);
+
+        var pane = GetPane(document);
+        pane!.Attribute("activePane")!.Value.Should().Be("bottomRight");
+    }
+
+    /// <summary>
+    /// No-regression sibling: a FROZEN sheet (not split) with no pre-existing &lt;pane&gt; must
+    /// still fall back to the OOXML default "topLeft" for the active-cell selection -- freeze
+    /// panes are created by a different code path, so the new "introducing a split" branch must
+    /// not fire for it.
+    /// </summary>
+    [Fact]
+    public void UpdateSheetView_FreezeCase_NoExistingPane_StillDefaultsToTopLeft()
+    {
+        var sheet = new Sheet(SheetId.New(), "S")
+        {
+            FrozenRows = 10u,
+            FrozenCols = 3u,
+            ActiveRow = 30u,
+            ActiveCol = 6u
+        };
+
+        var document = CreateWorksheetXmlWithPane(pane: null);
+        XlsxWorksheetViewWriter.UpdateSheetView(document, sheet);
+
+        GetPane(document).Should().BeNull("freeze panes are written by a different code path, not this method");
+        var selections = GetSelections(document);
+        selections.Should().ContainSingle();
+        selections[0].Attribute("pane").Should().BeNull();
+        selections[0].Attribute("activeCell")!.Value.Should().Be("F30");
     }
 }

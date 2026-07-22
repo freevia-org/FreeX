@@ -92,16 +92,48 @@ internal static class XlsxLegacyCommentPreserver
                 // is normal and the shim must be left in place for older/non-Excel readers.
                 if (!SourceCommentsHaveOnlyUnmodeledEntries(sourceCommentsXml, workbookNs, sheet, sourceArchive, sourceWorksheetPath))
                 {
-                    PurgeDeletedLegacyComments(
-                        sourceArchive,
-                        targetArchive,
-                        sourceWorksheetPath,
-                        targetWorksheetPath,
-                        sourceCommentsPath,
-                        sourceWorksheetXml,
-                        workbookNs,
-                        relNs,
-                        packageRelNs);
+                    // R68-io-comment-note-6-1: at least one entry in this comments part is a real,
+                    // deleted note -- but the part may ALSO hold a live-threaded-comment shim (see
+                    // IsLegacyThreadedCommentShimEntry) whose thread is untouched. An all-or-nothing
+                    // purge here would destroy that shim's legacy compatibility entry too, even
+                    // though nothing about its own thread changed. Rebuild the part keeping only the
+                    // shim(s) that still need preserving; only fall back to the full purge when none
+                    // exist to protect.
+                    var shimsOnlyCommentsXml = TryBuildShimsOnlyCommentsXml(
+                        sourceCommentsXml, workbookNs, sheet, out var keptShimAddresses);
+                    if (shimsOnlyCommentsXml is not null)
+                    {
+                        XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(shimsOnlyCommentsXml);
+                        ReplacePackageXmlPart(targetArchive, sourceCommentsPath, shimsOnlyCommentsXml);
+
+                        // The VML note-shape count must stay consistent with the reconciled
+                        // comments part (a leftover shape for the deleted note, with no matching
+                        // <comment> entry any more, makes the package unreadable by ClosedXML on
+                        // the next load) -- rebuild the VML to keep only the shims' own shapes.
+                        ReconcileShimsOnlyVmlDrawing(
+                            sourceArchive,
+                            targetArchive,
+                            sourceWorksheetPath,
+                            targetWorksheetPath,
+                            sourceWorksheetXml,
+                            workbookNs,
+                            relNs,
+                            packageRelNs,
+                            keptShimAddresses);
+                    }
+                    else
+                    {
+                        PurgeDeletedLegacyComments(
+                            sourceArchive,
+                            targetArchive,
+                            sourceWorksheetPath,
+                            targetWorksheetPath,
+                            sourceCommentsPath,
+                            sourceWorksheetXml,
+                            workbookNs,
+                            relNs,
+                            packageRelNs);
+                    }
                 }
 
                 continue;
@@ -588,6 +620,185 @@ internal static class XlsxLegacyCommentPreserver
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// R68-io-comment-note-6-1: when every REAL legacy note on a sheet has been deleted (so
+    /// <see cref="Sheet.Comments"/> is empty and <see cref="SourceCommentsHaveOnlyUnmodeledEntries"/>
+    /// returned <c>false</c>), builds a comments XML that keeps ONLY the source entries that are a
+    /// live-threaded-comment compatibility shim (<see cref="IsLegacyThreadedCommentShimEntry"/> and
+    /// its thread is still present in <see cref="Sheet.ThreadedComments"/>) -- mirroring the same
+    /// shim-preservation rule the <c>Sheet.Comments.Count &gt; 0</c> reconciliation path already
+    /// applies (see <see cref="TryBuildReconciledCommentsXml"/> ~line 249). Every other entry
+    /// (a deleted note, a dead shim, or a blank-text entry) is dropped. Returns <c>null</c> when no
+    /// entry needs preserving, signalling the caller to fall back to the all-or-nothing purge.
+    /// </summary>
+    private static XDocument? TryBuildShimsOnlyCommentsXml(
+        XDocument sourceCommentsXml,
+        XNamespace workbookNs,
+        Sheet sheet,
+        out List<CellAddress> keptShimAddresses)
+    {
+        var sourceAuthors = sourceCommentsXml.Root?
+            .Element(workbookNs + "authors")?
+            .Elements(workbookNs + "author")
+            .Select(a => a.Value)
+            .ToList() ?? [];
+
+        var keptEntries = new List<XElement>();
+        var keptAuthors = new List<string>();
+        keptShimAddresses = [];
+
+        foreach (var (sourceRef, sourceElement) in ReadLegacyCommentElementsByReference(sourceCommentsXml, workbookNs))
+        {
+            if (!CellAddress.TryParse(sourceRef, sheet.Id, out var address))
+                continue;
+
+            if (!IsLegacyThreadedCommentShimEntry(sourceElement, workbookNs, sourceAuthors) ||
+                !sheet.ThreadedComments.ContainsKey(address))
+            {
+                continue; // deleted note, dead shim, or unmodeled blank entry -- drop it
+            }
+
+            var entryToAdd = new XElement(sourceElement); // deep-clone
+
+            var sourceAuthorName = "";
+            if (int.TryParse(entryToAdd.Attribute("authorId")?.Value, out var sourceAuthorIdx) &&
+                sourceAuthorIdx >= 0 && sourceAuthorIdx < sourceAuthors.Count)
+            {
+                sourceAuthorName = sourceAuthors[sourceAuthorIdx];
+            }
+
+            var newAuthorIdx = keptAuthors.FindIndex(a => string.Equals(a, sourceAuthorName, StringComparison.Ordinal));
+            if (newAuthorIdx < 0)
+            {
+                newAuthorIdx = keptAuthors.Count;
+                keptAuthors.Add(sourceAuthorName);
+            }
+            entryToAdd.SetAttributeValue("authorId", newAuthorIdx.ToString());
+
+            keptEntries.Add(entryToAdd);
+            keptShimAddresses.Add(address);
+        }
+
+        if (keptEntries.Count == 0)
+            return null;
+
+        var result = new XDocument(sourceCommentsXml); // deep-clone preserves namespace declarations
+        var resultRoot = result.Root!;
+
+        var authorsElement = resultRoot.Element(workbookNs + "authors");
+        if (authorsElement is null)
+        {
+            authorsElement = new XElement(workbookNs + "authors");
+            resultRoot.AddFirst(authorsElement);
+        }
+        authorsElement.RemoveNodes();
+        foreach (var authorName in keptAuthors)
+            authorsElement.Add(new XElement(workbookNs + "author", authorName));
+
+        var resultList = resultRoot.Element(workbookNs + "commentList");
+        if (resultList is null)
+        {
+            resultList = new XElement(workbookNs + "commentList");
+            resultRoot.Add(resultList);
+        }
+        resultList.RemoveNodes();
+        foreach (var entry in keptEntries)
+            resultList.Add(entry); // already deep-cloned above
+
+        return result;
+    }
+
+    /// <summary>
+    /// R68-io-comment-note-6-1: rebuilds the source VML drawing to keep only the note shapes for
+    /// <paramref name="keptShimAddresses"/> (the live-threaded-comment shims
+    /// <see cref="TryBuildShimsOnlyCommentsXml"/> preserved in the comments part), dropping the
+    /// deleted note's shape. Without this, the VML would still carry a shape with no matching
+    /// <c>&lt;comment&gt;</c> entry any more, which ClosedXML fails to parse on the next load.
+    /// A no-op when there is no source VML to reconcile (nothing to fix).
+    /// </summary>
+    private static void ReconcileShimsOnlyVmlDrawing(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sourceWorksheetPath,
+        string targetWorksheetPath,
+        XDocument sourceWorksheetXml,
+        XNamespace workbookNs,
+        XNamespace relNs,
+        XNamespace packageRelNs,
+        IReadOnlyList<CellAddress> keptShimAddresses)
+    {
+        var sourceLegacyDrawing = sourceWorksheetXml.Root?.Element(workbookNs + "legacyDrawing");
+        var sourceVmlRelId = sourceLegacyDrawing?.Attribute(relNs + "id")?.Value;
+        if (string.IsNullOrWhiteSpace(sourceVmlRelId) ||
+            !TryGetInternalRelationshipTarget(
+                sourceArchive,
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+                sourceWorksheetPath,
+                sourceVmlRelId,
+                VmlDrawingRelationshipType,
+                packageRelNs,
+                out var sourceVmlPath))
+        {
+            return; // no source VML to reconcile
+        }
+
+        var sourceVmlEntry = sourceArchive.GetEntry(sourceVmlPath);
+        if (sourceVmlEntry is null)
+            return;
+
+        XDocument sourceVml;
+        try
+        {
+            sourceVml = OpcXml.LoadXml(sourceVmlEntry);
+        }
+        catch
+        {
+            return; // unparseable -- leave whatever is already in the target archive alone
+        }
+
+        var shapesByCell = IndexNoteShapesByCell(sourceVml);
+        var keptShapes = new List<XElement>();
+        foreach (var address in keptShimAddresses)
+        {
+            var key = (Row: address.Row - 1, Col: address.Col - 1);
+            if (shapesByCell.TryGetValue(key, out var shape))
+                keptShapes.Add(new XElement(shape)); // deep-clone; preserves geometry
+        }
+
+        var reconciledVml = BuildReconciledVml(sourceVml, keptShapes);
+        ReplacePackageXmlPart(targetArchive, sourceVmlPath, reconciledVml);
+
+        var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+        var targetWorksheetRelsXml = targetArchive.GetEntry(targetWorksheetRelsPath) is { } targetWorksheetRelsEntry
+            ? XlsxPackageXmlEditor.LoadXml(targetWorksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        var vmlRelId = EnsureSingleRelationshipForPackagePart(
+            targetWorksheetRelsXml,
+            packageRelNs,
+            targetWorksheetPath,
+            sourceVmlPath,
+            VmlDrawingRelationshipType,
+            GetHeaderFooterLegacyDrawingRelationshipIds(targetArchive, targetWorksheetPath, packageRelNs, relNs));
+        XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
+
+        // The target worksheet's own <legacyDrawing> marker must actually reference the VML
+        // relationship, or a later orphan-part cleanup pass would treat it as unused and strip
+        // the relationship/part right back out again (mirrors the equivalent step in the
+        // Sheet.Comments.Count > 0 reconciliation path below).
+        if (!string.IsNullOrWhiteSpace(vmlRelId) &&
+            targetArchive.GetEntry(targetWorksheetPath) is { } targetWorksheetEntryForVml)
+        {
+            var targetWorksheetXmlForVml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntryForVml);
+            var targetRootForVml = targetWorksheetXmlForVml.Root;
+            if (targetRootForVml is not null)
+            {
+                targetRootForVml.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
+                SetSingleLegacyDrawingMarker(targetRootForVml, workbookNs, relNs, vmlRelId);
+                XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXmlForVml);
+            }
+        }
     }
 
     /// <summary>

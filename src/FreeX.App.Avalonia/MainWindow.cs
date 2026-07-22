@@ -8124,10 +8124,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            if (args.KeyModifiers.HasFlag(KeyModifiers.Shift))
-                SelectRange(address);
-            else
-                SelectCell(address);
+            SelectClickedCell(address, args.KeyModifiers);
             BeginCellSelectionDrag(args, border, address);
             args.Handled = true;
         };
@@ -9621,7 +9618,17 @@ public sealed partial class MainWindow : Window
                 effectiveTextWrapping,
                 style,
                 borderNeighbors)
-            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer, patternBrush, borderNeighbors);
+            : CreateDefaultCellContent(
+                textBlock,
+                style,
+                conditionalDataBar,
+                conditionalIcon,
+                zoomFactor,
+                scaledIndentPadding,
+                sparklineLayer,
+                patternBrush,
+                borderNeighbors,
+                isRightToLeft: flowDirection == FlowDirection.RightToLeft);
 
         // Selected cells get a faint translucent-green wash over their content (matching the WPF grid's
         // SelectionBrush), so a multi-cell selection reads as a light highlight rather than bare green
@@ -9679,7 +9686,8 @@ public sealed partial class MainWindow : Window
         double scaledIndentPadding = 0,
         Control? sparklineLayer = null,
         IBrush? patternBrush = null,
-        CellBorderNeighborEdges borderNeighbors = default)
+        CellBorderNeighborEdges borderNeighbors = default,
+        bool isRightToLeft = false)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
 
@@ -9698,25 +9706,35 @@ public sealed partial class MainWindow : Window
         if (patternBrush is not null)
             content.Children.Add(new AvaloniaRectangle { Fill = patternBrush });
 
-        // Icon-set glyphs occupy a left gutter and push the cell text right by the gutter width.
+        // Icon-set glyphs occupy a gutter next to the icon and push the cell text away from it —
+        // on the cell's left edge for LTR (icon pinned left), or on the RIGHT edge for an RTL sheet
+        // (icon pinned right, mirroring Excel/WPF's ConditionalIconCellLayoutPlanner isRightToLeft
+        // branch and how data bars/row headers/alignment already mirror there) (R68-render-
+        // conditional-format-icon-6-3).
         if (conditionalIcon is { } icon)
         {
             var gutter = icon.TextGutter * zoomFactor;
             if (gutter > 0)
             {
                 var existing = textBlock.Margin;
-                textBlock.Margin = new Thickness(
-                    Math.Max(existing.Left, gutter + scaledIndentPadding),
-                    existing.Top,
-                    existing.Right,
-                    existing.Bottom);
+                textBlock.Margin = isRightToLeft
+                    ? new Thickness(
+                        existing.Left,
+                        existing.Top,
+                        Math.Max(existing.Right, gutter + scaledIndentPadding),
+                        existing.Bottom)
+                    : new Thickness(
+                        Math.Max(existing.Left, gutter + scaledIndentPadding),
+                        existing.Top,
+                        existing.Right,
+                        existing.Bottom);
             }
         }
 
         content.Children.Add(textBlock);
 
         if (conditionalIcon is { } iconGlyph)
-            content.Children.Add(CreateConditionalIconLayer(iconGlyph, zoomFactor));
+            content.Children.Add(CreateConditionalIconLayer(iconGlyph, zoomFactor, isRightToLeft));
 
         AddStyledCellBorderOverlay(content, style, borderNeighbors);
         return content;
@@ -9798,24 +9816,32 @@ public sealed partial class MainWindow : Window
             rectangle, bar.StartFraction, bar.FractionWidth, horizontalInset, axisLine, bar.AxisFraction);
     }
 
-    private static Control CreateConditionalIconLayer(CfIconRenderInstruction icon, double zoomFactor)
+    private static Control CreateConditionalIconLayer(CfIconRenderInstruction icon, double zoomFactor, bool isRightToLeft = false)
     {
         const double iconSize = ConditionalIconCellLayoutPlanner.IconSize;
         const double iconLeftInset = ConditionalIconCellLayoutPlanner.IconLeftInset;
         var size = iconSize * zoomFactor;
         var glyph = ConditionalFormatIconGlyphFactory.Create(icon, size);
+        // R68-render-conditional-format-icon-6-3: Excel/WPF pin the icon-set glyph to the sheet's
+        // LEADING edge, which is the RIGHT edge on a right-to-left sheet (mirroring
+        // ConditionalIconCellLayoutPlanner's isRightToLeft branch and how data bars/row headers/cell
+        // alignment already mirror there), instead of always the physical left edge.
+        var pinnedAlignment = isRightToLeft ? AvaloniaHorizontalAlignment.Right : AvaloniaHorizontalAlignment.Left;
+        var insetPadding = isRightToLeft
+            ? new Thickness(0, 0, iconLeftInset * zoomFactor, 0)
+            : new Thickness(iconLeftInset * zoomFactor, 0, 0, 0);
         return new Border
         {
             Width = (iconLeftInset + iconSize) * zoomFactor,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            HorizontalAlignment = pinnedAlignment,
             VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
-            Padding = new Thickness(iconLeftInset * zoomFactor, 0, 0, 0),
+            Padding = insetPadding,
             IsHitTestVisible = false,
             Child = new Border
             {
                 Width = size,
                 Height = size,
-                HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                HorizontalAlignment = pinnedAlignment,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 Child = glyph,
             },
@@ -10480,6 +10506,23 @@ public sealed partial class MainWindow : Window
         _session.SelectRange(new GridRange(_session.ActiveCell, address));
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
+    }
+
+    /// <summary>
+    /// Resolves a plain worksheet cell click to either an extend (<see cref="SelectRange"/>) or a
+    /// collapse (<see cref="SelectCell"/>), matching Excel: a physical Shift+click always extends,
+    /// and so does a plain click while F8 (Extend Selection mode, <see cref="ExcelSelectionMode.Extend"/>)
+    /// is active -- mirroring the keyboard path (<c>TryHandleStickySelectionNavigation</c>), which
+    /// likewise treats Extend mode as an implicit Shift on arrow-key navigation. Before this fix a
+    /// plain click always collapsed the selection even with F8 armed (R68-app-selection-
+    /// navigation-6-1).
+    /// </summary>
+    internal void SelectClickedCell(CellAddress address, KeyModifiers modifiers)
+    {
+        if (modifiers.HasFlag(KeyModifiers.Shift) || _keyboardSelectionMode == ExcelSelectionMode.Extend)
+            SelectRange(address);
+        else
+            SelectCell(address);
     }
 
     private void ClearSelectionExtensionState()
@@ -16342,6 +16385,15 @@ public sealed partial class MainWindow : Window
 
     private void FormatPainterButton_Click(object? sender, RoutedEventArgs e)
     {
+        // Matches Excel/WPF's FormatPainterBtn_Click: clicking the already-armed Format Painter
+        // button (single-shot or double-clicked/locked) CANCELS it instead of re-capturing a new
+        // source from the current selection (R68-commands-format-painter-6-2).
+        if (_session.IsFormatPainterActive)
+        {
+            CancelFormatPainter();
+            return;
+        }
+
         CaptureFormatPainterSource(persistent: false);
     }
 
@@ -20866,14 +20918,20 @@ public sealed partial class MainWindow : Window
         }
 
         var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
-        var destination = _session.ActiveCell;
         if (_session.ShouldPreferExternalClipboardImage(text) &&
-            await TryPasteClipboardImageAsync(clipboard, destination))
+            await TryPasteClipboardImageAsync(clipboard))
         {
             return;
         }
 
         var html = await TryGetClipboardHtmlAsync(clipboard);
+        // Capture the destination as the last synchronous step right before use (matching the
+        // paste-special helpers below): the clipboard reads above are real awaits, and the OS
+        // clipboard can take long enough (or the user can click a different cell while it's
+        // pending) that a destination captured earlier would name a STALE cell in the status
+        // message even though the paste itself always lands at the live active cell
+        // (R68-async-ordering-race-sweep-1).
+        var destination = _session.ActiveCell;
         var result = _session.PasteClipboardTextAtActiveCell(text, clipboardReadFailed: clipboardReadFailed, html: html);
         if (!result.Success)
         {
@@ -20942,7 +21000,7 @@ public sealed partial class MainWindow : Window
             ?? await dataTransfer.TryGetValueAsync(HtmlWindowsPlatformFormat);
     }
 
-    private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)
+    private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)
     {
         byte[] pngBytes;
         int pixelWidth;
@@ -20965,6 +21023,12 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
+        // Capture the destination as the last synchronous step right before use: the bitmap read
+        // above is a real await, and it names the cell the picture actually lands at (PasteClipboard
+        // ImageAtActiveCell always pastes to the LIVE active cell) instead of a cell captured before
+        // that await, which could go stale if the user clicked elsewhere while it was pending
+        // (R68-async-ordering-race-sweep-1).
+        var destination = _session.ActiveCell;
         var result = _session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight);
         if (!result.Success)
         {
@@ -20992,7 +21056,7 @@ public sealed partial class MainWindow : Window
         if (!_session.ShouldPreferExternalClipboardImage(text))
             return false;
 
-        return await TryPasteClipboardImageAsync(clipboard, _session.ActiveCell);
+        return await TryPasteClipboardImageAsync(clipboard);
     }
 
     private async Task PasteSpecialClipboardTextAsync(
@@ -24406,36 +24470,55 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (!await ConfirmBeforeDestructiveWorkbookActionAsync("Open Workbook", "Discard and Open"))
-            return;
-
-        var openPlan = WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats);
-        if (!openPlan.CanShowPicker)
+        // Claim the busy flag SYNCHRONOUSLY here, before the very first await, rather than deep
+        // inside OpenWorkbookFromTargetAsync (mirroring the WPF host's _isOpeningFile set-before-
+        // await). Otherwise a second Open request (a drop, OS file-activation, or another click)
+        // arriving while the confirm dialog / file picker below are still pending sees _isOpening
+        // still false and silently races this one instead of being rejected
+        // (R68-async-ordering-race-sweep-3).
+        _isOpening = true;
+        UpdateSaveButton();
+        try
         {
-            ShowOpenIssue(openPlan.Message);
-            return;
-        }
+            if (!await ConfirmBeforeDestructiveWorkbookActionAsync("Open Workbook", "Discard and Open"))
+                return;
 
-        var pickedStorageFile = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromDescriptors("Open Workbook", openPlan.FileTypes));
-
-        if (pickedStorageFile is null)
-            return;
-
-        using (pickedStorageFile)
-        {
-            var path = pickedStorageFile.LocalPath;
-            if (string.IsNullOrWhiteSpace(path))
+            var openPlan = WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats);
+            if (!openPlan.CanShowPicker)
             {
-                ShowOpenIssue("Open requires a local file path.");
+                ShowOpenIssue(openPlan.Message);
                 return;
             }
 
-            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(
-                path,
-                pickedStorageFile.StorageFile);
-            await OpenWorkbookPathAsync(path, fileAccessIdentity, confirmDirtyWorkbook: false);
+            var pickedStorageFile = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+                StorageProvider,
+                AvaloniaFilePickerOpenRequest.FromDescriptors("Open Workbook", openPlan.FileTypes));
+
+            if (pickedStorageFile is null)
+                return;
+
+            using (pickedStorageFile)
+            {
+                var path = pickedStorageFile.LocalPath;
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    ShowOpenIssue("Open requires a local file path.");
+                    return;
+                }
+
+                var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(
+                    path,
+                    pickedStorageFile.StorageFile);
+                // Call the guard-free core directly: this method already owns the busy flag for
+                // the whole operation, so routing through the guarded OpenWorkbookPathAsync wrapper
+                // would see _isOpening already true and bail out on its own request.
+                await OpenWorkbookPathCoreAsync(path, fileAccessIdentity, confirmDirtyWorkbook: false);
+            }
+        }
+        finally
+        {
+            _isOpening = false;
+            UpdateSaveButton();
         }
     }
 
@@ -24447,6 +24530,28 @@ public sealed partial class MainWindow : Window
         if (_isOpening || _isSaving)
             return;
 
+        // Same set-before-await fix as OpenWorkbookAsync above: this is itself a top-level entry
+        // point (drop / OS file-activation / recent-file open all call this directly), so it must
+        // claim the busy flag itself before its own confirm-dialog await, not rely on
+        // OpenWorkbookFromTargetAsync claiming it later (R68-async-ordering-race-sweep-3).
+        _isOpening = true;
+        UpdateSaveButton();
+        try
+        {
+            await OpenWorkbookPathCoreAsync(path, fileAccessIdentity, confirmDirtyWorkbook);
+        }
+        finally
+        {
+            _isOpening = false;
+            UpdateSaveButton();
+        }
+    }
+
+    private async Task OpenWorkbookPathCoreAsync(
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity,
+        bool confirmDirtyWorkbook)
+    {
         if (!TryCommitPendingFormulaEdit())
             return;
 
@@ -24534,8 +24639,9 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenWorkbookFromTargetAsync(WorkbookOpenTarget target)
     {
-        _isOpening = true;
-        UpdateSaveButton();
+        // _isOpening is already claimed by the entry point that reached here (OpenWorkbookAsync /
+        // OpenWorkbookPathAsync), set synchronously before their first await -- this method no
+        // longer owns the flag itself (R68-async-ordering-race-sweep-3).
         try
         {
             _statusText.Text = WorkbookProgressTextFormatter
@@ -24568,11 +24674,6 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
         {
             ShowOpenIssue($"Open failed: {ex.Message}");
-        }
-        finally
-        {
-            _isOpening = false;
-            UpdateSaveButton();
         }
     }
 

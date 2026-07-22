@@ -37,6 +37,21 @@ public sealed class RecalcEngine
     // no notion of "why" a spill is blocked) and retried as extra changed-roots every recalc pass
     // so a cleared blocker makes the anchor spill again immediately, matching Excel.
     private readonly HashSet<CellAddress> _spillBlockedAnchors = [];
+    // Cells most recently classified as part of a non-iterative circular reference (seeded to 0
+    // by AddCyclicCell below), kept live across incremental recalc passes so a caller with no
+    // access to a single Recalculate()'s transient RecalcReport - e.g. FormulaAuditingService's
+    // error-checking rule for "Formulas with circular references" - can still find out which
+    // cells are currently cyclic. Never populated while Workbook.IterativeCalculation is on: once
+    // iterative calc resolves a cycle to a converged value, Excel no longer treats it as an error
+    // (see RunIterativeCalc). Entries are removed once the cell evaluates normally again as part
+    // of the ordinary evaluation loop (its formula no longer participates in a cycle).
+    private readonly HashSet<CellAddress> _cyclicCells = [];
+
+    /// <summary>
+    /// Cells currently classified as part of a non-iterative circular reference by the most
+    /// recent recalculation(s). See <see cref="_cyclicCells"/> for lifecycle details.
+    /// </summary>
+    public IReadOnlyCollection<CellAddress> CyclicCells => _cyclicCells;
 
     public RecalcEngine(DependencyGraph graph, FormulaEvaluator evaluator)
     {
@@ -226,6 +241,13 @@ public sealed class RecalcEngine
 
             var cell = sheet.GetCell(addr);
             if (cell is null || !cell.HasFormula) continue;
+
+            // This cell is about to evaluate through the ordinary (non-cyclic) path, so it is no
+            // longer part of any circular reference even if a prior pass had classified it that
+            // way (e.g. its formula was edited to break the cycle). Keep the persisted cyclic-cell
+            // set (see field comment) from going stale.
+            if (_cyclicCells.Count > 0)
+                _cyclicCells.Remove(addr);
 
             // Did this cell own a spill before re-evaluation? If so, any outcome that does not
             // re-establish the same spill clears its target cells and downstream readers go stale.
@@ -659,7 +681,7 @@ public sealed class RecalcEngine
         dependencyPlan.OrderedCells.Count == 0 &&
         dependencyPlan.CyclicCells.Count == 0;
 
-    private static void AddCyclicCell(
+    private void AddCyclicCell(
         Workbook workbook,
         CellAddress cyclic,
         ref List<CellAddress>? cyclicCells,
@@ -678,6 +700,7 @@ public sealed class RecalcEngine
             return;
 
         (cyclicCells ??= []).Add(cyclic);
+        _cyclicCells.Add(cyclic);
 
         var sheet = workbook.GetSheet(cyclic.Sheet);
         if (sheet is null) return;
@@ -775,6 +798,12 @@ public sealed class RecalcEngine
             var seedCell = seedSheet?.GetCell(addr);
             if (seedCell is not null && ReferenceEquals(seedCell.Value, ErrorValue.Circular))
                 seedCell.Value = new BlankValue();
+
+            // Iterative calculation resolves this cycle to a converged value, not a fabricated
+            // error -- Excel does not flag it via "Formulas with circular references" while
+            // iterative calc is on, so drop any stale entry left by a prior non-iterative pass.
+            if (_cyclicCells.Count > 0)
+                _cyclicCells.Remove(addr);
         }
 
         for (var iteration = 0; iteration < maxIterations; iteration++)

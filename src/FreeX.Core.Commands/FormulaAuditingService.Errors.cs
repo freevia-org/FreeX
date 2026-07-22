@@ -39,9 +39,24 @@ public static partial class FormulaAuditingService
         "AGGREGATE"
     ];
 
-    public static IReadOnlyList<FormulaErrorInfo> FindFormulaErrors(Workbook workbook, SheetId? sheetId = null)
+    /// <param name="cyclicCells">
+    /// Cells the caller's <c>RecalcEngine</c> most recently classified as part of a non-iterative
+    /// circular reference (see <c>RecalcEngine.CyclicCells</c>). Since r66 (circular -&gt; 0), a
+    /// cyclic cell's <see cref="Cell.Value"/> is seeded to a plain 0 rather than
+    /// <see cref="ErrorValue.Circular"/> (Excel shows a warning dialog, not a fabricated error
+    /// value), so the cell-value scan below can no longer discover it on its own -- callers that
+    /// want "Formulas with circular references" to still surface must pass the engine's set here.
+    /// Optional and defaults to none so existing callers keep compiling unchanged.
+    /// </param>
+    public static IReadOnlyList<FormulaErrorInfo> FindFormulaErrors(
+        Workbook workbook,
+        SheetId? sheetId = null,
+        IReadOnlyCollection<CellAddress>? cyclicCells = null)
     {
         var result = new List<FormulaErrorInfo>();
+        var checkCircularReferences =
+            cyclicCells is { Count: > 0 } &&
+            !workbook.DisabledFormulaErrorCodes.Contains(ErrorValue.Circular.Code);
 
         foreach (var sheet in workbook.Sheets)
         {
@@ -69,6 +84,25 @@ public static partial class FormulaAuditingService
                     cell.HasFormula ? cell.FormulaText : null));
             }
 
+            if (checkCircularReferences)
+            {
+                foreach (var cyclicAddress in cyclicCells!)
+                {
+                    if (cyclicAddress.Sheet != sheet.Id)
+                        continue;
+
+                    if (sheet.GetCell(cyclicAddress) is not { } cyclicCell || cyclicCell.IgnoreFormulaError)
+                        continue;
+
+                    (sheetErrors ??= []).Add(new FormulaErrorInfo(
+                        sheet.Id,
+                        sheet.Name,
+                        cyclicAddress,
+                        ErrorValue.Circular,
+                        cyclicCell.HasFormula ? cyclicCell.FormulaText : null));
+                }
+            }
+
             if (sheetErrors is null)
                 continue;
 
@@ -87,10 +121,20 @@ public static partial class FormulaAuditingService
             : left.Address.Col.CompareTo(right.Address.Col);
     }
 
-    public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(Workbook workbook, SheetId? sheetId = null)
+    /// <param name="cyclicCells">
+    /// Cells the caller's <c>RecalcEngine</c> most recently classified as part of a non-iterative
+    /// circular reference (see <c>RecalcEngine.CyclicCells</c>). See the matching parameter on
+    /// <see cref="FindFormulaErrors"/> for why this must be threaded in explicitly rather than
+    /// discovered from cell values. Optional and defaults to none so existing callers keep
+    /// compiling unchanged.
+    /// </param>
+    public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(
+        Workbook workbook,
+        SheetId? sheetId = null,
+        IReadOnlyCollection<CellAddress>? cyclicCells = null)
     {
         var result = new List<FormulaErrorIssue>();
-        result.AddRange(FindLiteralFormulaErrorIssues(workbook, sheetId));
+        result.AddRange(FindLiteralFormulaErrorIssues(workbook, sheetId, cyclicCells));
         result.AddRange(FindFormulaCellIssues(workbook, sheetId));
         result.AddRange(FindInvalidDataValidationIssues(workbook, sheetId));
 
@@ -105,11 +149,17 @@ public static partial class FormulaAuditingService
         return result;
     }
 
-    private static IEnumerable<FormulaErrorIssue> FindLiteralFormulaErrorIssues(Workbook workbook, SheetId? sheetId)
+    private static IEnumerable<FormulaErrorIssue> FindLiteralFormulaErrorIssues(
+        Workbook workbook,
+        SheetId? sheetId,
+        IReadOnlyCollection<CellAddress>? cyclicCells = null)
     {
         var checkNumberStoredAsText = !workbook.DisabledFormulaErrorCodes.Contains(NumberStoredAsTextErrorCode);
         var checkTwoDigitYearTextDate = !workbook.DisabledFormulaErrorCodes.Contains(TwoDigitYearTextDateErrorCode);
         var checkFormulaStoredAsText = !workbook.DisabledFormulaErrorCodes.Contains(FormulaStoredAsTextErrorCode);
+        var checkCircularReferences =
+            cyclicCells is { Count: > 0 } &&
+            !workbook.DisabledFormulaErrorCodes.Contains(ErrorValue.Circular.Code);
 
         foreach (var sheet in workbook.Sheets)
         {
@@ -172,6 +222,27 @@ public static partial class FormulaAuditingService
                         null,
                         "The text in this cell starts with '=' or a fullwidth equals sign, optionally after an apostrophe, and is stored as text instead of a formula.");
                 }
+            }
+
+            if (!checkCircularReferences)
+                continue;
+
+            foreach (var cyclicAddress in cyclicCells!)
+            {
+                if (cyclicAddress.Sheet != sheet.Id)
+                    continue;
+
+                if (sheet.GetCell(cyclicAddress) is not { } cyclicCell || cyclicCell.IgnoreFormulaError)
+                    continue;
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    cyclicAddress,
+                    cyclicAddress.ToA1(),
+                    ErrorValue.Circular.Code,
+                    cyclicCell.FormulaText is null ? null : "=" + cyclicCell.FormulaText,
+                    DescribeError(ErrorValue.Circular));
             }
         }
     }

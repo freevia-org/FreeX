@@ -121,6 +121,71 @@ public sealed partial class ChartRendererTests
         series.MarkerType.Should().Be(expectedOxyMarkerType);
     }
 
+    // R68-meta-2: Dot shares OxyPlot's MarkerType.Circle with Auto/Circle (OxyPlot has no smaller
+    // dedicated dot marker type), so it must be distinguished by a reduced marker SIZE instead --
+    // before the fix, Dot rendered pixel-identical to a full Circle marker at the same requested
+    // size. This mirrors the Avalonia chart renderer's own Dot glyph (dotR = r * 0.45).
+    [Fact]
+    public void LineRenderer_DotMarkerRendersSmallerThanFullCircleAtSameRequestedSize()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            SeriesFormats = [new ChartSeriesFormat(0, MarkerStyle: ChartMarkerStyle.Dot, MarkerSize: 10)]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>().Subject;
+        series.MarkerType.Should().Be(MarkerType.Circle);
+        series.MarkerSize.Should().BeLessThan(10);
+        series.MarkerSize.Should().Be(4.5); // 10 * 0.45
+    }
+
+    // Sibling no-regression test: Auto and Circle keep rendering at the full requested marker
+    // size (only Dot is scaled down) after the R68 Dot-size fix.
+    [Theory]
+    [InlineData(ChartMarkerStyle.Auto)]
+    [InlineData(ChartMarkerStyle.Circle)]
+    public void LineRenderer_NonDotCircleMarkersKeepFullRequestedSize(ChartMarkerStyle markerStyle)
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            SeriesFormats = [new ChartSeriesFormat(0, MarkerStyle: markerStyle, MarkerSize: 10)]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>().Subject;
+        series.MarkerType.Should().Be(MarkerType.Circle);
+        series.MarkerSize.Should().Be(10);
+    }
+
     // Sibling no-regression test: the five pre-existing marker styles must keep mapping to their
     // original OxyPlot marker types after the new members were added to the switch.
     [Theory]

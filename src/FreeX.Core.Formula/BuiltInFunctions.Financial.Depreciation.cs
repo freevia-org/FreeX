@@ -59,8 +59,9 @@ public static partial class BuiltInFunctions
         // Excel's DB has no special case for salvage >= cost: it always evaluates the
         // declining-balance rate formula below, which naturally yields 0 when salvage == cost
         // and a small negative rate (i.e. a book-value increase) when salvage > cost.
-        // Rate rounded to 3 decimal places.
-        double rate = Math.Round(1 - Math.Pow(salvage / cost, 1.0 / ilife), 3);
+        // Rate rounded to 3 decimal places. The exponent uses the RAW (untruncated) life --
+        // only the period-count/loop bounds below use the truncated `ilife`.
+        double rate = Math.Round(1 - Math.Pow(salvage / cost, 1.0 / life), 3);
         double accumulated = 0;
         double dep = 0;
         for (int p = 1; p <= iper; p++)
@@ -222,6 +223,10 @@ public static partial class BuiltInFunctions
     private static ScalarValue AmordegrcScalar(ScalarValue costValue, ScalarValue datePurchasedValue, ScalarValue firstPeriodValue, ScalarValue salvageValue, ScalarValue periodValue, ScalarValue rateValue, ScalarValue basisValue)
     {
         if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        // Unlike YEARFRAC/ACCRINT/PRICE, Excel's AMORDEGRC rejects basis 2 (Actual/360) with
+        // #NUM! -- it only accepts 0 (30/360 US), 1 (Actual/actual), 3 (Actual/365) and
+        // 4 (30/360 European).
+        if (basis == 2) return ErrorValue.Num;
         double cost = ToNumber(costValue);
         double datePurchased = ToNumber(datePurchasedValue);
         double firstPeriod = ToNumber(firstPeriodValue);
@@ -297,6 +302,10 @@ public static partial class BuiltInFunctions
     private static ScalarValue AmorlincScalar(ScalarValue costValue, ScalarValue datePurchasedValue, ScalarValue firstPeriodValue, ScalarValue salvageValue, ScalarValue periodValue, ScalarValue rateValue, ScalarValue basisValue)
     {
         if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        // Unlike YEARFRAC/ACCRINT/PRICE, Excel's AMORLINC rejects basis 2 (Actual/360) with
+        // #NUM! -- it only accepts 0 (30/360 US), 1 (Actual/actual), 3 (Actual/365) and
+        // 4 (30/360 European).
+        if (basis == 2) return ErrorValue.Num;
         double cost = ToNumber(costValue);
         double datePurchased = ToNumber(datePurchasedValue);
         double firstPeriod = ToNumber(firstPeriodValue);

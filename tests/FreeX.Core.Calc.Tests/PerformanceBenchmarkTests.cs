@@ -290,7 +290,11 @@ public class PerformanceBenchmarkTests
             source.IndexOf("foreach (var addr in directFormulaRoots ?? evaluationPlan.OrderedCells)", StringComparison.Ordinal)];
         var fastPath = source[
             source.IndexOf("private static bool CanEvaluateChangedFormulaRootsDirectly", StringComparison.Ordinal)..
-            source.IndexOf("private static void AddCyclicCell", StringComparison.Ordinal)];
+            // AddCyclicCell became an instance method (no longer "private static") once it started
+            // populating the persisted _cyclicCells set (see RecalcEngine.CyclicCells) so
+            // FormulaAuditingService can discover circular cells across calls -- a genuine,
+            // necessary change, not hot-path scaffolding. Only the marker needed updating here.
+            source.IndexOf("private void AddCyclicCell", StringComparison.Ordinal)];
 
         recalculate.Should().Contain("CanEvaluateChangedFormulaRootsDirectly(plan, changedFormulaCells, _volatileCells.Count)");
         recalculate.Should().Contain("directFormulaRoots = changedFormulaCells!.Count == 1");

@@ -119,8 +119,15 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
         var width = DrawingMlUnits.EmuToPixels(ext.Attribute("cx")?.Value);
         var height = DrawingMlUnits.EmuToPixels(ext.Attribute("cy")?.Value);
-        if (width <= 0 || height <= 0)
+        // A schema-valid ext CAN be zero on one axis alone (e.g. a flat/degenerate shape flush against a
+        // cell edge); only reject the anchor outright when BOTH axes are non-positive, since then there is
+        // no usable size or position information left at all. Rejecting on a single zero axis used to drop
+        // the whole anchor -- position AND the still-meaningful other-axis size -- reloading the object at
+        // A1 with a default size instead of its real from-cell position and real dimension.
+        if (width <= 0 && height <= 0)
             return null;
+        width = Math.Max(0, width);
+        height = Math.Max(0, height);
 
         return new XlsxDrawingAnchor(
             ChartDrawingAnchorKind.OneCell,
@@ -150,8 +157,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var top = DrawingMlUnits.EmuToPixels(pos.Attribute("y")?.Value);
         var width = DrawingMlUnits.EmuToPixels(ext.Attribute("cx")?.Value);
         var height = DrawingMlUnits.EmuToPixels(ext.Attribute("cy")?.Value);
-        if (width <= 0 || height <= 0)
+        // See the matching comment in TryReadOneCellAnchor: only reject when BOTH axes are non-positive,
+        // otherwise the still-meaningful position (pos) and the non-degenerate axis are lost too.
+        if (width <= 0 && height <= 0)
             return null;
+        width = Math.Max(0, width);
+        height = Math.Max(0, height);
 
         return new XlsxDrawingAnchor(
             ChartDrawingAnchorKind.Absolute,

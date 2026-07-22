@@ -118,6 +118,12 @@ internal static class XlsxWorksheetViewWriter
         changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "rightToLeft", sheet.IsRightToLeft ? "1" : null);
         changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "topLeftCell", ToOptionalA1(sheet.ViewTopRow, sheet.ViewLeftCol));
 
+        // Captures the active pane computed below when this save is the FIRST one to introduce a
+        // brand-new split (no pre-existing <pane>, no freeze): the split-pane-creation block
+        // further down creates the <pane> element itself and needs this value to tag it with the
+        // correct activePane, since there is no existing pane to read one from.
+        string? activePaneNameForNewSplitPane = null;
+
         if (ToOptionalA1(sheet.ActiveRow, sheet.ActiveCol) is { } activeCell)
         {
             // A frozen/split sheetView can carry one <selection> per pane (topLeft/topRight/
@@ -142,6 +148,18 @@ internal static class XlsxWorksheetViewWriter
                     paneElement,
                     "activePane",
                     string.Equals(activePaneName, "topLeft", StringComparison.Ordinal) ? null : activePaneName);
+            }
+            else if (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
+                     (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))
+            {
+                // No pre-existing <pane>, but this save is introducing a brand-new split (the
+                // split-pane-creation block below runs AFTER this one and hasn't created the
+                // <pane> element yet). Compute the active pane from the split geometry being
+                // introduced rather than hardcoding "topLeft", or an active cell that is
+                // geometrically in a different quadrant (e.g. bottom-right) gets mistagged on the
+                // very first save that creates the split.
+                activePaneName = ComputeActivePaneName(sheet, sheet.ActiveRow!.Value, sheet.ActiveCol!.Value);
+                activePaneNameForNewSplitPane = activePaneName;
             }
             else
             {
@@ -205,8 +223,16 @@ internal static class XlsxWorksheetViewWriter
             // Preserve the existing pane's activePane attribute (which cell quadrant/pane the
             // user's cursor is in) -- it is independent of the split geometry itself, and a
             // rebuilt <pane> element that drops it silently resets the active pane to the OOXML
-            // default "topLeft" on any save that merely touches an unrelated view attribute.
-            var existingActivePane = existingPanes.Count > 0 ? existingPanes[0].Attribute("activePane")?.Value : null;
+            // default "topLeft" on any save that merely touches an unrelated view attribute. When
+            // there is no existing pane at all, this is the first save introducing the split, so
+            // fall back to the active pane computed above from the split geometry being
+            // introduced (rather than defaulting to "topLeft" regardless of where the active cell
+            // actually is).
+            var existingActivePane = existingPanes.Count > 0
+                ? existingPanes[0].Attribute("activePane")?.Value
+                : activePaneNameForNewSplitPane;
+            if (string.Equals(existingActivePane, "topLeft", StringComparison.Ordinal))
+                existingActivePane = null;
             var pane = new XElement(
                 worksheetNs + "pane",
                 sheet.SplitColumn is { } splitColumn ? new XAttribute("xSplit", SplitColumnToTwips(sheet, splitColumn)) : null,

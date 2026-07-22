@@ -21,21 +21,38 @@ namespace FreeX.Core.IO;
 /// </summary>
 internal static class XlsxDrawingAnchorApplier
 {
+    // Excel's real ceilings (1,048,576 rows x 16,384 columns), expressed zero-based to match the
+    // reader's FromColumnZeroBased/ToColumnZeroBased/FromRowZeroBased/ToRowZeroBased fields. The writer
+    // side already caps at these same 1-based limits (see XlsxSourceDrawingGeometryRewriter.MaxColumnIndex/
+    // MaxRowIndex, XlsxWorksheetChartWriter.MaxColumnIndex/MaxRowIndex). A source file can contain a
+    // schema-valid but absurd index (e.g. col 3,000,000,000) that is correctly ordered relative to its
+    // partner marker; without clamping, SumColumnPixels/SumRowPixels below would loop billions of times
+    // and hang the load. Clamping here matches Excel effectively ignoring/truncating such a value.
+    private const uint MaxColumnIndexZeroBased = 16383;
+    private const uint MaxRowIndexZeroBased = 1048575;
+
+    private static uint ClampColumn(uint zeroBased) => Math.Min(zeroBased, MaxColumnIndexZeroBased);
+
+    private static uint ClampRow(uint zeroBased) => Math.Min(zeroBased, MaxRowIndexZeroBased);
+
     public static void ApplyToChart(ChartModel chart, XlsxDrawingAnchor? anchor, Sheet sheet)
     {
         if (anchor is null)
             return;
 
+        var fromColumn = ClampColumn(anchor.FromColumnZeroBased);
+        var fromRow = ClampRow(anchor.FromRowZeroBased);
+
         chart.DrawingAnchorKind = anchor.Kind;
-        chart.Left = anchor.AbsoluteLeft ?? (SumColumnPixels(sheet, 1, anchor.FromColumnZeroBased) + anchor.FromColumnOffset);
-        chart.Top = anchor.AbsoluteTop ?? (SumRowPixels(sheet, 1, anchor.FromRowZeroBased) + anchor.FromRowOffset);
+        chart.Left = anchor.AbsoluteLeft ?? (SumColumnPixels(sheet, 1, fromColumn) + anchor.FromColumnOffset);
+        chart.Top = anchor.AbsoluteTop ?? (SumRowPixels(sheet, 1, fromRow) + anchor.FromRowOffset);
 
         var width = anchor.Width ?? (
-            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, ZeroBasedSpan(anchor.FromColumnZeroBased, anchor.ToColumnZeroBased!.Value))
+            SumColumnPixels(sheet, fromColumn + 1, ZeroBasedSpan(fromColumn, ClampColumn(anchor.ToColumnZeroBased!.Value)))
             + anchor.ToColumnOffset!.Value
             - anchor.FromColumnOffset);
         var height = anchor.Height ?? (
-            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, ZeroBasedSpan(anchor.FromRowZeroBased, anchor.ToRowZeroBased!.Value))
+            SumRowPixels(sheet, fromRow + 1, ZeroBasedSpan(fromRow, ClampRow(anchor.ToRowZeroBased!.Value)))
             + anchor.ToRowOffset!.Value
             - anchor.FromRowOffset);
         if (width > 0)
@@ -129,12 +146,15 @@ internal static class XlsxDrawingAnchorApplier
     /// </summary>
     internal static (double Width, double Height) GetAnchorSize(XlsxDrawingAnchor anchor, Sheet sheet)
     {
+        var fromColumn = ClampColumn(anchor.FromColumnZeroBased);
+        var fromRow = ClampRow(anchor.FromRowZeroBased);
+
         var width = anchor.Width ?? (
-            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, ZeroBasedSpan(anchor.FromColumnZeroBased, anchor.ToColumnZeroBased!.Value))
+            SumColumnPixels(sheet, fromColumn + 1, ZeroBasedSpan(fromColumn, ClampColumn(anchor.ToColumnZeroBased!.Value)))
             + anchor.ToColumnOffset!.Value
             - anchor.FromColumnOffset);
         var height = anchor.Height ?? (
-            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, ZeroBasedSpan(anchor.FromRowZeroBased, anchor.ToRowZeroBased!.Value))
+            SumRowPixels(sheet, fromRow + 1, ZeroBasedSpan(fromRow, ClampRow(anchor.ToRowZeroBased!.Value)))
             + anchor.ToRowOffset!.Value
             - anchor.FromRowOffset);
         return (width, height);

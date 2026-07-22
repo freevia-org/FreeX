@@ -454,7 +454,28 @@ public sealed partial class FormulaEvaluator
         var startSheetIndex = FindSheetIndex(workbook, spanRange.SheetName!);
         var endSheetIndex = FindSheetIndex(workbook, spanRange.EndSheetName!);
         if (startSheetIndex < 0 || endSheetIndex < 0)
+        {
+            // An external-workbook 3-D sheet-span (e.g. '[1]Sheet1:Sheet3'!A1) carries its external
+            // marker only on the start sheet name (Excel's own on-disk shape -- see
+            // FormulaSerializer.WriteSheetSpanName), so it never resolves through FindSheetIndex
+            // above, which only searches THIS workbook's own local Sheets. Mirror the single-sheet
+            // external path (SheetEvalContext.GetCellValue/GetRangeValues in
+            // FormulaEvaluator.Contexts.cs): when the start sheet name is a resolvable external
+            // reference, throw FormulaParseException instead of surfacing #REF!, so RecalcEngine's
+            // external-workbook-reference guard (IsLikelyExternalWorkbookReferenceFormula) preserves
+            // the cell's last-known cached value instead of clobbering it. A span whose start sheet
+            // is NOT a resolvable external reference is a genuine broken/unknown local span and still
+            // surfaces #REF! below.
+            if (ExternalSheetReferenceResolver.TryResolve(workbook, spanRange.SheetName!) is not null)
+            {
+                throw new FormulaParseException(
+                    $"External reference '{spanRange.SheetName}:{spanRange.EndSheetName}' spans " +
+                    "sheets this workbook cannot resolve locally; preserving the last-known loaded " +
+                    "value instead of recomputing to #REF!.");
+            }
+
             return ErrorValue.Ref;
+        }
 
         var firstIndex = Math.Min(startSheetIndex, endSheetIndex);
         var lastIndex = Math.Max(startSheetIndex, endSheetIndex);

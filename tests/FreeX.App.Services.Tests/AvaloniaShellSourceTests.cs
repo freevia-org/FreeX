@@ -950,7 +950,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static SaveChangesPrompt ToSaveChangesPrompt(DirtyWorkbookCloseChoice choice)");
         source.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
         source.Should().Contain("() => _session.CanSaveCurrentSource(out var target) ? target : null");
-        source.Should().Contain("OpenWorkbookPathAsync(path, fileAccessIdentity, confirmDirtyWorkbook: false)");
+        // R68-async-ordering-race-sweep-3: OpenWorkbookAsync now claims _isOpening synchronously
+        // before its own confirm-dialog/file-picker awaits, so its post-picker continuation must
+        // call the guard-free OpenWorkbookPathCoreAsync directly -- routing back through the
+        // guarded OpenWorkbookPathAsync wrapper here would see _isOpening already true and bail.
+        source.Should().Contain("OpenWorkbookPathCoreAsync(path, fileAccessIdentity, confirmDirtyWorkbook: false)");
         source.Should().Contain("ConfirmBeforeDestructiveWorkbookActionAsync(\"Open Workbook\", \"Discard and Open\")");
         source.Should().Contain("private async Task<DirtyWorkbookCloseChoice> ShowDirtyWorkbookCloseDialogAsync(");
         source.Should().Contain("AutomationProperties.SetAutomationId(saveButton, \"DirtyWorkbookSaveButton\");");
@@ -1318,7 +1322,11 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("private void RecordLaunchSmokeLiveSelectAllCommandKey(GridRange before, GridRange after)");
         windowSource.Should().Contain("RecordLaunchSmokeLiveSelectAllCommandKey(before, _session.SelectedRange);");
         windowSource.Should().Contain("internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()");
-        windowSource.Should().Contain("return await TryPasteClipboardImageAsync(clipboard, _session.ActiveCell);");
+        // R68-async-ordering-race-sweep-1: the destination is now captured inside
+        // TryPasteClipboardImageAsync itself (right before use, after the bitmap-read await)
+        // rather than passed in by the caller, so the status message always names the live
+        // active cell instead of one captured before the await could go stale.
+        windowSource.Should().Contain("return await TryPasteClipboardImageAsync(clipboard);");
         windowSource.Should().Contain("var externalImageClipboardPictures = _session.ActiveSheet.Pictures");
         windowSource.Should().Contain("ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length");
         windowSource.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
@@ -1727,7 +1735,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await clipboard.SetDataAsync(transfer);");
         source.Should().Contain("var text = await clipboard.TryGetTextAsync();");
         source.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
-        source.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)");
+        // R68-async-ordering-race-sweep-1: destination dropped as a parameter -- it is now
+        // captured as _session.ActiveCell inside the method, right before use, so a caller can
+        // no longer hand in a destination that goes stale across the bitmap-read await.
+        source.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)");
         source.Should().Contain("await clipboard.TryGetBitmapAsync()");
         source.Should().Contain("bitmap.Save(stream)");
         source.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");

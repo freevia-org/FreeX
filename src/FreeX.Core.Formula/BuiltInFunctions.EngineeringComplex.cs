@@ -98,7 +98,12 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
-        var suffix = args.Count > 2 && args[2] is not BlankValue ? ToText(args[2]) : "i";
+        // The suffix default of "i" only applies when the argument slot is truly omitted
+        // (args.Count <= 2). When the slot is present but evaluates to a blank cell (e.g.
+        // COMPLEX(3,4,A1) with A1 empty), Excel treats the blank as "" — neither "i" nor
+        // "j" — and returns #VALUE!, rather than silently falling back to the default.
+        if (args.Count > 2 && args[2] is BlankValue) return ErrorValue.Value;
+        var suffix = args.Count > 2 ? ToText(args[2]) : "i";
         if (suffix is not ("i" or "j")) return ErrorValue.Value;
 
         return MapBinaryMathArgs(args[0], args[1], (realValue, imaginaryValue) => ComplexScalar(realValue, imaginaryValue, suffix));
@@ -196,11 +201,12 @@ public static partial class BuiltInFunctions
         {
             var parsed = ParseComplexArgument(value);
             if (parsed.Error is not null) return parsed.Error;
-            if (parsed.Imaginary != 0)
+            if (parsed.ExplicitSuffix is not null)
             {
-                // Excel rejects mixing "i" and "j" notation across arguments.
-                if (explicitSuffix is not null && explicitSuffix != parsed.Suffix) return ErrorValue.Num;
-                explicitSuffix = parsed.Suffix;
+                // Excel rejects mixing "i" and "j" notation across arguments, even when one
+                // side's explicit suffix carries a zero coefficient (e.g. "3+0j").
+                if (explicitSuffix is not null && explicitSuffix != parsed.ExplicitSuffix) return ErrorValue.Num;
+                explicitSuffix = parsed.ExplicitSuffix;
             }
 
             real += parsed.Real;
@@ -225,10 +231,12 @@ public static partial class BuiltInFunctions
         var right = ParseComplexArgument(rightValue);
         if (right.Error is not null) return right.Error;
 
-        // Excel rejects mixing "i" and "j" notation across arguments. Pure real
-        // arguments (no imaginary component) don't carry an explicit suffix, so
-        // they never conflict with the other operand's notation.
-        if (left.Imaginary != 0 && right.Imaginary != 0 && left.Suffix != right.Suffix) return ErrorValue.Num;
+        // Excel rejects mixing "i" and "j" notation across arguments. The check compares the
+        // EXPLICIT suffix recorded from the source text (present even for a zero coefficient
+        // like "3+0j"), not just whether Imaginary != 0, so "3+0j" vs "5+2i" is still caught.
+        // A truly bare real (no suffix at all, e.g. "3") never carries an explicit suffix, so
+        // it never conflicts with the other operand's notation.
+        if (left.ExplicitSuffix is not null && right.ExplicitSuffix is not null && left.ExplicitSuffix != right.ExplicitSuffix) return ErrorValue.Num;
 
         var suffix = left.Imaginary != 0 ? left.Suffix : right.Suffix;
         return ComplexTextResult(left.Real - right.Real, left.Imaginary - right.Imaginary, suffix);
@@ -244,11 +252,12 @@ public static partial class BuiltInFunctions
         {
             var parsed = ParseComplexArgument(value);
             if (parsed.Error is not null) return parsed.Error;
-            if (parsed.Imaginary != 0)
+            if (parsed.ExplicitSuffix is not null)
             {
-                // Excel rejects mixing "i" and "j" notation across arguments.
-                if (explicitSuffix is not null && explicitSuffix != parsed.Suffix) return ErrorValue.Num;
-                explicitSuffix = parsed.Suffix;
+                // Excel rejects mixing "i" and "j" notation across arguments, even when one
+                // side's explicit suffix carries a zero coefficient (e.g. "3+0j").
+                if (explicitSuffix is not null && explicitSuffix != parsed.ExplicitSuffix) return ErrorValue.Num;
+                explicitSuffix = parsed.ExplicitSuffix;
             }
 
             var nextReal = real * parsed.Real - imaginary * parsed.Imaginary;
@@ -304,10 +313,12 @@ public static partial class BuiltInFunctions
         var right = ParseComplexArgument(rightValue);
         if (right.Error is not null) return right.Error;
 
-        // Excel rejects mixing "i" and "j" notation across arguments. Pure real
-        // arguments (no imaginary component) don't carry an explicit suffix, so
-        // they never conflict with the other operand's notation.
-        if (left.Imaginary != 0 && right.Imaginary != 0 && left.Suffix != right.Suffix) return ErrorValue.Num;
+        // Excel rejects mixing "i" and "j" notation across arguments. The check compares the
+        // EXPLICIT suffix recorded from the source text (present even for a zero coefficient
+        // like "3+0j"), not just whether Imaginary != 0, so "3+0j" vs "5+2i" is still caught.
+        // A truly bare real (no suffix at all, e.g. "3") never carries an explicit suffix, so
+        // it never conflicts with the other operand's notation.
+        if (left.ExplicitSuffix is not null && right.ExplicitSuffix is not null && left.ExplicitSuffix != right.ExplicitSuffix) return ErrorValue.Num;
 
         var denominator = right.Real * right.Real + right.Imaginary * right.Imaginary;
         if (denominator == 0) return ErrorValue.Num;
@@ -595,39 +606,44 @@ public static partial class BuiltInFunctions
         }
     }
 
-    private static (double Real, double Imaginary, string Suffix, ErrorValue? Error) ParseComplexArgument(ScalarValue value)
+    private static (double Real, double Imaginary, string Suffix, string? ExplicitSuffix, ErrorValue? Error) ParseComplexArgument(ScalarValue value)
     {
-        if (value is ErrorValue e) return (0, 0, "i", e);
-        if (value is BoolValue) return (0, 0, "i", ErrorValue.Value);
+        if (value is ErrorValue e) return (0, 0, "i", null, e);
+        if (value is BoolValue) return (0, 0, "i", null, ErrorValue.Value);
         // A blank cell flowing in through a range argument (e.g. IMSUM(A1:A3) with a gap)
         // is treated as the complex number 0, matching Excel's usual blank-in-range handling
         // for numeric-aggregate functions rather than erroring out the whole computation.
-        if (value is BlankValue) return (0, 0, "i", null);
+        if (value is BlankValue) return (0, 0, "i", null, null);
         if (TryCellNumber(value, out var number))
             return double.IsFinite(number)
-                ? (number, 0, "i", null)
-                : (0, 0, "i", ErrorValue.Num);
+                ? (number, 0, "i", null, null)
+                : (0, 0, "i", null, ErrorValue.Num);
 
         var text = ToText(value).Trim();
-        if (text.Length == 0) return (0, 0, "i", ErrorValue.Num);
+        if (text.Length == 0) return (0, 0, "i", null, ErrorValue.Num);
 
         var suffix = text[^1].ToString();
         if (suffix is not ("i" or "j"))
         {
             return TryParseComplexNumber(text, out var realOnly)
-                ? (realOnly, 0, "i", null)
-                : (0, 0, "i", ErrorValue.Num);
+                ? (realOnly, 0, "i", null, null)
+                : (0, 0, "i", null, ErrorValue.Num);
         }
 
         var body = text[..^1];
         if (!TrySplitComplexBody(body, out var realPart, out var imaginaryPart))
-            return (0, 0, suffix, ErrorValue.Num);
+            return (0, 0, suffix, suffix, ErrorValue.Num);
 
         if (!TryParseComplexNumber(realPart, out var real) ||
             !TryParseImaginaryCoefficient(imaginaryPart, out var imaginary))
-            return (0, 0, suffix, ErrorValue.Num);
+            return (0, 0, suffix, suffix, ErrorValue.Num);
 
-        return (real, imaginary, suffix, null);
+        // The i/j suffix was explicitly present in the source text (e.g. "3+0j"), even
+        // though the parsed imaginary coefficient may be zero. Record it separately from
+        // the display Suffix so mixed-notation mismatch checks (IMSUB/IMSUM/IMPRODUCT/
+        // IMDIV) catch cases like "3+0j" vs "5+2i" that a plain Imaginary != 0 test misses,
+        // while a truly bare real (no suffix at all) never triggers a mismatch.
+        return (real, imaginary, suffix, suffix, null);
     }
 
     private static bool TrySplitComplexBody(string body, out string realPart, out string imaginaryPart)

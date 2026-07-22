@@ -44,7 +44,15 @@ public static partial class BuiltInFunctions
     }
 
     private static ScalarValue UpperText(ScalarValue value) =>
-        TextResult(ToText(value).ToUpperInvariant());
+        TextResult(ApplyExcelUpperCase(ToText(value)));
+
+    // .NET's ToUpperInvariant maps German ß 1:1 (it stays ß, since there is no single
+    // uppercase codepoint for it), but Excel/Windows casing expands it to "SS" the same
+    // way Word and the Windows API's CharUpper do. Apply that expansion after the
+    // invariant uppercase pass so all other characters keep their normal ASCII/Unicode
+    // casing behavior.
+    private static string ApplyExcelUpperCase(string text) =>
+        text.ToUpperInvariant().Replace("ß", "SS", StringComparison.Ordinal);
 
     private static ScalarValue LowerText(ScalarValue value) =>
         TextResult(ToText(value).ToLowerInvariant());

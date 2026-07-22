@@ -292,6 +292,70 @@ public sealed class FormatPainterCommandTests
             rule.Formula2 == "9");
     }
 
+    // ---- R68-commands-format-painter-6-1 ----------------------------------------------------
+    // Format Painter copies cell style + data validation but not conditional-formatting rules,
+    // unlike Excel's Format Painter which also carries CF. Fixed by adding a
+    // PasteConditionalFormatsCommand to the composite, mirroring how PasteCommandFactory wires it
+    // for a normal "All merging conditional formats" paste.
+
+    [Fact]
+    public void CreateApplyFormatPainterCommand_CopiesThreeColorScaleConditionalFormatToTargetRange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new CellAddress(sheet.Id, 1, 1); // A1
+        var targetTopLeft = new CellAddress(sheet.Id, 1, 2); // B1
+        var targetBottomRight = new CellAddress(sheet.Id, 5, 2); // B5
+        var targetRange = new GridRange(targetTopLeft, targetBottomRight);
+        var sourceStyle = wb.RegisterStyle(new CellStyle { Bold = true });
+        sheet.SetStyleOnly(source.Row, source.Col, sourceStyle);
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(source, new CellAddress(sheet.Id, 5, 1)), // A1:A5
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            MinColor = new RgbColor(248, 105, 107),
+            MidColor = new RgbColor(255, 235, 132),
+            MaxColor = new RgbColor(99, 190, 123)
+        });
+
+        var command = FormatPainterCommandFactory.Create(wb, sheet, source, targetRange);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        // Style + data validation copy still works (no regression).
+        foreach (var address in targetRange.AllCells())
+            wb.GetStyle(sheet.GetCell(address)?.StyleId ?? sheet.GetStyleOnly(address.Row, address.Col)!.Value)
+                .Bold.Should().BeTrue();
+
+        var pasted = sheet.ConditionalFormats.Should().ContainSingle(rule => rule.AppliesTo == targetRange).Subject;
+        pasted.RuleType.Should().Be(CfRuleType.ColorScale);
+        pasted.UseThreeColorScale.Should().BeTrue();
+        pasted.MinColor.Should().Be(new RgbColor(248, 105, 107));
+        pasted.MidColor.Should().Be(new RgbColor(255, 235, 132));
+        pasted.MaxColor.Should().Be(new RgbColor(99, 190, 123));
+    }
+
+    [Fact]
+    public void CreateApplyFormatPainterCommand_SourceCellWithNoConditionalFormat_PaintsNoConditionalFormat_NoRegression()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 3, 2);
+        var sourceStyle = wb.RegisterStyle(new CellStyle { Bold = true });
+        sheet.SetStyleOnly(source.Row, source.Col, sourceStyle);
+
+        var command = FormatPainterCommandFactory.Create(wb, sheet, source, new GridRange(target, target));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.ConditionalFormats.Should().BeEmpty();
+        wb.GetStyle(sheet.GetStyleOnly(target.Row, target.Col)!.Value).Bold.Should().BeTrue();
+    }
+
     private static GridRange Range(SheetId sheetId, uint startRow, uint startCol, uint endRow, uint endCol) =>
         new(
             new CellAddress(sheetId, startRow, startCol),

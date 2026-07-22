@@ -506,10 +506,10 @@ public partial class MainWindow
                 return;
             }
 
-            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
+            if (TryHandleCellAreaExtendClick(newAddr))
             {
-                HideValidationDropdown();
-                ExtendSelection(_selectionAnchor.Value, newAddr);
+                // Handled inside TryHandleCellAreaExtendClick; falls through to the shared
+                // e.Handled = true below, same as every other branch here.
             }
             else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
             {
@@ -548,6 +548,31 @@ public partial class MainWindow
 
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// Handles a plain cell-area click when Shift is held OR F8 "Extend Selection" mode
+    /// (<see cref="_selectionMode"/> == <see cref="ExcelSelectionMode.Extend"/>) is active, by
+    /// extending from the current anchor to <paramref name="newAddr"/> exactly like Shift+click --
+    /// mirroring the keyboard-navigation extend path (ExcelSelectionModePlanner.ShouldExtendSelection,
+    /// used a few hundred lines below for arrow-key movement). Returns false (does nothing) for a
+    /// Ctrl+click or an unmodified click with F8 inactive, leaving those to the caller's other
+    /// branches. Split out of SheetGrid_MouseDown so this decision is directly testable without
+    /// driving a real, pixel-accurate WPF MouseButtonEventArgs through hit-testing (matching the
+    /// R49-render-multiarea-selection-3-2 precedent for header clicks).
+    ///
+    /// Before R68-app-selection-navigation-6-1, only Shift was checked here, so an F8-mode plain
+    /// click fell through to the ordinary click branch and collapsed the selection to the clicked
+    /// cell instead of extending it, and F8 mode had no effect on mouse clicks at all.
+    /// </summary>
+    private bool TryHandleCellAreaExtendClick(CellAddress newAddr)
+    {
+        if (!ExcelSelectionModePlanner.ShouldExtendSelection(_selectionMode, Keyboard.Modifiers) || !_selectionAnchor.HasValue)
+            return false;
+
+        HideValidationDropdown();
+        ExtendSelection(_selectionAnchor.Value, newAddr);
+        return true;
     }
 
     private void MainWindow_TextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)

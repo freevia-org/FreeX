@@ -412,10 +412,13 @@ public static class FillSeriesPlanner
     /// Detects a numeric or date AutoFill series from a line's leading seed cells, mirroring the
     /// fill handle's own numeric/date trend detection (<see cref="AutofillCommand"/>'s
     /// TryCreateScalarSeries / TryCreateForcedSingleCellSeries): a homogeneous 2+ cell seed run
-    /// continues its arithmetic step (the average step between the first and last seed); a lone
-    /// numeric or date seed defaults to a plain +1 step, since there is no natural trend to fit
-    /// from a single sample. A seed run that mixes types (or holds no numbers/dates at all) is not
-    /// a numeric/date series.
+    /// fits a least-squares regression line through ALL the seed points and continues THAT line
+    /// (Excel's own behavior for a fill-handle drag), not a naive endpoint-average step -- for a
+    /// non-arithmetic seed run like 1, 2, 6 the two-point-average step would produce 8.5, 11,
+    /// 13.5, while the correctly-fitted regression line continues as 8, 10.5, 13. A lone numeric
+    /// or date seed defaults to a plain +1 step, since there is no trend to fit from a single
+    /// sample. A seed run that mixes types (or holds no numbers/dates at all) is not a
+    /// numeric/date series.
     /// </summary>
     private static bool TryCreateNumericOrDateLineSeries(
         IReadOnlyList<ScalarValue> seedValues,
@@ -439,13 +442,55 @@ public static class FillSeriesPlanner
             return false;
         }
 
-        var step = numbers.Length >= 2
-            ? (numbers[^1] - numbers[0]) / (numbers.Length - 1)
-            : 1d;
-        var last = numbers[^1];
+        double anchor;
+        double step;
+        if (numbers.Length >= 2)
+        {
+            // Fit the regression line through all seed points and anchor on the fitted line's
+            // value at the seed run's last index (offset 0), matching AutofillCommand's own
+            // FitScalarLine so a Fill ▸ Series ▸ AutoFill continuation agrees with a fill-handle
+            // drag over the same seed cells. This reduces to the plain last-value anchor whenever
+            // the seed run is already perfectly linear, since the fitted line then passes exactly
+            // through every sampled point.
+            step = ComputeLeastSquaresSlope(numbers);
+            var meanX = (numbers.Length - 1) / 2.0;
+            var intercept = numbers.Average() - step * meanX;
+            anchor = intercept + step * (numbers.Length - 1);
+        }
+        else
+        {
+            step = 1d;
+            anchor = numbers[0];
+        }
 
-        lineSeries = offset => createValue(last + step * offset);
+        lineSeries = offset => createValue(anchor + step * offset);
         return true;
+    }
+
+    /// <summary>
+    /// Fits a straight line (least-squares) through <paramref name="numbers"/> (treated as
+    /// y-values at evenly spaced x = 0, 1, 2, ...) and returns its slope, mirroring
+    /// <see cref="AutofillCommand"/>'s own ComputeLinearFitSlope so AutoFill's numeric/date
+    /// continuation agrees with a fill-handle drag over the same seed cells. For exactly two
+    /// values this reduces to the plain two-point slope (numbers[1] - numbers[0]).
+    /// </summary>
+    private static double ComputeLeastSquaresSlope(IReadOnlyList<double> numbers)
+    {
+        var n = numbers.Count;
+        double sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        for (var i = 0; i < n; i++)
+        {
+            sumX += i;
+            sumY += numbers[i];
+            sumXY += i * numbers[i];
+            sumXX += (double)i * i;
+        }
+
+        var denominator = n * sumXX - sumX * sumX;
+        if (denominator == 0)
+            return 0;
+
+        return (n * sumXY - sumX * sumY) / denominator;
     }
 
     /// <summary>

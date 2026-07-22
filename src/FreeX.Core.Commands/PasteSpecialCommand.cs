@@ -346,6 +346,11 @@ internal static class PasteArithmetic
                 ? ErrorValue.DivByZero
                 : source;
 
+        // An overflowing operation (e.g. 1E200 * 1E200) produces +/-Infinity, which Excel reports as
+        // #NUM! rather than a literal "Infinity" value (which would otherwise XLSX-save as text).
+        if (double.IsInfinity(result))
+            return ErrorValue.Num;
+
         return ShouldPreserveDateValue(destination, source, operation)
             ? new DateTimeValue(result)
             : new NumberValue(result);

@@ -176,6 +176,14 @@ public static partial class ChartRenderer
             _ => LineStyle.Dash
         };
 
+    /// <summary>
+    /// Maps a chart marker style to its OxyPlot marker type. OxyPlot has no dedicated "smaller
+    /// dot" marker type, so <see cref="ChartMarkerStyle.Dot"/> shares <see cref="MarkerType.Circle"/>
+    /// with <see cref="ChartMarkerStyle.Auto"/>/<see cref="ChartMarkerStyle.Circle"/> here; callers
+    /// (<c>ApplyLineFormat</c>/<c>ApplyScatterFormat</c>) distinguish it by scaling the series'
+    /// <c>MarkerSize</c> down by <see cref="DotMarkerSizeScale"/>, mirroring the Avalonia renderer's
+    /// own smaller Dot glyph.
+    /// </summary>
     private static MarkerType ToOxyMarkerType(ChartMarkerStyle markerStyle) =>
         markerStyle switch
         {

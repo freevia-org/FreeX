@@ -766,7 +766,9 @@ public sealed partial class FormulaAuditingServiceTests
     {
         var source = ModelSourceTestSupport.ReadCommandsSource("FormulaAuditingService.Errors.cs");
 
-        source.Should().Contain("FindLiteralFormulaErrorIssues(workbook, sheetId)");
+        // r68 (FormulaAuditingService now detects circular cells via RecalcEngine.CyclicCells
+        // instead of ErrorValue.Circular) threaded a cyclicCells parameter through this call.
+        source.Should().Contain("FindLiteralFormulaErrorIssues(workbook, sheetId, cyclicCells)");
         source.Should().Contain("foreach (var (address, cell) in sheet.EnumerateCells())");
         source.Should().NotContain("result.AddRange(FindNumbersStoredAsTextIssues(workbook, sheetId));");
         source.Should().NotContain("result.AddRange(FindTwoDigitYearTextDateIssues(workbook, sheetId));");

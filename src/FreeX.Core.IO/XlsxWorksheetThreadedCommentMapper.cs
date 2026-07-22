@@ -856,8 +856,18 @@ internal static class XlsxWorksheetThreadedCommentMapper
         return $"{{{new Guid(bytes).ToString("D").ToUpperInvariant()}}}";
     }
 
-    private static string FormatDateTimeOffset(DateTimeOffset value) =>
-        value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+    private static string FormatDateTimeOffset(DateTimeOffset value)
+    {
+        // R68-io-comment-note-6-3: a dT with sub-second precision (e.g. read from a source file
+        // that carried fractional seconds) was silently truncated to whole seconds on every save
+        // because the format string had no fractional-second token. Only emit the fractional
+        // component when one is actually present, so an untouched whole-second dT still round-trips
+        // to the exact same string as before (matches Excel's own dT format for that common case).
+        var utc = value.ToUniversalTime();
+        return utc.Ticks % TimeSpan.TicksPerSecond == 0
+            ? utc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
+            : utc.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture);
+    }
 
     private static DateTimeOffset? ParseDateTimeOffset(string? value) =>
         DateTimeOffset.TryParse(

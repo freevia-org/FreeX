@@ -623,7 +623,8 @@ public static partial class BuiltInFunctions
         if (!TrySerialToDateTime(value, uses1904DateSystem, out var dt)) return ErrorValue.Num;
         if (returnType == 21)
             return new NumberValue(ExcelIsoWeeknum(dt, uses1904DateSystem));
-        if (!uses1904DateSystem && Math.Floor(ToNumber(value)) == 0)
+        double rawSerial = Math.Floor(ToNumber(value));
+        if (!uses1904DateSystem && rawSerial == 0)
             return new NumberValue(0);
 
         int firstDay = returnType switch
@@ -639,8 +640,13 @@ public static partial class BuiltInFunctions
         };
         if (firstDay < 0) return ErrorValue.Num;
         var jan1 = new DateTime(dt.Year, 1, 1);
+        int jan1Serial = (int)Math.Floor(DateToSerial(jan1, uses1904DateSystem));
         int jan1Dow = (ExcelDowToMonIndex(jan1, uses1904DateSystem) - firstDay + 7) % 7;
-        int dayOfYear = (dt - jan1).Days;
+        // Day-of-year computed from raw serial arithmetic rather than DateTime subtraction:
+        // ExcelDateSystem.SerialToDate collapses the 1900 phantom leap day (serial 60,
+        // "1900-02-29") onto the same real DateTime as serial 59 ("1900-02-28"), so a
+        // DateTime-based difference would put both serials in the same week.
+        int dayOfYear = (int)rawSerial - jan1Serial;
         return new NumberValue((dayOfYear + jan1Dow) / 7 + 1);
     }
 

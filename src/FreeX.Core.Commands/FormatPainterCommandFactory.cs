@@ -24,6 +24,22 @@ public static class FormatPainterCommandFactory
             var sourceStyle = workbook.GetStyle(styleId);
             commands.Add(new ApplyStyleCommand(targetRange.Start.Sheet, targetRange, StyleDiff.FromStyle(sourceStyle)));
             commands.Add(new FormatPainterDataValidationCommand(sourceSheet.Id, sourceRange, targetRange));
+            // A conditional-format rule (e.g. a color scale) is a range-level construct, not a
+            // per-cell one, so painting a single source cell across a bigger target selection must
+            // project any rule covering that cell onto the WHOLE target range -- exactly like the
+            // style copy and FormatPainterDataValidationCommand just above already do for this same
+            // 1x1-source branch -- rather than only the single clipped source cell.
+            // PasteConditionalFormatsCommand clips a rule to the intersection of its own AppliesTo and
+            // the "source range" passed in, then maps that clipped shape onto the destination anchor,
+            // so widening the source range here to the target's own footprint (anchored at the source
+            // cell) makes the mapped-and-clipped result land on the full target range.
+            var cfSourceRange = new GridRange(
+                sourceRange.Start,
+                new CellAddress(
+                    sourceSheet.Id,
+                    sourceRange.Start.Row + targetRange.RowCount - 1,
+                    sourceRange.Start.Col + targetRange.ColCount - 1));
+            commands.Add(new PasteConditionalFormatsCommand(targetRange.Start.Sheet, cfSourceRange, targetRange.Start, transpose: false));
             return new CompositeWorkbookCommand("Format Painter", commands);
         }
 
@@ -41,6 +57,9 @@ public static class FormatPainterCommandFactory
         }
 
         commands.Add(new FormatPainterDataValidationCommand(sourceSheet.Id, sourceRange, targetRange));
+        // Mirrors PasteCommandFactory's tiled paste-special branch: the conditional-format rule itself
+        // is merged once, anchored at the destination's start, rather than tiled per output cell.
+        commands.Add(new PasteConditionalFormatsCommand(targetRange.Start.Sheet, sourceRange, targetRange.Start, transpose: false));
         return new CompositeWorkbookCommand("Format Painter", commands);
     }
 
