@@ -258,7 +258,7 @@ public sealed partial class MainWindow
                 QuickAccessContextFamily => ExerciseQuickAccessContextRoute(row),
                 WaterfallContextFamily => ExerciseWaterfallContextRoute(row),
                 AutoFilterContextFamily => ExerciseAutoFilterContextRoute(row),
-                NativeMenuContextFamily => ExerciseNativeMenuContextRoute(row),
+                NativeMenuContextFamily => await ExerciseNativeMenuContextRouteAsync(row),
                 _ => Failed(row, "No production dispatch probe is registered for this context-menu family."),
             };
         }
@@ -570,21 +570,64 @@ public sealed partial class MainWindow
             : Failed(row, $"Selecting the production criteria control produced '{criteriaBox.Text}'.");
     }
 
-    private ContextMenuDispatchEvidence ExerciseNativeMenuContextRoute(ContextMenuValidationDescriptor row)
+    private async Task<ContextMenuDispatchEvidence> ExerciseNativeMenuContextRouteAsync(ContextMenuValidationDescriptor row)
     {
         var parts = row.ActionKey.Split(':', 2);
-        var resolved = parts.Length == 2 &&
-            (parts[0] == "file"
-                ? Enum.TryParse<NativeFileMenuItemId>(parts[1], out var fileId) && GetNativeFileMenuItem(fileId) is not null
-                : Enum.TryParse<NativeMenuItemId>(parts[1], out var itemId) && GetNativeMenuItem(itemId) is not null);
-        return resolved
-            ? new ContextMenuDispatchEvidence(
-                "skipped",
-                "native-menu-physical-boundary",
-                row.ProductionRoute,
-                "The real Avalonia NativeMenuItem is bound; activation requires the platform native menu and is not reported as invoked by this managed lane.")
-            : Failed(row, "Native menu item did not resolve to the production Avalonia menu object.");
+        if (parts.Length != 2)
+            return Failed(row, "Native menu action could not be parsed.");
+
+        if (parts[0] != "file" || !Enum.TryParse<NativeFileMenuItemId>(parts[1], out var fileId))
+        {
+            return GetNativeMenuItemByActionKey(parts) is not null
+                ? SkippedNativeMenuRoute(row)
+                : Failed(row, "Native menu item did not resolve to the production Avalonia menu object.");
+        }
+
+        if (GetNativeFileMenuItem(fileId) is null)
+            return Failed(row, "Native file menu item did not resolve to the production Avalonia menu object.");
+
+        if (!IsOwnedNativeFileMenuValidationRoute(fileId))
+            return SkippedNativeMenuRoute(row);
+
+        return await InvokeProductionContextRouteAsync(
+            row,
+            () => _ = ExecuteOwnedNativeFileMenuItemAsync(fileId));
     }
+
+    private static bool IsOwnedNativeFileMenuValidationRoute(NativeFileMenuItemId item) =>
+        item is NativeFileMenuItemId.BackstageInfo or
+            NativeFileMenuItemId.BackstageExport or
+            NativeFileMenuItemId.BackstageAccount or
+            NativeFileMenuItemId.Options or
+            NativeFileMenuItemId.WorkbookStatistics or
+            NativeFileMenuItemId.PageSetup or
+            NativeFileMenuItemId.PrintPreview;
+
+    private static bool IsOwnedNativeFileDialogRoute(ContextMenuValidationDescriptor row)
+    {
+        if (row.FamilyId != NativeMenuContextFamily)
+            return false;
+
+        var parts = row.ActionKey.Split(':', 2);
+        return parts.Length == 2 &&
+            parts[0] == "file" &&
+            Enum.TryParse<NativeFileMenuItemId>(parts[1], out var fileId) &&
+            IsOwnedNativeFileMenuValidationRoute(fileId);
+    }
+
+    private NativeMenuItem? GetNativeMenuItemByActionKey(string[] parts) =>
+        parts.Length == 2 &&
+        parts[0] == "menu" &&
+        Enum.TryParse<NativeMenuItemId>(parts[1], out var itemId)
+            ? GetNativeMenuItem(itemId)
+            : null;
+
+    private static ContextMenuDispatchEvidence SkippedNativeMenuRoute(ContextMenuValidationDescriptor row) =>
+        new(
+            "skipped",
+            "native-menu-physical-boundary",
+            row.ProductionRoute,
+            "The real Avalonia NativeMenuItem is bound; activation remains a platform-native boundary outside this managed lane.");
 
     private async Task<ContextMenuDispatchEvidence> InvokeProductionContextRouteAsync(
         ContextMenuValidationDescriptor row,
@@ -677,8 +720,11 @@ public sealed partial class MainWindow
         row.FamilyId == WorksheetContextFamily &&
         row.ActionKey == nameof(WorksheetContextMenuAction.QuickAnalysis);
 
-    private static bool MayOpenOwnedContextDialog(ContextMenuValidationDescriptor row)
+    internal static bool MayOpenOwnedContextDialog(ContextMenuValidationDescriptor row)
     {
+        if (row.FamilyId == NativeMenuContextFamily)
+            return IsOwnedNativeFileDialogRoute(row);
+
         if (row.FamilyId == SheetTabContextFamily)
         {
             return row.ActionKey is nameof(SheetTabContextMenuAction.Rename) or
