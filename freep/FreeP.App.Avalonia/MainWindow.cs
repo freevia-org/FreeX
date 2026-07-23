@@ -248,6 +248,7 @@ public sealed partial class MainWindow : Window
     internal bool RibbonKeyTipsVisibleForTests => _ribbonKeyTipsVisible;
     internal bool RibbonKeyTipMenuOpenForTests => _ribbonKeyTipMenuItems is not null;
     internal bool RibbonKeyTipFlyoutOpenForTests => _ribbonKeyTipFlyout?.IsOpen == true;
+    internal bool SlideCanvasFocusedForTests => _slideCanvas.IsFocused;
     internal IReadOnlyList<MenuItem> RibbonKeyTipRenderedMenuItemsForTests =>
         _ribbonKeyTipRenderedMenuItems ?? Array.Empty<MenuItem>();
     internal void SetRibbonKeyTipMenuScopeForTests(RibbonMenu menu, MenuFlyout flyout)
@@ -643,6 +644,18 @@ public sealed partial class MainWindow : Window
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
         KeyDown += MainWindow_KeyDown;
+        AddHandler(
+            InputElement.KeyDownEvent,
+            (_, e) =>
+            {
+                if (!_backstage.IsOpen || e.Key != Key.Escape)
+                    return;
+
+                HideBackstageAndRestoreFocus();
+                e.Handled = true;
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
         AddHandler(
             InputElement.PointerPressedEvent,
             (_, _) => SetRibbonKeyTipsVisible(false),
@@ -2687,7 +2700,21 @@ public sealed partial class MainWindow : Window
         GetPrintPlan: () => RefreshPrintBackstagePlan(),
         ExportVideo: () => RefreshVideoFramePackage());
 
-    private void ShowBackstage() => _backstage.Show();
+    private Control? _backstageRestoreFocus;
+
+    private void ShowBackstage()
+    {
+        _backstageRestoreFocus = FocusManager?.GetFocusedElement() as Control ?? _slideCanvas;
+        _backstage.Show();
+    }
+
+    private void HideBackstageAndRestoreFocus()
+    {
+        _backstage.Hide();
+        var target = _backstageRestoreFocus;
+        _backstageRestoreFocus = null;
+        (target is { IsVisible: true, Focusable: true } ? target : _slideCanvas).Focus();
+    }
 
     internal void ShowBackstageForTests() => ShowBackstage();
 
@@ -6449,6 +6476,13 @@ public sealed partial class MainWindow : Window
         if (TryHandleRibbonKeyTips(e))
             return;
 
+        if (_backstage.IsOpen && e.Key == Key.Escape)
+        {
+            HideBackstageAndRestoreFocus();
+            e.Handled = true;
+            return;
+        }
+
         if (TryMapKeyboardKey(e.Key, out var key) &&
             FreePKeyboardShortcutCatalog.TryDispatch(
                 key,
@@ -6527,7 +6561,8 @@ public sealed partial class MainWindow : Window
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)
     {
-        if (args.Key is Key.LeftAlt or Key.RightAlt)
+        if (args.Key is Key.LeftAlt or Key.RightAlt ||
+            args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None)
         {
             SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
             args.Handled = true;

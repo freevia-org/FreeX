@@ -75,7 +75,12 @@ public sealed class KeyboardContextParityTests
                 Press(window, Key.Escape).Handled.Should().BeTrue();
                 window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
 
-                Press(window, Key.RightAlt);
+                Press(window, Key.F10).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeTrue();
+                Press(window, Key.Escape).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+
+                Press(window, Key.RightAlt).Handled.Should().BeTrue();
                 Press(window, Key.N).Handled.Should().BeTrue();
                 window.RibbonKeyTipsVisibleForTests.Should().BeTrue();
                 var tabs = window.RibbonControlForTests.Should().BeOfType<TabControl>().Subject;
@@ -83,6 +88,30 @@ public sealed class KeyboardContextParityTests
 
                 Press(window, Key.Escape).Handled.Should().BeTrue();
                 window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaBackstageEscapeUsesWindowRouteAndRestoresSlideFocus()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                window.ShowBackstageForTests();
+                window.IsBackstageOpen.Should().BeTrue();
+
+                Press(window, Key.Escape).Handled.Should().BeTrue();
+
+                window.IsBackstageOpen.Should().BeFalse();
+                window.SlideCanvasFocusedForTests.Should().BeTrue();
             }
             finally
             {
