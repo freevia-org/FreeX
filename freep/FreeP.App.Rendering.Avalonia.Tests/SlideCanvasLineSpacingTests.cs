@@ -15,7 +15,8 @@ public sealed class SlideCanvasLineSpacingTests
     {
         SlideCanvas.ResolvePowerPointLineHeight(fontSizePx)
             .Should().BeApproximately(expected, 0.000001);
-}
+    }
+
     [Theory]
     [InlineData(24.0, 28.8)]
     [InlineData(37.3333333333, 44.8)]
@@ -61,5 +62,4 @@ public sealed class SlideCanvasLineSpacingTests
         SlideCanvas.ResolvePowerPointFontScale(source)
             .Should().BeApproximately(expected, 0.000001);
     }
-
 }
