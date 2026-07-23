@@ -5438,7 +5438,7 @@ public static class DocxReader
                 ? groupChild.Element(Wps + "spPr")?.Element(A + "xfrm")
                 : isPicture
                     ? groupChild.Element(Pic + "spPr")?.Element(A + "xfrm")
-                    : groupChild.Element(A + "xfrm");
+                    : groupChild.Element(Wpg + "xfrm") ?? groupChild.Element(A + "xfrm");
             var off = xfrm?.Element(A + "off");
             var ext = xfrm?.Element(A + "ext");
             var ox = EmuToPoints(off?.Attribute("x")?.Value ?? "0");
