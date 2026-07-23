@@ -4020,10 +4020,22 @@ public static partial class ChartRenderPlanner
         int categoryIndex,
         int triangleIndex)
     {
-        if (seriesIndex == 1 && categoryIndex == 1 && triangleIndex == 1)
-            return new SrgbColor(0xEB, 0xB1, 0x00);
-
-        return ResolveImportedSurfaceFacetColor(seriesIndex, categoryIndex, triangleIndex);
+        // This authored 25/35-degree view uses PowerPoint's lighter chart
+        // palette for the visible mesh. Keep the material correction local to
+        // the exact explicit-view signature; the generic imported surface
+        // palette remains the owner for other decks and camera paths.
+        return (seriesIndex, categoryIndex, triangleIndex) switch
+        {
+            (0, 0, 0) => new SrgbColor(0x44, 0x72, 0xC3),
+            (0, 0, 1) => new SrgbColor(0xEB, 0x7C, 0x30),
+            (0, 1, 0) => new SrgbColor(0xB3, 0x5E, 0x24),
+            (0, 1, 1) => new SrgbColor(0x9B, 0xC1, 0x83),
+            (1, 0, 0) => new SrgbColor(0x9B, 0xBF, 0x81),
+            (1, 0, 1) => new SrgbColor(0xA9, 0xD1, 0x8D),
+            (1, 1, 0) => new SrgbColor(0x91, 0xB5, 0x7C),
+            (1, 1, 1) => new SrgbColor(0xEB, 0xB1, 0x00),
+            _ => ResolveImportedSurfaceFacetColor(seriesIndex, categoryIndex, triangleIndex)
+        };
     }
 
     private static SrgbColor ApplyImportedSurfaceLighting(

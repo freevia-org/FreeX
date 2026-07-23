@@ -767,6 +767,15 @@ public sealed class ChartBaselineCorpusTests
         geometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
         geometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255);
         geometry.RenderFacets.Should().OnlyContain(facet => facet.Stroke.Alpha == 0);
+        geometry.RenderFacets.Select(facet => facet.Fill.Color).Should().Equal(
+            new SrgbColor(0x44, 0x72, 0xC3),
+            new SrgbColor(0xEB, 0x7C, 0x30),
+            new SrgbColor(0xB3, 0x5E, 0x24),
+            new SrgbColor(0x9B, 0xC1, 0x83),
+            new SrgbColor(0x9B, 0xBF, 0x81),
+            new SrgbColor(0xA9, 0xD1, 0x8D),
+            new SrgbColor(0x91, 0xB5, 0x7C),
+            new SrgbColor(0xEB, 0xB1, 0x00));
     }
 
     [Fact]
