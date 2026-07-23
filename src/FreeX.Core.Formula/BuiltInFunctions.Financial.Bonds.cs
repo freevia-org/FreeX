@@ -29,14 +29,28 @@ public static partial class BuiltInFunctions
         double daysToNext = CouponDayCount(settlement, ncd, basis);
         double a = daysInPeriod > 0 ? daysToNext / daysInPeriod : 1.0;
 
-        // Count coupons from next coupon date to maturity
-        int n = 0;
-        DateTime d = ncd;
+        // Count coupons from the first post-settlement coupon date (ncd) through maturity.
+        // Derive every schedule candidate as an offset from the ORIGINAL maturity
+        // (maturity.AddMonths(-n*months)) rather than iterating AddMonths on a drifting date,
+        // matching Coupnum (BuiltInFunctions.Financial.Coupons.cs) and CouponDatesAround
+        // (BuiltInFunctions.Financial.cs). Walking backward from settlement gives the same set as
+        // ncd..maturity because ncd is the first coupon strictly after settlement.
+        //
+        // The old forward walk (d = ncd; d = d.AddMonths(months)) happened to produce the right
+        // *count* even for a month-end maturity whose schedule crosses a shorter month -- there the
+        // intermediate dates drift down a day (e.g. Aug-31 -> Feb-29 -> Aug-29 -> Feb-28 -> Aug-28),
+        // but each drifted date stays in the same calendar month as the true schedule date, so it
+        // is still <= maturity exactly when the anchored date is, leaving n unchanged. It is also
+        // safe because the redemption below is added unconditionally (never gated on a date-equality
+        // test, unlike the DURATION/ODDFPRICE date-drift bugs that silently drop the principal).
+        // Anchoring keeps n exact regardless, so a future date-sensitive change here can't miscount.
         int months = 12 / frequency;
-        while (d <= maturity)
+        int n = 0;
+        DateTime d = maturity;
+        while (d > settlement)
         {
             n++;
-            d = d.AddMonths(months);
+            d = maturity.AddMonths(-n * months);
         }
         if (n == 0) n = 1;
 
