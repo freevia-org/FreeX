@@ -489,6 +489,7 @@ public sealed class RendererNeutralDedupPlannerTests
         wpf.Should().Contain("ImportedRadarLowerLabelOffsetY");
         avalonia.Should().NotContain("ImportedRadarAgilityLabelOffsetX");
         avalonia.Should().NotContain("ImportedRadarStaminaLabelOffsetX");
+        avalonia.Should().Contain("ImportedRadarValueLabelAvaloniaYCompensation");
     }
 
     [Fact]

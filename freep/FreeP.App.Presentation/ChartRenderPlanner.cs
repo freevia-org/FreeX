@@ -592,6 +592,8 @@ public static partial class ChartRenderPlanner
     public const double ImportedRadarLegendXOffset = 11.0;
     public const double ImportedRadarLegendLineHeight = 38.0;
     public const double ImportedRadarLegendVerticalOffset = 10.0;
+    public const double ImportedRadarValueLabelOffsetX = -16.0;
+    public const double ImportedRadarValueLabelOffsetY = -9.0;
     public const double ImportedPieLegendSwatchSize = 14.0;
     public const double ImportedPieLegendLabelInset = 20.0;
     public const double ImportedPieLegendLineHeight = 37.0;
@@ -5163,10 +5165,14 @@ public static partial class ChartRenderPlanner
             for (int ring = 0; ring <= ringCount; ring++)
             {
                 double ringRadius = radius * ring / ringCount;
-                double labelY = center.Y - ringRadius - 7.0;
+                double labelY = center.Y - ringRadius - 7.0 + ImportedRadarValueLabelOffsetY;
                 valueLabels.Add(new ChartTextPlan(
                     FormatAxisValue(radarMax * ring / ringCount),
-                    new ChartPlanRect(center.X - 58.0, labelY, 48.0, 14.0),
+                    new ChartPlanRect(
+                        center.X - 58.0 + ImportedRadarValueLabelOffsetX,
+                        labelY,
+                        48.0,
+                        14.0),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Right));
