@@ -7982,14 +7982,9 @@ public sealed class DocumentView : RichTextBox
                         RenderTransformOrigin = new Point(0.5, 0.5),
                         RenderTransform = new RotateTransform(angle)
                     };
-                    var paragraphs = modelCell.Paragraphs.Count > 0
-                        ? modelCell.Paragraphs
-                        : [new ModelParagraph()];
-                    foreach (var cellParagraph in paragraphs)
+                    foreach (var block in BuildTableCellParagraphs(modelCell, document))
                     {
-                        // Build a TextBlock for each paragraph so the rotation applies to the text.
-                        var block = BuildParagraph(cellParagraph, document, inTableCell: true);
-                        // Embed the FlowDocument Paragraph into a nested FlowDocument to get a TextBlock.
+                        // Keep each paragraph in a nested FlowDocument so its margins survive rotation.
                         var nested = new System.Windows.Controls.RichTextBox
                         {
                             Document = new System.Windows.Documents.FlowDocument(block),
