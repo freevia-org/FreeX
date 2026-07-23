@@ -51,9 +51,12 @@ public static class FreePRibbon
                         RibbonDropdown dropdown => dropdown with { Menu = NormalizeMenuKeyTips(dropdown.Menu) },
                         _ => control,
                     };
+                    var keyTip = normalized is RibbonComboBox && string.IsNullOrWhiteSpace(normalized.KeyTip)
+                        ? CreateComboBoxKeyTip(normalized.Label, controlKeyTips)
+                        : normalized.KeyTip;
                     return normalized with
                     {
-                        KeyTip = MakeUniqueKeyTip(normalized.KeyTip, controlKeyTips),
+                        KeyTip = MakeUniqueKeyTip(keyTip, controlKeyTips),
                     };
                 }).ToArray();
 
@@ -108,6 +111,24 @@ public static class FreePRibbon
             if (used.Add(candidate))
                 return candidate;
         }
+    }
+
+    private static string CreateComboBoxKeyTip(string label, HashSet<string> used)
+    {
+        var words = label
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(word => word.Any(char.IsAsciiLetterOrDigit))
+            .Select(word => new string(word.Where(char.IsAsciiLetterOrDigit).ToArray()))
+            .Where(word => word.Length > 0)
+            .ToArray();
+        var candidate = words.Length > 1
+            ? string.Concat(words.Select(word => char.ToUpperInvariant(word[0])))
+            : words.Length == 1
+                ? words[0][..Math.Min(3, words[0].Length)].ToUpperInvariant()
+                : "C";
+
+        return MakeUniqueKeyTip(candidate, used)
+            ?? throw new InvalidOperationException($"Unable to assign a combo-box key tip for '{label}'.");
     }
 
     private static void AddHomeGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)

@@ -26,7 +26,7 @@ public sealed class FreePKeyTipInventoryTests
                 group.KeyTip.Should().NotBeNullOrWhiteSpace(
                     $"group {tab.Id}/{group.Id} must be keyboard reachable");
                 var actionable = group.Controls
-                    .Where(control => control is not RibbonSeparator and not RibbonComboBox)
+                    .Where(control => control is not RibbonSeparator and not RibbonRowBreak and not RibbonLabel)
                     .ToArray();
                 actionable.Should().OnlyContain(
                     control => !string.IsNullOrWhiteSpace(control.KeyTip),
