@@ -202,6 +202,12 @@ internal static class FreePRibbonCommands
         registry.Register("freep.format-painter",
             new ActionRibbonCommand(() =>
             {
+                if (editor.SelectedShapeIds.Count == 1 &&
+                    getSlideCanvas?.Invoke()?.BeginFormatPainter() == true)
+                    return;
+
+                // Preserve the existing one-click multi-selection behavior: the first selected
+                // shape is the source and all other selected shapes are painted immediately.
                 editor.CopyFormatting();
                 editor.ApplyFormattingToSelection();
             }));

@@ -94,6 +94,12 @@ public sealed class CanvasGestureHandler
         _editor.CurrentSlideChanged += (_, _) => RefreshAdorner();
     }
 
+    /// <summary>Captures the selected source and arms source-then-target Format Painter mode.</summary>
+    public bool BeginFormatPainter() => _editor.BeginFormatPainter();
+
+    /// <summary>Disarms source-then-target Format Painter mode.</summary>
+    public void CancelFormatPainter() => _editor.CancelFormatPainter();
+
     // ── Mouse down ────────────────────────────────────────────────────────────────────────────
 
     private void OnMouseDown(object sender, MouseButtonEventArgs e)
@@ -105,6 +111,23 @@ public sealed class CanvasGestureHandler
 
         if (slide is null || _editor.Presentation is null)
             return;
+
+        // PowerPoint's single-click Format Painter waits for the next shape hit instead of
+        // turning that click into a move, resize, marquee, OLE activation, or zoom action.
+        if (_editor.IsFormatPainterActive)
+        {
+            var painterSlidePoint = xf.ScreenToSlide(pt.X, pt.Y);
+            var painterHitId = ShapeHitTester.HitTest(
+                slide,
+                _editor.Presentation,
+                painterSlidePoint.X,
+                painterSlidePoint.Y);
+            if (painterHitId.HasValue)
+                _editor.TryApplyFormatPainterToShape(painterHitId.Value);
+
+            e.Handled = true;
+            return;
+        }
 
         if (e.ClickCount >= 2)
         {

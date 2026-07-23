@@ -1657,6 +1657,11 @@ public sealed partial class MainWindow : Window
             QueueClipboardOperation(() => _clipboardService.PasteAsync(Editor))));
         r.Register("freep.format-painter", new ActionRibbonCommand(() =>
         {
+            if (Editor.SelectedShapeIds.Count == 1 && _gestureHandler?.BeginFormatPainter() == true)
+                return;
+
+            // Preserve the existing one-click multi-selection behavior: the first selected
+            // shape is the source and all other selected shapes are painted immediately.
             Editor.CopyFormatting();
             Editor.ApplyFormattingToSelection();
         }));

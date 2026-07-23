@@ -536,6 +536,47 @@ public sealed class EditingSession5ATests
         sess.Bus.CanUndo.Should().BeFalse();
     }
 
+    [Fact]
+    public void BeginFormatPainter_ThenTargetShape_AppliesOnceAndSelectsTarget()
+    {
+        var sess = Make();
+        var source = MakeShape(1, withText: true);
+        source.Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x336699)));
+        var target = MakeShape(2, withText: true);
+        target.TextBody!.Paragraphs[0].Runs[0].FontFamily = "Times New Roman";
+        sess.CurrentSlide!.Shapes.AddRange([source, target]);
+
+        sess.Select(1u);
+        sess.BeginFormatPainter().Should().BeTrue();
+        sess.IsFormatPainterActive.Should().BeTrue();
+        sess.TryApplyFormatPainterToShape(2u).Should().BeTrue();
+
+        target.Fill.Should().BeSameAs(source.Fill);
+        target.TextBody.Paragraphs[0].Runs[0].FontFamily.Should().Be("Arial");
+        sess.SelectedShapeIds.Should().Equal(2u);
+        sess.IsFormatPainterActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FormatPainterTarget_IsUndoableWithoutChangingSource()
+    {
+        var sess = Make();
+        var source = MakeShape(1);
+        source.Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x336699)));
+        var target = MakeShape(2);
+        var originalSourceFill = source.Fill;
+        var originalTargetFill = target.Fill;
+        sess.CurrentSlide!.Shapes.AddRange([source, target]);
+
+        sess.Select(1u);
+        sess.BeginFormatPainter().Should().BeTrue();
+        sess.TryApplyFormatPainterToShape(2u).Should().BeTrue();
+        sess.Undo();
+
+        target.Fill.Should().BeSameAs(originalTargetFill);
+        source.Fill.Should().BeSameAs(originalSourceFill);
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     // BUILT-IN THEMES CATALOGUE
     // ════════════════════════════════════════════════════════════════════════════════

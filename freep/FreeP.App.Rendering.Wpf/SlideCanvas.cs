@@ -151,6 +151,12 @@ public sealed class SlideCanvas : FrameworkElement
     /// </summary>
     public InCanvasTableCellEditor? TableCellEditor => _tableCellEditor;
 
+    /// <summary>Arms the single-click source-then-target Format Painter workflow.</summary>
+    public bool BeginFormatPainter() => _gestureHandler?.BeginFormatPainter() == true;
+
+    /// <summary>Disarms the single-click source-then-target Format Painter workflow.</summary>
+    public void CancelFormatPainter() => _gestureHandler?.CancelFormatPainter();
+
     // ── Cached draw ops (invalidated on model change) ─────────────────────────
 
     private IReadOnlyList<DrawOp>? _cachedOps;

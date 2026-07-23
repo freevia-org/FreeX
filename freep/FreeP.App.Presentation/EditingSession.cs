@@ -56,6 +56,7 @@ public sealed class EditingSession
     private ShapeFill?          _fmtFill;
     private ShapeOutline?       _fmtOutline;
     private RunFormatSnapshot?  _fmtRun;
+    private bool                 _formatPainterActive;
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -250,6 +251,7 @@ public sealed class EditingSession
     /// <summary>Navigates to the slide at <paramref name="index"/> and clears selection.</summary>
     public void SelectSlide(int index)
     {
+        _formatPainterActive = false;
         ClearSelection();
         CurrentSlideIndex = index;
     }
@@ -1100,6 +1102,54 @@ public sealed class EditingSession
     /// True when format-painter clipboard has been populated via <see cref="CopyFormatting"/>.
     /// </summary>
     public bool HasFormatClipboard => _fmtFill is not null || _fmtOutline is not null || _fmtRun is not null;
+
+    /// <summary>
+    /// True after the single-click Format Painter workflow captures a source shape and is
+    /// waiting for the next canvas shape to receive that formatting.
+    /// </summary>
+    public bool IsFormatPainterActive => _formatPainterActive;
+
+    /// <summary>
+    /// Captures the single selected source shape and enters the source-then-target Format
+    /// Painter workflow used by the canvas gesture handlers.
+    /// </summary>
+    public bool BeginFormatPainter()
+    {
+        if (_selectedShapeIds.Count != 1)
+            return false;
+
+        CopyFormatting();
+        _formatPainterActive = HasFormatClipboard;
+        return _formatPainterActive;
+    }
+
+    /// <summary>Leaves the source-then-target Format Painter workflow without changing the model.</summary>
+    public void CancelFormatPainter() => _formatPainterActive = false;
+
+    /// <summary>
+    /// Applies the captured source formatting to one hit-tested target shape. The target becomes
+    /// selected, matching PowerPoint's single-click painter workflow, and the operation remains
+    /// one undoable command.
+    /// </summary>
+    public bool TryApplyFormatPainterToShape(uint targetShapeId)
+    {
+        var slide = CurrentSlide;
+        if (!_formatPainterActive || !HasFormatClipboard || slide is null ||
+            slide.Shapes.All(shape => shape.Id != targetShapeId))
+        {
+            return false;
+        }
+
+        Bus.Execute(new ApplyFormatPainterCommand(
+            _currentSlideIndex,
+            new[] { targetShapeId },
+            _fmtFill,
+            _fmtOutline,
+            _fmtRun));
+        _formatPainterActive = false;
+        Select(targetShapeId);
+        return true;
+    }
 
     /// <summary>
     /// Applies the captured fill/outline/run-format to all currently selected shapes.

@@ -219,6 +219,8 @@ public sealed class CanvasGesturePlannerTests
         wpf.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
         wpf.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
         wpf.Should().Contain("CanvasGesturePlanner.ReduceDrag");
+        wpf.Should().Contain("BeginFormatPainter");
+        wpf.Should().Contain("TryApplyFormatPainterToShape");
         wpf.Should().Contain("StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle");
         wpf.Should().NotContain("ToCanvasGestureHandle");
         wpf.Should().NotContain("private const long MinEmu");
@@ -229,6 +231,8 @@ public sealed class CanvasGesturePlannerTests
         avalonia.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
         avalonia.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
         avalonia.Should().Contain("CanvasGesturePlanner.ReduceDrag");
+        avalonia.Should().Contain("BeginFormatPainter");
+        avalonia.Should().Contain("TryApplyFormatPainterToShape");
         avalonia.Should().Contain("StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle");
         avalonia.Should().NotContain("ToCanvasGestureHandle");
         avalonia.Should().NotContain("private const long MinEmu");
