@@ -485,7 +485,10 @@ internal static class Ooxml
         var element = parent?.Element(W + localName);
         if (element is null)
             return false;
-        var val = element.Attribute(W + "val")?.Value;
-        return val is null or "1" or "true" or "on";
+        return ReadOnOffValue(element.Attribute(W + "val")?.Value, defaultValue: true);
     }
+
+    /// <summary>Reads a WordprocessingML <c>ST_OnOff</c> lexical value, keeping a caller-provided absent default.</summary>
+    public static bool ReadOnOffValue(string? value, bool defaultValue = false) =>
+        value is null ? defaultValue : value is "1" or "true" or "on";
 }

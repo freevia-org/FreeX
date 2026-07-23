@@ -2681,12 +2681,13 @@ public static class DocxReader
         // DocxWriter.BuildTable. An explicit w:val="0" disables repetition just as it does for other
         // WordprocessingML boolean properties.
         var tblLook = tblPr?.Element(W + "tblLook");
-        var headerRow = tblLook?.Attribute(W + "firstRow")?.Value == "1";
-        var lastRow = tblLook?.Attribute(W + "lastRow")?.Value == "1";
-        var firstColumn = tblLook?.Attribute(W + "firstColumn")?.Value == "1";
-        var lastColumn = tblLook?.Attribute(W + "lastColumn")?.Value == "1";
-        var bandedRows = tblLook?.Attribute(W + "noHBand")?.Value == "0";
-        var bandedColumns = tblLook?.Attribute(W + "noVBand")?.Value == "0";
+        var headerRow = ReadOnOffValue(tblLook?.Attribute(W + "firstRow")?.Value);
+        var lastRow = ReadOnOffValue(tblLook?.Attribute(W + "lastRow")?.Value);
+        var firstColumn = ReadOnOffValue(tblLook?.Attribute(W + "firstColumn")?.Value);
+        var lastColumn = ReadOnOffValue(tblLook?.Attribute(W + "lastColumn")?.Value);
+        // Keep the existing absent attribute behavior (no banding); the no*Band attributes invert the flag.
+        var bandedRows = !ReadOnOffValue(tblLook?.Attribute(W + "noHBand")?.Value, defaultValue: true);
+        var bandedColumns = !ReadOnOffValue(tblLook?.Attribute(W + "noVBand")?.Value, defaultValue: true);
         var firstRow = tbl.Elements(W + "tr").FirstOrDefault();
         var repeatHeader = ReadToggle(firstRow?.Element(W + "trPr"), "tblHeader");
 
