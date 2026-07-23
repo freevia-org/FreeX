@@ -122,6 +122,12 @@ public static class DocxWriter
         // part-local media file + a relationship in word/_rels/comments.xml.rels, so comment-part images
         // round-trip referenced rather than orphaned. Empty for text-only comments.
         var commentImages = hasComments ? CollectCommentImages(document, usedPartNames) : new List<ImagePart>();
+        var footnoteImages = hasFootnotes
+            ? CollectNoteImages(document.Footnotes.Values.OrderBy(note => note.Id).SelectMany(note => note.Content), "footnote", usedPartNames)
+            : new List<ImagePart>();
+        var endnoteImages = hasEndnotes
+            ? CollectNoteImages(document.Endnotes.Values.OrderBy(note => note.Id).SelectMany(note => note.Content), "endnote", usedPartNames)
+            : new List<ImagePart>();
         var commentPreservedDrawings = hasComments
             ? CollectPartLocalPreservedDrawings(FlattenComments(document).SelectMany(comment => comment.Content), preservedParts)
             : [];
@@ -197,6 +203,8 @@ public static class DocxWriter
         var imageExtensions = images
             .Concat(headerFooterParts.SelectMany(p => p.Images))
             .Concat(commentImages)
+            .Concat(footnoteImages)
+            .Concat(endnoteImages)
             .Select(p => InlineImage.ExtensionFor(p.Image.Format))
             .Distinct()
             .OrderBy(ext => ext, StringComparer.Ordinal)
@@ -257,15 +265,23 @@ public static class DocxWriter
         }
         if (hasFootnotes)
         {
-            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document, footnotePreservedDrawings));
-            if (footnotePreservedDrawings.Count > 0)
-                WritePart(archive, "word/_rels/footnotes.xml.rels", BuildPartLocalPreservedDrawingRels(footnotePreservedDrawings));
+            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document, footnoteImages, footnotePreservedDrawings));
+            if (footnoteImages.Count > 0 || footnotePreservedDrawings.Count > 0)
+            {
+                WritePart(archive, "word/_rels/footnotes.xml.rels", BuildNoteRels(footnoteImages, footnotePreservedDrawings));
+                foreach (var image in footnoteImages)
+                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+            }
         }
         if (hasEndnotes)
         {
-            WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document, endnotePreservedDrawings));
-            if (endnotePreservedDrawings.Count > 0)
-                WritePart(archive, "word/_rels/endnotes.xml.rels", BuildPartLocalPreservedDrawingRels(endnotePreservedDrawings));
+            WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document, endnoteImages, endnotePreservedDrawings));
+            if (endnoteImages.Count > 0 || endnotePreservedDrawings.Count > 0)
+            {
+                WritePart(archive, "word/_rels/endnotes.xml.rels", BuildNoteRels(endnoteImages, endnotePreservedDrawings));
+                foreach (var image in endnoteImages)
+                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+            }
         }
         if (hasComments)
         {
@@ -1564,11 +1580,18 @@ public static class DocxWriter
     /// </summary>
     private static XDocument BuildFootnotes(
         TextDocument document,
+        IReadOnlyList<ImagePart> images,
         IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
     {
         var footnotes = new XElement(W + "footnotes",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+        if (images.Count > 0)
+        {
+            footnotes.Add(new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName));
+            footnotes.Add(new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName));
+            footnotes.Add(new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName));
+        }
 
         XElement Separator(int id, string type) =>
             new(W + "footnote",
@@ -1581,8 +1604,9 @@ public static class DocxWriter
         footnotes.Add(Separator(0, "continuationSeparator"));
 
         // Footnote chart references resolve against word/_rels/footnotes.xml.rels.
-        var noDrawings = RunDrawings.Empty() with
+        var noteDrawings = RunDrawings.Empty() with
         {
+            Images = BuildNoteImagesByRun(document.Footnotes.Values.OrderBy(note => note.Id).SelectMany(note => note.Content), images),
             PreservedDrawingRelIds = preservedDrawings
                 .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal)
         };
@@ -1592,7 +1616,7 @@ public static class DocxWriter
         {
             var element = new XElement(W + "footnote", new XAttribute(W + "id", footnote.Id));
             foreach (var paragraph in BuildNoteContent(
-                footnote.Content, noDrawings, noHyperlinks, "footnoteRef"))
+                footnote.Content, noteDrawings, noHyperlinks, "footnoteRef"))
                 element.Add(paragraph);
             footnotes.Add(element);
         }
@@ -1608,11 +1632,18 @@ public static class DocxWriter
     /// </summary>
     private static XDocument BuildEndnotes(
         TextDocument document,
+        IReadOnlyList<ImagePart> images,
         IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
     {
         var endnotes = new XElement(W + "endnotes",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+        if (images.Count > 0)
+        {
+            endnotes.Add(new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName));
+            endnotes.Add(new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName));
+            endnotes.Add(new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName));
+        }
 
         XElement Separator(int id, string type) =>
             new(W + "endnote",
@@ -1625,8 +1656,9 @@ public static class DocxWriter
         endnotes.Add(Separator(0, "continuationSeparator"));
 
         // Endnote chart references resolve against word/_rels/endnotes.xml.rels.
-        var noDrawings = RunDrawings.Empty() with
+        var noteDrawings = RunDrawings.Empty() with
         {
+            Images = BuildNoteImagesByRun(document.Endnotes.Values.OrderBy(note => note.Id).SelectMany(note => note.Content), images),
             PreservedDrawingRelIds = preservedDrawings
                 .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal)
         };
@@ -1636,7 +1668,7 @@ public static class DocxWriter
         {
             var element = new XElement(W + "endnote", new XAttribute(W + "id", endnote.Id));
             foreach (var paragraph in BuildNoteContent(
-                endnote.Content, noDrawings, noHyperlinks, "endnoteRef"))
+                endnote.Content, noteDrawings, noHyperlinks, "endnoteRef"))
                 element.Add(paragraph);
             endnotes.Add(element);
         }
@@ -1701,6 +1733,43 @@ public static class DocxWriter
                 foreach (var run in paragraph.Runs)
                     if (run.Image is not null && next < commentImages.Count)
                         map[run] = commentImages[next++];
+        return map;
+    }
+
+    /// <summary>
+    /// Collects inline images for one note story (footnotes or endnotes). The owning XML part has its own rels
+    /// file, so note media must never reuse document-level image relationship ids.
+    /// </summary>
+    private static List<ImagePart> CollectNoteImages(
+        IEnumerable<Paragraph> paragraphs,
+        string partPrefix,
+        HashSet<string> usedPartNames)
+    {
+        var images = new List<ImagePart>();
+        foreach (var paragraph in paragraphs)
+            foreach (var run in paragraph.Runs)
+                if (run.Image is { } image)
+                {
+                    var index = images.Count + 1;
+                    images.Add(new ImagePart(
+                        image,
+                        $"rIdImg{index}",
+                        NextAvailablePartFileName(usedPartNames, "word/media", partPrefix + "_image", InlineImage.ExtensionFor(image.Format)),
+                        (uint)index));
+                }
+        return images;
+    }
+
+    private static Dictionary<Run, ImagePart> BuildNoteImagesByRun(
+        IEnumerable<Paragraph> paragraphs,
+        IReadOnlyList<ImagePart> images)
+    {
+        var map = new Dictionary<Run, ImagePart>();
+        var next = 0;
+        foreach (var paragraph in paragraphs)
+            foreach (var run in paragraph.Runs)
+                if (run.Image is not null && next < images.Count)
+                    map[run] = images[next++];
         return map;
     }
 
@@ -6768,6 +6837,24 @@ public static class DocxWriter
         IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
     {
         var relationships = OpcRelationships.CreateRoot();
+        foreach (var drawing in preservedDrawings)
+            relationships.Add(OpcRelationships.CreateRelationship(
+                drawing.RelationshipId,
+                drawing.RelationshipType,
+                DocumentRelativeTarget(drawing.PartName)));
+        return new XDocument(relationships);
+    }
+
+    private static XDocument BuildNoteRels(
+        IReadOnlyList<ImagePart> images,
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
+    {
+        var relationships = OpcRelationships.CreateRoot();
+        foreach (var image in images)
+            relationships.Add(OpcRelationships.CreateRelationship(
+                image.RelationshipId,
+                ImageRel,
+                "media/" + image.FileName));
         foreach (var drawing in preservedDrawings)
             relationships.Add(OpcRelationships.CreateRelationship(
                 drawing.RelationshipId,

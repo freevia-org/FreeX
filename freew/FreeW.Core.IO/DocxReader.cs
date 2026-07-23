@@ -840,7 +840,7 @@ public static class DocxReader
                 footnote.Content.Add(ReadParagraph(
                     p,
                     archive,
-                    imageRelationships,
+                    noteRelationships,
                     hyperlinkRelationships,
                     noNumbering,
                     preservedDrawingTarget: document,
@@ -883,7 +883,7 @@ public static class DocxReader
                 endnote.Content.Add(ReadParagraph(
                     p,
                     archive,
-                    imageRelationships,
+                    noteRelationships,
                     hyperlinkRelationships,
                     noNumbering,
                     preservedDrawingTarget: document,
