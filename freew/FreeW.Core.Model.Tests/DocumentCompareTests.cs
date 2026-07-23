@@ -242,6 +242,71 @@ public class DocumentCompareTests
     }
 
     [Fact]
+    public void Compare_CaseChangesSuppressed_PreservesRevisedCasingWithoutRevisionMarks()
+    {
+        var original = DocWith("Status: Draft");
+        var revised = DocWith("status: draft");
+
+        var result = DocumentCompare.Compare(
+            original,
+            revised,
+            Author,
+            DateXml,
+            new CompareSettings { CaseChanges = false });
+
+        result.Paragraphs.Single().PlainText.Should().Be("status: draft");
+        TrackChanges.HasRevisions(result).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Compare_WhitespaceSuppressed_PreservesRevisedWhitespaceWithoutRevisionMarks()
+    {
+        var original = DocWith("alpha beta\tgamma");
+        var revised = DocWith("alpha   beta gamma");
+
+        var result = DocumentCompare.Compare(
+            original,
+            revised,
+            Author,
+            DateXml,
+            new CompareSettings { Whitespace = false });
+
+        result.Paragraphs.Single().PlainText.Should().Be("alpha   beta gamma");
+        TrackChanges.HasRevisions(result).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Compare_CaseAndWhitespaceSuppressed_StillTracksSubstantiveWordChanges()
+    {
+        var original = DocWith("Alpha beta");
+        var revised = DocWith("alpha   delta");
+
+        var result = DocumentCompare.Compare(
+            original,
+            revised,
+            Author,
+            DateXml,
+            new CompareSettings { CaseChanges = false, Whitespace = false });
+
+        var paragraph = result.Paragraphs.Single();
+        paragraph.Runs.Where(run => run.Revision == RevisionKind.Deleted)
+            .Select(run => run.Text.Trim()).Should().Equal("beta");
+        paragraph.Runs.Where(run => run.Revision == RevisionKind.Inserted)
+            .Select(run => run.Text.Trim()).Should().Equal("delta");
+    }
+
+    [Fact]
+    public void Compare_DefaultSettings_TracksCaseAndWhitespaceChanges()
+    {
+        var original = DocWith("Alpha beta");
+        var revised = DocWith("alpha  beta");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        TrackChanges.HasRevisions(result).Should().BeTrue();
+    }
+
+    [Fact]
     public void Compare_ShowChangesIn_StoredOnSettings()
     {
         // The ShowChangesIn flag is a dialog/presentation concept; the engine doesn't act on it, but
