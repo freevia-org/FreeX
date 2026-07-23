@@ -34,6 +34,9 @@ public sealed class SlideCanvas : Control
     private const double PowerPointDefaultLineSpacingFactor = 1.18;
     private const double PowerPointFixedTextLineSpacingFactor = 1.20;
     private const double ImportedRadarValueLabelAvaloniaYCompensation = 3.0;
+    private const double AvaloniaImportedRadarAgilityLabelOffsetX = 35.0;
+    private const double AvaloniaImportedRadarStaminaLabelOffsetX = -51.0;
+    private const double AvaloniaImportedRadarLowerLabelOffsetY = -2.0;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -1722,8 +1725,26 @@ public sealed class SlideCanvas : Control
             DrawChartLabel(dc, label.Text, labelBounds, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
         }
 
-        foreach (var label in plan.CategoryLabels)
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+        for (int labelIndex = 0; labelIndex < plan.CategoryLabels.Count; labelIndex++)
+        {
+            var label = plan.CategoryLabels[labelIndex];
+            var labelBounds = ToRect(label.Bounds);
+            if (plan.Rings.Count == 9 &&
+                plan.CategoryLabels.Count == 5 &&
+                plan.Series.Count == 2 &&
+                labelIndex is 2 or 3)
+            {
+                double horizontalOffset = labelIndex == 2
+                    ? AvaloniaImportedRadarAgilityLabelOffsetX
+                    : AvaloniaImportedRadarStaminaLabelOffsetX;
+                labelBounds = new Rect(
+                    labelBounds.X + horizontalOffset,
+                    labelBounds.Y + AvaloniaImportedRadarLowerLabelOffsetY,
+                    labelBounds.Width,
+                    labelBounds.Height);
+            }
+            DrawChartLabel(dc, label.Text, labelBounds, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+        }
 
         foreach (var primitive in plan.Series)
         {
