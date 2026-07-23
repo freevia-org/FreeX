@@ -10,6 +10,7 @@ public sealed partial class XlsxFileAdapter
     private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
     private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
     private const string QueryTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable";
+    private const string QueryTableContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.queryTable+xml";
 
     // R70-io-vba-6-1: parts making up a source package's VBA project. xl/vbaProject.bin is the
     // macro project itself; a digitally-signed macro project also carries
@@ -77,7 +78,10 @@ public sealed partial class XlsxFileAdapter
         if (sourceParts.HasStructuredTables)
             XlsxStructuredTableReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
         if (sourceParts.HasQueryTables)
+        {
             PreserveRenumberedWorksheetQueryTableRelationships(sourceArchive, generatedArchive, context);
+            CloneQueryTablesForDuplicatedSheets(sourceArchive, generatedArchive, context, workbook);
+        }
         if (sourceParts.HasExternalLinks)
             XlsxExternalLinkReferencePreserver.Preserve(sourceArchive, generatedArchive);
         if (sourceParts.HasUnsupportedSheetParts)
@@ -377,6 +381,278 @@ public sealed partial class XlsxFileAdapter
                 XlsxPackageXmlEditor.ReplaceXml(generatedArchive, targetRelsPath, targetRelsXml);
         }
     }
+
+    // R77-io-duplicate-sheet-querytable-1: FreeX has no in-model representation of a legacy/classic
+    // "Get External Data" queryTable at all -- it survives a save purely via the source-package
+    // passthrough above, keyed by matching SHEET NAME between the loaded source package and the
+    // freshly generated one. Duplicating a sheet (Home > Sheet > Duplicate Sheet / "Create a copy")
+    // gives the copy a brand-new name that never existed in the source package, so that name-keyed
+    // matching has nothing to attach a queryTable relationship to -- the copy silently loses its
+    // query-table binding even though real Excel duplicates the queryTable part (and its worksheet
+    // relationship) for the copied sheet. Since nothing in the model records "this sheet was
+    // duplicated from that one", identify the duplication by CONTENT instead: a brand-new target
+    // sheet whose cells are identical to a retained source sheet that itself carries a queryTable
+    // relationship is treated as a copy of that sheet, and gets its own clone of the queryTable
+    // part(s) -- a fresh, distinct part per copy, never a second relationship aimed at the
+    // original's part (two sheets sharing one queryTable part would corrupt on independent edits;
+    // Excel itself always writes a distinct queryTableN.xml per sheet). The underlying data-source
+    // connection (xl/connections.xml, referenced by the queryTable's own connectionId attribute) is
+    // deliberately left shared between the original and the clone, matching Excel's own behavior.
+    private static void CloneQueryTablesForDuplicatedSheets(
+        ZipArchive sourceArchive,
+        ZipArchive generatedArchive,
+        XlsxSourcePackagePreservationContext? context,
+        Workbook workbook)
+    {
+        if (context is null)
+            return;
+
+        // Brand-new target sheet names: present in the generated workbook but absent from the
+        // loaded source package entirely (added, or duplicated, during this edit).
+        var newSheetNames = context.TargetSheets.Keys
+            .Where(name => !context.SourceSheets.ContainsKey(name))
+            .ToList();
+        if (newSheetNames.Count == 0)
+            return;
+
+        foreach (var (candidateName, candidateSourcePath) in context.SourceSheets)
+        {
+            if (!IsWorksheetPartPath(candidateSourcePath))
+                continue;
+            if (!context.TargetSheets.ContainsKey(candidateName))
+                continue; // The candidate sheet itself was removed -- nothing left to duplicate from.
+
+            var candidateQueryTableRelationships = GetQueryTableRelationships(sourceArchive, candidateSourcePath, context.PackageRelNs);
+            if (candidateQueryTableRelationships.Count == 0)
+                continue;
+
+            var candidateSheet = workbook.GetSheet(candidateName);
+            if (candidateSheet is null)
+                continue;
+
+            foreach (var newSheetName in newSheetNames)
+            {
+                var newWorksheetPath = context.TargetSheets[newSheetName];
+                if (!IsWorksheetPartPath(newWorksheetPath))
+                    continue;
+
+                var newSheet = workbook.GetSheet(newSheetName);
+                if (newSheet is null || !SheetContentsMatch(candidateSheet, newSheet))
+                    continue;
+
+                CloneQueryTableRelationshipsOntoSheet(
+                    sourceArchive,
+                    generatedArchive,
+                    candidateSourcePath,
+                    newWorksheetPath,
+                    candidateQueryTableRelationships,
+                    context.PackageRelNs);
+            }
+        }
+    }
+
+    private static List<XElement> GetQueryTableRelationships(ZipArchive sourceArchive, string worksheetPath, XNamespace packageRelNs)
+    {
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
+        var relsEntry = sourceArchive.GetEntry(relsPath);
+        if (relsEntry is null)
+            return [];
+
+        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+        return relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship => string.Equals(
+                relationship.Attribute("Type")?.Value?.Trim(),
+                QueryTableRelationshipType,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList() ?? [];
+    }
+
+    /// <summary>
+    /// Cheap structural-duplicate check used to recognize a freshly duplicated sheet purely from
+    /// its content, since Duplicate Sheet leaves no lineage breadcrumb any IO-layer code can read.
+    /// Requires an exact cell-for-cell match (value, formula text, and style) between every
+    /// populated cell on both sheets, and rejects an empty candidate outright so two blank sheets
+    /// are never mistaken for a duplication pair.
+    /// </summary>
+    private static bool SheetContentsMatch(Sheet candidate, Sheet other)
+    {
+        var candidateCells = candidate.EnumerateCells().ToList();
+        if (candidateCells.Count == 0)
+            return false;
+
+        var otherCellsByPosition = other.EnumerateCells()
+            .ToDictionary(pair => (pair.Address.Row, pair.Address.Col), pair => pair.Cell);
+        if (otherCellsByPosition.Count != candidateCells.Count)
+            return false;
+
+        foreach (var (address, cell) in candidateCells)
+        {
+            if (!otherCellsByPosition.TryGetValue((address.Row, address.Col), out var otherCell))
+                return false;
+            if (!Equals(cell.Value, otherCell.Value) ||
+                !string.Equals(cell.FormulaText, otherCell.FormulaText, StringComparison.Ordinal) ||
+                !cell.StyleId.Equals(otherCell.StyleId))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void CloneQueryTableRelationshipsOntoSheet(
+        ZipArchive sourceArchive,
+        ZipArchive generatedArchive,
+        string candidateSourcePath,
+        string newWorksheetPath,
+        IReadOnlyList<XElement> candidateQueryTableRelationships,
+        XNamespace packageRelNs)
+    {
+        var newRelsPath = XlsxPackagePath.GetRelationshipPartPath(newWorksheetPath);
+        var newRelsEntry = generatedArchive.GetEntry(newRelsPath);
+        var newRelsXml = newRelsEntry is not null
+            ? XlsxPackageXmlEditor.LoadXml(newRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        var newRoot = newRelsXml.Root;
+        if (newRoot is null)
+            return;
+
+        // Don't re-clone if this sheet somehow already carries a queryTable relationship (e.g. this
+        // preserver running more than once over the same save).
+        if (newRoot.Elements(packageRelNs + "Relationship")
+            .Any(relationship => string.Equals(
+                relationship.Attribute("Type")?.Value?.Trim(),
+                QueryTableRelationshipType,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var changed = false;
+        foreach (var candidateRelationship in candidateQueryTableRelationships)
+        {
+            var target = candidateRelationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target))
+                continue;
+
+            var candidatePartPath = XlsxPackagePath.ResolveRelationshipTarget(candidateSourcePath, target);
+            var candidatePartEntry = sourceArchive.GetEntry(candidatePartPath);
+            if (candidatePartEntry is null)
+                continue;
+
+            var clonedPartPath = AllocateClonedQueryTablePartPath(generatedArchive);
+            CopyQueryTablePartContent(candidatePartEntry, generatedArchive, clonedPartPath);
+            CloneQueryTableContentTypeOverride(sourceArchive, generatedArchive, candidatePartPath, clonedPartPath);
+
+            // xl/queryTables/ is NOT one of the folders XlsxPackagePath.GetRelationshipTarget's
+            // whitelist treats as relative-from-xl/worksheets/ (only media/drawings/tables/... are),
+            // so that generic helper would wrongly compute a package-absolute-looking target here.
+            // Both worksheet parts and queryTable parts live directly under xl/, so the correct
+            // worksheet-relative target is always "../queryTables/<file>.xml" -- exactly what
+            // PreserveRenumberedWorksheetQueryTableRelationships above already relies on when it
+            // copies a same-shape Target string verbatim.
+            var clonedFileName = clonedPartPath["xl/queryTables/".Length..];
+            var newTarget = "../queryTables/" + clonedFileName;
+            var newId = XlsxPackageXmlEditor.NextRelationshipId(newRelsXml, packageRelNs);
+            newRoot.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", newId),
+                new XAttribute("Type", QueryTableRelationshipType),
+                new XAttribute("Target", newTarget)));
+            changed = true;
+        }
+
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(generatedArchive, newRelsPath, newRelsXml);
+    }
+
+    // Picks the next unused xl/queryTables/queryTableN.xml part name in the GENERATED package
+    // (re-scanned on every call so cloning several duplicated sheets in the same save never
+    // collides two clones on the same fresh name).
+    private static string AllocateClonedQueryTablePartPath(ZipArchive generatedArchive)
+    {
+        const string prefix = "xl/queryTables/queryTable";
+        const string suffix = ".xml";
+        var highestExisting = generatedArchive.Entries
+            .Select(entry => entry.FullName)
+            .Where(name =>
+                name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], out var number) ? number : 0)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return $"{prefix}{highestExisting + 1}{suffix}";
+    }
+
+    private static void CopyQueryTablePartContent(ZipArchiveEntry sourceEntry, ZipArchive generatedArchive, string targetPartPath)
+    {
+        generatedArchive.GetEntry(targetPartPath)?.Delete();
+        var targetEntry = generatedArchive.CreateEntry(targetPartPath, CompressionLevel.Optimal);
+        using var sourceStream = sourceEntry.Open();
+        using var targetStream = targetEntry.Open();
+        sourceStream.CopyTo(targetStream);
+    }
+
+    // Adds a [Content_Types].xml Override for the newly cloned part, reusing whichever ContentType
+    // value the original part's own Override carries (checking both the generated package -- where
+    // it was already merged in by MergeContentTypes -- and the source package as a fallback), or the
+    // standard queryTable content type if neither package happens to carry an explicit Override.
+    private static void CloneQueryTableContentTypeOverride(
+        ZipArchive sourceArchive,
+        ZipArchive generatedArchive,
+        string sourcePartPath,
+        string clonedPartPath)
+    {
+        var contentTypesEntry = generatedArchive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return;
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+        var root = contentTypesXml.Root;
+        if (root is null)
+            return;
+
+        if (root.Elements(contentTypeNs + "Override")
+            .Any(element => IsOverrideForPart(element, clonedPartPath)))
+        {
+            return;
+        }
+
+        var contentType =
+            FindOverrideContentType(root, contentTypeNs, sourcePartPath) ??
+            FindSourceOverrideContentType(sourceArchive, contentTypeNs, sourcePartPath) ??
+            QueryTableContentType;
+
+        root.Add(new XElement(
+            contentTypeNs + "Override",
+            new XAttribute("PartName", "/" + clonedPartPath),
+            new XAttribute("ContentType", contentType)));
+        XlsxPackageXmlEditor.ReplaceXml(generatedArchive, "[Content_Types].xml", contentTypesXml);
+    }
+
+    private static string? FindSourceOverrideContentType(ZipArchive sourceArchive, XNamespace contentTypeNs, string partPath)
+    {
+        var sourceContentTypesEntry = sourceArchive.GetEntry("[Content_Types].xml");
+        if (sourceContentTypesEntry is null)
+            return null;
+
+        var sourceRoot = XlsxPackageXmlEditor.LoadXml(sourceContentTypesEntry).Root;
+        return sourceRoot is null ? null : FindOverrideContentType(sourceRoot, contentTypeNs, partPath);
+    }
+
+    private static string? FindOverrideContentType(XElement root, XNamespace contentTypeNs, string partPath) =>
+        root.Elements(contentTypeNs + "Override")
+            .FirstOrDefault(element => IsOverrideForPart(element, partPath))
+            ?.Attribute("ContentType")?.Value;
+
+    private static bool IsOverrideForPart(XElement overrideElement, string partPath) =>
+        string.Equals(
+            overrideElement.Attribute("PartName")?.Value?.TrimStart('/'),
+            partPath,
+            StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<string> GetLegacyDrawingHfDependencyPaths(
         ZipArchive archive,

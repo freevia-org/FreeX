@@ -180,6 +180,7 @@ public sealed partial class FormulaEvaluator
             BinaryOperator.Power => Math.Pow(left, right),
             _ => 0
         };
+        value = RoundTo15SignificantDigits(value);
 
         if (double.IsFinite(value))
         {
@@ -215,7 +216,7 @@ public sealed partial class FormulaEvaluator
     private static ScalarValue PowerNumberValues(double baseVal, double exp)
     {
         if (baseVal == 0 && exp <= 0) return exp == 0 ? ErrorValue.Num : ErrorValue.DivByZero;
-        double result = Math.Pow(baseVal, exp);
+        double result = RoundTo15SignificantDigits(Math.Pow(baseVal, exp));
         return double.IsFinite(result) ? NumberValueFor(result) : ErrorValue.Num;
     }
 
@@ -259,6 +260,7 @@ public sealed partial class FormulaEvaluator
             ArithmeticKind.Subtract => leftNumber - rightNumber,
             _ => leftNumber * rightNumber
         };
+        result = RoundTo15SignificantDigits(result);
         return double.IsFinite(result) ? NumberValueFor(result) : ErrorValue.Num;
     }
 
@@ -278,7 +280,7 @@ public sealed partial class FormulaEvaluator
     private static ScalarValue DivideNumberValues(double dividend, double divisor)
     {
         if (divisor == 0) return ErrorValue.DivByZero;
-        double result = dividend / divisor;
+        double result = RoundTo15SignificantDigits(dividend / divisor);
         return double.IsFinite(result) ? NumberValueFor(result) : ErrorValue.Num;
     }
 
@@ -493,6 +495,64 @@ public sealed partial class FormulaEvaluator
 
         // Mixed types: numbers/dates < text < booleans (Excel convention)
         return TypeOrder(left).CompareTo(TypeOrder(right));
+    }
+
+    /// <summary>
+    /// Round a double to 15 significant digits using O(1) scaled arithmetic — no string
+    /// formatting, no parsing, no allocation. This is the hot path used on every +,-,*,/,^
+    /// binary arithmetic result (see ArithNumberValues/DivideNumberValues/PowerNumberValues/
+    /// TryEvaluateNumericBinaryScalar), so it must stay allocation-free: a prior attempt at
+    /// this fix (round 75) rounded via value.ToString("G15") + double.TryParse on every
+    /// arithmetic op and was reverted for the resulting perf regression.
+    ///
+    /// This mirrors Excel's own documented behavior of storing/computing with 15 significant
+    /// decimal digits of precision, which is why e.g. =0.1+0.2-0.3 evaluates to exactly 0 in
+    /// Excel (not the raw IEEE-754 double's ~5.5e-17).
+    ///
+    /// Algorithm: find the decimal exponent of the value (floor(log10(|value|))), which gives
+    /// the number of decimal places needed to retain exactly 15 significant digits. When that
+    /// count is in the [0,15] range supported natively by Math.Round(double,int,MidpointRounding)
+    /// we call it directly; otherwise (very large or very small magnitudes) we scale by a power
+    /// of 10, round to the nearest integer, and unscale. A value whose scale factor would over/
+    /// underflow double range (only reachable at ~1e295+ tiny magnitudes) is returned unrounded,
+    /// since IEEE-754 double precision itself is already the limiting factor there.
+    /// </summary>
+    private static double RoundTo15SignificantDigits(double value)
+    {
+        if (value == 0 || !double.IsFinite(value)) return value;
+
+        double absValue = Math.Abs(value);
+        int exponent = (int)Math.Floor(Math.Log10(absValue));
+        int decimals = 14 - exponent;
+
+        double result;
+        if (decimals >= 0 && decimals <= 15)
+        {
+            // Common case: magnitudes from ~1e-15 up through ~1e14. Math.Round(double,int,
+            // MidpointRounding) natively supports 0-15 decimal digits.
+            result = Math.Round(value, decimals, MidpointRounding.AwayFromZero);
+        }
+        else if (decimals < 0)
+        {
+            // Large magnitude (>= ~1e15): scale down so the 15 significant digits land at the
+            // integer position, round to the nearest integer, then scale back up.
+            double scale = Math.Pow(10, -decimals);
+            result = Math.Round(value / scale, MidpointRounding.AwayFromZero) * scale;
+        }
+        else
+        {
+            // Tiny magnitude (< ~1e-15): scale up so the 15 significant digits land at the
+            // integer position, round to the nearest integer, then scale back down.
+            double scale = Math.Pow(10, decimals);
+            if (!double.IsFinite(scale) || scale == 0)
+                return value; // magnitude too extreme to scale losslessly; already at double's limit.
+            result = Math.Round(value * scale, MidpointRounding.AwayFromZero) / scale;
+        }
+
+        // Guard: if scaling pushed the result to overflow/underflow (only possible at the
+        // extreme edges of double range), fall back to the original unrounded value rather
+        // than propagate NaN/Infinity from this helper.
+        return double.IsFinite(result) ? result : value;
     }
 
     /// <summary>
