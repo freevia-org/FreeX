@@ -518,6 +518,8 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 4).Should().Be(2);
         surfaceGeometry.RenderFacets.Should().HaveCount(15,
             "imported PowerPoint Surface3D cells render a continuous triangulated surface and projected boundary faces");
+        surfaceGeometry.WpfRenderFacets.Should().HaveCount(20,
+            "WPF applies five measured green-face registration overlays only to the imported default camera");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
         var firstSurfaceCellFacets = surfaceGeometry.RenderFacets
             .Where(facet => facet.SeriesIndex == 0 && facet.CategoryIndex == 0)
