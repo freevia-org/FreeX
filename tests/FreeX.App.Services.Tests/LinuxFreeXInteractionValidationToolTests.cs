@@ -13,6 +13,7 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         script.Should().Contain("[switch]$PhysicalOnly");
         script.Should().Contain("validationMode = \"physical-only\"");
         script.Should().Contain("scope = \"bounded physical X11 probes\"");
+        script.Should().Contain("summary = [pscustomobject]@{}");
         script.Should().Contain("-PhysicalOnly cannot be combined with -SkipX11");
         script.Should().Contain("Phase two uses a fresh X11 process for each bounded dialog slice");
         script.Should().Contain("--interaction-validation");

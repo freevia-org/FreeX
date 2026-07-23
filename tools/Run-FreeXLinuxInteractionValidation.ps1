@@ -849,6 +849,7 @@ try {
                 scope = "bounded physical X11 probes"
             }
             results = @()
+            summary = [pscustomobject]@{}
         }
         $combinedResults = @()
     } else {
