@@ -189,7 +189,11 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.DoesNotContain("send_key Enter", probe, StringComparison.Ordinal);
         Assert.Contains("send_key Return", probe, StringComparison.Ordinal);
         Assert.Contains("local before=\"\" after=\"\" dialog_id=\"\"", probe, StringComparison.Ordinal);
-        Assert.Contains("wait_for_csv_cell 6 11 \"$value\"", probe, StringComparison.Ordinal);
+        Assert.Contains("wait_for_document_clean()", probe, StringComparison.Ordinal);
+        Assert.Contains("seed_cell_text()", probe, StringComparison.Ordinal);
+        Assert.Contains("seed_cell_text 6 14 G15 \"$value\"", probe, StringComparison.Ordinal);
+        Assert.Contains("seed_cell_text 6 15 G16 \"$copy_value\"", probe, StringComparison.Ordinal);
+        Assert.Contains("seed_cell_text 6 16 G17 \"$cut_value\"", probe, StringComparison.Ordinal);
         Assert.Contains("send_active_key Home Return", probe, StringComparison.Ordinal);
         Assert.Contains("Physical X11 manifest does not satisfy schema v2", runner, StringComparison.Ordinal);
         Assert.Contains("geometry calibration did not pass", runner, StringComparison.Ordinal);

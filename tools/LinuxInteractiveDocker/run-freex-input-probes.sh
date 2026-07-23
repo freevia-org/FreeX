@@ -159,6 +159,32 @@ set_cell_text() {
         type_text "$value"
     fi
     send_key Return
+}
+
+wait_for_document_clean() {
+    local title=""
+    for _ in $(seq 1 20); do
+        title="$(xdotool getwindowname "$window_id" 2>/dev/null || true)"
+        if [[ "$title" != *"*"* ]]; then
+            return 0
+        fi
+        sleep 0.25
+    done
+    return 1
+}
+
+seed_cell_text() {
+    local column_offset="$1" row_offset="$2" address="$3" value="$4" committed=""
+    set_cell_text "$column_offset" "$row_offset" "$address" "$value" || return 1
+
+    # Verify the committed model value through the same physical F2/clipboard
+    # route used by the passing inline-edit probe before crediting persistence.
+    committed="$(copy_cell_formula "$column_offset" "$row_offset" "$address" || true)"
+    [[ "$committed" == "$value" ]] || return 1
+
+    send_key ctrl+s
+    wait_for_csv_cell "$column_offset" "$row_offset" "$value" || return 1
+    wait_for_document_clean || return 1
     select_cell "$column_offset" "$row_offset" "$address"
 }
 
@@ -474,7 +500,7 @@ send_active_key() {
 
 probe_worksheet_context_copy() {
     local value="X11ContextCopy" clipboard="" artifacts="worksheet-context-copy-before.png;worksheet-context-copy-open.png;worksheet-context-copy-after.png;worksheet-context-copy-postcondition.txt"
-    if set_cell_text 6 10 G11 "$value"; then
+    if seed_cell_text 6 10 G11 "$value"; then
         printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
         capture "worksheet-context-copy-before.png"
         send_key shift+F10
@@ -497,14 +523,7 @@ probe_worksheet_context_copy() {
 
 probe_worksheet_context_clear() {
     local value="X11ContextClear" before_hash="" after_hash="" observed="" artifacts="worksheet-context-clear-before.png;worksheet-context-clear-open.png;worksheet-context-clear-after.png;worksheet-context-clear-postcondition.txt"
-    if set_cell_text 6 11 G12 "$value"; then
-        send_key ctrl+s
-        if ! wait_for_csv_cell 6 11 "$value"; then
-            write_artifact "worksheet-context-clear-postcondition.txt" "seeded=false\ncell=G12\nexpected=$value\nobserved=$(json_escape "$(csv_cell_value 6 11)")"
-            record "worksheet-context-clear-physical" "failed" "worksheet-context-clear-postcondition.txt" "Could not persist the seeded G12 value before the physical worksheet context Clear probe." "worksheet-context-clear-postcondition.txt"
-            dismiss_overlays
-            return
-        fi
+    if seed_cell_text 6 14 G15 "$value"; then
         before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}')"
         capture "worksheet-context-clear-before.png"
         send_key shift+F10
@@ -519,16 +538,18 @@ probe_worksheet_context_clear() {
             [[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && break
             sleep 0.25
         done
-        observed="$(csv_cell_value 6 11)"
-        write_artifact "worksheet-context-clear-postcondition.txt" "expected-empty=true\nobserved=$(json_escape "$observed")\nfile-hash-before=$before_hash\nfile-hash-after=$after_hash\ncell=G12"
-        if [[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && wait_for_csv_cell 6 11 ""; then
-            record "worksheet-context-clear-physical" "passed" "worksheet-context-clear-before.png; worksheet-context-clear-open.png; worksheet-context-clear-after.png; cell=G12; saved-value-empty=true; file-hash-changed=true" "The rendered Clear submenu was physically activated and the saved harness CSV proves G12 is empty." "$artifacts"
+        observed="$(csv_cell_value 6 14)"
+        write_artifact "worksheet-context-clear-postcondition.txt" "expected-empty=true\nobserved=$(json_escape "$observed")\nfile-hash-before=$before_hash\nfile-hash-after=$after_hash\ncell=G15"
+        if [[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] &&
+           wait_for_document_clean &&
+           wait_for_csv_cell 6 14 ""; then
+            record "worksheet-context-clear-physical" "passed" "worksheet-context-clear-before.png; worksheet-context-clear-open.png; worksheet-context-clear-after.png; cell=G15; saved-value-empty=true; file-hash-changed=true" "The rendered Clear submenu was physically activated and the saved harness CSV proves G15 is empty." "$artifacts"
         else
-            record "worksheet-context-clear-physical" "failed" "worksheet-context-clear-before.png; worksheet-context-clear-open.png; worksheet-context-clear-after.png; cell=G12; observed-value=$observed; file-hash-changed=$([[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && printf true || printf false)" "Clear Contents did not produce the required saved-cell and file-hash postconditions." "$artifacts"
+            record "worksheet-context-clear-physical" "failed" "worksheet-context-clear-before.png; worksheet-context-clear-open.png; worksheet-context-clear-after.png; cell=G15; observed-value=$observed; file-hash-changed=$([[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && printf true || printf false)" "Clear Contents did not produce the required saved-cell and file-hash postconditions." "$artifacts"
         fi
     else
-        write_artifact "worksheet-context-clear-postcondition.txt" "seeded=false\ncell=G12"
-        record "worksheet-context-clear-physical" "failed" "worksheet-context-clear-postcondition.txt" "Could not seed calibrated G12 for the physical worksheet context Clear probe." "worksheet-context-clear-postcondition.txt"
+        write_artifact "worksheet-context-clear-postcondition.txt" "seeded=false\ncell=G15\nexpected=$value\nobserved=$(json_escape "$(csv_cell_value 6 14)")"
+        record "worksheet-context-clear-physical" "failed" "worksheet-context-clear-postcondition.txt" "Could not seed calibrated G15 for the physical worksheet context Clear probe." "worksheet-context-clear-postcondition.txt"
     fi
     dismiss_overlays
 }
@@ -539,42 +560,44 @@ probe_clipboard_roundtrips() {
     local copy_artifacts="clipboard-copy-paste-before.png;clipboard-copy-paste-after.png;clipboard-copy-paste-postcondition.txt"
     local cut_artifacts="clipboard-cut-paste-before.png;clipboard-cut-paste-after.png;clipboard-cut-paste-postcondition.txt"
 
-    if set_cell_text 6 12 G13 "$copy_value" &&
-       select_cell 7 12 H13 &&
-       [[ "$(csv_cell_value 7 12)" == "" ]]; then
+    if seed_cell_text 6 15 G16 "$copy_value" &&
+       select_cell 7 15 H16 &&
+       [[ "$(csv_cell_value 7 15)" == "" ]]; then
         printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
-        select_cell 6 12 G13
+        select_cell 6 15 G16
         capture "clipboard-copy-paste-before.png"
         send_key ctrl+c
         clipboard="$(wait_for_clipboard "$copy_value" || true)"
-        select_cell 7 12 H13
+        select_cell 7 15 H16
         send_key ctrl+v
         capture "clipboard-copy-paste-after.png"
         send_key ctrl+s
         sleep "$dialog_settle_seconds"
-        copy_destination="$(csv_cell_value 7 12)"
-        write_artifact "clipboard-copy-paste-postcondition.txt" "expected=$copy_value\nclipboard=$clipboard\ndestination=H13\nsaved-destination=$copy_destination"
-        if [[ "$clipboard" == "$copy_value" ]] && wait_for_csv_cell 7 12 "$copy_value"; then
-            record "clipboard-copy-paste-roundtrip" "passed" "clipboard-copy-paste-before.png; clipboard-copy-paste-after.png; clipboard=$clipboard; saved-cell=H13:$copy_destination" "Physical Ctrl+C/Ctrl+V roundtrip produced the exact clipboard text and saved destination value." "$copy_artifacts"
+        copy_destination="$(csv_cell_value 7 15)"
+        write_artifact "clipboard-copy-paste-postcondition.txt" "expected=$copy_value\nclipboard=$clipboard\ndestination=H16\nsaved-destination=$copy_destination"
+        if [[ "$clipboard" == "$copy_value" ]] &&
+           wait_for_document_clean &&
+           wait_for_csv_cell 7 15 "$copy_value"; then
+            record "clipboard-copy-paste-roundtrip" "passed" "clipboard-copy-paste-before.png; clipboard-copy-paste-after.png; clipboard=$clipboard; saved-cell=H16:$copy_destination" "Physical Ctrl+C/Ctrl+V roundtrip produced the exact clipboard text and saved destination value." "$copy_artifacts"
         else
             record "clipboard-copy-paste-roundtrip" "failed" "clipboard-copy-paste-before.png; clipboard-copy-paste-after.png; clipboard=$clipboard; saved-cell=H13:$copy_destination" "Copy/paste did not satisfy the exact clipboard and saved-cell postconditions." "$copy_artifacts"
         fi
     else
-        write_artifact "clipboard-copy-paste-postcondition.txt" "seeded=false\nsource=G13\ndestination=H13"
+        write_artifact "clipboard-copy-paste-postcondition.txt" "seeded=false\nsource=G16\ndestination=H16\nexpected=$copy_value\nobserved=$(json_escape "$(csv_cell_value 6 15)")"
         record "clipboard-copy-paste-roundtrip" "failed" "clipboard-copy-paste-postcondition.txt" "Could not seed the copy/paste roundtrip cells." "clipboard-copy-paste-postcondition.txt"
     fi
     dismiss_overlays
 
-    if set_cell_text 6 13 G14 "$cut_value" &&
-       select_cell 7 13 H14 &&
-       [[ "$(csv_cell_value 7 13)" == "" ]]; then
+    if seed_cell_text 6 16 G17 "$cut_value" &&
+       select_cell 7 16 H17 &&
+       [[ "$(csv_cell_value 7 16)" == "" ]]; then
         printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
         before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}')"
-        select_cell 6 13 G14
+        select_cell 6 16 G17
         capture "clipboard-cut-paste-before.png"
         send_key ctrl+x
         clipboard="$(wait_for_clipboard "$cut_value" || true)"
-        select_cell 7 13 H14
+        select_cell 7 16 H17
         send_key ctrl+v
         capture "clipboard-cut-paste-after.png"
         send_key ctrl+s
@@ -583,16 +606,16 @@ probe_clipboard_roundtrips() {
             [[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && break
             sleep 0.25
         done
-        cut_destination="$(csv_cell_value 7 13)"
-        cut_source="$(csv_cell_value 6 13)"
-        write_artifact "clipboard-cut-paste-postcondition.txt" "expected=$cut_value\nclipboard=$clipboard\nsource=G14\ndestination=H14\nsaved-source=$(json_escape "$cut_source")\nsaved-destination=$cut_destination\nfile-hash-before=$before_hash\nfile-hash-after=$after_hash"
+        cut_destination="$(csv_cell_value 7 16)"
+        cut_source="$(csv_cell_value 6 16)"
+        write_artifact "clipboard-cut-paste-postcondition.txt" "expected=$cut_value\nclipboard=$clipboard\nsource=G17\ndestination=H17\nsaved-source=$(json_escape "$cut_source")\nsaved-destination=$cut_destination\nfile-hash-before=$before_hash\nfile-hash-after=$after_hash"
         if [[ "$clipboard" == "$cut_value" && "$cut_source" == "" && "$cut_destination" == "$cut_value" && -n "$before_hash" && "$after_hash" != "$before_hash" ]]; then
-            record "clipboard-cut-paste-roundtrip" "passed" "clipboard-cut-paste-before.png; clipboard-cut-paste-after.png; clipboard=$clipboard; saved-source=G14:empty; saved-destination=H14:$cut_destination; file-hash-changed=true" "Physical Ctrl+X/Ctrl+V roundtrip proves the clipboard value, cleared source, destination value, and changed saved file." "$cut_artifacts"
+            record "clipboard-cut-paste-roundtrip" "passed" "clipboard-cut-paste-before.png; clipboard-cut-paste-after.png; clipboard=$clipboard; saved-source=G17:empty; saved-destination=H17:$cut_destination; file-hash-changed=true" "Physical Ctrl+X/Ctrl+V roundtrip proves the clipboard value, cleared source, destination value, and changed saved file." "$cut_artifacts"
         else
             record "clipboard-cut-paste-roundtrip" "failed" "clipboard-cut-paste-before.png; clipboard-cut-paste-after.png; clipboard=$clipboard; saved-source=G14:$cut_source; saved-destination=H14:$cut_destination; file-hash-changed=$([[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && printf true || printf false)" "Cut/paste did not satisfy the exact clipboard, source, destination, and file-hash postconditions." "$cut_artifacts"
         fi
     else
-        write_artifact "clipboard-cut-paste-postcondition.txt" "seeded=false\nsource=G14\ndestination=H14"
+        write_artifact "clipboard-cut-paste-postcondition.txt" "seeded=false\nsource=G17\ndestination=H17\nexpected=$cut_value\nobserved=$(json_escape "$(csv_cell_value 6 16)")"
         record "clipboard-cut-paste-roundtrip" "failed" "clipboard-cut-paste-postcondition.txt" "Could not seed the cut/paste roundtrip cells." "clipboard-cut-paste-postcondition.txt"
     fi
     dismiss_overlays
