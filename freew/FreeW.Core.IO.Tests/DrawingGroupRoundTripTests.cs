@@ -11,6 +11,7 @@ namespace FreeW.Core.IO.Tests;
 /// </summary>
 public sealed class DrawingGroupRoundTripTests
 {
+    private static readonly XNamespace W   = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private static readonly XNamespace A   = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Wp  = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
     private static readonly XNamespace Wpg = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
@@ -19,6 +20,8 @@ public sealed class DrawingGroupRoundTripTests
     private static readonly XNamespace C   = "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
     private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace Ct  = "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
 
     private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47];
 
@@ -46,6 +49,13 @@ public sealed class DrawingGroupRoundTripTests
         using var stream = new MemoryStream();
         DocxWriter.Write(doc, stream);
         return stream.ToArray();
+    }
+
+    private static XDocument EntryXml(byte[] docx, string entryPath)
+    {
+        using var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read);
+        using var stream = zip.GetEntry(entryPath)!.Open();
+        return XDocument.Load(stream);
     }
 
     private static DrawingGroup TwoMemberGroup()
@@ -149,6 +159,85 @@ public sealed class DrawingGroupRoundTripTests
         para.Runs.Add(Run.FromDrawingGroup(grp));
         doc.Blocks.Add(para);
         return doc;
+    }
+
+    /// <summary>Rehomes a native chart + SmartArt group from document.xml into a header with local relationships.</summary>
+    private static byte[] AuthorHeaderChartAndSmartArtGroupPackage()
+    {
+        var sourceBytes = WriteBytes(DocumentWith(ChartAndSmartArtGroup()));
+        using var sourceStream = new MemoryStream(sourceBytes);
+        using var source = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+
+        static XDocument ReadEntry(ZipArchive zip, string path)
+        {
+            using var stream = zip.GetEntry(path)!.Open();
+            return XDocument.Load(stream);
+        }
+
+        var sourceDocument = ReadEntry(source, "word/document.xml");
+        var drawing = new XElement(sourceDocument.Descendants(W + "drawing").Single());
+        var sourceRelationships = ReadEntry(source, "word/_rels/document.xml.rels");
+        var allRelationships = sourceRelationships.Root!.Elements(Rel + "Relationship").ToList();
+        var groupRelationships = allRelationships
+            .Where(relationship => relationship.Attribute("Type")!.Value.EndsWith("/chart", StringComparison.Ordinal)
+                                || relationship.Attribute("Type")!.Value.Contains("diagram", StringComparison.OrdinalIgnoreCase))
+            .Select(relationship => new XElement(relationship))
+            .ToList();
+        groupRelationships.Should().HaveCount(6);
+
+        var documentRelationships = new XDocument(new XElement(Rel + "Relationships",
+            allRelationships
+                .Where(relationship => !groupRelationships.Any(candidate => candidate.Attribute("Id")!.Value == relationship.Attribute("Id")!.Value))
+                .Select(relationship => new XElement(relationship)),
+            new XElement(Rel + "Relationship",
+                new XAttribute("Id", "rIdHeader1"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"),
+                new XAttribute("Target", "header1.xml"))));
+        var headerRelationships = new XDocument(new XElement(Rel + "Relationships", groupRelationships));
+        var document = new XDocument(new XElement(W + "document",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+            new XElement(W + "body",
+                new XElement(W + "p", new XElement(W + "r", new XElement(W + "t", "Body text"))),
+                new XElement(W + "sectPr", new XElement(W + "headerReference",
+                    new XAttribute(W + "type", "default"),
+                    new XAttribute(R + "id", "rIdHeader1"))))));
+        var header = new XDocument(new XElement(W + "hdr",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+            new XElement(W + "p", new XElement(W + "r", drawing))));
+        var contentTypes = ReadEntry(source, "[Content_Types].xml");
+        contentTypes.Root!.Add(new XElement(Ct + "Override",
+            new XAttribute("PartName", "/word/header1.xml"),
+            new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml")));
+
+        using var output = new MemoryStream();
+        using (var destination = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void AddXml(string path, XDocument xml)
+            {
+                var entry = destination.CreateEntry(path, CompressionLevel.Optimal);
+                using var stream = entry.Open();
+                xml.Save(stream);
+            }
+
+            foreach (var sourceEntry in source.Entries)
+            {
+                if (sourceEntry.FullName is "[Content_Types].xml" or "word/document.xml" or "word/_rels/document.xml.rels")
+                    continue;
+                var entry = destination.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+                using var input = sourceEntry.Open();
+                using var target = entry.Open();
+                input.CopyTo(target);
+            }
+
+            AddXml("[Content_Types].xml", contentTypes);
+            AddXml("word/document.xml", document);
+            AddXml("word/_rels/document.xml.rels", documentRelationships);
+            AddXml("word/header1.xml", header);
+            AddXml("word/_rels/header1.xml.rels", headerRelationships);
+        }
+        return output.ToArray();
     }
 
     // ── XML structure ────────────────────────────────────────────────────────────────────────────
@@ -258,6 +347,46 @@ public sealed class DrawingGroupRoundTripTests
         smartArt.Nodes.Select(node => node.Text).Should().Equal("Plan", "Ship");
         group.ChildOffsets[1].X.Should().BeApproximately(108, 0.1);
         group.ChildOffsets[1].Y.Should().BeApproximately(18, 0.1);
+    }
+
+    [Fact]
+    public void HeaderDrawingGroup_PreservesItsStoryLocalChartAndSmartArtGraph()
+    {
+        var source = AuthorHeaderChartAndSmartArtGroupPackage();
+        var read = DocxReader.Read(new MemoryStream(source));
+        var runs = read.FinalSectionHeadersFooters.Header!.Paragraphs.SelectMany(paragraph => paragraph.Runs).ToList();
+        runs.Should().ContainSingle(run => run.PreservedDrawing != null);
+        runs.Should().NotContain(run => run.DrawingGroup != null);
+
+        var rewritten = WriteBytes(read);
+        using var sourceZip = new ZipArchive(new MemoryStream(source), ZipArchiveMode.Read);
+        using var rewrittenZip = new ZipArchive(new MemoryStream(rewritten), ZipArchiveMode.Read);
+        foreach (var part in new[]
+                 {
+                     "word/charts/chart1.xml", "word/diagrams/data1.xml", "word/diagrams/layout1.xml",
+                     "word/diagrams/quickStyle1.xml", "word/diagrams/colors1.xml", "word/diagrams/drawing1.xml"
+                 })
+        {
+            using var sourcePart = sourceZip.GetEntry(part)!.Open();
+            using var rewrittenPart = rewrittenZip.GetEntry(part)!.Open();
+            using var sourceBytes = new MemoryStream();
+            using var rewrittenBytes = new MemoryStream();
+            sourcePart.CopyTo(sourceBytes);
+            rewrittenPart.CopyTo(rewrittenBytes);
+            rewrittenBytes.ToArray().Should().Equal(sourceBytes.ToArray());
+        }
+
+        var headerRels = EntryXml(rewritten, "word/_rels/header1.xml.rels").Root!.Elements(Rel + "Relationship").ToList();
+        headerRels.Should().HaveCount(6);
+        headerRels.Should().Contain(relationship => relationship.Attribute("Type")!.Value.EndsWith("/chart", StringComparison.Ordinal));
+        headerRels.Count(relationship => relationship.Attribute("Type")!.Value.Contains("diagram", StringComparison.OrdinalIgnoreCase)).Should().Be(5);
+        EntryXml(rewritten, "word/_rels/document.xml.rels").Root!.Elements(Rel + "Relationship")
+            .Should().NotContain(relationship => relationship.Attribute("Type")!.Value.EndsWith("/chart", StringComparison.Ordinal)
+                                           || relationship.Attribute("Type")!.Value.Contains("diagram", StringComparison.OrdinalIgnoreCase));
+
+        var secondRead = DocxReader.Read(new MemoryStream(rewritten));
+        secondRead.FinalSectionHeadersFooters.Header!.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().ContainSingle(run => run.PreservedDrawing != null);
     }
 
     // ── Two-member round-trip ────────────────────────────────────────────────────────────────────
