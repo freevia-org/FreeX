@@ -195,6 +195,50 @@ public class ShapeRoundTripTests
     }
 
     [Fact]
+    public void TextBox_ForeignNumbering_SurvivesRoundTrip()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 180, 72);
+        shape.TextParagraphs.Add(new Paragraph("Foreign item")
+        {
+            PreservedNumbering = new PreservedNumbering(12, 2)
+        });
+        var document = DocumentWith(shape);
+        document.Preserved.OriginalNumbering = new XElement(W + "numbering",
+            new XElement(W + "num",
+                new XAttribute(W + "numId", 12),
+                new XElement(W + "abstractNumId", new XAttribute(W + "val", 99))));
+
+        byte[] bytes;
+        using (var stream = new MemoryStream())
+        {
+            DocxWriter.Write(document, stream);
+            bytes = stream.ToArray();
+        }
+
+        var remappedNumId = 0;
+        using (var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        {
+            using var numberingReader = new StreamReader(zip.GetEntry("word/numbering.xml")!.Open());
+            var numbering = XDocument.Parse(numberingReader.ReadToEnd());
+            var emittedNumIds = numbering.Root!.Elements(W + "num")
+                .Select(element => element.Attribute(W + "numId")!.Value).ToHashSet();
+
+            using var documentReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+            var documentXml = XDocument.Parse(documentReader.ReadToEnd());
+            var emittedTextBoxParagraph = documentXml.Descendants(W + "txbxContent").Elements(W + "p").Single();
+            var numPr = emittedTextBoxParagraph.Element(W + "pPr")!.Element(W + "numPr")!;
+            remappedNumId = int.Parse(numPr.Element(W + "numId")!.Attribute(W + "val")!.Value);
+            emittedNumIds.Should().Contain(remappedNumId.ToString());
+            numPr.Element(W + "ilvl")!.Attribute(W + "val")!.Value.Should().Be("2");
+        }
+
+        var read = DocxReader.Read(new MemoryStream(bytes));
+        var rereadTextBoxParagraph = read.Paragraphs.Single().Runs.Single(run => run.Shape is not null).Shape!
+            .TextParagraphs.Single();
+        rereadTextBoxParagraph.PreservedNumbering.Should().Be(new PreservedNumbering(remappedNumId, 2));
+    }
+
+    [Fact]
     public void Shape_RoundTripsInsideTableCell()
     {
         // Shapes are an inline run mark, so they must flow through table cells like any other run.
