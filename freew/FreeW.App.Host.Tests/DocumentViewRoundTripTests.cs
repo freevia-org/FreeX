@@ -32,6 +32,65 @@ public sealed class DocumentViewRoundTripTests
         ((Paragraph)document.Blocks[blockIndex]).Runs[0];
 
     [StaFact]
+    public void ContextualSpacing_SuppressesSharedMarginForAdjacentSameStyleParagraphs()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Styles["Body"] = new DocumentStyle
+        {
+            Id = "Body",
+            Name = "Body",
+            Paragraph = ParagraphFormatting.Default with
+            {
+                SpaceBeforePt = 6,
+                SpaceAfterPt = 10,
+                SpaceBeforeIsSet = true,
+                SpaceAfterIsSet = true,
+                ContextualSpacing = true
+            }
+        };
+        document.Blocks.Add(new Paragraph("first") { StyleId = "Body" });
+        document.Blocks.Add(new Paragraph("second") { StyleId = "Body" });
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var paragraphs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Margin.Bottom.Should().Be(0);
+        paragraphs[1].Margin.Top.Should().Be(0);
+    }
+
+    [StaFact]
+    public void ContextualSpacing_ExplicitOffKeepsAdjacentSameStyleMargins()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Styles["Body"] = new DocumentStyle
+        {
+            Id = "Body",
+            Name = "Body",
+            Paragraph = ParagraphFormatting.Default with
+            {
+                SpaceBeforePt = 6,
+                SpaceAfterPt = 10,
+                SpaceBeforeIsSet = true,
+                SpaceAfterIsSet = true,
+                ContextualSpacing = false
+            }
+        };
+        document.Blocks.Add(new Paragraph("first") { StyleId = "Body" });
+        document.Blocks.Add(new Paragraph("second") { StyleId = "Body" });
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var paragraphs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+
+        paragraphs[0].Margin.Bottom.Should().BeApproximately(10 * 96.0 / 72.0, 0.001);
+        paragraphs[1].Margin.Top.Should().BeApproximately(6 * 96.0 / 72.0, 0.001);
+    }
+
+    [StaFact]
     public void Table_ExplicitBorderPayload_SurvivesViewRoundTrip()
     {
         var document = TextDocument.CreateEmpty();
