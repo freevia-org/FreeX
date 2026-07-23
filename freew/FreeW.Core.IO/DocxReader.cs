@@ -58,11 +58,11 @@ public static class DocxReader
         if (document.Blocks.Count == 0)
             document.Blocks.Add(new Paragraph());
 
-        ReadHeaderFooter(documentXml, archive, document, hyperlinkRelationships);
+        ReadHeaderFooter(documentXml, archive, document, hyperlinkRelationships, numbering);
         ReadNativeVmlWatermark(archive, document);
-        ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
-        ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
-        ReadComments(archive, document, hyperlinkRelationships);
+        ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships, numbering);
+        ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships, numbering);
+        ReadComments(archive, document, hyperlinkRelationships, numbering);
         ReadSettings(archive, document);
         // w:evenAndOddHeaders and w:mirrorMargins are document-global toggles stored in settings.xml, read
         // into document.Page by ReadSettings. Non-final sections' PageSettings are constructed earlier (during
@@ -724,7 +724,8 @@ public static class DocxReader
     private static void ReadComments(
         ZipArchive archive,
         TextDocument document,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
     {
         var commentsXml = LoadPart(archive, "word/comments.xml");
         var root = commentsXml?.Root;
@@ -743,8 +744,6 @@ public static class DocxReader
         // can place each flat w:comment as either a top-level comment or a reply under its parent, and
         // recover the resolved flag. Absent (classic comments) → every comment is treated as top-level.
         var extended = ReadCommentsExtended(archive);
-
-        var noNumbering = new Dictionary<int, ListKind>();
 
         // First pass: build every flat comment and remember its last-paragraph paraId (the value
         // commentsExtended threads on). Keep insertion order so reply threads keep their authored order.
@@ -768,7 +767,8 @@ public static class DocxReader
                     archive,
                     commentRelationships,
                     commentHyperlinks,
-                    noNumbering,
+                    numbering,
+                    capturePreservedNumbering: true,
                     preservedDrawingTarget: document,
                     preservedDrawingRelationshipTargets: commentRelationships));
                 // The last paragraph's w14:paraId is what commentsExtended references for this comment.
@@ -839,14 +839,14 @@ public static class DocxReader
         ZipArchive archive,
         TextDocument document,
         IReadOnlyDictionary<string, string> imageRelationships,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
     {
         var footnotesXml = LoadPart(archive, "word/footnotes.xml");
         var root = footnotesXml?.Root;
         if (root is null)
             return;
 
-        var noNumbering = new Dictionary<int, ListKind>();
         var noteRelationships = ReadPartRelationships(archive, "word/footnotes.xml");
         var noteHyperlinks = ReadPartHyperlinkRelationships(archive, "word/footnotes.xml");
         foreach (var element in root.Elements(W + "footnote"))
@@ -864,7 +864,8 @@ public static class DocxReader
                     archive,
                     noteRelationships,
                     noteHyperlinks,
-                    noNumbering,
+                    numbering,
+                    capturePreservedNumbering: true,
                     preservedDrawingTarget: document,
                     preservedDrawingRelationshipTargets: noteRelationships));
             if (footnote.Content.Count == 0)
@@ -883,14 +884,14 @@ public static class DocxReader
         ZipArchive archive,
         TextDocument document,
         IReadOnlyDictionary<string, string> imageRelationships,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
     {
         var endnotesXml = LoadPart(archive, "word/endnotes.xml");
         var root = endnotesXml?.Root;
         if (root is null)
             return;
 
-        var noNumbering = new Dictionary<int, ListKind>();
         var noteRelationships = ReadPartRelationships(archive, "word/endnotes.xml");
         var noteHyperlinks = ReadPartHyperlinkRelationships(archive, "word/endnotes.xml");
         foreach (var element in root.Elements(W + "endnote"))
@@ -908,7 +909,8 @@ public static class DocxReader
                     archive,
                     noteRelationships,
                     noteHyperlinks,
-                    noNumbering,
+                    numbering,
+                    capturePreservedNumbering: true,
                     preservedDrawingTarget: document,
                     preservedDrawingRelationshipTargets: noteRelationships));
             if (endnote.Content.Count == 0)
@@ -928,7 +930,8 @@ public static class DocxReader
         XDocument documentXml,
         ZipArchive archive,
         TextDocument document,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
     {
         var sectPr = documentXml.Root?.Element(W + "body")?.Element(W + "sectPr");
         if (sectPr is null)
@@ -944,7 +947,7 @@ public static class DocxReader
         document.Page.BackgroundColorHex = backgroundColor is { Length: > 0 } ? "#" + backgroundColor : null;
 
         ReadSectionHeadersFooters(
-            sectPr, document.FinalSectionHeadersFooters, archive, document, hyperlinkRelationships);
+            sectPr, document.FinalSectionHeadersFooters, archive, document, hyperlinkRelationships, numbering);
     }
 
     /// <summary>
@@ -959,26 +962,27 @@ public static class DocxReader
         SectionHeadersFooters hf,
         ZipArchive archive,
         TextDocument document,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
     {
         var partsById = ReadHeaderFooterRelationships(archive);
 
         hf.Header = ReadHeaderFooterPart(
-            sectPr, "headerReference", "default", W + "hdr", partsById, archive, document, hyperlinkRelationships);
+            sectPr, "headerReference", "default", W + "hdr", partsById, archive, document, hyperlinkRelationships, numbering);
         hf.Footer = ReadHeaderFooterPart(
-            sectPr, "footerReference", "default", W + "ftr", partsById, archive, document, hyperlinkRelationships);
+            sectPr, "footerReference", "default", W + "ftr", partsById, archive, document, hyperlinkRelationships, numbering);
         // Even-page header/footer (w:type="even") for "different odd/even pages". Present only when the
         // section carried the even references + parts; null otherwise so single-header sections are unaffected.
         hf.EvenHeader = ReadHeaderFooterPart(
-            sectPr, "headerReference", "even", W + "hdr", partsById, archive, document, hyperlinkRelationships);
+            sectPr, "headerReference", "even", W + "hdr", partsById, archive, document, hyperlinkRelationships, numbering);
         hf.EvenFooter = ReadHeaderFooterPart(
-            sectPr, "footerReference", "even", W + "ftr", partsById, archive, document, hyperlinkRelationships);
+            sectPr, "footerReference", "even", W + "ftr", partsById, archive, document, hyperlinkRelationships, numbering);
         // First-page header/footer (w:type="first") for "different first page". Present only when the section
         // carried the first references + parts.
         hf.FirstHeader = ReadHeaderFooterPart(
-            sectPr, "headerReference", "first", W + "hdr", partsById, archive, document, hyperlinkRelationships);
+            sectPr, "headerReference", "first", W + "hdr", partsById, archive, document, hyperlinkRelationships, numbering);
         hf.FirstFooter = ReadHeaderFooterPart(
-            sectPr, "footerReference", "first", W + "ftr", partsById, archive, document, hyperlinkRelationships);
+            sectPr, "footerReference", "first", W + "ftr", partsById, archive, document, hyperlinkRelationships, numbering);
     }
 
     /// <summary>
@@ -1080,6 +1084,7 @@ public static class DocxReader
         XElement? pPr,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering,
         TextDocument? document)
     {
         var sectPr = pPr?.Element(W + "sectPr");
@@ -1092,7 +1097,7 @@ public static class DocxReader
         var section = new Section(page, breakKind);
         // Each non-final section references its own header/footer parts; recover them into the section.
         if (document is not null)
-            ReadSectionHeadersFooters(sectPr, section.HeadersFooters, archive, document, hyperlinkRelationships);
+            ReadSectionHeadersFooters(sectPr, section.HeadersFooters, archive, document, hyperlinkRelationships, numbering);
         return section;
     }
 
@@ -1116,7 +1121,8 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> partsById,
         ZipArchive archive,
         TextDocument document,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
     {
         // Select the reference of the requested type ("default"/"even"/"first"). For the default type a
         // type-less reference also counts (Word treats an absent w:type as "default"); the "even"/"first"
@@ -1146,8 +1152,6 @@ public static class DocxReader
         var partHyperlinks = ReadPartHyperlinkRelationships(archive, partPath);
 
         var result = new HeaderFooter();
-        // Header/footer paragraphs carry no list numbering context (numbering.xml targets the body).
-        var noNumbering = new Dictionary<int, ListKind>();
         // Use Descendants, not direct children: real Word headers/footers routinely wrap their content in a
         // w:tbl (and/or w:sdt content controls), so the visible text lives in paragraphs NESTED inside table
         // cells / SDTs rather than as direct children of w:hdr/w:ftr. Reading only direct-child w:p (as before)
@@ -1179,7 +1183,8 @@ public static class DocxReader
                 archive,
                 partRelationships,
                 partHyperlinks,
-                noNumbering,
+                numbering,
+                capturePreservedNumbering: true,
                 preservedDrawingTarget: document,
                 preservedDrawingRelationshipTargets: partRelationships));
         }
@@ -1272,7 +1277,7 @@ public static class DocxReader
             // A paragraph carrying a w:pPr/w:sectPr ends a non-final section; recover that section's page
             // setup + break kind + own header/footer references onto the paragraph (the body-level final
             // section is read elsewhere).
-            paragraph.SectionBreak = ReadSectionBreak(pPr, archive, hyperlinkRelationships, preservedDrawingTarget);
+            paragraph.SectionBreak = ReadSectionBreak(pPr, archive, hyperlinkRelationships, numbering, preservedDrawingTarget);
         }
         else if (docDefaults is not null)
         {

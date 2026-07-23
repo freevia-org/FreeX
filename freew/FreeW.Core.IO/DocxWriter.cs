@@ -81,7 +81,7 @@ public static class DocxWriter
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
         // Emit a numbering part only when at least one paragraph is decorated as a list.
-        var hasLists = EnumerateParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
+        var hasLists = EnumerateStoryParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
 
         // Preserved numbering FreeW does not model: when the source carried a numbering.xml AND at least one
         // paragraph (or paragraph STYLE) kept its original w:numPr (because FreeW did not map it to a ListKind),
@@ -264,7 +264,7 @@ public static class DocxWriter
         foreach (var part in headerFooterParts)
         {
             WritePart(archive, "word/" + part.FileName,
-                BuildHeaderFooter(part.IsHeader ? W + "hdr" : W + "ftr", part));
+                BuildHeaderFooter(part.IsHeader ? W + "hdr" : W + "ftr", part, preservedNumbering, restartOverrides));
             if (part.Images.Count > 0 || part.PreservedDrawings.Count > 0 || part.Hyperlinks.Count > 0)
             {
                 WritePart(archive, "word/_rels/" + part.FileName + ".rels", BuildHeaderFooterRels(part));
@@ -274,7 +274,7 @@ public static class DocxWriter
         }
         if (hasFootnotes)
         {
-            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document, footnoteImages, footnotePreservedDrawings, footnoteHyperlinks));
+            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document, footnoteImages, footnotePreservedDrawings, footnoteHyperlinks, preservedNumbering, restartOverrides));
             if (footnoteImages.Count > 0 || footnotePreservedDrawings.Count > 0 || footnoteHyperlinks.Count > 0)
             {
                 WritePart(archive, "word/_rels/footnotes.xml.rels", BuildNoteRels(footnoteImages, footnotePreservedDrawings, footnoteHyperlinks));
@@ -284,7 +284,7 @@ public static class DocxWriter
         }
         if (hasEndnotes)
         {
-            WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document, endnoteImages, endnotePreservedDrawings, endnoteHyperlinks));
+            WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document, endnoteImages, endnotePreservedDrawings, endnoteHyperlinks, preservedNumbering, restartOverrides));
             if (endnoteImages.Count > 0 || endnotePreservedDrawings.Count > 0 || endnoteHyperlinks.Count > 0)
             {
                 WritePart(archive, "word/_rels/endnotes.xml.rels", BuildNoteRels(endnoteImages, endnotePreservedDrawings, endnoteHyperlinks));
@@ -294,7 +294,7 @@ public static class DocxWriter
         }
         if (hasComments)
         {
-            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages, commentPreservedDrawings, commentHyperlinks));
+            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages, commentPreservedDrawings, commentHyperlinks, preservedNumbering, restartOverrides));
             // word/commentsExtended.xml threads replies + carries resolved state. Always emitted alongside the
             // comments part (it has an entry per comment even for a flat, single-comment document) so modern
             // Word treats every comment as a thread root and the reply/resolve plumbing round-trips.
@@ -834,6 +834,30 @@ public static class DocxWriter
                         foreach (var cellParagraph in cell.Paragraphs)
                             yield return cellParagraph;
         }
+    }
+
+    private static IEnumerable<Paragraph> EnumerateStoryParagraphs(TextDocument document)
+    {
+        foreach (var paragraph in EnumerateParagraphs(document))
+            yield return paragraph;
+
+        foreach (var headersFooters in document.Sections.Select(section => section.HeadersFooters))
+            foreach (var content in new[]
+            {
+                headersFooters.Header, headersFooters.Footer,
+                headersFooters.EvenHeader, headersFooters.EvenFooter,
+                headersFooters.FirstHeader, headersFooters.FirstFooter
+            })
+                if (content is not null)
+                    foreach (var paragraph in content.Paragraphs)
+                        yield return paragraph;
+
+        foreach (var paragraph in document.Footnotes.Values.SelectMany(note => note.Content))
+            yield return paragraph;
+        foreach (var paragraph in document.Endnotes.Values.SelectMany(note => note.Content))
+            yield return paragraph;
+        foreach (var paragraph in FlattenComments(document).SelectMany(comment => comment.Content))
+            yield return paragraph;
     }
 
     private static void WritePart(ZipArchive archive, string entryPath, XDocument content)
@@ -1399,7 +1423,11 @@ public static class DocxWriter
     /// drawing namespaces (wp/a/pic) are declared on the root. An image-less header/footer declares only w/r
     /// (so it stays byte-equivalent to the historical output).
     /// </summary>
-    private static XDocument BuildHeaderFooter(XName rootName, HeaderFooterPart part)
+    private static XDocument BuildHeaderFooter(
+        XName rootName,
+        HeaderFooterPart part,
+        PreservedNumberingPlan? preservedNumbering,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
     {
         var root = new XElement(rootName,
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
@@ -1438,7 +1466,7 @@ public static class DocxWriter
             root.Add(new XElement(W + "p"));
         else
             foreach (var paragraph in part.Content.Paragraphs)
-                root.Add(BuildParagraph(paragraph, drawings, part.Hyperlinks));
+                root.Add(BuildParagraph(paragraph, drawings, part.Hyperlinks, preservedNumbering: preservedNumbering, restartOverrides: restartOverrides));
 
         return new XDocument(root);
     }
@@ -1615,7 +1643,9 @@ public static class DocxWriter
         TextDocument document,
         IReadOnlyList<ImagePart> images,
         IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
-        IReadOnlyDictionary<string, string> hyperlinks)
+        IReadOnlyDictionary<string, string> hyperlinks,
+        PreservedNumberingPlan? preservedNumbering,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
     {
         var footnotes = new XElement(W + "footnotes",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
@@ -1648,7 +1678,7 @@ public static class DocxWriter
         {
             var element = new XElement(W + "footnote", new XAttribute(W + "id", footnote.Id));
             foreach (var paragraph in BuildNoteContent(
-                footnote.Content, noteDrawings, hyperlinks, "footnoteRef"))
+                footnote.Content, noteDrawings, hyperlinks, "footnoteRef", preservedNumbering, restartOverrides))
                 element.Add(paragraph);
             footnotes.Add(element);
         }
@@ -1666,7 +1696,9 @@ public static class DocxWriter
         TextDocument document,
         IReadOnlyList<ImagePart> images,
         IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
-        IReadOnlyDictionary<string, string> hyperlinks)
+        IReadOnlyDictionary<string, string> hyperlinks,
+        PreservedNumberingPlan? preservedNumbering,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
     {
         var endnotes = new XElement(W + "endnotes",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
@@ -1699,7 +1731,7 @@ public static class DocxWriter
         {
             var element = new XElement(W + "endnote", new XAttribute(W + "id", endnote.Id));
             foreach (var paragraph in BuildNoteContent(
-                endnote.Content, noteDrawings, hyperlinks, "endnoteRef"))
+                endnote.Content, noteDrawings, hyperlinks, "endnoteRef", preservedNumbering, restartOverrides))
                 element.Add(paragraph);
             endnotes.Add(element);
         }
@@ -1711,11 +1743,13 @@ public static class DocxWriter
         IReadOnlyList<Paragraph> content,
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
-        string referenceElementName)
+        string referenceElementName,
+        PreservedNumberingPlan? preservedNumbering,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
     {
         var paragraphs = content.Count == 0
             ? new List<XElement> { new XElement(W + "p") }
-            : content.Select(paragraph => BuildParagraph(paragraph, drawings, hyperlinks)).ToList();
+            : content.Select(paragraph => BuildParagraph(paragraph, drawings, hyperlinks, preservedNumbering: preservedNumbering, restartOverrides: restartOverrides)).ToList();
 
         // Word requires a footnoteRef/endnoteRef marker in the note body to display its automatic number.
         // Keep it after pPr so the paragraph remains schema-valid and before the authored note text.
@@ -1834,7 +1868,9 @@ public static class DocxWriter
         TextDocument document,
         IReadOnlyList<ImagePart> commentImages,
         IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
-        IReadOnlyDictionary<string, string> hyperlinks)
+        IReadOnlyDictionary<string, string> hyperlinks,
+        PreservedNumberingPlan? preservedNumbering,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
     {
         var comments = new XElement(W + "comments",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
@@ -1880,7 +1916,7 @@ public static class DocxWriter
             else
                 for (var pi = 0; pi < comment.Content.Count; pi++)
                 {
-                    var built = BuildParagraph(comment.Content[pi], drawings, hyperlinks);
+                    var built = BuildParagraph(comment.Content[pi], drawings, hyperlinks, preservedNumbering: preservedNumbering, restartOverrides: restartOverrides);
                     // commentsExtended.xml references the comment's LAST paragraph; stamp paraId there.
                     if (pi == comment.Content.Count - 1)
                         built.SetAttributeValue(W14 + "paraId", paraId);
@@ -7092,11 +7128,11 @@ public static class DocxWriter
         var original = document.Preserved.OriginalNumbering;
         if (original is null)
             return null;
-        // Trigger when EITHER a body paragraph kept an original numPr OR a paragraph STYLE definition carries
+        // Trigger when any story paragraph kept an original numPr OR a paragraph STYLE definition carries
         // one (style-level numbering FreeW does not model). Both re-emit against the preserved numbering.xml
         // under the same disjoint-id remap, so a document that only has style-level numbering still builds a
         // plan. Authored-from-scratch / FreeW-only-lists documents have neither, so the plan stays null.
-        var hasParagraphPreserved = EnumerateParagraphs(document).Any(p => p.PreservedNumbering is not null);
+        var hasParagraphPreserved = EnumerateStoryParagraphs(document).Any(p => p.PreservedNumbering is not null);
         var hasStylePreserved = document.Styles.Values.Any(s => s.PreservedNumbering is not null);
         if (!hasParagraphPreserved && !hasStylePreserved)
             return null;
@@ -7167,7 +7203,7 @@ public static class DocxWriter
         var result = new Dictionary<(ListKind, int, int), int>();
         // Override numIds must be clear of FreeW's fixed 1/2/3 AND the preserved range (4..4+preserved.Nums.Count-1).
         var nextOverrideNumId = PreservedNumIdStart + (preserved?.Nums.Count ?? 0);
-        foreach (var paragraph in EnumerateParagraphs(document))
+        foreach (var paragraph in EnumerateStoryParagraphs(document))
         {
             var f = paragraph.Formatting;
             if (f.ListKind is not (ListKind.Number or ListKind.MultiLevel))

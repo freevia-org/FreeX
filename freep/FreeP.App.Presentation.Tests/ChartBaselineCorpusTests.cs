@@ -1065,6 +1065,33 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartBaselineDepthCorpus_UsesMeasuredWpfOrangeFacetWithoutChangingSharedMesh()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
+        var surfaceChart = PptxPackageReader.Read(deckPath).Slides[0].Shapes
+            .Single(shape => shape.Chart?.ChartType == ChartType.Surface3D).Chart!;
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            surfaceChart,
+            new ChartPlanRect(596, 105, 360, 189));
+
+        plan.WpfRenderFacets.Single(facet =>
+                facet.SeriesIndex == 0 &&
+                facet.CategoryIndex == 0 &&
+                facet.Fill.Color == new SrgbColor(0xF1, 0x80, 0x32))
+            .Points
+            .Should()
+            .Contain(new ChartPlanPoint(604, 228))
+            .And.Contain(new ChartPlanPoint(787, 185));
+        plan.RenderFacets.Single(facet =>
+                facet.SeriesIndex == 0 &&
+                facet.CategoryIndex == 0 &&
+                facet.Fill.Color == new SrgbColor(0xF1, 0x80, 0x32))
+            .Points
+            .Should()
+            .Contain(new ChartPlanPoint(625.5, 203.93));
+    }
+
+    [Fact]
     public void RadarBaselineReadiness_ProjectsStyleSpecificSharedHostDecisionsWithoutPowerPointCom()
     {
         var standardRadar = BuildRadarChart(RadarStyle.Standard);
