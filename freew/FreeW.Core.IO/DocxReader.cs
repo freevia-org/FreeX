@@ -1757,6 +1757,19 @@ public static class DocxReader
             // package custom-XML parts but not inline wrapper metadata, so retain the visible child runs.
             AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
+        else if (child.Name == W + "dir" || child.Name == W + "bdo")
+        {
+            // Inline bidirectional containers wrap ordinary paragraph content. FreeW's run-level RTL property
+            // is the closest editable equivalent, so retain every child run and apply it to an RTL scope.
+            // LTR is already the model default and needs no synthetic run property.
+            var firstRun = paragraph.Runs.Count;
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+            if (string.Equals(child.Attribute(W + "val")?.Value, "rtl", StringComparison.OrdinalIgnoreCase))
+            {
+                for (var index = firstRun; index < paragraph.Runs.Count; index++)
+                    paragraph.Runs[index].Formatting = paragraph.Runs[index].Formatting with { Rtl = true };
+            }
+        }
         else if (child.Name == W + "ruby")
         {
             AddRuby(paragraph, child, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
