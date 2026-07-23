@@ -683,6 +683,11 @@ public sealed class WordArtTests : IDisposable
         waveEffects.BevelTop.Should().NotBeNull();
         waveEffects.BevelTop!.WidthEmu.Should().Be(25400);
         waveEffects.BevelTop.HeightEmu.Should().Be(38100);
+        bodies
+            .Single(body => body.Paragraphs.SelectMany(p => p.Runs).Any(r => r.Text == "Wave Text"))
+            .Paragraphs.SelectMany(p => p.Runs)
+            .Single(r => r.Text == "Wave Text")
+            .TextOutline.Should().BeSameAs(ShapeOutline.None.Instance);
 
         var roundTripPath = WriteToPptx(pres);
         GetSchemaErrors(File.ReadAllBytes(roundTripPath)).Should().BeEmpty();

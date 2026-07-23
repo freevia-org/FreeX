@@ -224,6 +224,12 @@ internal static class PptxColorReader
     {
         if (lnElement is null) return null;
 
+        // PowerPoint emits an empty line element for some WordArt material
+        // routes. It carries no width, fill, or line-end semantics and is a
+        // no-outline marker rather than the default black line.
+        if (!lnElement.HasAttributes && !lnElement.Elements().Any())
+            return ShapeOutline.None.Instance;
+
         // a:noFill inside the line = no outline
         if (lnElement.Element(A + "noFill") is not null)
             return ShapeOutline.None.Instance;
