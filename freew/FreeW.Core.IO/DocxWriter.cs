@@ -314,19 +314,27 @@ public static class DocxWriter
         var charts = new List<ChartPart>();
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
+            {
                 if (run.Chart is { } chart)
-                {
-                    var index = charts.Count + 1;
-                    var chartFileName = NextAvailableChartFileName(usedPartNames);
-                    var embeddingFileName = NextAvailablePartFileName(
-                        usedPartNames,
-                        "word/embeddings",
-                        "Microsoft_Excel_Worksheet",
-                        "xlsx");
-                    // The external-data rId is part-LOCAL (it lives in word/charts/_rels/chartN.xml.rels), so a
-                    // fixed "rId1" per chart is fine and never collides with the document-level ids above.
-                    charts.Add(new ChartPart(chart, $"rIdChart{index}", chartFileName, (uint)index, embeddingFileName, "rId1"));
-                }
+                    Add(chart);
+                if (run.DrawingGroup is { } group)
+                    foreach (var groupedChart in group.Children.OfType<Chart>())
+                        Add(groupedChart);
+            }
+
+        void Add(Chart chart)
+        {
+            var index = charts.Count + 1;
+            var chartFileName = NextAvailableChartFileName(usedPartNames);
+            var embeddingFileName = NextAvailablePartFileName(
+                usedPartNames,
+                "word/embeddings",
+                "Microsoft_Excel_Worksheet",
+                "xlsx");
+            // The external-data rId is part-LOCAL (it lives in word/charts/_rels/chartN.xml.rels), so a
+            // fixed "rId1" per chart is fine and never collides with the document-level ids above.
+            charts.Add(new ChartPart(chart, $"rIdChart{index}", chartFileName, (uint)index, embeddingFileName, "rId1"));
+        }
         return charts;
     }
 
@@ -411,25 +419,33 @@ public static class DocxWriter
         var smartArts = new List<SmartArtPart>();
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
+            {
                 if (run.SmartArt is { } smartArt)
-                {
-                    var index = smartArts.Count + 1;
-                    smartArts.Add(new SmartArtPart(
-                        smartArt,
-                        $"rIdDgmData{index}",
-                        $"rIdDgmLayout{index}",
-                        $"rIdDgmStyle{index}",
-                        $"rIdDgmColors{index}",
-                        $"data{index}.xml",
-                        $"layout{index}.xml",
-                        $"quickStyle{index}.xml",
-                        $"colors{index}.xml",
-                        // Word resolves dgm:dataModelExt/@relId against the document-level relationship
-                        // set, matching the native package.
-                        $"rIdDgmDrawing{index}",
-                        $"drawing{index}.xml",
-                        (uint)index));
-                }
+                    Add(smartArt);
+                if (run.DrawingGroup is { } group)
+                    foreach (var groupedSmartArt in group.Children.OfType<SmartArt>())
+                        Add(groupedSmartArt);
+            }
+
+        void Add(SmartArt smartArt)
+        {
+            var index = smartArts.Count + 1;
+            smartArts.Add(new SmartArtPart(
+                smartArt,
+                $"rIdDgmData{index}",
+                $"rIdDgmLayout{index}",
+                $"rIdDgmStyle{index}",
+                $"rIdDgmColors{index}",
+                $"data{index}.xml",
+                $"layout{index}.xml",
+                $"quickStyle{index}.xml",
+                $"colors{index}.xml",
+                // Word resolves dgm:dataModelExt/@relId against the document-level relationship
+                // set, matching the native package.
+                $"rIdDgmDrawing{index}",
+                $"drawing{index}.xml",
+                (uint)index));
+        }
         return smartArts;
     }
 
@@ -1117,6 +1133,8 @@ public static class DocxWriter
         var embeddedByRun = new Dictionary<Run, EmbeddedObjectPart>();
         var smartArtsByRun = new Dictionary<Run, SmartArtPart>();
         var imagesByGroupChild = new Dictionary<InlineImage, ImagePart>();
+        var chartsByGroupChild = new Dictionary<Chart, ChartPart>();
+        var smartArtsByGroupChild = new Dictionary<SmartArt, SmartArtPart>();
         var nextImage = 0;
         var nextChart = 0;
         var nextEmbedded = 0;
@@ -1137,6 +1155,10 @@ public static class DocxWriter
                     {
                         if (child is InlineImage image)
                             imagesByGroupChild[image] = images[nextImage++];
+                        else if (child is Chart chart)
+                            chartsByGroupChild[chart] = charts[nextChart++];
+                        else if (child is SmartArt smartArt)
+                            smartArtsByGroupChild[smartArt] = smartArts[nextSmartArt++];
                     }
             }
 
@@ -1148,7 +1170,7 @@ public static class DocxWriter
 
         var drawings = new RunDrawings(
             imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, preservedDrawingRelIds,
-            imagesByGroupChild);
+            imagesByGroupChild, chartsByGroupChild, smartArtsByGroupChild);
 
         var body = new XElement(W + "body");
         for (var i = 0; i < document.Blocks.Count;)
@@ -1237,7 +1259,9 @@ public static class DocxWriter
         IReadOnlyDictionary<Run, SmartArtPart> SmartArts,
         IdAllocator Ids,
         IReadOnlyDictionary<string, string>? PreservedDrawingRelIds = null,
-        IReadOnlyDictionary<InlineImage, ImagePart>? GroupImages = null)
+        IReadOnlyDictionary<InlineImage, ImagePart>? GroupImages = null,
+        IReadOnlyDictionary<Chart, ChartPart>? GroupCharts = null,
+        IReadOnlyDictionary<SmartArt, SmartArtPart>? GroupSmartArts = null)
     {
         public static RunDrawings Empty() => new(
             new Dictionary<Run, ImagePart>(),
@@ -1246,7 +1270,9 @@ public static class DocxWriter
             new Dictionary<Run, SmartArtPart>(),
             new IdAllocator(),
             null,
-            new Dictionary<InlineImage, ImagePart>());
+            new Dictionary<InlineImage, ImagePart>(),
+            new Dictionary<Chart, ChartPart>(),
+            new Dictionary<SmartArt, SmartArtPart>());
     }
 
     /// <summary>
@@ -4118,13 +4144,7 @@ public static class DocxWriter
         var name = $"Chart {part.DrawingId}";
 
         var chartDocPr = new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name));
-        var chartGraphic = new XElement(A + "graphic",
-            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-            new XElement(A + "graphicData",
-                new XAttribute("uri", ChartGraphicDataUri),
-                new XElement(C + "chart",
-                    new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
-                    new XAttribute(R + "id", part.RelationshipId))));
+        var chartGraphic = BuildChartGraphic(part);
 
         if (part.Chart.IsFloating && part.Chart.Placement is { } chartPlacement)
             return BuildAnchorContainer(cx, cy, chartDocPr, chartGraphic, chartPlacement);
@@ -4141,6 +4161,15 @@ public static class DocxWriter
                 chartDocPr,
                 chartGraphic));
     }
+
+    private static XElement BuildChartGraphic(ChartPart part) =>
+        new(A + "graphic",
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XElement(A + "graphicData",
+                new XAttribute("uri", ChartGraphicDataUri),
+                new XElement(C + "chart",
+                    new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
+                    new XAttribute(R + "id", part.RelationshipId))));
 
     /// <summary>
     /// Re-emits a verbatim-preserved inline drawing (an unmodelled chart/chartex <c>w:drawing</c> captured on
@@ -4227,17 +4256,7 @@ public static class DocxWriter
         var editId = ((uint)(0x20000000 + part.DrawingId)).ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
         var smartArtDocPr = new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name));
-        var smartArtGraphic = new XElement(A + "graphic",
-            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-            new XElement(A + "graphicData",
-                new XAttribute("uri", DiagramGraphicDataUri),
-                new XElement(Dgm + "relIds",
-                    new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
-                    new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
-                    new XAttribute(R + "dm", part.DataRelationshipId),
-                    new XAttribute(R + "lo", part.LayoutRelationshipId),
-                    new XAttribute(R + "qs", part.QuickStyleRelationshipId),
-                    new XAttribute(R + "cs", part.ColorsRelationshipId))));
+        var smartArtGraphic = BuildSmartArtGraphic(part);
 
         if (part.SmartArt.IsFloating && part.SmartArt.Placement is { } smartArtPlacement)
             return BuildAnchorContainer(cx, cy, smartArtDocPr, smartArtGraphic, smartArtPlacement);
@@ -4258,11 +4277,24 @@ public static class DocxWriter
                 smartArtGraphic));
     }
 
+    private static XElement BuildSmartArtGraphic(SmartArtPart part) =>
+        new(A + "graphic",
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XElement(A + "graphicData",
+                new XAttribute("uri", DiagramGraphicDataUri),
+                new XElement(Dgm + "relIds",
+                    new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                    new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                    new XAttribute(R + "dm", part.DataRelationshipId),
+                    new XAttribute(R + "lo", part.LayoutRelationshipId),
+                    new XAttribute(R + "qs", part.QuickStyleRelationshipId),
+                    new XAttribute(R + "cs", part.ColorsRelationshipId))));
+
     /// <summary>
     /// Builds the <c>w:drawing/wp:anchor</c> for a <see cref="DrawingGroup"/>, emitting the group as
     /// <c>wpg:wgp</c> inside <c>a:graphicData[uri=wpg]</c>. Shapes and WordArt use <c>wps:wsp</c>; images use
-    /// their native <c>pic:pic</c> payload. Word rejects chart/SmartArt graphic frames in a wpg group, so
-    /// those unsupported child kinds intentionally retain the existing marker placeholder. Groups float.
+    /// their native <c>pic:pic</c> payload; charts and SmartArt use native <c>wpg:graphicFrame</c> children
+    /// that retain their document-level package relationships. Groups float.
     /// </summary>
     private static XElement BuildDrawingGroupDrawing(DrawingGroup group, RunDrawings drawings)
     {
@@ -4309,6 +4341,10 @@ public static class DocxWriter
                 WordArt wordArt => BuildDrawingGroupWordArtChild(wordArt, xfrm, childName, ids),
                 InlineImage image when drawings.GroupImages?.TryGetValue(image, out var imagePart) == true
                     => BuildDrawingGroupImageChild(imagePart, xfrm, childName),
+                Chart chart when drawings.GroupCharts?.TryGetValue(chart, out var chartPart) == true
+                    => BuildDrawingGroupGraphicFrameChild(BuildChartGraphic(chartPart), xfrm, childName, ids),
+                SmartArt smartArt when drawings.GroupSmartArts?.TryGetValue(smartArt, out var smartArtPart) == true
+                    => BuildDrawingGroupGraphicFrameChild(BuildSmartArtGraphic(smartArtPart), xfrm, childName, ids),
                 _ => BuildDrawingGroupPlaceholderChild(xfrm, new XElement(Wp + "docPr",
                     new XAttribute("id", ids.NextShapeDrawingId()),
                     new XAttribute("name", childName)))
@@ -4378,6 +4414,22 @@ public static class DocxWriter
         var spPr = pic.Element(Pic + "spPr");
         spPr?.Element(A + "xfrm")?.ReplaceWith(new XElement(xfrm));
         return pic;
+    }
+
+    private static XElement BuildDrawingGroupGraphicFrameChild(
+        XElement graphic,
+        XElement xfrm,
+        string childName,
+        IdAllocator ids)
+    {
+        var groupTransform = new XElement(Wpg + "xfrm", xfrm.Elements().Select(element => new XElement(element)));
+        return new XElement(Wpg + "graphicFrame",
+            new XElement(Wpg + "cNvPr",
+                new XAttribute("id", ids.NextShapeDrawingId()),
+                new XAttribute("name", childName)),
+            new XElement(Wpg + "cNvFrPr"),
+            groupTransform,
+            graphic);
     }
 
     private static XElement BuildDrawingGroupRichWspChild(

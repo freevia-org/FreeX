@@ -16,6 +16,9 @@ public sealed class DrawingGroupRoundTripTests
     private static readonly XNamespace Wpg = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
     private static readonly XNamespace Wps = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
     private static readonly XNamespace Pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+    private static readonly XNamespace C   = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+    private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
     private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47];
 
@@ -121,6 +124,24 @@ public sealed class DrawingGroupRoundTripTests
         return grp;
     }
 
+    private static DrawingGroup ChartAndSmartArtGroup()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Jan", "Feb"], [5.0, 8.0], title: "Grouped sales");
+        chart.WidthPt = 90;
+        chart.HeightPt = 48;
+
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Ship"]);
+        smartArt.WidthPt = 84;
+        smartArt.HeightPt = 42;
+
+        var group = new DrawingGroup { WidthPt = 200, HeightPt = 90 };
+        group.Children.Add(chart);
+        group.ChildOffsets.Add((0, 0));
+        group.Children.Add(smartArt);
+        group.ChildOffsets.Add((108, 18));
+        return group;
+    }
+
     private static TextDocument DocumentWith(DrawingGroup grp)
     {
         var doc = new TextDocument();
@@ -194,6 +215,49 @@ public sealed class DrawingGroupRoundTripTests
         roundTripped.Children.Should().HaveCount(2);
         roundTripped.Children[0].Should().BeOfType<InlineImage>().Which.Bytes.Should().Equal(imageBytes);
         roundTripped.Children[1].Should().BeOfType<Shape>();
+    }
+
+    [Fact]
+    public void DrawingGroup_NativeChartAndSmartArtChildren_EmitGraphicFramesAndRoundTrip()
+    {
+        var document = DocumentWith(ChartAndSmartArtGroup());
+        var bytes = WriteBytes(document);
+        var xml = DocXml(document);
+        var frames = xml.Descendants(Wpg + "wgp").Single().Elements(Wpg + "graphicFrame").ToList();
+
+        frames.Should().HaveCount(2);
+        foreach (var frame in frames)
+        {
+            frame.Element(Wpg + "cNvPr").Should().NotBeNull();
+            frame.Element(Wpg + "cNvFrPr").Should().NotBeNull();
+            frame.Element(Wpg + "xfrm").Should().NotBeNull();
+        }
+        frames.Single(frame => frame.Descendants(C + "chart").Any())
+            .Descendants(C + "chart").Single().Attribute(R + "id").Should().NotBeNull();
+        frames.Single(frame => frame.Descendants(Dgm + "relIds").Any())
+            .Descendants(Dgm + "relIds").Single().Attributes().Where(attribute => attribute.Name.Namespace == R)
+            .Select(attribute => attribute.Name.LocalName)
+            .Should().BeEquivalentTo(["dm", "lo", "qs", "cs"]);
+
+        using (var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        {
+            zip.GetEntry("word/charts/chart1.xml").Should().NotBeNull();
+            zip.GetEntry("word/diagrams/data1.xml").Should().NotBeNull();
+            zip.GetEntry("word/diagrams/layout1.xml").Should().NotBeNull();
+            zip.GetEntry("word/diagrams/quickStyle1.xml").Should().NotBeNull();
+            zip.GetEntry("word/diagrams/colors1.xml").Should().NotBeNull();
+        }
+
+        var recovered = DocxReader.Read(new MemoryStream(bytes));
+        var group = ((Paragraph)recovered.Blocks[0]).Runs.Single(run => run.DrawingGroup is not null).DrawingGroup!;
+        var chart = group.Children[0].Should().BeOfType<Chart>().Subject;
+        chart.Title.Should().Be("Grouped sales");
+        chart.Categories.Should().Equal("Jan", "Feb");
+        var smartArt = group.Children[1].Should().BeOfType<SmartArt>().Subject;
+        smartArt.Kind.Should().Be(SmartArtKind.Process);
+        smartArt.Nodes.Select(node => node.Text).Should().Equal("Plan", "Ship");
+        group.ChildOffsets[1].X.Should().BeApproximately(108, 0.1);
+        group.ChildOffsets[1].Y.Should().BeApproximately(18, 0.1);
     }
 
     // ── Two-member round-trip ────────────────────────────────────────────────────────────────────
