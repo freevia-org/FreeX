@@ -117,6 +117,43 @@ public sealed class AvaloniaRibbonInteractionValidationTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task BorderPickerMenuCommands_ObserveWpfCompatiblePickerState()
+    {
+        await Session.Dispatch(() =>
+        {
+            var commandIds = AvaloniaRibbonComposition
+                .EnumerateSurfaceRows(AvaloniaRibbonComposition.BuildDefinition())
+                .Select(row => row.CommandId.Value)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var targetIds = new[] { "Black", "Gray", "Accent 1", "Accent 2", "Thin", "Medium", "Thick", "Dashed", "Dotted", "Double" };
+
+            foreach (var targetId in targetIds)
+            {
+                var start = Array.IndexOf(commandIds, targetId);
+                Assert.True(start >= 0, $"Ribbon command catalog is missing {targetId}.");
+
+                var window = new MainWindow([]);
+                try
+                {
+                    var results = new List<InteractionValidationResult>();
+                    window.AddRibbonInteractionExecutionResults(results, start, 1);
+                    var result = Assert.Single(results, item =>
+                        item.Category == "ribbon-command-behavior" &&
+                        Uri.UnescapeDataString(item.Id["ribbon-command-behavior/".Length..]) == targetId);
+                    Assert.Equal("passed", result.Status);
+                    Assert.Equal("executed-production-lifecycle", result.EvidenceLevel);
+                    Assert.Contains("border-picker-state-changed", result.Evidence);
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }
+        }, CancellationToken.None);
+    }
+
     private static IReadOnlyList<InteractionValidationResult> GetResults()
     {
         if (_cachedResults is not null)
