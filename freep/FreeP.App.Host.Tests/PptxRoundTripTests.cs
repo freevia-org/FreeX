@@ -39,6 +39,73 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_ParagraphAlternateContent_UsesChoiceOrFallbackWithoutDroppingText()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Name = "Alternate paragraph text",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 914400,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "choice source" } } },
+                    new Paragraph { Runs = { new Run { Text = "fallback source" } } },
+                }
+            }
+        });
+
+        var sourcePath = WriteToPptx(pres);
+        using var patched = RewriteSlideXml(sourcePath, slideXml =>
+        {
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+            XNamespace x99 = "urn:freex:test-extension";
+
+            var paragraphs = slideXml.Descendants(a + "p")
+                .Where(paragraph => paragraph.Descendants(a + "t")
+                    .Any(text => text.Value is "choice source" or "fallback source"))
+                .ToArray();
+            paragraphs.Should().HaveCountGreaterThanOrEqualTo(2);
+
+            Wrap(paragraphs[0], supportedChoice: true);
+            Wrap(paragraphs[1], supportedChoice: false);
+            slideXml.Root!.Add(new XAttribute(XNamespace.Xmlns + "x99", x99.NamespaceName));
+
+            void Wrap(XElement paragraph, bool supportedChoice)
+            {
+                var sourceRun = paragraph.Elements(a + "r").First();
+                var fallbackRun = new XElement(sourceRun);
+                var choice = supportedChoice
+                    ? new XElement(a + "r", new XElement(a + "t", "choice branch"))
+                    : new XElement(x99 + "unsupported");
+
+                sourceRun.Remove();
+                paragraph.Add(new XElement(
+                    mc + "AlternateContent",
+                    new XElement(mc + "Choice", new XAttribute("Requires", "x99"), choice),
+                    new XElement(mc + "Fallback", fallbackRun)));
+            }
+
+            return slideXml;
+        });
+
+        var reloaded = PptxPackageReader.Read(patched);
+        var paragraphs = reloaded.Slides[0].Shapes.Single(shape => shape.Id == 42)
+            .TextBody!.Paragraphs;
+
+        paragraphs[0].Runs.Should().ContainSingle().Which.Text.Should().Be("choice branch");
+        paragraphs[1].Runs.Should().ContainSingle().Which.Text.Should().Be("fallback source");
+    }
+
+    [Fact]
     public void RoundTrip_AuthoredPictureBullet_WritesAndReadsBuBlipMedia()
     {
         var pres = Presentation.CreateEmpty();
@@ -1147,6 +1214,41 @@ public sealed class PptxRoundTripTests : IDisposable
                     var presXml = System.Xml.Linq.XDocument.Load(source);
                     var rewritten = rewrite(presXml);
                     rewritten.Save(target, System.Xml.Linq.SaveOptions.DisableFormatting);
+                }
+                else
+                {
+                    source.CopyTo(target);
+                }
+            }
+        }
+
+        destination.Position = 0;
+        return destination;
+    }
+
+    private static MemoryStream RewriteSlideXml(
+        string path,
+        Func<System.Xml.Linq.XDocument, System.Xml.Linq.XDocument> rewrite)
+    {
+        var destination = new MemoryStream();
+        using (var sourceZip = System.IO.Compression.ZipFile.OpenRead(path))
+        using (var destinationZip = new System.IO.Compression.ZipArchive(
+            destination,
+            System.IO.Compression.ZipArchiveMode.Create,
+            leaveOpen: true))
+        {
+            foreach (var entry in sourceZip.Entries)
+            {
+                var destinationEntry = destinationZip.CreateEntry(
+                    entry.FullName,
+                    System.IO.Compression.CompressionLevel.Fastest);
+                using var source = entry.Open();
+                using var target = destinationEntry.Open();
+
+                if (entry.FullName == "ppt/slides/slide1.xml")
+                {
+                    var slideXml = System.Xml.Linq.XDocument.Load(source);
+                    rewrite(slideXml).Save(target, System.Xml.Linq.SaveOptions.DisableFormatting);
                 }
                 else
                 {

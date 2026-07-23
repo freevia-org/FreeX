@@ -4094,31 +4094,101 @@ public static class PptxPackageReader
         }
 
         foreach (var child in pEl.Elements())
-        {
-            if (child.Name == A + "r")
-                para.Runs.Add(ReadRun(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId));
-            else if (child.Name == A + "br")
-                para.Runs.Add(new Run { Text = "\n" });
-            else if (child.Name == A + "fld")
-                para.Runs.Add(ReadFieldRun(child, scheme));
-            // Theme 21: OMML math — a14:m is the compact form; mc:AlternateContent wraps the
-            // full m:oMathPara form with a plain-text mc:Fallback.
-            else if (child.Name == A14 + "m")
-                para.Runs.Add(ReadMathRun(child, isAlternateContent: false));
-            else if (child.Name == MC + "AlternateContent")
-            {
-                // Check whether this mc:AlternateContent contains math (m:oMath or m:oMathPara)
-                var hasMath = child.Descendants(M + "oMath").Any()
-                           || child.Descendants(M + "oMathPara").Any()
-                           || child.Descendants(A14 + "m").Any();
-                if (hasMath)
-                    para.Runs.Add(ReadMathRun(child, isAlternateContent: true));
-                // Non-math mc:AlternateContent inside a paragraph — ignore (unsupported extension).
-            }
-        }
+            AppendParagraphContent(
+                para,
+                child,
+                scheme,
+                slideRels,
+                allSlides,
+                slideDir,
+                slidePartPathToId);
 
         return para;
     }
+
+    private static void AppendParagraphContent(
+        Paragraph para,
+        XElement child,
+        PresentationColorScheme scheme,
+        IReadOnlyList<OpcRelationshipTarget>? slideRels,
+        List<Slide>? allSlides,
+        string? slideDir,
+        IReadOnlyDictionary<string, string>? slidePartPathToId)
+    {
+        if (child.Name == A + "r")
+        {
+            para.Runs.Add(ReadRun(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId));
+            return;
+        }
+
+        if (child.Name == A + "br")
+        {
+            para.Runs.Add(new Run { Text = "\n" });
+            return;
+        }
+
+        if (child.Name == A + "fld")
+        {
+            para.Runs.Add(ReadFieldRun(child, scheme));
+            return;
+        }
+
+        if (child.Name == A14 + "m")
+        {
+            para.Runs.Add(ReadMathRun(child, isAlternateContent: false));
+            return;
+        }
+
+        if (child.Name != MC + "AlternateContent")
+            return;
+
+        // Theme 21: OMML math — mc:AlternateContent wraps the full
+        // m:oMathPara form with a plain-text mc:Fallback. Keep math as one
+        // structured run; ordinary alternate content is handled below.
+        var hasMath = child.Descendants(M + "oMath").Any()
+                   || child.Descendants(M + "oMathPara").Any()
+                   || child.Descendants(A14 + "m").Any();
+        if (hasMath)
+        {
+            para.Runs.Add(ReadMathRun(child, isAlternateContent: true));
+            return;
+        }
+
+        // PowerPoint uses AlternateContent for extension text as well as
+        // math. If the Choice does not contain a paragraph construct that
+        // FreeP understands, consume the visible Fallback instead of
+        // silently dropping the paragraph content.
+        var branch = SelectParagraphAlternateBranch(child);
+        if (branch is null)
+            return;
+
+        foreach (var branchChild in branch.Elements())
+            AppendParagraphContent(
+                para,
+                branchChild,
+                scheme,
+                slideRels,
+                allSlides,
+                slideDir,
+                slidePartPathToId);
+    }
+
+    private static XElement? SelectParagraphAlternateBranch(XElement alternateContent)
+    {
+        var choice = alternateContent.Element(MC + "Choice");
+        if (choice is not null && ContainsSupportedParagraphContent(choice))
+            return choice;
+
+        return alternateContent.Element(MC + "Fallback");
+    }
+
+    private static bool ContainsSupportedParagraphContent(XElement branch) =>
+        branch.DescendantsAndSelf().Any(element =>
+            element.Name == A + "r" ||
+            element.Name == A + "br" ||
+            element.Name == A + "fld" ||
+            element.Name == A14 + "m" ||
+            element.Name == MC + "AlternateContent");
 
     private static ImagePart? ReadBulletImage(
         XElement buBlip,
