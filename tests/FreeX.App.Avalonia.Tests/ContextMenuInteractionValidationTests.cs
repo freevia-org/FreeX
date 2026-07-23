@@ -212,6 +212,44 @@ public sealed class ContextMenuInteractionValidationTests
     }
 
     [Fact]
+    public async Task ProductionDispatch_ExercisesOwnedFileMenuRoutes()
+    {
+        string[] ids =
+        [
+            "context-menu.native-application.file:BackstageInfo",
+            "context-menu.native-application.file:BackstageExport",
+            "context-menu.native-application.file:BackstageAccount",
+            "context-menu.native-application.file:Options",
+            "context-menu.native-application.file:WorkbookStatistics",
+            "context-menu.native-application.file:PageSetup",
+            "context-menu.native-application.file:PrintPreview",
+        ];
+
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var results = new List<InteractionValidationResult>();
+                foreach (var id in ids)
+                    results.Add(await window.RunContextMenuInteractionValidationForTestAsync(id));
+
+                results.Should().OnlyContain(result => result.Status == "passed", because:
+                    string.Join(Environment.NewLine, results.Select(result =>
+                        $"{result.Id}: {result.EvidenceLevel} | {result.Note}")));
+                results.Should().OnlyContain(result =>
+                    result.EvidenceLevel == "production-dialog-opened-cancelled" ||
+                    result.EvidenceLevel == "production-dispatch-completed");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ProductionDispatch_ClosesAllEightExhaustiveContextMenuResiduals()
     {
         string[] ids =

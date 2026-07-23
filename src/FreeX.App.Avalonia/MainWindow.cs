@@ -2069,28 +2069,28 @@ public sealed partial class MainWindow : Window
         _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
 
         ConfigurePageSetupNativeMenuItem(_filePageSetupMenuItem);
-        _pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
+        _pageSetupMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PageSetup);
 
         ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);
-        _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
+        _printPreviewMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PrintPreview);
 
         ConfigureNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook);
         _shareWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Share);
 
         ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
-        _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
+        _workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);
 
         ConfigureNativeFileMenuItem(_backstageInfoMenuItem, NativeFileMenuItemId.BackstageInfo);
-        _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
+        _backstageInfoMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageInfo);
 
         ConfigureNativeFileMenuItem(_backstageExportMenuItem, NativeFileMenuItemId.BackstageExport);
-        _backstageExportMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Export);
+        _backstageExportMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageExport);
 
         ConfigureNativeFileMenuItem(_backstageAccountMenuItem, NativeFileMenuItemId.BackstageAccount);
-        _backstageAccountMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Account);
+        _backstageAccountMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageAccount);
 
         ConfigureNativeFileMenuItem(_optionsMenuItem, NativeFileMenuItemId.Options);
-        _optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);
+        _optionsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options);
 
         ConfigureNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook);
         _closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);
