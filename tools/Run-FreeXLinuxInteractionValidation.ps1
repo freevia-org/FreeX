@@ -7,6 +7,9 @@
   through X11, then asks the app to validate every catalogued interaction surface and model route.
   The two evidence streams are merged into one JSON/HTML report. Only the harness-owned container
   on the requested port is stopped.
+
+  Use -PhysicalOnly to rerun the bounded physical X11 probes and write a physical-only report
+  without starting the exhaustive managed interaction catalog.
 #>
 [CmdletBinding()]
 param(
@@ -33,6 +36,7 @@ param(
     [string]$ExistingX11Manifest = "",
 
     [switch]$SkipX11,
+    [switch]$PhysicalOnly,
 
     [switch]$SkipImageBuild,
     [switch]$SkipPublish
@@ -207,6 +211,9 @@ function Start-ValidationSession {
 
 if (-not $resumeRequested -and $SkipPublish) {
     throw "-SkipPublish requires -ResumeReportDirectory with an existing provenance record."
+}
+if ($PhysicalOnly -and $SkipX11) {
+    throw "-PhysicalOnly cannot be combined with -SkipX11; physical-only mode runs the bounded X11 probes."
 }
 if ($resumeRequested) {
     if (-not (Test-Path -LiteralPath $provenancePath -PathType Leaf)) {
@@ -830,15 +837,30 @@ try {
         }
     }
 
-    # Phase two uses a fresh X11 process for each bounded dialog slice. Avalonia retains native modal/input
-    # resources across repeated closes, so one 120-dialog process is not a reliable validation boundary.
-    $manifest = $null
-    $combinedResults = @()
-    $authoritativeDialogCount = $null
-    $authoritativeRibbonCount = $null
-    $authoritativeContextCount = $null
-    $coreSections = @("ribbon-bindings", "shortcuts", "range-inventory", "editing")
-    foreach ($coreSection in $coreSections) {
+    if ($PhysicalOnly) {
+        $manifest = [pscustomobject][ordered]@{
+            schemaVersion = 2
+            app = "FreeX"
+            platform = "linux"
+            shell = "avalonia"
+            validationMode = "physical-only"
+            coverage = [pscustomobject][ordered]@{
+                exhaustive = $false
+                scope = "bounded physical X11 probes"
+            }
+            results = @()
+        }
+        $combinedResults = @()
+    } else {
+        # Phase two uses a fresh X11 process for each bounded dialog slice. Avalonia retains native modal/input
+        # resources across repeated closes, so one 120-dialog process is not a reliable validation boundary.
+        $manifest = $null
+        $combinedResults = @()
+        $authoritativeDialogCount = $null
+        $authoritativeRibbonCount = $null
+        $authoritativeContextCount = $null
+        $coreSections = @("ribbon-bindings", "shortcuts", "range-inventory", "editing")
+        foreach ($coreSection in $coreSections) {
         $existingCorePath = Join-Path $reportDirectory "core-$coreSection.json"
         if (Test-Path -LiteralPath $existingCorePath -PathType Leaf) {
             $batchManifest = Read-CompletedJsonManifest -Path $existingCorePath -Deadline (Get-Date).AddMinutes(1) `
@@ -1106,15 +1128,16 @@ try {
     $combinedResults = @($combinedResults | Where-Object category -ne "range-selection") +
         @($deduplicatedRangeRows) + @($missingRangeRows)
 
-    $dialogContractIds = @($combinedResults | Where-Object category -eq "dialog-contract" | Select-Object -ExpandProperty id -Unique)
-    if ($dialogContractIds.Count -ne $authoritativeDialogCount) {
-        $combinedResults += [pscustomobject]@{
-            id = "validation.dialog-catalog-completeness"
-            category = "validation-completeness"
-            status = "failed"
-            evidenceLevel = "catalog-count-mismatch"
-            evidence = "expected=$authoritativeDialogCount; observed=$($dialogContractIds.Count)"
-            note = "Every authoritative production dialog route must emit exactly one keyboard/focus contract row."
+        $dialogContractIds = @($combinedResults | Where-Object category -eq "dialog-contract" | Select-Object -ExpandProperty id -Unique)
+        if ($dialogContractIds.Count -ne $authoritativeDialogCount) {
+            $combinedResults += [pscustomobject]@{
+                id = "validation.dialog-catalog-completeness"
+                category = "validation-completeness"
+                status = "failed"
+                evidenceLevel = "catalog-count-mismatch"
+                evidence = "expected=$authoritativeDialogCount; observed=$($dialogContractIds.Count)"
+                note = "Every authoritative production dialog route must emit exactly one keyboard/focus contract row."
+            }
         }
     }
 
