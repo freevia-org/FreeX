@@ -1773,7 +1773,13 @@ public sealed class MainWindow : Window
     private async Task OpenFindRecipientAsync()
     {
         if (_mailMerge?.Session.Data is not { Count: > 0 } data)
+        {
+            await FreeWInfoDialog.ShowAsync(
+                this,
+                "Select recipients first (Mailings > Select Recipients), then find a recipient.");
+            _editor.Focus();
             return;
+        }
         var query = await MailMergeDialogs.AskFindRecipientAsync(this);
         if (query is null)
         {
@@ -1783,7 +1789,7 @@ public sealed class MainWindow : Window
 
         var result = MailMergeFindRecipientPlanner.Find(data, query, _mailMerge.Session.CurrentIndex);
         _mailMerge.Session.CurrentIndex = result.Index;
-        _status.Text = result.Message;
+        await FreeWInfoDialog.ShowAsync(this, result.Message);
         _editor.Focus();
     }
 
