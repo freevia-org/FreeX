@@ -2571,14 +2571,19 @@ public static class DocxWriter
         // paragraphs with inherited/default spacing stay byte-unchanged.
         var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
             || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
-        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || hasLineSpacing)
+        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || f.BeforeAutoSpacing || f.AfterAutoSpacing || hasLineSpacing)
         {
             var spacingEl = new XElement(W + "spacing");
-            if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
-            {
+            var hasNumericSpacing = !f.BeforeAutoSpacing && f.SpaceBeforePt > 0
+                || !f.AfterAutoSpacing && f.SpaceAfterPt > 0;
+            if (f.BeforeAutoSpacing)
+                spacingEl.Add(new XAttribute(W + "beforeAutospacing", "1"));
+            else if (hasNumericSpacing)
                 spacingEl.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
+            if (f.AfterAutoSpacing)
+                spacingEl.Add(new XAttribute(W + "afterAutospacing", "1"));
+            else if (hasNumericSpacing)
                 spacingEl.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
-            }
             if (hasLineSpacing)
             {
                 var (line, rule) = f.LineRule switch
@@ -7932,15 +7937,20 @@ public static class DocxWriter
     {
         var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
             || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
-        if (f.SpaceBeforePt <= 0 && f.SpaceAfterPt <= 0 && !hasLineSpacing)
+        if (f.SpaceBeforePt <= 0 && f.SpaceAfterPt <= 0 && !f.BeforeAutoSpacing && !f.AfterAutoSpacing && !hasLineSpacing)
             return null;
         var pPr = new XElement(W + "pPr");
         var spacing = new XElement(W + "spacing");
-        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
-        {
+        var hasNumericSpacing = !f.BeforeAutoSpacing && f.SpaceBeforePt > 0
+            || !f.AfterAutoSpacing && f.SpaceAfterPt > 0;
+        if (f.BeforeAutoSpacing)
+            spacing.Add(new XAttribute(W + "beforeAutospacing", "1"));
+        else if (hasNumericSpacing)
             spacing.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
+        if (f.AfterAutoSpacing)
+            spacing.Add(new XAttribute(W + "afterAutospacing", "1"));
+        else if (hasNumericSpacing)
             spacing.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
-        }
         if (hasLineSpacing)
         {
             var (line, rule) = f.LineRule switch
@@ -7981,14 +7991,19 @@ public static class DocxWriter
         // default (a multiple of 1.15), mirroring the per-paragraph writer.
         var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
             || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
-        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || hasLineSpacing)
+        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || f.BeforeAutoSpacing || f.AfterAutoSpacing || hasLineSpacing)
         {
             var spacing = new XElement(W + "spacing");
-            if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
-            {
+            var hasNumericSpacing = !f.BeforeAutoSpacing && f.SpaceBeforePt > 0
+                || !f.AfterAutoSpacing && f.SpaceAfterPt > 0;
+            if (f.BeforeAutoSpacing)
+                spacing.Add(new XAttribute(W + "beforeAutospacing", "1"));
+            else if (hasNumericSpacing)
                 spacing.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
+            if (f.AfterAutoSpacing)
+                spacing.Add(new XAttribute(W + "afterAutospacing", "1"));
+            else if (hasNumericSpacing)
                 spacing.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
-            }
             if (hasLineSpacing)
             {
                 var (line, rule) = f.LineRule switch
