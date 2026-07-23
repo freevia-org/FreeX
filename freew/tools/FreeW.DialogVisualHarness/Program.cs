@@ -137,14 +137,18 @@ static RouteInventory BuildInventory(string root)
             && !fileName.Equals("NotesPane.cs", StringComparison.OrdinalIgnoreCase)
             && !fileName.Equals("ScreenClipOverlay.cs", StringComparison.OrdinalIgnoreCase))
             continue;
-        foreach (Match match in Regex.Matches(text, @"\bclass\s+(?<name>[A-Za-z_][A-Za-z0-9_]*(?:Dialog|Pane|Overlay))\b"))
+        var classMatches = Regex.Matches(text, @"\bclass\s+(?<name>[A-Za-z_][A-Za-z0-9_]*(?:Dialog|Pane|Overlay))\b");
+        for (var classIndex = 0; classIndex < classMatches.Count; classIndex++)
         {
+            var match = classMatches[classIndex];
             var typeName = match.Groups["name"].Value;
             var host = path.Contains("FreeW.App.Avalonia", StringComparison.OrdinalIgnoreCase) ? "avalonia" : "wpf";
             var sourceRouteId = Kebab(typeName.EndsWith("Dialog", StringComparison.Ordinal) ? typeName[..^6] : typeName);
             var routeId = CanonicalRoute(host, sourceRouteId);
             if (routes.Any(r => r.Host == host && r.RouteId == routeId)) continue;
-            var discoveredTabs = Regex.Matches(text, "(?:Header\\s*=\\s*|Label\\s*=\\s*)[\\\"'](?<tab>[^\\\"']+)[\\\"']")
+            var classEnd = classIndex + 1 < classMatches.Count ? classMatches[classIndex + 1].Index : text.Length;
+            var classText = text[match.Index..classEnd];
+            var discoveredTabs = Regex.Matches(classText, "(?:Header\\s*=\\s*|Label\\s*=\\s*)[\\\"'](?<tab>[^\\\"']+)[\\\"']")
                 .Select(m => m.Groups["tab"].Value);
             var tabs = ValidTabs(routeId, KnownTabs(routeId).Concat(discoveredTabs).Distinct(StringComparer.OrdinalIgnoreCase).Take(16)).ToArray();
             var modalMode = text.Contains("ShowDialog", StringComparison.OrdinalIgnoreCase) || text.Contains("modal", StringComparison.OrdinalIgnoreCase)
