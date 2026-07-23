@@ -237,6 +237,43 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void ContextualSpacing_SuppressesSharedMarginInsideOrdinaryRotatedTableCell()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Styles["CellBody"] = new DocumentStyle
+        {
+            Id = "CellBody",
+            Name = "Cell Body",
+            Paragraph = ParagraphFormatting.Default with
+            {
+                SpaceBeforePt = 6,
+                SpaceAfterPt = 10,
+                SpaceBeforeIsSet = true,
+                SpaceAfterIsSet = true,
+                ContextualSpacing = true
+            }
+        };
+        var table = Table.Create(1, 1);
+        var sourceCell = table.Rows[0].Cells[0];
+        sourceCell.TextDirection = CellTextDirection.Rotate90;
+        sourceCell.Paragraphs.Clear();
+        sourceCell.Paragraphs.Add(new Paragraph("first") { StyleId = "CellBody" });
+        sourceCell.Paragraphs.Add(new Paragraph("second") { StyleId = "CellBody" });
+        document.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var cell = view.Document.Blocks.OfType<System.Windows.Documents.Table>().Single()
+            .RowGroups.Single().Rows.Single().Cells.Single();
+        var paragraphs = RenderedCellParagraphs(cell).ToList();
+
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Margin.Bottom.Should().Be(0);
+        paragraphs[1].Margin.Top.Should().Be(0);
+    }
+
+    [StaFact]
     public void Table_ExplicitBorderPayload_SurvivesViewRoundTrip()
     {
         var document = TextDocument.CreateEmpty();
