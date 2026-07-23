@@ -1616,7 +1616,7 @@ public sealed partial class MainWindow : Window
         Editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
         var menu = BuildTableContextMenu(shape);
         _slideCanvas.ContextMenu = menu;
-        menu.IsOpen = true;
+        menu.Open(_slideCanvas);
         e.Handled = true;
     }
 
@@ -1641,7 +1641,7 @@ public sealed partial class MainWindow : Window
         Add("Delete Column", () => { Editor.Select(shape.Id); Editor.DeleteColumn(); });
         menu.Items.Add(new Separator());
 
-        var table = shape.Table;
+        var table = shape.Table!;
         var activeCell = Editor.ActiveTableCell;
         var canMerge = activeCell.HasValue &&
             (activeCell.Value.Col + 1 < table.ColumnWidthsEmu.Count ||

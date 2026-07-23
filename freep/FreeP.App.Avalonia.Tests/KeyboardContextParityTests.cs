@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
