@@ -358,6 +358,32 @@ public sealed class PresentationCommandTests
         p.Slides[0].Shapes[0].Should().BeSameAs(s1);
     }
 
+    [Fact]
+    public void ReorderShapeCommand_ApplyAndRevert_MovesNestedChildWithinGroup()
+    {
+        var (p, bus) = Make();
+        var first = MakeShape(1);
+        var group = new SlideShape
+        {
+            Id = 2,
+            Kind = SlideShapeKind.Group,
+            Children =
+            {
+                MakeShape(3),
+                MakeShape(4),
+                MakeShape(5)
+            }
+        };
+        p.Slides[0].Shapes.AddRange([first, group]);
+
+        bus.Execute(new ReorderShapeCommand(0, 3, 2));
+        group.Children.Select(shape => shape.Id).Should().Equal(4u, 5u, 3u);
+        p.Slides[0].Shapes.Select(shape => shape.Id).Should().Equal(1u, 2u);
+
+        bus.Undo();
+        group.Children.Select(shape => shape.Id).Should().Equal(3u, 4u, 5u);
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // TEXT / RUN-FORMAT COMMANDS
     // ════════════════════════════════════════════════════════════════════════════

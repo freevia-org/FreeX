@@ -1605,28 +1605,28 @@ public sealed class ReviewWorkflowAdapterTests
             window.ShowReadingOrderPane();
             window.IsReadingOrderMoveEarlierEnabled.Should().BeFalse();
             window.ReadingOrderMoveEarlierDisabledReason.Should()
-                .Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
-            window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
+            window.IsReadingOrderMoveLaterEnabled.Should().BeTrue();
             window.LastReadingOrderPlan!.Actions.Single(action =>
                     action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
-                .Status.Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
+                .Status.Should().Be(PresentationWorkflowCapabilityStatus.Available);
 
             var nestedMutation = window.ApplyReadingOrderMoveLater();
 
             nestedMutation.Should().Be(new PresentationReadingOrderMutationPlan(
                 PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
-                false,
+                true,
                 0,
                 503,
-                -1,
-                -1,
-                PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
-            group.Children.Select(shape => shape.Id).Should().Equal(503u, 504u);
-            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(502u, 503u, 504u, 501u);
+                0,
+                1,
+                null));
+            group.Children.Select(shape => shape.Id).Should().Equal(504u, 503u);
+            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(502u, 504u, 503u, 501u);
             window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(503);
             window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
             window.ReadingOrderMoveLaterDisabledReason.Should()
-                .Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage);
 
             var selection = window.ApplyReadingOrderSelectItem(504);
 
@@ -1635,22 +1635,26 @@ public sealed class ReviewWorkflowAdapterTests
                 true,
                 0,
                 504,
-                2,
+                1,
                 null));
             window.Editor.SelectedShapeIds.Should().Equal(504u);
             window.LastReadingOrderPlan!.SelectedItem.Should().NotBeNull();
             window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(504);
             window.ReadingOrderPaneMessage.Should().Be("Selected: Grouped label");
             window.IsReadingOrderMoveEarlierEnabled.Should().BeFalse();
-            window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
+            window.ReadingOrderMoveEarlierDisabledReason.Should()
+                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
+            window.IsReadingOrderMoveLaterEnabled.Should().BeTrue();
             window.ReadingOrderMoveLaterDisabledReason.Should()
-                .Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
+                .BeNull();
 
             window.Editor.Undo();
-            window.Editor.CurrentSlide.Shapes.Select(shape => shape.Id).Should().Equal(501u, 502u);
+            group.Children.Select(shape => shape.Id).Should().Equal(503u, 504u);
+            window.Editor.CurrentSlide.Shapes.Select(shape => shape.Id).Should().Equal(502u, 501u);
             window.Editor.SelectedShapeIds.Should().Equal(504u);
             window.Editor.Redo();
             window.Editor.CurrentSlide.Shapes.Select(shape => shape.Id).Should().Equal(502u, 501u);
+            group.Children.Select(shape => shape.Id).Should().Equal(504u, 503u);
             window.Editor.SelectedShapeIds.Should().Equal(504u);
         }
         finally

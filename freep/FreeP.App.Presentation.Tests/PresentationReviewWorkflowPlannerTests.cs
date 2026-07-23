@@ -2905,26 +2905,32 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 "Move Earlier",
                 PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
                 false,
-                PresentationWorkflowCapabilityStatus.Deferred,
-                PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+                PresentationWorkflowCapabilityStatus.Available,
+                PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage));
         Action(nestedFirst, PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
             .Should().Be(new PresentationReviewWorkflowActionPlan(
                 PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId,
                 "Move Later",
                 PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
-                false,
-                PresentationWorkflowCapabilityStatus.Deferred,
-                PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
         Action(nestedLast, PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)
-            .Status.Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
+            .Should().Be(new PresentationReviewWorkflowActionPlan(
+                PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId,
+                "Move Earlier",
+                PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier,
+                true,
+                PresentationWorkflowCapabilityStatus.Available,
+                null));
         Action(nestedLast, PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
             .Should().Be(new PresentationReviewWorkflowActionPlan(
                 PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId,
                 "Move Later",
                 PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
                 false,
-                PresentationWorkflowCapabilityStatus.Deferred,
-                PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+                PresentationWorkflowCapabilityStatus.Available,
+                PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage));
 
         static PresentationReviewWorkflowActionPlan Action(PresentationReadingOrderPlan plan, string commandId) =>
             plan.Actions.Single(action => action.CommandId == commandId);
@@ -2999,12 +3005,12 @@ public sealed class PresentationReviewWorkflowPlannerTests
 
         nested.Should().Be(new PresentationReadingOrderMutationPlan(
             PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
-            false,
+            true,
             0,
             4,
-            -1,
-            -1,
-            PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+            0,
+            1,
+            null));
         nestedBoundary.Should().Be(new PresentationReadingOrderMutationPlan(
             PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
             false,
@@ -3012,9 +3018,9 @@ public sealed class PresentationReviewWorkflowPlannerTests
             4,
             -1,
             -1,
-            PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+            PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage));
         slide.Shapes.Select(shape => shape.Id).Should().Equal(2u, 1u, 3u);
-        group.Children.Select(shape => shape.Id).Should().Equal(4u, 5u);
+        group.Children.Select(shape => shape.Id).Should().Equal(5u, 4u);
         editor.SelectedShapeIds.Should().Equal(4u);
     }
 

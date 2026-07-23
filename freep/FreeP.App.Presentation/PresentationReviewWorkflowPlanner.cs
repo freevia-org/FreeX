@@ -3720,9 +3720,7 @@ public static class PresentationReviewWorkflowPlanner
             label,
             intent,
             disabledReason is null,
-            disabledReason == NestedReadingOrderReorderDeferredMessage
-                ? PresentationWorkflowCapabilityStatus.Deferred
-                : PresentationWorkflowCapabilityStatus.Available,
+            PresentationWorkflowCapabilityStatus.Available,
             disabledReason);
     }
 
@@ -3741,11 +3739,6 @@ public static class PresentationReviewWorkflowPlanner
         if (selectedItemIndex < 0 || selectedShapeId is null)
         {
             return MissingReadingOrderSelectionMessage;
-        }
-
-        if (items[selectedItemIndex].NestingDepth > 0)
-        {
-            return NestedReadingOrderReorderDeferredMessage;
         }
 
         var moveTarget = FindReadingOrderMoveTarget(slide, selectedShapeId.Value, offset);
@@ -5633,7 +5626,13 @@ public static class PresentationReviewWorkflowPlanner
         uint shapeId,
         int offset)
     {
-        var sourceIndex = FindShapeIndex(slide.Shapes, shapeId);
+        var siblings = FindContainingShapeList(slide.Shapes, shapeId);
+        if (siblings is null)
+        {
+            return null;
+        }
+
+        var sourceIndex = FindShapeIndex(siblings, shapeId);
         if (sourceIndex < 0)
         {
             return null;
@@ -5642,7 +5641,28 @@ public static class PresentationReviewWorkflowPlanner
         return new ReadingOrderMoveTarget(
             sourceIndex,
             sourceIndex + offset,
-            slide.Shapes.Count);
+            siblings.Count);
+    }
+
+    private static List<SlideShape>? FindContainingShapeList(
+        List<SlideShape> shapes,
+        uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+            {
+                return shapes;
+            }
+
+            if (shape.Children.Count > 0 &&
+                FindContainingShapeList(shape.Children, shapeId) is { } childList)
+            {
+                return childList;
+            }
+        }
+
+        return null;
     }
 
     private static int FindShapeIndex(IReadOnlyList<SlideShape> shapes, uint shapeId)
