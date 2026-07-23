@@ -2749,11 +2749,11 @@ public static class DocxReader
         {
             var row = new TableRow();
 
-            // Row properties (w:trPr): explicit height + rule (w:trHeight) and the cant-split flag.
+            // Row properties (w:trPr): explicit height + rule (w:trHeight) and the cant-split on/off toggle.
             var trPr = tr.Element(W + "trPr");
             if (trPr is not null)
             {
-                row.AllowBreakAcrossPages = trPr.Element(W + "cantSplit") is null;
+                row.AllowBreakAcrossPages = !ReadToggle(trPr, "cantSplit");
                 var trHeight = trPr.Element(W + "trHeight");
                 if (trHeight is not null)
                 {

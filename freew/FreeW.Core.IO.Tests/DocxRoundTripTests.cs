@@ -1133,6 +1133,31 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_RowCantSplit_ExplicitOffToggle_AllowsBreakAndIsCanonicallyOmittedOnSave()
+    {
+        var document = ReadHandAuthoredDocx(
+            """
+            <w:tbl>
+              <w:tr>
+                <w:trPr><w:cantSplit w:val="0"/></w:trPr>
+                <w:tc><w:p><w:r><w:t>Body</w:t></w:r></w:p></w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:sectPr/>
+            """);
+
+        var row = document.Blocks.OfType<Table>().Single().Rows.Single();
+        row.AllowBreakAcrossPages.Should().BeTrue("w:cantSplit is an OOXML on/off toggle");
+
+        var xml = WriteDocumentXml(document);
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        xml.Descendants(ns + "cantSplit").Should().BeEmpty();
+
+        var reopened = RoundTrip(document).Blocks.OfType<Table>().Single().Rows.Single();
+        reopened.AllowBreakAcrossPages.Should().BeTrue();
+    }
+
+    [Fact]
     public void Table_HeaderRow_EmitsBoldShadedTblHeader()
     {
         var doc = new TextDocument();
