@@ -111,8 +111,9 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
 
         source.Should().Contain("public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)");
         source.Should().Contain("public double ControlHeight { get; init; } = 24;");
+        source.Should().Contain("public double ButtonHeight { get; init; } = 26;");
         source.Should().Contain("public double FontSize { get; init; } = 12;");
-        source.Should().Contain("public Thickness ButtonPadding { get; init; } = new(4, 1);");
+        source.Should().Contain("public Thickness ButtonPadding { get; init; } = new(12, 3);");
         source.Should().Contain("public Thickness TextBoxPadding { get; init; } = new(4, 1);");
         source.Should().Contain("public Thickness ComboBoxPadding { get; init; } = new(5, 0, 4, 0);");
         source.Should().Contain("public Thickness ListBoxItemPadding { get; init; } = new(4, 1);");
@@ -120,10 +121,10 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("Color.FromRgb(0, 120, 215)");
         source.Should().Contain("Color.FromRgb(112, 112, 112)");
         source.Should().Contain("Color.FromRgb(130, 130, 130)");
-        source.Should().Contain("button.Height = style.ControlHeight;");
-        source.Should().Contain("button.MinHeight = style.ControlHeight;");
-        source.Should().Contain("button.MaxHeight = style.ControlHeight;");
-        source.Should().Contain("button.Background = Brushes.White;");
+        source.Should().Contain("button.Height = style.ButtonHeight;");
+        source.Should().Contain("button.MinHeight = style.ButtonHeight;");
+        source.Should().Contain("button.MaxHeight = style.ButtonHeight;");
+        source.Should().Contain("button.Background = ButtonBackgroundBrush;");
         source.Should().Contain("button.BorderBrush = isDefault ? DefaultButtonBorderBrush : ButtonBorderBrush;");
         source.Should().Contain("button.IsDefault = true;");
         source.Should().Contain("if (fixedHeight)");
@@ -134,7 +135,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("public static void ApplyListBox(");
         source.Should().Contain("new Setter(Layoutable.MinHeightProperty, style.ListBoxItemMinHeight)");
         source.Should().Contain("public static StackPanel CreateActionRow(");
-        source.Should().Contain("public static void ApplyClassicTabChrome(TabControl tabControl)");
+        source.Should().Contain("public static void ApplyClassicTabChrome(");
         source.Should().Contain("Name(\"PART_ItemsPresenter\")");
         source.Should().Contain("Name(\"PART_SelectedContentHost\")");
         source.Should().Contain("new Thickness(0, 0, -1, -1)");
