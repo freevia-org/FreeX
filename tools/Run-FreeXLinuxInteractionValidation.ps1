@@ -165,7 +165,7 @@ function Ensure-ReportProvenance {
 
 function Start-ValidationSession {
     param(
-        [Parameter(Mandatory = $true)][string[]]$AppArgument,
+        [string[]]$AppArgument = @(),
         [string]$MemoryLimit = "",
         [switch]$ReusePublishedPayload
     )

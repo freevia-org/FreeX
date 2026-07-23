@@ -26,6 +26,7 @@ public sealed class LinuxInteractionRunnerSessionBindingTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("tools", "Run-FreeXLinuxInteractionValidation.ps1"));
 
         source.Should().Contain("function Start-ValidationSession");
+        source.Should().Contain("[string[]]$AppArgument = @()");
         source.Should().Contain("SessionMetadataPath = $metadataPath");
         source.Should().NotContain("$currentSessionPath");
         source.Should().Contain("manifest changed before it became stable");
