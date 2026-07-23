@@ -3432,7 +3432,10 @@ public static partial class ChartRenderPlanner
                 // PowerPoint keeps this dark-brown side face on the near-left
                 // fold. The generic projected triangle starts too far right
                 // and is mostly covered by the later top facets.
-                (155, 107), (188, 72), (204, 100), (218, 154), (181, 153)),
+                (154, 108), (164, 97), (180, 80), (187, 73), (188, 73),
+                (191, 78), (203, 101), (208, 120), (214, 143), (217, 155),
+                (201, 155), (180, 154), (166, 153), (165, 150), (163, 143),
+                (157, 120)),
             Facet(
                 new SrgbColor(0x9B, 0xC1, 0x83),
                 (158, 58), (280, 43), (311, 54), (239, 130)),
