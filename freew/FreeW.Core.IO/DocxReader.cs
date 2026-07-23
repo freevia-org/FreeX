@@ -1712,7 +1712,7 @@ public static class DocxReader
             if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
                 paragraph.Runs.Add(Run.CommentReference(refId));
             else
-                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+                AddRun(paragraph, child, archive, imageRelationships, hyperlinkRelationships, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "hyperlink")
         {
@@ -2507,6 +2507,7 @@ public static class DocxReader
         XElement r,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
         string? hyperlinkUrl,
         string? hyperlinkAnchor,
         int? commentId = null,
@@ -2541,7 +2542,7 @@ public static class DocxReader
             return;
         }
 
-        var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships);
+        var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships, hyperlinkRelationships);
         if (drawingGroup is not null)
         {
             var groupRun = Run.FromDrawingGroup(drawingGroup);
@@ -2578,7 +2579,7 @@ public static class DocxReader
         }
 
         // A w:drawing wrapping a wps:wsp (not a pic:pic) is an inline shape / text box.
-        var shape = ReadShape(r, archive, imageRelationships);
+        var shape = ReadShape(r, archive, imageRelationships, hyperlinkRelationships);
         if (shape is not null)
         {
             var shapeRun = Run.FromShape(shape);
@@ -3604,7 +3605,11 @@ public static class DocxReader
     /// paragraphs (wps:txbx/w:txbxContent). Returns null for a non-shape drawing (e.g. a picture) so the image
     /// path keeps working. Mirrors how the writer emits these (see <c>DocxWriter.BuildShapeDrawing</c>).
     /// </summary>
-    private static Shape? ReadShape(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
+    private static Shape? ReadShape(
+        XElement run,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         var drawing = run.Element(W + "drawing");
         var inline = drawing?.Element(Wp + "inline");
@@ -3788,10 +3793,9 @@ public static class DocxReader
         var txbxContent = wsp.Element(Wps + "txbx")?.Element(W + "txbxContent");
         if (txbxContent is not null)
         {
-            var noHyperlinks = new Dictionary<string, string>();
             var noNumbering = new Dictionary<int, ListKind>();
             foreach (var p in txbxContent.Elements(W + "p"))
-                shape.TextParagraphs.Add(ReadParagraph(p, archive, imageRelationships, noHyperlinks, noNumbering));
+                shape.TextParagraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
         }
 
         // Text direction: wps:bodyPr/@vert + @rot.
@@ -5739,7 +5743,8 @@ public static class DocxReader
     private static DrawingGroup? ReadDrawingGroup(
         XElement run,
         ZipArchive archive,
-        IReadOnlyDictionary<string, string> imageRelationships)
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         var drawing = run.Element(W + "drawing");
         var anchor = drawing?.Element(Wp + "anchor");
@@ -5800,7 +5805,7 @@ public static class DocxReader
             }
             else if (child is null && name.StartsWith("GroupChild:Shape:", StringComparison.Ordinal))
             {
-                child = ReadShape(fakeRun, archive, imageRelationships);
+                child = ReadShape(fakeRun, archive, imageRelationships, hyperlinkRelationships);
                 if (child is null)
                 {
                     var kindStr = name["GroupChild:Shape:".Length..];
@@ -5828,7 +5833,7 @@ public static class DocxReader
             {
                 // Unknown child type — try the rich shape/WordArt readers before falling back to a rectangle.
                 child = ReadWordArt(fakeRun)
-                    ?? (object?)ReadShape(fakeRun, archive, imageRelationships)
+                    ?? (object?)ReadShape(fakeRun, archive, imageRelationships, hyperlinkRelationships)
                     ?? new Shape(ShapeKind.Rectangle, cw, ch);
             }
 
