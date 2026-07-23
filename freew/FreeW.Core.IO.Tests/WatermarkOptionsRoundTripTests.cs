@@ -215,6 +215,28 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithMutatedVmlTextPathEnabled(TextDocument document, bool enabled)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            xml.Descendants(vml + "textpath").Last().SetAttributeValue("on", enabled ? "t" : "f");
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument ReadWithVmlPictureImageData(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -491,6 +513,19 @@ public class WatermarkOptionsRoundTripTests
         rewritten.Attribute("style")!.Value.Should().Contain("font-family:Calibri");
         rewritten.Attribute("style")!.Value.Should().Contain("font-size:1pt");
         rewritten.Attribute("style")!.Value.Should().NotContain("font:italic");
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_PreservesDisabledTextPathState()
+    {
+        var loaded = ReadWithMutatedVmlTextPathEnabled(new TextDocument
+        {
+            Page = { WatermarkOptions = new WatermarkOptions("AUTHORITATIVE") }
+        }, enabled: false);
+
+        loaded.Page.WatermarkOptions!.NativeVmlTextPathEnabled.Should().BeFalse();
+        ReadHeaderXml(loaded).Descendants(XNamespace.Get("urn:schemas-microsoft-com:vml") + "textpath")
+            .Last().Attribute("on")!.Value.Should().Be("f");
     }
 
     [Fact]

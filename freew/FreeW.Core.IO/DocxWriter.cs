@@ -1415,7 +1415,7 @@ public static class DocxWriter
         var textPath = nativeTextPath is null
             ? new XElement(V + "textpath")
             : new XElement(nativeTextPath);
-        textPath.SetAttributeValue("on", "t");
+        textPath.SetAttributeValue("on", options.NativeVmlTextPathEnabled == false ? "f" : "t");
         textPath.SetAttributeValue("fitshape", options.NativeVmlTextFitShape == false ? "f" : "t");
         textPath.SetAttributeValue("style", UpdateVmlTextPathStyle(
             textPath.Attribute("style")?.Value,

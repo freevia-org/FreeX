@@ -46,6 +46,7 @@ public static class WatermarkVisualPlanner
         ArgumentNullException.ThrowIfNull(options);
 
         if (options.IsPicture
+            || options.NativeVmlTextPathEnabled == false
             || string.IsNullOrWhiteSpace(options.Text)
             || pageWidthDip <= 0
             || pageHeightDip <= 0)

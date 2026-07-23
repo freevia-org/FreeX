@@ -2482,6 +2482,17 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void TextWatermarkLayoutPlanner_SuppressesExplicitlyDisabledNativeTextPath()
+    {
+        var plan = WatermarkVisualPlanner.BuildTextLayout(
+            new WatermarkOptions("DRAFT") { NativeVmlTextPathEnabled = false },
+            pageWidthDip: 816,
+            pageHeightDip: 1056);
+
+        plan.Should().BeNull();
+    }
+
+    [Fact]
     public void TextWatermarkLayoutPlanner_UsesSerializedFitShapeToResolveTextPathFontSize()
     {
         var fitted = WatermarkVisualPlanner.BuildTextLayout(

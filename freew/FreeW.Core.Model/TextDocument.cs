@@ -2407,6 +2407,12 @@ public sealed record WatermarkOptions(string Text)
     public string? NativeVmlTextPathXml { get; init; }
 
     /// <summary>
+    /// Optional <c>v:textpath/@on</c> state recovered from a native text watermark. An explicit
+    /// false value keeps the serialized watermark hidden instead of rendering it as active text.
+    /// </summary>
+    public bool? NativeVmlTextPathEnabled { get; init; }
+
+    /// <summary>
     /// Optional serialized <c>v:shapetype</c> payload referenced by an imported native VML text
     /// watermark. Retaining the path, formulas, and text-path settings prevents a custom Word
     /// watermark from being rewritten as FreeW's canonical <c>_x0000_t136</c> prototype.
