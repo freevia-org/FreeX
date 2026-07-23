@@ -597,6 +597,30 @@ public sealed class EditingSession5ATests
         target.Fill.Should().BeSameAs(originalTargetFill);
     }
 
+    [Fact]
+    public void FormatPainter_CanCopyBetweenNestedGroupChildrenAndUndo()
+    {
+        var sess = Make();
+        var source = MakeShape(11, withText: true);
+        source.Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x336699)));
+        var target = MakeShape(12, withText: true);
+        target.TextBody!.Paragraphs[0].Runs[0].FontFamily = "Times New Roman";
+        var sourceGroup = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        sourceGroup.Children.Add(source);
+        var targetGroup = new SlideShape { Id = 2, Kind = SlideShapeKind.Group };
+        targetGroup.Children.Add(target);
+        sess.CurrentSlide!.Shapes.AddRange([sourceGroup, targetGroup]);
+
+        sess.Select(11u);
+        sess.BeginFormatPainter().Should().BeTrue();
+        sess.TryApplyFormatPainterToShape(12u).Should().BeTrue();
+        target.Fill.Should().BeSameAs(source.Fill);
+        target.TextBody.Paragraphs[0].Runs[0].FontFamily.Should().Be("Arial");
+
+        sess.Undo();
+        target.Fill.Should().BeNull();
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     // BUILT-IN THEMES CATALOGUE
     // ════════════════════════════════════════════════════════════════════════════════

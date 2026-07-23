@@ -440,6 +440,18 @@ public sealed class EditingSession
         return null;
     }
 
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId) return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+
     // ── Transition operations ─────────────────────────────────────────────────────
 
     /// <summary>
@@ -1104,7 +1116,7 @@ public sealed class EditingSession
         var slide = CurrentSlide;
         if (slide is null || _selectedShapeIds.Count == 0) return;
 
-        var source = slide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+        var source = FindShape(slide.Shapes, _selectedShapeIds[0]);
         if (source is null) return;
 
         _fmtFill    = source.Fill;
@@ -1159,7 +1171,7 @@ public sealed class EditingSession
     {
         var slide = CurrentSlide;
         if (!_formatPainterActive || !HasFormatClipboard || slide is null ||
-            slide.Shapes.All(shape => shape.Id != targetShapeId))
+            FindShape(slide.Shapes, targetShapeId) is null)
         {
             return false;
         }

@@ -181,7 +181,7 @@ public sealed class ApplyFormatPainterCommand : IPresentationCommand
 
         foreach (var id in _targetIds)
         {
-            var shape = slide.Shapes.FirstOrDefault(s => s.Id == id);
+            var shape = FindShape(slide.Shapes, id);
             if (shape is null) continue;
 
             _undo.Add(new ShapeSnapshot(id, shape.Fill, shape.Outline, shape.TextBody));
@@ -201,7 +201,7 @@ public sealed class ApplyFormatPainterCommand : IPresentationCommand
 
         foreach (var snap in _undo)
         {
-            var shape = slide.Shapes.FirstOrDefault(s => s.Id == snap.Id);
+            var shape = FindShape(slide.Shapes, snap.Id);
             if (shape is null) continue;
             shape.Fill     = snap.Fill;
             shape.Outline  = snap.Outline;
@@ -211,6 +211,18 @@ public sealed class ApplyFormatPainterCommand : IPresentationCommand
 
     private Slide? SlideOrNull(Presentation p) =>
         _slideIndex >= 0 && _slideIndex < p.Slides.Count ? p.Slides[_slideIndex] : null;
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint id)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == id) return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, id) is { } child)
+                return child;
+        }
+
+        return null;
+    }
 
     private static void ApplyRunFormat(TextBody body, RunFormatSnapshot fmt)
     {
