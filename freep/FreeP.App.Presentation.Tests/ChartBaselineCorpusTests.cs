@@ -837,6 +837,20 @@ public sealed class ChartBaselineCorpusTests
                 new ChartPlanPoint(131, 106),
                 new ChartPlanPoint(83, 104),
                 new ChartPlanPoint(60, 103));
+        geometry.WpfRenderFacets.Single(facet =>
+                facet.Fill.Color == new SrgbColor(0x91, 0xB5, 0x7C))
+            .Points.Should().Equal(
+                new ChartPlanPoint(200, 61),
+                new ChartPlanPoint(201, 60),
+                new ChartPlanPoint(206, 57),
+                new ChartPlanPoint(225, 46),
+                new ChartPlanPoint(246, 34),
+                new ChartPlanPoint(250, 32),
+                new ChartPlanPoint(281, 31),
+                new ChartPlanPoint(291, 31),
+                new ChartPlanPoint(282, 41),
+                new ChartPlanPoint(246, 50),
+                new ChartPlanPoint(201, 61));
     }
 
     [Fact]
