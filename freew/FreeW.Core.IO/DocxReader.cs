@@ -760,7 +760,7 @@ public static class DocxReader
                 DateXml = element.Attribute(W + "date")?.Value
             };
             string? paraId = null;
-            foreach (var p in element.Elements(W + "p"))
+            foreach (var p in ReadStoryParagraphs(element))
             {
                 comment.Content.Add(ReadParagraph(
                     p,
@@ -858,7 +858,7 @@ public static class DocxReader
                 continue;
 
             var footnote = new Footnote(id);
-            foreach (var p in element.Elements(W + "p"))
+            foreach (var p in ReadStoryParagraphs(element))
                 footnote.Content.Add(ReadParagraph(
                     p,
                     archive,
@@ -903,7 +903,7 @@ public static class DocxReader
                 continue;
 
             var endnote = new Endnote(id);
-            foreach (var p in element.Elements(W + "p"))
+            foreach (var p in ReadStoryParagraphs(element))
                 endnote.Content.Add(ReadParagraph(
                     p,
                     archive,
@@ -1161,9 +1161,7 @@ public static class DocxReader
         // w:p descendants, but ReadShape owns those paragraphs; flattening them here would duplicate the text
         // when the header is saved again. We still flatten table/SDT structure to the model's paragraph list
         // (the model carries no per-header table) and leave legacy VML text boxes on their existing path.
-        foreach (var p in root.Descendants(W + "p").Where(paragraph =>
-                     !paragraph.Ancestors(W + "txbxContent")
-                         .Any(textBoxContent => textBoxContent.Parent?.Name == Wps + "txbx")))
+        foreach (var p in ReadStoryParagraphs(root))
         {
             // FreeW's page watermark is stored in a VML-only paragraph in the header. It is also
             // represented by custom document properties. Remove only the known watermark run: Word
@@ -1194,6 +1192,11 @@ public static class DocxReader
         }
         return result;
     }
+
+    private static IEnumerable<XElement> ReadStoryParagraphs(XElement container) =>
+        container.Descendants(W + "p").Where(paragraph =>
+            !paragraph.Ancestors(W + "txbxContent")
+                .Any(textBoxContent => textBoxContent.Parent?.Name == Wps + "txbx"));
 
     /// <summary>
     /// Reads the image relationships of an arbitrary part (e.g. a header/footer part) from its own
