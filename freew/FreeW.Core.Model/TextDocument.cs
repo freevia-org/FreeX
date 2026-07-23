@@ -881,6 +881,13 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public string? RevisionDateXml { get; set; }
 
     /// <summary>
+    /// The shared Word move-revision identifier (w:id on w:moveFrom/w:moveTo), or null for an ordinary
+    /// insertion/deletion. The move source still uses <see cref="RevisionKind.Deleted"/> and the destination
+    /// uses <see cref="RevisionKind.Inserted"/> so existing review rendering remains unchanged.
+    /// </summary>
+    public int? MoveRevisionId { get; set; }
+
+    /// <summary>
     /// A tracked <em>formatting</em> change on this run (Word's w:rPrChange), or null when the run's
     /// formatting was not changed under Track Changes. When set, <see cref="Formatting"/> is the new
     /// (current) formatting and <see cref="FormatRevision"/> carries the <em>previous</em> formatting plus

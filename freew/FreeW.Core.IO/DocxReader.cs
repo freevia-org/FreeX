@@ -1699,6 +1699,7 @@ public static class DocxReader
             run.Revision = revision.Kind;
             run.RevisionAuthor = revision.Author;
             run.RevisionDateXml = revision.DateXml;
+            run.MoveRevisionId = revision.MoveId;
         }
 
         paragraph.Runs.Add(run);
@@ -1739,12 +1740,17 @@ public static class DocxReader
         }
         else if (child.Name == W + "ins" || child.Name == W + "del" || child.Name == W + "moveTo" || child.Name == W + "moveFrom")
         {
-            // Tracked moves use the same inline content shape as insertions/deletions. FreeW does not model
-            // move ids, so map the source half to Deleted and the destination half to Inserted.
+            // Tracked moves use the same visible rendering categories as deletions/insertions, while their
+            // shared w:id preserves the move relationship for an exact package round-trip.
             var kind = child.Name == W + "del" || child.Name == W + "moveFrom"
                 ? RevisionKind.Deleted
                 : RevisionKind.Inserted;
-            var childRevision = new RevisionInfo(kind, child.Attribute(W + "author")?.Value, child.Attribute(W + "date")?.Value);
+            var isMove = child.Name == W + "moveFrom" || child.Name == W + "moveTo";
+            var childRevision = new RevisionInfo(
+                kind,
+                child.Attribute(W + "author")?.Value,
+                child.Attribute(W + "date")?.Value,
+                isMove && int.TryParse(child.Attribute(W + "id")?.Value, out var moveId) ? moveId : null);
             AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "sdt")
@@ -1776,7 +1782,18 @@ public static class DocxReader
         }
         else if (child.Name == W + "fldSimple")
         {
+            var firstRun = paragraph.Runs.Count;
             AddSimpleField(paragraph, child);
+            if (revision.Kind != RevisionKind.None)
+            {
+                for (var index = firstRun; index < paragraph.Runs.Count; index++)
+                {
+                    paragraph.Runs[index].Revision = revision.Kind;
+                    paragraph.Runs[index].RevisionAuthor = revision.Author;
+                    paragraph.Runs[index].RevisionDateXml = revision.DateXml;
+                    paragraph.Runs[index].MoveRevisionId = revision.MoveId;
+                }
+            }
         }
         else if (child.Name == M + "oMath")
         {
@@ -1786,6 +1803,13 @@ public static class DocxReader
             run.HyperlinkUrl = hyperlinkUrl;
             run.HyperlinkAnchor = hyperlinkAnchor;
             run.HyperlinkTooltip = hyperlinkTooltip;
+            if (revision.Kind != RevisionKind.None)
+            {
+                run.Revision = revision.Kind;
+                run.RevisionAuthor = revision.Author;
+                run.RevisionDateXml = revision.DateXml;
+                run.MoveRevisionId = revision.MoveId;
+            }
             paragraph.Runs.Add(run);
         }
         else if (child.Name == W + "bookmarkStart")
@@ -1836,6 +1860,7 @@ public static class DocxReader
             run.Revision = revision.Kind;
             run.RevisionAuthor = revision.Author;
             run.RevisionDateXml = revision.DateXml;
+            run.MoveRevisionId = revision.MoveId;
         }
 
         paragraph.Runs.Add(run);
@@ -2611,8 +2636,8 @@ public static class DocxReader
         return items;
     }
 
-    /// <summary>Carries a tracked-change kind plus its author/date while reading runs inside a w:ins/w:del.</summary>
-    private readonly record struct RevisionInfo(RevisionKind Kind, string? Author, string? DateXml);
+    /// <summary>Carries a tracked-change kind plus its author/date and optional move id while reading revisions.</summary>
+    private readonly record struct RevisionInfo(RevisionKind Kind, string? Author, string? DateXml, int? MoveId = null);
 
     private static void AddRun(
         Paragraph paragraph,
@@ -2637,6 +2662,7 @@ public static class DocxReader
             run.Revision = revision.Kind;
             run.RevisionAuthor = revision.Author;
             run.RevisionDateXml = revision.DateXml;
+            run.MoveRevisionId = revision.MoveId;
         }
 
         // A w:drawing whose anchor references a wpg:wgp group element is a floating drawing group.

@@ -1265,7 +1265,12 @@ public static class DocxWriter
         // Bookmark + revision ids start at 1; the shape docPr counter is seeded just above the image
         // drawing ids (1..imageCount) so the two id spaces never overlap. Each shape BuildRun emits takes
         // the next id.
-        var ids = new IdAllocator(shapeDrawingSeed: images.Count);
+        var ids = new IdAllocator(
+            shapeDrawingSeed: images.Count,
+            reservedRevisionIds: EnumerateStoryParagraphs(document)
+                .SelectMany(paragraph => paragraph.Runs)
+                .Where(run => run.MoveRevisionId is not null)
+                .Select(run => run.MoveRevisionId!.Value));
 
         // Map each image/chart run to its assigned part by replaying the same walk order CollectImages /
         // CollectCharts used, so document.xml and the rels agree on which rId belongs to which run.
@@ -1378,10 +1383,24 @@ public static class DocxWriter
         private int _shapeDrawingId;
         private int _contentControlId;
 
-        public IdAllocator(int shapeDrawingSeed = 0) => _shapeDrawingId = shapeDrawingSeed;
+        private readonly HashSet<int> _reservedRevisionIds;
+
+        public IdAllocator(int shapeDrawingSeed = 0, IEnumerable<int>? reservedRevisionIds = null)
+        {
+            _shapeDrawingId = shapeDrawingSeed;
+            _reservedRevisionIds = reservedRevisionIds is null ? [] : [.. reservedRevisionIds];
+        }
 
         public int NextBookmarkId() => ++_bookmarkId;
-        public int NextRevisionId() => ++_revisionId;
+        public int NextRevisionId()
+        {
+            do
+            {
+                _revisionId++;
+            }
+            while (_reservedRevisionIds.Contains(_revisionId));
+            return _revisionId;
+        }
         public int NextShapeDrawingId() => ++_shapeDrawingId;
         public int NextContentControlId() => ++_contentControlId;
     }
@@ -2326,22 +2345,25 @@ public static class DocxWriter
             Edge("right", margins.RightPt));
     }
 
-    /// <summary>True when two runs carry the same tracked-change kind, author and date (so they coalesce).</summary>
+    /// <summary>True when two runs carry the same tracked-change identity (so they coalesce).</summary>
     private static bool SameRevision(Run a, Run b) =>
         a.Revision == b.Revision
         && string.Equals(a.RevisionAuthor, b.RevisionAuthor, StringComparison.Ordinal)
-        && string.Equals(a.RevisionDateXml, b.RevisionDateXml, StringComparison.Ordinal);
+        && string.Equals(a.RevisionDateXml, b.RevisionDateXml, StringComparison.Ordinal)
+        && a.MoveRevisionId == b.MoveRevisionId;
 
     /// <summary>
-    /// Builds an empty w:ins (insertion) or w:del (deletion) wrapper carrying a unique w:id plus the
-    /// run's author/date attributes. The caller fills it with the wrapped run/hyperlink elements. The
-    /// run is assumed to carry a non-None revision.
+    /// Builds a tracked-change wrapper carrying its id and author/date. Move revisions preserve their source
+    /// w:moveFrom/w:moveTo wrapper and shared id; ordinary revisions use fresh w:ins/w:del ids.
     /// </summary>
     private static XElement NewRevisionWrapper(Run run, IdAllocator ids)
     {
-        var name = run.Revision == RevisionKind.Deleted ? "del" : "ins";
+        var isMove = run.MoveRevisionId is not null;
+        var name = isMove
+            ? run.Revision == RevisionKind.Deleted ? "moveFrom" : "moveTo"
+            : run.Revision == RevisionKind.Deleted ? "del" : "ins";
         var wrapper = new XElement(W + name,
-            new XAttribute(W + "id", ids.NextRevisionId()));
+            new XAttribute(W + "id", run.MoveRevisionId ?? ids.NextRevisionId()));
         if (run.RevisionAuthor is { Length: > 0 } author)
             wrapper.Add(new XAttribute(W + "author", author));
         if (run.RevisionDateXml is { Length: > 0 } date)
