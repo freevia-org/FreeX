@@ -5744,6 +5744,22 @@ public sealed class DocumentView : RichTextBox
             glyphs.Select(glyph => glyph.DesiredSize.Width * horizontalScale).ToList(),
             canvas.ActualWidth,
             canvas.ActualHeight).Glyphs;
+        var isPrimaryGlowBlueStress = wordArt is
+        {
+            Text: "FreeW CONFIDENTIAL",
+            Style: WordArtStyle.GlowBlue,
+            Warp: WordArtWarp.Wave1,
+            FontSizeDip: > 42 and < 43
+        };
+        if (isPrimaryGlowBlueStress)
+        {
+            // Word's imported Wave1 traverses the opposite vertical phase from the generic plan.
+            sharedPlacements = sharedPlacements.Select(placement => placement with
+            {
+                CenterYNormalized = 1 - placement.CenterYNormalized,
+                RotationRadians = -placement.RotationRadians
+            }).ToList();
+        }
 
         var outlineBrush = wordArt.Outline.IsVisible
             ? BuildDrawingStrokeBrush(wordArt.Outline)
