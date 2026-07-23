@@ -122,6 +122,9 @@ public static class DocxWriter
         // part-local media file + a relationship in word/_rels/comments.xml.rels, so comment-part images
         // round-trip referenced rather than orphaned. Empty for text-only comments.
         var commentImages = hasComments ? CollectCommentImages(document, usedPartNames) : new List<ImagePart>();
+        var commentPreservedDrawings = hasComments
+            ? CollectPartLocalPreservedDrawings(FlattenComments(document).SelectMany(comment => comment.Content), preservedParts)
+            : [];
         var footnotePreservedDrawings = hasFootnotes
             ? CollectPartLocalPreservedDrawings(document.Footnotes.Values.SelectMany(note => note.Content), preservedParts)
             : [];
@@ -266,15 +269,15 @@ public static class DocxWriter
         }
         if (hasComments)
         {
-            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages));
+            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages, commentPreservedDrawings));
             // word/commentsExtended.xml threads replies + carries resolved state. Always emitted alongside the
             // comments part (it has an entry per comment even for a flat, single-comment document) so modern
             // Word treats every comment as a thread root and the reply/resolve plumbing round-trips.
             WritePart(archive, CommentsExtendedPartName.TrimStart('/'), BuildCommentsExtended(document));
-            // Comment media + the comments part's own _rels (only when a comment carries an image).
-            if (commentImages.Count > 0)
+            // Comment media and preserved charts resolve through comments.xml.rels.
+            if (commentImages.Count > 0 || commentPreservedDrawings.Count > 0)
             {
-                WritePart(archive, "word/_rels/comments.xml.rels", BuildCommentsRels(commentImages));
+                WritePart(archive, "word/_rels/comments.xml.rels", BuildCommentsRels(commentImages, commentPreservedDrawings));
                 foreach (var image in commentImages)
                     WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
             }
@@ -1716,7 +1719,10 @@ public static class DocxWriter
     /// <paramref name="commentImages"/> (their media + <c>comments.xml.rels</c> are written by <see cref="Write(TextDocument, Stream)"/>),
     /// so comment-part images round-trip referenced rather than orphaned.
     /// </summary>
-    private static XDocument BuildComments(TextDocument document, IReadOnlyList<ImagePart> commentImages)
+    private static XDocument BuildComments(
+        TextDocument document,
+        IReadOnlyList<ImagePart> commentImages,
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
     {
         var comments = new XElement(W + "comments",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
@@ -1734,7 +1740,12 @@ public static class DocxWriter
         var imagesByRun = commentImages.Count > 0
             ? BuildCommentImagesByRun(document, commentImages)
             : new Dictionary<Run, ImagePart>();
-        var drawings = RunDrawings.Empty() with { Images = imagesByRun };
+        var drawings = RunDrawings.Empty() with
+        {
+            Images = imagesByRun,
+            PreservedDrawingRelIds = preservedDrawings
+                .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal)
+        };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         // The w14 namespace is declared on the root only when a comment paragraph carries a paraId (i.e.
@@ -1806,8 +1817,10 @@ public static class DocxWriter
         return new XDocument(root);
     }
 
-    /// <summary>Builds word/_rels/comments.xml.rels: one image relationship per comment media part.</summary>
-    private static XDocument BuildCommentsRels(IReadOnlyList<ImagePart> commentImages)
+    /// <summary>Builds word/_rels/comments.xml.rels for comment media and preserved charts.</summary>
+    private static XDocument BuildCommentsRels(
+        IReadOnlyList<ImagePart> commentImages,
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
     {
         var relationships = OpcRelationships.CreateRoot();
         foreach (var image in commentImages)
@@ -1815,6 +1828,11 @@ public static class DocxWriter
                 image.RelationshipId,
                 ImageRel,
                 "media/" + image.FileName));
+        foreach (var drawing in preservedDrawings)
+            relationships.Add(OpcRelationships.CreateRelationship(
+                drawing.RelationshipId,
+                drawing.RelationshipType,
+                DocumentRelativeTarget(drawing.PartName)));
         return new XDocument(relationships);
     }
 

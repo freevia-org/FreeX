@@ -677,6 +677,112 @@ public class CommentAndChartMediaRoundTripTests
             .Single(r => r.Image is not null).Image!.Bytes.Should().Equal(PngBytes);
     }
 
+    private static byte[] AuthorCommentChartExPackage()
+    {
+        var bodySource = AuthorChartExPackage();
+        using var sourceStream = new MemoryStream(bodySource);
+        using var source = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+        using var output = new MemoryStream();
+        using (var destination = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void AddText(string path, string content)
+            {
+                var entry = destination.CreateEntry(path, CompressionLevel.Optimal);
+                using var stream = entry.Open();
+                var bytes = Encoding.UTF8.GetBytes(content);
+                stream.Write(bytes, 0, bytes.Length);
+            }
+
+            foreach (var sourceEntry in source.Entries)
+            {
+                if (sourceEntry.FullName is "[Content_Types].xml" or "word/document.xml" or "word/_rels/document.xml.rels")
+                    continue;
+                var entry = destination.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+                using var input = sourceEntry.Open();
+                using var outputEntry = entry.Open();
+                input.CopyTo(outputEntry);
+            }
+
+            AddText("[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="png" ContentType="image/png"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                  <Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>
+                  <Override PartName="/word/charts/chartEx1.xml" ContentType="application/vnd.ms-office.chartex+xml"/>
+                </Types>
+                """);
+            AddText("word/_rels/document.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdC" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>
+                </Relationships>
+                """);
+            AddText("word/document.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <w:body>
+                    <w:p><w:commentRangeStart w:id="0"/><w:r><w:t>Reviewed text</w:t></w:r><w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="0"/></w:r></w:p>
+                    <w:sectPr/>
+                  </w:body>
+                </w:document>
+                """);
+            AddText("word/comments.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                            xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
+                  <w:comment w:id="0" w:author="Reviewer" w:initials="RV">
+                    <w:p><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="5274310" cy="3076575"/><wp:docPr id="1" name="Comment Chart"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/drawing/2014/chartex"><cx:chart r:id="rId7"/></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+                  </w:comment>
+                </w:comments>
+                """);
+            AddText("word/_rels/comments.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId7" Type="http://schemas.microsoft.com/office/2014/relationships/chartEx" Target="charts/chartEx1.xml"/>
+                </Relationships>
+                """);
+        }
+        return output.ToArray();
+    }
+
+    [Fact]
+    public void UnmodelledCommentChartEx_PreservesPartLocalRelationshipAndContentTypes_Verbatim()
+    {
+        var source = AuthorCommentChartExPackage();
+        var read = ReadDoc(source);
+        read.Comments[0].Content.SelectMany(paragraph => paragraph.Runs)
+            .Should().ContainSingle(run => run.PreservedDrawing != null);
+
+        var rewritten = WriteBytes(read);
+        EntryBytes(rewritten, "word/charts/chartEx1.xml").Should().Equal(EntryBytes(source, "word/charts/chartEx1.xml"));
+        EntryBytes(rewritten, "word/charts/_rels/chartEx1.xml.rels").Should().Equal(EntryBytes(source, "word/charts/_rels/chartEx1.xml.rels"));
+        EntryBytes(rewritten, "word/media/chartImage1.png").Should().Equal(PngBytes);
+
+        var commentRels = EntryXml(rewritten, "word/_rels/comments.xml.rels").Root!.Elements(Rel + "Relationship").ToList();
+        var chartRel = commentRels.Single(relationship => relationship.Attribute("Type")!.Value == ChartExRelType);
+        chartRel.Attribute("Target")!.Value.Should().Be("charts/chartEx1.xml");
+        EntryXml(rewritten, "word/comments.xml").Descendants(Cx + "chart").Single()
+            .Attribute(R + "id")!.Value.Should().Be(chartRel.Attribute("Id")!.Value);
+        EntryXml(rewritten, "word/_rels/document.xml.rels").Root!.Elements(Rel + "Relationship")
+            .Should().NotContain(relationship => relationship.Attribute("Type")!.Value == ChartExRelType);
+
+        var twice = WriteBytes(ReadDoc(rewritten));
+        EntryBytes(twice, "word/charts/chartEx1.xml").Should().Equal(EntryBytes(rewritten, "word/charts/chartEx1.xml"));
+        HasEntry(twice, "word/_rels/comments.xml.rels").Should().BeTrue();
+    }
+
     // --- Regression: normal media + a FreeW chart + a text-only comment round-trip as today ----------
 
     [Fact]
