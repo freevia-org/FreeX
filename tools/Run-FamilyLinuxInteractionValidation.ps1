@@ -1,0 +1,270 @@
+<#
+.SYNOPSIS
+  Run the reusable physical X11 smoke baseline for FreeW or FreeP in Docker.
+
+.DESCRIPTION
+  Starts one harness-owned Avalonia application using the generic interactive Linux
+  desktop, injects the family-parameterized X11 probe, retains screenshots and a
+  strictly contract-checked manifest, and stops only the container it started unless
+  -KeepContainer is supplied.
+
+  This is a deterministic baseline, not exhaustive command or dialog parity. FreeX
+  continues to use Run-FreeXLinuxInteractionValidation.ps1 for its exhaustive lane.
+#>
+[CmdletBinding()]
+param(
+    [ValidateSet("FreeW", "FreeP")]
+    [string]$App = "FreeW",
+
+    [ValidateRange(1024, 65535)]
+    [int]$Port = 6090,
+
+    [ValidateRange(640, 7680)]
+    [int]$Width = 1280,
+
+    [ValidateRange(480, 4320)]
+    [int]$Height = 820,
+
+    [ValidateRange(72, 240)]
+    [int]$Dpi = 96,
+
+    [ValidateSet("2g", "4g", "6g", "8g")]
+    [string]$MemoryLimit = "4g",
+
+    [string]$OutputDir = "artifacts/linux-family-interactive",
+    [string]$PublishDir = "",
+    [switch]$SkipPublish,
+    [switch]$SkipImageBuild,
+    [switch]$Replace,
+    [switch]$KeepContainer
+)
+
+$ErrorActionPreference = "Stop"
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
+$probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-family-input-probes.sh"
+$schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/family-x11-validation.schema.json"
+$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
+    [IO.Path]::GetFullPath($OutputDir)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
+}
+$appKey = $App.ToLowerInvariant()
+
+$probeParameters = @{
+    FreeW = [ordered]@{
+        WindowPattern = "FreeW"
+        RibbonTabKey = "I"
+        FileKey = "F"
+        FileSurface = "top-level-backstage-window"
+    }
+    FreeP = [ordered]@{
+        WindowPattern = "FreeP"
+        RibbonTabKey = "N"
+        FileKey = "F"
+        FileSurface = "in-window-backstage-overlay"
+    }
+}[$App]
+
+function Invoke-External {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [string]$WorkingDirectory = $repoRoot
+    )
+
+    Push-Location $WorkingDirectory
+    try {
+        & $FilePath @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "$FilePath exited with code $LASTEXITCODE."
+        }
+    } finally {
+        Pop-Location
+    }
+}
+
+function Assert-ManifestContract {
+    param(
+        [Parameter(Mandatory = $true)][string]$ManifestPath,
+        [Parameter(Mandatory = $true)][string]$EvidenceDirectory
+    )
+
+    if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) {
+        throw "Manifest schema is missing: $schemaPath"
+    }
+
+    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
+    if ($schema.'$schema' -notmatch "json-schema.org") {
+        throw "Manifest contract reference is not a JSON Schema document."
+    }
+
+    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+    if ($manifest.schemaVersion -ne 1 -or
+        $manifest.suite -ne "family-linux-physical-baseline" -or
+        $manifest.platform -ne "linux" -or
+        $manifest.shell -ne "avalonia" -or
+        $manifest.app -ne $App -or
+        $manifest.baseline -ne $true -or
+        $manifest.coverage.exhaustive -ne $false -or
+        $manifest.parameters.fileSurface -ne $probeParameters.FileSurface -or
+        $manifest.parameters.ribbonTabKey -ne $probeParameters.RibbonTabKey -or
+        $manifest.parameters.fileKey -ne $probeParameters.FileKey -or
+        $manifest.appSurface -ne $probeParameters.FileSurface) {
+        throw "Manifest header does not satisfy the family physical-baseline contract."
+    }
+
+    $requiredIds = @(
+        "visible-window-discovery",
+        "alt-keytips-appearance",
+        "alt-keytips-dismissal",
+        "f10-keytips-appearance",
+        "f10-keytips-dismissal",
+        "ribbon-tab-keytip-switch",
+        "file-surface-open",
+        "file-surface-dismissal"
+    )
+    $results = @($manifest.results)
+    $ids = @($results | ForEach-Object { [string]$_.id })
+    if ($ids.Count -ne ($ids | Select-Object -Unique).Count) {
+        throw "Manifest contains duplicate result IDs."
+    }
+    foreach ($requiredId in $requiredIds) {
+        if ($ids -notcontains $requiredId) {
+            throw "Manifest is missing required result '$requiredId'."
+        }
+    }
+
+    $passed = @($results | Where-Object { $_.status -eq "passed" }).Count
+    $failed = @($results | Where-Object { $_.status -eq "failed" }).Count
+    if ($manifest.summary.total -ne $results.Count -or
+        $manifest.summary.passed -ne $passed -or
+        $manifest.summary.failed -ne $failed) {
+        throw "Manifest summary does not match its result rows."
+    }
+
+    foreach ($result in $results) {
+        if ($result.category -ne "physical-x11-smoke" -or
+            $result.evidenceLevel -ne "physical-x11-input" -or
+            @($result.evidence).Count -lt 1) {
+            throw "Result '$($result.id)' is missing physical evidence metadata."
+        }
+        foreach ($evidence in @($result.evidence)) {
+            $evidencePath = Join-Path $EvidenceDirectory ([string]$evidence)
+            if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf)) {
+                throw "Result '$($result.id)' references missing evidence '$evidence'."
+            }
+            if ((Get-Item -LiteralPath $evidencePath).Length -le 0) {
+                throw "Result '$($result.id)' references empty evidence '$evidence'."
+            }
+        }
+    }
+
+    foreach ($screenshot in @($manifest.screenshots)) {
+        $screenshotPath = Join-Path $EvidenceDirectory ([string]$screenshot.name)
+        if (-not (Test-Path -LiteralPath $screenshotPath -PathType Leaf)) {
+            throw "Manifest references missing screenshot '$($screenshot.name)'."
+        }
+        if ((Get-Item -LiteralPath $screenshotPath).Length -le 0) {
+            throw "Manifest references empty screenshot '$($screenshot.name)'."
+        }
+    }
+
+    $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{
+            status = "passed"
+            validator = "tools/Run-FamilyLinuxInteractionValidation.ps1"
+            contractReference = "tools/LinuxInteractiveDocker/family-x11-validation.schema.json"
+        }) -Force
+    $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
+    return $manifest
+}
+
+if (-not (Test-Path -LiteralPath $probeSource -PathType Leaf)) {
+    throw "Family probe is missing: $probeSource"
+}
+
+$sessionDirectory = $null
+$started = $false
+try {
+    $startArguments = @(
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
+        "-Action", "Start", "-App", $App, "-Port", "$Port",
+        "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
+        "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot
+    )
+    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) {
+        $startArguments += @("-PublishDir", $PublishDir)
+    }
+    if ($SkipPublish) { $startArguments += "-SkipPublish" }
+    if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
+    if ($Replace) { $startArguments += "-Replace" }
+
+    Invoke-External -FilePath "powershell.exe" -Arguments $startArguments
+    $started = $true
+
+    $currentSessionPath = Join-Path $resolvedOutputRoot "$appKey/current-session.json"
+    if (-not (Test-Path -LiteralPath $currentSessionPath -PathType Leaf)) {
+        throw "Generic runner did not write current session metadata: $currentSessionPath"
+    }
+    $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+    $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
+    if (-not (Test-Path -LiteralPath $sessionDirectory -PathType Container)) {
+        throw "Session directory does not exist: $sessionDirectory"
+    }
+
+    $probeInWork = Join-Path $sessionDirectory "family-input-probes.sh"
+    Copy-Item -LiteralPath $probeSource -Destination $probeInWork -Force
+    $probeLog = Join-Path $sessionDirectory "family-validation/probe.log"
+    New-Item -ItemType Directory -Path (Split-Path -Parent $probeLog) -Force | Out-Null
+    New-Item -ItemType File -Path $probeLog -Force | Out-Null
+
+    $dockerArguments = @(
+        "exec", "--env", "FAMILY_APP=$App",
+        "--env", "FAMILY_WINDOW_PATTERN=$($probeParameters.WindowPattern)",
+        "--env", "FAMILY_TAB_KEY=$($probeParameters.RibbonTabKey)",
+        "--env", "FAMILY_FILE_KEY=$($probeParameters.FileKey)",
+        "--env", "FAMILY_FILE_SURFACE=$($probeParameters.FileSurface)",
+        [string]$session.containerName, "bash", "/work/family-input-probes.sh", "/work/family-validation"
+    )
+    Push-Location $repoRoot
+    try {
+        $probeOutput = @(& docker @dockerArguments 2>&1)
+        $probeExitCode = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    if ($probeOutput.Count -gt 0) {
+        $probeOutput | Set-Content -LiteralPath $probeLog -Encoding utf8
+    } else {
+        "docker exec produced no stdout/stderr; inspect family-x11-results.json for probe evidence." |
+            Set-Content -LiteralPath $probeLog -Encoding utf8
+    }
+
+    $manifestPath = Join-Path $sessionDirectory "family-validation/family-x11-results.json"
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw "Family probe did not write a manifest: $manifestPath"
+    }
+    $manifest = Assert-ManifestContract -ManifestPath $manifestPath -EvidenceDirectory (Split-Path -Parent $manifestPath)
+    Write-Host "Manifest contract validation: $($manifest.contractValidation.status)"
+    Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"
+    Write-Host "Manifest: $manifestPath"
+    Write-Host "Screenshots: $(Split-Path -Parent $manifestPath)"
+    if ($probeExitCode -ne 0 -or $manifest.summary.failed -gt 0) {
+        throw "Family physical probe failed with exit code $probeExitCode and $($manifest.summary.failed) failed result(s). Evidence was retained at $manifestPath; probe log: $probeLog"
+    }
+} finally {
+    if ($started -and -not $KeepContainer) {
+        try {
+            Invoke-External -FilePath "powershell.exe" -Arguments @(
+                "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
+                "-Action", "Stop", "-App", $App, "-Port", "$Port",
+                "-OutputDir", $resolvedOutputRoot
+            )
+        } catch {
+            Write-Warning "Could not stop harness-owned $App container on port ${Port}: $($_.Exception.Message)"
+        }
+    } elseif ($started) {
+        Write-Host "Container retained by request on port $Port."
+    }
+}
