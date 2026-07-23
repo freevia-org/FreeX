@@ -55,8 +55,6 @@ $reportDirectory = if ([string]::IsNullOrWhiteSpace($ResumeReportDirectory)) {
     (Resolve-Path -LiteralPath $ResumeReportDirectory).Path
 }
 New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
-$sessionBindingDirectory = Join-Path $reportDirectory "session-bindings"
-New-Item -ItemType Directory -Path $sessionBindingDirectory -Force | Out-Null
 $provenancePath = Join-Path $reportDirectory "resume-provenance.json"
 $workspaceHasher = [Security.Cryptography.SHA256]::Create()
 try {
@@ -70,6 +68,8 @@ try {
 }
 $appImageReference = "freex-linux-interactive-app-freex-$workspaceKey" + ":current"
 $publishDirectory = Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/freex/publish/linux-x64"
+$sessionBindingDirectory = Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/freex/session-bindings/$reportStamp-$PID"
+New-Item -ItemType Directory -Path $sessionBindingDirectory -Force | Out-Null
 
 function Get-SourceCommit {
     $output = @(& git -C $repoRoot rev-parse --verify HEAD 2>$null)
@@ -1195,4 +1195,7 @@ q.addEventListener('input',filter);s.addEventListener('change',filter);c.addEven
     }
 } finally {
     & $harness -Action Stop -App FreeX -Port $Port
+    if (Test-Path -LiteralPath $sessionBindingDirectory -PathType Container) {
+        Remove-Item -LiteralPath $sessionBindingDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }

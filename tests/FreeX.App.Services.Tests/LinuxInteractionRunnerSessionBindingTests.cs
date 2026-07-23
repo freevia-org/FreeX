@@ -27,6 +27,8 @@ public sealed class LinuxInteractionRunnerSessionBindingTests
 
         source.Should().Contain("function Start-ValidationSession");
         source.Should().Contain("[string[]]$AppArgument = @()");
+        source.Should().Contain("Join-Path $env:TEMP \"FreeX-LinuxInteractive/$workspaceKey/freex/session-bindings");
+        source.Should().Contain("Remove-Item -LiteralPath $sessionBindingDirectory -Recurse -Force");
         source.Should().Contain("SessionMetadataPath = $metadataPath");
         source.Should().NotContain("$currentSessionPath");
         source.Should().Contain("manifest changed before it became stable");
