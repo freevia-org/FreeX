@@ -91,6 +91,47 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void ContextualSpacing_SuppressesSharedMarginForAdjacentSameStyleListItems()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Styles["ListBody"] = new DocumentStyle
+        {
+            Id = "ListBody",
+            Name = "List Body",
+            Paragraph = ParagraphFormatting.Default with
+            {
+                SpaceBeforePt = 6,
+                SpaceAfterPt = 10,
+                SpaceBeforeIsSet = true,
+                SpaceAfterIsSet = true,
+                ContextualSpacing = true
+            }
+        };
+        document.Blocks.Add(new Paragraph("first")
+        {
+            StyleId = "ListBody",
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet }
+        });
+        document.Blocks.Add(new Paragraph("second")
+        {
+            StyleId = "ListBody",
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet }
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var list = view.Document.Blocks.OfType<System.Windows.Documents.List>().Single();
+        var paragraphs = list.ListItems
+            .SelectMany(item => item.Blocks.OfType<System.Windows.Documents.Paragraph>())
+            .ToList();
+
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Margin.Bottom.Should().Be(0);
+        paragraphs[1].Margin.Top.Should().Be(0);
+    }
+
+    [StaFact]
     public void Table_ExplicitBorderPayload_SurvivesViewRoundTrip()
     {
         var document = TextDocument.CreateEmpty();

@@ -4519,6 +4519,8 @@ public sealed class DocumentView : RichTextBox
                     flow.Blocks.Add(wpfParagraph);
                     continue;
                 }
+                ModelParagraph? previousListParagraph = null;
+                WpfParagraph? previousListWpfParagraph = null;
                 for (var p = 0; p < listParagraphs.Count; p++)
                 {
                     var wpfParagraph = BuildParagraph(
@@ -4531,9 +4533,26 @@ public sealed class DocumentView : RichTextBox
                             ? listReservations
                             : null,
                         suppressedFloatingWrapRuns: suppressedFloatingWrapRuns);
+                    if (previousListParagraph is not null
+                        && previousListWpfParagraph is not null
+                        && SuppressesContextualSpacing(previousListParagraph, listParagraphs[p].Paragraph, _model))
+                    {
+                        previousListWpfParagraph.Margin = new Thickness(
+                            previousListWpfParagraph.Margin.Left,
+                            previousListWpfParagraph.Margin.Top,
+                            previousListWpfParagraph.Margin.Right,
+                            0);
+                        wpfParagraph.Margin = new Thickness(
+                            wpfParagraph.Margin.Left,
+                            0,
+                            wpfParagraph.Margin.Right,
+                            wpfParagraph.Margin.Bottom);
+                    }
                     if (markers is not null)
                         PrependMultiLevelMarker(wpfParagraph, markers[p], _model);
                     list.ListItems.Add(new WpfListItem(wpfParagraph));
+                    previousListParagraph = listParagraphs[p].Paragraph;
+                    previousListWpfParagraph = wpfParagraph;
                 }
                 flow.Blocks.Add(list);
                 previousBodyParagraph = null;
@@ -14846,9 +14865,7 @@ public sealed class DocumentView : RichTextBox
         ModelParagraph previous,
         ModelParagraph current,
         TextDocument document) =>
-        previous.Formatting.ListKind == ListKind.None
-        && current.Formatting.ListKind == ListKind.None
-        && string.Equals(previous.StyleId, current.StyleId, StringComparison.OrdinalIgnoreCase)
+        string.Equals(previous.StyleId, current.StyleId, StringComparison.OrdinalIgnoreCase)
         && Resolve(current, document).ContextualSpacing is true;
 
     private static RunFormatting StyleRun(ModelParagraph paragraph, TextDocument document) =>
