@@ -2343,6 +2343,60 @@ public class DocxRoundTripTests
         endnotesXml.Should().Contain("endnoteRef");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NoteImages_UseOwningPartRelationshipsAndRoundTrip(bool endnote)
+    {
+        var imageBytes = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+        var document = new TextDocument();
+        var body = new Paragraph("Body");
+        body.Runs.Add(endnote ? Run.EndnoteReference(1) : Run.FootnoteReference(1));
+        document.Blocks.Add(body);
+        var content = new Paragraph();
+        content.Runs.Add(new Run("Illustrated note "));
+        content.Runs.Add(Run.FromImage(new InlineImage(imageBytes, 24, 18)));
+        if (endnote)
+        {
+            var note = new Endnote(1);
+            note.Content.Add(content);
+            document.Endnotes[1] = note;
+        }
+        else
+        {
+            var note = new Footnote(1);
+            note.Content.Add(content);
+            document.Footnotes[1] = note;
+        }
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        var bytes = stream.ToArray();
+        var partName = endnote ? "endnotes" : "footnotes";
+        var mediaName = endnote ? "endnote_image1.png" : "footnote_image1.png";
+        using (var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        {
+            zip.GetEntry("word/media/" + mediaName).Should().NotBeNull();
+            using var rels = new StreamReader(zip.GetEntry("word/_rels/" + partName + ".xml.rels")!.Open());
+            var relsXml = rels.ReadToEnd();
+            relsXml.Should().Contain("relationships/image");
+            relsXml.Should().Contain("media/" + mediaName);
+
+            using var noteXml = new StreamReader(zip.GetEntry("word/" + partName + ".xml")!.Open());
+            noteXml.ReadToEnd().Should().Contain("rIdImg1");
+        }
+
+        var read = DocxReader.Read(new MemoryStream(bytes));
+        var image = (endnote ? read.Endnotes[1].Content : read.Footnotes[1].Content)
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.Image is not null)
+            .Image!;
+        image.Bytes.Should().Equal(imageBytes);
+        image.WidthPt.Should().Be(24);
+        image.HeightPt.Should().Be(18);
+    }
+
     [Fact]
     public void NoEndnotes_DoesNotEmitPart()
     {
