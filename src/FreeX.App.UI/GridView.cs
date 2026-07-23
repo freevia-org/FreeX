@@ -80,6 +80,62 @@ public partial class GridView : FrameworkElement
         peer.NotifyActiveCellValueIfChanged();
     }
 
+    /// <summary>
+    /// Flags describing a cell's attached metadata for building its screen-reader announcement
+    /// (UIA Name) -- the accessible parity to the sighted indicators GridView already renders
+    /// (comment corner-triangle, formula-bar "=" prefix, merged span, hyperlink hand-cursor).
+    /// R80 added <see cref="HasComment"/>/<see cref="CommentTitle"/> only
+    /// (R80-app-accessibility-a11y-5-3); R81 adds <see cref="IsFormula"/>, <see cref="IsMerged"/>,
+    /// and <see cref="HasHyperlink"/>, all backed by data GridView already has wired
+    /// (<c>DisplayCell.Formula</c>, <see cref="MergedRegions"/>, <see cref="HyperlinkCells"/>).
+    /// <see cref="HasDataValidation"/> and <see cref="IsLocked"/> are included so the builder and
+    /// its cue text are ready and unit-testable, but neither is wired to a live GridView signal:
+    /// GridView has no property carrying "cells with a data-validation rule" (only
+    /// <see cref="ValidationCircleCells"/>, which is the narrower "current value fails its rule"
+    /// set -- conflating the two would misannounce every cell with a passing validation as having
+    /// none) or "the active sheet is protected" (a prerequisite for "locked" to mean anything;
+    /// <c>CellStyle.Locked</c> defaults to true for virtually every cell, so surfacing it
+    /// unconditionally would announce "is locked" on almost every cell in almost every workbook).
+    /// Wiring those two needs a new signal sourced outside FreeX.App.UI.
+    /// </summary>
+    internal readonly record struct CellAnnouncementMetadata(
+        bool HasComment = false,
+        string? CommentTitle = null,
+        bool IsFormula = false,
+        bool IsMerged = false,
+        bool HasDataValidation = false,
+        bool HasHyperlink = false,
+        bool IsLocked = false);
+
+    /// <summary>
+    /// Pure, unit-testable builder for a cell's UIA Name: the cell address (plus its value, if
+    /// any) followed by a comma-separated "has X"/"is X" cue for each set metadata flag. Kept
+    /// free of any GridView/AutomationPeer dependency so it can be exercised directly in tests
+    /// without constructing a GridView, Viewport, or AutomationPeer.
+    /// </summary>
+    internal static string BuildCellAnnouncementName(string address, string? value, CellAnnouncementMetadata metadata)
+    {
+        var name = string.IsNullOrWhiteSpace(value) ? address : $"{address}: {value}";
+
+        List<string>? cues = null;
+        void AddCue(string cue) => (cues ??= []).Add(cue);
+
+        if (metadata.HasComment && !string.IsNullOrEmpty(metadata.CommentTitle))
+            AddCue($"has {metadata.CommentTitle.ToLowerInvariant()}");
+        if (metadata.IsFormula)
+            AddCue("is a formula");
+        if (metadata.IsMerged)
+            AddCue("is merged");
+        if (metadata.HasDataValidation)
+            AddCue("has data validation");
+        if (metadata.HasHyperlink)
+            AddCue("has a hyperlink");
+        if (metadata.IsLocked)
+            AddCue("is locked");
+
+        return cues is null ? name : $"{name}, {string.Join(", ", cues)}";
+    }
+
     private sealed class GridViewAutomationPeer(GridView owner) :
         FrameworkElementAutomationPeer(owner),
         IGridProvider,
@@ -170,6 +226,45 @@ public partial class GridView : FrameworkElement
             comment = null;
             return false;
         }
+
+        /// <summary>
+        /// Whether the cell is formula-backed (<c>DisplayCell.Formula</c> is populated whenever
+        /// the viewport request includes formulas, which is the default), so the cell's
+        /// AutomationPeer can announce "is a formula" the way a sighted user sees the formula
+        /// text in the formula bar (R81 completion of R80-app-accessibility-a11y-5-3).
+        /// </summary>
+        internal bool IsCellFormula(uint row, uint column) =>
+            TryGetDisplayCell(row, column, out var cell) && !string.IsNullOrEmpty(cell.Formula);
+
+        /// <summary>
+        /// Whether the cell falls within one of <see cref="MergedRegions"/> (checked directly
+        /// against the dependency property rather than the render-built <c>_mergeLookup</c> cache,
+        /// so it is correct even before the first render pass -- e.g. for a peer queried right
+        /// after construction, as the unit tests do).
+        /// </summary>
+        internal bool IsCellMerged(uint row, uint column)
+        {
+            if (OwnerGrid.MergedRegions is not { Count: > 0 } merges)
+                return false;
+
+            var address = new CellAddress(OwnerGrid.ActiveSheetId, row, column);
+            foreach (var merge in merges)
+            {
+                if (merge.Contains(address))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Whether the cell is one of the host-supplied <see cref="HyperlinkCells"/> (the same
+        /// set GridView.Input.cs consults for the Ctrl+hover hand cursor), so the cell's
+        /// AutomationPeer can announce "has a hyperlink".
+        /// </summary>
+        internal bool IsCellHyperlinked(uint row, uint column) =>
+            OwnerGrid.HyperlinkCells is { Count: > 0 } links &&
+            links.Contains(new CellAddress(OwnerGrid.ActiveSheetId, row, column));
 
         internal Rect GetCellBoundingRectangle(uint row, uint column)
         {
@@ -593,16 +688,23 @@ public partial class GridView : FrameworkElement
         protected override string GetNameCore()
         {
             var address = $"{CellAddress.NumberToColumnName(column)}{row}";
-            var name = string.IsNullOrWhiteSpace(Value)
-                ? address
-                : $"{address}: {Value}";
 
-            // Append a "has note"/"has comment" cue so a screen reader can discover the cell
-            // carries a note or threaded comment, matching the sighted corner-triangle indicator
-            // (GridView.Rendering.cs DrawCommentIndicator). See R80-app-accessibility-a11y-5-3.
-            return parent.TryGetCellComment(row, column, out var comment) && comment is not null
-                ? $"{name}, has {comment.Title.ToLowerInvariant()}"
-                : name;
+            // Append "has note"/"has comment", "is a formula", "is merged", and "has a hyperlink"
+            // cues so a screen reader can discover metadata a sighted user sees via the corner-
+            // triangle indicator (GridView.Rendering.cs DrawCommentIndicator), the formula-bar "="
+            // prefix, a merged span, and the Ctrl+hover hand cursor, respectively. See
+            // R80-app-accessibility-a11y-5-3 (comment cue, added round 80) and its R81 completion
+            // (formula/merged/hyperlink cues; data-validation/locked deliberately left unwired --
+            // see CellAnnouncementMetadata's doc comment for why).
+            parent.TryGetCellComment(row, column, out var comment);
+            var metadata = new CellAnnouncementMetadata(
+                HasComment: comment is not null,
+                CommentTitle: comment?.Title,
+                IsFormula: parent.IsCellFormula(row, column),
+                IsMerged: parent.IsCellMerged(row, column),
+                HasHyperlink: parent.IsCellHyperlinked(row, column));
+
+            return GridView.BuildCellAnnouncementName(address, Value, metadata);
         }
 
         protected override Rect GetBoundingRectangleCore() =>

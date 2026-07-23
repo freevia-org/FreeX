@@ -274,7 +274,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
             charts.Add(new XlsxChartPackagePart(
                 XlsxPackageXmlEditor.LoadXml(chartEntry),
                 chartRelationships,
-                ReadNonVisualName(chartElement),
+                // R81-io-drawing-chart-name: the chart's name lives on the <xdr:graphicFrame>'s own
+                // <xdr:nvGraphicFramePr><xdr:cNvPr name="..."/> -- NOT inside the <c:chart>/<cx:chart>
+                // element, which (per schema) is just a self-closing r:id reference with no cNvPr
+                // descendant. Read from graphicFrameElement (same source as the Alt Text title/descr
+                // above) so the round-tripped ChartModel.Name is preserved instead of always null.
+                ReadNonVisualName(graphicFrameElement ?? chartElement),
                 chartAnchor,
                 chartDrawingOrderIndex,
                 chartAltTextTitle,

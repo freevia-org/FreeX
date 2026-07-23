@@ -117,10 +117,10 @@ public sealed class R80_ChartAltTextRoundTripTests
 
         chart.AltTextTitle.Should().BeNull();
         chart.AltTextDescription.Should().BeNull();
-        // Note: chart.Name itself does not currently round-trip through XlsxFileAdapter (a separate,
-        // pre-existing defect in ReadNonVisualName(chartElement) -- out of scope for this fix, which
-        // only adds/preserves AltTextTitle/AltTextDescription). Only assert on chart.Title here, which
-        // already round-trips and must remain unaffected by the new Alt Text fields.
+        // chart.Name now round-trips too (fixed in R81-io-drawing-chart-name: the reader was reading the
+        // name from the name-less <c:chart> element instead of the ancestor <xdr:graphicFrame>). Assert
+        // both Name and Title survive so the Alt Text fields are shown not to disturb either.
+        chart.Name.Should().Be("Chart 1", "the chart Name must round-trip and be unaffected by the Alt Text fields");
         chart.Title.Should().Be("Sales by quarter", "adding Alt Text fields must not disturb the existing chart Title round-trip");
     }
 }

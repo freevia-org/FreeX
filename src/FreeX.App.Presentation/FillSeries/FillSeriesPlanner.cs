@@ -30,12 +30,21 @@ public enum FillSeriesDateUnit
 }
 
 /// <summary>The validated options the Fill ▸ Series dialog produces.</summary>
+/// <param name="Trend">
+/// Excel's Fill ▸ Series "Trend" checkbox (enabled for the Linear and Growth series types only).
+/// When set, the Step value is ignored and the series instead continues a least-squares best-fit
+/// line (Linear) or best-fit exponential curve (Growth) computed from every already-populated seed
+/// value at the head of each series line, extrapolated into that line's remaining (blank) cells --
+/// see <see cref="FillSeriesPlanner.BuildLinearSeriesEdits"/> / <see cref="FillSeriesPlanner.BuildGrowthSeriesEdits"/>.
+/// Has no effect on the Date or AutoFill series types.
+/// </param>
 public sealed record FillSeriesOptions(
     double Step,
     FillSeriesDirection SeriesIn = FillSeriesDirection.Columns,
     FillSeriesType Type = FillSeriesType.Linear,
     FillSeriesDateUnit DateUnit = FillSeriesDateUnit.Day,
-    double? StopValue = null);
+    double? StopValue = null,
+    bool Trend = false);
 
 /// <summary>Why the Fill ▸ Series inputs could not be turned into options.</summary>
 public enum FillSeriesInputError
@@ -195,10 +204,10 @@ public static class FillSeriesPlanner
 
         return options.Type switch
         {
-            FillSeriesType.Growth => BuildGrowthSeriesEdits(sheet, range, options.Step, options.SeriesIn, options.StopValue),
+            FillSeriesType.Growth => BuildGrowthSeriesEdits(sheet, range, options.Step, options.SeriesIn, options.StopValue, options.Trend),
             FillSeriesType.Date => BuildDateSeriesEdits(sheet, range, options.Step, options.SeriesIn, options.DateUnit, options.StopValue),
             FillSeriesType.AutoFill => BuildAutoFillSeriesEdits(sheet, range, options.SeriesIn),
-            _ => BuildLinearSeriesEdits(sheet, range, options.Step, options.SeriesIn, options.StopValue),
+            _ => BuildLinearSeriesEdits(sheet, range, options.Step, options.SeriesIn, options.StopValue, options.Trend),
         };
     }
 
@@ -207,8 +216,16 @@ public static class FillSeriesPlanner
         GridRange range,
         double step,
         FillSeriesDirection seriesIn,
-        double? stopValue = null)
+        double? stopValue = null,
+        bool trend = false)
     {
+        // Trend replaces the fixed-step chain below with a per-line least-squares best fit --
+        // see BuildTrendSeriesEdits. The Step value plays no part in Trend mode (Excel disables
+        // the Step box once Trend is checked), and the non-Trend path below is left byte-for-byte
+        // unchanged so existing Linear callers are unaffected.
+        if (trend)
+            return BuildTrendSeriesEdits(sheet, range, step, seriesIn, growth: false);
+
         var edits = new List<(CellAddress, Cell)>();
         var value = 0d;
         var hasValue = false;
@@ -260,8 +277,15 @@ public static class FillSeriesPlanner
         GridRange range,
         double step,
         FillSeriesDirection seriesIn,
-        double? stopValue = null)
+        double? stopValue = null,
+        bool trend = false)
     {
+        // See BuildLinearSeriesEdits' matching Trend guard: Growth-Trend fits a best-fit
+        // exponential curve (log-linear least squares) through each line's seed run instead of
+        // chaining the fixed multiplicative Step below, and the non-Trend path is unchanged.
+        if (trend)
+            return BuildTrendSeriesEdits(sheet, range, step, seriesIn, growth: true);
+
         var edits = new List<(CellAddress, Cell)>();
         var value = 0d;
         var ascending = false;
@@ -308,6 +332,130 @@ public static class FillSeriesPlanner
 
         return edits;
     }
+
+    /// <summary>
+    /// Builds the Fill ▸ Series "Trend" edits shared by Linear and Growth (see
+    /// <see cref="FillSeriesOptions.Trend"/>): each independent series line (column, for "Series in
+    /// Columns"; row, for "Series in Rows" -- the same per-line split <see cref="EnumerateSeriesLines"/>
+    /// already provides for the AutoFill series type) is fitted and extrapolated on its own, exactly
+    /// like the non-Trend engines treat each line as an independent series.
+    /// </summary>
+    private static List<(CellAddress Address, Cell NewCell)> BuildTrendSeriesEdits(
+        Sheet sheet,
+        GridRange range,
+        double step,
+        FillSeriesDirection seriesIn,
+        bool growth)
+    {
+        var edits = new List<(CellAddress, Cell)>();
+        foreach (var line in EnumerateSeriesLines(sheet.Id, range, seriesIn))
+            BuildTrendLineEdits(sheet, line, step, growth, edits);
+
+        return edits;
+    }
+
+    /// <summary>
+    /// Builds one line's Trend edits: reads the leading contiguous run of already-populated
+    /// numeric/date seed cells (matching <see cref="BuildAutoFillLineEdits"/>'s own seed-run scan),
+    /// fits a best-fit line through them, and extrapolates the fit into the line's remaining
+    /// (blank) cells. A line with no seed at all is left untouched, matching every other series
+    /// engine's own no-seed no-op.
+    /// </summary>
+    private static void BuildTrendLineEdits(
+        Sheet sheet,
+        IReadOnlyList<CellAddress> line,
+        double step,
+        bool growth,
+        List<(CellAddress Address, Cell NewCell)> edits)
+    {
+        var seedValues = new List<ScalarValue>();
+        foreach (var address in line)
+        {
+            var value = sheet.GetValue(address.Row, address.Col);
+            if (!TryGetLinearOrGrowthSeriesSeed(value, out _))
+                break;
+
+            seedValues.Add(value);
+        }
+
+        var seedCount = seedValues.Count;
+        if (seedCount == 0)
+            return;
+
+        // A single known point has no trend line to fit -- Excel's own Trend behavior for a lone
+        // seed falls back to the manually entered Step value instead (additive for Linear,
+        // multiplicative for Growth), the same single-seed chaining the non-Trend engines above
+        // use for their own lone-seed case.
+        if (seedCount == 1)
+        {
+            TryGetLinearOrGrowthSeriesSeed(seedValues[0], out var value);
+            var createSingle = SeedValueFactory(seedValues[0]);
+            for (var i = seedCount; i < line.Count; i++)
+            {
+                value = growth ? value * step : value + step;
+                edits.Add((line[i], Cell.FromValue(createSingle(value))));
+            }
+
+            return;
+        }
+
+        Func<int, ScalarValue> lineSeries;
+        var fitted = growth
+            ? TryCreateGrowthTrendLineSeries(seedValues, out lineSeries)
+            : TryCreateNumericOrDateLineSeries(seedValues, out lineSeries);
+        if (!fitted)
+            return; // Mixed/non-numeric seed run, or (Growth) a zero/negative seed with no logarithm.
+
+        for (var i = seedCount; i < line.Count; i++)
+            edits.Add((line[i], Cell.FromValue(lineSeries(i - seedCount + 1))));
+    }
+
+    /// <summary>
+    /// Fits a least-squares exponential curve through a Growth-Trend line's seed run by
+    /// linearizing it: a least-squares fit of ln(y) against x = 0, 1, 2, ... yields a slope/
+    /// intercept whose exponential y = exp(intercept + slope * x) is the best-fit growth curve,
+    /// mirroring <see cref="TryCreateNumericOrDateLineSeries"/>'s own linear fit (and its anchor-at-
+    /// the-last-seed-index convention) but in log space. A seed run containing a zero or negative
+    /// value has no logarithm and cannot be growth-fitted -- Excel raises #NUM! for this case, so
+    /// this returns false and the caller leaves that line untouched, matching every other
+    /// unsupported-seed case in this file (e.g. <see cref="BuildGrowthSeriesEdits"/>'s own
+    /// non-numeric-seed no-op).
+    /// </summary>
+    private static bool TryCreateGrowthTrendLineSeries(
+        IReadOnlyList<ScalarValue> seedValues,
+        out Func<int, ScalarValue> lineSeries)
+    {
+        var createValue = SeedValueFactory(seedValues[0]);
+        double[] numbers;
+        if (seedValues.All(value => value is NumberValue))
+            numbers = seedValues.Select(value => ((NumberValue)value).Value).ToArray();
+        else if (seedValues.All(value => value is DateTimeValue))
+            numbers = seedValues.Select(value => ((DateTimeValue)value).Value).ToArray();
+        else
+        {
+            lineSeries = null!;
+            return false;
+        }
+
+        if (numbers.Any(number => number <= 0))
+        {
+            lineSeries = null!;
+            return false;
+        }
+
+        var logs = numbers.Select(number => Math.Log(number)).ToArray();
+        var slope = ComputeLeastSquaresSlope(logs);
+        var meanX = (numbers.Length - 1) / 2.0;
+        var intercept = logs.Average() - slope * meanX;
+        var anchorLog = intercept + slope * (numbers.Length - 1);
+
+        lineSeries = offset => createValue(Math.Exp(anchorLog + slope * offset));
+        return true;
+    }
+
+    /// <summary>Builds a same-typed (number or date-serial) value factory from a sample seed cell's value.</summary>
+    private static Func<double, ScalarValue> SeedValueFactory(ScalarValue seed) =>
+        seed is DateTimeValue ? serial => new DateTimeValue(serial) : serial => new NumberValue(serial);
 
     public static List<(CellAddress Address, Cell NewCell)> BuildDateSeriesEdits(
         Sheet sheet,
