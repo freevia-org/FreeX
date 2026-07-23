@@ -53,7 +53,10 @@ internal sealed class AvaloniaRibbonContextSource : IRibbonContextSource
         Recompute();
     }
 
-    /// <summary>The selection was cleared: drop any drawing-object context.</summary>
+    /// <summary>
+    /// The drawing selection was cleared. Cell-based contexts are refreshed by the host because this
+    /// source does not own the active-cell/table/pivot accessors.
+    /// </summary>
     public void OnSelectionCleared()
     {
         if (_parityCaptureActivationKey is not null)
