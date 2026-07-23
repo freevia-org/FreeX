@@ -86,7 +86,6 @@ public static class DocxReader
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
         ReadPreservedParts(archive, document);
-        NormalizeWordReferencePageBreaks(document);
 
         return document;
     }
@@ -568,52 +567,6 @@ public static class DocxReader
             var value = source.Element(B + localName)?.Value;
             return string.IsNullOrEmpty(value) ? null : value;
         }
-    }
-
-    /// <summary>
-    /// Word relocates a page break represented by an empty page-break-before paragraph to the start of the
-    /// contiguous citation/authority run immediately before it. This is visible in Word's in-memory
-    /// WordOpenXML and in its rendered pages, although Word may leave the original empty paragraph in the
-    /// stored package. Mirror that layout normalization so a FreeW render of the same package starts the
-    /// citation block on the same page as Word.
-    /// </summary>
-    private static void NormalizeWordReferencePageBreaks(TextDocument document)
-    {
-        for (var index = 0; index < document.Blocks.Count; index++)
-        {
-            if (document.Blocks[index] is not Paragraph { Runs.Count: 0 } pageBreakParagraph
-                || !pageBreakParagraph.Formatting.PageBreakBefore)
-            {
-                continue;
-            }
-
-            var firstReference = index - 1;
-            var hasCitationField = false;
-            while (firstReference >= 0
-                && document.Blocks[firstReference] is Paragraph paragraph
-                && HasCitationOrAuthority(paragraph))
-            {
-                hasCitationField |= HasCitationField(paragraph);
-                firstReference--;
-            }
-
-            firstReference++;
-            if (firstReference >= index || !hasCitationField)
-                continue;
-
-            if (document.Blocks[firstReference] is not Paragraph firstParagraph)
-                continue;
-
-            firstParagraph.Formatting = firstParagraph.Formatting with { PageBreakBefore = true };
-            pageBreakParagraph.Formatting = pageBreakParagraph.Formatting with { PageBreakBefore = false };
-        }
-
-        static bool HasCitationOrAuthority(Paragraph paragraph) => paragraph.Runs.Any(run =>
-            run.Citation is not null
-            || string.Equals(run.ComplexField?.Keyword, "CITATION", StringComparison.OrdinalIgnoreCase));
-
-        static bool HasCitationField(Paragraph paragraph) => paragraph.Runs.Any(run =>
-            string.Equals(run.ComplexField?.Keyword, "CITATION", StringComparison.OrdinalIgnoreCase));
     }
 
     private static BibliographyAuthorInfo ReadBibliographyAuthor(XElement source)

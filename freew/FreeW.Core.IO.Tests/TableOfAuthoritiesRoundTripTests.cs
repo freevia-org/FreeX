@@ -246,12 +246,11 @@ public class TableOfAuthoritiesRoundTripTests
             SourceType.WebSite);
 
         var reopenedParagraphs = reopened.Blocks.OfType<Paragraph>().ToList();
-        reopenedParagraphs.Any(paragraph =>
-            paragraph.Runs.Any(run => run.ComplexField is { Keyword: "CITATION" })
-            && paragraph.Formatting.PageBreakBefore).Should().BeTrue();
-        reopenedParagraphs.Any(paragraph =>
-            paragraph.Runs.Count == 0
-            && !paragraph.Formatting.PageBreakBefore).Should().BeTrue();
+        reopenedParagraphs.Single(paragraph => paragraph.Runs.Count == 0)
+            .Formatting.PageBreakBefore.Should().BeTrue();
+        reopenedParagraphs.Where(paragraph =>
+                paragraph.Runs.Any(run => run.ComplexField is { Keyword: "CITATION" }))
+            .Should().OnlyContain(paragraph => !paragraph.Formatting.PageBreakBefore);
 
         var rewritten = WriteDocx(reopened);
         EntryXml(rewritten, "customXml/item1.xml").Root!.Name.Should().Be(B + "Sources");
@@ -284,11 +283,11 @@ public class TableOfAuthoritiesRoundTripTests
             .Where(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId)
             .Select(paragraph => paragraph.PlainText)
             .ToList();
-        // Word relocates the explicit break to the first citation paragraph, so both authority marks render
-        // on page 2 even though the cached generated TOA paragraphs retain their original sentinel values.
+        // The serialized break follows the first authority mark, so the regenerated TOA preserves Word's
+        // physical page references rather than moving the whole preceding citation block to page 2.
         rebuiltToaEntries.Should().Contain([
-            "Example v. FreeW, 123 F.4th 456 (2026)\t2",
-            "Free Software Evidence Act, 42 U.S.C. 2026\t2"
+            "Example v. FreeW, 123 F.4th 456 (2026)\t1, 2",
+            "Free Software Evidence Act, 42 U.S.C. 2026\t1"
         ]);
     }
 
