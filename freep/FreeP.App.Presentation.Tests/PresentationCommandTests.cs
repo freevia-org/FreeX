@@ -721,6 +721,46 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SlideCloner_CloneShape_ClonesMediaAndCaptionTracks()
+    {
+        var shape = MakeShape(1);
+        shape.Media = new MediaInfo
+        {
+            IsVideo = true,
+            Bytes = new byte[] { 1, 2, 3 },
+            ContentType = "video/mp4",
+            SourcePackagePath = "ppt/media/video1.mp4",
+            LinkUrl = "https://example.invalid/video.mp4",
+        };
+        shape.Media.CaptionTracks.Add(new MediaCaptionTrackInfo
+        {
+            RelationshipId = "rIdCaption1",
+            Source = "captions/en.vtt",
+            Bytes = new byte[] { 10, 20 },
+            ContentType = "text/vtt",
+            Language = "en-US",
+            Label = "English",
+            IsExternal = false,
+        });
+
+        var clone = SlideCloner.CloneShape(shape);
+
+        clone.Media.Should().NotBeNull();
+        clone.Media.Should().NotBeSameAs(shape.Media);
+        clone.Media!.CaptionTracks.Should().HaveCount(1);
+        clone.Media.CaptionTracks.Should().NotBeSameAs(shape.Media.CaptionTracks);
+        clone.Media.CaptionTracks[0].Label.Should().Be("English");
+        clone.Media.CaptionTracks[0].Bytes.Should().Equal(10, 20);
+
+        clone.Media.CaptionTracks[0].Label = "French";
+        clone.Media.CaptionTracks[0].Bytes[0] = 99;
+        clone.Media.Bytes[0] = 88;
+        shape.Media.CaptionTracks[0].Label.Should().Be("English");
+        shape.Media.CaptionTracks[0].Bytes[0].Should().Be(10);
+        shape.Media.Bytes[0].Should().Be(1);
+    }
+
+    [Fact]
     public void SlideCloner_CloneShape_ClonesTextBody()
     {
         var shape = MakeShape(1);
