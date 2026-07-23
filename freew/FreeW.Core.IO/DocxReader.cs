@@ -2677,7 +2677,9 @@ public static class DocxReader
         var catalogBorders = catalogStyle?.Borders ?? false;
 
         // The table-style toggles round-trip via w:tblLook (HeaderRow=firstRow, BandedRows=noHBand="0")
-        // and, for RepeatHeaderRow, via w:trPr/w:tblHeader on the first row. See DocxWriter.BuildTable.
+        // and, for RepeatHeaderRow, via the w:trPr/w:tblHeader on/off toggle on the first row. See
+        // DocxWriter.BuildTable. An explicit w:val="0" disables repetition just as it does for other
+        // WordprocessingML boolean properties.
         var tblLook = tblPr?.Element(W + "tblLook");
         var headerRow = tblLook?.Attribute(W + "firstRow")?.Value == "1";
         var lastRow = tblLook?.Attribute(W + "lastRow")?.Value == "1";
@@ -2686,7 +2688,7 @@ public static class DocxReader
         var bandedRows = tblLook?.Attribute(W + "noHBand")?.Value == "0";
         var bandedColumns = tblLook?.Attribute(W + "noVBand")?.Value == "0";
         var firstRow = tbl.Elements(W + "tr").FirstOrDefault();
-        var repeatHeader = firstRow?.Element(W + "trPr")?.Element(W + "tblHeader") is not null;
+        var repeatHeader = ReadToggle(firstRow?.Element(W + "trPr"), "tblHeader");
 
         table.Formatting = TableFormatting.Default with
         {
