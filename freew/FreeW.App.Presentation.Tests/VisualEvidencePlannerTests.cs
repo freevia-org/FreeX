@@ -2036,7 +2036,7 @@ public sealed class VisualEvidencePlannerTests
         expectation.Fields.HasNumPagesFields.Should().BeTrue();
         expectation.Fields.HasHeaderFooterFields.Should().BeTrue();
         expectation.Tables.TableCount.Should().Be(1);
-        expectation.Tables.EstimatedPageCount.Should().Be(2);
+        expectation.Tables.EstimatedPageCount.Should().Be(3);
         expectation.Tables.HasMultiPageTables.Should().BeTrue();
         expectation.Tables.HasRepeatedHeaderPages.Should().BeTrue();
         expectation.Tables.HasKeepTogetherRows.Should().BeTrue();
@@ -2060,6 +2060,7 @@ public sealed class VisualEvidencePlannerTests
             && row.IsRepeatedHeader
             && row.StartsPlannedPage
             && row.PageNumber == 2);
+        expectation.Tables.PaginationPlans.Single().Pages[2].RepeatedHeaderRowIndexes.Should().Equal(0);
     }
 
     [Fact]

@@ -551,10 +551,70 @@ public static class DocumentViewLayoutPlanner
         for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
         {
             if (document.Blocks[blockIndex] is Table table)
-                plans.Add(BuildTableLayoutPlan(table, plans.Count, document.Page));
+            {
+                var leadingContentHeightDip = EstimateLeadingContentHeightDip(document, blockIndex);
+                plans.Add(BuildTableLayoutPlan(
+                    table,
+                    plans.Count,
+                    document.Page,
+                    leadingContentHeightDip));
+            }
         }
 
         return plans;
+    }
+
+    public static double EstimateLeadingContentHeightDip(TextDocument document, int sourceBlockIndex)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        if (sourceBlockIndex <= 0)
+            return 0;
+
+        var dipPerPoint = PageLayout.PointsToDip(1);
+        var defaultFontSizeDip = Math.Max(8, document.DefaultRun.FontSizePt ?? 11) * dipPerPoint;
+        var columnCount = Math.Max(1, document.Page.ColumnCount);
+        var charsPerColumnLine = columnCount == 1
+            ? 92
+            : Math.Max(
+                16,
+                (int)Math.Floor(
+                    BuildColumnPlan(
+                        document.Page,
+                        PageLayout.ContentAreaDip(document.Page).Width,
+                        usePageColumns: true).WidthDip
+                    / Math.Max(4.5, defaultFontSizeDip * 0.50)));
+        var height = 0.0;
+        foreach (var block in document.Blocks.Take(sourceBlockIndex))
+        {
+            if (block is not Paragraph paragraph)
+                continue;
+
+            var charsPerLine = paragraph.StyleId?.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) == true
+                ? Math.Max(16, (int)Math.Round(charsPerColumnLine * 0.78))
+                : charsPerColumnLine;
+            var lineCount = Math.Max(1, (int)Math.Ceiling(
+                Math.Max(1, paragraph.PlainText.Length) / (double)charsPerLine));
+            var lineHeightDip = paragraph.Formatting.LineRule switch
+            {
+                LineSpacingRule.Exact or LineSpacingRule.AtLeast when paragraph.Formatting.LineHeightPt > 0
+                    => paragraph.Formatting.LineHeightPt * dipPerPoint,
+                _ => defaultFontSizeDip * Math.Max(1, paragraph.Formatting.LineSpacing)
+            };
+            height += lineCount * lineHeightDip
+                + paragraph.Formatting.SpaceBeforePt * dipPerPoint
+                + paragraph.Formatting.SpaceAfterPt * dipPerPoint;
+
+            if (paragraph.StyleId?.Equals("Heading1", StringComparison.OrdinalIgnoreCase) == true)
+                height += defaultFontSizeDip * 0.6;
+        }
+
+        // The page renderer reserves a bottom band for detached footnote bodies. Keep this shared
+        // pagination contract aligned with that first-page reservation.
+        if (document.Footnotes.Count > 0)
+            height += 80;
+
+        return Math.Max(0, height);
     }
 
     public static DocumentTableLayoutPlan BuildTableLayoutPlan(
