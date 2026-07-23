@@ -2707,6 +2707,16 @@ public static class PptxPackageReader
             var prst = aSpPr.Element(A + "prstGeom")?.Attribute("prst")?.Value;
             shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
             ReadPresetGeometryAdjustments(aSpPr, shape);
+
+            // PowerPoint's cached hierarchy SmartArt drawing represents connector
+            // segments as empty dsp:sp elements with a line and an xfrm, but no
+            // preset geometry.  Treating those as the default rectangle paints
+            // the connector bounding box instead of its thin line.  Keep this
+            // scoped to geometry-less, textless cached shapes so ordinary
+            // geometry-less text boxes and normal slide shapes retain their
+            // existing fallback behavior.
+            if (string.IsNullOrWhiteSpace(prst) && string.IsNullOrWhiteSpace(shape.PlainText))
+                shape.AutoShapeKind = DrawingShapeKind.Line;
         }
 
         // txBody
@@ -3696,6 +3706,25 @@ public static class PptxPackageReader
                         cgp.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
                         break;
                 }
+            }
+
+            // Cached SmartArt connector paths may omit a:path/@w and @h even
+            // though their points use a local coordinate space. Infer the
+            // authored path extent before the compositor maps the path into
+            // the shape bounds; otherwise a long horizontal branch is scaled
+            // as though its source units were the already-rendered DIP box.
+            if (cgp.PathW <= 0 && cgp.Segments.Count > 0)
+            {
+                var maxX = cgp.Segments.Max(segment => Math.Max(segment.X,
+                    Math.Max(segment.X1, Math.Max(segment.X2, segment.X3))));
+                cgp.PathW = Math.Max(1, (long)Math.Ceiling(maxX));
+            }
+
+            if (cgp.PathH <= 0 && cgp.Segments.Count > 0)
+            {
+                var maxY = cgp.Segments.Max(segment => Math.Max(segment.Y,
+                    Math.Max(segment.Y1, Math.Max(segment.Y2, segment.Y3))));
+                cgp.PathH = Math.Max(1, (long)Math.Ceiling(maxY));
             }
 
             if (cgp.Segments.Count > 0)
