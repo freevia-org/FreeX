@@ -335,6 +335,7 @@ public sealed class ChartBaselineCorpusTests
             .Should().Equal("Speed", "Power", "Agility", "Stamina", "Tech");
         plan.CategoryLabels.Should().OnlyContain(label => !label.Text.Contains("...", StringComparison.Ordinal));
         plan.Series.Should().HaveCount(2);
+        ChartRenderPlanner.ImportedRadarSeriesStrokeThickness.Should().Be(4.0);
         plan.Series.Should().OnlyContain(series =>
             series.Stroke.Thickness == ChartRenderPlanner.ImportedRadarSeriesStrokeThickness);
 
