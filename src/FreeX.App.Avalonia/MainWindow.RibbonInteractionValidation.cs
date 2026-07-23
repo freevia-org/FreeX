@@ -581,10 +581,6 @@ public sealed partial class MainWindow
         }
     }
 
-    private void SetRibbonBorderPickerColor(CellColor color) => _borderPickerColor = color;
-
-    private void SetRibbonBorderPickerStyle(BorderStyle style) => _borderPickerStyle = style;
-
     private static WorkbookSession CreateDisposableRibbonSession() =>
         new WorkbookSessionFactory().CreateParityDemo(
             viewportHeight: 480,
