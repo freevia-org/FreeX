@@ -85,6 +85,7 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("$existingRibbonPath", script, StringComparison.Ordinal);
         Assert.Contains("Reusing dialog interaction batch", script, StringComparison.Ordinal);
         Assert.Contains("Reusing ribbon interaction batch", script, StringComparison.Ordinal);
+        Assert.Contains("\"cell-inline-formula-point-range-drag\"", script, StringComparison.Ordinal);
     }
 
     [Fact]
