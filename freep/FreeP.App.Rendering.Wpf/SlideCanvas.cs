@@ -921,7 +921,20 @@ public sealed class SlideCanvas : FrameworkElement
         {
             var gridPen = CreateChartGridLinePen(scene.GridLines);
             foreach (var gridLine in scene.GridLines.GridLines)
-                dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
+            {
+                if (scene.UseWpfPixelSnappedImportedGrid &&
+                    Math.Abs(gridLine.Start.Y - gridLine.End.Y) < 0.001)
+                {
+                    var left = Math.Min(gridLine.Start.X, gridLine.End.X);
+                    var right = Math.Max(gridLine.Start.X, gridLine.End.X);
+                    var top = Math.Round(gridLine.Start.Y - 0.5, MidpointRounding.AwayFromZero);
+                    dc.DrawRectangle(gridPen.Brush, null, new Rect(left, top, right - left, 1.0));
+                }
+                else
+                {
+                    dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
+                }
+            }
         }
 
         if (scene.DrawProjectedThreeDBarFrame)

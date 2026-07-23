@@ -133,6 +133,20 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartLabelsCorpus_ImportedLabeledGridCarriesWpfOnlySnapHint()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 1280, 720));
+
+        scene.UseWpfPixelSnappedImportedGrid.Should().BeTrue();
+    }
+
+    [Fact]
     public void ChartLabelsCorpus_ImportedCartesianLabelsUsePowerPointGeometry()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
