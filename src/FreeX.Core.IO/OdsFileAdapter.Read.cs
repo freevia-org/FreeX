@@ -230,8 +230,10 @@ public sealed partial class OdsFileAdapter
             case "date":
             {
                 var raw = (string?)cellElement.Attribute(OfficeNs + "date-value");
+                // FromDateTime (not a bare ToOADate) so an ODF date in the 1900-01-01..1900-02-28
+                // window lands on its Excel serial rather than one day later — see DateTimeValue.
                 if (raw is not null && TryParseOdfDate(raw, out var dt))
-                    return new DateTimeValue(dt.ToOADate());
+                    return DateTimeValue.FromDateTime(dt);
                 return BlankValue.Instance;
             }
             case "time":

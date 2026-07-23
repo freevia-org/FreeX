@@ -180,10 +180,19 @@ internal static class XlsxClosedXmlCellMapper
 
     // Converts a true calendar DateTime (as ClosedXML surfaces it, already correcting for the
     // workbook's date1904 flag) into the internal ScalarValue serial. The internal convention must
-    // match how the 1904-aware date functions interpret a stored serial: 1900-epoch OADate when
+    // match how the 1904-aware date functions interpret a stored serial: Excel 1900 serial when
     // Uses1904DateSystem is false, 1904-epoch-relative (day-count since 1904-01-01) when true.
+    //
+    // The 1900 branch must go through DateTimeValue.FromDateTime, NOT a bare ToOADate(): ClosedXML
+    // hands back the TRUE Excel calendar date for an early-1900 serial (stored serial 15 surfaces as
+    // 1900-01-15), and OADate places every date in 1900-01-01..1900-02-28 one day later than its
+    // Excel serial — so ToOADate() here loaded an Excel-authored 1/15/1900 cell as serial 16, which
+    // then rendered and computed as 1/16/1900. The 1904 branch needs no such correction: that
+    // calendar has no phantom leap day, and ToOADate() - 1462 is exactly (date - 1904-01-01).
     private static ScalarValue MapDateTimeValue(DateTime dateTime, bool uses1904DateSystem) =>
-        new DateTimeValue(uses1904DateSystem ? dateTime.ToOADate() - Date1904EpochOADate : dateTime.ToOADate());
+        uses1904DateSystem
+            ? new DateTimeValue(dateTime.ToOADate() - Date1904EpochOADate)
+            : DateTimeValue.FromDateTime(dateTime);
 
     private static bool TryMapDateTimeValue(DateTimeValue value, bool uses1904DateSystem, out DateTime dateTime)
     {
@@ -193,7 +202,11 @@ internal static class XlsxClosedXmlCellMapper
 
         try
         {
-            dateTime = DateTime.FromOADate(uses1904DateSystem ? value.Value + Date1904EpochOADate : value.Value);
+            // Mirror image of MapDateTimeValue, so the serial ClosedXML writes back is the one the
+            // model holds (see that method's note on the 1900 phantom-leap-day offset).
+            dateTime = uses1904DateSystem
+                ? DateTime.FromOADate(value.Value + Date1904EpochOADate)
+                : value.ToDateTime();
             return true;
         }
         catch (ArgumentException)

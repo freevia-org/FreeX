@@ -1,5 +1,15 @@
 namespace FreeX.Core.Formula;
 
+/// <remarks>
+/// The 1900-system serial space here is the same one <see cref="FreeX.Core.Model.DateTimeValue"/>
+/// stores and converts (its FromDateTime/ToDateTime apply the identical phantom-1900-02-29
+/// correction), so a serial produced by either side is interpreted the same way by the other for
+/// every genuine date. The two deliberately diverge below serial 1 only: a sub-1 serial is a pure
+/// time of day, which DateTimeValue keeps anchored to the 1899-12-30 OADate zero point that the
+/// text/HTML writers use as their time-only sentinel, while <see cref="SerialToDate(double)"/>
+/// applies its correction uniformly. Only the time-of-day component is meaningful there, and it
+/// agrees in both.
+/// </remarks>
 internal static class ExcelDateSystem
 {
     private static readonly DateTime OleAutomationEpoch = new(1899, 12, 30);

@@ -136,7 +136,11 @@ internal static class DataValidationBoundsParser
             DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out currentCultureDate))
         {
-            oaDate = currentCultureDate.ToOADate();
+            // DateTimeValue.FromDateTime, not a bare ToOADate(): ValidateDate compares this bound
+            // against the cell's raw serial (DateTimeValue.Value / NumberValue.Value), so the bound
+            // has to live in the same Excel serial space. OADate places 1900-01-01..1900-02-28 one
+            // day high, which would make a "1/15/1900" bound miss a cell typed as 1/15/1900.
+            oaDate = DateTimeValue.FromDateTime(currentCultureDate).Value;
             return true;
         }
 

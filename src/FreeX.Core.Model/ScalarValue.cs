@@ -21,13 +21,39 @@ public sealed record BoolValue(bool Value) : ScalarValue;
 public sealed record TextValue(string Value) : ScalarValue;
 
 /// <summary>
-/// Represents a date/time value stored as an OLE Automation date (double).
-/// Excel stores dates as serial numbers; this preserves that representation.
+/// Represents a date/time value stored as an Excel serial number (double), exactly as the
+/// workbook file itself stores it: serial 1 is 1900-01-01, and the fractional part is the
+/// time of day.
 /// </summary>
+/// <remarks>
+/// An Excel serial is NOT the same as .NET's OLE Automation date. Excel's 1900 calendar contains
+/// a fictitious 1900-02-29 (serial 60) that never existed; .NET's OADate reserves no slot for it,
+/// so every genuine date in 1900-01-01..1900-02-28 sits exactly one day LATER in OADate space
+/// than its Excel serial (e.g. 1900-01-15 is OADate 16 but Excel serial 15). The conversions
+/// below correct for that, keeping this type's <see cref="Value"/> in the same serial space that
+/// the formula engine (FreeX.Core.Formula.ExcelDateSystem) and the number formatter already
+/// assume — without it, a date typed or loaded in that window computes and renders one day late.
+///
+/// The correction deliberately covers only the genuine-date range (serial &gt;= 1). A serial below
+/// 1 carries no date part at all — it is a pure time of day (see the time-only entries produced by
+/// the text/HTML readers) — and stays on the plain OADate convention, whose 1899-12-30 zero point
+/// is the sentinel those writers use to recognize a time-only value. Excel's own "day zero"
+/// (displayed as 1/0/1900) is not representable as a .NET <see cref="DateTime"/> either way.
+/// </remarks>
 public sealed record DateTimeValue(double Value) : ScalarValue
 {
-    public DateTime ToDateTime() => DateTime.FromOADate(Value);
-    public static DateTimeValue FromDateTime(DateTime dt) => new(dt.ToOADate());
+    // Excel serial 60 is the phantom 1900-02-29; serials 1..59 are the genuine dates that OADate
+    // shifts by a day. FakeLeapDayBoundary is the first date OADate and Excel agree on again.
+    private const double FirstDateSerial = 1;
+    private const double PhantomLeapDaySerial = 60;
+    private static readonly DateTime FirstDate = new(1900, 1, 1);
+    private static readonly DateTime FakeLeapDayBoundary = new(1900, 3, 1);
+
+    public DateTime ToDateTime() =>
+        DateTime.FromOADate(Value is >= FirstDateSerial and < PhantomLeapDaySerial ? Value + 1 : Value);
+
+    public static DateTimeValue FromDateTime(DateTime dt) =>
+        new(dt >= FirstDate && dt < FakeLeapDayBoundary ? dt.ToOADate() - 1 : dt.ToOADate());
 }
 
 /// <summary>Represents a cell error value (e.g. #DIV/0!, #VALUE!, #REF!).</summary>

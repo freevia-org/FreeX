@@ -323,7 +323,9 @@ public sealed partial class OdsFileAdapter
                 break;
             case DateTimeValue d when double.IsFinite(d.Value):
             {
-                var dt = DateTime.FromOADate(d.Value);
+                // ToDateTime (not a bare FromOADate) so the serial written back is the mirror of the
+                // one OdsFileAdapter.Read parsed — see DateTimeValue's 1900 serial note.
+                var dt = d.ToDateTime();
                 cellElement.SetAttributeValue(OfficeNs + "value-type", "date");
                 // Preserve a time component when present (no date part => time-of-day only is still valid).
                 var iso = dt.TimeOfDay == TimeSpan.Zero
