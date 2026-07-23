@@ -715,6 +715,33 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SlideCloner_CloneShape_PreservesShapeEffectsAndZeroExtentFlag()
+    {
+        var shape = MakeShape(1);
+        shape.HasExplicitZeroExtentTransform = true;
+        shape.Effects = new ShapeEffects
+        {
+            HasOuterShadow = true,
+            OuterShadowAlpha = 166,
+            OuterShadowBlurRadEmu = 50800,
+            OuterShadowDistEmu = 38100,
+            OuterShadowDirDeg = 45,
+            HasGlow = true,
+            GlowRadiusEmu = 25400,
+        };
+
+        var clone = SlideCloner.CloneShape(shape);
+
+        clone.HasExplicitZeroExtentTransform.Should().BeTrue();
+        clone.Effects.Should().NotBeNull();
+        clone.Effects.Should().NotBeSameAs(shape.Effects);
+        clone.Effects!.HasOuterShadow.Should().BeTrue();
+        clone.Effects.OuterShadowBlurRadEmu.Should().Be(50800);
+        clone.Effects.HasGlow.Should().BeTrue();
+        clone.Effects.GlowRadiusEmu.Should().Be(25400);
+    }
+
+    [Fact]
     public void SlideCloner_CloneShape_ClonesGroupChildren()
     {
         var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };

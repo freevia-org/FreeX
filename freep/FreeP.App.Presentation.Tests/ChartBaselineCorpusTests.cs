@@ -310,6 +310,13 @@ public sealed class ChartBaselineCorpusTests
         plan.Rings.Should().HaveCount(9);
         plan.ValueLabels.Select(label => label.Text)
             .Should().Equal("0", "10", "20", "30", "40", "50", "60", "70", "80", "90");
+        plan.ValueLabels.Should().OnlyContain(label =>
+            label.Bounds.X == plan.ValueLabels[0].Bounds.X &&
+            label.Bounds.Width == 48.0);
+        plan.ValueLabels[0].Bounds.X.Should().BeApproximately(
+            frame.Plot.X + frame.Plot.Width / 2 + ChartRenderPlanner.ImportedRadarCenterOffsetX - 58.0 +
+            ChartRenderPlanner.ImportedRadarValueLabelOffsetX,
+            0.0001);
         plan.CategoryLabels.Select(label => label.Text)
             .Should().Equal("Speed", "Power", "Agility", "Stamina", "Tech");
         plan.CategoryLabels.Should().OnlyContain(label => !label.Text.Contains("...", StringComparison.Ordinal));

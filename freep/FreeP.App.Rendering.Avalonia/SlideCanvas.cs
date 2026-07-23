@@ -33,6 +33,7 @@ public sealed class SlideCanvas : Control
 {
     private const double PowerPointDefaultLineSpacingFactor = 1.18;
     private const double PowerPointFixedTextLineSpacingFactor = 1.20;
+    private const double ImportedRadarValueLabelAvaloniaYCompensation = 3.0;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -1705,7 +1706,21 @@ public sealed class SlideCanvas : Control
             dc.DrawLine(spokePen, ToPoint(spoke.Start), ToPoint(spoke.End));
 
         foreach (var label in plan.ValueLabels)
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+        {
+            var labelBounds = ToRect(label.Bounds);
+            if (plan.Rings.Count == 9 &&
+                plan.CategoryLabels.Count == 5 &&
+                plan.Series.Count == 2)
+            {
+                labelBounds = new Rect(
+                    labelBounds.X,
+                    labelBounds.Y + ImportedRadarValueLabelAvaloniaYCompensation,
+                    labelBounds.Width,
+                    labelBounds.Height);
+            }
+
+            DrawChartLabel(dc, label.Text, labelBounds, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+        }
 
         foreach (var label in plan.CategoryLabels)
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
@@ -2150,34 +2165,38 @@ public sealed class SlideCanvas : Control
         }
 
         var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);
+        double importedAptosBodyOriginOffsetY =
+            TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY(renderText);
         foreach (var placement in plan.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
+            double placementY = placement.Y - importedAptosBodyOriginOffsetY;
 
             if (placement.Bullet is { } bullet)
             {
+                bullet = bullet with { Y = bullet.Y - importedAptosBodyOriginOffsetY };
                 DrawBulletPlacementAvalonia(dc, bullet);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
             {
                 case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placement.Y);
+                    RenderParaWithMath(dc, para, placement.X, placementY);
                     break;
                 case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, renderText);
+                    RenderParaWithEffects(dc, para, placement.X, placementY, bounds, renderText);
                     break;
                 case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
+                    RenderParaWithTabs(dc, para, placement.X, placementY, para.TabStops);
                     break;
                 case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
+                    RenderParaWithBaseline(dc, para, placement.X, placementY, placement.MaxWidthDip);
                     break;
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
                         ft.MaxTextWidth = placement.MaxWidthDip;
-                    dc.DrawText(ft, new Point(placement.X, placement.Y));
+                    dc.DrawText(ft, new Point(placement.X, placementY));
                     break;
             }
         }

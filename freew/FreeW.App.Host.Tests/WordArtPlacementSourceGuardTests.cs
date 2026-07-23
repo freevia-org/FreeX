@@ -25,6 +25,8 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("preserveOpaqueGlowFill");
         wpf.Should().Contain("Style: WordArtStyle.GlowBlue,");
         wpf.Should().Contain("BlurRadius = 2");
+        wpf.Should().Contain("var isImportedFreeWGlowBlue = wordArt is");
+        wpf.Should().Contain("Canvas.SetTop(fillLayer, -6);");
         wpf.Should().Contain("var isPrimaryGlowBlueStress = wordArt is");
         wpf.Should().Contain("Text: \"FreeW CONFIDENTIAL\",");
         wpf.Should().Contain("fillLayer.Width = canvas.ActualWidth + 8;");
@@ -38,6 +40,8 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("var preserveOpaqueGlowGoldFill = wordArt is");
         wpf.Should().Contain("Text: \"FORMAT\",");
         wpf.Should().Contain("Style: WordArtStyle.GlowGold,");
+        wpf.Should().Contain("if (wordArt.Style == WordArtStyle.GlowGold)");
+        wpf.Should().Contain("Color.FromRgb(0xD8, 0xBA, 0x66)");
         wpf.Should().Contain("glowColor: glowColor");
         wpf.Should().Contain("var isImportedGradFillMultiArchUp = wordArt is");
         wpf.Should().Contain("Style: WordArtStyle.GradFillMulti,");
