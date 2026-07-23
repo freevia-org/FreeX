@@ -253,6 +253,126 @@ public sealed class KeyboardContextParityTests
     }
 
     [Fact]
+    public async Task AvaloniaAltKeyTipsOpenRenderedCollapsedGroupOverflowScope()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.MinWidth = 0;
+                window.Width = 800;
+                window.Height = 600;
+                window.Show();
+
+                var ribbon = window.RibbonControlForTests!;
+                var definition = FreePRibbonAvalonia.Build();
+                var home = definition.Tabs.Single(tab => tab.Id == "home");
+                Button? collapsedButton = null;
+
+                foreach (var width in new[] { 800d, 680d, 560d })
+                {
+                    window.Width = width;
+                    Dispatcher.UIThread.RunJobs();
+                    collapsedButton = ribbon
+                        .GetVisualDescendants()
+                        .OfType<Button>()
+                        .FirstOrDefault(button => (button.Tag as string)?.StartsWith("collapsed:", StringComparison.Ordinal) == true);
+                    if (collapsedButton is not null)
+                        break;
+                }
+
+                collapsedButton.Should().NotBeNull("the rendered ribbon must expose an overflow button at a constrained width");
+                var groupId = (collapsedButton!.Tag as string)!["collapsed:".Length..];
+                var group = home.Groups.Single(candidate => candidate.Id == groupId);
+                var usedGroupKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var collapsedGroupKeyTip = home.Groups
+                    .Select(candidate =>
+                    {
+                        var keyTip = RibbonCollapsedGroupPresentationPlanner.DeriveGroupKeyTip(
+                            candidate.Header,
+                            usedGroupKeyTips);
+                        return (candidate, keyTip);
+                    })
+                    .Single(entry => entry.candidate.Id == group.Id)
+                    .keyTip;
+
+                Press(window, Key.LeftAlt).Handled.Should().BeTrue();
+                PressKeyTip(window, home.KeyTip!);
+                PressKeyTip(window, collapsedGroupKeyTip);
+
+                window.RibbonKeyTipMenuOpenForTests.Should().BeTrue();
+                window.RibbonKeyTipFlyoutOpenForTests.Should().BeTrue();
+                window.RibbonKeyTipRenderedMenuItemsForTests.Should().NotBeEmpty(
+                    "collapsed-group key tips must bind to the actual renderer-created overflow items");
+
+                Press(window, Key.Escape).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+                window.RibbonKeyTipMenuOpenForTests.Should().BeFalse();
+                window.RibbonKeyTipFlyoutOpenForTests.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task RendererBackedNestedKeyTipTraversalOpensVisibleChildSubmenu()
+    {
+        await Session.Dispatch(() =>
+        {
+            var commandId = new RibbonCommandId("test.nested.menu.leaf");
+            var menu = new RibbonMenu([
+                new RibbonMenuItem(
+                    "More",
+                    KeyTip: "M",
+                    Children: [new RibbonMenuItem("Leaf", commandId, "L")])
+            ]);
+            var definition = new RibbonDefinitionBuilder()
+                .Tab("home", "Home", "H", tab => tab.Group("test", "Test", "T", 100, group =>
+                    group.Dropdown("test.nested.menu", "More", menu)))
+                .Build();
+            var registry = new RibbonCommandRegistry();
+            registry.Register(commandId, new ActionRibbonCommand(() => { }));
+            var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
+            var host = new Window
+            {
+                Width = 600,
+                Height = 200,
+                Content = ribbon,
+            };
+            var window = new MainWindow([]);
+            MenuFlyout? flyout = null;
+            try
+            {
+                host.Show();
+                var dropdown = ribbon
+                    .GetVisualDescendants()
+                    .OfType<Button>()
+                    .Single(button => button.Flyout is MenuFlyout);
+                flyout = (MenuFlyout)dropdown.Flyout!;
+                flyout.ShowAt(dropdown);
+                var parent = flyout.Items.OfType<MenuItem>().Single();
+
+                window.SetRibbonKeyTipMenuScopeForTests(menu, flyout);
+                window.HandleRibbonMenuKeyTipForTests("M").Should().BeTrue();
+                parent.IsSubMenuOpen.Should().BeTrue(
+                    "deeper key-tip traversal must open the visible renderer submenu");
+                window.RibbonKeyTipRenderedMenuItemsForTests
+                    .Should().ContainSingle(item => Equals(item.Header, "Leaf"));
+            }
+            finally
+            {
+                flyout?.Hide();
+                host.Close();
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task RendererBackedLargeSplitKeyTipLookupOpensDropdownFlyout()
     {
         await Session.Dispatch(() =>
