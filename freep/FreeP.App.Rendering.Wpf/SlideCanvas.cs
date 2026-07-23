@@ -28,6 +28,7 @@ public sealed class SlideCanvas : FrameworkElement
 {
     private const double ImportedAptosWpfRasterScale = 0.95;
     private const double ImportedAptosBodyWpfRasterScale = 0.957;
+    private const double ImportedAptosBodyWpfLightRasterScale = 1.016;
     private const double ImportedAptosDisplayWpfRasterScaleY = 0.86;
     private const double ImportedRadarAgilityLabelOffsetX = 35.0;
     private const double ImportedRadarStaminaLabelOffsetX = -51.0;
@@ -2187,10 +2188,14 @@ public sealed class SlideCanvas : FrameworkElement
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
                         ft.MaxTextWidth = placement.MaxWidthDip;
                     bool useImportedAptosDisplayRasterScale = UsesImportedAptosDisplayFont(para);
+                    // The exact imported Aptos body signature falls back to a heavier WPF font;
+                    // keep its measured layout, but tune only the host fallback paint weight.
+                    if (useImportedAptosBodyRasterScale)
+                        ft.SetFontWeight(FontWeights.Light, 0, ft.Text.Length);
                     if (useImportedAptosRasterScale)
                     {
                         double scaleX = useImportedAptosBodyRasterScale
-                            ? ImportedAptosBodyWpfRasterScale
+                            ? ImportedAptosBodyWpfLightRasterScale
                             : ImportedAptosWpfRasterScale;
                         double centerX = para.Align == TextAlign.Center
                             ? bounds.X + bounds.Width * 0.5
