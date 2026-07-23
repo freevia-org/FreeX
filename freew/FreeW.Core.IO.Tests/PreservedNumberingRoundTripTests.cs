@@ -397,6 +397,63 @@ public class PreservedNumberingRoundTripTests
         emittedNumIds.Should().Contain(numId);
     }
 
+    [Fact]
+    public void ForeignNumbering_InNonBodyStories_SurvivesRoundTrip()
+    {
+        var source = ReadDoc(AuthorForeignNumberingPackage());
+        var document = new TextDocument();
+        document.Preserved.OriginalNumbering = new XElement(source.Preserved.OriginalNumbering!);
+
+        Paragraph StoryParagraph(string text, int level) => new(text)
+        {
+            PreservedNumbering = new PreservedNumbering(12, level)
+        };
+
+        var header = new HeaderFooter();
+        header.Paragraphs.Add(StoryParagraph("Header item", 0));
+        document.Header = header;
+
+        var footnote = new Footnote(1);
+        footnote.Content.Add(StoryParagraph("Footnote item", 1));
+        document.Footnotes[footnote.Id] = footnote;
+
+        var endnote = new Endnote(1);
+        endnote.Content.Add(StoryParagraph("Endnote item", 2));
+        document.Endnotes[endnote.Id] = endnote;
+
+        var comment = new Comment(0, string.Empty, author: "A", initials: "A");
+        comment.Content[0] = StoryParagraph("Comment item", 0);
+        document.Comments[comment.Id] = comment;
+
+        var bytes = WriteBytes(document);
+        HasEntry(bytes, "word/numbering.xml").Should().BeTrue();
+        var emittedNumIds = EntryXml(bytes, "word/numbering.xml").Root!.Elements(W + "num")
+            .Select(element => element.Attribute(W + "numId")!.Value).ToHashSet();
+
+        string AssertStoryNumPr(string path, string text, string expectedLevel)
+        {
+            var paragraph = EntryXml(bytes, path).Descendants(W + "p")
+                .Single(element => string.Concat(element.Descendants(W + "t").Select(t => t.Value)) == text);
+            var numPr = paragraph.Element(W + "pPr")!.Element(W + "numPr")!;
+            var numId = numPr.Element(W + "numId")!.Attribute(W + "val")!.Value;
+            emittedNumIds.Should().Contain(numId);
+            numPr.Element(W + "ilvl")!.Attribute(W + "val")!.Value.Should().Be(expectedLevel);
+            return numId;
+        }
+
+        var remappedNumId = int.Parse(AssertStoryNumPr("word/header1.xml", "Header item", "0"));
+        AssertStoryNumPr("word/footnotes.xml", "Footnote item", "1").Should().Be(remappedNumId.ToString());
+        AssertStoryNumPr("word/endnotes.xml", "Endnote item", "2").Should().Be(remappedNumId.ToString());
+        AssertStoryNumPr("word/comments.xml", "Comment item", "0").Should().Be(remappedNumId.ToString());
+
+        var reread = ReadDoc(bytes);
+        reread.Header!.Paragraphs.Single(paragraph => paragraph.PlainText == "Header item")
+            .PreservedNumbering.Should().Be(new PreservedNumbering(remappedNumId, 0));
+        reread.Footnotes[1].Content.Single().PreservedNumbering.Should().Be(new PreservedNumbering(remappedNumId, 1));
+        reread.Endnotes[1].Content.Single().PreservedNumbering.Should().Be(new PreservedNumbering(remappedNumId, 2));
+        reread.Comments[0].Content.Single().PreservedNumbering.Should().Be(new PreservedNumbering(remappedNumId, 0));
+    }
+
     // --- Disjoint id space: FreeW-authored list + foreign numbering coexist -------------------------
 
     [Fact]
