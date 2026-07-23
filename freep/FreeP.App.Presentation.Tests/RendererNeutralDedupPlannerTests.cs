@@ -412,6 +412,16 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfRelaxedInsetRouteUsesTheSharedMaterialGuardForRoundedGeometry()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+
+        wpf.Should().Contain("GetShapeRenderGeometry(shape, materialPlan)");
+        wpf.Should().Contain("materialPlan.Kind == ImportedShapeMaterialKind.RelaxedInset");
+        wpf.Should().Contain("new RectangleGeometry");
+    }
+
+    [Fact]
     public void WpfAndAvaloniaMediaAdapters_ConsumeOneSharedInteractionPlan()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowMediaController.cs");

@@ -294,6 +294,8 @@ public sealed class SlideCanvas : FrameworkElement
             && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
 
         var bounds = shape.BoundsDip;
+        var materialPlan = ShapeMaterialRenderPlanner.Plan(shape);
+        var shapeGeometry = GetShapeRenderGeometry(shape, materialPlan);
         var renderTransform = ShapeTransformPlanner.PlanShapeRenderTransform(shape);
         bool hasTransform = !renderTransform.IsIdentity;
 
@@ -304,9 +306,8 @@ public sealed class SlideCanvas : FrameworkElement
 
         // Effects: draw before the shape (painter's algorithm — shadow behind shape)
         if (shape.Effects is not null)
-            RenderShapeEffects(dc, shape);
+            RenderShapeEffects(dc, shape, shapeGeometry);
 
-        var materialPlan = ShapeMaterialRenderPlanner.Plan(shape);
         if (materialPlan.Kind == ImportedShapeMaterialKind.IsometricCrossDepth)
             RenderImportedShapeDepth(dc, shape, materialPlan);
 
@@ -328,21 +329,20 @@ public sealed class SlideCanvas : FrameworkElement
         else if (shape.Geometry.Contours.Count > 0)
         {
             // Draw geometry
-            var geometry = ContourListToGeometry(shape.Geometry);
             var fillBrush = MakeBrush(shape.Fill, bounds);
             var pen = shape.Effects?.HasSoftEdge == true ? null : MakePen(shape.Outline);
-            dc.DrawGeometry(fillBrush, pen, geometry);
+            dc.DrawGeometry(fillBrush, pen, shapeGeometry);
 
             if (materialPlan.Kind == ImportedShapeMaterialKind.Circle)
-                RenderImportedShapeMaterial(dc, materialPlan, geometry);
+                RenderImportedShapeMaterial(dc, materialPlan, shapeGeometry);
         }
 
         // Bevel overlay: painted ON TOP of the fill (but before text)
         if (shape.Effects is not null)
-            RenderShapeBevel(dc, shape);
+            RenderShapeBevel(dc, shape, shapeGeometry);
 
         if (materialPlan.Kind is ImportedShapeMaterialKind.RelaxedInset or ImportedShapeMaterialKind.Angle)
-            RenderImportedShapeMaterial(dc, materialPlan, ContourListToGeometry(shape.Geometry));
+            RenderImportedShapeMaterial(dc, materialPlan, shapeGeometry);
 
         // Draw text overlay
         if (shape.Text is not null)
@@ -352,7 +352,7 @@ public sealed class SlideCanvas : FrameworkElement
             dc.Pop();
     }
 
-    private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)
+    private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape, Geometry shapeGeometry)
     {
         if (shape.Geometry.Contours.Count == 0) return;
         if (shape.Text is not null && shape.Fill is ResolvedFill.None) return;
@@ -360,7 +360,6 @@ public sealed class SlideCanvas : FrameworkElement
 
         if (plan.ShadowPasses.Count > 0)
         {
-            var shadowGeo = ContourListToGeometry(shape.Geometry);
             for (int passIndex = 0; passIndex < plan.ShadowPasses.Count; passIndex++)
             {
                 var pass = plan.ShadowPasses[passIndex];
@@ -372,14 +371,13 @@ public sealed class SlideCanvas : FrameworkElement
                     Color.FromArgb(alpha, pass.Color.R, pass.Color.G, pass.Color.B));
                 if (shadowBrush.CanFreeze) shadowBrush.Freeze();
                 dc.PushTransform(new TranslateTransform(pass.OffsetX, pass.OffsetY));
-                dc.DrawGeometry(shadowBrush, null, shadowGeo);
+                dc.DrawGeometry(shadowBrush, null, shapeGeometry);
                 dc.Pop();
             }
         }
 
         if (plan.GlowPasses.Count > 0)
         {
-            var glowGeo = ContourListToGeometry(shape.Geometry);
             foreach (var pass in plan.GlowPasses)
             {
                 var glowBrush = new SolidColorBrush(
@@ -387,13 +385,12 @@ public sealed class SlideCanvas : FrameworkElement
                 if (glowBrush.CanFreeze) glowBrush.Freeze();
                 var glowPen = new Pen(glowBrush, pass.StrokeWidthDip);
                 if (glowPen.CanFreeze) glowPen.Freeze();
-                dc.DrawGeometry(null, glowPen, glowGeo);
+                dc.DrawGeometry(null, glowPen, shapeGeometry);
             }
         }
 
         if (plan.SoftEdgePasses.Count > 0)
         {
-            var softEdgeGeo = ContourListToGeometry(shape.Geometry);
             var fillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
             if (fillBrush is not null)
             {
@@ -401,7 +398,7 @@ public sealed class SlideCanvas : FrameworkElement
                 {
                     var softEdgePen = new Pen(fillBrush, pass.StrokeWidthDip * SoftEdgeOuterSpreadScale);
                     dc.PushOpacity(pass.Alpha / 255.0);
-                    dc.DrawGeometry(null, softEdgePen, softEdgeGeo);
+                    dc.DrawGeometry(null, softEdgePen, shapeGeometry);
                     dc.Pop();
                 }
             }
@@ -489,7 +486,7 @@ public sealed class SlideCanvas : FrameworkElement
     /// Called AFTER the shape geometry has been painted so the overlay sits on top.
     /// Also draws the contour outline if one is requested.
     /// </summary>
-    private static void RenderShapeBevel(DrawingContext dc, DrawOp.Shape shape)
+    private static void RenderShapeBevel(DrawingContext dc, DrawOp.Shape shape, Geometry shapeGeometry)
     {
         var fx = shape.Effects;
         if (fx is null) return;
@@ -500,13 +497,12 @@ public sealed class SlideCanvas : FrameworkElement
 
         if (shape.Geometry.Contours.Count == 0) return;
 
-        var geo    = ContourListToGeometry(shape.Geometry);
         var bounds = shape.BoundsDip;
 
         if (hasBevel && fx.BevelTop is not null)
         {
             var (highlight, shade) = BevelGeometryHelper.ComputeBevelRegions(bounds, fx.BevelTop, fx.LightDirDeg);
-            DrawBevelOverlay(dc, geo, bounds, highlight, shade,
+            DrawBevelOverlay(dc, shapeGeometry, bounds, highlight, shade,
                 fx.BevelTop.WidthDip, fx.BevelTop.HeightDip, fx.BevelTop.PresetName);
         }
 
@@ -518,8 +514,27 @@ public sealed class SlideCanvas : FrameworkElement
             if (contourBrush.CanFreeze) contourBrush.Freeze();
             var contourPen = new Pen(contourBrush, Math.Max(0.5, fx.ContourWidthDip));
             if (contourPen.CanFreeze) contourPen.Freeze();
-            dc.DrawGeometry(null, contourPen, geo);
+            dc.DrawGeometry(null, contourPen, shapeGeometry);
         }
+    }
+
+    private static Geometry GetShapeRenderGeometry(
+        DrawOp.Shape shape,
+        ShapeMaterialRenderPlan materialPlan)
+    {
+        if (materialPlan.Kind == ImportedShapeMaterialKind.RelaxedInset)
+        {
+            var bounds = shape.BoundsDip;
+            var radius = Math.Min(bounds.Width, bounds.Height) * 0.16;
+            var geometry = new RectangleGeometry(
+                new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height),
+                radius,
+                radius);
+            if (geometry.CanFreeze) geometry.Freeze();
+            return geometry;
+        }
+
+        return ContourListToGeometry(shape.Geometry);
     }
 
     private static void DrawBevelOverlay(
