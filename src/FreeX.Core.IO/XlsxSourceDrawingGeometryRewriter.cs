@@ -94,9 +94,11 @@ internal static class XlsxSourceDrawingGeometryRewriter
 
     /// <summary>
     /// Walks the drawing's anchors in the same document order the reader uses
-    /// (<see cref="XlsxWorksheetDrawingPartReader"/>: all &lt;xdr:pic&gt; in order, then all &lt;xdr:sp&gt;
-    /// in order classified into text boxes vs shapes exactly like the reader, then all &lt;xdr:cxnSp&gt;
-    /// appended to the shapes sequence).
+    /// (<see cref="XlsxWorksheetDrawingPartReader"/>: all &lt;xdr:pic&gt; in order; &lt;xdr:sp&gt; and
+    /// &lt;xdr:cxnSp&gt; classified into text boxes vs. shapes/connectors via a SINGLE combined
+    /// document-order pass, exactly mirroring <c>XlsxWorksheetDrawingParts.ReadShapeAndTextBoxParts</c>'s
+    /// own R78-io-shape-geometry-5-2 fix -- see the R81-io-drawing-shape-cxnsp-order comment below for why
+    /// this must NOT be two separate per-element-name passes).
     /// <para>
     /// <see cref="XlsxWorksheetDrawingObjectWriter"/> only ever emits NEW (non-source-loaded) objects, and
     /// always writes them BEFORE <see cref="XlsxWorksheetDrawingPartMerger"/> appends the untouched
@@ -150,46 +152,57 @@ internal static class XlsxSourceDrawingGeometryRewriter
 
         var textBoxElements = new List<XElement>();
         var shapeElements = new List<XElement>();
-        foreach (var shapeElement in drawingRoot.Descendants(SpreadsheetDrawingNs + "sp"))
+        // R81-io-drawing-shape-cxnsp-order fix: walk <xdr:sp> and <xdr:cxnSp> together in a SINGLE
+        // document-order pass, exactly mirroring XlsxWorksheetDrawingParts.ReadShapeAndTextBoxParts's own
+        // R78-io-shape-geometry-5-2 fix. Two SEPARATE Descendants() passes (every <xdr:sp> first, THEN
+        // every <xdr:cxnSp>) silently reordered shapeElements relative to sourceShapes -- which the reader
+        // builds via that single combined pass, preserving the drawing's true authored order -- whenever a
+        // drawing part mixed shapes and connectors in any order other than "every sp before every cxnSp"
+        // (e.g. a connector authored before a later shape). That desynchronized the positional Zip
+        // alignment below: a resize applied to one shape's model got silently written onto a completely
+        // different shape/connector's XML element (and vice versa) on save.
+        foreach (var shapeElement in drawingRoot.Descendants())
         {
-            if (shapeElement.Ancestors(MarkupCompatNs + "Fallback").Any())
-                continue;
-
-            // R72-io-drawing-anchors-4-1/R78-io-drawing-grpsp-move: a shape nested inside an xdr:grpSp
-            // is positioned relative to the group's own xdr:xfrm, not by its own top-level anchor -- it
-            // stays in this candidate list (for positional Zip alignment against sourceShapes below,
-            // which includes group children too) but is routed to RewriteGroupChildGeometry rather than
-            // ever being matched against the group's shared anchor.
-            var isTextBox = shapeElement
-                .Element(SpreadsheetDrawingNs + "nvSpPr")?
-                .Element(SpreadsheetDrawingNs + "cNvSpPr")?
-                .Attribute("txBox")?.Value == "1";
-
-            // R62-io-drawing-textbox-6-3: mirror XlsxWorksheetDrawingParts.ReadSpElement's identical
-            // gate -- route purely on the txBox="1" marker, not on non-empty text, so an emptied
-            // (text-deleted) text box still zips up against sheet.TextBoxes here instead of shifting
-            // into shapeElements and desynchronizing the index-based Zip alignment below.
-            if (isTextBox)
+            if (shapeElement.Name == SpreadsheetDrawingNs + "sp")
             {
-                textBoxElements.Add(shapeElement);
-                continue;
+                if (shapeElement.Ancestors(MarkupCompatNs + "Fallback").Any())
+                    continue;
+
+                // R72-io-drawing-anchors-4-1/R78-io-drawing-grpsp-move: a shape nested inside an xdr:grpSp
+                // is positioned relative to the group's own xdr:xfrm, not by its own top-level anchor --
+                // it stays in this candidate list (for positional Zip alignment against sourceShapes
+                // below, which includes group children too) but is routed to RewriteGroupChildGeometry
+                // rather than ever being matched against the group's shared anchor.
+                var isTextBox = shapeElement
+                    .Element(SpreadsheetDrawingNs + "nvSpPr")?
+                    .Element(SpreadsheetDrawingNs + "cNvSpPr")?
+                    .Attribute("txBox")?.Value == "1";
+
+                // R62-io-drawing-textbox-6-3: mirror XlsxWorksheetDrawingParts.ReadSpElement's identical
+                // gate -- route purely on the txBox="1" marker, not on non-empty text, so an emptied
+                // (text-deleted) text box still zips up against sheet.TextBoxes here instead of shifting
+                // into shapeElements and desynchronizing the index-based Zip alignment below.
+                if (isTextBox)
+                {
+                    textBoxElements.Add(shapeElement);
+                    continue;
+                }
+
+                var preset = shapeElement
+                    .Element(SpreadsheetDrawingNs + "spPr")?
+                    .Element(drawingNs + "prstGeom")?
+                    .Attribute("prst")?
+                    .Value;
+                if (DrawingMlPresetGeometryMap.TryGetShapeKind(preset, out _))
+                    shapeElements.Add(shapeElement);
             }
+            else if (shapeElement.Name == SpreadsheetDrawingNs + "cxnSp")
+            {
+                if (shapeElement.Ancestors(MarkupCompatNs + "Fallback").Any())
+                    continue;
 
-            var preset = shapeElement
-                .Element(SpreadsheetDrawingNs + "spPr")?
-                .Element(drawingNs + "prstGeom")?
-                .Attribute("prst")?
-                .Value;
-            if (DrawingMlPresetGeometryMap.TryGetShapeKind(preset, out _))
                 shapeElements.Add(shapeElement);
-        }
-
-        foreach (var connectorElement in drawingRoot.Descendants(SpreadsheetDrawingNs + "cxnSp"))
-        {
-            if (connectorElement.Ancestors(MarkupCompatNs + "Fallback").Any())
-                continue;
-
-            shapeElements.Add(connectorElement);
+            }
         }
 
         var textBoxAnchors = textBoxElements.Skip(Math.Max(0, textBoxElements.Count - sourceTextBoxes.Count));
@@ -607,10 +620,27 @@ internal static class XlsxSourceDrawingGeometryRewriter
             // ScaleX/ScaleY are the plain magnitude-only chOff/chExt-to-off/ext scale product (see
             // DrawingGroupTransform) -- exactly what ReadDrawingXfrmExtent multiplied by to produce the
             // model's Width/Height, so dividing by it here recovers the element's own pre-scale local size.
-            var localCxEmu = DrawingMlUnits.PixelsToEmu(widthPixels) / groupTransform.ScaleX;
-            var localCyEmu = DrawingMlUnits.PixelsToEmu(heightPixels) / groupTransform.ScaleY;
-            changed |= SetExtentAttribute(ext, "cx", DrawingMlUnits.EmuToPixels(localCxEmu));
-            changed |= SetExtentAttribute(ext, "cy", DrawingMlUnits.EmuToPixels(localCyEmu));
+            //
+            // R81-io-drawing-grpsp-lineflat fix: mirror RewriteShapeXfrmExtent's ParsesPositive guard --
+            // only rewrite an axis whose SOURCE ext value is already positive. A grouped line-like
+            // connector (a horizontal/vertical straight connector) can legitimately carry an intentional
+            // zero on one axis (see DrawingShapeKindSupport.IsLineLike); ComputeGroupTransform's caller
+            // (ReadDrawingXfrmExtent) reports that axis to ApplyToShape, which -- because the axis is
+            // exactly zero -- never overwrites the model's default (non-zero) Width/Height there (it can't
+            // faithfully round-trip an intentional zero through the model). Without this guard, rewriting
+            // both axes unconditionally from the model clobbered that intentional zero with the model's
+            // bogus default-derived size on every save, turning a flat line diagonal.
+            if (ParsesPositive(ext.Attribute("cx")))
+            {
+                var localCxEmu = DrawingMlUnits.PixelsToEmu(widthPixels) / groupTransform.ScaleX;
+                changed |= SetExtentAttribute(ext, "cx", DrawingMlUnits.EmuToPixels(localCxEmu));
+            }
+
+            if (ParsesPositive(ext.Attribute("cy")))
+            {
+                var localCyEmu = DrawingMlUnits.PixelsToEmu(heightPixels) / groupTransform.ScaleY;
+                changed |= SetExtentAttribute(ext, "cy", DrawingMlUnits.EmuToPixels(localCyEmu));
+            }
         }
 
         return changed;
