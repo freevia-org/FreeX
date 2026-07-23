@@ -17,6 +17,15 @@ public class ShapeRoundTripTests
     private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Wps = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
 
+    private static Shape TextBoxWithHyperlink(string text, string url)
+    {
+        var shape = new Shape(ShapeKind.TextBox, 180, 72);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(text) { HyperlinkUrl = url });
+        shape.TextParagraphs.Add(paragraph);
+        return shape;
+    }
+
     private static TextDocument RoundTrip(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -109,6 +118,52 @@ public class ShapeRoundTripTests
         roundTripped.TextParagraphs.Should().HaveCount(2);
         roundTripped.TextParagraphs[0].PlainText.Should().Be("First line");
         roundTripped.TextParagraphs[1].PlainText.Should().Be("Second line");
+    }
+
+    [Fact]
+    public void TextBoxHyperlinks_UseOwningStoryRelationships_AndRoundTrip()
+    {
+        const string bodyUrl = "https://example.com/textbox-body";
+        const string headerUrl = "https://example.com/textbox-header";
+
+        var document = DocumentWith(TextBoxWithHyperlink("Body link", bodyUrl));
+        var header = new HeaderFooter();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(Run.FromShape(TextBoxWithHyperlink("Header link", headerUrl)));
+        header.Paragraphs.Add(headerParagraph);
+        document.FinalSectionHeadersFooters.Header = header;
+
+        byte[] bytes;
+        using (var stream = new MemoryStream())
+        {
+            DocxWriter.Write(document, stream);
+            bytes = stream.ToArray();
+        }
+
+        using (var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        {
+            string ReadEntry(string path)
+            {
+                using var reader = new StreamReader(zip.GetEntry(path)!.Open());
+                return reader.ReadToEnd();
+            }
+
+            var documentXml = XDocument.Parse(ReadEntry("word/document.xml"));
+            var headerXml = XDocument.Parse(ReadEntry("word/header1.xml"));
+            documentXml.Descendants(W + "txbxContent").Descendants(W + "hyperlink").Should().ContainSingle();
+            headerXml.Descendants(W + "txbxContent").Descendants(W + "hyperlink").Should().ContainSingle();
+
+            ReadEntry("word/_rels/document.xml.rels").Should().Contain(bodyUrl).And.NotContain(headerUrl);
+            ReadEntry("word/_rels/header1.xml.rels").Should().Contain(headerUrl).And.NotContain(bodyUrl);
+        }
+
+        var roundTripped = DocxReader.Read(new MemoryStream(bytes));
+        var bodyShape = roundTripped.Paragraphs.Single().Runs.Single(run => run.Shape is not null).Shape!;
+        var headerShape = roundTripped.FinalSectionHeadersFooters.Header!.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.Shape is not null).Shape!;
+        bodyShape.TextParagraphs.Single().Runs.Single().HyperlinkUrl.Should().Be(bodyUrl);
+        headerShape.TextParagraphs.Single().Runs.Single().HyperlinkUrl.Should().Be(headerUrl);
     }
 
     [Fact]
