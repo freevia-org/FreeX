@@ -134,6 +134,34 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithMutatedVmlTextRotation(TextDocument document, double rotationDegrees)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            var shape = xml.Descendants(vml + "shape")
+                .Single(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject");
+            var style = shape.Attribute("style")!.Value;
+            shape.SetAttributeValue("style", style.Replace(
+                "rotation:315",
+                $"rotation:{rotationDegrees.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+                StringComparison.Ordinal));
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument ReadWithMutatedVmlTextShapeType(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -412,6 +440,20 @@ public class WatermarkOptionsRoundTripTests
         var reopened = RoundTrip(loaded);
         XElement.Parse(reopened.Page.WatermarkOptions!.NativeVmlTextShapeTypeXml!)
             .Attribute("path")!.Value.Should().Be("m0,0l21600,0e");
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_PreservesExplicitShapeRotation()
+    {
+        var loaded = ReadWithMutatedVmlTextRotation(new TextDocument
+        {
+            Page = { WatermarkOptions = new WatermarkOptions("AUTHORITATIVE") }
+        }, 300.5);
+
+        loaded.Page.WatermarkOptions!.NativeVmlTextRotationDegrees.Should().BeApproximately(300.5, 0.001);
+        ReadHeaderXml(loaded).Descendants(XNamespace.Get("urn:schemas-microsoft-com:vml") + "shape")
+            .Single(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject")
+            .Attribute("style")!.Value.Should().Contain("rotation:300.5");
     }
 
     [Fact]

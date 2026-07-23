@@ -5135,6 +5135,7 @@ public static class DocxReader
                         NativeVmlTextWidthPt = textWidthPt > 0 ? textWidthPt : null,
                         NativeVmlTextHeightPt = textHeightPt > 0 ? textHeightPt : null,
                         NativeVmlTextFitShape = fitShape,
+                        NativeVmlTextRotationDegrees = rotation,
                         NativeVmlTextShapeTypeXml = shapeTypeXml
                     };
                     return;
@@ -5154,6 +5155,7 @@ public static class DocxReader
                     NativeVmlTextWidthPt = textWidthPt > 0 ? textWidthPt : null,
                     NativeVmlTextHeightPt = textHeightPt > 0 ? textHeightPt : null,
                     NativeVmlTextFitShape = fitShape,
+                    NativeVmlTextRotationDegrees = rotation,
                     NativeVmlTextShapeTypeXml = shapeTypeXml
                 };
                 return;

@@ -66,8 +66,22 @@ public static class WatermarkVisualPlanner
             YDip: (pageHeightDip - height) / 2,
             WidthDip: width,
             HeightDip: height,
-            RotationDegrees: options.Layout == WatermarkLayout.Diagonal ? -45 : 0,
+            RotationDegrees: ResolveTextPathRotationDegrees(options),
             FitsShape: options.NativeVmlTextFitShape != false);
+    }
+
+    private static double ResolveTextPathRotationDegrees(WatermarkOptions options)
+    {
+        if (options.NativeVmlTextRotationDegrees is not { } nativeRotation
+            || !double.IsFinite(nativeRotation))
+        {
+            return options.Layout == WatermarkLayout.Diagonal ? -45 : 0;
+        }
+
+        var normalized = nativeRotation % 360;
+        return normalized > 180 ? normalized - 360
+            : normalized <= -180 ? normalized + 360
+            : normalized;
     }
 
     public static double ResolveTextPathFontSize(TextWatermarkLayoutPlan plan, double unitTextWidthDip)

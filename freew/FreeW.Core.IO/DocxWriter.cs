@@ -1301,7 +1301,10 @@ public static class DocxWriter
         var color = NormalizeHex(options.FontColorHex, "808080");
         var opacity = Math.Clamp(options.Opacity, 0, 1)
             .ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
-        var rotation = options.Layout == WatermarkLayout.Diagonal ? "315" : "0";
+        var rotation = options.NativeVmlTextRotationDegrees is { } nativeRotation
+            && double.IsFinite(nativeRotation)
+            ? nativeRotation.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
+            : options.Layout == WatermarkLayout.Diagonal ? "315" : "0";
         var shapeId = watermarkImage is null ? "PowerPlusWaterMarkObject" : "PowerPlusPictureWaterMarkObject";
         var nativeTextShapeType = watermarkImage is null
             ? TryParseNativeVmlTextShapeType(options.NativeVmlTextShapeTypeXml)

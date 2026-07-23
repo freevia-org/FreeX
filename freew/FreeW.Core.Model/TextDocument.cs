@@ -2394,6 +2394,12 @@ public sealed record WatermarkOptions(string Text)
     public bool? NativeVmlTextFitShape { get; init; }
 
     /// <summary>
+    /// Optional clockwise VML rotation recovered from a native text-watermark shape. This retains
+    /// imported nonstandard angles instead of collapsing every nonzero rotation to Diagonal.
+    /// </summary>
+    public double? NativeVmlTextRotationDegrees { get; init; }
+
+    /// <summary>
     /// Optional serialized <c>v:shapetype</c> payload referenced by an imported native VML text
     /// watermark. Retaining the path, formulas, and text-path settings prevents a custom Word
     /// watermark from being rewritten as FreeW's canonical <c>_x0000_t136</c> prototype.

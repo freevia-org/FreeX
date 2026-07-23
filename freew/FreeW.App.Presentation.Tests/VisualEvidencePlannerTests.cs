@@ -2470,6 +2470,18 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void TextWatermarkLayoutPlanner_UsesExplicitNativeVmlRotation()
+    {
+        var plan = WatermarkVisualPlanner.BuildTextLayout(
+            new WatermarkOptions("DRAFT") { NativeVmlTextRotationDegrees = 300.5 },
+            pageWidthDip: 816,
+            pageHeightDip: 1056);
+
+        plan.Should().NotBeNull();
+        plan!.RotationDegrees.Should().BeApproximately(-59.5, 0.001);
+    }
+
+    [Fact]
     public void TextWatermarkLayoutPlanner_UsesSerializedFitShapeToResolveTextPathFontSize()
     {
         var fitted = WatermarkVisualPlanner.BuildTextLayout(
