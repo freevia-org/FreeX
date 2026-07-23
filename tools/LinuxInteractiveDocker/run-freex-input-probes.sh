@@ -677,6 +677,12 @@ probe_window_management() {
     after_bounds="$(window_bounds_signature)"
     write_artifact "window-bounds-after-arrange.txt" "$after_bounds"
     capture "window-arrange-after.png"
+    # Arrange All temporarily moves focus through its popup. Restore the original
+    # workbook's worksheet focus before delivering the application shortcut, just
+    # as a user does by clicking the workbook they want to cycle from.
+    focus_app
+    xdotool mousemove --window "$window_id" 520 420 click 1
+    sleep 0.2
     active_before="$(xdotool getactivewindow 2>/dev/null || true)"
     send_active_key ctrl+F6
     active_after="$(xdotool getactivewindow 2>/dev/null || true)"
