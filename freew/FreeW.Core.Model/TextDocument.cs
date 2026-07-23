@@ -1756,6 +1756,22 @@ public abstract class Block
     public BlockContentControl? BlockContentControl { get; set; }
 }
 
+/// <summary>
+/// A body-level <c>w:altChunk</c> import that FreeW preserves without attempting to interpret its source
+/// payload. Word resolves the referenced HTML, RTF, or nested Word package when it opens the document.
+/// </summary>
+public sealed class AltChunkBlock : Block
+{
+    /// <summary>The absolute OPC part name of the preserved altChunk payload.</summary>
+    public string PreservedPartName { get; }
+
+    public AltChunkBlock(string preservedPartName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(preservedPartName);
+        PreservedPartName = preservedPartName.StartsWith('/') ? preservedPartName : "/" + preservedPartName;
+    }
+}
+
 /// <summary>A paragraph: an ordered sequence of runs plus paragraph formatting and an optional style.</summary>
 public sealed class Paragraph : Block
 {

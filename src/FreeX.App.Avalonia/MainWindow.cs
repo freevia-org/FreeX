@@ -768,6 +768,31 @@ public sealed partial class MainWindow : Window
     internal int SheetGridBuildCountForTest => _sheetGridBuildCount;
 
     /// <summary>
+    /// Test-only driver that reproduces a full mouse cell-selection drag from <paramref name="anchor"/>
+    /// (the pressed cell) to <paramref name="cursor"/>, then the release. It mirrors the real gesture:
+    /// <c>BeginCellSelectionDrag</c> records the pressed cell as the transient anchor,
+    /// <c>ContinueCellSelectionDrag</c> extends to the cursor via <c>SelectRangeFromAnchor</c>, and
+    /// <c>EndCellSelectionDragAsync</c> clears the transient anchor/cursor fields -- the exact sequence
+    /// that used to discard the true anchor before View &gt; Split / Freeze Panes could read it. Not
+    /// used by production code paths.
+    /// </summary>
+    internal void RaiseCellSelectionDragForTest(CellAddress anchor, CellAddress cursor)
+    {
+        _cellDragSelectionAnchor = anchor;
+        SelectRangeFromAnchor(anchor, cursor);
+        _cellDragSelectionAnchor = null;
+        _selectionExtensionAnchor = null;
+        _selectionExtensionCursor = null;
+    }
+
+    /// <summary>
+    /// Test-only entry point for the View &gt; Split ribbon command (<c>SplitPanesAtActiveCell</c>),
+    /// which is otherwise reached only through the ribbon command map (<c>["view.split"]</c>). Not used
+    /// by production code paths.
+    /// </summary>
+    internal void InvokeSplitPanesAtActiveCellForTest() => SplitPanesAtActiveCell();
+
+    /// <summary>
     /// Test-only accessor for the persistent worksheet grid host (survives RefreshShell/
     /// BuildSheetGrid rebuilds — see its field comment), so headless accessibility regression tests
     /// can move real keyboard focus onto it before driving navigation, exactly as a screen-reader
@@ -7216,7 +7241,10 @@ public sealed partial class MainWindow : Window
             return;
 
         ClearSelectedDrawingObject();
-        _session.SelectRange(new GridRange(anchor, address));
+        // Pin the active cell to `anchor` (the pressed cell) rather than the range's normalized
+        // top-left, so a drag that ran up/left keeps the active cell at the true starting corner --
+        // which View > Split / Freeze Panes read after the gesture ends (split-creation-selection-anchor).
+        _session.SelectAnchoredRange(anchor, address);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
         // While a mouse-drag selection is in progress (this method is only ever invoked from
         // ContinueCellSelectionDrag), Excel's Name Box shows a live "{rows}R x {cols}C" dimension
@@ -11060,10 +11088,14 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        _selectionExtensionAnchor = _session.ActiveCell;
+        // The old active cell is the anchor of the extended selection; keep it there (Shift+click
+        // extends toward `address` without moving the anchor) so a downward-then-upward extend still
+        // resolves the active cell to the original corner rather than the normalized top-left.
+        var anchor = _session.ActiveCell;
+        _selectionExtensionAnchor = anchor;
         _selectionExtensionCursor = address;
         ClearSelectedDrawingObject();
-        _session.SelectRange(new GridRange(_session.ActiveCell, address));
+        _session.SelectAnchoredRange(anchor, address);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
     }
@@ -25069,7 +25101,9 @@ public sealed partial class MainWindow : Window
         var anchor = _selectionExtensionAnchor ?? _session.ActiveCell;
         _selectionExtensionAnchor = anchor;
         _selectionExtensionCursor = target;
-        _session.SelectRange(new GridRange(anchor, target));
+        // Extend toward `target` while keeping the active cell pinned to the extension anchor, so an
+        // upward/leftward Shift+Arrow run doesn't relocate the active cell to the range's top-left.
+        _session.SelectAnchoredRange(anchor, target);
     }
 
     private static uint OffsetCellIndex(uint current, int delta, uint max) =>

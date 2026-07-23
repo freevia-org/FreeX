@@ -22,7 +22,7 @@ public sealed class R69NameBoxDragDimensionSourceTests
             source.IndexOf("private void SelectRangeFromAnchor(", System.StringComparison.Ordinal)..
             source.IndexOf("private Control AddColumnResizeHandle(", System.StringComparison.Ordinal)];
 
-        method.Should().Contain("_session.SelectRange(new GridRange(anchor, address));");
+        method.Should().Contain("_session.SelectAnchoredRange(anchor, address);");
         method.Should().Contain("if (!_cellAddressBoxHasPendingEdit)");
         method.Should().Contain("_cellAddressText.Text = FormatDragSelectionDimensionText(_session.SelectedRange);");
         method.Should().Contain("_cellSelectionDragShowedDimensionText = true;");

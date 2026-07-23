@@ -795,11 +795,30 @@ public static class DocxWriter
     private static Dictionary<string, string> CollectHyperlinks(IEnumerable<Paragraph> paragraphs)
     {
         var byUrl = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var paragraph in paragraphs)
+        foreach (var paragraph in EnumerateHyperlinkParagraphs(paragraphs))
             foreach (var run in paragraph.Runs)
                 if (run.HyperlinkUrl is { Length: > 0 } url && !byUrl.ContainsKey(url))
                     byUrl[url] = $"rIdLink{byUrl.Count + 1}";
         return byUrl;
+    }
+
+    private static IEnumerable<Paragraph> EnumerateHyperlinkParagraphs(IEnumerable<Paragraph> paragraphs)
+    {
+        foreach (var paragraph in paragraphs)
+        {
+            yield return paragraph;
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.Shape is { } shape)
+                    foreach (var nested in EnumerateHyperlinkParagraphs(shape.TextParagraphs))
+                        yield return nested;
+
+                if (run.DrawingGroup is { } group)
+                    foreach (var shapeChild in group.Children.OfType<Shape>())
+                        foreach (var nested in EnumerateHyperlinkParagraphs(shapeChild.TextParagraphs))
+                            yield return nested;
+            }
+        }
     }
 
     /// <summary>All paragraphs, including those nested inside table cells (where runs can also live).</summary>
@@ -1939,6 +1958,9 @@ public static class DocxWriter
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null) => block switch
     {
         Table table => BuildTable(table, drawings, hyperlinks, preservedNumbering, restartOverrides),
+        AltChunkBlock altChunk when drawings.PreservedDrawingRelIds is { } preservedRelIds
+            && preservedRelIds.TryGetValue(altChunk.PreservedPartName, out var relationshipId)
+            => new XElement(W + "altChunk", new XAttribute(R + "id", relationshipId)),
         // Only top-level body paragraphs can end a non-final section, so the per-section header/footer map
         // is threaded here (and nowhere else); table-cell/header/footer/footnote paragraphs pass no map.
         Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides),
@@ -2535,7 +2557,7 @@ public static class DocxWriter
                 while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
                     && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId
                     && SameRevision(head, runs[i]))
-                    content.Add(BuildRun(runs[i++], drawings));
+                    content.Add(BuildRun(runs[i++], drawings, hyperlinks));
                 var sdt = new XElement(W + "sdt", BuildSdtProperties(control), content);
                 Content(head, sdt);
                 continue;
@@ -2601,7 +2623,7 @@ public static class DocxWriter
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
                 while (i < runs.Count && runs[i].HyperlinkUrl == url && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
-                    hyperlink.Add(BuildRun(runs[i++], drawings));
+                    hyperlink.Add(BuildRun(runs[i++], drawings, hyperlinks));
                 Content(head, hyperlink);
             }
             else if (anchor is { Length: > 0 })
@@ -2611,13 +2633,13 @@ public static class DocxWriter
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
                 while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
-                    hyperlink.Add(BuildRun(runs[i++], drawings));
+                    hyperlink.Add(BuildRun(runs[i++], drawings, hyperlinks));
                 Content(head, hyperlink);
             }
             else
             {
                 var run = runs[i++];
-                Content(run, BuildRun(run, drawings));
+                Content(run, BuildRun(run, drawings, hyperlinks));
             }
         }
 
@@ -2955,7 +2977,10 @@ public static class DocxWriter
         return builder.ToString();
     }
 
-    private static XElement BuildRun(Run run, RunDrawings drawings)
+    private static XElement BuildRun(
+        Run run,
+        RunDrawings drawings,
+        IReadOnlyDictionary<string, string> hyperlinks)
     {
         // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
         // sibling of w:r, never wrapped in one), carrying its math fragments as m:r/m:sSup/m:f.
@@ -2969,7 +2994,7 @@ public static class DocxWriter
             var rPr = BuildRunProperties(run.Formatting);
             if (rPr is not null)
                 sr.Add(rPr);
-            sr.Add(BuildShapeDrawing(shape, drawings.Ids));
+            sr.Add(BuildShapeDrawing(shape, drawings.Ids, hyperlinks));
             return sr;
         }
 
@@ -3000,7 +3025,7 @@ public static class DocxWriter
         if (run.CrossReference is { } crossReference)
             return new XElement(W + "fldSimple",
                 new XAttribute(W + "instr", CrossReferenceInstruction(crossReference)),
-                BuildTextRun(run, drawings));
+                BuildTextRun(run, drawings, hyperlinks));
 
         // A table-cell formula field (Word's Table > Data > Formula) emits a w:fldSimple whose w:instr is
         // the formula plus an optional number-format switch (e.g. " =SUM(ABOVE) \# "#,##0.00" "), wrapping a
@@ -3009,7 +3034,7 @@ public static class DocxWriter
         if (run.TableFormula is { } formula)
             return new XElement(W + "fldSimple",
                 new XAttribute(W + "instr", TableFormulaInstruction(formula)),
-                BuildTextRun(run, drawings));
+                BuildTextRun(run, drawings, hyperlinks));
 
         // A document field emits a self-contained w:fldSimple wrapping a run; the wrapped run's w:t
         // carries the last-known/cached value as fallback text for field-unaware consumers. The
@@ -3017,7 +3042,7 @@ public static class DocxWriter
         if (FieldInstruction(run.FieldKind) is { } instruction)
             return new XElement(W + "fldSimple",
                 new XAttribute(W + "instr", instruction),
-                BuildTextRun(run, drawings));
+                BuildTextRun(run, drawings, hyperlinks));
 
         // A footnote reference is a superscript run carrying a w:footnoteReference (no literal text).
         // Carry the run's real formatting (forcing vertAlign=superscript) so a bold/coloured/sized
@@ -3045,7 +3070,7 @@ public static class DocxWriter
             return br;
         }
 
-        return BuildTextRun(run, drawings);
+        return BuildTextRun(run, drawings, hyperlinks);
     }
 
     // A textless marker run (footnote/endnote reference): carries the run's own formatting forced to
@@ -3060,7 +3085,10 @@ public static class DocxWriter
         return r;
     }
 
-    private static XElement BuildTextRun(Run run, RunDrawings drawings)
+    private static XElement BuildTextRun(
+        Run run,
+        RunDrawings drawings,
+        IReadOnlyDictionary<string, string> hyperlinks)
     {
         var r = new XElement(W + "r");
         var rPr = BuildRunProperties(run.Formatting);
@@ -3078,7 +3106,7 @@ public static class DocxWriter
         if (run.PreservedDrawing is { } preservedDrawing)
             r.Add(BuildPreservedDrawing(preservedDrawing, drawings.PreservedDrawingRelIds));
         else if (run.DrawingGroup is not null)
-            r.Add(BuildDrawingGroupDrawing(run.DrawingGroup, drawings));
+            r.Add(BuildDrawingGroupDrawing(run.DrawingGroup, drawings, hyperlinks));
         else if (run.Image is not null && drawings.Images.TryGetValue(run, out var imagePart))
             r.Add(BuildDrawing(imagePart));
         else if (run.Chart is not null && drawings.Charts.TryGetValue(run, out var chartPart))
@@ -3736,7 +3764,10 @@ public static class DocxWriter
     /// wps:txbx/w:txbxContent holding the body paragraphs. The shape's wp:docPr id comes from the
     /// per-write shape docPr counter so it never collides with image drawing ids.
     /// </summary>
-    private static XElement BuildShapeDrawing(Shape shape, IdAllocator ids)
+    private static XElement BuildShapeDrawing(
+        Shape shape,
+        IdAllocator ids,
+        IReadOnlyDictionary<string, string> hyperlinks)
     {
         var cx = PointsToEmu(shape.WidthPt);
         var cy = PointsToEmu(shape.HeightPt);
@@ -3842,7 +3873,7 @@ public static class DocxWriter
             var txbxContent = new XElement(W + "txbxContent");
             var nested = RunDrawings.Empty() with { Ids = ids };
             foreach (var paragraph in shape.TextParagraphs)
-                txbxContent.Add(BuildParagraph(paragraph, nested, EmptyHyperlinks));
+                txbxContent.Add(BuildParagraph(paragraph, nested, hyperlinks));
             wsp.Add(new XElement(Wps + "txbx", txbxContent));
         }
 
@@ -3967,10 +3998,6 @@ public static class DocxWriter
                     new XAttribute("h", fx.BevelH),
                     new XAttribute("prst", fx.BevelPresetType)));
     }
-
-    /// <summary>Empty hyperlink map for building text-box body paragraphs (they carry no document rels).</summary>
-    /// <summary>Empty hyperlink map for building text-box body paragraphs (they carry no document rels).</summary>
-    private static readonly Dictionary<string, string> EmptyHyperlinks = new();
 
     // The fixed colours a WordArt preset paints with (kept simple and deterministic so the reader can infer
     // the preset back from which effect elements are present, not from exact colour values).
@@ -4486,7 +4513,10 @@ public static class DocxWriter
     /// their native <c>pic:pic</c> payload; charts and SmartArt use native <c>wpg:graphicFrame</c> children
     /// that retain their document-level package relationships. Groups float.
     /// </summary>
-    private static XElement BuildDrawingGroupDrawing(DrawingGroup group, RunDrawings drawings)
+    private static XElement BuildDrawingGroupDrawing(
+        DrawingGroup group,
+        RunDrawings drawings,
+        IReadOnlyDictionary<string, string> hyperlinks)
     {
         var ids = drawings.Ids;
         var cx = PointsToEmu(group.WidthPt);
@@ -4527,7 +4557,7 @@ public static class DocxWriter
 
             children.Add(child switch
             {
-                Shape shape => BuildDrawingGroupShapeChild(shape, xfrm, childName, ids),
+                Shape shape => BuildDrawingGroupShapeChild(shape, xfrm, childName, ids, hyperlinks),
                 WordArt wordArt => BuildDrawingGroupWordArtChild(wordArt, xfrm, childName, ids),
                 InlineImage image when drawings.GroupImages?.TryGetValue(image, out var imagePart) == true
                     => BuildDrawingGroupImageChild(imagePart, xfrm, childName),
@@ -4575,9 +4605,10 @@ public static class DocxWriter
         Shape shape,
         XElement xfrm,
         string childName,
-        IdAllocator ids)
+        IdAllocator ids,
+        IReadOnlyDictionary<string, string> hyperlinks)
     {
-        var drawing = BuildShapeDrawing(shape, ids);
+        var drawing = BuildShapeDrawing(shape, ids, hyperlinks);
         return BuildDrawingGroupRichWspChild(drawing, xfrm, childName);
     }
 

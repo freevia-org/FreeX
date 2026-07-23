@@ -70,7 +70,7 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("_formulaReferenceLength = _cellDragFormulaReferenceLength;");
         source.Should().Contain("SelectRangeFromAnchor(anchor, target);");
         source.Should().Contain("_cellDragSelectionPointer?.Capture(null);");
-        source.Should().Contain("_session.SelectRange(new GridRange(anchor, address));");
+        source.Should().Contain("_session.SelectAnchoredRange(anchor, address);");
         source.Should().Contain("TryInsertFormulaPointReference(address))");
         source.Should().Contain("BeginCellSelectionDrag(args, border, address);");
         source.Should().Contain("RestoreFormulaRangeEditorFocusAfterDrag(formulaRangeEditor);");
@@ -222,7 +222,7 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("var anchor = _selectionExtensionAnchor ?? _session.ActiveCell;");
         source.Should().Contain("_selectionExtensionAnchor = anchor;");
         source.Should().Contain("_selectionExtensionCursor = target;");
-        source.Should().Contain("_session.SelectRange(new GridRange(anchor, target));");
+        source.Should().Contain("_session.SelectAnchoredRange(anchor, target);");
         source.Should().Contain("private void MoveOrExtendActiveCellTo(CellAddress target, bool extendSelection)");
     }
 

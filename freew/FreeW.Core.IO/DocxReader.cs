@@ -38,6 +38,7 @@ public static class DocxReader
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
         var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
+        var altChunkRelationships = ReadAltChunkRelationships(archive);
         var (numbering, startOverrides) = ReadNumbering(archive, document);
 
         var body = documentXml.Root?.Element(W + "body");
@@ -51,7 +52,7 @@ public static class DocxReader
             Paragraph? prevPara = null;
             var prevAfterAuto = false;
             foreach (var element in body.Elements())
-                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto);
+                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, altChunkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto);
         }
 
         if (document.Blocks.Count == 0)
@@ -268,6 +269,25 @@ public static class DocxReader
         if (archive.GetEntry("word/webSettings.xml") is not null)
             Capture("/word/webSettings.xml",
                 docRelTypesByTarget.GetValueOrDefault("webSettings.xml") ?? WebSettingsRelType);
+
+        // Body-level altChunk imports are unresolved source payloads (HTML, RTF, or a nested Word package) that
+        // Word imports on open. Keep the body marker plus its payload and any local relationship graph intact.
+        foreach (var altChunk in document.Blocks.OfType<AltChunkBlock>())
+        {
+            CapturePreservedPart(
+                archive,
+                document,
+                altChunk.PreservedPartName,
+                overrides,
+                contentTypeDefaults,
+                AltChunkRelType);
+            CaptureReferencedParts(
+                archive,
+                document,
+                altChunk.PreservedPartName,
+                overrides,
+                contentTypeDefaults);
+        }
 
         // word/glossary/*: Word building blocks / AutoText live in a glossary document part plus optional
         // glossary-local rels, styles, media and other satellites. Preserve the glossary subtree as package
@@ -1481,6 +1501,7 @@ public static class DocxReader
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<string, string> altChunkRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
         IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
         ref Paragraph? prevPara,
@@ -1520,6 +1541,20 @@ public static class DocxReader
             prevPara = null;
             prevAfterAuto = false;
         }
+        else if (element.Name == W + "altChunk")
+        {
+            var relationshipId = element.Attribute(R + "id")?.Value;
+            if (relationshipId is not null && altChunkRelationships.TryGetValue(relationshipId, out var partName))
+            {
+                var altChunk = new AltChunkBlock(partName)
+                {
+                    BlockContentControl = inheritedBlockContentControl
+                };
+                document.Blocks.Add(altChunk);
+            }
+            prevPara = null;
+            prevAfterAuto = false;
+        }
         else if (element.Name == W + "sdt")
         {
             var blockControl = ReadBlockContentControl(element.Element(W + "sdtPr"));
@@ -1531,6 +1566,7 @@ public static class DocxReader
                     archive,
                     imageRelationships,
                     hyperlinkRelationships,
+                    altChunkRelationships,
                     numbering,
                     startOverrides,
                     ref prevPara,
@@ -1676,7 +1712,7 @@ public static class DocxReader
             if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
                 paragraph.Runs.Add(Run.CommentReference(refId));
             else
-                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+                AddRun(paragraph, child, archive, imageRelationships, hyperlinkRelationships, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "hyperlink")
         {
@@ -2471,6 +2507,7 @@ public static class DocxReader
         XElement r,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
         string? hyperlinkUrl,
         string? hyperlinkAnchor,
         int? commentId = null,
@@ -2505,7 +2542,7 @@ public static class DocxReader
             return;
         }
 
-        var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships);
+        var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships, hyperlinkRelationships);
         if (drawingGroup is not null)
         {
             var groupRun = Run.FromDrawingGroup(drawingGroup);
@@ -2542,7 +2579,7 @@ public static class DocxReader
         }
 
         // A w:drawing wrapping a wps:wsp (not a pic:pic) is an inline shape / text box.
-        var shape = ReadShape(r, archive, imageRelationships);
+        var shape = ReadShape(r, archive, imageRelationships, hyperlinkRelationships);
         if (shape is not null)
         {
             var shapeRun = Run.FromShape(shape);
@@ -3568,7 +3605,11 @@ public static class DocxReader
     /// paragraphs (wps:txbx/w:txbxContent). Returns null for a non-shape drawing (e.g. a picture) so the image
     /// path keeps working. Mirrors how the writer emits these (see <c>DocxWriter.BuildShapeDrawing</c>).
     /// </summary>
-    private static Shape? ReadShape(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
+    private static Shape? ReadShape(
+        XElement run,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         var drawing = run.Element(W + "drawing");
         var inline = drawing?.Element(Wp + "inline");
@@ -3752,10 +3793,9 @@ public static class DocxReader
         var txbxContent = wsp.Element(Wps + "txbx")?.Element(W + "txbxContent");
         if (txbxContent is not null)
         {
-            var noHyperlinks = new Dictionary<string, string>();
             var noNumbering = new Dictionary<int, ListKind>();
             foreach (var p in txbxContent.Elements(W + "p"))
-                shape.TextParagraphs.Add(ReadParagraph(p, archive, imageRelationships, noHyperlinks, noNumbering));
+                shape.TextParagraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
         }
 
         // Text direction: wps:bodyPr/@vert + @rot.
@@ -4681,6 +4721,16 @@ public static class DocxReader
             "word/_rels/document.xml.rels",
             relationship => relationship.Target,
             relationship => relationship.Type.EndsWith("/hyperlink", StringComparison.Ordinal));
+
+    /// <summary>Maps a body <c>w:altChunk/@r:id</c> to its package-local source payload.</summary>
+    private static Dictionary<string, string> ReadAltChunkRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/document.xml.rels",
+            relationship => "/" + OpcPathHelper.ResolveRelativeZipPath("word", relationship.Target),
+            relationship =>
+                !relationship.IsExternal &&
+                relationship.Type == AltChunkRelType);
 
     private static byte[]? LoadMedia(ZipArchive archive, string entryPath)
     {
@@ -5693,7 +5743,8 @@ public static class DocxReader
     private static DrawingGroup? ReadDrawingGroup(
         XElement run,
         ZipArchive archive,
-        IReadOnlyDictionary<string, string> imageRelationships)
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         var drawing = run.Element(W + "drawing");
         var anchor = drawing?.Element(Wp + "anchor");
@@ -5754,7 +5805,7 @@ public static class DocxReader
             }
             else if (child is null && name.StartsWith("GroupChild:Shape:", StringComparison.Ordinal))
             {
-                child = ReadShape(fakeRun, archive, imageRelationships);
+                child = ReadShape(fakeRun, archive, imageRelationships, hyperlinkRelationships);
                 if (child is null)
                 {
                     var kindStr = name["GroupChild:Shape:".Length..];
@@ -5782,7 +5833,7 @@ public static class DocxReader
             {
                 // Unknown child type — try the rich shape/WordArt readers before falling back to a rectangle.
                 child = ReadWordArt(fakeRun)
-                    ?? (object?)ReadShape(fakeRun, archive, imageRelationships)
+                    ?? (object?)ReadShape(fakeRun, archive, imageRelationships, hyperlinkRelationships)
                     ?? new Shape(ShapeKind.Rectangle, cw, ch);
             }
 
