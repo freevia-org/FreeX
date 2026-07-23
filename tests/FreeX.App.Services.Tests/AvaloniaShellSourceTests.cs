@@ -903,8 +903,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task CreateNewWorkbookAsync()");
         source.Should().Contain("ConfirmBeforeDestructiveWorkbookActionAsync(\"New Workbook\", \"Discard and Create\")");
         source.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
-        normalizedSource.Should().Contain("_session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);\n        RefreshViewportSizeForZoom();\n        ClearSelectedDrawingObject();\n        RefreshShell(_session.StartupStatus);");
-        normalizedSource.Should().Contain("_session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);\n        RefreshViewportSizeForZoom();\n        ClearSelectedDrawingObject();\n        RefreshShell(status);");
+        normalizedSource.Should().Contain("ReplaceSession(_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true));\n        RefreshViewportSizeForZoom();\n        ClearSelectedDrawingObject();\n        RefreshShell(_session.StartupStatus);");
+        normalizedSource.Should().Contain("ReplaceSession(_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true));\n        RefreshViewportSizeForZoom();\n        ClearSelectedDrawingObject();\n        RefreshShell(status);");
         source.Should().Contain("RefreshShell(_session.StartupStatus);");
         source.Should().Contain("RecordStartupRecentWorkbook(source);");
         source.Should().Contain("private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)");
@@ -930,7 +930,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity");
         source.Should().Contain("RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
-        normalizedSource.Should().Contain("_session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
+        normalizedSource.Should().Contain("ReplaceSession(_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true));\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("Closing += MainWindow_Closing;");
         source.Should().Contain("private async Task CloseWorkbookAsync()");
         source.Should().Contain("ConfirmBeforeDestructiveWorkbookActionAsync(\"Close Workbook\", \"Discard and Close\")");
