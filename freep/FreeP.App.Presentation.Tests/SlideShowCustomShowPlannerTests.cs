@@ -30,6 +30,37 @@ public sealed class SlideShowCustomShowPlannerTests
     }
 
     [Fact]
+    public void BuildFullPresentationRoute_SkipsHiddenSlidesAndMapsCurrentSlide()
+    {
+        var presentation = MakePresentation("Intro", "Hidden", "Appendix");
+        presentation.Slides[1].IsHidden = true;
+
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(
+            presentation,
+            startIndex: 1);
+
+        route.Slides.Select(slide => slide.Title).Should().Equal("Intro", "Appendix");
+        route.SourceSlideIndices.Should().Equal(0, 2);
+        route.StartIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void BuildCustomShowRoute_PreservesAnExplicitHiddenSlide()
+    {
+        var presentation = MakePresentation("Intro", "Hidden", "Appendix");
+        presentation.Slides[1].IsHidden = true;
+
+        var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+            presentation,
+            new SlideShowCustomSlideSequence(
+                "Presenter review",
+                new[] { presentation.Slides[1].Id }));
+
+        route.Slides.Select(slide => slide.Title).Should().Equal("Hidden");
+        route.SourceSlideIndices.Should().Equal(1);
+    }
+
+    [Fact]
     public void TryBuildNamedCustomShowRoute_SelectsShowByNameCaseInsensitively()
     {
         var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
