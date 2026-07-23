@@ -570,7 +570,18 @@ public static class PictureStyleCatalog
 /// </summary>
 public sealed class Run(string text, RunFormatting? formatting = null)
 {
-    public string Text { get; set; } = text;
+    private string _text = text;
+
+    /// <summary>
+    /// The literal text for ordinary runs, or the concatenated base text for a ruby annotation. Keeping ruby
+    /// base fragments authoritative lets callers construct the annotation incrementally without leaving its
+    /// visible fallback stale.
+    /// </summary>
+    public string Text
+    {
+        get => Ruby?.BaseText ?? _text;
+        set => _text = value;
+    }
     public RunFormatting Formatting { get; set; } = formatting ?? RunFormatting.Default;
 
     /// <summary>Optional inline image. When non-null this run renders/serialises as a picture.</summary>

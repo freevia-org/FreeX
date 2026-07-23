@@ -7,6 +7,18 @@ namespace FreeW.Core.IO.Tests;
 public class RubyAnnotationRoundTripTests
 {
     [Fact]
+    public void RubyRun_BaseTextFallbackTracksIncrementalBaseFragments()
+    {
+        var annotation = new RubyAnnotation();
+        var run = Run.FromRuby(annotation);
+
+        annotation.BaseFragments.Add(new RubyTextFragment("漢", RunFormatting.Default));
+        annotation.BaseFragments.Add(new RubyTextFragment("字", RunFormatting.Default));
+
+        run.Text.Should().Be("漢字");
+    }
+
+    [Fact]
     public void RubyAnnotation_PreservesFormattedBaseGuideAndProperties()
     {
         using var input = BuildPackage();
