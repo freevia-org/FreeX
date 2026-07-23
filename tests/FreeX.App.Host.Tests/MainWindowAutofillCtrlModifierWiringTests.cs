@@ -50,8 +50,39 @@ public sealed class MainWindowAutofillCtrlModifierWiringTests
 
         var handler = source[handlerStart..helperStart];
 
-        // The command must be constructed with the captured Ctrl state, not the 3-arg overload that
-        // silently defaults ctrlHeld to false.
-        handler.Should().Contain("new AutofillCommand(_currentSheetId, sourceRange, fillRange, _autofillCtrlHeld);");
+        // The dragged-fill path must thread the captured Ctrl state through ExecuteAutofill, and
+        // ExecuteAutofill must construct AutofillCommand with that parameter, not the 3-arg overload
+        // that silently defaults ctrlHeld to false.
+        handler.Should().Contain("ExecuteAutofill(sourceRange, fillRange, _autofillCtrlHeld);");
+        handler.Should().Contain("new AutofillCommand(_currentSheetId, sourceRange, fillRange, ctrlHeld);");
+    }
+
+    [Fact]
+    public void OnAutofillHandleDoubleClicked_PassesHardcodedFalseIntoExecuteAutofill_NotStaleField()
+    {
+        // Regression guard for R79-commands-autofill-series-5-1: double-click never raises the
+        // paired AutofillModifiersResolved event (that only fires at drag-release), so
+        // _autofillCtrlHeld can hold a stale value from an earlier Ctrl-held drag. Excel's
+        // double-click fill always behaves like a plain (non-Ctrl) drag, so the double-click
+        // handler must pass a hardcoded ctrlHeld: false into ExecuteAutofill instead of reading
+        // the possibly-stale field.
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var handlerStart = source.IndexOf("private void OnAutofillHandleDoubleClicked", StringComparison.Ordinal);
+        var handlerEnd = source.IndexOf("private void ResolveAdjacentColumnLastPopulatedRow", StringComparison.Ordinal);
+        if (handlerEnd < 0)
+        {
+            handlerEnd = source.IndexOf("private ", handlerStart + 1, StringComparison.Ordinal);
+        }
+
+        handlerStart.Should().BeGreaterThanOrEqualTo(0);
+        handlerEnd.Should().BeGreaterThan(handlerStart);
+
+        var handler = source[handlerStart..handlerEnd];
+
+        // The fill call itself must pass a hardcoded false, not read the (possibly stale) field --
+        // this only checks the actual argument expression, not any explanatory comment text that
+        // may mention the field's name.
+        handler.Should().Contain("ExecuteAutofill(source, fillRange.Value, ctrlHeld: false);");
+        handler.Should().NotContain("ExecuteAutofill(source, fillRange.Value, _autofillCtrlHeld");
     }
 }

@@ -47,9 +47,27 @@ public partial class MainWindow
         InvalidateNavigationCaches();
     }
 
+    /// <summary>
+    /// Plain F9's "Calculate Now" scope: recalculate only what is actually dirty using the
+    /// existing dependency graph -- volatile cells (always re-evaluated every calc pass) and
+    /// anything their formulas touch. In Automatic mode this is normally a cheap no-op, since
+    /// RecalculateIfAutomatic already keeps every edited cell's dependents current as edits
+    /// happen; unlike <see cref="RecalculateWorkbook"/> (Ctrl+Alt+F9's "Calculate Full" scope)
+    /// it does NOT rebuild the dependency graph or re-evaluate every formula cell in the
+    /// workbook, matching Excel's distinct F9 vs Ctrl+Alt+F9 cost/scope.
+    /// </summary>
+    private void RecalculateDirtyCells()
+    {
+        _recalcEngine.Recalculate(_workbook, []);
+        InvalidateNavigationCaches();
+    }
+
     private void RebuildDependenciesAndCalculate()
     {
-        _recalcEngine.RebuildFormulaDependencies(_workbook);
+        // RecalculateAllFormulas already rebuilds the dependency graph as its own first step
+        // (RecalcEngine.RecalculateAllFormulas), so calling RebuildFormulaDependencies again here
+        // first would redundantly clear and re-register every formula cell's dependency edges
+        // twice for a single Ctrl+Alt+Shift+F9 press.
         _recalcEngine.RecalculateAllFormulas(_workbook);
         InvalidateNavigationCaches();
         UpdateViewport();

@@ -317,9 +317,17 @@ public static partial class BuiltInFunctions
         double a = daysInPeriod > 0 ? daysToNext / daysInPeriod : 1.0;
 
         int months = 12 / frequency;
+        // Anchor each schedule candidate off the ORIGINAL maturity (md.AddMonths(-count*months)),
+        // not off the shrinking `d`, to avoid compounding .NET's day-of-month clamp for month-end
+        // maturities whose forward schedule crosses a shorter month (same fix as Coupnum in
+        // BuiltInFunctions.Financial.Coupons.cs). Without this, the last generated date can drift
+        // away from `md` and never compare equal to it, silently dropping the redemption below.
+        int couponCount = 0;
+        DateTime probe = md;
+        while (probe > sd) { couponCount++; probe = md.AddMonths(-couponCount * months); }
         var couponDates = new List<DateTime>();
-        DateTime d = ncd;
-        while (d <= md) { couponDates.Add(d); d = d.AddMonths(months); }
+        for (int i = 0; i < couponCount; i++)
+            couponDates.Add(md.AddMonths(-(couponCount - 1 - i) * months));
         if (couponDates.Count == 0) couponDates.Add(ncd);
 
         double c = coupon / frequency * 100;

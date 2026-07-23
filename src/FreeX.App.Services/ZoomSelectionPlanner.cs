@@ -1,3 +1,5 @@
+using FreeX.Core.Model;
+
 namespace FreeX.App.Services;
 
 public static class ZoomSelectionPlanner
@@ -5,6 +7,35 @@ public static class ZoomSelectionPlanner
     private const double DefaultColumnWidthPixels = 80d;
     private const double DefaultRowHeightPixels = 20d;
     private const double PercentScale = 100d;
+
+    /// <summary>
+    /// Resolves the range Zoom-to-Selection should fit/scroll to. Excel's Zoom-to-Selection fits
+    /// the *bounding box of the whole multi-area selection* when more than one area is selected
+    /// (e.g. Ctrl+click-drag to add a second disjoint range) -- not just the last-clicked/active
+    /// range -- so union all of <paramref name="selectedRanges"/>'s extents when there is more than
+    /// one; otherwise fall back to the single active <paramref name="primaryRange"/>.
+    /// </summary>
+    public static GridRange ResolveFitRange(GridRange primaryRange, IReadOnlyList<GridRange>? selectedRanges)
+    {
+        if (selectedRanges is not { Count: > 1 })
+            return primaryRange;
+
+        var sheet = selectedRanges[0].Start.Sheet;
+        var minRow = selectedRanges[0].Start.Row;
+        var minCol = selectedRanges[0].Start.Col;
+        var maxRow = selectedRanges[0].End.Row;
+        var maxCol = selectedRanges[0].End.Col;
+        for (var i = 1; i < selectedRanges.Count; i++)
+        {
+            var candidate = selectedRanges[i];
+            if (candidate.Start.Row < minRow) minRow = candidate.Start.Row;
+            if (candidate.Start.Col < minCol) minCol = candidate.Start.Col;
+            if (candidate.End.Row > maxRow) maxRow = candidate.End.Row;
+            if (candidate.End.Col > maxCol) maxCol = candidate.End.Col;
+        }
+
+        return new GridRange(new CellAddress(sheet, minRow, minCol), new CellAddress(sheet, maxRow, maxCol));
+    }
 
     public static double CalculateZoomPercent(
         int requestedZoomPercent,

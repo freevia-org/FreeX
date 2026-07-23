@@ -80,6 +80,37 @@ public static class PageBreakPreviewInstructionBuilder
     }
 
     /// <summary>
+    /// Resolves every print range the page-break preview should render: all of the sheet's configured
+    /// print areas (Excel supports a multi-area print range via a comma-separated
+    /// <c>_xlnm.Print_Area</c> defined name — <see cref="Sheet.PrintAreas"/> holds one <see
+    /// cref="GridRange"/> per area), or the used range when none is configured. Unlike <see
+    /// cref="TryResolvePrintRange"/> (which only exposes the first area, for single-range callers),
+    /// this mirrors <c>WorkbookExportPrintPlanner.ResolveSheetPrintRanges</c> so the preview does not
+    /// mask out a real, second-or-later print area as non-printing. Returns false when neither is
+    /// available (an empty sheet has nothing to preview).
+    /// </summary>
+    public static bool TryResolvePrintRanges(Sheet sheet, out IReadOnlyList<GridRange> printRanges)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        var areas = sheet.PrintAreas.Where(area => area.Start.Sheet == sheet.Id).ToList();
+        if (areas.Count > 0)
+        {
+            printRanges = areas;
+            return true;
+        }
+
+        if (sheet.GetUsedRange() is { } usedRange)
+        {
+            printRanges = [usedRange];
+            return true;
+        }
+
+        printRanges = [];
+        return false;
+    }
+
+    /// <summary>
     /// Re-projects the session's viewport metrics into the display pixel space the grid renderer draws
     /// in: each column/row gets <c>max(minimum, size) × zoom</c> and cumulative offsets accumulate in
     /// that same space, so the overlay lines up with the rendered cells. Mirrors the grid's

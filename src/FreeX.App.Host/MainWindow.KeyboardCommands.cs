@@ -46,6 +46,7 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SizeWorkbookWindow, (_, _) => BeginSystemWindowSize());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CalculateNow, CalcNowBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CalculateSheet, CalcSheetBtn_Click);
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CalculateFull, CalcFullBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.RebuildDependenciesAndCalculate, (_, _) => RebuildDependenciesAndCalculate());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenErrorChecking, ErrorCheckBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleFormulaBarExpansion, FormulaBarExpandBtn_Click);

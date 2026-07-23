@@ -359,6 +359,7 @@ public enum KeyboardCommandShortcut
     SizeWorkbookWindow,
     CalculateNow,
     CalculateSheet,
+    CalculateFull,
     RebuildDependenciesAndCalculate,
     OpenErrorChecking,
     ToggleFormulaBarExpansion,

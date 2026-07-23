@@ -10,7 +10,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
     private readonly IReadOnlyList<SheetId> _sheetIds;
     private readonly SheetId _sourceSheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _sourceEdits;
-    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata)>? _snapshot;
+    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata, bool HadPhoneticGuide, CellPhoneticGuide? OldPhoneticGuide)>? _snapshot;
 
     public string Label => "Edit Grouped Sheets";
 
@@ -53,6 +53,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
                 var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(address, out var oldRuns);
                 var hadHyperlink = sheet.Hyperlinks.TryGetValue(address, out var oldHyperlink);
                 var hadHyperlinkMetadata = sheet.HyperlinkMetadata.TryGetValue(address, out var oldHyperlinkMetadata);
+                var hadPhoneticGuide = sheet.CellPhoneticGuides.TryGetValue(address, out var oldPhoneticGuide);
                 _snapshot.Add((
                     sheetId,
                     address,
@@ -63,7 +64,9 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
                     hadHyperlink,
                     oldHyperlink,
                     hadHyperlinkMetadata,
-                    oldHyperlinkMetadata));
+                    oldHyperlinkMetadata,
+                    hadPhoneticGuide,
+                    oldPhoneticGuide));
 
                 var appliedCell = sourceCell.Clone();
                 if (oldCell is not null)
@@ -71,12 +74,14 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
 
                 sheet.SetCell(address, appliedCell);
 
-                // The cell's content is being replaced, so any rich-text runs and hyperlink that
-                // belonged to the old content are stale and must not carry over to the new content
-                // (matching EditCellsCommand's handling of the same dictionaries).
+                // The cell's content is being replaced, so any rich-text runs, hyperlink and
+                // phonetic guide that belonged to the old content are stale and must not carry
+                // over to the new content (matching EditCellsCommand's handling of the same
+                // dictionaries).
                 sheet.RichTextRuns.Remove(address);
                 sheet.Hyperlinks.Remove(address);
                 sheet.HyperlinkMetadata.Remove(address);
+                sheet.CellPhoneticGuides.Remove(address);
 
                 affected.Add(address);
             }
@@ -90,7 +95,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
         if (_snapshot is null)
             return;
 
-        foreach (var (sheetId, address, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata) in _snapshot)
+        foreach (var (sheetId, address, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata, hadPhoneticGuide, oldPhoneticGuide) in _snapshot)
         {
             var sheet = ctx.GetSheet(sheetId);
             if (oldCell is null)
@@ -117,6 +122,11 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
                 sheet.HyperlinkMetadata[address] = oldHyperlinkMetadata;
             else
                 sheet.HyperlinkMetadata.Remove(address);
+
+            if (hadPhoneticGuide && oldPhoneticGuide is not null)
+                sheet.CellPhoneticGuides[address] = oldPhoneticGuide;
+            else
+                sheet.CellPhoneticGuides.Remove(address);
         }
     }
 

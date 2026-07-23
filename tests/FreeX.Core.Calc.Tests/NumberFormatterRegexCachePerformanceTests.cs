@@ -66,7 +66,7 @@ public sealed class NumberFormatterRegexCachePerformanceTests
             source.IndexOf("private static bool IsPlainNumericSection", StringComparison.Ordinal)..
             source.IndexOf("private static string ApplyNumericFormat", StringComparison.Ordinal)];
 
-        formatNumber.Should().Contain("TryFormatPlainNumericSection(magnitude, sections[0], out var plainNumericText)");
+        formatNumber.Should().Contain("TryFormatPlainNumericSection(magnitude, effectiveFormat, out var plainNumericText)");
         formatNumber.IndexOf("TryFormatPlainNumericSection", StringComparison.Ordinal)
             .Should()
             .BeLessThan(formatNumber.IndexOf("ApplyNumericFormat", StringComparison.Ordinal));

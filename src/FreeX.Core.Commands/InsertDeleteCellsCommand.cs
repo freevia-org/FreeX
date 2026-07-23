@@ -30,6 +30,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
+    private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _cfRuleSnapshot;
@@ -136,6 +137,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             ShiftAnnotationsInBandRight(sheet.HyperlinkMetadata, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
             _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             ShiftAnnotationsInBandRight(sheet.RichTextRuns, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
+            _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
+            ShiftAnnotationsInBandRight(sheet.CellPhoneticGuides, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
             // R52-commands-clear-delete-3-1: shift style-only (formatted-but-empty) cells in lockstep
             // with the value cells in the same band, so a fill/border applied to an empty cell moves
             // (or is displaced) exactly the way the same formatting on a value-bearing cell would.
@@ -245,6 +248,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             ShiftAnnotationsInBandDown(sheet.HyperlinkMetadata, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
             _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             ShiftAnnotationsInBandDown(sheet.RichTextRuns, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
+            _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
+            ShiftAnnotationsInBandDown(sheet.CellPhoneticGuides, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
             // R52-commands-clear-delete-3-1: see the Shift-Right branch above.
             _styleOnlySnapshot = CaptureStyleOnlyEntries(sheet);
             ShiftStyleOnlyInBandDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
@@ -339,6 +344,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
     }
 
@@ -702,6 +708,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         foreach (var addr in sheet.Hyperlinks.Keys) Consider(addr);
         foreach (var addr in sheet.HyperlinkMetadata.Keys) Consider(addr);
         foreach (var addr in sheet.RichTextRuns.Keys) Consider(addr);
+        foreach (var addr in sheet.CellPhoneticGuides.Keys) Consider(addr);
 
         if (sheet.HasStyleOnlyCells)
         {
@@ -734,6 +741,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         foreach (var addr in sheet.Hyperlinks.Keys) Consider(addr);
         foreach (var addr in sheet.HyperlinkMetadata.Keys) Consider(addr);
         foreach (var addr in sheet.RichTextRuns.Keys) Consider(addr);
+        foreach (var addr in sheet.CellPhoneticGuides.Keys) Consider(addr);
 
         if (sheet.HasStyleOnlyCells)
         {
@@ -1326,6 +1334,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
+    private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _cfRuleSnapshot;
@@ -1410,6 +1419,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             DeleteAnnotationsInBandLeft(sheet.HyperlinkMetadata, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
             _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             DeleteAnnotationsInBandLeft(sheet.RichTextRuns, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+            _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
+            DeleteAnnotationsInBandLeft(sheet.CellPhoneticGuides, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
             // R52-commands-clear-delete-3-1: clear/shift style-only (formatted-but-empty) cells in
             // lockstep with the value cells in the same band — see InsertCellsCommand's Shift-Right
             // branch for the full rationale.
@@ -1507,6 +1518,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             DeleteAnnotationsInBandUp(sheet.HyperlinkMetadata, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
             _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
             DeleteAnnotationsInBandUp(sheet.RichTextRuns, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+            _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
+            DeleteAnnotationsInBandUp(sheet.CellPhoneticGuides, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
             // R52-commands-clear-delete-3-1: see the Delete-Shift-Left branch above.
             _styleOnlySnapshot = InsertCellsCommand.CaptureStyleOnlyEntries(sheet);
             DeleteStyleOnlyInBandUp(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
@@ -1591,6 +1604,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         InsertCellsCommand.RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
     }
 

@@ -112,6 +112,44 @@ public partial class PhaseCFinancialTests
         mdur.Should().BeApproximately(dur / (1 + 0.06 / 2), 0.001);
     }
 
+    [Fact]
+    public void Duration_MonthEndMaturityCrossingShorterMonth_IncludesRedemption()
+    {
+        // R79-formula-financial-5-1: settlement 2025-01-31, maturity 2027-01-31 (month-end),
+        // quarterly frequency. Walking the coupon schedule forward from the shrinking previous
+        // date (the pre-fix bug) drifts through April (30 days) and never lands back on the
+        // day-31 maturity, so the redemption principal is silently dropped from the last cash
+        // flow. Anchoring every candidate off the ORIGINAL maturity (the fix) keeps the last
+        // schedule entry exactly equal to maturity, so the redemption is folded in correctly.
+        // Hand-computed expected value: 8 quarterly coupons of c=1.25 (coupon 5%, freq 4) at
+        // y=0.0125/period, with the final period's cash flow = 1.25 + 100 (redemption); since
+        // settlement sits exactly on a coupon reset date, price comes out to par (100) and the
+        // weighted-average (Macaulay) duration is ~1.91568146186755 years.
+        double duration = Calc("DURATION(DATE(2025,1,31),DATE(2027,1,31),0.05,0.05,4,0)");
+        duration.Should().BeApproximately(1.91568146186755, 1e-9);
+    }
+
+    [Fact]
+    public void Mduration_MonthEndMaturityCrossingShorterMonth_IncludesRedemption()
+    {
+        // Sibling of Duration_MonthEndMaturityCrossingShorterMonth_IncludesRedemption:
+        // MDURATION = DURATION / (1 + yield/frequency) = 1.91568146186755 / 1.0125.
+        double mduration = Calc("MDURATION(DATE(2025,1,31),DATE(2027,1,31),0.05,0.05,4,0)");
+        mduration.Should().BeApproximately(1.89203107344943, 1e-9);
+    }
+
+    [Fact]
+    public void Duration_NonMonthEndSchedule_NoRegression()
+    {
+        // No-regression sibling: identical economics (2-year, quarterly, 5%/5%, basis 0) but with
+        // a day-of-month (15th) that never hits .NET's AddMonths clamp, so this case was already
+        // correct before the fix. Confirms the anchored-schedule rewrite did not change behavior
+        // for the common (non-edge-case) path -- same expected value as the month-end case above,
+        // since basis-0 (30/360) day counts are day-of-month-shape-invariant here.
+        double duration = Calc("DURATION(DATE(2025,1,15),DATE(2027,1,15),0.05,0.05,4,0)");
+        duration.Should().BeApproximately(1.91568146186755, 1e-9);
+    }
+
     // ── EFFECT/NOMINAL edge cases ─────────────────────────────────────────
 
     [Fact]

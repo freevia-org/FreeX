@@ -37,6 +37,17 @@ public static class WorkbookPdfContentBuilder
     private static readonly PdfColor HeaderTextColor  = new(31, 41, 55);
     private static readonly PdfColor FooterTextColor  = new(97, 106, 117);
     private static readonly PdfColor GridLineColor    = new(180, 185, 190);
+    private static readonly PdfColor HeadingFillColor   = new(242, 242, 242);
+    private static readonly PdfColor HeadingBorderColor = new(211, 211, 211);
+
+    // R79-services-pagesetup-print-5-2: row/column heading gutter size in PDF points, converted from
+    // the same fixed 40px (row-number gutter width) / 20px (column-letter band height) pixel constants
+    // PrintLayoutPlanner.MeasurePrintableGrid uses for the WPF print/preview path -- unscaled by the
+    // sheet's Scale%/Fit-to-pages ratio, matching PrintRenderer.HeaderFooter.cs (the heading gutter is
+    // reserved from the printable area, not shrunk/grown with the grid content).
+    private const double HeadingGutterWidthPx  = 40.0;
+    private const double HeadingGutterHeightPx = 20.0;
+    private const double HeadingFontSize = 9.0;
 
     // -----------------------------------------------------------------------
     // Page-setup-aware path (new)
@@ -115,6 +126,17 @@ public static class WorkbookPdfContentBuilder
         var columnCount = Math.Max(1, contentPlan.ColumnCount);
         var rowCount    = Math.Max(1, contentPlan.RowCount);
 
+        // R79-services-pagesetup-print-5-2: reserve a row-number/column-letter heading gutter from the
+        // content rect when the sheet has "Print row and column headings" enabled, matching
+        // PrintLayoutPlanner.MeasurePrintableGrid's fixed 40px/20px reservation for the WPF print path
+        // -- the gutter eats into the space available for the cell grid rather than being layered on
+        // top of it.
+        const double ptPerPx = SheetPdfPageSetupResolver.PdfPointsPerInch / 96.0;
+        var headingWidthPt  = sheet.PrintHeadings ? HeadingGutterWidthPx  * ptPerPx : 0.0;
+        var headingHeightPt = sheet.PrintHeadings ? HeadingGutterHeightPx * ptPerPx : 0.0;
+        var gridAvailableWidth  = Math.Max(1.0, contentWidth  - headingWidthPt);
+        var gridAvailableHeight = Math.Max(1.0, contentHeight - headingHeightPt);
+
         // Distribute available width/height proportionally to actual column/row sizes, then apply
         // the sheet's Scale%/Fit-to-pages ratio directly to the grid geometry -- matching the WPF
         // PrintRenderer path (PrintRenderer.HeaderFooter.cs), which always applies
@@ -122,12 +144,24 @@ public static class WorkbookPdfContentBuilder
         // unscaled content already fits the page. Excel shrinks/grows every printed element in
         // direct proportion to the configured scale, not merely "when it would otherwise overflow".
         var (colWidths, rowHeights, effectiveScaleRatio) = ComputeActualGridSizes(
-            sheet, contentPlan, contentWidth, contentHeight, scaleRatio);
+            sheet, contentPlan, gridAvailableWidth, gridAvailableHeight, scaleRatio);
 
-        // Grid origin: top-left corner in PDF y-up (top = high y).
-        // We position the grid at the top of the content rect.
-        var gridLeft = contentLeft;
-        var gridTop  = contentTop;   // PDF y-up: top edge = high y value
+        // R79-services-pagesetup-print-5-1: Page Setup > Margins > Center on page (Horizontally /
+        // Vertically) offsets the whole printed block (heading gutter + grid) within the content rect,
+        // matching PageContentRenderModelBuilder.cs's xOffset/yOffset for the WPF print-preview path --
+        // pre-fix, the grid was always pinned flush to the top-left content margin regardless of these
+        // flags.
+        var printedWidth  = headingWidthPt  + colWidths.Sum();
+        var printedHeight = headingHeightPt + rowHeights.Sum();
+        var centerXOffset = sheet.CenterHorizontallyOnPage ? Math.Max(0.0, (contentWidth  - printedWidth)  / 2.0) : 0.0;
+        var centerYOffset = sheet.CenterVerticallyOnPage   ? Math.Max(0.0, (contentHeight - printedHeight) / 2.0) : 0.0;
+        var offsetContentLeft = contentLeft + centerXOffset;
+        var offsetContentTop  = contentTop  - centerYOffset;
+
+        // Grid origin: top-left corner in PDF y-up (top = high y), shifted past the heading gutter (if
+        // any) and by the center-on-page offset (if any).
+        var gridLeft = offsetContentLeft + headingWidthPt;
+        var gridTop  = offsetContentTop  - headingHeightPt;   // PDF y-up: top edge = high y value
 
         // Build a cumulative column-x lookup (left edge of each column).
         var colXs  = BuildCumulative(colWidths,  gridLeft);
@@ -272,6 +306,16 @@ public static class WorkbookPdfContentBuilder
 
                 ops.Add(new PdfLine(lineX, gridTop, lineX, gridBottom, GridLineColor, 0.4));
             }
+        }
+
+        // ── Row/column headings ──────────────────────────────────────────────
+        // R79-services-pagesetup-print-5-2: draw the A/B/C.../1/2/3... heading gutter when the sheet's
+        // Page Setup > Sheet > "Row and column headings" is enabled, matching PrintRenderer.Headings.cs
+        // (DrawPrintHeadings) for the WPF print path.
+        if (sheet.PrintHeadings)
+        {
+            AddPrintHeadings(ops, offsetContentLeft, offsetContentTop, headingWidthPt, headingHeightPt,
+                colWidths, rowHeights, colXs, rowYs, contentPlan);
         }
 
         // ── Header band ────────────────────────────────────────────────────────
@@ -556,6 +600,67 @@ public static class WorkbookPdfContentBuilder
         }
 
         return ys;
+    }
+
+    /// <summary>
+    /// Draws the row-number / column-letter heading gutter for one page, matching
+    /// PrintRenderer.Headings.cs's <c>DrawPrintHeadings</c> for the WPF print path: a light-gray fill +
+    /// border behind each heading cell (plus the top-left corner box), with the column letter / row
+    /// number centered inside.
+    /// </summary>
+    private static void AddPrintHeadings(
+        List<PdfDrawOp> ops,
+        double contentLeft,
+        double contentTop,
+        double headingWidthPt,
+        double headingHeightPt,
+        double[] colWidths,
+        double[] rowHeights,
+        double[] colXs,
+        double[] rowYs,
+        PortablePdfPageContentPlan contentPlan)
+    {
+        var bandTop = contentTop;
+        var bandBottom = contentTop - headingHeightPt;
+
+        // Top-left corner box (blank -- no label).
+        ops.Add(new PdfFillRect(contentLeft, bandBottom, headingWidthPt, headingHeightPt, HeadingFillColor));
+        ops.Add(new PdfStrokeRect(contentLeft, bandBottom, headingWidthPt, headingHeightPt, HeadingBorderColor, 0.4));
+
+        // Column letters, spanning the same column widths/offsets as the cell grid.
+        for (var colIndex = 0; colIndex < colXs.Length && colIndex < colWidths.Length; colIndex++)
+        {
+            var x = colXs[colIndex];
+            var w = colWidths[colIndex];
+            ops.Add(new PdfFillRect(x, bandBottom, w, headingHeightPt, HeadingFillColor));
+            ops.Add(new PdfStrokeRect(x, bandBottom, w, headingHeightPt, HeadingBorderColor, 0.4));
+
+            var label = CellAddress.NumberToColumnName(contentPlan.Columns[colIndex].Column);
+            AddCenteredHeadingText(ops, label, x, w, bandBottom, headingHeightPt);
+        }
+
+        // Row numbers, spanning the same row heights/offsets as the cell grid.
+        for (var rowIndex = 0; rowIndex < rowYs.Length && rowIndex < rowHeights.Length; rowIndex++)
+        {
+            var y = rowYs[rowIndex];
+            var h = rowHeights[rowIndex];
+            ops.Add(new PdfFillRect(contentLeft, y, headingWidthPt, h, HeadingFillColor));
+            ops.Add(new PdfStrokeRect(contentLeft, y, headingWidthPt, h, HeadingBorderColor, 0.4));
+
+            var label = contentPlan.Rows[rowIndex].Row.ToString(CultureInfo.InvariantCulture);
+            AddCenteredHeadingText(ops, label, contentLeft, headingWidthPt, y, h);
+        }
+    }
+
+    /// <summary>Centers <paramref name="label"/> horizontally and vertically inside a heading cell rect.</summary>
+    private static void AddCenteredHeadingText(
+        List<PdfDrawOp> ops, string label, double cellX, double cellWidth, double cellBottomY, double cellHeight)
+    {
+        var textWidth = PortablePdfTextMeasurer.Instance.Measure(
+            label, null, HeadingFontSize, bold: false, italic: false).Width;
+        var textX = cellX + Math.Max(0.0, (cellWidth - textWidth) / 2.0);
+        var baseline = cellBottomY + Math.Max(0.0, (cellHeight - HeadingFontSize) / 2.0) + (HeadingFontSize * 0.3);
+        ops.Add(new PdfText(textX, baseline, HeadingFontSize, PdfFontFace.Regular, HeaderTextColor, label));
     }
 
     private static void AddVectorDrawingOps(

@@ -76,7 +76,10 @@ public partial class GridView
         return occupied;
     }
 
-    private static void DrawConditionalIcon(DrawingContext dc, ConditionalFormatIcon icon, Rect rect) =>
+    // Public (rather than private) so the WPF print/PDF path (PrintRenderer.GridCells.cs, a
+    // different assembly) can draw the exact same icon glyph the interactive grid draws instead of
+    // reimplementing ConditionalIconGlyphRenderer's (internal) geometry a second time.
+    public static void DrawConditionalIcon(DrawingContext dc, ConditionalFormatIcon icon, Rect rect) =>
         ConditionalIconGlyphRenderer.Draw(dc, icon, rect);
 
     public static ConditionalIconGlyphKind ResolveConditionalIconGlyphKind(ConditionalFormatIcon icon) =>

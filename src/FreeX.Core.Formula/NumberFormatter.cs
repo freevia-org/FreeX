@@ -226,15 +226,66 @@ public static partial class NumberFormatter
         WorkbookTheme? theme,
         bool uses1904DateSystem = false)
     {
-        if (sections.Length == 1 && (sections[0].Length == 0 || sections[0][0] != '['))
+        // A single-section format (no ';') that starts with a bracket token is still "one
+        // section" for Excel's sign-placement purposes when that bracket is a modifier --
+        // locale/currency ([$-409], [$$-409]), color ([Red]/[Color12]), theme, or a DBNum/
+        // NatNum directive (see ParseSection) -- not a second section to select between. Only
+        // two kinds of leading bracket actually change how the section is selected/measured
+        // and must keep going through the ParseSections/hasConditions path below unchanged:
+        // an elapsed-time lead token ([h], [hh], [m], [mm], [s], [ss] -- measured via
+        // Math.Abs inside FormatElapsedTime, which already drops the sign on its own) and an
+        // explicit [condition] (which, with only one section, never has an unconditioned
+        // section to fall back to -- see the hasConditions branch's General-format fallback).
+        ParsedSection? bracketModifierSection = null;
+        if (sections.Length == 1 && sections[0].Length > 0 && sections[0][0] == '[' &&
+            !FindUnquotedElapsedTimeToken(sections[0]).Success)
         {
+            var probe = ParseSection(sections[0], indexedColors, theme);
+            if (probe.Condition is null)
+                bracketModifierSection = probe;
+        }
+
+        if (sections.Length == 1 &&
+            (sections[0].Length == 0 || sections[0][0] != '[' || bracketModifierSection is not null))
+        {
+            var effectiveFormat = bracketModifierSection?.Format ?? sections[0];
+            var colorHex = bracketModifierSection?.ColorHex;
+
             // Excel treats a negative value as fundamentally invalid for a date/time-only format
             // (see BuildInvalidDateTimeIndicator) -- check this before splitting sign/magnitude
             // below, since formatting the (always-positive) magnitude as a date would otherwise
             // fabricate a plausible-looking but bogus calendar date/time with no hint that the
-            // underlying value is negative.
-            if (value < 0 && sections[0].Length > 0 && IsDateTimeFormat(sections[0]))
-                return new FormatResult(BuildInvalidDateTimeIndicator(sections[0], targetWidthCharacters));
+            // underlying value is negative. A retained "[$..." locale/currency token (see
+            // ParseSection's IsRetainedSectionDirective) keeps its literal digits (e.g. the
+            // "409" in "[$-409]") in effectiveFormat, which would otherwise trip
+            // IsDateTimeFormat's "no digit-only tokens" heuristic into a false negative -- run
+            // the same locale-token cleanup the generic numeric-format code path further below
+            // applies before checking/reporting, so both the detection and the fallback '#'-run
+            // width match what that generic date/time branch already does.
+            var dateTimeCheckFormat = effectiveFormat.Contains("[$", StringComparison.Ordinal)
+                ? PreserveLocaleCurrencyTokens(effectiveFormat, out _, out _)
+                : effectiveFormat;
+            if (value < 0 && dateTimeCheckFormat.Length > 0 && IsDateTimeFormat(dateTimeCheckFormat))
+                return new FormatResult(BuildInvalidDateTimeIndicator(dateTimeCheckFormat, targetWidthCharacters), colorHex);
+
+            // A simple fraction format (e.g. "?/2", "# ?/?") implements Excel's negative-rounds-
+            // to-all-zero sign suppression internally in FormatSimpleFraction, keyed off whether
+            // the rounded NUMERATOR (and whole part) come out to zero -- not off whether the
+            // rendered text's digits are all '0'. A fixed literal denominator (e.g. the "2" in
+            // "?/2") always renders a non-zero digit even when the fraction itself has rounded
+            // away to nothing, so the generic magnitude+IsAllZeroText scheme below (built for
+            // plain numeric sections, where every digit in the output really does reflect the
+            // value) misfires and leaves a stray "-" in front (R74 vs R79 regression: "-0/2"
+            // instead of "0/2"). Route fraction formats through FormatSimpleFraction with the
+            // ORIGINAL signed value instead, so its own (already correct/tested) sign-suppression
+            // logic runs -- matching what the slower ParseSections/SelectPositionalSection path
+            // (still used for multi-section formats) already does for FormatSimpleFraction.
+            if (IsSimpleFractionFormat(effectiveFormat))
+            {
+                var fractionText = ApplyNativeDigitSubstitution(FormatSimpleFraction(value, effectiveFormat), effectiveFormat);
+                fractionText = ApplyAccountingTargetWidth(fractionText, effectiveFormat, targetWidthCharacters);
+                return new FormatResult(fractionText, colorHex);
+            }
 
             // A single-section format applies to negatives by formatting the MAGNITUDE and prepending a
             // leading minus to the whole result (so "-" sits before any prefix: -¥12.30, not ¥-12.30).
@@ -257,17 +308,17 @@ public static partial class NumberFormatter
                 magnitude = 0.0;
             }
 
-            var singleSectionText = sections[0] == ""
+            var singleSectionText = effectiveFormat == ""
                 ? ""
-                : TryFormatPlainNumericSection(magnitude, sections[0], out var plainNumericText)
+                : TryFormatPlainNumericSection(magnitude, effectiveFormat, out var plainNumericText)
                     ? plainNumericText
-                    : ApplyNumericFormat(magnitude, sections[0], uses1904DateSystem: uses1904DateSystem, targetWidthCharacters: targetWidthCharacters);
-            singleSectionText = ApplyAccountingTargetWidth(singleSectionText, sections[0], targetWidthCharacters);
+                    : ApplyNumericFormat(magnitude, effectiveFormat, uses1904DateSystem: uses1904DateSystem, targetWidthCharacters: targetWidthCharacters);
+            singleSectionText = ApplyAccountingTargetWidth(singleSectionText, effectiveFormat, targetWidthCharacters);
             // Excel never displays negative zero: if sign is "-" but the formatted text
             // is all zeros (after magnitude formatting), drop the sign.
             if (sign == "-" && IsAllZeroText(singleSectionText))
                 sign = "";
-            return new FormatResult(sign + singleSectionText);
+            return new FormatResult(sign + singleSectionText, colorHex);
         }
 
         var parsedSections = ParseSections(sections, indexedColors, theme, out var hasConditions);
@@ -284,7 +335,13 @@ public static partial class NumberFormatter
             {
                 selectedIndex = FindParsedSectionIndex(parsedSections, section => section.Condition is null);
                 if (selectedIndex < 0)
-                    selectedIndex = 0;
+                {
+                    // Every section in this format carries an explicit [condition] and none of
+                    // them matched the value -- Excel has no section left to fall back to, so it
+                    // renders the value with the plain General format (and no color), not the
+                    // first conditioned section's pattern/text/color unconditionally.
+                    return new FormatResult(FormatNumberGeneral(value, targetWidthCharacters));
+                }
             }
 
             section = parsedSections[selectedIndex];

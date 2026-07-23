@@ -37,6 +37,9 @@ public static partial class NumberFormatter
         bool uses1904DateSystem = false)
     {
         var (parsed, displayValue) = SelectDateTimeSection(oaDate, sections, indexedColors, theme);
+        if (parsed is null)
+            return new FormatResult(FormatGeneralDateTime(oaDate, uses1904DateSystem));
+
         if (parsed.Format == "")
             return new FormatResult("", parsed.ColorHex);
 
@@ -45,7 +48,7 @@ public static partial class NumberFormatter
         return new FormatResult(text, parsed.ColorHex);
     }
 
-    private static (ParsedSection Section, double DisplayValue) SelectDateTimeSection(
+    private static (ParsedSection? Section, double DisplayValue) SelectDateTimeSection(
         double value,
         string[] sections,
         WorkbookIndexedColorPalette? indexedColors,
@@ -74,7 +77,10 @@ public static partial class NumberFormatter
                 return (section, value);
         }
 
-        return (parsedSections[0], value);
+        // Every section carries an explicit [condition] and none matched: Excel falls back to
+        // General format (uncolored), not the first conditioned section's pattern/color --
+        // matching the numeric path's identical fallback in FormatNumber.
+        return (null, value);
     }
 
     private static string FormatDateTime(double oaDate, string format, bool uses1904DateSystem = false)

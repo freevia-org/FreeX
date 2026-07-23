@@ -480,7 +480,11 @@ public partial class MainWindow : Window, IWorkbookWindow
         if (fillRange is null)
             return;
 
-        OnAutofillRequested(source, fillRange.Value);
+        // Double-click never raises AutofillModifiersResolved (that pairing only happens at
+        // drag-release), so _autofillCtrlHeld may hold a stale value from an earlier drag.
+        // Excel's double-click fill always behaves like a plain (non-Ctrl) drag, so pass false
+        // explicitly rather than reading the possibly-stale field.
+        ExecuteAutofill(source, fillRange.Value, ctrlHeld: false);
     }
 
     /// <summary>

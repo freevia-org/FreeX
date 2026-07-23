@@ -20,8 +20,20 @@ public partial class MainWindow
         _sparklineValueCache.Clear();
     }
 
+    private void RefreshKeyLockIndicators()
+    {
+        var plan = KeyLockIndicatorPlanner.Build(
+            System.Windows.Input.Keyboard.IsKeyToggled(System.Windows.Input.Key.CapsLock),
+            System.Windows.Input.Keyboard.IsKeyToggled(System.Windows.Input.Key.NumLock));
+
+        SetVisibilityIfChanged(StatusCapsLockText, ToVisibility(plan.CapsLockVisible));
+        SetVisibilityIfChanged(StatusNumLockText, ToVisibility(plan.NumLockVisible));
+    }
+
     private void RefreshStatusBar()
     {
+        RefreshKeyLockIndicators();
+
         var sheet = _workbook.GetSheet(_currentSheetId);
         var selectedRange = SheetGrid.SelectedRange;
         var selectedRanges = SheetGrid.SelectedRanges;

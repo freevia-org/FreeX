@@ -447,16 +447,17 @@ internal static class XlsxSparklineMapper
         AddColorElement(el, x14Ns, "colorHigh",      representative.HighPointColor);
         AddColorElement(el, x14Ns, "colorLow",       representative.LowPointColor);
 
-        // dateAxis (schema order: after the color elements, before the sparklines list).
+        // date axis (schema order: after the color elements, before the sparklines list).
+        // Per CT_SparklineGroup there is no wrapper element -- the range is a bare <xm:f> that is a
+        // direct child of the group, gated by the group's own dateAxis="1" boolean attribute.
         // The date-axis range may reference a different sheet than the host sheet, same as a
-        // sparkline's data range; if that sheet no longer exists, omit the element rather than
-        // write a dangling/misattributed reference.
+        // sparkline's data range; if that sheet no longer exists, omit it rather than write a
+        // dangling/misattributed reference.
         if (representative.DateAxisRange is { } dateAxisRange &&
             ResolveSheetName(workbook, sheet, dateAxisRange.Start.Sheet) is { } dateAxisSheetName)
         {
-            el.Add(new XElement(
-                x14Ns + "dateAxis",
-                new XElement(xmNs + "f", $"{SheetNameFormatter.QuoteIfNeeded(dateAxisSheetName)}!{dateAxisRange}")));
+            el.Add(new XAttribute("dateAxis", "1"));
+            el.Add(new XElement(xmNs + "f", $"{SheetNameFormatter.QuoteIfNeeded(dateAxisSheetName)}!{dateAxisRange}"));
         }
 
         // sparklines list. Each sparkline's DataRange may live on a different sheet than the host
@@ -499,8 +500,10 @@ internal static class XlsxSparklineMapper
     }
 
     /// <summary>
-    /// Reads the group's optional &lt;x14:dateAxis&gt;&lt;xm:f&gt;range&lt;/xm:f&gt;&lt;/x14:dateAxis&gt;
-    /// (Excel's sparkline "Date Axis Type" setting). The formula may be sheet-qualified
+    /// Reads the group's optional date-axis range (Excel's sparkline "Date Axis Type" setting).
+    /// Per CT_SparklineGroup there is no wrapper element -- the range is a bare &lt;xm:f&gt; that is a
+    /// direct child of the group (after the color elements, before &lt;x14:sparklines&gt;), gated by
+    /// the group's own <c>dateAxis="1"</c> boolean attribute. The formula may be sheet-qualified
     /// (e.g. "Sheet1!$A$1:$A$5") and — like the sparkline data range — may point at a DIFFERENT sheet
     /// than the host. The bare range is parsed against the placeholder <paramref name="sheet"/> and the
     /// qualifier's sheet NAME is returned alongside so the caller can resolve it to the real SheetId.
@@ -508,9 +511,13 @@ internal static class XlsxSparklineMapper
     /// </summary>
     private static (GridRange? Range, string? SheetName) ReadDateAxisRange(XElement group, SheetId sheet)
     {
-        var dateAxis = group.Elements().FirstOrDefault(e =>
-            string.Equals(e.Name.LocalName, "dateAxis", StringComparison.OrdinalIgnoreCase));
-        var formula = FindChildByLocalName(dateAxis, "f")?.Value;
+        var dateAxisAttr = group.Attribute("dateAxis")?.Value;
+        var hasDateAxis = string.Equals(dateAxisAttr, "1", StringComparison.Ordinal) ||
+            string.Equals(dateAxisAttr, "true", StringComparison.OrdinalIgnoreCase);
+        if (!hasDateAxis)
+            return (null, null);
+
+        var formula = FindChildByLocalName(group, "f")?.Value;
         if (string.IsNullOrWhiteSpace(formula))
             return (null, null);
 

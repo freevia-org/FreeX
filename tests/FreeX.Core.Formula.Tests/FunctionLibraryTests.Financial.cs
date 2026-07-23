@@ -349,6 +349,46 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=NPV(A1,100)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void Npv_RateExactlyNegativeOne_ReturnsDivByZeroError()
+    {
+        // R79-formula-financial-5-3: rate=-1 makes (1+rate)^1 = 0, so 100/0 is a literal
+        // division by zero. Excel's standard x/0 propagation rule surfaces #DIV/0! here (a
+        // different error than XNPV/XIRR's documented #NUM! for their own rate<=-1 boundary).
+        // Before the fix, Npv only guarded against non-finite rate, let the division produce
+        // +Infinity, and then NumberResult collapsed any non-finite sum to the generic #NUM!.
+        _eval.Evaluate("=NPV(-1,100)", MakeSheet()).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Fact]
+    public void Npv_RateExactlyNegativeOne_MultipleValues_ReturnsDivByZeroError()
+    {
+        // Same as above but with multiple cash flows, confirming the error fires on the first
+        // zero-denominator term rather than only when there is exactly one value.
+        _eval.Evaluate("=NPV(-1,100,200,300)", MakeSheet()).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Fact]
+    public void Npv_RateExactlyNegativeOne_DirectRangeFastPath_ReturnsDivByZeroError()
+    {
+        // Same rate=-1 boundary but routed through the direct-range fast path
+        // (TryEvaluateNpvDirectRanges in FormulaEvaluator.FinancialFastPaths.cs), which shares
+        // the identical division and must surface the same #DIV/0! rather than #NUM!.
+        var sheet = MakeSheet((1, 1, new NumberValue(100)), (2, 1, new NumberValue(200)));
+        _eval.Evaluate("=NPV(-1,A1:A2)", sheet).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Fact]
+    public void Npv_RateLessThanNegativeOne_NoRegression()
+    {
+        // No-regression sibling: rate < -1 (e.g. -2) never zeroes the denominator for an integer
+        // exponent -- Math.Pow(-1, n) is +/-1, not 0 -- so NPV must still compute a normal finite
+        // result rather than erroring, confirming the new denom==0 guard only fires exactly at
+        // the true division-by-zero boundary.
+        ((NumberValue)_eval.Evaluate("=NPV(-2,100)", MakeSheet())).Value
+            .Should().BeApproximately(100.0 / -1.0, 1e-9);
+    }
+
     [Fact] public void Irr_CashflowSeries_ReturnsRate()
     {
         var sheet = MakeSheet(

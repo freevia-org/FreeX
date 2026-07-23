@@ -152,7 +152,7 @@ public sealed partial class MainWindow
     private Canvas? BuildPageBreakPreviewOverlay(ViewportModel viewport, bool showHeadings, double zoomFactor)
     {
         var sheet = _session.ActiveSheet;
-        if (!PageBreakPreviewInstructionBuilder.TryResolvePrintRange(sheet, out var printRange))
+        if (!PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out var printRanges))
             return null;
 
         var displayViewport = PageBreakPreviewInstructionBuilder.ProjectToDisplaySpace(
@@ -168,7 +168,7 @@ public sealed partial class MainWindow
 
         var layout = PageBreakPreviewLayoutPlanner.Calculate(
             displayViewport,
-            printRange,
+            printRanges,
             sheet.RowPageBreaks,
             sheet.ColumnPageBreaks,
             sheet.PageOrder,

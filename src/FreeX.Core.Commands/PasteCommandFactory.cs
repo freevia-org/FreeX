@@ -331,6 +331,7 @@ public static class PasteCommandFactory
             var specialRichTextRuns = specialCarriesFormatting ? sourceSheet?.RichTextRuns : null;
             var specialHyperlinks = specialCarriesFormatting ? sourceSheet?.Hyperlinks : null;
             var specialHyperlinkMetadata = specialCarriesFormatting ? sourceSheet?.HyperlinkMetadata : null;
+            var specialPhoneticGuides = specialCarriesFormatting ? sourceSheet?.CellPhoneticGuides : null;
 
             var pasteSpecialCommand = new PasteSpecialCellsCommand(
                 targetSheetId,
@@ -340,7 +341,8 @@ public static class PasteCommandFactory
                 options,
                 specialRichTextRuns,
                 specialHyperlinks,
-                specialHyperlinkMetadata);
+                specialHyperlinkMetadata,
+                specialPhoneticGuides);
 
             var specialExtraCommands = new List<IWorkbookCommand>();
             if (specialCarriesFormatting && sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange)))

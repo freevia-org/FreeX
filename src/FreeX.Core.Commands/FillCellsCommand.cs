@@ -19,6 +19,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
     private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
     private List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>? _richTextRunsSnapshot;
+    private List<(CellAddress Address, bool HadPhoneticGuide, CellPhoneticGuide? PhoneticGuide)>? _phoneticGuideSnapshot;
 
     public string Label => _direction switch
     {
@@ -68,6 +69,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
         _snapshot = [];
         _hyperlinkSnapshot = [];
         _richTextRunsSnapshot = [];
+        _phoneticGuideSnapshot = [];
         foreach (var target in targets)
         {
             _snapshot.Add((target, sheet.GetCell(target)?.Clone(), sheet.GetStyleOnly(target.Row, target.Col)));
@@ -81,6 +83,10 @@ public sealed class FillCellsCommand : IWorkbookCommand
                 target,
                 sheet.RichTextRuns.TryGetValue(target, out var oldRuns),
                 oldRuns));
+            _phoneticGuideSnapshot.Add((
+                target,
+                sheet.CellPhoneticGuides.TryGetValue(target, out var oldPhoneticGuide),
+                oldPhoneticGuide));
 
             var source = GetSourceAddress(target);
             var sourceCell = sheet.GetCell(source);
@@ -94,6 +100,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
                 sheet.Hyperlinks.Remove(target);
                 sheet.HyperlinkMetadata.Remove(target);
                 sheet.RichTextRuns.Remove(target);
+                sheet.CellPhoneticGuides.Remove(target);
                 continue;
             }
 
@@ -112,6 +119,11 @@ public sealed class FillCellsCommand : IWorkbookCommand
                 sheet.RichTextRuns[target] = sourceRuns;
             else
                 sheet.RichTextRuns.Remove(target);
+
+            if (sheet.CellPhoneticGuides.TryGetValue(source, out var sourcePhoneticGuide))
+                sheet.CellPhoneticGuides[target] = sourcePhoneticGuide;
+            else
+                sheet.CellPhoneticGuides.Remove(target);
         }
 
         return new CommandOutcome(true, AffectedCells: targets);
@@ -161,6 +173,17 @@ public sealed class FillCellsCommand : IWorkbookCommand
                 sheet.RichTextRuns[address] = runs;
             else
                 sheet.RichTextRuns.Remove(address);
+        }
+
+        if (_phoneticGuideSnapshot is null)
+            return;
+
+        foreach (var (address, hadPhoneticGuide, phoneticGuide) in _phoneticGuideSnapshot)
+        {
+            if (hadPhoneticGuide && phoneticGuide is not null)
+                sheet.CellPhoneticGuides[address] = phoneticGuide;
+            else
+                sheet.CellPhoneticGuides.Remove(address);
         }
     }
 
@@ -296,6 +319,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
         _snapshot = [];
         _hyperlinkSnapshot = [];
         _richTextRunsSnapshot = [];
+        _phoneticGuideSnapshot = [];
         var writtenCells = new List<CellAddress>(targetAnchors.Count);
 
         foreach (var target in targetAnchors)
@@ -312,6 +336,10 @@ public sealed class FillCellsCommand : IWorkbookCommand
                 target,
                 sheet.RichTextRuns.TryGetValue(target, out var oldRuns),
                 oldRuns));
+            _phoneticGuideSnapshot.Add((
+                target,
+                sheet.CellPhoneticGuides.TryGetValue(target, out var oldPhoneticGuide),
+                oldPhoneticGuide));
 
             var sourceCell = sheet.GetCell(source);
             if (sourceCell is null)
@@ -343,6 +371,11 @@ public sealed class FillCellsCommand : IWorkbookCommand
                 sheet.RichTextRuns[target] = sourceRuns;
             else
                 sheet.RichTextRuns.Remove(target);
+
+            if (sheet.CellPhoneticGuides.TryGetValue(source, out var sourcePhoneticGuide))
+                sheet.CellPhoneticGuides[target] = sourcePhoneticGuide;
+            else
+                sheet.CellPhoneticGuides.Remove(target);
 
             writtenCells.Add(target);
         }

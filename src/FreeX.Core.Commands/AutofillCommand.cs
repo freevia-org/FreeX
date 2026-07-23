@@ -20,6 +20,7 @@ public sealed class AutofillCommand : IWorkbookCommand
     private List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
     private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
     private List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>? _richTextRunsSnapshot;
+    private List<(CellAddress Address, bool HadPhoneticGuide, CellPhoneticGuide? PhoneticGuide)>? _phoneticGuideSnapshot;
     private List<GridRange>? _createdMergedRegions;
 
     public string Label => "Autofill";
@@ -110,6 +111,7 @@ public sealed class AutofillCommand : IWorkbookCommand
         _snapshot = new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(capacity);
         _hyperlinkSnapshot = new List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>(capacity);
         _richTextRunsSnapshot = new List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>(capacity);
+        _phoneticGuideSnapshot = new List<(CellAddress Address, bool HadPhoneticGuide, CellPhoneticGuide? PhoneticGuide)>(capacity);
         var writtenCells = new List<CellAddress>(capacity);
 
         for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
@@ -221,6 +223,7 @@ public sealed class AutofillCommand : IWorkbookCommand
         _snapshot = new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(capacity);
         _hyperlinkSnapshot = new List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>(capacity);
         _richTextRunsSnapshot = new List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>(capacity);
+        _phoneticGuideSnapshot = new List<(CellAddress Address, bool HadPhoneticGuide, CellPhoneticGuide? PhoneticGuide)>(capacity);
         var writtenCells = new List<CellAddress>(capacity);
 
         for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
@@ -329,6 +332,7 @@ public sealed class AutofillCommand : IWorkbookCommand
         _snapshot = new List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>(capacity);
         _hyperlinkSnapshot = new List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>(capacity);
         _richTextRunsSnapshot = new List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>(capacity);
+        _phoneticGuideSnapshot = new List<(CellAddress Address, bool HadPhoneticGuide, CellPhoneticGuide? PhoneticGuide)>(capacity);
         _createdMergedRegions = [];
         var writtenCells = new List<CellAddress>(capacity);
 
@@ -460,9 +464,20 @@ public sealed class AutofillCommand : IWorkbookCommand
                     sheet.RichTextRuns.Remove(address);
             }
         }
+
+        if (_phoneticGuideSnapshot is not null)
+        {
+            foreach (var (address, hadPhoneticGuide, phoneticGuide) in _phoneticGuideSnapshot)
+            {
+                if (hadPhoneticGuide && phoneticGuide is not null)
+                    sheet.CellPhoneticGuides[address] = phoneticGuide;
+                else
+                    sheet.CellPhoneticGuides.Remove(address);
+            }
+        }
     }
 
-    /// <summary>Snapshots a destination cell's hyperlink/rich-text annotations before overwriting it, for undo.</summary>
+    /// <summary>Snapshots a destination cell's hyperlink/rich-text/phonetic-guide annotations before overwriting it, for undo.</summary>
     private void SnapshotAnnotations(Sheet sheet, CellAddress addr)
     {
         _hyperlinkSnapshot!.Add((
@@ -475,6 +490,10 @@ public sealed class AutofillCommand : IWorkbookCommand
             addr,
             sheet.RichTextRuns.TryGetValue(addr, out var oldRuns),
             oldRuns));
+        _phoneticGuideSnapshot!.Add((
+            addr,
+            sheet.CellPhoneticGuides.TryGetValue(addr, out var oldPhoneticGuide),
+            oldPhoneticGuide));
     }
 
     /// <summary>
@@ -500,6 +519,7 @@ public sealed class AutofillCommand : IWorkbookCommand
         if (!copyRichTextRuns)
         {
             sheet.RichTextRuns.Remove(target);
+            sheet.CellPhoneticGuides.Remove(target);
             return;
         }
 
@@ -507,14 +527,20 @@ public sealed class AutofillCommand : IWorkbookCommand
             sheet.RichTextRuns[target] = sourceRuns;
         else
             sheet.RichTextRuns.Remove(target);
+
+        if (sheet.CellPhoneticGuides.TryGetValue(source, out var sourcePhoneticGuide))
+            sheet.CellPhoneticGuides[target] = sourcePhoneticGuide;
+        else
+            sheet.CellPhoneticGuides.Remove(target);
     }
 
-    /// <summary>Drops a destination cell's hyperlink/rich-text annotations (Clear Contents semantics).</summary>
+    /// <summary>Drops a destination cell's hyperlink/rich-text/phonetic-guide annotations (Clear Contents semantics).</summary>
     private static void ClearAnnotations(Sheet sheet, CellAddress addr)
     {
         sheet.Hyperlinks.Remove(addr);
         sheet.HyperlinkMetadata.Remove(addr);
         sheet.RichTextRuns.Remove(addr);
+        sheet.CellPhoneticGuides.Remove(addr);
     }
 
 

@@ -22,6 +22,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
+    private Dictionary<CellAddress, CellPhoneticGuide>? _phoneticGuideSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
     private Dictionary<Guid, string?>? _cfFormulaSnapshot;
@@ -277,6 +278,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         _hyperlinkSnapshot = CaptureDictionary(ResolveSheet, static s => s.Hyperlinks, affected);
         _hyperlinkMetadataSnapshot = CaptureDictionary(ResolveSheet, static s => s.HyperlinkMetadata, affected);
         _richTextRunsSnapshot = CaptureDictionary(ResolveSheet, static s => s.RichTextRuns, affected);
+        _phoneticGuideSnapshot = CaptureDictionary(ResolveSheet, static s => s.CellPhoneticGuides, affected);
         _sparklineSnapshot = CaptureSparklinesByLocation(ResolveSheet, affected);
         _payloadAffectedCells = affected;
 
@@ -486,6 +488,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         RestoreDictionary(ResolveSheet, static s => s.Hyperlinks, _hyperlinkSnapshot, _payloadAffectedCells);
         RestoreDictionary(ResolveSheet, static s => s.HyperlinkMetadata, _hyperlinkMetadataSnapshot, _payloadAffectedCells);
         RestoreDictionary(ResolveSheet, static s => s.RichTextRuns, _richTextRunsSnapshot, _payloadAffectedCells);
+        RestoreDictionary(ResolveSheet, static s => s.CellPhoneticGuides, _phoneticGuideSnapshot, _payloadAffectedCells);
         RestoreSparklines(ResolveSheet, _sparklineSnapshot, _payloadAffectedCells);
         // Restore DV/CF rule ranges that were translated during the move.
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sourceSheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
@@ -550,6 +553,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                 sheet.Hyperlinks.TryGetValue(source, out var hyperlink) ? hyperlink : null,
                 sheet.HyperlinkMetadata.TryGetValue(source, out var metadata) ? metadata : null,
                 sheet.RichTextRuns.TryGetValue(source, out var richRuns) ? richRuns : null,
+                sheet.CellPhoneticGuides.TryGetValue(source, out var phoneticGuide) ? phoneticGuide : null,
                 sparklinesByLocation is not null && sparklinesByLocation.TryGetValue(source, out var sourceSparkline)
                     ? CloneSparklineAt(
                         sourceSparkline,
@@ -694,6 +698,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         sheet.Hyperlinks.Remove(address);
         sheet.HyperlinkMetadata.Remove(address);
         sheet.RichTextRuns.Remove(address);
+        sheet.CellPhoneticGuides.Remove(address);
         RemoveSparklineAt(sheet, address);
     }
 
@@ -724,6 +729,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.HyperlinkMetadata[payload.Target] = payload.HyperlinkMetadata;
         if (payload.RichTextRuns is not null)
             sheet.RichTextRuns[payload.Target] = payload.RichTextRuns;
+        if (payload.PhoneticGuide is not null)
+            sheet.CellPhoneticGuides[payload.Target] = payload.PhoneticGuide;
         if (payload.Sparkline is not null)
             sheet.Sparklines.Add(payload.Sparkline);
     }
@@ -954,6 +961,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         string? Hyperlink,
         HyperlinkMetadata? HyperlinkMetadata,
         IReadOnlyList<CellTextRun>? RichTextRuns,
+        CellPhoneticGuide? PhoneticGuide,
         SparklineModel? Sparkline);
 
     /// <summary>

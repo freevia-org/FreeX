@@ -691,6 +691,9 @@ public partial class MainWindow
         if (IsControlModifierKey(e))
             SheetGrid.RefreshPointerCursor();
 
+        if (e.Key is System.Windows.Input.Key.CapsLock or System.Windows.Input.Key.NumLock)
+            RefreshKeyLockIndicators();
+
         if (Keyboard.FocusedElement is not TextBox and not ComboBox)
         {
             var keyTipKey = GetEffectiveKey(e);

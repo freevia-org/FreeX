@@ -270,7 +270,11 @@ public sealed partial class FormulaEvaluator
                 return null;
 
             valueIndex++;
-            total += value / Math.Pow(1 + rate, valueIndex);
+            var denom = Math.Pow(1 + rate, valueIndex);
+            // rate == -1 zeroes every discount factor: Excel's plain x/0 #DIV/0! propagation,
+            // matching the slow-path Npv in BuiltInFunctions.Financial.CashFlow.cs.
+            if (denom == 0) return ErrorValue.DivByZero;
+            total += value / denom;
         }
     }
 
@@ -287,7 +291,11 @@ public sealed partial class FormulaEvaluator
         if (hasNumber)
         {
             valueIndex++;
-            total += value / Math.Pow(1 + rate, valueIndex);
+            var denom = Math.Pow(1 + rate, valueIndex);
+            // rate == -1 zeroes every discount factor: Excel's plain x/0 #DIV/0! propagation,
+            // matching the slow-path Npv in BuiltInFunctions.Financial.CashFlow.cs.
+            if (denom == 0) return ErrorValue.DivByZero;
+            total += value / denom;
         }
 
         return null;
