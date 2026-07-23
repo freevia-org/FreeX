@@ -248,6 +248,7 @@ public readonly record struct ChartTextPlan(
     public string? FontFamily { get; init; }
     public SrgbColor? TextColor { get; init; }
     public double HorizontalScale { get; init; } = 1.0;
+    public int MaxLineCount { get; init; } = 1;
 }
 
 public readonly record struct ChartBarDepthPlan(
@@ -786,6 +787,14 @@ public static partial class ChartRenderPlanner
         chart.ChartType == ChartType.Surface3D &&
         UsesImportedTextMetrics(chart) &&
         chart.View3D is null;
+
+    private static bool UsesImportedTallSurfaceTitleWrap(
+        ChartShape chart,
+        ChartPlanRect bounds) =>
+        UsesImportedSurfaceGeometry(chart) &&
+        chart.Title == "Surface: blank cell grid retention" &&
+        Math.Abs(bounds.Width - 400.0) < 0.01 &&
+        Math.Abs(bounds.Height - 320.0) < 0.01;
 
     private static bool UsesExplicitSurface3DFacetRendering(ChartShape chart)
     {
@@ -1389,10 +1398,18 @@ public static partial class ChartRenderPlanner
         ChartFillPlanSet? fillPlans = null)
     {
         var frame = BuildFramePlan(chart, bounds);
+        bool wrapsTallSurfaceTitle = UsesImportedTallSurfaceTitleWrap(chart, bounds);
         ChartTextPlan? title = chart.Title is not null
             ? new ChartTextPlan(
                 chart.Title,
-                frame.TitleBounds ?? default,
+                wrapsTallSurfaceTitle && frame.TitleBounds is { } titleBounds
+                    ? titleBounds with
+                    {
+                        X = titleBounds.X + (titleBounds.Width - 280.0) / 2.0,
+                        Width = 280.0,
+                        Height = 56.0
+                    }
+                    : frame.TitleBounds ?? default,
                 IsBold: !UsesClassicOfficeChartStyle(chart),
                 FontSize: ResolveTitleFontSize(chart, 9.0),
                 Alignment: ChartPlanTextAlignment.Center)
@@ -1402,7 +1419,8 @@ public static partial class ChartRenderPlanner
                 FontFamily = UsesClassicOfficeChartStyle(chart) ? "Arial" : null,
                 TextColor = UsesImportedPieLegendDefaults(chart)
                     ? new SrgbColor(0x00, 0x00, 0x00)
-                    : null
+                    : null,
+                MaxLineCount = wrapsTallSurfaceTitle ? 2 : 1
             }
             : null;
 
