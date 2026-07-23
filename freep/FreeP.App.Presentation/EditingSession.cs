@@ -399,9 +399,8 @@ public sealed class EditingSession
     }
 
     /// <summary>
-    /// Moves one selected top-level shape within the slide reading order.
-    /// Group children remain selectable in the pane, but their move actions are deferred
-    /// until the model has an explicit group-level reading-order contract.
+    /// Moves one selected shape within its containing reading-order sibling list.
+    /// Group children remain inside their parent group while moving among siblings.
     /// </summary>
     public bool MoveSelectedShapeInReadingOrder(int offset)
     {
@@ -410,13 +409,35 @@ public sealed class EditingSession
         if (step == 0) return false;
 
         var id = _selectedShapeIds[0];
-        var shapes = CurrentSlide.Shapes;
+        var shapes = FindContainingShapeList(CurrentSlide.Shapes, id);
+        if (shapes is null) return false;
         var idx = shapes.FindIndex(s => s.Id == id);
         var targetIndex = idx + step;
         if (idx < 0 || targetIndex < 0 || targetIndex >= shapes.Count) return false;
 
         Bus.Execute(new ReorderShapeCommand(_currentSlideIndex, id, targetIndex));
         return true;
+    }
+
+    private static List<SlideShape>? FindContainingShapeList(
+        List<SlideShape> shapes,
+        uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+            {
+                return shapes;
+            }
+
+            if (shape.Children.Count > 0 &&
+                FindContainingShapeList(shape.Children, shapeId) is { } childList)
+            {
+                return childList;
+            }
+        }
+
+        return null;
     }
 
     // ── Transition operations ─────────────────────────────────────────────────────

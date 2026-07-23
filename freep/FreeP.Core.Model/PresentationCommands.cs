@@ -313,6 +313,36 @@ file static class ShapeHelper
         if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
         return p.Slides[slideIndex].Shapes;
     }
+
+    internal static List<SlideShape>? FindContainingList(
+        Presentation p,
+        int slideIndex,
+        uint shapeId)
+    {
+        var shapes = Shapes(p, slideIndex);
+        return shapes is null ? null : FindContainingList(shapes, shapeId);
+    }
+
+    private static List<SlideShape>? FindContainingList(
+        List<SlideShape> shapes,
+        uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+            {
+                return shapes;
+            }
+
+            if (shape.Children.Count > 0 &&
+                FindContainingList(shape.Children, shapeId) is { } childList)
+            {
+                return childList;
+            }
+        }
+
+        return null;
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -638,7 +668,7 @@ public sealed class ReorderShapeCommand : IPresentationCommand
     private readonly int  _slideIndex;
     private readonly uint _shapeId;
     private readonly int  _newZIndex;
-    private int           _oldZIndex;
+    private int           _oldZIndex = -1;
 
     public ReorderShapeCommand(int slideIndex, uint shapeId, int newZIndex)
     {
@@ -651,7 +681,7 @@ public sealed class ReorderShapeCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper.FindContainingList(p, _slideIndex, _shapeId);
         if (shapes is null) return;
         _oldZIndex = shapes.FindIndex(s => s.Id == _shapeId);
         if (_oldZIndex < 0) return;
@@ -660,8 +690,9 @@ public sealed class ReorderShapeCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var shapes = ShapeHelper.Shapes(p, _slideIndex);
-        if (shapes is null || _oldZIndex < 0) return;
+        if (_oldZIndex < 0) return;
+        var shapes = ShapeHelper.FindContainingList(p, _slideIndex, _shapeId);
+        if (shapes is null) return;
         MoveInList(shapes, _newZIndex, _oldZIndex);
     }
 

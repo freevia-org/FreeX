@@ -3224,7 +3224,7 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public async Task ReadingOrderPane_defers_nested_group_child_move_through_shared_plan()
+    public async Task ReadingOrderPane_moves_nested_group_child_within_sibling_order()
     {
         PresentationReadingOrderPlan? initialPlan = null;
         PresentationReadingOrderMutationPlan? nestedMove = null;
@@ -3304,19 +3304,19 @@ public sealed class MainWindowHeadlessTests
         initialPlan.SelectedItem!.ShapeId.Should().Be(702);
         initialPlan.SelectedItem.NestingDepth.Should().Be(1);
         moveEarlierEnabled.Should().BeFalse();
-        moveEarlierDisabledReason.Should().Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
-        moveLaterEnabled.Should().BeFalse();
-        moveLaterDisabledReason.Should().Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
+        moveEarlierDisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
+        moveLaterEnabled.Should().BeTrue();
+        moveLaterDisabledReason.Should().BeNull();
         nestedMove.Should().Be(new PresentationReadingOrderMutationPlan(
             PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
-            false,
+            true,
             0,
             702,
-            -1,
-            -1,
-            PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
-        childOrderAfterMove.Should().Equal(702u, 703u);
-        paneOrderAfterMove.Should().Equal(700u, 701u, 702u, 703u);
+            0,
+            1,
+            null));
+        childOrderAfterMove.Should().Equal(703u, 702u);
+        paneOrderAfterMove.Should().Equal(700u, 701u, 703u, 702u);
         boundaryMove.Should().Be(new PresentationReadingOrderMutationPlan(
             PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
             false,
@@ -3324,7 +3324,7 @@ public sealed class MainWindowHeadlessTests
             702,
             -1,
             -1,
-            PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+            PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage));
     }
 
     [Fact]
