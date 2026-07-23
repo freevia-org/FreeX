@@ -156,6 +156,41 @@ public sealed partial class FormulaEvaluator
         var ignoreErrors = options is 2 or 3 or 6 or 7;
         var ignoreHiddenRows = options is 1 or 3 or 5 or 7;
         var ignoreNestedAggregates = options <= 3;
+
+        // The common single-range form should stay allocation-light after the formula has been
+        // parsed. Keep the multi-range list for formulas that genuinely need it, but do not create
+        // a list and backing array for =AGGREGATE(...,A1:A100000).
+        if (node.Arguments.Count == 3)
+        {
+            var rangeState = TryCreateDirectRangeArgument(node.Arguments[2], context, out var range, out result);
+            if (rangeState == DirectRangeFastPathState.Unsupported)
+                return false;
+            if (rangeState == DirectRangeFastPathState.Error)
+                return true;
+
+            var singleNumeric = new DirectRangeNumericAccumulator();
+            long singleCountA = 0;
+            if (!TryAccumulateAggregateDirectRange(
+                    context,
+                    range,
+                    funcNum,
+                    ignoreErrors,
+                    ignoreHiddenRows,
+                    ignoreNestedAggregates,
+                    ref singleNumeric,
+                    ref singleCountA,
+                    out var rangeError))
+            {
+                result = rangeError!;
+                return true;
+            }
+
+            result = funcNum == 3
+                ? NumberValueFor(singleCountA)
+                : EvaluateSubtotalAggregateNumericResult(funcNum, singleNumeric, countA: 0);
+            return true;
+        }
+
         var ranges = new List<DirectRangeArgument>(node.Arguments.Count - 2);
 
         for (var index = 2; index < node.Arguments.Count; index++)
@@ -174,42 +209,72 @@ public sealed partial class FormulaEvaluator
 
         foreach (var range in ranges)
         {
-            for (var row = range.StartRow; row <= range.EndRow; row++)
+            if (!TryAccumulateAggregateDirectRange(
+                    context,
+                    range,
+                    funcNum,
+                    ignoreErrors,
+                    ignoreHiddenRows,
+                    ignoreNestedAggregates,
+                    ref numeric,
+                    ref countA,
+                    out var rangeError))
             {
-                if (ignoreHiddenRows && IsFastAggregateRowHidden(context, range, row))
-                    continue;
-
-                for (var col = range.StartCol; col <= range.EndCol; col++)
-                {
-                    if (ignoreNestedAggregates && IsFastNestedSubtotalOrAggregateCell(context, range, row, col))
-                        continue;
-
-                    var value = GetFastRangeCellValue(context, range, row, col);
-                    if (value is ErrorValue error)
-                    {
-                        if (ignoreErrors)
-                            continue;
-
-                        result = error;
-                        return true;
-                    }
-
-                    if (funcNum == 3)
-                    {
-                        if (value is not BlankValue)
-                            countA++;
-                    }
-                    else if (TryDirectRangeNumber(value, out var number, out _))
-                    {
-                        numeric.Add(number, funcNum);
-                    }
-                }
+                result = rangeError!;
+                return true;
             }
         }
 
         result = funcNum == 3
             ? NumberValueFor(countA)
             : EvaluateSubtotalAggregateNumericResult(funcNum, numeric, countA: 0);
+        return true;
+    }
+
+    private static bool TryAccumulateAggregateDirectRange(
+        IEvalContext context,
+        DirectRangeArgument range,
+        int funcNum,
+        bool ignoreErrors,
+        bool ignoreHiddenRows,
+        bool ignoreNestedAggregates,
+        ref DirectRangeNumericAccumulator numeric,
+        ref long countA,
+        out ErrorValue? error)
+    {
+        error = null;
+        for (var row = range.StartRow; row <= range.EndRow; row++)
+        {
+            if (ignoreHiddenRows && IsFastAggregateRowHidden(context, range, row))
+                continue;
+
+            for (var col = range.StartCol; col <= range.EndCol; col++)
+            {
+                if (ignoreNestedAggregates && IsFastNestedSubtotalOrAggregateCell(context, range, row, col))
+                    continue;
+
+                var value = GetFastRangeCellValue(context, range, row, col);
+                if (value is ErrorValue cellError)
+                {
+                    if (ignoreErrors)
+                        continue;
+
+                    error = cellError;
+                    return false;
+                }
+
+                if (funcNum == 3)
+                {
+                    if (value is not BlankValue)
+                        countA++;
+                }
+                else if (TryDirectRangeNumber(value, out var number, out _))
+                {
+                    numeric.Add(number, funcNum);
+                }
+            }
+        }
+
         return true;
     }
 

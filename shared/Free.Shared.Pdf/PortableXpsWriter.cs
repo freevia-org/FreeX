@@ -121,7 +121,7 @@ public static class PortableXpsWriter
                 if (options.TextFont is null)
                 {
                     requirements.Add(
-                        "PdfText requires an embedded XPS font resource; the current Avalonia renderer exposes text strings but no font bytes/glyph mapping");
+                        "PdfText requires an embedded XPS font resource; the current renderer exposes text strings but no font bytes/glyph mapping");
                 }
                 break;
             case PdfImage image:
