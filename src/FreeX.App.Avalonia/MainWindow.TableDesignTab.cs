@@ -31,6 +31,9 @@ public sealed partial class MainWindow
     private bool TryGetActiveStructuredTable(out StructuredTableModel table)
     {
         table = null!;
+        if (_selectedDrawingObjectKind is not null)
+            return false;
+
         var sheet = _session.ActiveSheet;
         var activeCell = _session.ActiveCell;
 

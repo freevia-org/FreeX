@@ -58,6 +58,24 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("Mail merge error check selected:");
     }
 
+    [Fact]
+    public void MailingsCommandHost_PreservesWpfPreviewAndSessionInvalidationContracts()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("if (!_mailMerge.EnsurePreviewingForNavigation())");
+        source.Should().Contain("_mailMerge.ApplyFieldMapping(mapping);");
+        source.Should().Contain(
+            "Select recipients first (Mailings > Select Recipients), then match fields.");
+        source.Should().Contain(
+            "Select recipients first (Mailings > Select Recipients), then filter and sort.");
+        source.Should().Contain(
+            "Select recipients first (Mailings > Select Recipients), then preview a record.");
+        source.Should().Contain(
+            "Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
+    }
+
     private static string RepositoryFile(params string[] relativeParts)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -232,6 +232,35 @@ public sealed class MailingsTabTests
     }
 
     [Fact]
+    public void EnsurePreviewingForNavigation_enters_preview_before_navigation_dialog()
+    {
+        var view = ViewWith(new Paragraph($"Hello {MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}"));
+        var engine = new MailMergeEngine(view, Callbacks());
+        engine.LoadRecipientsCsv(SampleCsv);
+
+        engine.EnsurePreviewingForNavigation().Should().BeTrue();
+
+        engine.Session.IsPreviewing.Should().BeTrue();
+        PlainText(view.Document).Should().Contain("Hello Ada");
+    }
+
+    [Fact]
+    public void ApplyFieldMapping_while_previewing_restores_template_and_exits_preview()
+    {
+        var field = $"{MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}";
+        var view = ViewWith(new Paragraph($"Hello {field}"));
+        var engine = new MailMergeEngine(view, Callbacks());
+        engine.LoadRecipientsCsv(SampleCsv);
+        engine.TogglePreview();
+
+        engine.ApplyFieldMapping(new FieldMapping());
+
+        engine.Session.IsPreviewing.Should().BeFalse();
+        PlainText(view.Document).Should().Contain($"Hello {field}");
+        engine.Session.CurrentIndex.Should().Be(0);
+    }
+
+    [Fact]
     public void AddressBlock_and_GreetingLine_resolve_in_preview()
     {
         var view = ViewWith(new Paragraph("«GreetingLine»"), new Paragraph("«AddressBlock»"));

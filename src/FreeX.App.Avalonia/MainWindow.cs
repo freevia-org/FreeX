@@ -5336,6 +5336,8 @@ public sealed partial class MainWindow : Window
         _selectedDrawingObjectKind = drawingObject.Kind;
         _selectedDrawingObjectId = drawingObject.Id;
         _ribbonContextSource.OnDrawingObjectSelected(drawingObject.Kind);
+        RefreshTableContextualTab();
+        RefreshPivotContextualTab();
         RefreshShell($"Selected {FormatDrawingObjectKind(drawingObject.Kind)}: {drawingObject.DisplayName}");
     }
 
@@ -5347,10 +5349,12 @@ public sealed partial class MainWindow : Window
     {
         _selectedDrawingObjectKind = null;
         _selectedDrawingObjectId = null;
-        // TODO(avalonia-shell): signal table/pivot active context once a shell accessor exists (ref: docs/parity/subagent-contextual-table-pivot-ribbons-2026-06-07.md#remaining-gaps)
-        // No "active cell is inside a table/pivot" accessor exists in the Avalonia shell yet.
-        // Chart/picture/shape selection (above) drives the contextual tabs for now; clearing drops them.
         _ribbonContextSource.OnSelectionCleared();
+        // WPF's selected-object context callback re-evaluates cell-based contexts after the object
+        // is cleared. Keep the same ordering here: the accessors must see no drawing selection, then
+        // derive table/pivot state from the active cell that commands intentionally leave unchanged.
+        RefreshTableContextualTab();
+        RefreshPivotContextualTab();
     }
 
     private static string FormatDrawingObjectKind(SelectionPaneObjectKind kind) =>

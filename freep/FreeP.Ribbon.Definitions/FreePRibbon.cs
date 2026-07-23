@@ -181,18 +181,21 @@ public static class FreePRibbon
         {
             Items = FreePRibbonDefinitionData.FontFamilies,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
+            KeyTip = FreePRibbonText.FontFamilyKeyTip,
             Width = 140
         });
         group.ComboBox("freep.font-size", FreePRibbonText.FontSizeLabel, control => control with
         {
             Items = FreePRibbonDefinitionData.FontSizes,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size),
+            KeyTip = FreePRibbonText.FontSizeKeyTip,
             Width = 64
         });
         group.ComboBox("freep.font-color", FreePRibbonText.FontColorLabel, control => control with
         {
             Items = FreePRibbonDefinitionData.FontColors,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.FontColor, RibbonCommandIconAccent.Color),
+            KeyTip = FreePRibbonText.FontColorKeyTip,
             Width = 96
         });
         group.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
@@ -358,6 +361,7 @@ public static class FreePRibbon
             {
                 Items = FreePRibbonDefinitionData.TransitionDurations,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
+                KeyTip = FreePRibbonText.TransitionDurationCommand.KeyTip,
                 Width = 90
             });
             group.MediumToggle("freep.transition.advance-on-click", FreePRibbonText.TransitionAdvanceOnClickCommand.Label,
@@ -366,6 +370,7 @@ public static class FreePRibbon
             {
                 Items = FreePRibbonDefinitionData.TransitionAdvanceAfterOptions,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
+                KeyTip = FreePRibbonText.TransitionAdvanceAfterCommand.KeyTip,
                 Width = 90
             });
             group.Medium("freep.transition.apply-all", FreePRibbonText.TransitionApplyAllCommand.Label,
@@ -407,18 +412,21 @@ public static class FreePRibbon
             {
                 Items = FreePRibbonDefinitionData.AnimationTriggers,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.Next),
+                KeyTip = FreePRibbonText.AnimationTriggerCommand.KeyTip,
                 Width = profile.AnimationTriggerWidth
             });
             group.ComboBox("freep.anim.duration", FreePRibbonText.AnimationDurationCommand.Label, control => control with
             {
                 Items = FreePRibbonDefinitionData.AnimationDurations,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
+                KeyTip = FreePRibbonText.AnimationDurationCommand.KeyTip,
                 Width = 90
             });
             group.ComboBox("freep.anim.delay", FreePRibbonText.AnimationDelayCommand.Label, control => control with
             {
                 Items = FreePRibbonDefinitionData.AnimationDelays,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
+                KeyTip = FreePRibbonText.AnimationDelayCommand.KeyTip,
                 Width = 90
             });
             group.Medium("freep.anim.move-earlier", FreePRibbonText.AnimationMoveEarlierCommand.Label, RibbonCommandIconKind.Previous, FreePRibbonText.AnimationMoveEarlierCommand.KeyTip);
