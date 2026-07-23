@@ -2529,6 +2529,19 @@ public static class DocxReader
             return;
         }
 
+        // Header/footer/comment/note charts resolve through their owning story part, while the modelled Chart
+        // writer only owns document-level chart relationships. Preserve those local drawings verbatim before
+        // the generic chart reader claims them, so their source part and part-local relationship survive.
+        if (preservedDrawingTarget is not null
+            && preservedDrawingRelationshipTargets is not null
+            && CaptureUnmodelledChartDrawing(r, archive, preservedDrawingTarget, preservedDrawingRelationshipTargets) is { } localPreservedDrawing)
+        {
+            var drawingRun = new Run(string.Empty) { PreservedDrawing = localPreservedDrawing, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(drawingRun);
+            paragraph.Runs.Add(drawingRun);
+            return;
+        }
+
         // A run whose w:drawing references a chart part (a:graphicData/c:chart) becomes a chart run.
         // imageRelationships maps EVERY document relationship id → part path (it is not filtered to
         // images), so the chart part resolves through it just like a media part.
@@ -2570,6 +2583,7 @@ public static class DocxReader
         // travel as PreservedParts so the unread chart round-trips instead of vanishing. Header/footer callers
         // supply their part-local relationship map; body/table callers retain document-level ownership.
         if (preservedDrawingTarget is not null
+            && preservedDrawingRelationshipTargets is null
             && CaptureUnmodelledChartDrawing(r, archive, preservedDrawingTarget, preservedDrawingRelationshipTargets) is { } preservedDrawing)
         {
             var drawingRun = new Run(string.Empty) { PreservedDrawing = preservedDrawing, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };

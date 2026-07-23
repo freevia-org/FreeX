@@ -26,6 +26,7 @@ public class CommentAndChartMediaRoundTripTests
     private static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace Cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
 
     private const string ChartExRelType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
@@ -388,6 +389,116 @@ public class CommentAndChartMediaRoundTripTests
         EntryBytes(twice, "word/charts/chartEx1.xml").Should().Equal(EntryBytes(rewritten, "word/charts/chartEx1.xml"));
         EntryBytes(twice, "word/media/chartImage1.png").Should().Equal(PngBytes);
         HasEntry(twice, "word/_rels/header1.xml.rels").Should().BeTrue();
+    }
+
+    private static byte[] AuthorHeaderClassicChartPackage()
+    {
+        var chartDocument = new TextDocument();
+        var chart = new Chart { Kind = ChartKind.Column, Title = "Story chart" };
+        chart.Categories.Add("A");
+        chart.Series.Add(new ChartSeries { Name = "S", Values = { 1, 2 } });
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        chartDocument.Blocks.Add(paragraph);
+        var bodyChartSource = WriteBytes(chartDocument);
+        var drawing = new XElement(EntryXml(bodyChartSource, "word/document.xml").Descendants(W + "drawing").Single());
+        drawing.Descendants(C + "chart").Single().SetAttributeValue(R + "id", "rId7");
+
+        using var sourceStream = new MemoryStream(bodyChartSource);
+        using var source = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+        using var output = new MemoryStream();
+        using (var destination = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void AddText(string path, string content)
+            {
+                var entry = destination.CreateEntry(path, CompressionLevel.Optimal);
+                using var stream = entry.Open();
+                var bytes = Encoding.UTF8.GetBytes(content);
+                stream.Write(bytes, 0, bytes.Length);
+            }
+
+            foreach (var sourceEntry in source.Entries.Where(entry =>
+                         entry.FullName.StartsWith("word/charts/", StringComparison.Ordinal)
+                         || entry.FullName.StartsWith("word/embeddings/", StringComparison.Ordinal)))
+            {
+                var entry = destination.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+                using var input = sourceEntry.Open();
+                using var outputEntry = entry.Open();
+                input.CopyTo(outputEntry);
+            }
+
+            AddText("[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="xlsx" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+                  <Override PartName="/word/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>
+                </Types>
+                """);
+            AddText("_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                </Relationships>
+                """);
+            AddText("word/_rels/document.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdHeader1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
+                </Relationships>
+                """);
+            AddText("word/document.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <w:body><w:p/><w:sectPr><w:headerReference w:type="default" r:id="rIdHeader1"/></w:sectPr></w:body>
+                </w:document>
+                """);
+            AddText("word/header1.xml",
+                $"""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <w:p><w:r>{drawing.ToString(SaveOptions.DisableFormatting)}</w:r></w:p>
+                </w:hdr>
+                """);
+            AddText("word/_rels/header1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="charts/chart1.xml"/>
+                </Relationships>
+                """);
+        }
+        return output.ToArray();
+    }
+
+    [Fact]
+    public void ModelledHeaderChart_PreservesItsPartLocalRelationshipInsteadOfBecomingABodyChart()
+    {
+        var source = AuthorHeaderClassicChartPackage();
+        var read = ReadDoc(source);
+        var runs = read.FinalSectionHeadersFooters.Header!.Paragraphs.SelectMany(paragraph => paragraph.Runs).ToList();
+        runs.Should().ContainSingle(run => run.PreservedDrawing != null);
+        runs.Should().NotContain(run => run.Chart != null);
+
+        var rewritten = WriteBytes(read);
+        EntryBytes(rewritten, "word/charts/chart1.xml").Should().Equal(EntryBytes(source, "word/charts/chart1.xml"));
+        EntryBytes(rewritten, "word/charts/_rels/chart1.xml.rels").Should().Equal(EntryBytes(source, "word/charts/_rels/chart1.xml.rels"));
+        var headerRels = EntryXml(rewritten, "word/_rels/header1.xml.rels").Root!.Elements(Rel + "Relationship").ToList();
+        var chartRel = headerRels.Single(relationship => relationship.Attribute("Type")!.Value == ChartRelType);
+        chartRel.Attribute("Target")!.Value.Should().Be("charts/chart1.xml");
+        EntryXml(rewritten, "word/header1.xml").Descendants(C + "chart").Single()
+            .Attribute(R + "id")!.Value.Should().Be(chartRel.Attribute("Id")!.Value);
+        EntryXml(rewritten, "word/_rels/document.xml.rels").Root!.Elements(Rel + "Relationship")
+            .Should().NotContain(relationship => relationship.Attribute("Type")!.Value == ChartRelType);
     }
 
     private static byte[] AuthorNoteChartExPackage(string partName, string noteName, string referenceName)
