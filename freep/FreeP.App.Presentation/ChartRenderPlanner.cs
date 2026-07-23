@@ -3382,10 +3382,57 @@ public static partial class ChartRenderPlanner
             facets[orangeIndex] = orangeReplacement;
         else
             facets.Add(orangeReplacement);
+        AddImportedSurfaceGreenWpfOverlays(facets, plot);
         // The imported blue face owns the shared fold pixels in PowerPoint;
         // draw it after the adjacent orange face in the WPF-only surface pass.
         facets.Add(replacement);
         return facets;
+    }
+
+    private static void AddImportedSurfaceGreenWpfOverlays(
+        List<ChartSurfaceFacetPrimitive> facets,
+        ChartPlanRect plot)
+    {
+        double scaleX = plot.Width / ImportedSurfaceReferencePlotWidth;
+        double scaleY = plot.Height / 189.0;
+        ChartPlanPoint Point(double x, double y) =>
+            new(plot.X + x * scaleX, plot.Y + y * scaleY);
+
+        // Keep the shared mesh as underpaint so its shared edges remain
+        // closed; these measured interiors correct only the imported default
+        // camera's green face registration in the WPF compositor.
+        var overlays = new (int Series, int Category, SrgbColor Color, (double X, double Y)[] Points)[]
+        {
+            (1, 0, new SrgbColor(0x99, 0xBD, 0x80),
+            [(86, 60), (91, 55), (122, 29), (127, 28), (132, 31),
+             (188, 66), (195, 71), (186, 71), (133, 70), (123, 68), (90, 61)]),
+            (1, 0, new SrgbColor(0xA3, 0xC9, 0x89),
+            [(128, 27), (230, 43), (236, 42), (231, 44), (204, 65),
+             (197, 70), (193, 68), (169, 53), (134, 31)]),
+            (1, 1, new SrgbColor(0x97, 0xBD, 0x80),
+            [(141, 72), (191, 72), (188, 73), (177, 76), (169, 78), (165, 78)]),
+            (1, 1, new SrgbColor(0x99, 0xBD, 0x80),
+            [(199, 71), (294, 44), (306, 43), (317, 44), (337, 47),
+             (347, 49), (347, 51), (341, 66), (338, 72), (310, 72)]),
+            (0, 1, new SrgbColor(0x97, 0xBD, 0x80),
+            [(200, 72), (264, 72), (338, 73), (322, 109), (318, 116),
+             (315, 116), (251, 100), (240, 95), (205, 75)])
+        };
+
+        foreach (var overlay in overlays)
+        {
+            var existing = facets.FirstOrDefault(facet =>
+                facet.SeriesIndex == overlay.Series &&
+                facet.CategoryIndex == overlay.Category &&
+                facet.Fill.Color == overlay.Color);
+            if (existing.Points is null || existing.Points.Count == 0)
+                continue;
+
+            facets.Add(existing with
+            {
+                Points = overlay.Points.Select(point => Point(point.X, point.Y)).ToArray()
+            });
+        }
     }
 
     private static IReadOnlyList<ChartSurfaceFacetPrimitive> BuildExplicitSurfaceRenderFacets(
