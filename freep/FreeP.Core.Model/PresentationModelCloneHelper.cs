@@ -115,7 +115,7 @@ internal static class PresentationModelCloneHelper
         return copy;
     }
 
-    private static ShapeEffects? CloneShapeEffects(ShapeEffects? source)
+    internal static ShapeEffects? CloneShapeEffects(ShapeEffects? source)
     {
         if (source is null)
             return null;

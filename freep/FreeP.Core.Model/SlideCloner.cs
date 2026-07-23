@@ -66,9 +66,11 @@ public static class SlideCloner
             OffsetYEmu     = shape.OffsetYEmu,
             ExtentCxEmu    = shape.ExtentCxEmu,
             ExtentCyEmu    = shape.ExtentCyEmu,
+            HasExplicitZeroExtentTransform = shape.HasExplicitZeroExtentTransform,
             RotationDeg    = shape.RotationDeg,
             FlipH          = shape.FlipH,
             FlipV          = shape.FlipV,
+            Effects        = PresentationModelCloneHelper.CloneShapeEffects(shape.Effects),
             Fill           = shape.Fill,      // immutable — share
             Outline        = shape.Outline,   // immutable — share
             Placeholder    = shape.Placeholder is null ? null : ClonePlaceholder(shape.Placeholder),
