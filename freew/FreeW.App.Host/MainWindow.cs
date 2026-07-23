@@ -2127,22 +2127,21 @@ public sealed class MainWindow : Window
         var area = System.Windows.SystemParameters.WorkArea;
         var count = freeWWindows.Count;
 
-        // Tile in a single row for 1–3 windows, two rows for 4+.
-        var cols = Math.Min(count, 3);
-        var rows = (int)Math.Ceiling((double)count / cols);
-        var tileW = area.Width  / cols;
-        var tileH = area.Height / rows;
+        var bounds = ArrangeAllLayoutPlanner.ArrangeRowFirst(
+            area.Width,
+            area.Height,
+            count,
+            maxColumns: 3);
 
-        for (var i = 0; i < count; i++)
+        for (var i = 0; i < bounds.Count; i++)
         {
-            var col = i % cols;
-            var row = i / cols;
             var w = freeWWindows[i];
+            var bound = bounds[i];
             w.WindowState = System.Windows.WindowState.Normal;
-            w.Left   = area.Left + col * tileW;
-            w.Top    = area.Top  + row * tileH;
-            w.Width  = tileW;
-            w.Height = tileH;
+            w.Left   = area.Left + bound.X;
+            w.Top    = area.Top  + bound.Y;
+            w.Width  = bound.Width;
+            w.Height = bound.Height;
         }
     }
 

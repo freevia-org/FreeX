@@ -6584,7 +6584,11 @@ public sealed partial class MainWindow : Window
     private void SetRibbonKeyTipsVisible(bool visible)
     {
         if (!visible)
+        {
+            if (_ribbonKeyTipFlyout is not null)
+                AvaloniaRibbonRenderer.SetMenuKeyTipsVisible(_ribbonKeyTipFlyout, false);
             _ribbonKeyTipFlyout?.Hide();
+        }
 
         _ribbonKeyTipFlyout = null;
         _ribbonKeyTipMenuItems = null;
@@ -6669,6 +6673,7 @@ public sealed partial class MainWindow : Window
                 if (renderedParent is not null)
                 {
                     renderedParent.IsSubMenuOpen = true;
+                    AvaloniaRibbonRenderer.SetMenuKeyTipsVisible(renderedParent, true);
                     _ribbonKeyTipRenderedMenuItems = renderedParent.Items.OfType<MenuItem>().ToArray();
                 }
 
@@ -6755,6 +6760,8 @@ public sealed partial class MainWindow : Window
             : Array.Empty<MenuItem>();
         _ribbonKeyTipSequence = string.Empty;
         _ribbonKeyTipFlyout = flyout;
+        if (flyout is not null)
+            AvaloniaRibbonRenderer.SetMenuKeyTipsVisible(flyout, true);
         return true;
     }
 
@@ -6765,6 +6772,7 @@ public sealed partial class MainWindow : Window
             return;
 
         flyout.ShowAt(button);
+        AvaloniaRibbonRenderer.SetMenuKeyTipsVisible(flyout, true);
         _ribbonKeyTipFlyout = flyout;
         _ribbonKeyTipMenuItems = BuildCollapsedGroupKeyTipItems(group);
         _ribbonKeyTipRenderedMenuItems = flyout.Items.OfType<MenuItem>().ToArray();

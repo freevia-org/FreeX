@@ -17,7 +17,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
             harness.StartScreenIsVisible.Should().BeTrue();
             harness.KeyTipScope.Should().Be("Commands");
-            harness.OverlayBadgeTexts.Should().Contain(["N", "O", "SH"]);
+            harness.OverlayBadgeTexts.Should().Contain(["N", "O", "R"]);
             harness.OverlayBadgeTexts.Should().NotContain("FG", "covered Home ribbon controls should not participate while Backstage is open");
             harness.VisibleCommandKeyTips("N").Should().ContainSingle().Which.Should().Be("New");
         });

@@ -98,6 +98,8 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenPrintPreview = null,
     /// <summary>AV-VIEW: Opens a second window on the same document (or status note if unsupported).</summary>
     Action? NewWindow = null,
+    /// <summary>AV-VIEW: Tiles all visible FreeW windows across the active screen working area.</summary>
+    Action? ArrangeAll = null,
     /// <summary>AV-VIEW: Toggle the split preview.</summary>
     Action? ToggleSplit = null,
     /// <summary>AV-VIEW: Whether the split preview is active.</summary>

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
@@ -39,6 +40,14 @@ public sealed class FreeWRibbonParityTests
             "freew.import-pdf-text",
             "freew.save",
         });
+
+        var mainWindow = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew", "FreeW.App.Host", "MainWindow.cs"));
+        mainWindow.Should().Contain("New: () => _file.New()");
+        mainWindow.Should().Contain("Open: () => _file.Open()");
+        mainWindow.Should().Contain("ImportPdfText: () => _file.ImportPdfText()");
+        mainWindow.Should().Contain("Save: () => _file.Save()");
     }
 
     [StaFact]
@@ -3076,6 +3085,22 @@ public sealed class FreeWRibbonParityTests
         aa!.Execute(RibbonCommandContext.Empty);
         newWindowCalled.Should().BeTrue("freew.new-window must invoke the onNewWindow callback");
         arrangeAllCalled.Should().BeTrue("freew.arrange-all must invoke the onArrangeAll callback");
+    }
+
+    [Fact]
+    public void ArrangeAll_uses_the_shared_FreeW_row_first_policy_before_translating_Wpf_bounds()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew", "FreeW.App.Host", "MainWindow.cs"));
+
+        source.Should().Contain("ArrangeAllLayoutPlanner.ArrangeRowFirst(");
+        source.Should().Contain("maxColumns: 3");
+        source.Should().Contain("w.WindowState = System.Windows.WindowState.Normal");
+        source.Should().Contain("w.Left   = area.Left + bound.X");
+        source.Should().Contain("w.Top    = area.Top  + bound.Y");
+        source.Should().NotContain("var tileW = area.Width");
+        source.Should().NotContain("var tileH = area.Height");
     }
 
     // Helper: collect all command id strings from a control's menu items (non-recursive depth-1, skips separators).

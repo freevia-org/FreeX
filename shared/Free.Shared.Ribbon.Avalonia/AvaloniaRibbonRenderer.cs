@@ -66,10 +66,19 @@ public static class AvaloniaRibbonRenderer
     };
     private static readonly ConditionalWeakTable<CheckBox, CheckBoxExecutionState> CheckBoxExecutionStates = new();
     private static readonly ConditionalWeakTable<Control, KeyTipFlyoutState> KeyTipFlyoutStates = new();
+    private static readonly ConditionalWeakTable<MenuItem, MenuKeyTipState> MenuKeyTipStates = new();
 
     private sealed class KeyTipFlyoutState
     {
         public List<FlyoutBase> OpenFlyouts { get; } = new();
+        public HashSet<MenuFlyout> RegisteredMenuFlyouts { get; } = new();
+        public bool IsVisible { get; set; }
+    }
+
+    private sealed class MenuKeyTipState
+    {
+        public required Border Badge { get; init; }
+        public object? OriginalIcon { get; set; }
     }
 
     private sealed class CheckBoxExecutionState
@@ -513,6 +522,14 @@ public static class AvaloniaRibbonRenderer
     public static void SetTopLevelKeyTipsVisible(Control ribbon, bool visible)
     {
         ArgumentNullException.ThrowIfNull(ribbon);
+        var state = KeyTipFlyoutStates.GetOrCreateValue(ribbon);
+        if (!visible)
+            CloseKeyTipFlyouts(ribbon);
+
+        state.IsVisible = visible;
+        if (visible)
+            RegisterRibbonFlyouts(ribbon, state);
+
         ForEachRibbonDescendant(ribbon, control =>
         {
             if (control is Border { Tag: string tag } badge &&
@@ -522,6 +539,113 @@ public static class AvaloniaRibbonRenderer
             }
         });
     }
+
+    /// <summary>
+    /// Shows or hides key-tip badges for the currently visible root scope of a menu flyout.
+    /// Nested submenu badges are revealed when their parent scope opens; hiding always clears the
+    /// complete menu tree so Escape, completion, and failed routes cannot leave stale badges behind.
+    /// </summary>
+    public static void SetMenuKeyTipsVisible(FlyoutBase flyout, bool visible)
+    {
+        if (flyout is MenuFlyout menuFlyout)
+            SetMenuKeyTipsVisible(menuFlyout, visible);
+    }
+
+    public static void SetMenuKeyTipsVisible(MenuFlyout flyout, bool visible)
+    {
+        ArgumentNullException.ThrowIfNull(flyout);
+        foreach (var item in flyout.Items.OfType<MenuItem>())
+            SetMenuItemKeyTipsVisible(item, visible, recurse: !visible);
+    }
+
+    /// <summary>Reveals or clears the immediate child scope of a rendered submenu item.</summary>
+    public static void SetMenuKeyTipsVisible(MenuItem parent, bool visible)
+    {
+        ArgumentNullException.ThrowIfNull(parent);
+        foreach (var item in parent.Items.OfType<MenuItem>())
+            SetMenuItemKeyTipsVisible(item, visible, recurse: !visible);
+    }
+
+    private static void RegisterRibbonFlyouts(Control ribbon, KeyTipFlyoutState state)
+    {
+        var controls = new List<Control>();
+        ForEachRibbonDescendant(ribbon, controls.Add);
+        foreach (var menuFlyout in controls
+                     .OfType<Button>()
+                     .Select(button => button.Flyout)
+                     .OfType<MenuFlyout>()
+                     .Distinct())
+        {
+            if (!state.RegisteredMenuFlyouts.Add(menuFlyout))
+                continue;
+
+            menuFlyout.Opened += (_, _) =>
+            {
+                if (!state.IsVisible)
+                    return;
+
+                SetMenuKeyTipsVisible(menuFlyout, true);
+                if (!state.OpenFlyouts.Contains(menuFlyout))
+                    state.OpenFlyouts.Add(menuFlyout);
+            };
+        }
+    }
+
+    private static void SetMenuItemKeyTipsVisible(MenuItem item, bool visible, bool recurse)
+    {
+        if (MenuKeyTipStates.TryGetValue(item, out var state))
+        {
+            // Avalonia exposes no stable trailing-content slot on MenuItem for arbitrary multi-character
+            // key tips. The Icon presenter is the only public slot that accepts a live Control without
+            // replacing Header; capture a pre-existing icon before the first hidden pass so cleanup
+            // restores the menu's original geometry/content exactly.
+            if (!visible && !ReferenceEquals(item.Icon, state.Badge))
+                state.OriginalIcon = item.Icon;
+            state.Badge.IsVisible = visible;
+            item.Icon = visible ? state.Badge : state.OriginalIcon;
+        }
+
+        if (!recurse)
+            return;
+
+        foreach (var child in item.Items.OfType<MenuItem>())
+            SetMenuItemKeyTipsVisible(child, visible, recurse: true);
+    }
+
+    private static void RegisterMenuKeyTip(MenuItem item, string? keyTip)
+    {
+        SetKeyTip(item, keyTip);
+        if (string.IsNullOrWhiteSpace(keyTip))
+            return;
+
+        MenuKeyTipStates.Add(item, new MenuKeyTipState
+        {
+            Badge = CreateKeyTipBadge(keyTip),
+            OriginalIcon = item.Icon,
+        });
+    }
+
+    private static Border CreateKeyTipBadge(string keyTip) => new()
+    {
+        Tag = KeyTipBadgeTag,
+        Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xCE)),
+        BorderBrush = new SolidColorBrush(Color.FromRgb(0x76, 0x70, 0x5C)),
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(2),
+        Padding = new Thickness(3, 0),
+        MinWidth = 18,
+        HorizontalAlignment = HorizontalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center,
+        IsVisible = false,
+        Child = new TextBlock
+        {
+            Text = keyTip.Trim().ToUpperInvariant(),
+            FontFamily = RibbonFontFamily,
+            FontSize = 10,
+            Foreground = Brushes.Black,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        },
+    };
 
     public static bool TryActivateTopLevelKeyTip(Control ribbon, string keyTip)
     {
@@ -629,7 +753,13 @@ public static class AvaloniaRibbonRenderer
         }
 
         OpenKeyTipFlyout(ribbon, menuFlyout, button);
-        return controlRemainder.Length == 0 || TryActivateMenuKeyTip(menuFlyout, controlRemainder);
+        if (controlRemainder.Length == 0)
+            return true;
+
+        var activated = TryActivateMenuKeyTip(menuFlyout, controlRemainder);
+        if (!activated)
+            CloseKeyTipFlyouts(ribbon);
+        return activated;
     }
 
     /// <summary>Closes flyouts opened by keyboard key-tip navigation without disturbing pointer flyouts.</summary>
@@ -640,7 +770,10 @@ public static class AvaloniaRibbonRenderer
             return;
 
         foreach (var flyout in state.OpenFlyouts)
+        {
+            SetMenuKeyTipsVisible(flyout, false);
             flyout.Hide();
+        }
         state.OpenFlyouts.Clear();
     }
 
@@ -648,7 +781,10 @@ public static class AvaloniaRibbonRenderer
     {
         CloseKeyTipFlyouts(ribbon);
         flyout.ShowAt(anchor);
-        KeyTipFlyoutStates.GetOrCreateValue(ribbon).OpenFlyouts.Add(flyout);
+        SetMenuKeyTipsVisible(flyout, true);
+        var state = KeyTipFlyoutStates.GetOrCreateValue(ribbon);
+        if (!state.OpenFlyouts.Contains(flyout))
+            state.OpenFlyouts.Add(flyout);
     }
 
     private static bool TryActivateMenuKeyTip(MenuFlyout flyout, string input)
@@ -670,6 +806,7 @@ public static class AvaloniaRibbonRenderer
             if (match.Item.Items.Count > 0)
             {
                 match.Item.IsSubMenuOpen = true;
+                SetMenuKeyTipsVisible(match.Item, true);
                 items = match.Item.Items.OfType<MenuItem>().ToArray();
                 continue;
             }
@@ -1765,7 +1902,7 @@ public static class AvaloniaRibbonRenderer
             InputGesture = null,
             Tag = item.CommandId?.Value,
         };
-        SetKeyTip(menuItem, item.KeyTip);
+        RegisterMenuKeyTip(menuItem, item.KeyTip);
 
         if (!string.IsNullOrEmpty(item.InputGesture))
             menuItem.InputGesture = TryParseGesture(item.InputGesture);
@@ -1847,8 +1984,17 @@ public static class AvaloniaRibbonRenderer
                     flyout.Items.Add(new Separator());
                     break;
                 case RibbonComboBox combo:
-                    flyout.Items.Add(new MenuItem { Header = combo.Label, IsEnabled = false, Tag = combo.CommandId.Value });
+                {
+                    var item = new MenuItem
+                    {
+                        Header = combo.Label,
+                        IsEnabled = false,
+                        Tag = combo.CommandId.Value,
+                    };
+                    RegisterMenuKeyTip(item, combo.KeyTip);
+                    flyout.Items.Add(item);
                     break;
+                }
                 case RibbonSplitButton split:
                     AddCollapsedSplitButtonItems(flyout, split, registry, afterExecute);
                     break;
@@ -1897,6 +2043,7 @@ public static class AvaloniaRibbonRenderer
             Header = control.Label,
             Tag = control.CommandId.Value,
         };
+        RegisterMenuKeyTip(item, control.KeyTip);
         item.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
         ApplyEnablement(item, control.CommandId, registry);
         return item;
@@ -1912,6 +2059,7 @@ public static class AvaloniaRibbonRenderer
             Header = control.Label,
             Tag = control.CommandId.Value,
         };
+        RegisterMenuKeyTip(item, control.KeyTip);
 
         if (BuildMenu(control) is { } menu)
         {
