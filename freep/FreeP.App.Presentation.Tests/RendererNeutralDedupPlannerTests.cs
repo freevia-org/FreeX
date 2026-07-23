@@ -477,7 +477,7 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
-    public void WpfRadarLowerLabelRegistration_IsHostLocalAndImportedScoped()
+    public void RadarLowerLabelRegistration_IsHostLocalAndImportedScoped()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
         var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
@@ -487,8 +487,9 @@ public sealed class RendererNeutralDedupPlannerTests
         wpf.Should().Contain("ImportedRadarAgilityLabelOffsetX");
         wpf.Should().Contain("ImportedRadarStaminaLabelOffsetX");
         wpf.Should().Contain("ImportedRadarLowerLabelOffsetY");
-        avalonia.Should().NotContain("ImportedRadarAgilityLabelOffsetX");
-        avalonia.Should().NotContain("ImportedRadarStaminaLabelOffsetX");
+        avalonia.Should().Contain("AvaloniaImportedRadarAgilityLabelOffsetX");
+        avalonia.Should().Contain("AvaloniaImportedRadarStaminaLabelOffsetX");
+        avalonia.Should().Contain("AvaloniaImportedRadarLowerLabelOffsetY");
         avalonia.Should().Contain("ImportedRadarValueLabelAvaloniaYCompensation");
     }
 
