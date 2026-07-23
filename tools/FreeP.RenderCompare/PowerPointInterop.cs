@@ -140,6 +140,80 @@ internal static class PowerPointInterop
         }
     }
 
+    /// <summary>
+    /// Exports PowerPoint's native notes-page layout to a PDF. This is kept
+    /// separate from slide PNG export because notes pages are a print-output
+    /// selection, not a slide surface.
+    /// </summary>
+    internal static PowerPointExportResult ExportNotesPagesToPdfDetailed(
+        string pptxPath,
+        string outputPath)
+    {
+        var beforePids = GetPowerPointProcessIds();
+        var ownedPids = new HashSet<int>();
+        dynamic? app = null;
+        dynamic? presentation = null;
+
+        try
+        {
+            app = CreatePowerPointApplication();
+            ownedPids = GetPowerPointProcessIds()
+                .Where(pid => !beforePids.Contains(pid))
+                .ToHashSet();
+
+            presentation = OpenPresentation(app, pptxPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
+            var slideCount = (int)presentation.Slides.Count;
+            dynamic printRange = presentation.PrintOptions.Ranges.Add(1, slideCount);
+
+            // Presentation.ExportAsFixedFormat has 16 positional parameters.
+            // Supply the full argument list so notes-page output is selected
+            // explicitly rather than inheriting PowerPoint's slide default.
+            presentation.ExportAsFixedFormat(
+                outputPath,
+                2,              // ppFixedFormatTypePDF
+                2,              // ppFixedFormatIntentPrint
+                MsoFalse,       // FrameSlides
+                1,              // ppPrintHandoutVerticalFirst
+                5,              // ppPrintOutputNotesPages
+                MsoFalse,       // PrintHiddenSlides
+                printRange,      // explicit ppPrintAll range
+                1,              // ppPrintAll
+                Type.Missing,   // SlideShowName
+                false,          // IncludeDocProperties
+                true,           // KeepIRMSettings
+                true,           // DocStructureTags
+                true,           // BitmapMissingFonts
+                false,          // UseISO19005_1
+                Type.Missing);  // ExternalExporter
+
+            if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
+                throw new InvalidOperationException("PowerPoint did not emit a notes-page PDF.");
+
+            ClosePresentation(ref presentation);
+            FinishApplication(ref app, ownedPids.Count > 0);
+            WaitForPowerPointToExit(ownedPids, timeoutMs: 15_000);
+            return PowerPointExportResult.Success(slideCount);
+        }
+        catch (PowerPointPrerequisiteException ex)
+        {
+            Console.Error.WriteLine($"PowerPoint prerequisite unavailable: {ex.Message}");
+            return PowerPointExportResult.Failed(PowerPointExportFailureKind.ComUnavailable, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"PowerPoint notes-page export failed: {ex.GetType().Name}: {ex.Message}");
+            return PowerPointExportResult.Failed(PowerPointExportFailureKind.ExportFailed, 0, 0);
+        }
+        finally
+        {
+            ClosePresentation(ref presentation);
+            FinishApplication(ref app, ownedPids.Count > 0);
+            WaitForPowerPointToExit(ownedPids, timeoutMs: 10_000);
+            KillPowerPointProcesses(ownedPids);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // PowerPoint COM lifecycle
     // -----------------------------------------------------------------------

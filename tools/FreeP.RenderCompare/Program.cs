@@ -72,6 +72,7 @@ internal static class Program
             return mode switch
             {
                 "--powerpoint-export" => RunPowerPointExport(args[1..]),
+                "--powerpoint-notes-export" => RunPowerPointNotesExport(args[1..]),
                 "--freep-render"      => RunFreePRender(args[1..]),
                 "--avalonia-render"   => RunAvaloniaRender(args[1..]),
                 "--diff"              => RunDiff(args[1..]),
@@ -192,6 +193,28 @@ internal static class Program
         Console.WriteLine($"  size   : {width}x{height}");
 
         return PowerPointInterop.ExportSlidesToPng(pptxPath, outDir, width, height);
+    }
+
+    private static int RunPowerPointNotesExport(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("usage: --powerpoint-notes-export <pptx> <out.pdf>");
+            return 2;
+        }
+
+        var pptxPath = Path.GetFullPath(args[0]);
+        var outputPath = Path.GetFullPath(args[1]);
+        if (!File.Exists(pptxPath))
+        {
+            Console.Error.WriteLine($"File not found: {pptxPath}");
+            return 1;
+        }
+
+        Console.WriteLine("PowerPoint notes-page export");
+        Console.WriteLine($"  input : {pptxPath}");
+        Console.WriteLine($"  output: {outputPath}");
+        return PowerPointInterop.ExportNotesPagesToPdfDetailed(pptxPath, outputPath).ExitCode;
     }
 
     // -----------------------------------------------------------------------
@@ -695,6 +718,9 @@ internal static class Program
         Console.WriteLine("Modes:");
         Console.WriteLine("  --powerpoint-export <pptx> <outDir> [--width W] [--height H]");
         Console.WriteLine("      Export each slide via PowerPoint COM to PNG.");
+        Console.WriteLine();
+        Console.WriteLine("  --powerpoint-notes-export <pptx> <out.pdf>");
+        Console.WriteLine("      Export PowerPoint's native notes-page print layout to PDF.");
         Console.WriteLine();
         Console.WriteLine("  --freep-render <pptx> <outDir> [--width W] [--height H]");
         Console.WriteLine("      Render via FreeP WPF renderer (SlideCanvas) off-screen.");
