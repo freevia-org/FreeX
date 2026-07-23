@@ -352,6 +352,16 @@ public sealed record ParagraphFormatting
     public double SpaceAfterPt { get; init; } = 8;
 
     /// <summary>
+    /// Whether Word's <c>w:beforeAutospacing</c> token controls the before-spacing axis. The renderer keeps
+    /// <see cref="SpaceBeforePt"/>'s measured automatic-spacing approximation, while this flag preserves the
+    /// source semantic so a save writes the automatic token instead of a conflicting numeric value.
+    /// </summary>
+    public bool BeforeAutoSpacing { get; init; }
+
+    /// <summary><inheritdoc cref="BeforeAutoSpacing"/></summary>
+    public bool AfterAutoSpacing { get; init; }
+
+    /// <summary>
     /// Whether <see cref="SpaceBeforePt"/> / <see cref="SpaceAfterPt"/> were set *explicitly* on this
     /// paragraph or style (a direct <c>w:spacing/@w:before</c>/<c>@w:after</c> or an autospacing toggle), as
     /// opposed to an inherited document-default/built-in value. Lets the render-time cascade inherit the

@@ -4436,8 +4436,11 @@ public static class DocxReader
     private static ParagraphFormatting ReadDocDefaultParagraph(XElement ddPr)
     {
         var spacing = ddPr.Element(W + "spacing");
-        var before = spacing?.Attribute(W + "before") is { } b ? DxaToPoints(b.Value) : 0.0;
-        var after = spacing?.Attribute(W + "after") is { } a ? DxaToPoints(a.Value) : 0.0;
+        var beforeAuto = spacing?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
+        var afterAuto = spacing?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
+        const double autoSpacingPt = 14.0;
+        var before = beforeAuto ? autoSpacingPt : spacing?.Attribute(W + "before") is { } b ? DxaToPoints(b.Value) : 0.0;
+        var after = afterAuto ? autoSpacingPt : spacing?.Attribute(W + "after") is { } a ? DxaToPoints(a.Value) : 0.0;
         var rule = LineSpacingRule.Multiple;
         var ls = ParagraphFormatting.Default.LineSpacing;
         var lh = 0.0;
@@ -4456,6 +4459,8 @@ public static class DocxReader
         {
             SpaceBeforePt = before,
             SpaceAfterPt = after,
+            BeforeAutoSpacing = beforeAuto,
+            AfterAutoSpacing = afterAuto,
             LineRule = rule,
             LineSpacing = ls,
             LineHeightPt = lh,
@@ -4577,6 +4582,8 @@ public static class DocxReader
             LineSpacingIsSet = lineVal is not null,
             SpaceBeforePt = spaceBeforePt,
             SpaceAfterPt = spaceAfterPt,
+            BeforeAutoSpacing = beforeAuto,
+            AfterAutoSpacing = afterAuto,
             // As for line spacing: explicit only when this pPr sets its own before/after (or an autospacing
             // toggle). Otherwise the render cascade inherits the paragraph's style rather than 0/docDefault.
             SpaceBeforeIsSet = beforeAuto || spacing?.Attribute(W + "before") is not null,
