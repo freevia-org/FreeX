@@ -442,11 +442,26 @@ public static class SlideShowCustomShowPlanner
     {
         ArgumentNullException.ThrowIfNull(presentation);
 
+        var visibleSlides = presentation.Slides
+            .Select((slide, sourceIndex) => (slide, sourceIndex))
+            .Where(entry => !entry.slide.IsHidden)
+            .ToArray();
+        var visibleStartIndex = visibleSlides.Length == 0
+            ? 0
+            : Array.FindIndex(
+                visibleSlides,
+                entry => entry.sourceIndex >= Math.Clamp(startIndex, 0, presentation.Slides.Count - 1));
+
+        if (visibleStartIndex < 0 && visibleSlides.Length > 0)
+        {
+            visibleStartIndex = visibleSlides.Length - 1;
+        }
+
         return new SlideShowPlaybackRoute(
             customShowName: null,
-            presentation.Slides.ToArray(),
-            Enumerable.Range(0, presentation.Slides.Count).ToArray(),
-            startIndex);
+            visibleSlides.Select(entry => entry.slide).ToArray(),
+            visibleSlides.Select(entry => entry.sourceIndex).ToArray(),
+            visibleStartIndex);
     }
 
     public static SlideShowPlaybackRoute BuildCustomShowRoute(
