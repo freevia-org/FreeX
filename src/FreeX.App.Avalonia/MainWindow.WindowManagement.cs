@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
 using Free.Shared.Shell;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -18,17 +19,10 @@ namespace FreeX.App.Avalonia;
 // exposes a live Windows collection), so these are genuinely feasible rather than
 // emulated.
 //
-// IMPORTANT HONESTY NOTES:
-//  * NEW WINDOW: Excel's "New Window" opens a second *view of the same workbook*.
-//    The current MainWindow constructor (MainWindow.cs:573 / :581) always creates
-//    its own WorkbookSession internally (_session = _sessionFactory.Create(...));
-//    there is no constructor overload that accepts a shared session. Because this
-//    file is forbidden from editing existing files, New Window here opens a new
-//    independent top-level window with its own fresh document. It is therefore a
-//    NEW WINDOW, not a synchronized second view of the active workbook. A separate
-//    deliverable proposes the ctor change required to make it a true shared-session
-//    second view; until that lands centrally, the behaviour is documented honestly
-//    to the user via the status message.
+//  * NEW WINDOW: Excel's "New Window" opens a second view of the same workbook. Avalonia uses
+//    per-view WorkbookSessions over shared document state plus a local window registry, so model
+//    mutations and document state are visible to every sibling while selection/viewport/prompt
+//    state remains local and opening/replacing a document detaches one view.
 //  * HIDE: view.unhide is already wired (MainWindow.cs:732) but it maps to
 //    UnhideSheetAsync() -- that restores a hidden *worksheet*, NOT a hidden window.
 //    So there is no existing window-restore path to stay consistent with. To avoid
@@ -54,14 +48,58 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    internal WorkbookId DocumentId => _session.Workbook.Id;
+
+    internal void ApplyWindowTitleSuffix(string suffix)
+    {
+        _windowTitleSuffix = suffix ?? string.Empty;
+        Title = FormatWindowWorkbookTitle();
+    }
+
+    internal void RefreshFromSharedWorkbook()
+    {
+        if (!IsVisible)
+            return;
+
+        if (!_session.IsDirty)
+            _autosaveCoordinator?.NotifyAutosaveSaved();
+        RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+    }
+
+    private void Session_WorkbookChanged(object? sender, EventArgs e)
+    {
+        WindowRegistry.NotifyWorkbookChanged(this);
+    }
+
+    internal void ReplaceSession(WorkbookSession replacement)
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+        if (ReferenceEquals(_session, replacement))
+            return;
+
+        _autosaveCoordinator?.NotifyAutosaveSaved();
+        _session.WorkbookChanged -= Session_WorkbookChanged;
+        _session = replacement;
+        _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+        _session.WorkbookChanged += Session_WorkbookChanged;
+        WindowRegistry.RefreshWindowNumbering();
+    }
+
+    internal MainWindow CreateSharedViewForTest() =>
+        new(App.StartupArguments, _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth));
+
     // view.newWindow
     private void NewWindow()
     {
-        // Opens a new independent top-level window (own fresh workbook). See the
-        // file header: this is a new window, not a synchronized second view of the
-        // active workbook, because the MainWindow ctor does not accept a shared
-        // WorkbookSession.
-        var window = new MainWindow(App.StartupArguments);
+        var window = new MainWindow(
+            App.StartupArguments,
+            _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth));
+        var snapshotStore = AutosaveSnapshotStore.CreateDefault(
+            PlatformApplicationDataPathProvider.LocalInstance);
+        var autosaveCoordinator = new AvaloniaAutosaveCoordinator(window, snapshotStore);
+        window.AttachAutosaveCoordinator(autosaveCoordinator);
+        window.Closed += (_, _) => autosaveCoordinator.OnWindowClosed();
+        autosaveCoordinator.Start();
         window.Show();
         window.Activate();
         RefreshShell(UiText.Get("ShellLoc_OpenedNewWindow"));
@@ -174,6 +212,8 @@ public sealed partial class MainWindow : Window
         // otherwise the closed window (and its whole WorkbookSession/document graph) leaks for the
         // rest of the session.
         HiddenWindows.Remove(this);
+        _session.WorkbookChanged -= Session_WorkbookChanged;
+        WindowRegistry.Unregister(this);
         // If this window was part of a side-by-side pair, clear the pair so the partner window
         // is not left broadcasting to a closed window.
         CleanUpSideBySideOnClose();
