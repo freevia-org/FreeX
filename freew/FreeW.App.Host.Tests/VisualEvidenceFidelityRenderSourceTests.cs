@@ -77,8 +77,10 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument");
         source.Should().Contain("RenderPictureWatermark(");
         source.Should().Contain("WatermarkVisualPlanner.BuildPictureLayout(");
-        source.Should().Contain("RenderReviewMarkupCapture(bmp, doc)");
+        source.Should().Contain("RenderReviewMarkupCapture(bmp, doc, i, reviewAnchorPageAssignment)");
         source.Should().Contain("ReviewBalloonLayoutPlanner.BuildSources(document, ReviewDisplayPolicy.Default)");
+        source.Should().Contain("PaginationEngine.ComputeBlockPageAssignment(bodyView)");
+        source.Should().Contain("anchorPageAssignment[source.BlockIndex] == pageIndex");
         source.Should().Contain("new Rect(stripLeft, stripTop, width - stripLeft, stripBottom - stripTop)");
         source.Should().Contain("backstage-print-preview-fidelity.docx");
         source.Should().Contain("backstage-pdf-export-fidelity.docx");
@@ -170,6 +172,16 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("fe.Tag is FreeW.Core.Model.Shape");
         source.Should().Contain("? Stretch.None");
         source.Should().Contain(": Stretch.Fill");
+    }
+
+    [Fact]
+    public void FidelityRender_ScopesCommentBalloonsToTheirAnchorPage()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("PaginationEngine.ComputeBlockPageAssignment(bodyView)");
+        source.Should().Contain("RenderReviewMarkupCapture(bmp, doc, i, reviewAnchorPageAssignment)");
+        source.Should().Contain("anchorPageAssignment[source.BlockIndex] == pageIndex");
     }
 
     private static string RepositoryFile(params string[] parts)

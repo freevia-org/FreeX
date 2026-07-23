@@ -206,6 +206,19 @@ static void RenderDocumentComposite(
     };
     bodyView.LoadModel(doc);
 
+    // Review balloons belong to the physical page containing their model anchor. Capture the
+    // same block-to-page map that the paged editor uses before the live FlowDocument is detached.
+    // The review compositor later consumes it to avoid repeating page-one comments on every page.
+    int[] reviewAnchorPageAssignment;
+    try
+    {
+        reviewAnchorPageAssignment = PaginationEngine.ComputeBlockPageAssignment(bodyView);
+    }
+    catch
+    {
+        reviewAnchorPageAssignment = [];
+    }
+
     // A drawing group owns several child visuals but one paragraph anchor. Snapshot that anchor while
     // the populated view is arranged; the normal detached path below remains authoritative for all
     // other floating-object kinds.
@@ -788,7 +801,7 @@ static void RenderDocumentComposite(
         // dedicated right strip owns the balloons. Keep that view-mode composition out of the
         // ordinary document renderer, but reproduce it for the canonical 96-DPI evidence page.
         if (doc.Comments.Count > 0 && thisPixW == 816 && thisPixH == 1056)
-            bmp = RenderReviewMarkupCapture(bmp, doc);
+            bmp = RenderReviewMarkupCapture(bmp, doc, i, reviewAnchorPageAssignment);
 
         // Word's capture script fits each page within a fixed evidence surface. Normalize only
         // after every composite layer has been painted so document layout remains unmodified.
@@ -953,7 +966,9 @@ static RenderTargetBitmap NormalizeWordBaselineRasterSurface(RenderTargetBitmap 
 
 static RenderTargetBitmap RenderReviewMarkupCapture(
     RenderTargetBitmap pageBitmap,
-    TextDocument document)
+    TextDocument document,
+    int pageIndex,
+    IReadOnlyList<int> anchorPageAssignment)
 {
     const double pageScale = 0.75;
     const double documentTop = 127;
@@ -969,7 +984,11 @@ static RenderTargetBitmap RenderReviewMarkupCapture(
     var result = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
     var visual = new DrawingVisual();
     var sources = ReviewBalloonLayoutPlanner.BuildSources(document, ReviewDisplayPolicy.Default)
-        .Where(source => source.Kind == ReviewBalloonKind.Comment)
+        .Where(source => source.Kind == ReviewBalloonKind.Comment
+            && (anchorPageAssignment.Count == 0
+                || source.BlockIndex < 0
+                || source.BlockIndex >= anchorPageAssignment.Count
+                || anchorPageAssignment[source.BlockIndex] == pageIndex))
         .ToArray();
 
     using (var dc = visual.RenderOpen())
