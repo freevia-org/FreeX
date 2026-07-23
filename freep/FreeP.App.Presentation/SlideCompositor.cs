@@ -1011,7 +1011,7 @@ public static class SlideCompositor
         // on the cached-drawing path because hierarchy3 is intentionally not a
         // live-layout admission yet.
         if (IsSimpleAccentHierarchy(smart)
-            && shape.AutoShapeKind == DrawingShapeKind.Rectangle
+            && shape.AutoShapeKind is DrawingShapeKind.Line or DrawingShapeKind.Rectangle
             && shape.Outline is ShapeOutline.Visible line)
         {
             var connectorColor = new ThemeAwareColor(SrgbColor.FromRgb(0x0E4B66));

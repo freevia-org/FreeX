@@ -100,19 +100,20 @@ public sealed class FileCommandsSourceTests
             "FreeP.App.Host",
             "MainWindow.cs"));
 
-        source.Should().Contain("CommandBindings.Add(new CommandBinding(ApplicationCommands.New,    (_, _) => _file.New()))");
-        source.Should().Contain("CommandBindings.Add(new CommandBinding(ApplicationCommands.Open,   (_, _) => _file.Open()))");
-        source.Should().Contain("CommandBindings.Add(new CommandBinding(ApplicationCommands.Save,   (_, _) => _file.Save()))");
-        source.Should().Contain("CommandBindings.Add(new CommandBinding(ApplicationCommands.SaveAs, (_, _) => _file.SaveAs()))");
+        source.Should().Contain("InstallSharedKeyboardShortcuts();");
+        source.Should().Contain("New: () => _file.New(),");
+        source.Should().Contain("Open: () => _file.Open(),");
+        source.Should().Contain("Save: () => _file.Save(),");
+        source.Should().Contain("SaveAs: () => _file.SaveAs(),");
         source.Should().Contain("New: () => _file.New()");
         source.Should().Contain("Open: () => _file.Open()");
         source.Should().Contain("Save: () => _file.Save()");
         source.Should().Contain("SaveAs: () => _file.SaveAs()");
-        source.Should().Contain("CommandBindings.Add(new CommandBinding(ApplicationCommands.Undo, (_, _) => Editor.Undo()))");
-        source.Should().Contain("var redoCommand = new RoutedCommand(\"Redo\", typeof(MainWindow))");
-        source.Should().Contain("CommandBindings.Add(new CommandBinding(redoCommand, (_, _) => Editor.Redo()))");
-        source.Should().Contain("new KeyGesture(Key.Y, ModifierKeys.Control)");
-        source.Should().Contain("new KeyGesture(Key.Z, ModifierKeys.Control | ModifierKeys.Shift)");
+        source.Should().Contain("case FreePKeyboardCommand.Undo: Editor.Undo(); break;");
+        source.Should().Contain("case FreePKeyboardCommand.Redo: Editor.Redo(); break;");
+        source.Should().Contain("foreach (var shortcut in FreePKeyboardShortcutCatalog.All)");
+        source.Should().NotContain("ApplicationCommands.New");
+        source.Should().NotContain("ApplicationCommands.Open");
     }
 
 }
