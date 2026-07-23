@@ -217,7 +217,12 @@ public sealed partial class MainWindow : Window
     private AvaloniaCanvasGestureHandler? _gestureHandler;
     private AvaloniaInCanvasTextEditor?  _textEditor;
     private Control? _ribbonControl;
+    private RibbonDefinition? _ribbonDefinition;
+    private RibbonCommandRegistry? _ribbonCommandRegistry;
     private bool _ribbonKeyTipsVisible;
+    private string? _ribbonKeyTipTabId;
+    private string? _ribbonKeyTipGroupId;
+    private string _ribbonKeyTipSequence = string.Empty;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
 
@@ -1708,9 +1713,12 @@ public sealed partial class MainWindow : Window
     private Control BuildRibbon()
     {
         var registry = BuildCommandRegistry();
+        var definition = FreePRibbonAvalonia.Build();
+        _ribbonDefinition = definition;
+        _ribbonCommandRegistry = registry;
 
         _ribbonControl = AvaloniaRibbonRenderer.BuildRibbon(
-            FreePRibbonAvalonia.Build(),
+            definition,
             registry,
             afterExecute: null,
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
@@ -6518,13 +6526,31 @@ public sealed partial class MainWindow : Window
         }
 
         var token = ToRibbonKeyTipToken(args.Key);
-        if (token is null || _ribbonControl is null ||
-            !AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, token))
-        {
+        if (token is null)
             return false;
+
+        if (_ribbonKeyTipTabId is null)
+        {
+            if (_ribbonControl is null ||
+                !AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, token))
+                return false;
+
+            _ribbonKeyTipTabId = GetSelectedRibbonTabId();
+            _ribbonKeyTipGroupId = null;
+            _ribbonKeyTipSequence = string.Empty;
+            args.Handled = _ribbonKeyTipTabId is not null;
+            return args.Handled;
         }
 
-        SetRibbonKeyTipsVisible(false);
+        if (TryHandleNestedRibbonKeyTip(token))
+        {
+            args.Handled = true;
+            return true;
+        }
+
+        // WPF keeps key-tip mode active after an unmatched character, so the
+        // user can recover with another key or Escape without invoking a document shortcut.
+        _ribbonKeyTipSequence = string.Empty;
         args.Handled = true;
         return true;
     }
@@ -6532,9 +6558,84 @@ public sealed partial class MainWindow : Window
     private void SetRibbonKeyTipsVisible(bool visible)
     {
         _ribbonKeyTipsVisible = visible;
+        _ribbonKeyTipTabId = null;
+        _ribbonKeyTipGroupId = null;
+        _ribbonKeyTipSequence = string.Empty;
         if (_ribbonControl is not null)
             AvaloniaRibbonRenderer.SetTopLevelKeyTipsVisible(_ribbonControl, visible);
     }
+
+    private bool TryHandleNestedRibbonKeyTip(string token)
+    {
+        var tab = _ribbonDefinition?.FindTab(_ribbonKeyTipTabId!);
+        if (tab is null)
+            return false;
+
+        _ribbonKeyTipSequence += token;
+
+        if (_ribbonKeyTipGroupId is null)
+        {
+            var exactGroup = tab.Groups.FirstOrDefault(group =>
+                KeyTipEquals(group.KeyTip, _ribbonKeyTipSequence));
+            if (exactGroup is not null)
+            {
+                _ribbonKeyTipGroupId = exactGroup.Id;
+                _ribbonKeyTipSequence = string.Empty;
+                return true;
+            }
+
+            if (tab.Groups.Any(group => KeyTipStartsWith(group.KeyTip, _ribbonKeyTipSequence)))
+                return true;
+
+            // Some WPF ribbons expose a command directly after the tab. Support that
+            // form when the key tip is unique across the active tab.
+            var directMatches = tab.Groups
+                .SelectMany(group => group.Controls)
+                .Where(control => KeyTipEquals(control.KeyTip, _ribbonKeyTipSequence))
+                .ToArray();
+            return directMatches.Length == 1 && TryExecuteRibbonKeyTipCommand(directMatches[0]);
+        }
+
+        var group = tab.FindGroup(_ribbonKeyTipGroupId);
+        if (group is null)
+            return false;
+
+        var exactControl = group.Controls.FirstOrDefault(control =>
+            KeyTipEquals(control.KeyTip, _ribbonKeyTipSequence));
+        if (exactControl is not null)
+            return TryExecuteRibbonKeyTipCommand(exactControl);
+
+        return group.Controls.Any(control =>
+            KeyTipStartsWith(control.KeyTip, _ribbonKeyTipSequence));
+    }
+
+    private bool TryExecuteRibbonKeyTipCommand(RibbonControl control)
+    {
+        if (control is RibbonSeparator or RibbonRowBreak or RibbonComboBox or RibbonLabel ||
+            _ribbonCommandRegistry is null ||
+            !_ribbonCommandRegistry.TryGet(control.CommandId, out var command) ||
+            command is null)
+            return false;
+
+        if (command is IRibbonStatefulCommand stateful && !stateful.GetState().IsEnabled)
+            return false;
+
+        command.Execute(RibbonCommandContext.Empty);
+        SetRibbonKeyTipsVisible(false);
+        return true;
+    }
+
+    private string? GetSelectedRibbonTabId()
+        => (_ribbonControl as TabControl)?.SelectedItem is TabItem { Tag: string tabId }
+            ? tabId
+            : null;
+
+    private static bool KeyTipEquals(string? keyTip, string sequence)
+        => string.Equals(keyTip?.Trim(), sequence, StringComparison.OrdinalIgnoreCase);
+
+    private static bool KeyTipStartsWith(string? keyTip, string sequence)
+        => !string.IsNullOrWhiteSpace(keyTip) &&
+           keyTip.Trim().StartsWith(sequence, StringComparison.OrdinalIgnoreCase);
 
     private static bool TryMapKeyboardKey(Key key, out FreePKeyboardKey mapped)
     {
