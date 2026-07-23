@@ -88,6 +88,8 @@ public sealed class ContextMenuInteractionValidationTests
                 familyResults.Concat(variantResults).Should().OnlyContain(result =>
                     result.Evidence.Contains("coverage=", StringComparison.Ordinal) &&
                     result.Evidence.Contains("batch-status=", StringComparison.Ordinal));
+                familyResults.Concat(variantResults).Should().NotContain(result =>
+                    result.Status == "failed");
                 familyResults.Concat(variantResults).Should().Contain(result =>
                     result.Status == "skipped" &&
                     result.EvidenceLevel == "bounded-batch-aggregate");
@@ -174,6 +176,52 @@ public sealed class ContextMenuInteractionValidationTests
         ownedRows.Should().HaveCount(ownedIds.Count);
         ownedRows.Should().OnlyContain(row => MainWindow.MayOpenOwnedContextDialog(row));
         nativeRows.Except(ownedRows).Should().OnlyContain(row => !MainWindow.MayOpenOwnedContextDialog(row));
+    }
+
+    [Fact]
+    public async Task DirectStructuralWorksheetRoutes_UseMutationEvidenceInsteadOfDialogWaits()
+    {
+        var directActions = new HashSet<string>(StringComparer.Ordinal)
+        {
+            nameof(WorksheetContextMenuAction.InsertRowAbove),
+            nameof(WorksheetContextMenuAction.InsertRowBelow),
+            nameof(WorksheetContextMenuAction.InsertColumnLeft),
+            nameof(WorksheetContextMenuAction.InsertColumnRight),
+            nameof(WorksheetContextMenuAction.DeleteRows),
+            nameof(WorksheetContextMenuAction.DeleteColumns),
+        };
+        var rows = MainWindow.BuildContextMenuValidationInventory()
+            .Where(row =>
+                row.FamilyId == "context-menu.worksheet" &&
+                row.VariantId == "context-menu.worksheet.target.worksheet" &&
+                row.IsEnabled &&
+                directActions.Contains(row.ActionKey))
+            .GroupBy(row => row.ActionKey, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
+
+        rows.Should().HaveCount(directActions.Count);
+        rows.Should().OnlyContain(row => !MainWindow.MayOpenOwnedContextDialog(row));
+
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var results = new List<InteractionValidationResult>();
+                foreach (var row in rows)
+                    results.Add(await window.RunContextMenuInteractionValidationForTestAsync(row.Id));
+
+                results.Should().OnlyContain(result => result.Status == "passed");
+                results.Should().OnlyContain(result =>
+                    result.EvidenceLevel == "production-mutation-undone");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
     }
 
     [Fact]
