@@ -151,6 +151,32 @@ public sealed class ContextMenuInteractionValidationTests
     }
 
     [Fact]
+    public void OwnedNativeFileRoutes_UseTheOwnedDialogWaitContract()
+    {
+        var inventory = MainWindow.BuildContextMenuValidationInventory();
+        var nativeRows = inventory.Where(row => row.FamilyId == "context-menu.native-application").ToArray();
+        var ownedIds = new HashSet<NativeFileMenuItemId>
+        {
+            NativeFileMenuItemId.BackstageInfo,
+            NativeFileMenuItemId.BackstageExport,
+            NativeFileMenuItemId.BackstageAccount,
+            NativeFileMenuItemId.Options,
+            NativeFileMenuItemId.WorkbookStatistics,
+            NativeFileMenuItemId.PageSetup,
+            NativeFileMenuItemId.PrintPreview,
+        };
+
+        var ownedRows = nativeRows.Where(row =>
+            row.ActionKey.StartsWith("file:", StringComparison.Ordinal) &&
+            Enum.TryParse<NativeFileMenuItemId>(row.ActionKey["file:".Length..], out var id) &&
+            ownedIds.Contains(id)).ToArray();
+
+        ownedRows.Should().HaveCount(ownedIds.Count);
+        ownedRows.Should().OnlyContain(row => MainWindow.MayOpenOwnedContextDialog(row));
+        nativeRows.Except(ownedRows).Should().OnlyContain(row => !MainWindow.MayOpenOwnedContextDialog(row));
+    }
+
+    [Fact]
     public void Inventory_HasNoPlannerOnlyActionableRoute()
     {
         var inventory = MainWindow.BuildContextMenuValidationInventory();

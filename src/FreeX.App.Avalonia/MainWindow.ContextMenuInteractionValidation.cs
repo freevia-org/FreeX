@@ -603,6 +603,18 @@ public sealed partial class MainWindow
             NativeFileMenuItemId.PageSetup or
             NativeFileMenuItemId.PrintPreview;
 
+    private static bool IsOwnedNativeFileDialogRoute(ContextMenuValidationDescriptor row)
+    {
+        if (row.FamilyId != NativeMenuContextFamily)
+            return false;
+
+        var parts = row.ActionKey.Split(':', 2);
+        return parts.Length == 2 &&
+            parts[0] == "file" &&
+            Enum.TryParse<NativeFileMenuItemId>(parts[1], out var fileId) &&
+            IsOwnedNativeFileMenuValidationRoute(fileId);
+    }
+
     private NativeMenuItem? GetNativeMenuItemByActionKey(string[] parts) =>
         parts.Length == 2 &&
         parts[0] == "menu" &&
@@ -708,8 +720,11 @@ public sealed partial class MainWindow
         row.FamilyId == WorksheetContextFamily &&
         row.ActionKey == nameof(WorksheetContextMenuAction.QuickAnalysis);
 
-    private static bool MayOpenOwnedContextDialog(ContextMenuValidationDescriptor row)
+    internal static bool MayOpenOwnedContextDialog(ContextMenuValidationDescriptor row)
     {
+        if (row.FamilyId == NativeMenuContextFamily)
+            return IsOwnedNativeFileDialogRoute(row);
+
         if (row.FamilyId == SheetTabContextFamily)
         {
             return row.ActionKey is nameof(SheetTabContextMenuAction.Rename) or
