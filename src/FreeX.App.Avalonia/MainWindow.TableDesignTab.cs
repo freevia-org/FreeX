@@ -1,3 +1,4 @@
+using Free.Shared.Ribbon;
 using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -12,12 +13,15 @@ namespace FreeX.App.Avalonia;
 /// to Range are wired here; if the active cell is not inside a table, each reports an honest status line.
 /// </summary>
 /// <remarks>
-/// The toggles route through the Avalonia renderer's click-to-execute path (the renderer does not paint a
-/// persistent check mark from model state), so each click flips the underlying table flag and the status
-/// line reports the resulting on/off state. The style repaint is delegated to the Core
-/// <see cref="ReapplyStructuredTableStyleCommand"/>, which captures the table's current banding
-/// (<see cref="StructuredTableStyleBanding.CaptureCurrent"/>) so there is no dependency on the WPF-only
-/// TableStyleGalleryPlanner. Convert to Range removes the structured table via
+/// The six Style Options toggles render their checked state via <see cref="GetTableStyleOptionRibbonState"/>,
+/// registered against their canonical command ids ("Total Row", "First Column", etc.) in MainWindow.cs's
+/// AvaloniaRibbonHostCallbacks.ExtraCommandStates -- the same StatefulRelayRibbonCommand/SyncToggleStates
+/// mechanism the View-tab checkboxes use -- so the toggle buttons reflect the active table's real
+/// TotalsRowShown/ShowFirstColumn/etc. flags, matching the WPF host's
+/// <c>_ribbonState.SetChecked(...)</c> calls in RefreshTableContextualTab. The style repaint itself is
+/// delegated to the Core <see cref="ReapplyStructuredTableStyleCommand"/>, which captures the table's
+/// current banding (<see cref="StructuredTableStyleBanding.CaptureCurrent"/>) so there is no dependency on
+/// the WPF-only TableStyleGalleryPlanner. Convert to Range removes the structured table via
 /// <see cref="ConvertStructuredTableToRangeCommand"/> (no confirmation dialog in this Phase; the WPF host
 /// asks Yes/No first).
 /// </remarks>
@@ -183,4 +187,20 @@ public sealed partial class MainWindow
 
     private static string TableDisplayName(StructuredTableModel table)
         => TableDesignCommandPlanner.GetDisplayName(table);
+
+    // --- Style Options toggle checked-state (ribbon parity) --------------------------------------
+
+    /// <summary>
+    /// Render-time <see cref="RibbonCommandState"/> for one of the six Table Design ▸ Style Options
+    /// toggles: checked when the active cell's table currently has the corresponding flag on, and the
+    /// planner default (unchecked) when the active cell is not inside a table. Registered per-toggle in
+    /// MainWindow.cs's ExtraCommandStates so <c>AvaloniaRibbonRenderer.SyncToggleStates</c> paints the
+    /// pressed state on every ribbon refresh, mirroring the WPF host's
+    /// <c>_ribbonState.SetChecked("Total Row", table.TotalsRowShown)</c> (and siblings) in
+    /// RefreshTableContextualTab.
+    /// </summary>
+    private RibbonCommandState GetTableStyleOptionRibbonState(Func<StructuredTableModel, bool> flag) =>
+        TryGetActiveStructuredTable(out var table)
+            ? new RibbonCommandState(IsChecked: flag(table))
+            : RibbonCommandState.Default;
 }

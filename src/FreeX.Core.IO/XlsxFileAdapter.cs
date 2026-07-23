@@ -362,6 +362,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
                 // Determine whether this cell is a provisional spill cell (non-anchor in array range).
                 CellAddress? provisionalAnchor = null;
+                // Declared <f t="array" ref="..."> extent for this cell if it is the anchor of a legacy
+                // CSE array formula (set below, consumed when constructing the anchor's Cell further down).
+                uint legacyArrayRows = 0, legacyArrayCols = 0;
 
                 if (xlCell.HasArrayFormula && xlCell.FormulaReference is { } arrayRef)
                 {
@@ -377,10 +380,23 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     if (isAnchor)
                     {
                         // Register the declared ref range so we can identify non-anchor cells as
-                        // provisional spill cells when they appear later in the iteration.
+                        // provisional spill cells when they appear later in the iteration. A genuinely
+                        // multi-cell ref also marks this anchor as a fixed-extent legacy CSE array
+                        // formula (see Cell.LegacyArrayRows) so it never free-spills like a modern
+                        // dynamic-array formula. A 1x1 ref is deliberately NOT treated as fixed-extent
+                        // here: FreeX's own full save (XlsxFileAdapter.Save.cs) writes a currently-1x1
+                        // dynamic-array/blocked-spill formula as a single-cell "t=array ref=anchor" too
+                        // (purely to keep HasArrayFormula true across a round-trip so it can re-spill
+                        // again later) -- that representation is indistinguishable from a genuine
+                        // single-cell legacy CSE formula, and treating every 1x1 array-formula reload
+                        // as permanently fixed-extent would stop those FreeX-authored dynamic arrays
+                        // from ever re-spilling after an edit (R17_save_io_Tests, FreeXR13S11Tests).
                         if (arrayRef.LastAddress.RowNumber > arrayRef.FirstAddress.RowNumber ||
                             arrayRef.LastAddress.ColumnNumber > arrayRef.FirstAddress.ColumnNumber)
                         {
+                            legacyArrayRows = (uint)(arrayRef.LastAddress.RowNumber - arrayRef.FirstAddress.RowNumber + 1);
+                            legacyArrayCols = (uint)(arrayRef.LastAddress.ColumnNumber - arrayRef.FirstAddress.ColumnNumber + 1);
+
                             arraySpillRanges ??= [];
                             arraySpillRanges.Add((
                                 (uint)arrayRef.FirstAddress.RowNumber,
@@ -461,7 +477,18 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     // A plain (non-array) formula uses Excel's legacy implicit intersection; an array
                     // formula (CSE or dynamic) spills. Cell.FromFormula defaults to Dynamic.
                     if (!xlCell.HasArrayFormula)
+                    {
                         cell.ArrayMode = FormulaArrayMode.Implicit;
+                    }
+                    else if (legacyArrayRows > 0)
+                    {
+                        // This is the anchor of a legacy CSE array formula (<f t="array" ref="...">):
+                        // confine its result to the originally declared ref extent on every recalc
+                        // instead of letting it free-spill like a modern dynamic-array formula (see
+                        // Cell.LegacyArrayRows / RecalcEngine).
+                        cell.LegacyArrayRows = legacyArrayRows;
+                        cell.LegacyArrayCols = legacyArrayCols;
+                    }
                     // Preserve the cached formula result so callers see the last-calculated value
                     // without needing to recalculate immediately.
                     var cached = XlsxClosedXmlCellMapper.MapFormulaValue(xlCell, workbook.Uses1904DateSystem);
@@ -1234,6 +1261,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                         chartPart.Xml, sheet.Id, fallbackDataRange: null, sheetNameResolver, out var chart))
                 {
                     chart.Name = chartPart.Name;
+                    chart.AltTextTitle = chartPart.Title;
+                    chart.AltTextDescription = chartPart.AltText;
                     XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
                     ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
                     ApplyChartUserShapesRelationshipMetadata(chart, chartPart);

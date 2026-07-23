@@ -35,7 +35,16 @@ public sealed class Cell
         get => _formulaText;
         // Assigning formula text means the cell was authored/edited, which is a modern (Dynamic) formula.
         // The loader marks legacy formulas Implicit explicitly after constructing the cell.
-        set { _formulaText = value; CachedAst = null; ArrayMode = FormulaArrayMode.Dynamic; }
+        set
+        {
+            _formulaText = value;
+            CachedAst = null;
+            ArrayMode = FormulaArrayMode.Dynamic;
+            // A freshly authored/edited formula is never a legacy fixed-extent CSE array formula
+            // even if this cell previously held one (see LegacyArrayRows).
+            LegacyArrayRows = 0;
+            LegacyArrayCols = 0;
+        }
     }
 
     /// <summary>
@@ -43,6 +52,22 @@ public sealed class Cell
     /// intersects to a scalar (<see cref="FormulaArrayMode.Implicit"/>). Defaults to Dynamic.
     /// </summary>
     public FormulaArrayMode ArrayMode { get; set; } = FormulaArrayMode.Dynamic;
+
+    /// <summary>
+    /// For a legacy multi-cell CSE array formula (Ctrl+Shift+Enter; ECMA-376 <c>&lt;f t="array"
+    /// ref="..."/&gt;</c>), the row/column extent of the ref range as originally declared/entered.
+    /// Zero (the default) means "not a fixed-extent legacy array formula" -- an ordinary dynamic-array
+    /// formula (<see cref="ArrayMode"/> Dynamic) free-spills to whatever size its result naturally is.
+    /// When non-zero, the recalc engine confines the formula's result to exactly this many rows/cols
+    /// instead of letting it spill/negotiate with neighboring cells: Excel's legacy CSE semantics never
+    /// grow or shrink the originally selected range, silently dropping extra result values and showing
+    /// #N/A in any declared cell the natural result doesn't reach. Set by the file loader; reset to 0
+    /// whenever <see cref="FormulaText"/> is reassigned (a fresh edit is always a modern formula).
+    /// </summary>
+    public uint LegacyArrayRows { get; set; }
+
+    /// <summary>See <see cref="LegacyArrayRows"/>.</summary>
+    public uint LegacyArrayCols { get; set; }
 
     /// <summary>Whether this cell contains a formula.</summary>
     public bool HasFormula => FormulaText is not null;
@@ -87,6 +112,8 @@ public sealed class Cell
         copy._formulaText = _formulaText;
         copy.CachedAst = CachedAst;
         copy.ArrayMode = ArrayMode;
+        copy.LegacyArrayRows = LegacyArrayRows;
+        copy.LegacyArrayCols = LegacyArrayCols;
         return copy;
     }
 }

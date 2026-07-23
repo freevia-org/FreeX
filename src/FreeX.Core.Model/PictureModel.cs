@@ -57,6 +57,18 @@ public sealed class PictureModel
     /// See R65-io-image-drawing-6-1.
     /// </summary>
     public string? LinkedImageTarget { get; set; }
+
+    /// <summary>
+    /// The raw bytes of the vector <c>.svg</c> media part backing this picture, when it was inserted
+    /// via Excel's Insert &gt; Icons/SVG -- Excel always keeps a PNG rasterization in
+    /// <see cref="ImageBytes"/>/<see cref="ContentType"/> as the universal-compatibility fallback, but
+    /// carries this vector original alongside it (via the <c>a:blip/a:extLst</c> <c>asvg:svgBlip</c>
+    /// extension) so the picture stays editable as a vector in Excel's "Graphics Format" ribbon tab
+    /// (recolor, "Convert to Shape"). Null for every ordinary raster picture. Must be re-emitted
+    /// alongside the PNG fallback on save or the picture permanently downgrades to a flat raster the
+    /// first time it is edited. See R80-io-drawing-image-5-3.
+    /// </summary>
+    public byte[]? SvgImageBytes { get; set; }
 }
 
 public sealed record PictureCellSnapshot(

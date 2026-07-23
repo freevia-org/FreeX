@@ -125,6 +125,16 @@ internal static class SubtotalPlanBuilder
         // the previous pass's own grand-total row (a later pass) -- never part of any group -- so it
         // is excluded from the scan entirely; this pass computes its own grand total independently.
         var existingSubtotalRows = new HashSet<uint>(SubtotalRowFinder.Find(sheet, range.Start.Sheet, range));
+
+        // A prior summary-above pass places its Grand Total row (and, transitively, each group's
+        // own subtotal row) at the START of the range rather than the end, so the seed row itself
+        // -- not just rows scanned by the loop below -- can be one of those leftover subtotal rows.
+        // Skip forward past any leading run of existing-subtotal rows before seeding groupStart /
+        // currentLabel, so the first genuine data row (not a stale grand-total/subtotal row) anchors
+        // the first group, matching how the loop already treats such rows mid-scan.
+        while (groupStart <= range.End.Row && existingSubtotalRows.Contains(groupStart))
+            groupStart++;
+
         var scanEnd = range.End.Row > groupStart && existingSubtotalRows.Contains(range.End.Row)
             ? range.End.Row - 1
             : range.End.Row;

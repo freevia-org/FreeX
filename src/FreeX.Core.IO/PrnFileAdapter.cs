@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -33,11 +34,13 @@ namespace FreeX.Core.IO;
 ///   <item>Trailing spaces on each line are trimmed (matching Excel .prn behaviour).</item>
 ///   <item>
 ///     Cell display strings are produced by the same logic used by
-///     <see cref="DelimitedTextWorkbookWriter"/>: numbers via <c>InvariantCulture</c> round-trip
-///     formatting, date/time values formatted as ISO dates/times, booleans as TRUE/FALSE, errors as
-///     their code string (e.g. #VALUE!). Formula cells write their calculated
-///     <see cref="Cell.Value"/> (never the formula source text), matching Excel's plain-text
-///     Save-As behaviour.
+///     <see cref="DelimitedTextWorkbookWriter"/>: a cell with an explicit (non-"General") applied
+///     number format is rendered through <c>NumberFormatter</c> (so "0%"/currency/custom date
+///     formats export their displayed text, e.g. "15%"), otherwise numbers use
+///     <c>InvariantCulture</c> round-trip formatting and date/time values format as ISO
+///     dates/times; booleans render as TRUE/FALSE, errors as their code string (e.g. #VALUE!).
+///     Formula cells write their calculated <see cref="Cell.Value"/> (never the formula source
+///     text), matching Excel's plain-text Save-As behaviour.
 ///   </item>
 /// </list>
 /// </para>
@@ -82,7 +85,13 @@ internal static class PrnWorkbookWriter
 
         if (workbook.Sheets.Count == 0) return;
 
-        var sheet = workbook.Sheets[0];
+        // Real Excel's plain-text Save-As types (including .prn) export the active (currently
+        // selected) sheet, not the first sheet in tab order — matching
+        // DelimitedTextWorkbookWriter.Save's identical rule for CSV/TXT.
+        var activeSheetIndex = workbook.ActiveSheetIndex is { } index && index >= 0 && index < workbook.Sheets.Count
+            ? index
+            : 0;
+        var sheet = workbook.Sheets[activeSheetIndex];
 
         // --- Pass 1: collect display text for every cell in the used range ---
         if (sheet.GetUsedRange() is not { } usedRange) return;
@@ -122,7 +131,7 @@ internal static class PrnWorkbookWriter
             var c = (int)(address.Col - minCol);
             if (r < 0 || r >= rowCount || c < 0 || c >= colCount) continue;
 
-            var text = GetCellDisplayText(cell);
+            var text = GetCellDisplayText(cell, workbook);
             if (text.Length == 0) continue;
 
             if (!rowTexts.TryGetValue(r, out var rowMap))
@@ -222,8 +231,24 @@ internal static class PrnWorkbookWriter
     /// comment documents this exact rule: real Excel's plain-text Save-As formats always write a
     /// formula cell's calculated result, not the formula itself.
     /// </remarks>
-    private static string GetCellDisplayText(Cell cell)
+    private static string GetCellDisplayText(Cell cell, Workbook workbook)
     {
+        // Real Excel's .prn Save-As, like its CSV/TXT siblings, writes the cell's DISPLAYED text —
+        // a cell explicitly formatted "0%"/"$#,##0.00"/a custom date pattern exports "15%",
+        // "$1,234.50", "Wednesday, July 22, 2026", not the bare stored value — matching
+        // DelimitedTextWorkbookWriter's TryGetAppliedNumberFormat rule. A cell left at the default
+        // "General" format has no explicit numeric/date shape to honor and keeps the raw fallback.
+        if (cell.Value is NumberValue or DateTimeValue)
+        {
+            var numberFormat = workbook.GetStyle(cell.StyleId).NumberFormat;
+            if (!string.IsNullOrEmpty(numberFormat) &&
+                !string.Equals(numberFormat, "General", StringComparison.OrdinalIgnoreCase))
+            {
+                return NumberFormatter.FormatWithColor(
+                    cell.Value, numberFormat, workbook.IndexedColors, workbook.Theme, workbook.Uses1904DateSystem).Text;
+            }
+        }
+
         return cell.Value switch
         {
             NumberValue number => FormatNumber(number.Value),

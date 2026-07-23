@@ -611,6 +611,7 @@ public sealed partial class NativeJsonAdapter
         public List<ThreadedCommentDto> ThreadedComments { get; set; } = [];
         public List<HyperlinkDto> Hyperlinks { get; set; } = [];
         public List<RichTextRunDto> RichTextRuns { get; set; } = [];
+        public List<CellPhoneticGuideDto> CellPhoneticGuides { get; set; } = [];
         public List<string> AllowEditRanges { get; set; } = [];
         public List<AllowEditRangePasswordDto> AllowEditRangePasswords { get; set; } = [];
         public WorksheetBackgroundDto? BackgroundImage { get; set; }
@@ -994,6 +995,9 @@ public sealed partial class NativeJsonAdapter
         public DateTimeOffset? CreatedAtUtc { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public DateTimeOffset? ModifiedAtUtc { get; set; }
+        /// <summary>See <see cref="ThreadedComment.RootTextEditedAtUtc"/>.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public DateTimeOffset? RootTextEditedAtUtc { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Id { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

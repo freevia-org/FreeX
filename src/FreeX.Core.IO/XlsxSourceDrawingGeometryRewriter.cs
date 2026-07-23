@@ -858,10 +858,13 @@ internal static class XlsxSourceDrawingGeometryRewriter
     }
 
     private static bool HasPictureCrop(PictureModel picture) =>
-        picture.CropLeft > 0 ||
-        picture.CropTop > 0 ||
-        picture.CropRight > 0 ||
-        picture.CropBottom > 0;
+        // R80-io-drawing-image-5-2: a NEGATIVE crop inset (Excel's "crop past the image edge"
+        // outward padding) is also a real crop that must be patched in -- checking only "> 0" treated a
+        // negative-only crop as "no crop" and silently dropped the whole srcRect on save.
+        picture.CropLeft != 0 ||
+        picture.CropTop != 0 ||
+        picture.CropRight != 0 ||
+        picture.CropBottom != 0;
 
     private static bool SetSourceRectangle(XElement blipFill, XNamespace drawingNs, PictureModel picture)
     {
@@ -907,7 +910,9 @@ internal static class XlsxSourceDrawingGeometryRewriter
     }
 
     private static string ToSourceRectanglePercent(double ratio) =>
-        ((int)Math.Round(Math.Clamp(ratio, 0, 1) * 100000d)).ToString(CultureInfo.InvariantCulture);
+        // R80-io-drawing-image-5-2: preserve negative (outward-crop/padding) ratios -- only clamp the
+        // magnitude to Excel's ±100% bound, matching ReadSourceRectangleRatio's [-1, 1] range.
+        ((int)Math.Round(Math.Clamp(ratio, -1, 1) * 100000d)).ToString(CultureInfo.InvariantCulture);
 
     private static bool SetOrRemoveAttribute(XElement element, string attributeName, string? value)
     {

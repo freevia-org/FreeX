@@ -58,4 +58,27 @@ public class ImplicitIntersectionEvalTests
         // Same column 10 position, but Dynamic spills -> anchor = A7*B15 = 2 (not the intersected 20).
         Recalc(wb, sheet, 20, 10, "A7:J7*B15", FormulaArrayMode.Dynamic).Should().Be(new NumberValue(2));
     }
+
+    // R80-formula-array-cse-5-1: a legacy plain (non-CSE) formula whose text is an array constant --
+    // e.g. "={1,2,3}", which XlsxFileAdapter loads as ArrayMode.Implicit for any non-array formula -- has
+    // no worksheet position to intersect against. Real Excel always shows such a formula's top-left
+    // element regardless of which cell it lives in.
+    [Fact]
+    public void Implicit_ArrayConstant_ResolvesToTopLeftElement_AtCoincidingColumn()
+    {
+        var (wb, sheet) = Setup();
+        // Formula cell C1 (row 1, col 3): naive row/col-coordinate intersection would coincidentally
+        // collide with the array constant's default StartRow=1/StartCol=1 frame, picking cells[0,2] == 3.
+        // Excel (and now FreeX) shows the top-left element, 1.
+        Recalc(wb, sheet, 1, 3, "{1,2,3}", FormulaArrayMode.Implicit).Should().Be(new NumberValue(1));
+    }
+
+    // No-regression sibling: moving the same formula to a column where naive coordinate intersection
+    // would be out-of-range (and previously surfaced #VALUE!) must still show the top-left element.
+    [Fact]
+    public void Implicit_ArrayConstant_ResolvesToTopLeftElement_AtOffAxisColumn()
+    {
+        var (wb, sheet) = Setup();
+        Recalc(wb, sheet, 1, 4, "{1,2,3}", FormulaArrayMode.Implicit).Should().Be(new NumberValue(1));
+    }
 }

@@ -575,6 +575,58 @@ public class FindReplaceTests
         result.Failure.Should().Be(new CommandOutcome(false, "The sheet is protected."));
         sheet.GetCell(a1)!.Value.Should().Be(new TextValue("foo"));
     }
+
+    [Fact]
+    public void TryReplaceAll_FormatOnlySearchWithEntireCellUnchecked_DoesNotThrowAndReplacesNothing()
+    {
+        // R80-commands-find-replace-5-1: a blank "Find what" combined with a Format criterion
+        // (Excel's format-only find/replace workflow) used to crash here. TryReplaceAll's Find()
+        // call matches every cell with the required format via an empty searchText, then called
+        // the private TryCreateReplacementCell directly -- bypassing the public
+        // TryCreateReplacementCommand wrapper's empty-searchText guard -- so the non-wildcard,
+        // non-entire-cell branch of TryCreateReplacementText hit
+        // string.Replace("", replaceText, comparison), which throws ArgumentException
+        // unconditionally. Excel neither crashes nor substitutes text for a format-only match; it
+        // must return zero replacements instead.
+        var (wb, sheet, commandBus) = Setup();
+        var boldStyle = wb.RegisterStyle(new CellStyle { Bold = true });
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("Alpha"));
+        sheet.GetCell(a1)!.StyleId = boldStyle;
+
+        var act = () => FindReplaceService.TryReplaceAll(
+            wb,
+            commandBus,
+            searchText: "",
+            replaceText: "X",
+            new FindOptions(RequiredFormat: new StyleDiff(Bold: true)),
+            matchCase: false,
+            matchEntireCell: false);
+
+        act.Should().NotThrow();
+        act().ReplacedCount.Should().Be(0);
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("Alpha"));
+    }
+
+    [Fact]
+    public void TryReplaceAll_NormalNonEmptySearch_StillReplacesMatchingCells()
+    {
+        // No-regression sibling: the new empty-searchText guard inside
+        // TryCreateReplacementText must not affect the ordinary, non-blank-search Replace All
+        // path that TryReplaceAll is meant to serve.
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(a1, new TextValue("foo"));
+        sheet.SetCell(a2, new TextValue("foobar"));
+
+        var result = FindReplaceService.TryReplaceAll(wb, commandBus, "foo", "bar");
+
+        result.ReplacedCount.Should().Be(2);
+        result.Failure.Should().BeNull();
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("bar"));
+        sheet.GetCell(a2)!.Value.Should().Be(new TextValue("barbar"));
+    }
 }
 
 file sealed class RejectingCommandBus(string message) : ICommandBus

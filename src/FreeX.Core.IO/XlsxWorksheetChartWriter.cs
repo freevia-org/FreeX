@@ -717,6 +717,12 @@ internal static class XlsxWorksheetChartWriter
                 new XElement(spreadsheetDrawingNs + "cNvPr",
                     new XAttribute("id", chartIndex + 1),
                     new XAttribute("name", DrawingName(chart.Name, $"Chart {chartIndex}")),
+                    // R80-app-accessibility-a11y-5-1: re-emit the chart's Alt Text title/description
+                    // (Excel's View Alt Text) -- matches the picture/shape/text-box writers' existing
+                    // title/descr pattern (see XlsxWorksheetDrawingObjectWriter). Without this the
+                    // chart's alt text was silently dropped on every open+save round-trip.
+                    string.IsNullOrWhiteSpace(chart.AltTextTitle) ? null : new XAttribute("title", chart.AltTextTitle),
+                    string.IsNullOrWhiteSpace(chart.AltTextDescription) ? null : new XAttribute("descr", chart.AltTextDescription),
                     // R41-io-hyperlink-drawing-rels-3-1: re-attach the chart-object hyperlink captured
                     // from the pre-rebuild drawing part (see ReadOldChartGraphicFrameHyperlinks).
                     objectHyperlinkRelId is null

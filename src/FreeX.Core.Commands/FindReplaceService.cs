@@ -531,6 +531,18 @@ public static class FindReplaceService
     {
         newText = "";
 
+        // Format-only find/replace (blank "Find what" combined with a Format criterion, see
+        // FindReplaceService.Find's RequiredFormat handling) reaches this helper via
+        // TryReplaceAll's direct TryCreateReplacementCell call, which -- unlike the public
+        // TryCreateReplacementCommand wrapper -- has no empty-searchText guard of its own.
+        // Without this guard, the non-wildcard, non-entire-cell branch below would hit
+        // string.Replace("", replaceText, comparison), which throws ArgumentException for any
+        // StringComparison (oldValue must not be empty), crashing the WPF host. Matching the
+        // wrapper's existing constraint, an empty search text simply cannot substitute text, so
+        // report no match here instead of throwing.
+        if (string.IsNullOrEmpty(searchText))
+            return false;
+
         if (HasWildcard(searchText))
         {
             var regex = GetOrCreateSearchRegex(searchText, comparison, matchEntireCell);

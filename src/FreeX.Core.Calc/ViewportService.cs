@@ -174,6 +174,7 @@ public sealed partial class ViewportService : IViewportService
         var columnOutlineGroups = sheet.ShowOutlineSymbols == false
             ? []
             : BuildColumnOutlineGroups(sheet);
+        var borderFringe = BuildBorderFringe(workbook, sheet, rowMetrics, colMetrics, ref styleCache);
 
         return new ViewportModel(
             cells,
@@ -185,7 +186,112 @@ public sealed partial class ViewportService : IViewportService
             chartDataCells,
             drawingObjects,
             rowOutlineGroups,
-            columnOutlineGroups);
+            columnOutlineGroups,
+            borderFringe);
+    }
+
+    /// <summary>
+    /// Collects borders authored on cells that sit just OUTSIDE the rendered viewport window
+    /// (<paramref name="rowMetrics"/>/<paramref name="colMetrics"/>) but whose facing edge is
+    /// shared with a still-visible boundary cell -- e.g. scrolling down by one row moves the
+    /// cell carrying a BorderBottom off the top of the viewport, yet the seam it authors is still
+    /// physically on-screen (the top edge of the new topmost visible row). The renderer's own
+    /// shared-edge precedence lookup (GridView.Rendering.cs's borderStyleLookup) is built solely
+    /// from <see cref="ViewportModel.Cells"/>, so without this it can never see that off-screen
+    /// author and the line silently vanishes purely as a function of scroll position. Only the
+    /// four true viewport edges are ever considered (an interior scroll boundary always has both
+    /// neighboring rows/columns loaded already), and only when the off-screen neighbor isn't
+    /// itself hidden (an adjacent hidden row/column's border is instead migrated onto the nearest
+    /// visible neighbor by <see cref="ApplyHiddenNeighborBorderMigration"/>, so re-surfacing it
+    /// here would double it up).
+    /// </summary>
+    private static IReadOnlyDictionary<(uint Row, uint Col), BorderFringeEdges>? BuildBorderFringe(
+        Workbook workbook,
+        Sheet sheet,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        ref ViewportStyleCache styleCache)
+    {
+        if (rowMetrics.Count == 0 || colMetrics.Count == 0)
+            return null;
+
+        Dictionary<(uint Row, uint Col), BorderFringeEdges>? fringe = null;
+
+        var topRow = rowMetrics[0].Row;
+        var bottomRow = rowMetrics[^1].Row;
+        var leftCol = colMetrics[0].Col;
+        var rightCol = colMetrics[^1].Col;
+
+        if (topRow > 1 && !IsRowHidden(sheet, topRow - 1))
+        {
+            foreach (var colMetric in colMetrics)
+            {
+                if (GetRawCellStyleForBorderMigration(workbook, sheet, topRow - 1, colMetric.Col, ref styleCache) is { } aboveStyle &&
+                    aboveStyle.BorderBottom.Style != BorderStyle.None)
+                {
+                    AddBorderFringeEdge(ref fringe, topRow, colMetric.Col, top: aboveStyle.BorderBottom);
+                }
+            }
+        }
+
+        if (bottomRow < CellAddress.MaxRow && !IsRowHidden(sheet, bottomRow + 1))
+        {
+            foreach (var colMetric in colMetrics)
+            {
+                if (GetRawCellStyleForBorderMigration(workbook, sheet, bottomRow + 1, colMetric.Col, ref styleCache) is { } belowStyle &&
+                    belowStyle.BorderTop.Style != BorderStyle.None)
+                {
+                    AddBorderFringeEdge(ref fringe, bottomRow, colMetric.Col, bottom: belowStyle.BorderTop);
+                }
+            }
+        }
+
+        if (leftCol > 1 && !sheet.IsColEffectivelyHidden(leftCol - 1))
+        {
+            foreach (var rowMetric in rowMetrics)
+            {
+                if (GetRawCellStyleForBorderMigration(workbook, sheet, rowMetric.Row, leftCol - 1, ref styleCache) is { } leftStyle &&
+                    leftStyle.BorderRight.Style != BorderStyle.None)
+                {
+                    AddBorderFringeEdge(ref fringe, rowMetric.Row, leftCol, left: leftStyle.BorderRight);
+                }
+            }
+        }
+
+        if (rightCol < CellAddress.MaxCol && !sheet.IsColEffectivelyHidden(rightCol + 1))
+        {
+            foreach (var rowMetric in rowMetrics)
+            {
+                if (GetRawCellStyleForBorderMigration(workbook, sheet, rowMetric.Row, rightCol + 1, ref styleCache) is { } rightStyle &&
+                    rightStyle.BorderLeft.Style != BorderStyle.None)
+                {
+                    AddBorderFringeEdge(ref fringe, rowMetric.Row, rightCol, right: rightStyle.BorderLeft);
+                }
+            }
+        }
+
+        return fringe;
+    }
+
+    private static void AddBorderFringeEdge(
+        ref Dictionary<(uint Row, uint Col), BorderFringeEdges>? fringe,
+        uint row,
+        uint col,
+        CellBorder? top = null,
+        CellBorder? bottom = null,
+        CellBorder? left = null,
+        CellBorder? right = null)
+    {
+        fringe ??= new Dictionary<(uint Row, uint Col), BorderFringeEdges>();
+        var key = (row, col);
+        var existing = fringe.TryGetValue(key, out var current) ? current : new BorderFringeEdges();
+        fringe[key] = existing with
+        {
+            Top = top ?? existing.Top,
+            Bottom = bottom ?? existing.Bottom,
+            Left = left ?? existing.Left,
+            Right = right ?? existing.Right,
+        };
     }
 
     private static IReadOnlyList<RowMetric> MaterializeRowMetrics(IReadOnlyList<RowMetric> metrics)

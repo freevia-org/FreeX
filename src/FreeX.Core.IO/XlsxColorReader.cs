@@ -129,6 +129,36 @@ public static class XlsxColorReader
         return false;
     }
 
+    /// <summary>
+    /// Like <see cref="TryReadCellColor(XElement?,WorkbookTheme,WorkbookIndexedColorPalette,out CellColor)"/>
+    /// but also returns a <see cref="WorkbookThemeColorReference"/> (slot + tint) via
+    /// <paramref name="themeColorReference"/> when the color was expressed as a theme reference, so callers
+    /// can preserve the theme link instead of only keeping the baked RGB (see R80-border-theme-color-1:
+    /// without this a theme-colored cell border loses its theme link on round-trip, unlike font/fill colors).
+    /// <paramref name="themeColorReference"/> is <see langword="null"/> when the color was sRGB or indexed.
+    /// </summary>
+    public static bool TryReadCellColorWithThemeReference(
+        XElement? element,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors,
+        out CellColor color,
+        out WorkbookThemeColorReference? themeColorReference)
+    {
+        themeColorReference = null;
+
+        if (TryReadCellColor(element, out color))
+            return true;
+
+        if (TryReadThemeColorReference(element, theme, out color, out themeColorReference))
+            return true;
+
+        if (TryReadIndexedColor(element, indexedColors, out color))
+            return true;
+
+        color = default;
+        return false;
+    }
+
     private static string NormalizeRgbAttribute(string rgb)
     {
         var normalized = rgb.Trim().TrimStart('#');
@@ -152,6 +182,31 @@ public static class XlsxColorReader
         }
 
         color = theme.ResolveColor(slot, ReadTint(element));
+        return true;
+    }
+
+    private static bool TryReadThemeColorReference(
+        XElement? element,
+        WorkbookTheme theme,
+        out CellColor color,
+        out WorkbookThemeColorReference? themeColorReference)
+    {
+        color = default;
+        themeColorReference = null;
+        if (element is null)
+            return false;
+
+        var themeText = element.Attribute("theme")?.Value;
+        if (string.IsNullOrWhiteSpace(themeText) ||
+            !int.TryParse(themeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var themeIndex) ||
+            !TryMapThemeColorSlot(themeIndex, out var slot))
+        {
+            return false;
+        }
+
+        var tint = ReadTint(element);
+        color = theme.ResolveColor(slot, tint);
+        themeColorReference = new WorkbookThemeColorReference(slot, tint);
         return true;
     }
 
@@ -187,6 +242,25 @@ public static class XlsxColorReader
     private const int SystemForegroundIndexedValue = 64;
     private const int SystemBackgroundIndexedValue = 65;
 
+    // R80-io-theme-styles-5-1: the legacy indexed palette's low fixed range (0=black, 1=white,
+    // 2=red, 3=green, 4=blue, 5=yellow, 6=magenta, 7=cyan) is a real, distinct part of the
+    // OOXML/BIFF indexed-color model -- it is NOT reachable via the "index - 7" transform below
+    // (that transform is only valid for the 8-63 range, where 8-15 duplicate these same eight
+    // fixed colors before the 48 customizable "standard colors" begin at 16). Values 0-7 must be
+    // resolved directly against their fixed RGB rather than forwarded to TryResolveColor, which
+    // would receive a negative index and reject it outright.
+    private static readonly CellColor[] LegacyFixedIndexedColors =
+    [
+        new(0x00, 0x00, 0x00), // 0 black
+        new(0xFF, 0xFF, 0xFF), // 1 white
+        new(0xFF, 0x00, 0x00), // 2 red
+        new(0x00, 0xFF, 0x00), // 3 green
+        new(0x00, 0x00, 0xFF), // 4 blue
+        new(0xFF, 0xFF, 0x00), // 5 yellow
+        new(0xFF, 0x00, 0xFF), // 6 magenta
+        new(0x00, 0xFF, 0xFF), // 7 cyan
+    ];
+
     private static bool TryReadIndexedColor(XElement? element, WorkbookIndexedColorPalette indexedColors, out CellColor color)
     {
         color = default;
@@ -209,6 +283,10 @@ public static class XlsxColorReader
         else if (index == SystemBackgroundIndexedValue)
         {
             indexedColor = CellColor.White;
+        }
+        else if (index is >= 0 and <= 7)
+        {
+            indexedColor = LegacyFixedIndexedColors[index];
         }
         else if (!indexedColors.TryResolveColor(index - 7, out indexedColor))
         {

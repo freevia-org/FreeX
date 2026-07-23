@@ -14,9 +14,9 @@ namespace FreeX.Core.IO.Tests;
 /// <c>FillThemeColor</c>, and <c>FillPatternThemeColor</c> (slot + tint) alongside the existing baked
 /// RGB fallback fields.
 ///
-/// Border theme colors are NOT covered here: <see cref="CellBorder"/> has no theme-color field to
-/// populate (that would require extending FreeX.Core.Model.CellStyle/CellBorder, which is out of this
-/// fixer's assigned file set), so border colors still flatten to baked RGB as before this fix.
+/// Border theme colors were NOT covered here originally: <see cref="CellBorder"/> had no theme-color
+/// field to populate. That gap was closed separately (R80-border-theme-color-1) by adding
+/// <see cref="CellBorder.ThemeColor"/> — see <c>R80_border_theme_color_Tests</c> for that coverage.
 /// </summary>
 public sealed class R19_theme_cell_color_Tests
 {

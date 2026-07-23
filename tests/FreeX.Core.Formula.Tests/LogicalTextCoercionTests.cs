@@ -110,4 +110,27 @@ public class LogicalTextCoercionTests
     [InlineData("=NOT(0)", true)]
     public void Not_BooleanAndNumeric_Unaffected(string formula, bool expected) =>
         Eval(formula).Should().Be(new BoolValue(expected));
+
+    // R80-formula-logical-lambda-5-1: a trailing/embedded comma leaves a direct argument
+    // omitted, which the parser turns into an OmittedArgumentNode that evaluates to a raw
+    // BlankValue (not wrapped in ReferencedScalarValue, since it isn't a cell reference).
+    // TryDirectLogicalBool previously had no BlankValue case, so this fell to `default: return
+    // false`, which AND/OR/XOR's callers interpreted as "cannot coerce" -> #VALUE!. Excel treats
+    // an omitted direct logical argument as FALSE, same as a blank cell reference.
+    [Theory]
+    [InlineData("=AND(TRUE,)", false)]
+    [InlineData("=OR(FALSE,)", false)]
+    [InlineData("=XOR(,)", false)]
+    public void Logical_DirectOmittedArgument_CoercesToFalse(string formula, bool expected) =>
+        Eval(formula).Should().Be(new BoolValue(expected));
+
+    // No-regression sibling: an omitted argument must still only contribute FALSE, not flip an
+    // otherwise-true result, and a determining FALSE earlier in the list still short-circuits.
+    [Theory]
+    [InlineData("=AND(TRUE,,TRUE)", false)]
+    [InlineData("=OR(TRUE,)", true)]
+    [InlineData("=XOR(TRUE,)", true)]
+    [InlineData("=XOR(TRUE,,TRUE)", false)]
+    public void Logical_DirectOmittedArgument_DoesNotOverrideOtherArgs(string formula, bool expected) =>
+        Eval(formula).Should().Be(new BoolValue(expected));
 }

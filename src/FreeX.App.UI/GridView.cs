@@ -153,6 +153,24 @@ public partial class GridView : FrameworkElement
                 ? cell.DisplayText
                 : string.Empty;
 
+        /// <summary>
+        /// Returns the cell's note/threaded-comment display (title + body), if any, so the cell's
+        /// UIA AutomationPeer can announce its presence -- sighted users see a corner-triangle
+        /// indicator (see GridView.Rendering.cs DrawCommentIndicator) but a screen-reader user
+        /// otherwise has no equivalent cue (R80-app-accessibility-a11y-5-3).
+        /// </summary>
+        internal bool TryGetCellComment(uint row, uint column, out CellCommentDisplay? comment)
+        {
+            if (TryGetDisplayCell(row, column, out var cell) && cell.HasComment)
+            {
+                comment = cell.CommentDisplay;
+                return true;
+            }
+
+            comment = null;
+            return false;
+        }
+
         internal Rect GetCellBoundingRectangle(uint row, uint column)
         {
             var viewport = OwnerGrid.Viewport;
@@ -575,9 +593,16 @@ public partial class GridView : FrameworkElement
         protected override string GetNameCore()
         {
             var address = $"{CellAddress.NumberToColumnName(column)}{row}";
-            return string.IsNullOrWhiteSpace(Value)
+            var name = string.IsNullOrWhiteSpace(Value)
                 ? address
                 : $"{address}: {Value}";
+
+            // Append a "has note"/"has comment" cue so a screen reader can discover the cell
+            // carries a note or threaded comment, matching the sighted corner-triangle indicator
+            // (GridView.Rendering.cs DrawCommentIndicator). See R80-app-accessibility-a11y-5-3.
+            return parent.TryGetCellComment(row, column, out var comment) && comment is not null
+                ? $"{name}, has {comment.Title.ToLowerInvariant()}"
+                : name;
         }
 
         protected override Rect GetBoundingRectangleCore() =>
@@ -597,7 +622,10 @@ public partial class GridView : FrameworkElement
 
         protected override string GetAccessKeyCore() => string.Empty;
 
-        protected override string GetHelpTextCore() => string.Empty;
+        protected override string GetHelpTextCore() =>
+            parent.TryGetCellComment(row, column, out var comment) && comment is not null
+                ? $"{comment.Title}: {comment.Body}"
+                : string.Empty;
 
         protected override string GetItemStatusCore() => string.Empty;
 

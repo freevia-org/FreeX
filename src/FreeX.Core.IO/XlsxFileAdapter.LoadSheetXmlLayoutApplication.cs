@@ -106,6 +106,8 @@ public sealed partial class XlsxFileAdapter
             if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, fallbackChartDataRange, sheetNameResolver, out var chart))
             {
                 chart.Name = chartPart.Name;
+                chart.AltTextTitle = chartPart.Title;
+                chart.AltTextDescription = chartPart.AltText;
                 XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
                 ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
                 ApplyChartUserShapesRelationshipMetadata(chart, chartPart);
@@ -141,7 +143,11 @@ public sealed partial class XlsxFileAdapter
                 // R65-io-image-drawing-6-1: a "Link to File" picture part has LinkTarget set instead of
                 // ImageBytes -- carry it onto the model so the picture is materialized as a linked
                 // picture (with a marker other code can check) instead of silently vanishing.
-                LinkedImageTarget = picturePart.LinkTarget
+                LinkedImageTarget = picturePart.LinkTarget,
+                // R80-io-drawing-image-5-3: carry the vector SVG fallback (if any) onto the model so
+                // the writer can re-emit the asvg:svgBlip extension instead of permanently downgrading
+                // the picture to a flat PNG the first time it is edited.
+                SvgImageBytes = picturePart.SvgImageBytes
             };
             XlsxDrawingAnchorApplier.ApplyToPicture(picture, picturePart.Anchor, sheet);
             picture.IsSourceLoaded = true;

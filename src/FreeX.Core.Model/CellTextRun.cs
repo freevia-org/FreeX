@@ -78,6 +78,23 @@ public readonly record struct CellRunColor
     private const int SystemForegroundIndexedValue = 64;
     private const int SystemBackgroundIndexedValue = 65;
 
+    // R80-io-theme-styles-5-1: indices 0-7 are the legacy indexed palette's fixed range
+    // (black/white/red/green/blue/yellow/magenta/cyan) -- a real, distinct part of the
+    // OOXML/BIFF indexed-color model, NOT reachable via the "index - 7" transform below (that
+    // transform is only valid for 8-63, where 8-15 duplicate these same eight colors). Mirrors
+    // XlsxColorReader.LegacyFixedIndexedColors.
+    private static readonly CellColor[] LegacyFixedIndexedColors =
+    [
+        new(0x00, 0x00, 0x00), // 0 black
+        new(0xFF, 0xFF, 0xFF), // 1 white
+        new(0xFF, 0x00, 0x00), // 2 red
+        new(0x00, 0xFF, 0x00), // 3 green
+        new(0x00, 0x00, 0xFF), // 4 blue
+        new(0xFF, 0xFF, 0x00), // 5 yellow
+        new(0xFF, 0x00, 0xFF), // 6 magenta
+        new(0x00, 0xFF, 0xFF), // 7 cyan
+    ];
+
     /// <summary>
     /// Resolves this color to a concrete RGB value using the workbook theme and indexed-color palette.
     /// </summary>
@@ -102,6 +119,9 @@ public readonly record struct CellRunColor
 
         if (IndexedIndex == SystemBackgroundIndexedValue)
             return CellColor.White;
+
+        if (IndexedIndex is >= 0 and <= 7)
+            return LegacyFixedIndexedColors[IndexedIndex];
 
         // OOXML indexed colors are zero-based; WorkbookIndexedColorPalette stores Excel
         // ColorIndex values one-based starting at palette entry 8 (indexed=8 -> ColorIndex 1),

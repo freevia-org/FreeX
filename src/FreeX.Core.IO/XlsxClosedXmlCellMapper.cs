@@ -435,29 +435,29 @@ internal static class XlsxClosedXmlCellMapper
         if (style.BorderTop.Style != BorderStyle.None)
         {
             xlStyle.Border.TopBorder = MapBorderStyleInverse(style.BorderTop.Style);
-            xlStyle.Border.TopBorderColor = XLColor.FromArgb(255, style.BorderTop.Color.R, style.BorderTop.Color.G, style.BorderTop.Color.B);
+            xlStyle.Border.TopBorderColor = ToXLBorderColor(style.BorderTop);
         }
         if (style.BorderRight.Style != BorderStyle.None)
         {
             xlStyle.Border.RightBorder = MapBorderStyleInverse(style.BorderRight.Style);
-            xlStyle.Border.RightBorderColor = XLColor.FromArgb(255, style.BorderRight.Color.R, style.BorderRight.Color.G, style.BorderRight.Color.B);
+            xlStyle.Border.RightBorderColor = ToXLBorderColor(style.BorderRight);
         }
         if (style.BorderBottom.Style != BorderStyle.None)
         {
             xlStyle.Border.BottomBorder = MapBorderStyleInverse(style.BorderBottom.Style);
-            xlStyle.Border.BottomBorderColor = XLColor.FromArgb(255, style.BorderBottom.Color.R, style.BorderBottom.Color.G, style.BorderBottom.Color.B);
+            xlStyle.Border.BottomBorderColor = ToXLBorderColor(style.BorderBottom);
         }
         if (style.BorderLeft.Style != BorderStyle.None)
         {
             xlStyle.Border.LeftBorder = MapBorderStyleInverse(style.BorderLeft.Style);
-            xlStyle.Border.LeftBorderColor = XLColor.FromArgb(255, style.BorderLeft.Color.R, style.BorderLeft.Color.G, style.BorderLeft.Color.B);
+            xlStyle.Border.LeftBorderColor = ToXLBorderColor(style.BorderLeft);
         }
         if (style.BorderDiagonalDown.Style != BorderStyle.None || style.BorderDiagonalUp.Style != BorderStyle.None)
         {
             // OOXML: diagonal border style/color is shared; diagonalDown/diagonalUp flags select which lines to draw.
             var diagBorder = style.BorderDiagonalDown.Style != BorderStyle.None ? style.BorderDiagonalDown : style.BorderDiagonalUp;
             xlStyle.Border.DiagonalBorder = MapBorderStyleInverse(diagBorder.Style);
-            xlStyle.Border.DiagonalBorderColor = XLColor.FromArgb(255, diagBorder.Color.R, diagBorder.Color.G, diagBorder.Color.B);
+            xlStyle.Border.DiagonalBorderColor = ToXLBorderColor(diagBorder);
             xlStyle.Border.DiagonalDown = style.BorderDiagonalDown.Style != BorderStyle.None;
             xlStyle.Border.DiagonalUp = style.BorderDiagonalUp.Style != BorderStyle.None;
         }
@@ -639,6 +639,15 @@ internal static class XlsxClosedXmlCellMapper
             ? XLColor.FromTheme(ToXLThemeColor(themeColor.Slot), themeColor.Tint)
             : XLColor.FromTheme(ToXLThemeColor(themeColor.Slot));
 
+    // Preserves a border edge's theme link on save, mirroring the FontThemeColor/FillThemeColor
+    // handling above (see R80-border-theme-color-1: without this every themed cell border was
+    // flattened to a literal <color rgb="…"/> on save, even when untouched from an Excel-authored
+    // theme-colored border, unlike font/fill colors which already re-emit <color theme="…"/>).
+    private static XLColor ToXLBorderColor(CellBorder border) =>
+        border.ThemeColor is { } borderThemeColor
+            ? ToXLColor(borderThemeColor)
+            : XLColor.FromArgb(255, border.Color.R, border.Color.G, border.Color.B);
+
     private static XLThemeColor ToXLThemeColor(WorkbookThemeColorSlot slot) => slot switch
     {
         WorkbookThemeColorSlot.Dark1 => XLThemeColor.Text1,
@@ -715,7 +724,7 @@ internal static class XlsxClosedXmlCellMapper
             XLBorderStyleValues.MediumDashDotDot => BorderStyle.MediumDashDotDot,
             _ => BorderStyle.None,
         };
-        return new CellBorder(mapped, MapColor(color, theme, indexedColors));
+        return new CellBorder(mapped, MapColor(color, theme, indexedColors), MapThemeColorReference(color));
     }
 
     private static XLBorderStyleValues MapBorderStyleInverse(BorderStyle style) => style switch

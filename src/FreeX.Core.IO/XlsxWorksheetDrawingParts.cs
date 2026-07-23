@@ -16,7 +16,15 @@ internal sealed record XlsxChartPackagePart(
     // (unknown/no anchor) so the one out-of-scope positional caller that never supplies it
     // (XlsxFileAdapter.SourcePackageSnapshot.cs's TryReadWorksheetChartParts fallback, which also
     // passes Anchor: null) keeps compiling unchanged.
-    int DrawingOrderIndex = -1);
+    int DrawingOrderIndex = -1,
+    // R80-app-accessibility-a11y-5-1: the chart's Alt Text title/description, read from the chart's
+    // own <xdr:graphicFrame><xdr:nvGraphicFramePr><xdr:cNvPr title="..." descr="..."/> (NOT from
+    // inside the <c:chart>/<cx:chart> element itself, which never carries a cNvPr) -- mirrors
+    // XlsxPicturePackagePart/XlsxTextBoxPackagePart/XlsxShapePackagePart's Title/AltText fields.
+    // Both default to null so the same out-of-scope positional caller referenced above (which never
+    // supplies them either) keeps compiling unchanged.
+    string? Title = null,
+    string? AltText = null);
 
 internal sealed record XlsxPicturePackagePart(
     byte[] ImageBytes,
@@ -38,7 +46,13 @@ internal sealed record XlsxPicturePackagePart(
     // (ImageBytes is empty and ContentType is ""). Carries the external relationship Target verbatim
     // so the writer can re-emit the same r:link + External relationship on save instead of the
     // picture silently vanishing (see XlsxWorksheetDrawingObjectWriter.AddPictureAnchor).
-    string? LinkTarget = null);
+    string? LinkTarget = null,
+    // R80-io-drawing-image-5-3: the raw bytes of the vector .svg media part referenced by this
+    // picture's <a:blip><a:extLst><a:ext><asvg:svgBlip r:embed=".."/> extension (Excel's "Insert
+    // Icons/SVG" pictures keep a PNG raster in ImageBytes/ContentType as the universal fallback AND
+    // this vector original so the picture stays editable as a shape/recolorable in Excel's "Graphics
+    // Format" tab). Null for every ordinary raster picture. See ReadPictureSvgBlipRelationshipId.
+    byte[]? SvgImageBytes = null);
 
 internal sealed record XlsxTextBoxPackagePart(
     string Text,
@@ -251,12 +265,20 @@ internal static partial class XlsxWorksheetDrawingPartReader
             // anchors and always normalized to the back of the z-order stack on load.
             var chartDrawingOrderIndex = ReadNearestAnchorOrderIndex(chartElement);
 
+            // R80-app-accessibility-a11y-5-1: the chart's Alt Text title/description live on the
+            // <xdr:graphicFrame>'s own <xdr:nvGraphicFramePr><xdr:cNvPr title="..." descr="..."/> --
+            // NOT inside the <c:chart>/<cx:chart> element itself, which (per schema) is just a
+            // self-closing r:id reference and has no cNvPr descendant of its own.
+            var (_, chartAltTextTitle, chartAltTextDescription) = ReadNonVisualProperties(graphicFrameElement ?? chartElement);
+
             charts.Add(new XlsxChartPackagePart(
                 XlsxPackageXmlEditor.LoadXml(chartEntry),
                 chartRelationships,
                 ReadNonVisualName(chartElement),
                 chartAnchor,
-                chartDrawingOrderIndex));
+                chartDrawingOrderIndex,
+                chartAltTextTitle,
+                chartAltTextDescription));
         }
 
         return charts;
@@ -316,6 +338,24 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 contentType = XlsxPackagePath.GetImageContentType(imagePath);
             }
 
+            // R80-io-drawing-image-5-3: a picture inserted via Excel's Insert > Icons/SVG carries a
+            // second, vector relationship inside <a:blip><a:extLst> (the asvg:svgBlip extension) that
+            // ReadPictureBlipRelationshipId's plain Descendants(a:blip) walk above never surfaces --
+            // read it separately so the vector original isn't silently reduced to the PNG fallback.
+            byte[]? svgImageBytes = null;
+            if (!isExternalLink)
+            {
+                var svgBlipRelId = ReadPictureSvgBlipRelationshipId(pictureElement, drawingNs, relNs);
+                if (!string.IsNullOrWhiteSpace(svgBlipRelId) &&
+                    relationshipTargets.TryGetValue(svgBlipRelId, out var svgBlipTarget))
+                {
+                    var svgImagePath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, svgBlipTarget);
+                    var svgImageEntry = archive.GetEntry(svgImagePath);
+                    if (svgImageEntry is not null)
+                        svgImageBytes = ReadEntryBytes(svgImageEntry);
+                }
+            }
+
             var sourceRectangle = pictureElement
                 .Element(spreadsheetDrawingNs + "blipFill")?
                 .Element(drawingNs + "srcRect");
@@ -362,7 +402,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 ReadSourceRectangleRatio(sourceRectangle, "r"),
                 ReadSourceRectangleRatio(sourceRectangle, "b"),
                 anchorElement is null ? -1 : ReadAnchorOrderIndex(anchorElement, spreadsheetDrawingNs),
-                linkTarget));
+                linkTarget,
+                svgImageBytes));
         }
 
         return pictures;
@@ -411,6 +452,34 @@ internal static partial class XlsxWorksheetDrawingPartReader
         }
 
         return (null, false);
+    }
+
+    /// <summary>
+    /// R80-io-drawing-image-5-3: reads the relationship id of a picture's vector fallback, carried in
+    /// <c>&lt;a:blip&gt;&lt;a:extLst&gt;&lt;a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"&gt;
+    /// &lt;asvg:svgBlip r:embed=".."/&gt;&lt;/a:ext&gt;&lt;/a:extLst&gt;</c> -- the Microsoft SVG
+    /// extension Excel writes for a picture inserted via Insert &gt; Icons/SVG so the picture stays
+    /// editable as a vector (recolor, "Convert to Shape") even though <see cref="ReadPictureBlipRelationshipId"/>
+    /// only ever resolves the PNG rasterization used as the universal-compatibility fallback. Returns
+    /// null when the picture has no vector fallback (the common case for an ordinary raster picture).
+    /// </summary>
+    private static string? ReadPictureSvgBlipRelationshipId(
+        XElement pictureElement, XNamespace drawingNs, XNamespace relNs)
+    {
+        XNamespace svgNs = "http://schemas.microsoft.com/office/drawing/2016/SVG/main";
+        foreach (var blip in pictureElement.Descendants(drawingNs + "blip"))
+        {
+            var svgBlip = blip
+                .Element(drawingNs + "extLst")?
+                .Elements(drawingNs + "ext")
+                .Select(ext => ext.Element(svgNs + "svgBlip"))
+                .FirstOrDefault(element => element is not null);
+            var embedId = svgBlip?.Attribute(relNs + "embed")?.Value;
+            if (!string.IsNullOrWhiteSpace(embedId))
+                return embedId;
+        }
+
+        return null;
     }
 
     private static Dictionary<string, string> ReadRelationshipTargetsById(XElement relationshipRoot, XNamespace packageRelNs)
@@ -1004,7 +1073,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return 0;
         }
 
-        return Math.Clamp(value / 100000d, 0, 1);
+        // R80-io-drawing-image-5-2: a NEGATIVE l/t/r/b is a valid, Excel-authored "crop past the
+        // image edge" (dragging a crop handle outward pads/zooms-out the picture within its frame) --
+        // clamping the floor to 0 here silently discarded that outward crop and made the picture
+        // render as if uncropped. Preserve negative insets (mirrored against the +1/-1 = ±100% bound
+        // that already applied on the positive side) instead of flooring them to 0.
+        return Math.Clamp(value / 100000d, -1, 1);
     }
 
     private static double ReadDrawingRotation(XElement? transform)

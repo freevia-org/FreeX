@@ -5,6 +5,22 @@ public sealed class ChartModel
 {
     public Guid Id { get; init; } = Guid.NewGuid();
     public string? Name { get; set; }
+
+    /// <summary>
+    /// R80-app-accessibility-a11y-5-1: the chart's "Alt Text" title, from the drawing anchor's
+    /// &lt;xdr:cNvPr title="..."/&gt; -- distinct from <see cref="Title"/> (the chart's own visible
+    /// &lt;c:title&gt; text). Mirrors PictureModel/DrawingShapeModel/TextBoxModel's existing
+    /// Title/AltText pair so the Accessibility Checker can inspect a chart's real alt text instead
+    /// of using the chart title as a false proxy.
+    /// </summary>
+    public string? AltTextTitle { get; set; }
+
+    /// <summary>
+    /// R80-app-accessibility-a11y-5-1: the chart's "Alt Text" description, from the drawing anchor's
+    /// &lt;xdr:cNvPr descr="..."/&gt;. Without this, a chart's real alt text set in Excel (View Alt
+    /// Text) was silently dropped on open+save round-trip through FreeX.
+    /// </summary>
+    public string? AltTextDescription { get; set; }
     public ChartType Type { get; set; } = ChartType.Column;
     public GridRange DataRange { get; set; }
     public bool IsVisible { get; set; } = true;

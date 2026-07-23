@@ -722,6 +722,30 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_WildcardMatchMode_MatchesNumericLookupValueByEquality()
+    {
+        // match_mode 2 is a superset of exact match: a non-wildcard numeric lookup_value
+        // must still find an exact numeric candidate via plain equality (like MATCH's match_type=0).
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(5)), (3, 1, new NumberValue(10)),
+            (1, 2, new TextValue("one")), (2, 2, new TextValue("five")), (3, 2, new TextValue("ten")));
+
+        _eval.Evaluate("=XLOOKUP(5,A1:A3,B1:B3,\"\",2)", sheet).Should().Be(new TextValue("five"));
+    }
+
+    [Fact]
+    public void Xlookup_WildcardMatchMode_NumericLookupValueFallsBackWhenAbsent()
+    {
+        // No-regression sibling: numeric equality fallback must not over-match values that
+        // genuinely aren't present in the lookup array, and should still return the if-not-found value.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(5)), (3, 1, new NumberValue(10)),
+            (1, 2, new TextValue("one")), (2, 2, new TextValue("five")), (3, 2, new TextValue("ten")));
+
+        _eval.Evaluate("=XLOOKUP(7,A1:A3,B1:B3,\"missing\",2)", sheet).Should().Be(new TextValue("missing"));
+    }
+
+    [Fact]
     public void Xlookup_ModeRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
     {
         var sheet = MakeSheet(
@@ -977,6 +1001,37 @@ public partial class FunctionLibraryTests
             (1, 1, new TextValue("Alpha")), (2, 1, new TextValue("Beta")), (3, 1, new TextValue("Alpine")));
 
         _eval.Evaluate("=XMATCH(\"Al*\",A1:A3,2)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Xmatch_WildcardMode_MatchesNumericLookupValueByEquality()
+    {
+        // match_mode 2 is a superset of exact match: a non-wildcard numeric lookup_value
+        // must still find an exact numeric candidate via plain equality (like MATCH's match_type=0).
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(5)), (3, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=XMATCH(5,A1:A3,2)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Xmatch_WildcardMode_MatchesBooleanLookupValueByEquality()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new BoolValue(false)), (2, 1, new BoolValue(true)));
+
+        _eval.Evaluate("=XMATCH(TRUE,A1:A2,2)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Xmatch_WildcardMode_NumericLookupValueStillNoMatchWhenAbsent()
+    {
+        // No-regression sibling: numeric equality fallback must not over-match values that
+        // genuinely aren't present in the lookup array.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(5)), (3, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=XMATCH(7,A1:A3,2)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]

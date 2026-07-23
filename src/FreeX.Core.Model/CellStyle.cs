@@ -63,7 +63,22 @@ public enum BorderStyle
 /// <summary>
 /// A single border edge on a cell.
 /// </summary>
-public readonly record struct CellBorder(BorderStyle Style = BorderStyle.None, CellColor Color = default);
+/// <param name="Style">The line style, or <see cref="BorderStyle.None"/> for no border.</param>
+/// <param name="Color">The resolved RGB color used for rendering (baked from <paramref name="ThemeColor"/> at load time when present).</param>
+/// <param name="ThemeColor">
+/// Theme-backed color. When present, the border's color follows the workbook theme (mirrors
+/// <see cref="CellStyle.FontThemeColor"/>/<see cref="CellStyle.FillThemeColor"/>); <see cref="Color"/> still
+/// carries the resolved fallback so renderers that don't resolve against a theme keep working unchanged.
+/// </param>
+public readonly record struct CellBorder(BorderStyle Style = BorderStyle.None, CellColor Color = default, WorkbookThemeColorReference? ThemeColor = null)
+{
+    /// <summary>Resolves the effective border color against <paramref name="theme"/>, preferring <see cref="ThemeColor"/> when present.</summary>
+    public CellColor ResolveColor(WorkbookTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        return ThemeColor?.Resolve(theme) ?? Color;
+    }
+}
 
 /// <summary>
 /// Pattern styles available for a cell fill.

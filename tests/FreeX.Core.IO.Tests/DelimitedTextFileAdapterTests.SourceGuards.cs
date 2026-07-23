@@ -46,7 +46,7 @@ public sealed partial class DelimitedTextFileAdapterTests
     {
         var source = TestWorkspaceFiles.ReadCoreIoSource("DelimitedTextWorkbookWriter.cs");
 
-        source.Should().Contain("WriteNumberValue(writer, number.Value);");
+        source.Should().Contain("WriteNumberValue(writer, delimiter, cell, number.Value, workbook);");
         source.Should().Contain("value.TryFormat(buffer, out var charsWritten, provider: CultureInfo.InvariantCulture)");
         source.Should().NotContain("NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture)");
     }

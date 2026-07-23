@@ -47,12 +47,11 @@ public static partial class BuiltInFunctions
 
         GetLookupSearchBounds(lookupVector.Count, searchMode, out int start, out int end, out int step);
 
-        string pattern = ToText(lookupValue);
         for (int i = start; i != end; i += step)
         {
             var candidate = lookupVector[i];
             if (candidate is ErrorValue err) return err;
-            if (candidate is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
+            if (MatchExactValue(candidate, lookupValue))
                 return new NumberValue(i + 1);
         }
         return ErrorValue.NA;
@@ -78,12 +77,11 @@ public static partial class BuiltInFunctions
 
         if (matchMode == 2)
         {
-            string pattern = ToText(lookupValue);
             for (int i = start; i != end; i += step)
             {
                 var candidate = lookupVector[i];
                 if (candidate is ErrorValue err) return err;
-                if (candidate is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
+                if (MatchExactValue(candidate, lookupValue))
                     return new NumberValue(i + 1);
             }
             return ErrorValue.NA;
@@ -295,12 +293,11 @@ public static partial class BuiltInFunctions
 
         GetLookupSearchBounds(lookupVector.Count, searchMode, out int start, out int end, out int step);
 
-        string pattern = ToText(lookupValue);
         for (int i = start; i != end; i += step)
         {
             var candidate = lookupVector[i];
             if (candidate is ErrorValue err) return err;
-            if (candidate is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
+            if (MatchExactValue(candidate, lookupValue))
                 return XlookupReturnAt(returnArr, i, lookupIsVertical);
         }
         return ifNotFound;
@@ -333,12 +330,11 @@ public static partial class BuiltInFunctions
 
         if (matchMode == 2)
         {
-            string pattern = ToText(lookupValue);
             for (int i = start; i != end; i += step)
             {
                 var candidate = lookupVector[i];
                 if (candidate is ErrorValue err) return err;
-                if (candidate is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
+                if (MatchExactValue(candidate, lookupValue))
                     return XlookupReturnAt(returnArr, i, lookupIsVertical);
             }
             return ifNotFound;

@@ -104,9 +104,9 @@ public static partial class BuiltInFunctions
     private static ScalarValue NotScalar(ScalarValue value)
     {
         if (value is ErrorValue err) return err;
-        // A blank argument (e.g. NOT() on an empty cell) coerces to FALSE, same as ToBool did.
-        // TryDirectLogicalBool has no blank case (AND/OR/XOR handle blank cells separately via
-        // ReferencedScalarValue), so preserve that behavior explicitly before delegating.
+        // A blank argument (e.g. NOT() on an empty cell) coerces to FALSE, same as ToBool did
+        // (TryDirectLogicalBool now also treats a direct blank as FALSE, but short-circuit here
+        // to avoid an extra dispatch and keep the NOT(!FALSE)=TRUE intent obvious).
         if (value is BlankValue) return new BoolValue(true);
         // Route through the same direct-logical coercion AND/OR/XOR use, so a numeric-text
         // argument (e.g. "1"/"0") coerces to its numeric value instead of erroring, while
@@ -158,7 +158,6 @@ public static partial class BuiltInFunctions
                 else if (refError is not null) return refError;
                 continue;
             }
-            if (a is BlankValue) continue; // blank = FALSE, skip (no effect on XOR)
             // Route direct scalars through the same coercion AND/OR use, so a direct numeric-text
             // literal (e.g. "1"/"0") coerces to its numeric value instead of erroring, while
             // genuinely non-numeric text still yields #VALUE!.

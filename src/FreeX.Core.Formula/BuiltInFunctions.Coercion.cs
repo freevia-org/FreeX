@@ -25,9 +25,11 @@ public static partial class BuiltInFunctions
     };
 
     // Coerces a DIRECT argument to AND/OR/XOR the way Excel does: numbers/booleans by value and a NUMERIC
-    // string by its value (<>0 = TRUE). Non-numeric text — including the words "TRUE"/"FALSE" — and other
-    // inputs that are not valid direct logical values (e.g. a direct blank) return false, so the caller
-    // yields #VALUE!. (Text inside a referenced range is ignored separately, not via this method.)
+    // string by its value (<>0 = TRUE). A direct blank (an omitted argument, e.g. the trailing comma in
+    // =AND(TRUE,)) coerces to FALSE, same as ToBool/NOT already do — Excel does not error on it. Non-numeric
+    // text — including the words "TRUE"/"FALSE" — and other inputs that are not valid direct logical values
+    // return false via `result`/`false` return, so the caller yields #VALUE!. (Text inside a referenced range
+    // is ignored separately, not via this method.)
     internal static bool TryDirectLogicalBool(ScalarValue value, out bool result)
     {
         result = false;
@@ -36,6 +38,7 @@ public static partial class BuiltInFunctions
             case BoolValue b: result = b.Value; return true;
             case NumberValue n: result = n.Value != 0.0; return true;
             case DateTimeValue d: result = d.Value != 0.0; return true;
+            case BlankValue: result = false; return true;
             case DirectTextLiteralValue t when ExcelTextNumberParser.TryParse(t.Value, out var dn): result = dn != 0.0; return true;
             case TextValue t when ExcelTextNumberParser.TryParse(t.Value, out var tn): result = tn != 0.0; return true;
             // A 1×1 RangeValue collapses to its single cell for logical evaluation (implicit intersection).
