@@ -898,7 +898,7 @@ public static class DocxReader
         document.Page.BackgroundColorHex = backgroundColor is { Length: > 0 } ? "#" + backgroundColor : null;
 
         ReadSectionHeadersFooters(
-            sectPr, document.FinalSectionHeadersFooters, archive, hyperlinkRelationships);
+            sectPr, document.FinalSectionHeadersFooters, archive, document, hyperlinkRelationships);
     }
 
     /// <summary>
@@ -912,26 +912,27 @@ public static class DocxReader
         XElement sectPr,
         SectionHeadersFooters hf,
         ZipArchive archive,
+        TextDocument document,
         IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         var partsById = ReadHeaderFooterRelationships(archive);
 
         hf.Header = ReadHeaderFooterPart(
-            sectPr, "headerReference", "default", W + "hdr", partsById, archive, hyperlinkRelationships);
+            sectPr, "headerReference", "default", W + "hdr", partsById, archive, document, hyperlinkRelationships);
         hf.Footer = ReadHeaderFooterPart(
-            sectPr, "footerReference", "default", W + "ftr", partsById, archive, hyperlinkRelationships);
+            sectPr, "footerReference", "default", W + "ftr", partsById, archive, document, hyperlinkRelationships);
         // Even-page header/footer (w:type="even") for "different odd/even pages". Present only when the
         // section carried the even references + parts; null otherwise so single-header sections are unaffected.
         hf.EvenHeader = ReadHeaderFooterPart(
-            sectPr, "headerReference", "even", W + "hdr", partsById, archive, hyperlinkRelationships);
+            sectPr, "headerReference", "even", W + "hdr", partsById, archive, document, hyperlinkRelationships);
         hf.EvenFooter = ReadHeaderFooterPart(
-            sectPr, "footerReference", "even", W + "ftr", partsById, archive, hyperlinkRelationships);
+            sectPr, "footerReference", "even", W + "ftr", partsById, archive, document, hyperlinkRelationships);
         // First-page header/footer (w:type="first") for "different first page". Present only when the section
         // carried the first references + parts.
         hf.FirstHeader = ReadHeaderFooterPart(
-            sectPr, "headerReference", "first", W + "hdr", partsById, archive, hyperlinkRelationships);
+            sectPr, "headerReference", "first", W + "hdr", partsById, archive, document, hyperlinkRelationships);
         hf.FirstFooter = ReadHeaderFooterPart(
-            sectPr, "footerReference", "first", W + "ftr", partsById, archive, hyperlinkRelationships);
+            sectPr, "footerReference", "first", W + "ftr", partsById, archive, document, hyperlinkRelationships);
     }
 
     /// <summary>
@@ -1032,7 +1033,8 @@ public static class DocxReader
     private static Section? ReadSectionBreak(
         XElement? pPr,
         ZipArchive archive,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        TextDocument? document)
     {
         var sectPr = pPr?.Element(W + "sectPr");
         if (sectPr is null)
@@ -1043,7 +1045,8 @@ public static class DocxReader
         var breakKind = SectionBreakFromToken(sectPr.Element(W + "type")?.Attribute(W + "val")?.Value);
         var section = new Section(page, breakKind);
         // Each non-final section references its own header/footer parts; recover them into the section.
-        ReadSectionHeadersFooters(sectPr, section.HeadersFooters, archive, hyperlinkRelationships);
+        if (document is not null)
+            ReadSectionHeadersFooters(sectPr, section.HeadersFooters, archive, document, hyperlinkRelationships);
         return section;
     }
 
@@ -1066,6 +1069,7 @@ public static class DocxReader
         XName rootName,
         IReadOnlyDictionary<string, string> partsById,
         ZipArchive archive,
+        TextDocument document,
         IReadOnlyDictionary<string, string> hyperlinkRelationships)
     {
         // Select the reference of the requested type ("default"/"even"/"first"). For the default type a
@@ -1092,7 +1096,7 @@ public static class DocxReader
 
         // Images inside a header/footer resolve their r:embed against the PART's own _rels (e.g.
         // word/_rels/header3.xml.rels), not document.xml.rels — so build a part-local image-relationship map.
-        var partImageRelationships = ReadPartImageRelationships(archive, partPath);
+        var partRelationships = ReadPartRelationships(archive, partPath);
 
         var result = new HeaderFooter();
         // Header/footer paragraphs carry no list numbering context (numbering.xml targets the body).
@@ -1123,7 +1127,14 @@ public static class DocxReader
             if (!preservedParagraph.Descendants(W + "r").Any())
                 continue;
 
-            result.Paragraphs.Add(ReadParagraph(preservedParagraph, archive, partImageRelationships, hyperlinkRelationships, noNumbering));
+            result.Paragraphs.Add(ReadParagraph(
+                preservedParagraph,
+                archive,
+                partRelationships,
+                hyperlinkRelationships,
+                noNumbering,
+                preservedDrawingTarget: document,
+                preservedDrawingRelationshipTargets: partRelationships));
         }
         return result;
     }
@@ -1148,6 +1159,16 @@ public static class DocxReader
                 relationship.Type.EndsWith("/image", StringComparison.Ordinal));
     }
 
+    private static Dictionary<string, string> ReadPartRelationships(ZipArchive archive, string partPath)
+    {
+        var directory = OpcPathHelper.GetDirectoryName(partPath);
+        return OpcRelationships.LoadTargetMap(
+            archive,
+            OpcPathHelper.GetRelationshipPartPath(partPath),
+            relationship => OpcPathHelper.ResolveRelativeZipPath(directory, relationship.Target),
+            relationship => !relationship.IsExternal);
+    }
+
     /// <summary>Maps relationship id → part path for header/footer relationships in document.xml.rels.</summary>
     private static Dictionary<string, string> ReadHeaderFooterRelationships(ZipArchive archive) =>
         OpcRelationships.LoadTargetMap(
@@ -1170,13 +1191,14 @@ public static class DocxReader
         IReadOnlyDictionary<int, ListKind> numbering,
         bool capturePreservedNumbering = false,
         TextDocument? preservedDrawingTarget = null,
+        IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets = null,
         ContentControl? inheritedControl = null,
         IReadOnlyDictionary<(int NumId, int Level), int>? startOverrides = null)
     {
         var paragraph = new Paragraph();
         var pPr = p.Element(W + "pPr");
-        // Body/table paragraphs inherit the document default spacing (w:docDefaults); header/footer/note
-        // paragraphs (preservedDrawingTarget == null) use the neutral fallback, as before.
+        // Body/table/header/footer paragraphs share the document default spacing (w:docDefaults); note and
+        // comment paragraphs still use the neutral fallback because they are read outside the document flow.
         var docDefaults = preservedDrawingTarget?.DefaultParagraph;
         if (pPr is not null)
         {
@@ -1194,7 +1216,7 @@ public static class DocxReader
             // A paragraph carrying a w:pPr/w:sectPr ends a non-final section; recover that section's page
             // setup + break kind + own header/footer references onto the paragraph (the body-level final
             // section is read elsewhere).
-            paragraph.SectionBreak = ReadSectionBreak(pPr, archive, hyperlinkRelationships);
+            paragraph.SectionBreak = ReadSectionBreak(pPr, archive, hyperlinkRelationships, preservedDrawingTarget);
         }
         else if (docDefaults is not null)
         {
@@ -1356,7 +1378,8 @@ public static class DocxReader
                     hyperlinkUrl: null,
                     hyperlinkAnchor: null,
                     hyperlinkTooltip: null,
-                    preservedDrawingTarget);
+                    preservedDrawingTarget,
+                    preservedDrawingRelationshipTargets);
             }
         }
 
@@ -1439,7 +1462,7 @@ public static class DocxReader
                 numbering,
                 capturePreservedNumbering: true,
                 preservedDrawingTarget: document,
-                inheritedControl,
+                inheritedControl: inheritedControl,
                 startOverrides: startOverrides);
             para.BlockContentControl = inheritedBlockContentControl;
             document.Blocks.Add(para);
@@ -1494,7 +1517,8 @@ public static class DocxReader
         string? hyperlinkUrl,
         string? hyperlinkAnchor,
         string? hyperlinkTooltip,
-        TextDocument? preservedDrawingTarget)
+        TextDocument? preservedDrawingTarget,
+        IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets)
     {
         var fieldDepth = 0;
         var fieldInstr = new System.Text.StringBuilder();
@@ -1562,7 +1586,7 @@ public static class DocxReader
                 continue;
             }
 
-            AddParagraphContentElement(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget);
+            AddParagraphContentElement(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
     }
 
@@ -1606,7 +1630,8 @@ public static class DocxReader
         string? hyperlinkUrl,
         string? hyperlinkAnchor,
         string? hyperlinkTooltip,
-        TextDocument? preservedDrawingTarget)
+        TextDocument? preservedDrawingTarget,
+        IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets)
     {
         if (child.Name == W + "r")
         {
@@ -1615,7 +1640,7 @@ public static class DocxReader
             if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
                 paragraph.Runs.Add(Run.CommentReference(refId));
             else
-                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget);
+                AddRun(paragraph, child, archive, imageRelationships, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "hyperlink")
         {
@@ -1623,18 +1648,18 @@ public static class DocxReader
             var id = child.Attribute(R + "id")?.Value;
             var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
             var tooltip = child.Attribute(W + "tooltip")?.Value;
-            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget);
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "ins" || child.Name == W + "del")
         {
             // A tracked insertion (w:ins) or deletion (w:del) wraps runs, hyperlinks, and sometimes SDTs.
             var kind = child.Name == W + "del" ? RevisionKind.Deleted : RevisionKind.Inserted;
             var childRevision = new RevisionInfo(kind, child.Attribute(W + "author")?.Value, child.Attribute(W + "date")?.Value);
-            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget);
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "sdt")
         {
-            AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, preservedDrawingTarget, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
+            AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, preservedDrawingTarget, preservedDrawingRelationshipTargets, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
         }
         else if (child.Name == W + "fldSimple")
         {
@@ -2282,6 +2307,7 @@ public static class DocxReader
         int? commentId,
         RevisionInfo revision,
         TextDocument? preservedDrawingTarget,
+        IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets,
         ContentControl? inheritedControl = null,
         string? hyperlinkUrl = null,
         string? hyperlinkAnchor = null,
@@ -2310,7 +2336,8 @@ public static class DocxReader
             hyperlinkUrl,
             hyperlinkAnchor,
             hyperlinkTooltip,
-            preservedDrawingTarget);
+            preservedDrawingTarget,
+            preservedDrawingRelationshipTargets);
     }
 
     private static BlockContentControl ReadBlockContentControl(XElement? sdtPr)
@@ -2414,7 +2441,8 @@ public static class DocxReader
         RevisionInfo revision = default,
         ContentControl? control = null,
         string? hyperlinkTooltip = null,
-        TextDocument? preservedDrawingTarget = null)
+        TextDocument? preservedDrawingTarget = null,
+        IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets = null)
     {
         void ApplyRevision(Run run)
         {
@@ -2516,10 +2544,10 @@ public static class DocxReader
         // A body/table run whose w:drawing references a chart (or chartex) part FreeW did NOT model into a
         // Run.Chart above (e.g. chartex / an unrecognised chart structure) is preserved VERBATIM: the whole
         // drawing XML is captured into the run, and the chart part(s) + their _rels + the media they reference
-        // travel as PreservedParts so the unread chart round-trips instead of vanishing. Only attempted for
-        // body/table runs (preservedDrawingTarget non-null) — header/footer/comment/note runs do not capture.
+        // travel as PreservedParts so the unread chart round-trips instead of vanishing. Header/footer callers
+        // supply their part-local relationship map; body/table callers retain document-level ownership.
         if (preservedDrawingTarget is not null
-            && CaptureUnmodelledChartDrawing(r, archive, preservedDrawingTarget) is { } preservedDrawing)
+            && CaptureUnmodelledChartDrawing(r, archive, preservedDrawingTarget, preservedDrawingRelationshipTargets) is { } preservedDrawing)
         {
             var drawingRun = new Run(string.Empty) { PreservedDrawing = preservedDrawing, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
             ApplyRevision(drawingRun);
@@ -3864,23 +3892,27 @@ public static class DocxReader
 
     /// <summary>
     /// Captures a run's inline <c>w:drawing</c> VERBATIM when it references a chart (or <c>chartex</c>) part
-    /// that FreeW did NOT model into a <see cref="Chart"/> above. The chart relationship(s) are resolved against
-    /// <c>document.xml.rels</c>; for each, the chart part, its own <c>_rels</c> and the media those rels point at
-    /// are added to <see cref="TextDocument.Preserved"/> (deduped by part name, carrying their content-type
-    /// Overrides), and the chart relationship is captured as a document-referenced preserved part so the writer
-    /// re-emits the document→chart relationship. The returned <see cref="PreservedDrawing"/> carries the drawing
-    /// XML plus the reference (original rId → preserved chart part) the writer rewrites to the fresh rId.
+    /// that FreeW did NOT model into a <see cref="Chart"/> above. Body/table relationships resolve against
+    /// <c>document.xml.rels</c>; header/footer callers supply their part-local relationship map. For each, the
+    /// chart part, its own <c>_rels</c> and the media those rels point at are added to
+    /// <see cref="TextDocument.Preserved"/> (deduped by part name, carrying their content-type Overrides). The
+    /// returned <see cref="PreservedDrawing"/> carries the drawing XML plus the reference (original rId →
+    /// preserved chart part) the writer rewrites to a relationship in the owning part.
     /// Returns null when the drawing references no chart-typed relationship (so the ordinary paths are unaffected).
     /// </summary>
-    private static PreservedDrawing? CaptureUnmodelledChartDrawing(XElement run, ZipArchive archive, TextDocument document)
+    private static PreservedDrawing? CaptureUnmodelledChartDrawing(
+        XElement run,
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string>? partRelationshipTargets = null)
     {
         var drawing = run.Element(W + "drawing");
         if (drawing is null)
             return null;
 
-        // (Id, Type, Target) for every document relationship — used to spot chart/chartEx references and to
-        // resolve part paths (targets are relative to word/, where document.xml.rels lives).
-        var docRels = ReadDocumentRelationships(archive);
+        // Body drawings resolve against document.xml.rels. Header/footer drawings pass their own complete
+        // relationship map and identify chart ownership from the DrawingML payload.
+        var docRels = partRelationshipTargets is null ? ReadDocumentRelationships(archive) : null;
         var contentTypeOverrides = ReadContentTypeOverrides(archive);
         var contentTypeDefaults = ReadContentTypeDefaults(archive);
 
@@ -3888,18 +3920,38 @@ public static class DocxReader
         foreach (var descendant in drawing.DescendantsAndSelf())
         {
             var relId = descendant.Attribute(R + "id")?.Value ?? descendant.Attribute(R + "embed")?.Value;
-            if (relId is null || !docRels.TryGetValue(relId, out var rel))
+            if (relId is null)
                 continue;
-            if (rel.Type is not (ChartRelType or ChartExRelType))
+            var chartEx = descendant.Name == Cx + "chart";
+            var chart = descendant.Name == C + "chart";
+            if (!chartEx && !chart)
                 continue;
 
-            var partName = OpcPathHelper.ResolveAbsolutePartName("/word", rel.Target);
+            string? partName;
+            string? relationshipType;
+            if (partRelationshipTargets is not null)
+            {
+                partName = partRelationshipTargets.TryGetValue(relId, out var localPartPath)
+                    ? "/" + localPartPath.TrimStart('/')
+                    : null;
+                relationshipType = null;
+            }
+            else if (docRels!.TryGetValue(relId, out var rel)
+                && rel.Type is ChartRelType or ChartExRelType)
+            {
+                partName = OpcPathHelper.ResolveAbsolutePartName("/word", rel.Target);
+                relationshipType = rel.Type;
+            }
+            else
+            {
+                continue;
+            }
             if (partName is null)
                 continue;
 
-            // Capture the chart part itself as a DOCUMENT-referenced preserved part (so BuildDocumentRels emits
-            // the document→chart relationship the rewritten drawing r:id points at), then pull in its satellites.
-            if (CapturePreservedPart(archive, document, partName, contentTypeOverrides, contentTypeDefaults, rel.Type))
+            // A body chart keeps its document relationship type; a header/footer chart deliberately does not,
+            // so the writer emits the rewritten relationship only in the owning part's _rels file.
+            if (CapturePreservedPart(archive, document, partName, contentTypeOverrides, contentTypeDefaults, relationshipType))
                 CaptureReferencedParts(archive, document, partName, contentTypeOverrides, contentTypeDefaults);
             references.Add(new PreservedDrawingReference(relId, partName));
         }
