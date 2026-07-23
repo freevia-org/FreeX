@@ -258,7 +258,7 @@ public sealed class VisualEvidencePlannerTests
             "caption",
             "footnotes"]);
         tablePageCompositionScenario.ExpectedOutputNamePattern.Should().Be("table-page-composition-stress_p{page}.png");
-        tablePageCompositionScenario.MinimumExpectedOutputs.Should().Be(2);
+        tablePageCompositionScenario.MinimumExpectedOutputs.Should().Be(3);
         tablePageCompositionScenario.Composition.ExpectsTables.Should().BeTrue();
         tablePageCompositionScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
         tablePageCompositionScenario.Composition.ExpectsPageBorder.Should().BeTrue();
@@ -1559,6 +1559,8 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("table-pagination-repeat-header/table-pagination-repeat-header_p2.png");
             plan.Fixtures.Single(f => f.ScenarioId == "table-page-composition-stress")
                 .ExpectedBaselinePaths.Should().Contain("table-page-composition-stress/table-page-composition-stress_p2.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "table-page-composition-stress")
+                .ExpectedBaselinePaths.Should().Contain("table-page-composition-stress/table-page-composition-stress_p3.png");
             plan.Fixtures.Single(f => f.ScenarioId == "field-page-number-variants")
                 .ExpectedBaselinePaths.Should().Contain("field-page-number-variants/field-page-number-variants_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "references-heavy-fields")
@@ -1997,7 +1999,7 @@ public sealed class VisualEvidencePlannerTests
             "table-page-composition-stress",
             document.Page,
             pageNumber: 2,
-            pageCount: 2,
+            pageCount: 3,
             outputName: "table-page-composition-stress_p2.png",
             headerSlotName: "header",
             footerSlotName: "footer",
@@ -2007,10 +2009,18 @@ public sealed class VisualEvidencePlannerTests
         document.Page.WatermarkOptions.Should().NotBeNull();
         document.FinalSectionHeadersFooters.Header.Should().NotBeNull();
         document.FinalSectionHeadersFooters.Footer.Should().NotBeNull();
+        document.FinalSectionHeadersFooters.Header!.PlainText.Should().Contain(" of 3");
         document.Footnotes.Should().ContainKey(1);
+        var table = document.Blocks.OfType<Table>().Single();
+        table.Rows[3].Cells[3].Paragraphs.Single().PlainText.Should()
+            .Be("Page 2 should repeat the header row inside the same page chrome.");
+        table.Rows[7].Cells[3].Paragraphs.Single().PlainText.Should()
+            .Be("Page 3 should repeat the header row before the caption and closing text.");
         document.Blocks.OfType<Paragraph>().Should().Contain(p =>
             p.StyleId == Captions.StyleId &&
             p.PlainText.StartsWith("Table 1:", StringComparison.Ordinal));
+        document.Blocks.OfType<Paragraph>().Should().Contain(p =>
+            p.PlainText.Contains("three trusted rows", StringComparison.Ordinal));
 
         expectation.Composition.ExpectsTables.Should().BeTrue();
         expectation.Composition.ExpectsHeadersFooters.Should().BeTrue();
@@ -7995,22 +8005,22 @@ public sealed class VisualEvidencePlannerTests
                 "table-page-composition-stress"
             };
             var wpfRows = scenarioIds
-                .SelectMany(scenarioId => Enumerable.Range(1, 2)
+                .SelectMany(scenarioId => Enumerable.Range(1, scenarioId == "table-page-composition-stress" ? 3 : 2)
                     .Select(page => BuildFileBackedRow(
                         root,
                         FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                         scenarioId,
                         page,
-                        pageCount: 2)))
+                        pageCount: scenarioId == "table-page-composition-stress" ? 3 : 2)))
                 .ToList();
             var avaloniaRows = scenarioIds
-                .SelectMany(scenarioId => Enumerable.Range(1, 2)
+                .SelectMany(scenarioId => Enumerable.Range(1, scenarioId == "table-page-composition-stress" ? 3 : 2)
                     .Select(page => BuildFileBackedRow(
                         root,
                         FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                         scenarioId,
                         page,
-                        pageCount: 2)))
+                        pageCount: scenarioId == "table-page-composition-stress" ? 3 : 2)))
                 .ToList();
 
             FreeWVisualEvidencePlanner.WriteManifest(
@@ -8034,16 +8044,16 @@ public sealed class VisualEvidencePlannerTests
                         new FreeWVisualEvidenceExpectedScenario(
                             FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                             scenarioId,
-                            2),
+                            scenarioId == "table-page-composition-stress" ? 3 : 2),
                         new FreeWVisualEvidenceExpectedScenario(
                             FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                             scenarioId,
-                            2)
+                            scenarioId == "table-page-composition-stress" ? 3 : 2)
                     })
                     .ToList());
 
             summary.Trust.Passed.Should().BeTrue();
-            summary.TablePaginationProofReadiness.Should().HaveCount(4);
+            summary.TablePaginationProofReadiness.Should().HaveCount(5);
             summary.TablePaginationProofReadiness.Should().OnlyContain(row =>
                 row.Status == "paired-renderer-proof-ready"
                 && row.WordBaselineStatus == "not-run"
@@ -8065,7 +8075,7 @@ public sealed class VisualEvidencePlannerTests
                 comparisons);
 
             withBaseline.Trust.Passed.Should().BeTrue();
-            withBaseline.TablePaginationProofReadiness.Should().HaveCount(4);
+            withBaseline.TablePaginationProofReadiness.Should().HaveCount(5);
             withBaseline.TablePaginationProofReadiness.Should().OnlyContain(row =>
                 row.Status == "paired-renderer-proof-ready"
                 && row.WordBaselineStatus == "word-baseline-unavailable=2"
@@ -8093,7 +8103,7 @@ public sealed class VisualEvidencePlannerTests
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
             doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(40);
-            doc.RootElement.GetProperty("tablePaginationProofReadiness").GetArrayLength().Should().Be(4);
+            doc.RootElement.GetProperty("tablePaginationProofReadiness").GetArrayLength().Should().Be(5);
             doc.RootElement.GetProperty("remainingEvidenceBlockers").EnumerateArray()
                 .Should().Contain(blocker =>
                     blocker.GetProperty("blockerId").GetString() == "table-page-composition-stress-word-baseline-fidelity");

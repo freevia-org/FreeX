@@ -896,7 +896,7 @@ public static class FreeWVisualEvidencePlanner
             BodyPrintComposition with { ExpectsTables = true }),
         new(
             "table-page-composition-stress",
-            "Combined table pagination and page-composition fidelity capture.",
+            "Three-page table pagination and page-composition fidelity capture.",
             [
                 "table-layout",
                 "table-pagination",
@@ -925,7 +925,7 @@ public static class FreeWVisualEvidencePlanner
                 "body-text"
             ],
             "table-page-composition-stress_p{page}.png",
-            2,
+            3,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with
             {
