@@ -289,7 +289,10 @@ internal static class XlsxDataValidationClosedXmlMapper
         if (DateTime.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed) ||
             DateTime.TryParse(trimmed, CultureInfo.CurrentCulture, DateTimeStyles.None, out parsed))
         {
-            serialText = FormatSerial(parsed.ToOADate());
+            // Excel serial, not the raw OADate — a date-validation bound is compared against stored
+            // cell serials, which place 1900-01-01..1900-02-28 one day below their OADate. Mirrors
+            // DataValidationBoundsParser.TryParseDateBound on the in-app side.
+            serialText = FormatSerial(DateTimeValue.FromDateTime(parsed).Value);
             return true;
         }
 

@@ -2608,11 +2608,15 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
     // Converts the true calendar DateTime NPOI surfaces (it has already resolved the workbook's 1904
     // windowing) into the internal ScalarValue serial. The internal convention must match how the
-    // 1904-aware date functions interpret a stored serial: 1900-epoch OADate when the workbook is not
+    // 1904-aware date functions interpret a stored serial: Excel 1900 serial when the workbook is not
     // 1904, 1904-epoch-relative (day-count since 1904-01-01) when it is. This is the read-side mirror of
-    // XlsxClosedXmlCellMapper.MapDateTimeValue for the legacy .xls (NPOI) path.
+    // XlsxClosedXmlCellMapper.MapDateTimeValue for the legacy .xls (NPOI) path — including its use of
+    // DateTimeValue.FromDateTime for the 1900 branch: NPOI's DateUtil.GetJavaDate(15) returns the true
+    // 1900-01-15, whose OADate (16) is one day past the Excel serial that cell actually holds.
     private static DateTimeValue MapDateTimeValue(DateTime date, bool uses1904DateSystem) =>
-        new(uses1904DateSystem ? date.ToOADate() - Date1904EpochOADate : date.ToOADate());
+        uses1904DateSystem
+            ? new DateTimeValue(date.ToOADate() - Date1904EpochOADate)
+            : DateTimeValue.FromDateTime(date);
 
     private static StyleId GetStyleId(
         NPOIWorkbook sourceWorkbook,
