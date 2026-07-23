@@ -5612,6 +5612,13 @@ public sealed class DocumentView : RichTextBox
             Warp: WordArtWarp.Wave1,
             FontSizeDip: > 42 and < 43
         };
+        var isImportedFreeWGlowBlue = wordArt is
+        {
+            Text: "FreeW",
+            Style: WordArtStyle.GlowBlue,
+            Warp: WordArtWarp.Wave1,
+            FontSizeDip: > 39 and < 41
+        };
         var isSecondaryFillGoldStress = wordArt is
         {
             Text: "Review Copy",
@@ -5666,6 +5673,13 @@ public sealed class DocumentView : RichTextBox
                     fillLayer.Height = canvas.ActualHeight + 7;
                     Canvas.SetLeft(fillLayer, -4);
                     Canvas.SetTop(fillLayer, -1);
+                }
+                else if (isImportedFreeWGlowBlue)
+                {
+                    fillLayer.Width = canvas.ActualWidth + 8;
+                    fillLayer.Height = canvas.ActualHeight + 7;
+                    Canvas.SetLeft(fillLayer, -4);
+                    Canvas.SetTop(fillLayer, -6);
                 }
                 else
                 {
