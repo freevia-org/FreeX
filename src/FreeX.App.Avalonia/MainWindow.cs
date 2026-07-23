@@ -751,6 +751,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal WorkbookSession Session => _session;
 
+    internal RibbonContextState RibbonContextStateForTest => _ribbonContextSource.Current;
+
     internal static IReadOnlySet<string> InteractiveValidationKeyboardShortcutScenarioIds { get; } =
         FreeX.App.Presentation.InteractionValidation.InteractiveValidationInventory.KeyboardShortcuts
             .Select(scenario => scenario.Id)
@@ -3952,8 +3954,7 @@ public sealed partial class MainWindow : Window
         Title = FormatWindowWorkbookTitle();
         UpdateViewportScrollBars();
         RefreshPivotFieldPane();
-        _ribbonContextSource.OnPivotActive(
-            FreeX.App.Avalonia.Pivot.PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
+        RefreshPivotContextualTab();
         UpdateSaveButton();
         _refreshRibbonToggleStates?.Invoke();
     }
@@ -11080,6 +11081,7 @@ public sealed partial class MainWindow : Window
         ClearSelectedDrawingObject();
         _session.SelectCell(address);
         RefreshTableContextualTab();
+        RefreshPivotContextualTab();
         ApplyFormatPainterAfterTargetSelection();
     }
 
@@ -11097,6 +11099,7 @@ public sealed partial class MainWindow : Window
         ClearSelectedDrawingObject();
         _session.SelectAnchoredRange(anchor, address);
         RefreshTableContextualTab();
+        RefreshPivotContextualTab();
         ApplyFormatPainterAfterTargetSelection();
     }
 
