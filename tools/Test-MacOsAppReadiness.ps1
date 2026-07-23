@@ -334,6 +334,13 @@ function Test-IsMacOsConditionalSourcePath {
     return $relative.StartsWith("src/FreeX.App.Avalonia/MacOs/", [System.StringComparison]::OrdinalIgnoreCase)
 }
 
+function Test-IsLinuxConditionalSourcePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $relative = Get-RepoRelativePath $Path
+    return $relative.StartsWith("src/FreeX.App.Avalonia/Linux/", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Test-MacOsIcon {
     param([Parameter(Mandatory = $true)][string]$IconFilePath)
 
@@ -3241,6 +3248,10 @@ function Test-PortableSourceHygiene {
             }
 
             if (Test-IsIgnoredSourcePath $file.FullName) {
+                continue
+            }
+
+            if (Test-IsLinuxConditionalSourcePath $file.FullName) {
                 continue
             }
 

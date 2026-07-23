@@ -1064,6 +1064,32 @@ public sealed class MacOsAppReadinessPreflightTests
     }
 
     [Fact]
+    public void MacOsAppReadinessPreflight_AllowsNativeLinuxTokensInsideLinuxSourceBoundary()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(
+            temp.Path,
+            extraAvaloniaSourcePath: "src/FreeX.App.Avalonia/Linux/X11WindowActivator.cs",
+            extraAvaloniaSource: """
+            using System.Runtime.InteropServices;
+
+            namespace FreeX.App.Avalonia;
+
+            internal static class X11WindowActivator
+            {
+                [DllImport("libX11.so.6")]
+                private static extern nint XOpenDisplay(nint displayName);
+            }
+            """);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().Be(0, result.Output + result.Error);
+        result.Output.Should().Contain("macOS app readiness preflight passed.");
+    }
+
+    [Fact]
     public void MacOsAppReadinessPreflight_AllowsNativeMacOsTokensInsideMacOsSourceBoundary()
     {
         using var temp = new TestTemporaryDirectory();
