@@ -73,6 +73,9 @@ public class SheetTabCommandTests
             Kind = PictureKind.Image,
             ImageBytes = [1, 2, 3],
             ContentType = "image/png",
+            // R80-io-drawing-image-5-3: an Insert > Icons/SVG picture keeps this editable vector
+            // original alongside the PNG fallback; duplicating the sheet must not drop it.
+            SvgImageBytes = [9, 8, 7],
             Width = 90,
             Height = 60,
             LockAspectRatio = false,
@@ -204,6 +207,10 @@ public class SheetTabCommandTests
         copiedImage.Anchor.Should().Be(new CellAddress(copy.Id, 2, 2));
         copiedImage.Kind.Should().Be(PictureKind.Image);
         copiedImage.ImageBytes.Should().Equal(1, 2, 3);
+        // R80-io-drawing-image-5-3: the vector original must travel with the duplicate (and own its
+        // own byte array, not alias the source picture's) rather than being silently dropped.
+        copiedImage.SvgImageBytes.Should().Equal(9, 8, 7);
+        copiedImage.SvgImageBytes.Should().NotBeSameAs(sheet.Pictures[1].SvgImageBytes);
         copiedImage.LockAspectRatio.Should().BeFalse();
         copiedImage.RotationDegrees.Should().Be(45);
         copiedImage.Title.Should().Be("Logo title");
@@ -284,6 +291,37 @@ public class SheetTabCommandTests
         command.Revert(ctx);
 
         wb.Sheets.Should().ContainSingle().Which.Id.Should().Be(sheet.Id);
+    }
+
+    // R65-io-image-drawing-6-1 regression: duplicating a sheet that holds a "Link to File" picture
+    // (an <a:blip> carrying r:link instead of r:embed, with no embedded ImageBytes) must copy the
+    // LinkedImageTarget onto the clone — it is that picture's ONLY image reference, so dropping it
+    // would leave the duplicate with no image at all.
+    [Fact]
+    public void DuplicateSheetCommand_CopiesLinkedToFilePictureTarget()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        sheet.Pictures.Add(new PictureModel
+        {
+            Name = "Linked Photo",
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Kind = PictureKind.Image,
+            ImageBytes = null,
+            LinkedImageTarget = "file:///C:/Images/photo.png",
+            Width = 90,
+            Height = 60,
+            IsSourceLoaded = true
+        });
+
+        new DuplicateSheetCommand(sheet.Id).Apply(ctx).Success.Should().BeTrue();
+
+        var copiedPicture = wb.Sheets[1].Pictures.Should().ContainSingle().Subject;
+        copiedPicture.Name.Should().Be("Linked Photo");
+        copiedPicture.ImageBytes.Should().BeNull();
+        copiedPicture.LinkedImageTarget.Should().Be("file:///C:/Images/photo.png");
     }
 
     // ── F14/F23 regression: Sheet.Clone must copy comment authors/shown-comments and the

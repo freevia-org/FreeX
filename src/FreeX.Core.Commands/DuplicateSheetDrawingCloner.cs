@@ -255,6 +255,17 @@ internal static class DuplicateSheetDrawingCloner
                 : picture.LinkedSourceSheetName,
             ImageBytes = picture.ImageBytes?.ToArray(),
             ContentType = picture.ContentType,
+            // R80-io-drawing-image-5-3: an Insert > Icons/SVG picture keeps a PNG rasterization in
+            // ImageBytes as the compatibility fallback but carries the editable vector original in
+            // SvgImageBytes. Copying ImageBytes without this would silently downgrade the duplicated
+            // picture to a flat PNG, re-introducing the same drop the round-80 fix addressed on the
+            // original-picture path. Defensive-copy the array to match ImageBytes above so the
+            // duplicate owns its own bytes rather than aliasing the source picture's.
+            SvgImageBytes = picture.SvgImageBytes?.ToArray(),
+            // R65-io-image-drawing-6-1: for a "Link to File" picture, ImageBytes is null and this
+            // r:link external target is the picture's ONLY image reference — dropping it here would
+            // leave the duplicate with no image at all.
+            LinkedImageTarget = picture.LinkedImageTarget,
             Title = picture.Title,
             AltText = picture.AltText,
             Width = picture.Width,
