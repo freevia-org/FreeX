@@ -8139,10 +8139,6 @@ public sealed class DocumentView : RichTextBox
             }
         };
 
-        var paragraphs = modelCell.Paragraphs.Count > 0
-            ? modelCell.Paragraphs
-            : (IEnumerable<ModelParagraph>)[new ModelParagraph()];
-
         if (modelCell.TextDirection != CellTextDirection.Horizontal)
         {
             // Keep the rotated content's measured bounds inside the authored row. Rotating a
@@ -8152,22 +8148,8 @@ public sealed class DocumentView : RichTextBox
             var angle = modelCell.TextDirection == CellTextDirection.Rotate90 ? 90.0 : 270.0;
             stack.HorizontalAlignment = HorizontalAlignment.Center;
             stack.VerticalAlignment = VerticalAlignment.Center;
-            foreach (var cellParagraph in paragraphs)
-            {
-                var textBlock = new System.Windows.Controls.TextBlock
-                {
-                    Width = textWidth,
-                    TextWrapping = TextWrapping.Wrap,
-                    TextAlignment = System.Windows.TextAlignment.Center,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    RenderTransformOrigin = new Point(0.5, 0.5),
-                    RenderTransform = new RotateTransform(angle)
-                };
-                foreach (var run in cellParagraph.Runs)
-                    textBlock.Inlines.Add(BuildRun(run, cellParagraph, document));
+            foreach (var textBlock in BuildConstrainedRotatedCellTextBlocks(modelCell, document, textWidth, angle))
                 stack.Children.Add(textBlock);
-            }
         }
         else
         {
@@ -8196,6 +8178,68 @@ public sealed class DocumentView : RichTextBox
         grid.Children.Add(borderChrome);
 
         return grid;
+    }
+
+    // Constrained rotated cells cannot host FlowDocument paragraphs without expanding the table's
+    // measured axis. Preserve their logical paragraph spacing on the TextBlock sequence instead.
+    private static IReadOnlyList<System.Windows.Controls.TextBlock> BuildConstrainedRotatedCellTextBlocks(
+        ModelTableCell cell,
+        TextDocument document,
+        double textWidth,
+        double angle)
+    {
+        var modelParagraphs = cell.Paragraphs.Count > 0
+            ? cell.Paragraphs
+            : [new ModelParagraph()];
+        var textBlocks = new List<System.Windows.Controls.TextBlock>(modelParagraphs.Count);
+        ModelParagraph? previousModelParagraph = null;
+        System.Windows.Controls.TextBlock? previousTextBlock = null;
+
+        foreach (var modelParagraph in modelParagraphs)
+        {
+            var formatting = Resolve(modelParagraph, document);
+            var before = formatting.SpaceBeforeIsSet
+                ? Math.Max(0, formatting.SpaceBeforePt) * PxPerPoint
+                : 0;
+            var after = formatting.SpaceAfterIsSet
+                ? Math.Max(0, formatting.SpaceAfterPt) * PxPerPoint
+                : 0;
+            var textBlock = new System.Windows.Controls.TextBlock
+            {
+                Width = textWidth,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = System.Windows.TextAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, before, 0, after),
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = new RotateTransform(angle)
+            };
+            foreach (var run in modelParagraph.Runs)
+                textBlock.Inlines.Add(BuildRun(run, modelParagraph, document));
+
+            if (previousModelParagraph is not null
+                && previousTextBlock is not null
+                && SuppressesContextualSpacing(previousModelParagraph, modelParagraph, document))
+            {
+                previousTextBlock.Margin = new Thickness(
+                    previousTextBlock.Margin.Left,
+                    previousTextBlock.Margin.Top,
+                    previousTextBlock.Margin.Right,
+                    0);
+                textBlock.Margin = new Thickness(
+                    textBlock.Margin.Left,
+                    0,
+                    textBlock.Margin.Right,
+                    textBlock.Margin.Bottom);
+            }
+
+            textBlocks.Add(textBlock);
+            previousModelParagraph = modelParagraph;
+            previousTextBlock = textBlock;
+        }
+
+        return textBlocks;
     }
 
     private sealed class TableCellBorderChrome(TableCellBorderVisualPlan plan) : FrameworkElement
