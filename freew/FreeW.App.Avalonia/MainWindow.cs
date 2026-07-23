@@ -1730,18 +1730,28 @@ public sealed class MainWindow : Window
     private async Task OpenMatchFieldsAsync()
     {
         if (_mailMerge?.Session.Data is not { } data)
+        {
+            await FreeWInfoDialog.ShowAsync(
+                this,
+                "Select recipients first (Mailings > Select Recipients), then match fields.");
             return;
+        }
         var mapping = await MailMergeDialogs.AskMatchFieldsAsync(
             this, data.Header, _mailMerge.Session.Mapping ?? new FieldMapping());
         if (mapping is not null)
-            _mailMerge.Session.Mapping = mapping;
+            _mailMerge.ApplyFieldMapping(mapping);
         _editor.Focus();
     }
 
     private async Task OpenFilterSortAsync()
     {
-        if (_mailMerge?.Session.Data is not { } data)
+        if (_mailMerge?.Session.Data is not { Count: > 0 } data)
+        {
+            await FreeWInfoDialog.ShowAsync(
+                this,
+                "Select recipients first (Mailings > Select Recipients), then filter and sort.");
             return;
+        }
         var filtered = await MailMergeDialogs.AskFilterSortRecipientsAsync(this, data);
         if (filtered is not null)
         {
@@ -1754,11 +1764,18 @@ public sealed class MainWindow : Window
 
     private async Task OpenPreviewNavigationAsync()
     {
-        if (_mailMerge?.Session.Data is not { Count: > 0 } data)
+        if (_mailMerge is null)
+            return;
+        if (_mailMerge.Session.Data is not { Count: > 0 })
         {
-            _mailMerge?.TogglePreview();
+            await FreeWInfoDialog.ShowAsync(
+                this,
+                "Select recipients first (Mailings > Select Recipients), then preview a record.");
             return;
         }
+        if (!_mailMerge.EnsurePreviewingForNavigation())
+            return;
+        var data = _mailMerge.Session.Data!;
         var action = await MailMergeDialogs.AskPreviewNavigationAsync(
             this, _mailMerge.Session.CurrentIndex, data.Count);
         switch (action)
@@ -1812,8 +1829,15 @@ public sealed class MainWindow : Window
 
     private async Task OpenFinishMergeAsync()
     {
-        if (_mailMerge?.Session.Data is not { Count: > 0 } data)
+        if (_mailMerge is null)
             return;
+        if (_mailMerge.Session.Data is not { Count: > 0 } data)
+        {
+            await FreeWInfoDialog.ShowAsync(
+                this,
+                "Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
+            return;
+        }
         var plan = await MailMergeDialogs.AskFinishMergeAsync(
             this, data.Count, _mailMerge.Session.CurrentIndex);
         if (plan is { Success: true, Destination: MailMergeFinishDestination.NewDocument })

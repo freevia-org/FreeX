@@ -109,8 +109,38 @@ internal sealed class MailMergeEngine
         if (!RequireRecipients("Select recipients first (Mailings > Select Recipients), then match fields."))
             return;
 
-        Session.Mapping = MailMerge.AutoMatchFields(Session.Data!.Header);
+        ApplyFieldMapping(MailMerge.AutoMatchFields(Session.Data!.Header));
         ShowInfo("Matched recipient fields automatically.");
+    }
+
+    /// <summary>
+    /// Apply a Match Fields result and leave an active preview in a coherent editable state. Changing the
+    /// mapping invalidates the rendered record, so restore the stashed template before clearing preview mode.
+    /// </summary>
+    public void ApplyFieldMapping(FieldMapping mapping)
+    {
+        ArgumentNullException.ThrowIfNull(mapping);
+        Session.Mapping = mapping;
+
+        if (!Session.IsPreviewing)
+            return;
+
+        var template = Session.Template!;
+        _editor.LoadDocument(template);
+        Session.Template = null;
+        Session.CurrentIndex = 0;
+    }
+
+    /// <summary>
+    /// Ensure the Preview Results navigation dialog always opens over a rendered record, matching the WPF
+    /// command's first-preview behavior. Returns false after the normal no-recipient feedback path.
+    /// </summary>
+    public bool EnsurePreviewingForNavigation()
+    {
+        if (!Session.IsPreviewing)
+            TogglePreview();
+
+        return Session.IsPreviewing;
     }
 
     public void FilterSortRecipients()
