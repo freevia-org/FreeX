@@ -502,6 +502,9 @@ public static class SlideCloner
             Direction     = a.Direction,
             WheelSpokeCount = a.WheelSpokeCount,
             TriggerShapeId = a.TriggerShapeId,
+            RawPresetClass = a.RawPresetClass,
+            RawPresetId = a.RawPresetId,
+            RawPresetSubtype = a.RawPresetSubtype,
         };
 
         if (a.Motion is not null)

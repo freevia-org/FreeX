@@ -2231,8 +2231,13 @@ public static class PptxPackageWriter
         if (anim.Kind == AnimationKind.Motion && anim.Motion is not null)
             return BuildMotionBuildItemEl(anim, triggerOverride, ref nodeId);
 
-        var (presetClass, presetId) = PptxAnimationMap.AnimationPresetToOoxml(anim.Preset, anim.Kind);
-        var subtypeAttr = PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction);
+        var (mappedPresetClass, mappedPresetId) = PptxAnimationMap.AnimationPresetToOoxml(anim.Preset, anim.Kind);
+        bool hasRawPreset = !string.IsNullOrWhiteSpace(anim.RawPresetClass) && anim.RawPresetId.HasValue;
+        string presetClass = hasRawPreset ? anim.RawPresetClass! : mappedPresetClass;
+        int presetId = hasRawPreset ? anim.RawPresetId!.Value : mappedPresetId;
+        var subtypeAttr = hasRawPreset && anim.RawPresetSubtype is not null
+            ? anim.RawPresetSubtype
+            : PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction);
 
         string delayStr = triggerOverride == AnimationTrigger.OnClick
             ? "indefinite"
