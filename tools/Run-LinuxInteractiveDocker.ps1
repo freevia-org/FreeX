@@ -44,6 +44,7 @@ param(
     [string]$Image = "freex-linux-interactive:ubuntu24.04",
     [string]$DocumentPath = "",
     [string[]]$AppArgument = @(),
+    [string]$SessionMetadataPath = "",
     [switch]$SkipPublish,
     [switch]$SkipImageBuild,
     [switch]$OpenBrowser,
@@ -102,6 +103,13 @@ $publishDir = if ([string]::IsNullOrWhiteSpace($PublishDir)) {
 }
 $documentsDir = Join-Path $appOutputRoot "documents"
 $currentSessionPath = Join-Path $appOutputRoot "current-session.json"
+$sessionMetadataOutputPath = if ([string]::IsNullOrWhiteSpace($SessionMetadataPath)) {
+    $currentSessionPath
+} elseif ([IO.Path]::IsPathRooted($SessionMetadataPath)) {
+    [IO.Path]::GetFullPath($SessionMetadataPath)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $repoRoot $SessionMetadataPath))
+}
 $labelName = "io.github.tony-xmelon.freex.linux-interactive"
 
 function Invoke-Docker {
@@ -154,6 +162,26 @@ function Get-CurrentSession {
     }
 
     return Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+}
+
+function Write-SessionMetadata {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)]$Metadata
+    )
+
+    $parent = Split-Path -Parent $Path
+    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    $temporaryPath = Join-Path $parent (".$([IO.Path]::GetFileName($Path)).$([guid]::NewGuid().ToString('N')).tmp")
+    try {
+        $json = $Metadata | ConvertTo-Json -Depth 8
+        [IO.File]::WriteAllText($temporaryPath, $json, (New-Object Text.UTF8Encoding($false)))
+        Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
+    } finally {
+        if (Test-Path -LiteralPath $temporaryPath -PathType Leaf) {
+            Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 function Get-OwnedAppImage {
@@ -346,12 +374,16 @@ West,87,92,179
     $containerDocument = "/documents/$(Split-Path -Leaf $demoPath)"
 }
 
-$sessionStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+$sessionStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssfffZ")
 $sessionDir = Join-Path $appOutputRoot "sessions/$sessionStamp"
+if (Test-Path -LiteralPath $sessionDir) {
+    $sessionDir = Join-Path $appOutputRoot "sessions/$sessionStamp-$([guid]::NewGuid().ToString('N'))"
+}
 New-Item -ItemType Directory -Path $sessionDir -Force | Out-Null
 
 $sessionMetadata = [ordered]@{
     schemaVersion = 1
+    sessionId = [guid]::NewGuid().ToString("N")
     app = $App
     containerName = $containerName
     port = $Port
@@ -359,7 +391,12 @@ $sessionMetadata = [ordered]@{
     sessionDirectory = $sessionDir
     startedUtc = (Get-Date).ToUniversalTime().ToString("O")
 }
-$sessionMetadata | ConvertTo-Json | Set-Content -LiteralPath $currentSessionPath -Encoding utf8
+# Keep the legacy pointer for interactive Status/Screenshot callers, and also write the
+# caller-owned path atomically so validation can bind to this exact Start invocation.
+Write-SessionMetadata -Path $currentSessionPath -Metadata $sessionMetadata
+if ($sessionMetadataOutputPath -ne $currentSessionPath) {
+    Write-SessionMetadata -Path $sessionMetadataOutputPath -Metadata $sessionMetadata
+}
 
 $sessionMount = "type=bind,source=$sessionDir,target=/work"
 $documentsMount = "type=bind,source=$documentsDir,target=/documents"
@@ -436,6 +473,7 @@ Write-Host "Resolution : $($ready.screen) at $($ready.dpi) DPI"
 Write-Host "Window     : $($ready.windowTitle)"
 Write-Host "Published  : $publishDir"
 Write-Host "Artifacts  : $sessionDir"
+Write-Host "Session metadata: $sessionMetadataOutputPath"
 Write-Host "Stop       : powershell -File tools/Run-LinuxInteractiveDocker.ps1 -Action Stop -App $App -Port $Port"
 
 if ($OpenBrowser) {

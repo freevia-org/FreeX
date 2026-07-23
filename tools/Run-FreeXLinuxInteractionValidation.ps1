@@ -41,7 +41,6 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $harness = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
-$currentSessionPath = Join-Path $repoRoot "artifacts/linux-interactive/freex/current-session.json"
 $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
 $runnerSchemaVersion = 2
@@ -56,6 +55,8 @@ $reportDirectory = if ([string]::IsNullOrWhiteSpace($ResumeReportDirectory)) {
     (Resolve-Path -LiteralPath $ResumeReportDirectory).Path
 }
 New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
+$sessionBindingDirectory = Join-Path $reportDirectory "session-bindings"
+New-Item -ItemType Directory -Path $sessionBindingDirectory -Force | Out-Null
 $provenancePath = Join-Path $reportDirectory "resume-provenance.json"
 $workspaceHasher = [Security.Cryptography.SHA256]::Create()
 try {
@@ -162,6 +163,48 @@ function Ensure-ReportProvenance {
     Assert-ProvenanceMatchesCurrent -Expected $script:reportProvenance
 }
 
+function Start-ValidationSession {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$AppArgument,
+        [string]$MemoryLimit = "",
+        [switch]$ReusePublishedPayload
+    )
+
+    $metadataPath = Join-Path $sessionBindingDirectory ("session-$([guid]::NewGuid().ToString('N')).json")
+    $startArguments = @{
+        Action = "Start"
+        App = "FreeX"
+        Port = $Port
+        Replace = $true
+        SessionMetadataPath = $metadataPath
+        AppArgument = $AppArgument
+    }
+    if ($SkipImageBuild -or $ReusePublishedPayload) { $startArguments.SkipImageBuild = $true }
+    if ($SkipPublish -or $ReusePublishedPayload) { $startArguments.SkipPublish = $true }
+    if (-not [string]::IsNullOrWhiteSpace($MemoryLimit)) {
+        $startArguments.MemoryLimit = $MemoryLimit
+    }
+
+    & $harness @startArguments
+    if (-not $?) {
+        throw "Linux interaction-validation harness failed to start."
+    }
+    if (-not (Test-Path -LiteralPath $metadataPath -PathType Leaf)) {
+        throw "Linux interaction-validation harness did not write its bound session metadata: $metadataPath"
+    }
+
+    try {
+        $session = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "Linux interaction-validation bound session metadata is not valid JSON: $metadataPath"
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$session.sessionDirectory) -or
+        -not (Test-Path -LiteralPath ([string]$session.sessionDirectory) -PathType Container)) {
+        throw "Linux interaction-validation bound session metadata has no existing session directory: $metadataPath"
+    }
+    $session
+}
+
 if (-not $resumeRequested -and $SkipPublish) {
     throw "-SkipPublish requires -ResumeReportDirectory with an existing provenance record."
 }
@@ -180,20 +223,69 @@ if ($resumeRequested) {
 function Read-CompletedJsonManifest {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][datetime]$Deadline
+        [Parameter(Mandatory = $true)][datetime]$Deadline,
+        [string]$ExpectedSection = "",
+        [bool]$ExpectedIncludeCoreResults = $false,
+        [bool]$ExpectedRibbonOnly = $false,
+        [int]$ExpectedDialogStart = 0,
+        [int]$ExpectedDialogCount = 0,
+        [int]$ExpectedRibbonCommandStart = 0,
+        [int]$ExpectedRibbonCommandCount = 0,
+        [int]$ExpectedContextMenuDispatchStart = 0,
+        [int]$ExpectedContextMenuDispatchCount = 0,
+        [bool]$RequireRunnerMetadata = $false
     )
 
+    $lastLength = "missing"
+    $lastError = "manifest was not observed"
     while ((Get-Date) -lt $Deadline) {
         if (Test-Path -LiteralPath $Path -PathType Leaf) {
             try {
-                return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+                $before = Get-Item -LiteralPath $Path
+                $raw = [IO.File]::ReadAllText($Path)
+                $after = Get-Item -LiteralPath $Path
+                $lastLength = [string]$after.Length
+                if ($before.Length -ne $after.Length -or
+                    $before.LastWriteTimeUtc -ne $after.LastWriteTimeUtc) {
+                    throw "manifest changed while it was being read"
+                }
+
+                $candidate = $raw | ConvertFrom-Json
+                Start-Sleep -Milliseconds 100
+                $stableInfo = Get-Item -LiteralPath $Path
+                if ($stableInfo.Length -ne $after.Length -or
+                    $stableInfo.LastWriteTimeUtc -ne $after.LastWriteTimeUtc) {
+                    throw "manifest changed before it became stable"
+                }
+                $stableRaw = [IO.File]::ReadAllText($Path)
+                if ($stableRaw -ne $raw) {
+                    throw "manifest content changed before it became stable"
+                }
+
+                if (-not [string]::IsNullOrWhiteSpace($ExpectedSection)) {
+                    Validate-InteractionManifest `
+                        $candidate `
+                        $ExpectedSection `
+                        $ExpectedIncludeCoreResults `
+                        $ExpectedRibbonOnly `
+                        $ExpectedDialogStart `
+                        $ExpectedDialogCount `
+                        $ExpectedRibbonCommandStart `
+                        $ExpectedRibbonCommandCount `
+                        $ExpectedContextMenuDispatchStart `
+                        $ExpectedContextMenuDispatchCount `
+                        $RequireRunnerMetadata | Out-Null
+                }
+                return $candidate
             } catch {
-                # The app writes a large manifest directly; file existence can precede the final byte.
+                $lastError = $_.Exception.Message
             }
+        } else {
+            $lastError = "manifest path does not exist"
         }
         Start-Sleep -Milliseconds 500
     }
-    return $null
+    throw "Timed out waiting for a stable interaction manifest; path='$Path'; length=$lastLength; parseError=$lastError"
 }
 
 $script:catalogReference = $null
@@ -590,15 +682,6 @@ function Merge-ContextMenuAggregateResults {
     @($Results | Where-Object { $_.category -notin $aggregateCategories }) + @($merged)
 }
 
-$desktopStartArguments = @{
-    Action = "Start"
-    App = "FreeX"
-    Port = $Port
-    Replace = $true
-}
-if ($SkipImageBuild) { $desktopStartArguments.SkipImageBuild = $true }
-if ($SkipPublish) { $desktopStartArguments.SkipPublish = $true }
-
 try {
     if ($SkipX11) {
         if ([string]::IsNullOrWhiteSpace($ExistingX11Manifest) -or
@@ -612,22 +695,15 @@ try {
         # Bounded validation batches always reuse the published payload. A resumed run that skips
         # physical X11 probes still needs to refresh that payload once unless explicitly told not to.
         if (-not $SkipPublish) {
-            & $harness @desktopStartArguments
-            if ($LASTEXITCODE -ne 0) {
-                throw "Linux interaction-validation payload failed to publish."
-            }
+            Start-ValidationSession -AppArgument @() | Out-Null
             Ensure-ReportProvenance
             & $harness -Action Stop -App FreeX -Port $Port
         }
     } else {
         # Phase one sends real X11 keyboard and pointer events through the production handlers.
-        & $harness @desktopStartArguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "Linux X11 input-validation harness failed to start."
-        }
+        $x11Session = Start-ValidationSession -AppArgument @()
         Ensure-ReportProvenance
 
-        $x11Session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
         & docker cp $x11ProbeScript "${containerName}:/tmp/run-freex-input-probes.sh"
         if ($LASTEXITCODE -ne 0) { throw "Could not copy X11 input probes into '$containerName'." }
         & docker exec --env DISPLAY=:99 $containerName bash /tmp/run-freex-input-probes.sh /work/x11-validation
@@ -759,7 +835,9 @@ try {
     foreach ($coreSection in $coreSections) {
         $existingCorePath = Join-Path $reportDirectory "core-$coreSection.json"
         if (Test-Path -LiteralPath $existingCorePath -PathType Leaf) {
-            $batchManifest = Read-CompletedJsonManifest -Path $existingCorePath -Deadline (Get-Date).AddMinutes(1)
+            $batchManifest = Read-CompletedJsonManifest -Path $existingCorePath -Deadline (Get-Date).AddMinutes(1) `
+                -ExpectedSection $coreSection -ExpectedIncludeCoreResults $true -ExpectedRibbonOnly $false `
+                -ExpectedContextMenuDispatchCount ([int]::MaxValue) -RequireRunnerMetadata $true
             if ($null -eq $batchManifest) {
                 throw "Existing core interaction section '$coreSection' is incomplete: $existingCorePath"
             }
@@ -784,15 +862,12 @@ try {
             "--interaction-validation-core-section", $coreSection
         )
         Write-Host "Running core interaction section '$coreSection'..."
-        & $harness -Action Start -App FreeX -Port $Port -Replace -SkipImageBuild -SkipPublish -AppArgument $appArguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "Linux core interaction section '$coreSection' failed to start."
-        }
-
-        $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+        $session = Start-ValidationSession -ReusePublishedPayload -AppArgument $appArguments
         $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
-        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline
+        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline `
+            -ExpectedSection $coreSection -ExpectedIncludeCoreResults $true -ExpectedRibbonOnly $false `
+            -ExpectedContextMenuDispatchCount ([int]::MaxValue)
         if ($null -eq $batchManifest) {
             $appLogPath = Join-Path ([string]$session.sessionDirectory) "logs/app.log"
             $appLog = if (Test-Path -LiteralPath $appLogPath) { Get-Content -LiteralPath $appLogPath -Raw } else { "" }
@@ -823,7 +898,10 @@ try {
         $contextCount = [Math]::Min($ContextBatchSize, $authoritativeContextCount - $contextStart)
         $existingContextPath = Join-Path $reportDirectory ("context-batch-{0:D3}.json" -f $contextStart)
         if (Test-Path -LiteralPath $existingContextPath -PathType Leaf) {
-            $batchManifest = Read-CompletedJsonManifest -Path $existingContextPath -Deadline (Get-Date).AddMinutes(1)
+            $batchManifest = Read-CompletedJsonManifest -Path $existingContextPath -Deadline (Get-Date).AddMinutes(1) `
+                -ExpectedSection "context-menus" -ExpectedIncludeCoreResults $true -ExpectedRibbonOnly $false `
+                -ExpectedContextMenuDispatchStart $contextStart -ExpectedContextMenuDispatchCount $contextCount `
+                -RequireRunnerMetadata $true
             if ($null -eq $batchManifest) {
                 throw "Existing context batch is incomplete: $existingContextPath"
             }
@@ -847,14 +925,12 @@ try {
             "--interaction-validation-context-count", [string]$contextCount
         )
         Write-Host "Running context-menu dispatch batch $contextStart..$($contextStart + $contextCount - 1)..."
-        & $harness -Action Start -App FreeX -Port $Port -Replace -SkipImageBuild -SkipPublish -MemoryLimit 6g -AppArgument $appArguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "Linux context-menu interaction batch starting at $contextStart failed to start."
-        }
-        $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+        $session = Start-ValidationSession -MemoryLimit "6g" -ReusePublishedPayload -AppArgument $appArguments
         $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
-        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline
+        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline `
+            -ExpectedSection "context-menus" -ExpectedIncludeCoreResults $true -ExpectedRibbonOnly $false `
+            -ExpectedContextMenuDispatchStart $contextStart -ExpectedContextMenuDispatchCount $contextCount
         if ($null -eq $batchManifest) {
             $appLogPath = Join-Path ([string]$session.sessionDirectory) "logs/app.log"
             $appLog = if (Test-Path -LiteralPath $appLogPath) { Get-Content -LiteralPath $appLogPath -Raw } else { "" }
@@ -876,7 +952,10 @@ try {
         }
         $existingDialogPath = Join-Path $reportDirectory ("batch-{0:D3}.json" -f $dialogStart)
         if (Test-Path -LiteralPath $existingDialogPath -PathType Leaf) {
-            $batchManifest = Read-CompletedJsonManifest -Path $existingDialogPath -Deadline (Get-Date).AddMinutes(1)
+            $batchManifest = Read-CompletedJsonManifest -Path $existingDialogPath -Deadline (Get-Date).AddMinutes(1) `
+                -ExpectedSection "dialogs" -ExpectedIncludeCoreResults $false -ExpectedRibbonOnly $false `
+                -ExpectedDialogStart $dialogStart -ExpectedDialogCount $dialogCount `
+                -RequireRunnerMetadata $true
             if ($null -eq $batchManifest) {
                 throw "Existing dialog batch is incomplete: $existingDialogPath"
             }
@@ -905,24 +984,12 @@ try {
         )
 
         Write-Host "Running dialog interaction batch $dialogStart..$($dialogStart + $dialogCount - 1)..."
-        $batchStartArguments = @{
-            Action = "Start"
-            App = "FreeX"
-            Port = $Port
-            Replace = $true
-            SkipImageBuild = $true
-            SkipPublish = $true
-            AppArgument = $appArguments
-        }
-        & $harness @batchStartArguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "Linux interaction-validation batch starting at $dialogStart failed to start."
-        }
-
-        $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+        $session = Start-ValidationSession -ReusePublishedPayload -AppArgument $appArguments
         $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
-        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline
+        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline `
+            -ExpectedSection "dialogs" -ExpectedIncludeCoreResults $false -ExpectedRibbonOnly $false `
+            -ExpectedDialogStart $dialogStart -ExpectedDialogCount $dialogCount
         if ($null -eq $batchManifest) {
             $appLogPath = Join-Path ([string]$session.sessionDirectory) "logs/app.log"
             $appLog = if (Test-Path -LiteralPath $appLogPath) { Get-Content -LiteralPath $appLogPath -Raw } else { "" }
@@ -962,7 +1029,10 @@ try {
         $ribbonCount = [Math]::Min($RibbonBatchSize, $authoritativeRibbonCount - $ribbonStart)
         $existingRibbonPath = Join-Path $reportDirectory ("ribbon-batch-{0:D3}.json" -f $ribbonStart)
         if (Test-Path -LiteralPath $existingRibbonPath -PathType Leaf) {
-            $batchManifest = Read-CompletedJsonManifest -Path $existingRibbonPath -Deadline (Get-Date).AddMinutes(1)
+            $batchManifest = Read-CompletedJsonManifest -Path $existingRibbonPath -Deadline (Get-Date).AddMinutes(1) `
+                -ExpectedSection "ribbon-only" -ExpectedIncludeCoreResults $true -ExpectedRibbonOnly $true `
+                -ExpectedRibbonCommandStart $ribbonStart -ExpectedRibbonCommandCount $ribbonCount `
+                -ExpectedContextMenuDispatchCount ([int]::MaxValue) -RequireRunnerMetadata $true
             if ($null -eq $batchManifest) {
                 throw "Existing ribbon batch is incomplete: $existingRibbonPath"
             }
@@ -984,15 +1054,13 @@ try {
             "--interaction-validation-ribbon-only"
         )
         Write-Host "Running ribbon interaction batch $ribbonStart..$($ribbonStart + $ribbonCount - 1)..."
-        & $harness -Action Start -App FreeX -Port $Port -Replace -SkipImageBuild -SkipPublish -AppArgument $appArguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "Linux ribbon interaction-validation batch starting at $ribbonStart failed to start."
-        }
-
-        $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+        $session = Start-ValidationSession -ReusePublishedPayload -AppArgument $appArguments
         $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
-        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline
+        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline `
+            -ExpectedSection "ribbon-only" -ExpectedIncludeCoreResults $true -ExpectedRibbonOnly $true `
+            -ExpectedRibbonCommandStart $ribbonStart -ExpectedRibbonCommandCount $ribbonCount `
+            -ExpectedContextMenuDispatchCount ([int]::MaxValue)
         if ($null -eq $batchManifest) {
             throw "Ribbon interaction-validation batch $ribbonStart did not write a complete manifest within $TimeoutMinutes minute(s): $batchManifestPath"
         }
