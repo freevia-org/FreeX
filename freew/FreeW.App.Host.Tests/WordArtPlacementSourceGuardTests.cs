@@ -25,6 +25,8 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("preserveOpaqueGlowFill");
         wpf.Should().Contain("Style: WordArtStyle.GlowBlue,");
         wpf.Should().Contain("BlurRadius = 2");
+        wpf.Should().Contain("var isImportedFreeWGlowBlue = wordArt is");
+        wpf.Should().Contain("Canvas.SetTop(fillLayer, -6);");
         wpf.Should().Contain("var isPrimaryGlowBlueStress = wordArt is");
         wpf.Should().Contain("Text: \"FreeW CONFIDENTIAL\",");
         wpf.Should().Contain("fillLayer.Width = canvas.ActualWidth + 8;");
