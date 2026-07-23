@@ -1133,6 +1133,42 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_LookOnOffLexicalValues_ReadAndCanonicalize()
+    {
+        var document = ReadHandAuthoredDocx(
+            """
+            <w:tbl>
+              <w:tblPr>
+                <w:tblLook w:firstRow="true" w:lastRow="on" w:firstColumn="true" w:lastColumn="on"
+                           w:noHBand="false" w:noVBand="off"/>
+              </w:tblPr>
+              <w:tr><w:tc><w:p><w:r><w:t>Body</w:t></w:r></w:p></w:tc></w:tr>
+            </w:tbl>
+            <w:sectPr/>
+            """);
+
+        var formatting = document.Blocks.OfType<Table>().Single().Formatting;
+        formatting.HeaderRow.Should().BeTrue();
+        formatting.LastRow.Should().BeTrue();
+        formatting.FirstColumn.Should().BeTrue();
+        formatting.LastColumn.Should().BeTrue();
+        formatting.BandedRows.Should().BeTrue();
+        formatting.BandedColumns.Should().BeTrue();
+
+        var xml = WriteDocumentXml(document);
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var look = xml.Descendants(ns + "tblLook").Single();
+        look.Attribute(ns + "firstRow")?.Value.Should().Be("1");
+        look.Attribute(ns + "lastRow")?.Value.Should().Be("1");
+        look.Attribute(ns + "firstColumn")?.Value.Should().Be("1");
+        look.Attribute(ns + "lastColumn")?.Value.Should().Be("1");
+        look.Attribute(ns + "noHBand")?.Value.Should().Be("0");
+        look.Attribute(ns + "noVBand")?.Value.Should().Be("0");
+
+        RoundTrip(document).Blocks.OfType<Table>().Single().Formatting.Should().Be(formatting);
+    }
+
+    [Fact]
     public void Table_RowCantSplit_ExplicitOffToggle_AllowsBreakAndIsCanonicallyOmittedOnSave()
     {
         var document = ReadHandAuthoredDocx(
