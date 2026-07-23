@@ -8542,6 +8542,14 @@ public sealed partial class MainWindow : Window
                 _session.Workbook.Theme),
             borderNeighbors: borderNeighbors);
 
+        // The outer cell border is the worksheet hit target.  Keep rendered content out of the
+        // hit-test tree so an overflowing TextBlock cannot capture a pointer over the adjacent
+        // cell; WPF paints cell text directly into its DrawingContext and has no equivalent child
+        // visual.  Inline editing replaces this child with a live TextBox below, so edit gestures
+        // remain interactive.
+        if (border.Child is { } cellContent)
+            cellContent.IsHitTestVisible = false;
+
         // Comment/note corner indicator + hover card: mirrors WPF's GridView.Rendering.cs
         // DrawCommentIndicator (small top-right triangle, red for a legacy note, purple for a
         // threaded comment or a cell that mixes both) and GridView.CommentPreview.cs (hover shows
