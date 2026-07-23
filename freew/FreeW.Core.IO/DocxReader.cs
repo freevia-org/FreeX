@@ -5127,13 +5127,15 @@ public static class DocxReader
                 var rotation = ParseVmlStyleNumber(textShape.Attribute("style")?.Value, "rotation");
                 var (textWidthPt, textHeightPt) = ParseVmlShapeSize(textShape.Attribute("style")?.Value);
                 var fitShape = ParseVmlBoolean(textPath?.Attribute("fitshape")?.Value);
+                var shapeTypeXml = ReadNativeVmlTextShapeTypeXml(root, textShape);
                 if (document.Page.WatermarkOptions is { IsPicture: false } existingTextWatermark)
                 {
                     document.Page.WatermarkOptions = existingTextWatermark with
                     {
                         NativeVmlTextWidthPt = textWidthPt > 0 ? textWidthPt : null,
                         NativeVmlTextHeightPt = textHeightPt > 0 ? textHeightPt : null,
-                        NativeVmlTextFitShape = fitShape
+                        NativeVmlTextFitShape = fitShape,
+                        NativeVmlTextShapeTypeXml = shapeTypeXml
                     };
                     return;
                 }
@@ -5151,7 +5153,8 @@ public static class DocxReader
                     Opacity = ParseVmlOpacity(fill?.Attribute("opacity")?.Value),
                     NativeVmlTextWidthPt = textWidthPt > 0 ? textWidthPt : null,
                     NativeVmlTextHeightPt = textHeightPt > 0 ? textHeightPt : null,
-                    NativeVmlTextFitShape = fitShape
+                    NativeVmlTextFitShape = fitShape,
+                    NativeVmlTextShapeTypeXml = shapeTypeXml
                 };
                 return;
             }
@@ -5190,6 +5193,17 @@ public static class DocxReader
             };
             return;
         }
+    }
+
+    private static string? ReadNativeVmlTextShapeTypeXml(XElement? root, XElement shape)
+    {
+        var shapeTypeId = shape.Attribute("type")?.Value.Trim().TrimStart('#');
+        if (string.IsNullOrWhiteSpace(shapeTypeId))
+            return null;
+
+        return root?.Descendants(V + "shapetype")
+            .FirstOrDefault(shapeType => shapeType.Attribute("id")?.Value == shapeTypeId)
+            ?.ToString(SaveOptions.DisableFormatting);
     }
 
     // FreeW metadata remains authoritative for picture content and editing semantics. VML adds

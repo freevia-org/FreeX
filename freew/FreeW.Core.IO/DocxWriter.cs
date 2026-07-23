@@ -1303,6 +1303,9 @@ public static class DocxWriter
             .ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
         var rotation = options.Layout == WatermarkLayout.Diagonal ? "315" : "0";
         var shapeId = watermarkImage is null ? "PowerPlusWaterMarkObject" : "PowerPlusPictureWaterMarkObject";
+        var nativeTextShapeType = watermarkImage is null
+            ? TryParseNativeVmlTextShapeType(options.NativeVmlTextShapeTypeXml)
+            : null;
         var shapeSize = watermarkImage is null
             ? options.NativeVmlTextWidthPt is > 0 and var textWidthPt
                 && options.NativeVmlTextHeightPt is > 0 and var textHeightPt
@@ -1313,7 +1316,7 @@ public static class DocxWriter
                 ? $"width:{FormatPt(pictureWidthPt)}pt;height:{FormatPt(pictureHeightPt)}pt"
                 : "width:468pt;height:281pt";
 
-        var shapeType = new XElement(V + "shapetype",
+        var shapeType = nativeTextShapeType ?? new XElement(V + "shapetype",
             new XAttribute("id", "_x0000_t136"),
             new XAttribute("coordsize", "21600,21600"),
             new XAttribute(O + "spt", "136"),
@@ -1347,6 +1350,9 @@ public static class DocxWriter
                 new XAttribute(V + "ext", "edit"),
                 new XAttribute("text", "t"),
                 new XAttribute("shapetype", "t")));
+        var shapeTypeId = shapeType.Attribute("id")?.Value;
+        if (string.IsNullOrWhiteSpace(shapeTypeId))
+            shapeTypeId = "_x0000_t136";
 
         var fill = watermarkImage is null
             ? new XElement(V + "fill",
@@ -1361,7 +1367,7 @@ public static class DocxWriter
 
         var shape = new XElement(V + "shape",
             new XAttribute("id", shapeId),
-            new XAttribute("type", "#_x0000_t136"),
+            new XAttribute("type", "#" + shapeTypeId),
             new XAttribute("style", $"position:absolute;margin-left:0;margin-top:0;{shapeSize};rotation:{rotation};z-index:-251654144;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin"),
             new XAttribute(O + "allowincell", "f"),
             new XAttribute("stroked", "f"),
@@ -1381,6 +1387,25 @@ public static class DocxWriter
                 new XElement(W + "pict",
                     shapeType,
                     shape)));
+    }
+
+    private static XElement? TryParseNativeVmlTextShapeType(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+
+        try
+        {
+            var shapeType = XElement.Parse(xml, LoadOptions.PreserveWhitespace);
+            return shapeType.Name == V + "shapetype"
+                && !string.IsNullOrWhiteSpace(shapeType.Attribute("id")?.Value)
+                ? shapeType
+                : null;
+        }
+        catch (System.Xml.XmlException)
+        {
+            return null;
+        }
     }
 
     private static string NormalizeHex(string? value, string fallback)
