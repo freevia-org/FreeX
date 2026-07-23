@@ -69,6 +69,29 @@ public sealed class FloatingObjectRenderTests
         return doc;
     }
 
+    private static TextDocument DocWithImportedBehindTextbox()
+    {
+        var shape = Shape.TextBoxWith("Behind text box\nwith shadow", widthPt: 150, heightPt: 60, fillColorHex: "#D9EAD3");
+        shape.OutlineColorHex = "#38761D";
+        shape.OutlineWidthPt = 1.5;
+        shape.Placement = new FloatingPlacement
+        {
+            Wrapping = ImageWrapping.Behind,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            HorizontalOffsetPt = 18,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+            VerticalOffsetPt = 12,
+            ZOrderIndex = 1
+        };
+        shape.Effects = new ShapeEffectLst { HasShadow = true, ShadowAlpha = 35000 };
+
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
     private static TextDocument DocWithMixedFloatingBands(out Shape behindShape, out Shape frontShape)
     {
         behindShape = new Shape(ShapeKind.Rectangle, 72, 36)
@@ -209,6 +232,18 @@ public sealed class FloatingObjectRenderTests
 
         Canvas.GetTop(canvas.Children.OfType<FrameworkElement>().Single())
             .Should().BeApproximately(241, 0.01);
+    }
+
+    [StaFact]
+    public void ImportedBehindTextbox_UsesItsMeasuredWordOverlayRegistration()
+    {
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(DocWithImportedBehindTextbox());
+
+        Canvas.GetTop(canvas.Children.OfType<FrameworkElement>().Single())
+            .Should().BeApproximately(97, 0.01);
     }
 
     [StaFact]

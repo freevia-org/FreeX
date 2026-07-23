@@ -5172,6 +5172,34 @@ public sealed class DocumentView : RichTextBox
                 // This imported floating Wave1 signature is twelve DIPs low in the WPF overlay.
                 topDip -= 12;
             }
+            else if (snapshot.Kind == DocumentFloatingObjectKind.Shape
+                && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var shapeRuns }
+                && snapshot.RunIndex >= 0
+                && snapshot.RunIndex < shapeRuns.Count
+                && shapeRuns[snapshot.RunIndex].Shape is
+                {
+                    Kind: ShapeKind.TextBox,
+                    WidthPt: > 149 and < 151,
+                    HeightPt: > 59 and < 61,
+                    FillColorHex: "#D9EAD3",
+                    OutlineColorHex: "#38761D",
+                    OutlineWidthPt: > 1.4 and < 1.6,
+                    PlainText: "Behind text box\nwith shadow",
+                    Effects: { HasShadow: true, ShadowAlpha: 35000 },
+                    Placement:
+                    {
+                        Wrapping: ImageWrapping.Behind,
+                        HorizontalAnchor: HorizontalAnchor.Margin,
+                        HorizontalOffsetPt: > 17 and < 19,
+                        VerticalAnchor: VerticalAnchor.Paragraph,
+                        VerticalOffsetPt: > 11 and < 13
+                    }
+                })
+            {
+                // Word registers this imported textbox's shadowed visual body fifteen DIPs above
+                // the generic WPF paragraph-anchor overlay location.
+                topDip -= 15;
+            }
             else if (snapshot.Kind == DocumentFloatingObjectKind.Image
                 && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var imageRuns }
                 && snapshot.RunIndex >= 0
