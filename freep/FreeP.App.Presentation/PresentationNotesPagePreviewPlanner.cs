@@ -70,6 +70,11 @@ public sealed record PresentationNotesPagePreviewPlan(
     public bool HasSlide => SlideIndex is not null;
     public bool HasNotes => !string.IsNullOrWhiteSpace(NotesText);
     public int RenderedPageCount => RenderPages.Count;
+
+    // PowerPoint treats a native notes master with no renderable placeholder
+    // shapes as a text-only notes surface, rather than synthesizing the usual
+    // thumbnail and notes-box fallback geometry.
+    public bool UsesEmptyNativeNotesMaster { get; init; }
 }
 
 /// <summary>
@@ -97,8 +102,13 @@ public static class PresentationNotesPagePreviewPlanner
             0,
             ResolveNotesPageWidthPoints(presentation, pageWidth),
             ResolveNotesPageHeightPoints(presentation, pageHeight));
-        var slideBounds = BuildSlideBounds(pageBounds, presentation);
-        var notesBounds = BuildNotesBounds(pageBounds, slideBounds, presentation);
+        var usesEmptyNativeNotesMaster = HasEmptyNativeNotesMaster(presentation);
+        var slideBounds = usesEmptyNativeNotesMaster
+            ? new LayoutRect(0, 0, 0, 0)
+            : BuildSlideBounds(pageBounds, presentation);
+        var notesBounds = usesEmptyNativeNotesMaster
+            ? pageBounds
+            : BuildNotesBounds(pageBounds, slideBounds, presentation);
 
         if (slideCount == 0)
         {
@@ -122,7 +132,10 @@ public static class PresentationNotesPagePreviewPlanner
                 emptyNoteLines,
                 StyledNoteLines: [],
                 emptyLinesPerRenderedPage,
-                BuildRenderedPages(null, emptyNoteLines, emptyNotesPlaceholder, emptyLinesPerRenderedPage));
+                BuildRenderedPages(null, emptyNoteLines, emptyNotesPlaceholder, emptyLinesPerRenderedPage))
+            {
+                UsesEmptyNativeNotesMaster = usesEmptyNativeNotesMaster
+            };
         }
 
         var normalizedIndex = Math.Clamp(currentSlideIndex, 0, slideCount - 1);
@@ -131,7 +144,9 @@ public static class PresentationNotesPagePreviewPlanner
         var notesPlaceholder = BuildNotesPlaceholder(notesText, notesBounds);
         var styledNoteLines = SplitStyledNoteLines(slide.Notes, notesBounds.Width);
         var noteLines = styledNoteLines.Select(line => line.Text).ToArray();
-        var linesPerPage = CountLinesPerRenderedPage(pageBounds, notesBounds);
+        var linesPerPage = usesEmptyNativeNotesMaster
+            ? 1
+            : CountLinesPerRenderedPage(pageBounds, notesBounds);
 
         return new PresentationNotesPagePreviewPlan(
             PresentationExportPlanner.BuildPrintPlan(
@@ -154,8 +169,15 @@ public static class PresentationNotesPagePreviewPlanner
             noteLines,
             styledNoteLines,
             linesPerPage,
-            BuildRenderedPages(normalizedIndex + 1, noteLines, notesPlaceholder, linesPerPage));
+            BuildRenderedPages(normalizedIndex + 1, noteLines, notesPlaceholder, linesPerPage))
+        {
+            UsesEmptyNativeNotesMaster = usesEmptyNativeNotesMaster
+        };
     }
+
+    internal static bool HasEmptyNativeNotesMaster(Presentation presentation) =>
+        presentation.NotesMasterXml is { Length: > 0 } &&
+        presentation.NotesMasterPlaceholders.Count == 0;
 
     public static double ResolveNotesPageWidthPoints(Presentation presentation, double? pageWidth = null)
     {

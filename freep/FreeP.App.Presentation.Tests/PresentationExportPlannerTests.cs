@@ -773,6 +773,25 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void CommentsNotesCorpus_UsesPowerPointEmptyNotesMasterPagination()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "21-comments-notes.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+
+        presentation.NotesMasterXml.Should().NotBeNull();
+        presentation.NotesMasterPlaceholders.Should().BeEmpty();
+
+        var plans = presentation.Slides
+            .Select((_, index) => PresentationNotesPagePreviewPlanner.Build(presentation, index))
+            .ToArray();
+
+        plans.Should().OnlyContain(plan => plan.UsesEmptyNativeNotesMaster);
+        plans[0].RenderedPageCount.Should().Be(2);
+        plans[1].RenderedPageCount.Should().Be(1);
+        PresentationNotesPagePdfExporter.BuildRenderPlan(presentation).Pages.Should().HaveCount(3);
+    }
+
+    [Fact]
     public void NotesPagePreviewPlan_ExposesNotesPlaceholderStateForEmptyNotes()
     {
         var presentation = Presentation.CreateEmpty();
@@ -2142,6 +2161,20 @@ public sealed class PresentationExportPlannerTests
         paragraph.Runs.Add(new Run { Text = text });
         configure?.Invoke(paragraph);
         return paragraph;
+    }
+
+    private static string FindCorpusDirectory()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
+            if (File.Exists(Path.Combine(candidate, "21-comments-notes.pptx")))
+                return candidate;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus.");
     }
 
     private static string ReadZipText(ZipArchive archive, string path)
