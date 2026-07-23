@@ -1605,25 +1605,28 @@ public sealed class ReviewWorkflowAdapterTests
             window.ShowReadingOrderPane();
             window.IsReadingOrderMoveEarlierEnabled.Should().BeFalse();
             window.ReadingOrderMoveEarlierDisabledReason.Should()
-                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
-            window.IsReadingOrderMoveLaterEnabled.Should().BeTrue();
+                .Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
+            window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
+            window.LastReadingOrderPlan!.Actions.Single(action =>
+                    action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)
+                .Status.Should().Be(PresentationWorkflowCapabilityStatus.Deferred);
 
             var nestedMutation = window.ApplyReadingOrderMoveLater();
 
             nestedMutation.Should().Be(new PresentationReadingOrderMutationPlan(
                 PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
-                true,
+                false,
                 0,
                 503,
-                0,
-                1,
-                null));
-            group.Children.Select(shape => shape.Id).Should().Equal(504u, 503u);
-            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(502u, 504u, 503u, 501u);
+                -1,
+                -1,
+                PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+            group.Children.Select(shape => shape.Id).Should().Equal(503u, 504u);
+            window.LastReadingOrderPlan!.Items.Select(item => item.ShapeId).Should().Equal(502u, 503u, 504u, 501u);
             window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(503);
             window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
             window.ReadingOrderMoveLaterDisabledReason.Should()
-                .Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage);
+                .Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
 
             var selection = window.ApplyReadingOrderSelectItem(504);
 
@@ -1632,14 +1635,23 @@ public sealed class ReviewWorkflowAdapterTests
                 true,
                 0,
                 504,
-                1,
+                2,
                 null));
             window.Editor.SelectedShapeIds.Should().Equal(504u);
             window.LastReadingOrderPlan!.SelectedItem.Should().NotBeNull();
             window.LastReadingOrderPlan.SelectedItem!.ShapeId.Should().Be(504);
             window.ReadingOrderPaneMessage.Should().Be("Selected: Grouped label");
             window.IsReadingOrderMoveEarlierEnabled.Should().BeFalse();
-            window.IsReadingOrderMoveLaterEnabled.Should().BeTrue();
+            window.IsReadingOrderMoveLaterEnabled.Should().BeFalse();
+            window.ReadingOrderMoveLaterDisabledReason.Should()
+                .Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
+
+            window.Editor.Undo();
+            window.Editor.CurrentSlide.Shapes.Select(shape => shape.Id).Should().Equal(501u, 502u);
+            window.Editor.SelectedShapeIds.Should().Equal(504u);
+            window.Editor.Redo();
+            window.Editor.CurrentSlide.Shapes.Select(shape => shape.Id).Should().Equal(502u, 501u);
+            window.Editor.SelectedShapeIds.Should().Equal(504u);
         }
         finally
         {
@@ -2080,6 +2092,8 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
         source.Should().Contain("_reviewWorkflowSession.RefreshAltTextPlans(");
+        source.Should().Contain("_reviewWorkflowSession.ApplyReadingOrderMove(");
+        source.Should().Contain("_reviewWorkflowSession.SelectReadingOrderItem(");
         source.Should().Contain("_reviewWorkflowSession.RefreshReadingOrderPlan();");
         source.Should().Contain("_reviewWorkflowSession.RefreshProofingRequestPlan();");
         source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");

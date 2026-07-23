@@ -63,6 +63,35 @@ public sealed class PresentationReviewWorkflowSessionTests
     }
 
     [Fact]
+    public void ReadingOrderMutation_UsesSharedPlannerAndRefreshesSelection()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape { Id = 1, Name = "Back" });
+        slide.Shapes.Add(new SlideShape { Id = 2, Name = "Selected" });
+        slide.Shapes.Add(new SlideShape { Id = 3, Name = "Front" });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(2);
+        var session = CreateSession(editor, []);
+
+        var mutation = session.ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
+
+        mutation.Should().Be(new PresentationReadingOrderMutationPlan(
+            PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
+            true,
+            0,
+            2,
+            1,
+            2,
+            null));
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(1u, 3u, 2u);
+        editor.SelectedShapeIds.Should().Equal(2u);
+        session.LastReadingOrderPlan!.SelectedItem!.ShapeId.Should().Be(2u);
+        session.LastReadingOrderPlan.Items.Select(item => item.ShapeId).Should().Equal(1u, 3u, 2u);
+    }
+
+    [Fact]
     public void ProofingMutation_NormalizesSelectionAfterCorrectionAndTracksIgnoreAndDictionaryUpdates()
     {
         var presentation = Presentation.CreateEmpty();
