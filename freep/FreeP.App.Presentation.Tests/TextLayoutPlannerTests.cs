@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -831,15 +832,66 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
-    public void WpfImportedBulletBodyOriginCalibration_IsNarrowlyGuarded()
+    public void ImportedBulletBodyOriginPolicy_RecognizesOnlyTheGuardedBulletBodySignature()
+    {
+        var paragraphs = Enumerable.Range(0, 6)
+            .Select(_ => new ResolvedParagraph
+            {
+                Runs = new[]
+                {
+                    new ResolvedRun { Text = "Bullet", FontFamily = "Aptos", FontSizePt = 18.0 }
+                },
+                BulletKind = BulletKind.Char
+            })
+            .ToArray();
+
+        var matching = new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Shape,
+            Paragraphs = paragraphs
+        };
+        TextLayoutPlanner.UsesImportedAptosBodyOrigin(matching).Should().BeTrue();
+        TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY(matching)
+            .Should().Be(TextLayoutPlanner.ImportedAptosBodyOriginOffsetY);
+
+        TextLayoutPlanner.UsesImportedAptosBodyOrigin(new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Shape,
+            Paragraphs = paragraphs.Take(5).ToArray()
+        }).Should().BeFalse();
+
+        TextLayoutPlanner.UsesImportedAptosBodyOrigin(new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.None,
+            Paragraphs = paragraphs
+        }).Should().BeFalse();
+
+        TextLayoutPlanner.UsesImportedAptosBodyOrigin(new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Shape,
+            Paragraphs = paragraphs.Skip(1).Append(new ResolvedParagraph
+            {
+                Runs = new[]
+                {
+                    new ResolvedRun { Text = "Bullet", FontFamily = "Calibri", FontSizePt = 18.0 }
+                },
+                BulletKind = BulletKind.Char
+            }).ToArray()
+        }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaImportedBulletBodyOrigin_ConsumeSharedPolicy()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
 
-        wpf.Should().Contain("ImportedAptosBodyOriginOffsetY = 6.0");
-        wpf.Should().Contain("UsesImportedAptosBodyOrigin");
-        wpf.Should().Contain("text.Paragraphs.Count == 6");
-        wpf.Should().Contain("paragraph.BulletKind != BulletKind.None");
-        wpf.Should().Contain("text.AutoFitKind == TextAutoFitKind.Shape");
+        wpf.Should().Contain("TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY");
+        avalonia.Should().Contain("TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY");
+        wpf.Should().NotContain("ImportedAptosBodyOriginOffsetY = 6.0");
+        avalonia.Should().NotContain("ImportedAptosBodyOriginOffsetY = 6.0");
+        wpf.Should().NotContain("UsesImportedAptosBodyOrigin");
+        avalonia.Should().NotContain("UsesImportedAptosBodyOrigin");
     }
 
     [Fact]

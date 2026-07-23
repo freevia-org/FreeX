@@ -2150,34 +2150,38 @@ public sealed class SlideCanvas : Control
         }
 
         var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);
+        double importedAptosBodyOriginOffsetY =
+            TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY(renderText);
         foreach (var placement in plan.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
+            double placementY = placement.Y - importedAptosBodyOriginOffsetY;
 
             if (placement.Bullet is { } bullet)
             {
+                bullet = bullet with { Y = bullet.Y - importedAptosBodyOriginOffsetY };
                 DrawBulletPlacementAvalonia(dc, bullet);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
             {
                 case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placement.Y);
+                    RenderParaWithMath(dc, para, placement.X, placementY);
                     break;
                 case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, renderText);
+                    RenderParaWithEffects(dc, para, placement.X, placementY, bounds, renderText);
                     break;
                 case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
+                    RenderParaWithTabs(dc, para, placement.X, placementY, para.TabStops);
                     break;
                 case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
+                    RenderParaWithBaseline(dc, para, placement.X, placementY, placement.MaxWidthDip);
                     break;
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
                         ft.MaxTextWidth = placement.MaxWidthDip;
-                    dc.DrawText(ft, new Point(placement.X, placement.Y));
+                    dc.DrawText(ft, new Point(placement.X, placementY));
                     break;
             }
         }

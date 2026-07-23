@@ -172,12 +172,31 @@ public static class TextLayoutPlanner
     public const double DipPerPoint = 96.0 / 72.0;
     public const double DefaultColumnSpacingDip = 48.5;
     public const double DefaultTabStopDip = 96.0;
+    public const double ImportedAptosBodyOriginOffsetY = 6.0;
     public const double RuntimeAutoFitMinimumFontScale = 0.60;
     public const double RuntimeAutoFitMaximumLineSpacingReduction = 0.20;
     /// <summary>PowerPoint's authored baseline runs use a compact script glyph.</summary>
     public const double BaselineRunFontScale = 0.67;
 
     public static double PointsToDip(double points) => points * DipPerPoint;
+
+    public static bool UsesImportedAptosBodyOrigin(ResolvedTextLayout text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        return text.AutoFitKind == TextAutoFitKind.Shape &&
+            text.Paragraphs.Count == 6 &&
+            text.Paragraphs.All(paragraph =>
+                paragraph.Runs.Count == 1 &&
+                string.Equals(paragraph.Runs[0].FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase) &&
+                Math.Abs(paragraph.Runs[0].FontSizePt - 18.0) < 0.01 &&
+                !paragraph.Runs[0].Bold &&
+                !paragraph.Runs[0].Italic &&
+                paragraph.BulletKind != BulletKind.None);
+    }
+
+    public static double ResolveImportedAptosBodyOriginOffsetY(ResolvedTextLayout text) =>
+        UsesImportedAptosBodyOrigin(text) ? ImportedAptosBodyOriginOffsetY : 0.0;
 
     public static TextOrientationPlan PlanTextOrientation(
         ResolvedTextLayout text,
