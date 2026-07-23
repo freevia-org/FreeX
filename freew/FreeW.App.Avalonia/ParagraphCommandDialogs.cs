@@ -5,7 +5,9 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Localization;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
@@ -199,12 +201,21 @@ public sealed class TabsDialog : FreeWDialogWindow
 
 public sealed class BordersAndShadingDialog : FreeWDialogWindow
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ControlHeight = 20,
+            ButtonHeight = 21,
+            ButtonPadding = new Thickness(10, 1),
+        };
+
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
 
+    private readonly TabControl _tabs;
     private readonly ComboBox _paragraphSetting = Combo(BordersAndShadingDialogPlanner.SettingNames);
     private readonly ComboBox _paragraphStyle = Combo(BordersAndShadingDialogPlanner.LineStyleNames);
-    private readonly ComboBox _paragraphColor = Combo(BordersAndShadingDialogPlanner.Palette);
-    private readonly TextBox _paragraphWidth = new() { Width = 90 };
+    private readonly ComboBox _paragraphColor = ColorCombo();
+    private readonly TextBox _paragraphWidth = NumberBox();
     private readonly CheckBox _top = Check("Top");
     private readonly CheckBox _left = Check("Left");
     private readonly CheckBox _bottom = Check("Bottom");
@@ -212,18 +223,18 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
 
     private readonly ComboBox _pageSetting = Combo(BordersAndShadingDialogPlanner.SettingNames);
     private readonly ComboBox _pageStyle = Combo(BordersAndShadingDialogPlanner.LineStyleNames);
-    private readonly ComboBox _pageColor = Combo(BordersAndShadingDialogPlanner.Palette);
-    private readonly TextBox _pageWidth = new() { Width = 90 };
+    private readonly ComboBox _pageColor = ColorCombo();
+    private readonly TextBox _pageWidth = NumberBox();
     private readonly ComboBox _pageArt = Combo(BordersAndShadingDialogPlanner.ArtBorders.Select(option => option.Label));
 
-    private readonly ComboBox _shadingColor = Combo(new[] { "(none)" }.Concat(BordersAndShadingDialogPlanner.Palette));
+    private readonly ComboBox _shadingColor = ColorCombo(includeNone: true);
     private readonly ComboBox _shadingPattern = Combo(BordersAndShadingDialogPlanner.PatternNames);
     private readonly TextBlock _status = new() { IsVisible = false, Foreground = Brushes.Red };
 
     public BordersAndShadingDialog(ParagraphFormatting paragraph, PageBorder? pageBorder)
     {
         Title = "Borders and Shading";
-        Width = 440;
+        Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -252,38 +263,59 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
             : PaletteIndex(paragraph.ShadingColorHex) + 1;
         _shadingPattern.SelectedIndex = BordersAndShadingDialogPlanner.IndexOfPattern(paragraph.ShadingPattern);
 
-        var outer = new StackPanel { Margin = new Thickness(16) };
-        outer.Children.Add(Section("Paragraph Border"));
-        var paragraphGrid = TwoColumnGrid();
-        AddRow(paragraphGrid, 0, "Setting:", _paragraphSetting);
-        AddRow(paragraphGrid, 1, "Style:", _paragraphStyle);
-        AddRow(paragraphGrid, 2, "Color:", _paragraphColor);
-        AddRow(paragraphGrid, 3, "Width:", _paragraphWidth);
-        outer.Children.Add(paragraphGrid);
-        outer.Children.Add(ButtonRow(_top, _left, _bottom, _right));
+        _tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
+        _tabs.Items.Add(new TabItem { Header = "Borders", Content = BuildBordersTab() });
+        _tabs.Items.Add(new TabItem { Header = "Page Border", Content = BuildPageBorderTab() });
+        _tabs.Items.Add(new TabItem { Header = "Shading", Content = BuildShadingTab() });
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(_tabs, DialogChromeStyle);
 
-        outer.Children.Add(Section("Page Border"));
-        var pageGrid = TwoColumnGrid();
-        AddRow(pageGrid, 0, "Setting:", _pageSetting);
-        AddRow(pageGrid, 1, "Style:", _pageStyle);
-        AddRow(pageGrid, 2, "Color:", _pageColor);
-        AddRow(pageGrid, 3, "Width:", _pageWidth);
-        AddRow(pageGrid, 4, "Art:", _pageArt);
-        outer.Children.Add(pageGrid);
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(14, 8, 14, 0));
+        var ok = Button(LocalizedUiText.Ok, (_, _) => Accept(), isDefault: true);
+        var cancel = Button(LocalizedUiText.Cancel, (_, _) => Close(null), isCancel: true);
+        var actions = AvaloniaCompactDialogChrome.CreateActionRow(
+            [ok, cancel],
+            new Thickness(14, 12, 14, 12),
+            DialogChromeStyle);
+        var root = new DockPanel();
+        DockPanel.SetDock(actions, Dock.Bottom);
+        root.Children.Add(actions);
+        root.Children.Add(_tabs);
+        Content = root;
 
-        outer.Children.Add(Section("Shading"));
-        var shadingGrid = TwoColumnGrid();
-        AddRow(shadingGrid, 0, "Fill:", _shadingColor);
-        AddRow(shadingGrid, 1, "Pattern:", _shadingPattern);
-        outer.Children.Add(shadingGrid);
-        outer.Children.Add(_status);
+        Opened += (_, _) => _paragraphWidth.Focus();
+    }
 
-        var ok = Button("OK", (_, _) => Accept());
-        ok.IsDefault = true;
-        var cancel = Button("Cancel", (_, _) => Close(null));
-        cancel.IsCancel = true;
-        outer.Children.Add(ButtonRow(ok, cancel));
-        Content = outer;
+    internal TabControl TabsForTest => _tabs;
+
+    private Control BuildBordersTab()
+    {
+        var grid = TwoColumnGrid(6);
+        AddRow(grid, 0, "Setting:", _paragraphSetting);
+        AddRow(grid, 1, "Style:", _paragraphStyle);
+        AddRow(grid, 2, "Colour:", _paragraphColor);
+        AddRow(grid, 3, "Width (pt):", _paragraphWidth);
+        AddRow(grid, 4, "Edges:", EdgeRow(_top, _bottom));
+        AddRow(grid, 5, string.Empty, EdgeRow(_left, _right));
+        return grid;
+    }
+
+    private Control BuildPageBorderTab()
+    {
+        var grid = TwoColumnGrid(5);
+        AddRow(grid, 0, "Setting:", _pageSetting);
+        AddRow(grid, 1, "Style:", _pageStyle);
+        AddRow(grid, 2, "Art border:", _pageArt);
+        AddRow(grid, 3, "Colour:", _pageColor);
+        AddRow(grid, 4, "Width (pt):", _pageWidth);
+        return grid;
+    }
+
+    private Control BuildShadingTab()
+    {
+        var grid = TwoColumnGrid(2);
+        AddRow(grid, 0, "Fill:", _shadingColor);
+        AddRow(grid, 1, "Pattern:", _shadingPattern);
+        return grid;
     }
 
     public static void ApplyResult(DocumentView editor, BordersAndShadingDialogResult result)
@@ -359,40 +391,85 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
         return 0;
     }
 
-    private static TextBlock Section(string text) => new()
+    private static ComboBox Combo(IEnumerable<string> items)
     {
-        Text = text,
-        FontWeight = FontWeight.SemiBold,
-        Margin = new Thickness(0, 12, 0, 4)
+        var combo = new ComboBox
+        {
+            ItemsSource = items.ToArray(),
+            SelectedIndex = 0,
+            MinWidth = 160,
+        };
+        AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
+        return combo;
+    }
+
+    private static ComboBox ColorCombo(bool includeNone = false)
+    {
+        var items = new List<Control>();
+        if (includeNone)
+            items.Add(new TextBlock { Text = "No Colour", VerticalAlignment = VerticalAlignment.Center });
+        items.AddRange(BordersAndShadingDialogPlanner.Palette.Select(ColorItem));
+        var combo = new ComboBox { ItemsSource = items, SelectedIndex = 0, MinWidth = 160 };
+        AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
+        return combo;
+    }
+
+    private static Control ColorItem(string hex)
+    {
+        var swatch = new Border
+        {
+            Width = 28,
+            Height = 12,
+            Background = Brush.Parse(hex),
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 6, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { swatch, new TextBlock { Text = hex, VerticalAlignment = VerticalAlignment.Center } },
+        };
+    }
+
+    private static TextBox NumberBox() => new() { Width = 160 };
+
+    private static CheckBox Check(string text) => new()
+    {
+        Content = text,
+        VerticalAlignment = VerticalAlignment.Center,
     };
 
-    private static ComboBox Combo(IEnumerable<string> items) => new()
+    private static Grid TwoColumnGrid(int rows)
     {
-        ItemsSource = items.ToArray(),
-        SelectedIndex = 0,
-        MinWidth = 160
-    };
-
-    private static CheckBox Check(string text) => new() { Content = text, Margin = new Thickness(0, 0, 10, 0) };
-
-    private static Grid TwoColumnGrid()
-    {
-        var grid = new Grid();
+        var grid = new Grid { Margin = new Thickness(8) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var row = 0; row < rows; row++)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         return grid;
+    }
+
+    private static StackPanel EdgeRow(CheckBox first, CheckBox second)
+    {
+        first.Margin = new Thickness(0, 0, 16, 0);
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { first, second },
+        };
     }
 
     private static void AddRow(Grid grid, int row, string label, Control control)
     {
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var text = new TextBlock
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 3, 8, 3)
+            Margin = new Thickness(0, 4, 8, 4)
         };
-        control.Margin = new Thickness(0, 3, 0, 3);
+        control.Margin = new Thickness(0, 4, 0, 4);
         Grid.SetRow(text, row);
         Grid.SetColumn(text, 0);
         Grid.SetRow(control, row);
@@ -401,22 +478,10 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
         grid.Children.Add(control);
     }
 
-    private static StackPanel ButtonRow(params Control[] controls)
+    private static Button Button(string text, EventHandler<RoutedEventArgs> click, bool isDefault = false, bool isCancel = false)
     {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0)
-        };
-        foreach (var control in controls)
-            row.Children.Add(control);
-        return row;
-    }
-
-    private static Button Button(string text, EventHandler<RoutedEventArgs> click)
-    {
-        var button = new Button { Content = text, MinWidth = 76, Margin = new Thickness(6, 0, 0, 0) };
+        var button = new Button { Content = text, IsDefault = isDefault, IsCancel = isCancel };
+        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 72, isDefault: isDefault);
         button.Click += click;
         return button;
     }
