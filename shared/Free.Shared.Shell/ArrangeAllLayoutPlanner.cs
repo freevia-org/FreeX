@@ -49,6 +49,42 @@ public static class ArrangeAllLayoutPlanner
         };
     }
 
+    /// <summary>
+    /// Builds a row-first tiled layout with a fixed maximum number of columns. This is the neutral
+    /// geometry entry point for hosts whose Arrange All policy keeps the same column count on the
+    /// final, incomplete row (the existing FreeW WPF behavior uses a maximum of three columns).
+    /// </summary>
+    public static IReadOnlyList<ShellRect> ArrangeRowFirst(
+        double workAreaWidth,
+        double workAreaHeight,
+        int windowCount,
+        int maxColumns)
+    {
+        if (windowCount <= 0 || maxColumns <= 0)
+            return Array.Empty<ShellRect>();
+
+        var width = workAreaWidth > 0 ? workAreaWidth : FallbackWidth;
+        var height = workAreaHeight > 0 ? workAreaHeight : FallbackHeight;
+        var columns = Math.Min(windowCount, maxColumns);
+        var rows = (int)Math.Ceiling((double)windowCount / columns);
+        var tileWidth = width / columns;
+        var tileHeight = height / rows;
+        var bounds = new ShellRect[windowCount];
+
+        for (var index = 0; index < windowCount; index++)
+        {
+            var column = index % columns;
+            var row = index / columns;
+            bounds[index] = new ShellRect(
+                tileWidth * column,
+                tileHeight * row,
+                tileWidth,
+                tileHeight);
+        }
+
+        return bounds;
+    }
+
     private static IReadOnlyList<ShellRect> ArrangeTiled(double width, double height, int windowCount)
     {
         var columns = (int)Math.Ceiling(Math.Sqrt(windowCount));

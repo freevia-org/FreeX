@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -13,6 +14,7 @@ using System.Globalization;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
 using FreeW.App.Avalonia.Backstage;
@@ -1093,6 +1095,46 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// AV-VIEW: Window > Arrange All. Tiles every visible FreeW top-level window on the screen that
+    /// owns this window, using the screen working area so desktop panels/taskbars remain unobscured.
+    /// Avalonia reports working-area coordinates in physical pixels while Window dimensions are DIPs;
+    /// the planner converts only the latter before applying each tile.
+    /// </summary>
+    private void ArrangeAllWindows()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+            return;
+
+        var windows = desktop.Windows
+            .OfType<MainWindow>()
+            .Where(window => window.IsVisible)
+            .ToList();
+        if (windows.Count == 0)
+            return;
+
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        if (screen is null)
+            return;
+
+        var scaling = screen.Scaling > 0 ? screen.Scaling : 1;
+        var bounds = ArrangeAllLayoutPlanner.ArrangeRowFirst(
+            screen.WorkingArea.Width / scaling,
+            screen.WorkingArea.Height / scaling,
+            windows.Count,
+            maxColumns: 3);
+        var tiles = FreeWAvaloniaWindowBoundsTranslator.Translate(screen.WorkingArea, scaling, bounds);
+        for (var index = 0; index < windows.Count && index < tiles.Count; index++)
+        {
+            var window = windows[index];
+            var tile = tiles[index];
+            window.WindowState = WindowState.Normal;
+            window.Position = tile.Position;
+            window.Width = tile.Width;
+            window.Height = tile.Height;
+        }
+    }
+
+    /// <summary>
     /// AV-VIEW: Window → Split. A true split-pane (two scroll regions over one document) is a larger
     /// surface than this slice. The top pane remains the live editor; the bottom pane is a
     /// read-only paginated snapshot, so the command is backed without pretending to offer dual live editing.
@@ -1536,6 +1578,7 @@ public sealed partial class MainWindow : Window
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
             OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
             NewWindow:       OpenNewWindow,
+            ArrangeAll:      ArrangeAllWindows,
             ToggleSplit:     ToggleSplit,
             IsSplitActive:   () => _viewDepthPlan.IsSplitActive,
             ZoomOnePage:     ZoomToOnePage,

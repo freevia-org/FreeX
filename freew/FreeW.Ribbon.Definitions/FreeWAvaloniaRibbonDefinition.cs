@@ -833,10 +833,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Toggle("freew.zoom-multiple-pages", "Multiple Pages");
                     g.Toggle("freew.zoom-side-to-side", "Side to Side");
                 });
-                // AV-VIEW: Window group — new window (second view on the same doc) + split.
+                // AV-VIEW: Window group — new window, Arrange All, and split.
                 tab.Group("window", "Window", null, 80, g =>
                 {
                     g.Button("freew.new-window", "New Window");
+                    g.Button("freew.arrange-all", "Arrange All");
                     g.Toggle("freew.split",      "Split");
                 });
             })

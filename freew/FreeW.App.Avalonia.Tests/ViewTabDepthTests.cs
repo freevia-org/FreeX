@@ -91,6 +91,7 @@ public sealed class ViewTabDepthTests
                      "freew.zoom-dialog", "freew.gridlines", "freew.ruler", "freew.nav-pane",
                      "freew.view-gridlines", "freew.view-ruler", "freew.navigationpane",
                      "freew.new-window", "freew.split", "freew.split-window",
+                     "freew.arrange-all",
                  })
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"AV-VIEW command '{id}' must be registered");
@@ -123,6 +124,7 @@ public sealed class ViewTabDepthTests
         ids.Should().NotContain("freew.view-ruler");
         ids.Should().NotContain("freew.navigationpane");
         ids.Should().Contain("freew.new-window");
+        ids.Should().Contain("freew.arrange-all");
         ids.Should().Contain("freew.split");
         // Show group must surface the Reviewing Pane toggle on the View tab too.
         ids.Should().Contain("freew.reviewing-pane");
@@ -396,6 +398,21 @@ public sealed class ViewTabDepthTests
         var viewTab = definition.Tabs.Single(t => t.Id == "view");
         viewTab.Groups.Should().Contain(g => g.Id == "window",
             "AV-VIEW must add a Window group to the View tab");
+    }
+
+    [Fact]
+    public void View_arrange_all_routes_to_the_host_callback()
+    {
+        var invoked = 0;
+        var callbacks = NoopCallbacks() with { ArrangeAll = () => invoked++ };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.arrange-all"), out var command)
+            .Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        invoked.Should().Be(1);
     }
 
     // ── Gridlines toggle (flag) ──────────────────────────────────────────────

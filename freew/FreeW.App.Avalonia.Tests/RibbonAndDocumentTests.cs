@@ -94,6 +94,36 @@ public class RibbonAndDocumentTests
                  })
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"Avalonia Help command '{id}' must be wired");
+
+        var calls = new List<string>();
+        var routedCallbacks = NoopCallbacks() with
+        {
+            Backstage = () => calls.Add("backstage"),
+            NewDocument = () => calls.Add("new"),
+            Open = () => calls.Add("open"),
+            ImportPdfText = () => calls.Add("import-pdf-text"),
+            Save = () => calls.Add("save"),
+        };
+        var routedRegistry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), routedCallbacks);
+        foreach (var id in new[]
+                 {
+                     "freew.backstage",
+                     "freew.new",
+                     "freew.open",
+                     "freew.import-pdf-text",
+                     "freew.save",
+                 })
+        {
+            routedRegistry.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+        }
+        calls.Should().Equal("backstage", "new", "open", "import-pdf-text", "save");
+
+        var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        mainWindow.Should().Contain("NewDocument: NewDocument");
+        mainWindow.Should().Contain("ImportPdfText: () => _ = ImportPdfTextAsync()");
+        mainWindow.Should().Contain("Backstage: () => _ = ShowBackstageAsync()");
+        mainWindow.Should().Contain("Save: () => _ = SaveAsync()");
     }
 
     [Fact]

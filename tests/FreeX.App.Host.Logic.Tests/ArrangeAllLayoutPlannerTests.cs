@@ -53,6 +53,39 @@ public sealed class ArrangeAllLayoutPlannerTests
     }
 
     [Fact]
+    public void RowFirst_UsesFreeWThreeColumnGeometryIncludingItsIncompleteFinalRow()
+    {
+        var bounds = ArrangeAllLayoutPlanner.ArrangeRowFirst(
+            workAreaWidth: 1200,
+            workAreaHeight: 800,
+            windowCount: 5,
+            maxColumns: 3);
+
+        bounds.Should().HaveCount(5);
+        bounds[0].Should().Be(new ShellRect(0, 0, 400, 400));
+        bounds[1].Should().Be(new ShellRect(400, 0, 400, 400));
+        bounds[2].Should().Be(new ShellRect(800, 0, 400, 400));
+        bounds[3].Should().Be(new ShellRect(0, 400, 400, 400));
+        bounds[4].Should().Be(new ShellRect(400, 400, 400, 400));
+    }
+
+    [Fact]
+    public void RowFirst_UsesTheSameThreeColumnsForAOneWindowFinalRow()
+    {
+        var bounds = ArrangeAllLayoutPlanner.ArrangeRowFirst(1000, 600, 4, maxColumns: 3);
+
+        bounds.Should().HaveCount(4);
+        bounds[3].Should().Be(new ShellRect(0, 300, 1000d / 3, 300));
+    }
+
+    [Fact]
+    public void RowFirst_RejectsEmptyWindowsOrAnInvalidColumnPolicy()
+    {
+        ArrangeAllLayoutPlanner.ArrangeRowFirst(100, 100, 0, maxColumns: 3).Should().BeEmpty();
+        ArrangeAllLayoutPlanner.ArrangeRowFirst(100, 100, 2, maxColumns: 0).Should().BeEmpty();
+    }
+
+    [Fact]
     public void Cascade_OffsetsWindowsDiagonallyAndKeepsThemInsideTheWorkArea()
     {
         var bounds = ArrangeAllLayoutPlanner.Arrange(

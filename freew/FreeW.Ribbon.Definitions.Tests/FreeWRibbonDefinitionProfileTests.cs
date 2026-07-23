@@ -614,7 +614,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
             .Should()
             .BeEquivalentTo(new[]
             {
-                "freew.arrange-all",
                 "freew.backstage",
                 "freew.import-pdf-text",
                 "freew.new",
@@ -627,12 +626,12 @@ public sealed class FreeWRibbonDefinitionProfileTests
                 .Should()
                 .BeTrue("platform-only FreeW rows must carry command-specific evidence so they are not ambiguous parity blockers");
         }
-        AssertPlatformOnlyNote(commands, "freew.arrange-all", "WPF desktop multi-window tiling command");
         AssertPlatformOnlyNote(commands, "freew.backstage", "Avalonia compact File entry");
         AssertPlatformOnlyNote(commands, "freew.import-pdf-text", "Avalonia compact File command makes PDF text import explicit");
         AssertPlatformOnlyNote(commands, "freew.new", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.open", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.save", "Avalonia compact File command");
+        AssertGapClassification(commands, "freew.arrange-all", "shared-profile");
         AssertBehaviorEvidence(
             commands,
             "freew.arrange-all",
@@ -641,8 +640,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
             "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
             "freew.platform-only.window-shell",
-            "Window-management shell variance",
-            "platform-only");
+            "Window-management shell variance");
         AssertBehaviorEvidence(
             commands,
             "freew.backstage",
