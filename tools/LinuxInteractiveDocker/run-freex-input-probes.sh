@@ -158,7 +158,7 @@ set_cell_text() {
     if [[ -n "$value" ]]; then
         type_text "$value"
     fi
-    send_key Enter
+    send_key Return
     select_cell "$column_offset" "$row_offset" "$address"
 }
 
@@ -498,6 +498,13 @@ probe_worksheet_context_copy() {
 probe_worksheet_context_clear() {
     local value="X11ContextClear" before_hash="" after_hash="" observed="" artifacts="worksheet-context-clear-before.png;worksheet-context-clear-open.png;worksheet-context-clear-after.png;worksheet-context-clear-postcondition.txt"
     if set_cell_text 6 11 G12 "$value"; then
+        send_key ctrl+s
+        if ! wait_for_csv_cell 6 11 "$value"; then
+            write_artifact "worksheet-context-clear-postcondition.txt" "seeded=false\ncell=G12\nexpected=$value\nobserved=$(json_escape "$(csv_cell_value 6 11)")"
+            record "worksheet-context-clear-physical" "failed" "worksheet-context-clear-postcondition.txt" "Could not persist the seeded G12 value before the physical worksheet context Clear probe." "worksheet-context-clear-postcondition.txt"
+            dismiss_overlays
+            return
+        fi
         before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}')"
         capture "worksheet-context-clear-before.png"
         send_key shift+F10
@@ -532,7 +539,9 @@ probe_clipboard_roundtrips() {
     local copy_artifacts="clipboard-copy-paste-before.png;clipboard-copy-paste-after.png;clipboard-copy-paste-postcondition.txt"
     local cut_artifacts="clipboard-cut-paste-before.png;clipboard-cut-paste-after.png;clipboard-cut-paste-postcondition.txt"
 
-    if set_cell_text 6 12 G13 "$copy_value" && set_cell_text 7 12 H13 ""; then
+    if set_cell_text 6 12 G13 "$copy_value" &&
+       select_cell 7 12 H13 &&
+       [[ "$(csv_cell_value 7 12)" == "" ]]; then
         printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
         select_cell 6 12 G13
         capture "clipboard-copy-paste-before.png"
@@ -556,7 +565,9 @@ probe_clipboard_roundtrips() {
     fi
     dismiss_overlays
 
-    if set_cell_text 6 13 G14 "$cut_value" && set_cell_text 7 13 H14 ""; then
+    if set_cell_text 6 13 G14 "$cut_value" &&
+       select_cell 7 13 H14 &&
+       [[ "$(csv_cell_value 7 13)" == "" ]]; then
         printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
         before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}')"
         select_cell 6 13 G14
@@ -636,7 +647,9 @@ probe_window_management() {
     focus_app
     enter_view_keytip
     keytip_key a
-    keytip_key t
+    # The Arrange All popup owns X11 focus. Navigate its rendered menu instead of
+    # injecting a key-tip token back into the workbook window.
+    send_active_key Home Return
     sleep "$dialog_settle_seconds"
     after_bounds="$(window_bounds_signature)"
     write_artifact "window-bounds-after-arrange.txt" "$after_bounds"
@@ -676,7 +689,7 @@ probe_window_management() {
 
 probe_cancelable_window() {
     local id="$1" keys="$2" screenshot_name="$3"
-    local before after dialog_id opened=false closed=false
+    local before="" after="" dialog_id="" opened=false closed=false
     local before_screenshot="${id}-before.png" after_screenshot="${id}-after-open.png" cancel_screenshot="${id}-after-cancel.png"
     local artifacts="${before_screenshot};${after_screenshot};${cancel_screenshot};${id}-postcondition.txt"
     before="$(visible_window_count)"

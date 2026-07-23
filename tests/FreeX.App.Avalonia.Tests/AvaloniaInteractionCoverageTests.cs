@@ -186,6 +186,11 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("window_bounds_signature", probe, StringComparison.Ordinal);
         Assert.Contains("^.+ - FreeX$", probe, StringComparison.Ordinal);
         Assert.Contains("shared-workbook-parity=managed-behavior-tested", probe, StringComparison.Ordinal);
+        Assert.DoesNotContain("send_key Enter", probe, StringComparison.Ordinal);
+        Assert.Contains("send_key Return", probe, StringComparison.Ordinal);
+        Assert.Contains("local before=\"\" after=\"\" dialog_id=\"\"", probe, StringComparison.Ordinal);
+        Assert.Contains("wait_for_csv_cell 6 11 \"$value\"", probe, StringComparison.Ordinal);
+        Assert.Contains("send_active_key Home Return", probe, StringComparison.Ordinal);
         Assert.Contains("Physical X11 manifest does not satisfy schema v2", runner, StringComparison.Ordinal);
         Assert.Contains("geometry calibration did not pass", runner, StringComparison.Ordinal);
         Assert.Contains("xdotool getactivewindow", probe, StringComparison.Ordinal);
