@@ -460,6 +460,35 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_SmartArt_HierarchyCachedConnectorSegmentsUseLineGeometry()
+    {
+        var corpusPath = FindRenderCompareCorpusFile("14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(corpusPath);
+
+        var fallbackShapes = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SelectMany(shape => shape.SmartArt?.FallbackShapes ?? [])
+            .ToList();
+
+        var connectorSegments = fallbackShapes
+            .Where(shape => string.IsNullOrWhiteSpace(shape.PlainText)
+                && (shape.ExtentCxEmu >= shape.ExtentCyEmu * 4
+                    || shape.ExtentCyEmu >= shape.ExtentCxEmu * 4))
+            .ToList();
+
+        connectorSegments.Should().NotBeEmpty("the live SmartArt corpus contains cached connector segments");
+        connectorSegments.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Line,
+            "geometry-less, textless cached SmartArt shapes are connector line segments, not rectangles");
+
+        var clonedConnector = SlideCloner.CloneShape(connectorSegments[0]);
+        clonedConnector.CustomGeometry.Should().HaveCount(connectorSegments[0].CustomGeometry.Count,
+            "the compositor clones cached SmartArt shapes before rendering them");
+        clonedConnector.CustomGeometry[0].PathW.Should().BeGreaterThan(0);
+        clonedConnector.CustomGeometry[0].PathH.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Reader_SmartArt_PictureCaptionList_ImportsNodePictures()
     {
         var nodeTexts = new[] { "Alpha caption", "Beta caption" };
@@ -3351,5 +3380,19 @@ public sealed class SmartArtTests : IDisposable
 
         // Parts bytes are still there (round-trip writes them back verbatim)
         sa.Parts.Should().ContainKey("ppt/diagrams/data1.xml");
+    }
+
+    private static string FindRenderCompareCorpusFile(string fileName)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus", fileName);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new FileNotFoundException($"Could not locate the RenderCompare corpus deck '{fileName}'.");
     }
 }

@@ -87,6 +87,19 @@ public static class SlideCloner
         foreach (var pair in shape.PresetGeometryAdjustments)
             copy.PresetGeometryAdjustments[pair.Key] = pair.Value;
 
+        foreach (var path in shape.CustomGeometry)
+        {
+            var pathCopy = new CustomGeometryPath
+            {
+                PathW = path.PathW,
+                PathH = path.PathH,
+                Fill = path.Fill,
+                Stroke = path.Stroke,
+            };
+            pathCopy.Segments.AddRange(path.Segments);
+            copy.CustomGeometry.Add(pathCopy);
+        }
+
         // Theme 21: OLE — byte arrays are treated as immutable once loaded; share reference.
         copy.OleObject = shape.OleObject is null ? null : CloneOleObject(shape.OleObject);
 
