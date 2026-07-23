@@ -241,7 +241,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Table layout proof readiness requires FreeW visual evidence summary schema v25 or newer");
         source.Should().Contain("'table-layout-complex' = 1");
         source.Should().Contain("'table-pagination-repeat-header' = 2");
-        source.Should().Contain("'table-page-composition-stress' = 2");
+        source.Should().Contain("'table-page-composition-stress' = 3");
         source.Should().Contain("Table layout proof readiness: trusted scenario rows=");
         source.Should().Contain("Table layout Word-baseline policy rows: verified rows=");
         source.Should().Contain("Assert-TablePaginationPageCompositionProofReadiness $summaryJson $effectiveScenarioIds");

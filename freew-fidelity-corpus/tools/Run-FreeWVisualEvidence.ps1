@@ -1284,7 +1284,7 @@ function Assert-TableLayoutProofReadiness {
     $minimumTrustedOutputsByScenario = @{
         'table-layout-complex' = 1
         'table-pagination-repeat-header' = 2
-        'table-page-composition-stress' = 2
+        'table-page-composition-stress' = 3
     }
     $failures = New-Object System.Collections.Generic.List[string]
     $trustedScenarioRows = 0
@@ -1393,7 +1393,7 @@ function Assert-TablePaginationPageCompositionProofReadiness {
     )
     $minimumTrustedOutputsByScenario = @{
         'table-pagination-repeat-header' = 2
-        'table-page-composition-stress' = 2
+        'table-page-composition-stress' = 3
     }
     $failures = New-Object System.Collections.Generic.List[string]
     $trustedScenarioRows = 0
