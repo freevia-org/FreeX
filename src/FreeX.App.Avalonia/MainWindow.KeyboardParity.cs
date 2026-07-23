@@ -164,6 +164,19 @@ public sealed partial class MainWindow
         KeyModifiers modifiers,
         AvaloniaHostShortcut shortcut) => new(key, modifiers, shortcut);
 
+    private bool TryHandleWorkbookWindowSwitchShortcut(KeyEventArgs args)
+    {
+        if (args.Key is not (Key.F6 or Key.Tab) ||
+            args.KeyModifiers is not (KeyModifiers.Control or (KeyModifiers.Control | KeyModifiers.Shift)))
+        {
+            return false;
+        }
+
+        args.Handled = true;
+        SwitchWorkbookWindow(forward: args.KeyModifiers == KeyModifiers.Control);
+        return true;
+    }
+
     private const KeyModifiers None = KeyModifiers.None;
     private const KeyModifiers Ctrl = KeyModifiers.Control;
     private const KeyModifiers Shift = KeyModifiers.Shift;
@@ -212,8 +225,12 @@ public sealed partial class MainWindow
         if (!TryResolveAvaloniaHostShortcut(args.Key, args.KeyModifiers, out var shortcut))
             return false;
 
+        var isWorkbookWindowSwitch = shortcut is
+            AvaloniaHostShortcut.SwitchToNextWorkbookWindow or
+            AvaloniaHostShortcut.SwitchToPreviousWorkbookWindow;
         if (IsTextEditingEventSource(args) &&
-            shortcut != AvaloniaHostShortcut.ToggleFormulaBarExpansion)
+            shortcut != AvaloniaHostShortcut.ToggleFormulaBarExpansion &&
+            !isWorkbookWindowSwitch)
         {
             return false;
         }

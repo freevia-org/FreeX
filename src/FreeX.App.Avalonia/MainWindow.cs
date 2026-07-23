@@ -24369,6 +24369,9 @@ public sealed partial class MainWindow : Window
             RefreshKeyLockIndicators();
         }
 
+        if (TryHandleWorkbookWindowSwitchShortcut(e))
+            return;
+
         if (TryHandleLegacyDataFilterSequence(e))
             return;
 

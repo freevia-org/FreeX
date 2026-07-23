@@ -75,16 +75,12 @@ public sealed partial class MainWindow : Window
             WindowState = WindowState.Normal;
 
         Activate();
-
-        // WPF's ActivateWindow uses a topmost nudge before focusing the target. X11 window
-        // managers may otherwise leave the old workbook active after a _NET_ACTIVE_WINDOW
-        // request, especially immediately after Arrange All changed both window bounds.
-        Topmost = true;
-        Topmost = false;
-        Activate();
-        X11WindowActivator.Activate(this);
         Focus();
         _sheetGridHost.Focus();
+        // Avalonia may restore focus through its X11 focus proxy while Focus() settles.
+        // Queue the native top-level activation last so the desktop active window agrees
+        // with the managed workbook target after the focus handoff completes.
+        X11WindowActivator.Activate(this);
     }
 
     private void Session_WorkbookChanged(object? sender, EventArgs e)
