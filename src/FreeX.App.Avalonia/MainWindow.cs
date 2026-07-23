@@ -8542,6 +8542,12 @@ public sealed partial class MainWindow : Window
                 _session.Workbook.Theme),
             borderNeighbors: borderNeighbors);
 
+        // Grid tracks define worksheet ownership. Give the interactive border the exact slot size
+        // (cellWidth/cellHeight already include merged spans) so Linux font measurement cannot let
+        // a long source cell's visual and pointer bounds extend into an adjacent empty cell.
+        border.Width = cellWidth;
+        border.Height = cellHeight;
+
         // The outer cell border is the worksheet hit target.  Keep rendered content out of the
         // hit-test tree so an overflowing TextBlock cannot capture a pointer over the adjacent
         // cell; WPF paints cell text directly into its DrawingContext and has no equivalent child

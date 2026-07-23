@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using FluentAssertions;
 using FreeX.App.Services;
@@ -53,19 +54,41 @@ public sealed class AvaloniaOverflowHitTestingTests
 
                 var targetBorder = FindByAutomationId<Border>(window, "Cell_H13");
                 targetBorder.IsHitTestVisible.Should().BeTrue();
-                var targetPoint = targetBorder.TranslatePoint(
-                    new Point(targetBorder.Bounds.Width / 2, targetBorder.Bounds.Height / 2),
+                var sheetGrid = targetBorder.GetVisualAncestors()
+                    .OfType<Grid>()
+                    .First(grid => grid.Children.Contains(targetBorder));
+                var sourceColumnWidth = sheetGrid.ColumnDefinitions[Grid.GetColumn(sourceBorder)].ActualWidth;
+                var sourceRowHeight = sheetGrid.RowDefinitions[Grid.GetRow(sourceBorder)].ActualHeight;
+                sourceBorder.Width.Should().BeApproximately(sourceColumnWidth, 0.01,
+                    "the interactive G13 border must own exactly one grid column even when its text overflows");
+                sourceBorder.Height.Should().BeApproximately(sourceRowHeight, 0.01,
+                    "the interactive G13 border must own exactly one grid row");
+                sourceBorder.Bounds.Width.Should().BeApproximately(sourceColumnWidth, 0.01,
+                    "the G13 cell hit target must be constrained to the G column track");
+                var targetSlotCenter = GetGridSlotCenter(sheetGrid, targetBorder);
+                var targetPoint = sheetGrid.TranslatePoint(
+                    targetSlotCenter,
                     window);
                 targetPoint.Should().NotBeNull();
                 targetBorder.IsAttachedToVisualTree().Should().BeTrue();
                 targetPoint!.Value.X.Should().BeInRange(0, window.Bounds.Width);
                 targetPoint.Value.Y.Should().BeInRange(0, window.Bounds.Height);
 
+                IInputElement? pointerSource = null;
+                window.AddHandler(
+                    InputElement.PointerPressedEvent,
+                    (_, args) => pointerSource ??= args.Source as IInputElement,
+                    RoutingStrategies.Tunnel,
+                    handledEventsToo: true);
+
                 window.MouseMove(targetPoint.Value, RawInputModifiers.None);
                 window.MouseDown(
                     targetPoint.Value,
                     MouseButton.Left,
                     RawInputModifiers.LeftMouseButton);
+                var hitCell = ResolveHitCell(pointerSource);
+                AutomationProperties.GetAutomationId(hitCell).Should().Be("Cell_H13",
+                    "the real root-window pointer hit test at H13's grid-track center must resolve H13");
                 window.MouseUp(targetPoint.Value, MouseButton.Left, RawInputModifiers.None);
 
                 window.Session.ActiveCell.Should().Be(target,
@@ -88,4 +111,25 @@ public sealed class AvaloniaOverflowHitTestingTests
         window.GetVisualDescendants()
             .OfType<T>()
             .Single(control => AutomationProperties.GetAutomationId(control) == automationId);
+
+    private static Point GetGridSlotCenter(Grid grid, Border cell)
+    {
+        var column = Grid.GetColumn(cell);
+        var row = Grid.GetRow(cell);
+        var x = grid.ColumnDefinitions.Take(column).Sum(definition => definition.ActualWidth) +
+            grid.ColumnDefinitions[column].ActualWidth / 2;
+        var y = grid.RowDefinitions.Take(row).Sum(definition => definition.ActualHeight) +
+            grid.RowDefinitions[row].ActualHeight / 2;
+        return new Point(x, y);
+    }
+
+    private static Border ResolveHitCell(IInputElement? hit)
+    {
+        hit.Should().NotBeNull();
+        return (hit as Visual)?.GetSelfAndVisualAncestors()
+            .OfType<Border>()
+            .FirstOrDefault(control =>
+                AutomationProperties.GetAutomationId(control)?.StartsWith("Cell_", StringComparison.Ordinal) == true)
+            ?? throw new InvalidOperationException($"Hit element {hit!.GetType().Name} has no worksheet-cell ancestor.");
+    }
 }
