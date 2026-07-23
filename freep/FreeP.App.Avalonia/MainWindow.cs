@@ -9,6 +9,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
@@ -6729,12 +6730,24 @@ public sealed partial class MainWindow : Window
 
     private FlyoutBase? ShowRibbonFlyout(RibbonCommandId commandId)
     {
-        var button = _ribbonControl?
-            .GetLogicalDescendants()
+        if (_ribbonControl is null)
+            return null;
+
+        return ShowRibbonFlyout(_ribbonControl, commandId);
+    }
+
+    internal static FlyoutBase? ShowRibbonFlyout(Control ribbon, RibbonCommandId commandId)
+    {
+        var buttons = ribbon
+            .GetVisualDescendants()
             .OfType<Button>()
-            .FirstOrDefault(candidate =>
-                string.Equals(candidate.Tag as string, commandId.Value, StringComparison.Ordinal) &&
-                candidate.Flyout is not null);
+            .Where(candidate => candidate.Flyout is not null)
+            .ToArray();
+        var dropdownTag = $"{commandId.Value}.Dropdown";
+        var button = buttons.FirstOrDefault(candidate =>
+                string.Equals(candidate.Tag as string, dropdownTag, StringComparison.Ordinal))
+            ?? buttons.FirstOrDefault(candidate =>
+                string.Equals(candidate.Tag as string, commandId.Value, StringComparison.Ordinal));
         if (button?.Flyout is not { } flyout)
             return null;
 

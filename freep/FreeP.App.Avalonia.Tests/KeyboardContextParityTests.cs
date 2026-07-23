@@ -1,11 +1,14 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -245,6 +248,54 @@ public sealed class KeyboardContextParityTests
             finally
             {
                 window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task RendererBackedLargeSplitKeyTipLookupOpensDropdownFlyout()
+    {
+        await Session.Dispatch(() =>
+        {
+            var commandId = new RibbonCommandId("test.large-split");
+            var menuCommandId = new RibbonCommandId("test.large-split.menu");
+            var definition = new RibbonDefinitionBuilder()
+                .Tab("home", "Home", "H", tab => tab.Group("clipboard", "Clipboard", "C", 100, group =>
+                    group.SplitButton(
+                        commandId.Value,
+                        "Paste",
+                        new RibbonMenu([new RibbonMenuItem("Paste Special", menuCommandId, "S")]),
+                        split => split with { PreferredLayout = RibbonCommandLayoutKind.Large })))
+                .Build();
+            var registry = new RibbonCommandRegistry();
+            registry.Register(commandId, new ActionRibbonCommand(() => { }));
+            registry.Register(menuCommandId, new ActionRibbonCommand(() => { }));
+            var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
+            var host = new Window
+            {
+                Width = 600,
+                Height = 200,
+                Content = ribbon,
+            };
+            FlyoutBase? flyout = null;
+            try
+            {
+                host.Show();
+                var dropdown = ribbon
+                    .GetVisualDescendants()
+                    .OfType<Button>()
+                    .Single(button => Equals(button.Tag, $"{commandId.Value}.Dropdown"));
+
+                dropdown.Flyout.Should().NotBeNull();
+                flyout = MainWindow.ShowRibbonFlyout(ribbon, commandId);
+
+                flyout.Should().BeSameAs(dropdown.Flyout);
+                flyout!.IsOpen.Should().BeTrue();
+            }
+            finally
+            {
+                flyout?.Hide();
+                host.Close();
             }
         }, CancellationToken.None);
     }
