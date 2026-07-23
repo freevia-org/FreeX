@@ -2393,6 +2393,13 @@ public sealed record WatermarkOptions(string Text)
     /// </summary>
     public bool? NativeVmlTextFitShape { get; init; }
 
+    /// <summary>
+    /// Optional serialized <c>v:shapetype</c> payload referenced by an imported native VML text
+    /// watermark. Retaining the path, formulas, and text-path settings prevents a custom Word
+    /// watermark from being rewritten as FreeW's canonical <c>_x0000_t136</c> prototype.
+    /// </summary>
+    public string? NativeVmlTextShapeTypeXml { get; init; }
+
     /// <summary>Whether this watermark is a picture watermark (<see cref="ImageBytes"/> is non-null).</summary>
     public bool IsPicture => ImageBytes is { Length: > 0 };
 

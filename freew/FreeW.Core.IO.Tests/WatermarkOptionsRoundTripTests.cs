@@ -134,6 +134,33 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithMutatedVmlTextShapeType(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            var shapeType = xml.Descendants(vml + "shapetype").Single();
+            shapeType.SetAttributeValue("id", "FreeWCustomWatermarkPath");
+            shapeType.SetAttributeValue("path", "m0,0l21600,0e");
+            xml.Descendants(vml + "shape")
+                .Single(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject")
+                .SetAttributeValue("type", "#FreeWCustomWatermarkPath");
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument ReadWithVmlPictureImageData(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -357,6 +384,34 @@ public class WatermarkOptionsRoundTripTests
         loaded.Page.WatermarkOptions!.NativeVmlTextFitShape.Should().Be(expected);
         ReadHeaderXml(loaded).Descendants(XNamespace.Get("urn:schemas-microsoft-com:vml") + "textpath")
             .Last().Attribute("fitshape")!.Value.Should().Be(expected ? "t" : "f");
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_PreservesReferencedShapeTypePayload()
+    {
+        var loaded = ReadWithMutatedVmlTextShapeType(new TextDocument
+        {
+            Page = { WatermarkOptions = new WatermarkOptions("AUTHORITATIVE") }
+        });
+
+        var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+        var payload = loaded.Page.WatermarkOptions!.NativeVmlTextShapeTypeXml;
+        payload.Should().NotBeNull();
+        var parsedPayload = XElement.Parse(payload!);
+        parsedPayload.Attribute("id")!.Value.Should().Be("FreeWCustomWatermarkPath");
+        parsedPayload.Attribute("path")!.Value.Should().Be("m0,0l21600,0e");
+
+        var rewritten = ReadHeaderXml(loaded);
+        rewritten.Descendants(vml + "shape")
+            .Single(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject")
+            .Attribute("type")!.Value.Should().Be("#FreeWCustomWatermarkPath");
+        rewritten.Descendants(vml + "shapetype")
+            .Single(shapeType => shapeType.Attribute("id")?.Value == "FreeWCustomWatermarkPath")
+            .Attribute("path")!.Value.Should().Be("m0,0l21600,0e");
+
+        var reopened = RoundTrip(loaded);
+        XElement.Parse(reopened.Page.WatermarkOptions!.NativeVmlTextShapeTypeXml!)
+            .Attribute("path")!.Value.Should().Be("m0,0l21600,0e");
     }
 
     [Fact]
