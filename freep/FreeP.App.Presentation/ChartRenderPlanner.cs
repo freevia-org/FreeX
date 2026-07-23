@@ -3307,7 +3307,7 @@ public static partial class ChartRenderPlanner
             ? BuildSurfaceFrameSegments(
                 plot,
                 UsesImportedSurfaceGeometry(chart),
-                UsesSurfaceWireframe(chart))
+                UsesSurfaceWireframe(chart) && !UsesImportedSurfaceGeometry(chart))
             : Array.Empty<ChartLineSegmentPrimitive>();
 
         return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours)

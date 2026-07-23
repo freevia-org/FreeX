@@ -616,8 +616,8 @@ public sealed class ChartBaselineCorpusTests
                 "the imported rear-green fold uses the measured lower-edge registration");
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
-        surfaceGeometry.FrameSegments.Should().HaveCount(45,
-            "the imported PowerPoint frame carries 26 value-axis and 6 category-axis tick strokes");
+        surfaceGeometry.FrameSegments.Should().HaveCount(37,
+            "the imported PowerPoint frame carries five wall edges, 26 value-axis, and 6 category-axis tick strokes");
         surfaceGeometry.FrameSegments[0].Start.X
             .Should().BeApproximately(8.0, 0.0001,
                 "the imported PowerPoint front frame edge starts inside the plot gutter");
