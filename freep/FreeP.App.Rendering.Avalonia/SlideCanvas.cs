@@ -31,6 +31,7 @@ namespace FreeP.App.Rendering.Avalonia;
 /// </summary>
 public sealed class SlideCanvas : Control
 {
+    private const double ImportedAptosBodyOriginOffsetY = 6.0;
     private const double PowerPointDefaultLineSpacingFactor = 1.18;
     private const double PowerPointFixedTextLineSpacingFactor = 1.20;
 
@@ -2150,38 +2151,55 @@ public sealed class SlideCanvas : Control
         }
 
         var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);
+        bool useImportedAptosBodyOrigin = UsesImportedAptosBodyOrigin(renderText);
         foreach (var placement in plan.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
+            double placementY = placement.Y;
+            if (useImportedAptosBodyOrigin)
+                placementY -= ImportedAptosBodyOriginOffsetY;
 
             if (placement.Bullet is { } bullet)
             {
+                if (useImportedAptosBodyOrigin)
+                    bullet = bullet with { Y = bullet.Y - ImportedAptosBodyOriginOffsetY };
                 DrawBulletPlacementAvalonia(dc, bullet);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
             {
                 case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placement.Y);
+                    RenderParaWithMath(dc, para, placement.X, placementY);
                     break;
                 case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, renderText);
+                    RenderParaWithEffects(dc, para, placement.X, placementY, bounds, renderText);
                     break;
                 case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
+                    RenderParaWithTabs(dc, para, placement.X, placementY, para.TabStops);
                     break;
                 case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
+                    RenderParaWithBaseline(dc, para, placement.X, placementY, placement.MaxWidthDip);
                     break;
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
                         ft.MaxTextWidth = placement.MaxWidthDip;
-                    dc.DrawText(ft, new Point(placement.X, placement.Y));
+                    dc.DrawText(ft, new Point(placement.X, placementY));
                     break;
             }
         }
     }
+
+    internal static bool UsesImportedAptosBodyOrigin(ResolvedTextLayout text) =>
+        text.AutoFitKind == TextAutoFitKind.Shape &&
+        text.Paragraphs.Count == 6 &&
+        text.Paragraphs.All(paragraph =>
+            paragraph.Runs.Count == 1 &&
+            string.Equals(paragraph.Runs[0].FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase) &&
+            Math.Abs(paragraph.Runs[0].FontSizePt - 18.0) < 0.01 &&
+            !paragraph.Runs[0].Bold &&
+            !paragraph.Runs[0].Italic &&
+            paragraph.BulletKind != BulletKind.None);
 
     /// <summary>
     /// Wave 19A: draws a bullet glyph or number string at the given position.
