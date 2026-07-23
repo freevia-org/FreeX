@@ -716,6 +716,7 @@ public static class DocxReader
         // use it (in place of the body's image relationships) so an image inside a comment becomes a real
         // Run.Image — which the writer re-emits as a comment media part + comments.xml.rels (see BuildComments).
         var commentRelationships = ReadPartRelationships(archive, "word/comments.xml");
+        var commentHyperlinks = ReadPartHyperlinkRelationships(archive, "word/comments.xml");
 
         // Modern (threaded) comments: word/commentsExtended.xml threads replies via w15:paraId /
         // w15:paraIdParent and marks resolved threads with w15:done. Parse it first so the comment loop
@@ -746,7 +747,7 @@ public static class DocxReader
                     p,
                     archive,
                     commentRelationships,
-                    hyperlinkRelationships,
+                    commentHyperlinks,
                     noNumbering,
                     preservedDrawingTarget: document,
                     preservedDrawingRelationshipTargets: commentRelationships));
@@ -827,6 +828,7 @@ public static class DocxReader
 
         var noNumbering = new Dictionary<int, ListKind>();
         var noteRelationships = ReadPartRelationships(archive, "word/footnotes.xml");
+        var noteHyperlinks = ReadPartHyperlinkRelationships(archive, "word/footnotes.xml");
         foreach (var element in root.Elements(W + "footnote"))
         {
             var type = element.Attribute(W + "type")?.Value;
@@ -840,8 +842,8 @@ public static class DocxReader
                 footnote.Content.Add(ReadParagraph(
                     p,
                     archive,
-                    imageRelationships,
-                    hyperlinkRelationships,
+                    noteRelationships,
+                    noteHyperlinks,
                     noNumbering,
                     preservedDrawingTarget: document,
                     preservedDrawingRelationshipTargets: noteRelationships));
@@ -870,6 +872,7 @@ public static class DocxReader
 
         var noNumbering = new Dictionary<int, ListKind>();
         var noteRelationships = ReadPartRelationships(archive, "word/endnotes.xml");
+        var noteHyperlinks = ReadPartHyperlinkRelationships(archive, "word/endnotes.xml");
         foreach (var element in root.Elements(W + "endnote"))
         {
             var type = element.Attribute(W + "type")?.Value;
@@ -883,8 +886,8 @@ public static class DocxReader
                 endnote.Content.Add(ReadParagraph(
                     p,
                     archive,
-                    imageRelationships,
-                    hyperlinkRelationships,
+                    noteRelationships,
+                    noteHyperlinks,
                     noNumbering,
                     preservedDrawingTarget: document,
                     preservedDrawingRelationshipTargets: noteRelationships));
@@ -1120,6 +1123,7 @@ public static class DocxReader
         // Images inside a header/footer resolve their r:embed against the PART's own _rels (e.g.
         // word/_rels/header3.xml.rels), not document.xml.rels — so build a part-local image-relationship map.
         var partRelationships = ReadPartRelationships(archive, partPath);
+        var partHyperlinks = ReadPartHyperlinkRelationships(archive, partPath);
 
         var result = new HeaderFooter();
         // Header/footer paragraphs carry no list numbering context (numbering.xml targets the body).
@@ -1154,7 +1158,7 @@ public static class DocxReader
                 preservedParagraph,
                 archive,
                 partRelationships,
-                hyperlinkRelationships,
+                partHyperlinks,
                 noNumbering,
                 preservedDrawingTarget: document,
                 preservedDrawingRelationshipTargets: partRelationships));
@@ -1191,6 +1195,15 @@ public static class DocxReader
             relationship => OpcPathHelper.ResolveRelativeZipPath(directory, relationship.Target),
             relationship => !relationship.IsExternal);
     }
+
+    private static Dictionary<string, string> ReadPartHyperlinkRelationships(ZipArchive archive, string partPath) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            OpcPathHelper.GetRelationshipPartPath(partPath),
+            relationship => relationship.Target,
+            relationship =>
+                relationship.IsExternal &&
+                relationship.Type.EndsWith("/hyperlink", StringComparison.Ordinal));
 
     /// <summary>Maps relationship id → part path for header/footer relationships in document.xml.rels.</summary>
     private static Dictionary<string, string> ReadHeaderFooterRelationships(ZipArchive archive) =>

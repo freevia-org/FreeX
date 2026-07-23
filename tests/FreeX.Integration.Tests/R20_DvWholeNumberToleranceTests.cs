@@ -17,6 +17,19 @@ namespace FreeX.Integration.Tests;
 ///
 /// DataValidationService.ValidateNumeric now uses a small absolute/relative tolerance
 /// (1e-9, scaled by magnitude) instead, via the new IsEffectivelyWholeNumber helper.
+///
+/// Round 77 (precision-1-arithmetic-15sig) added Excel-matching 15-significant-digit rounding
+/// to FreeX's own +,-,*,/,^ evaluator operators (FormulaEvaluator.Operators.cs's
+/// RoundTo15SignificantDigits), so a formula evaluated *through FreeX* like the ten-term sum
+/// below now lands bit-exact on 1.0, same as real Excel — it no longer reproduces the noisy
+/// 0.9999999999999999 this test originally relied on to exercise the tolerance path. That's
+/// the intended, correct effect of the precision fix (asserted directly below). The
+/// IsEffectivelyWholeNumber tolerance itself is still a real requirement though:
+/// DataValidationService.Validate accepts a bare NumberValue from any source, not only
+/// FreeX's own rounded-arithmetic operators — a value pasted in, imported from an external
+/// file, or produced by an aggregate function can still carry ordinary un-rounded FP noise —
+/// so the noisy value below is now built with raw C# double arithmetic (bypassing FreeX's
+/// evaluator entirely) instead of via _eval.Evaluate.
 /// </summary>
 public class R20_dv_wholenumber_epsilon_Tests
 {
@@ -25,14 +38,14 @@ public class R20_dv_wholenumber_epsilon_Tests
     [Fact]
     public void WholeNumberDv_FormulaResultWithOrdinaryFpNoise_IsAccepted()
     {
-        // Summing 0.1 ten times via repeated double addition does not land on exactly
-        // 1.0 — it lands on 0.9999999999999999 (a classic, well-documented IEEE-754
-        // artifact). Excel still accepts this as a "whole number" for DV purposes.
-        var sheet = MakeSheet();
-        var result = _eval.Evaluate("=0.1+0.1+0.1+0.1+0.1+0.1+0.1+0.1+0.1+0.1", sheet);
-
-        result.Should().BeOfType<NumberValue>();
-        var noisyOne = ((NumberValue)result).Value;
+        // Raw C# double arithmetic (NOT run through FreeX's evaluator, which now rounds to 15
+        // significant digits) reproduces the classic accumulated FP-noise artifact: summing
+        // 0.1 ten times lands on 0.9999999999999999, not exactly 1.0. This models a value
+        // that reaches DataValidationService from a source other than FreeX's own rounded
+        // arithmetic operators.
+        double noisyOne = 0.1;
+        for (var i = 0; i < 9; i++)
+            noisyOne += 0.1;
 
         // Sanity-check the premise: the raw double value must NOT be bit-exactly 1.0,
         // otherwise this test would not be exercising the tolerance fix at all.
@@ -43,6 +56,21 @@ public class R20_dv_wholenumber_epsilon_Tests
 
         DataValidationService.Validate(dv, new NumberValue(noisyOne))
             .Should().BeNull("a formula result that is mathematically whole, modulo ordinary FP noise, must pass WholeNumber DV");
+    }
+
+    [Fact]
+    public void WholeNumberDv_FreeXEvaluatedNoiseProneFormula_NowRoundsToBitExactWholeNumber()
+    {
+        // Round 77: the exact formula the test above used to rely on for its FP-noise
+        // premise now evaluates bit-exact through FreeX's own operators, matching Excel's
+        // 15-significant-digit rounding of arithmetic results. Covered in depth by
+        // R77_ArithmeticResult15SigRoundingTests; asserted here too since it directly
+        // documents why the sibling test above had to change its noise source.
+        var sheet = MakeSheet();
+        var result = _eval.Evaluate("=0.1+0.1+0.1+0.1+0.1+0.1+0.1+0.1+0.1+0.1", sheet);
+
+        result.Should().BeOfType<NumberValue>();
+        ((NumberValue)result).Value.Should().Be(1.0, "Excel rounds arithmetic results to 15 significant digits");
     }
 
     [Fact]

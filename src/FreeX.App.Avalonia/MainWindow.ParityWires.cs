@@ -59,21 +59,22 @@ public sealed partial class MainWindow
     /// <summary>
     /// View - Split: toggles the window split, matching the ribbon's IconToggle("Split", ...) semantics
     /// and WPF's SplitViewBtn_Click (MainWindow.ViewCommands.cs). If the active sheet is already split,
-    /// clear it (splitRow/splitColumn both null); otherwise split at the active cell.
+    /// clear it (splitRow/splitColumn both null); otherwise split at the active cell -- falling back to
+    /// the viewport midpoint when the active cell is A1 (see SplitAnchorResolver).
     /// </summary>
     private void SplitPanesAtActiveCell()
     {
         var sheet = _session.ActiveSheet;
-        uint? splitRow = null;
-        uint? splitColumn = null;
         var wasSplit = sheet.SplitRow is not null || sheet.SplitColumn is not null;
+        var cell = _session.ActiveCell;
+        var viewport = _session.Viewport;
 
-        if (!wasSplit)
-        {
-            var cell = _session.ActiveCell;
-            splitRow = cell.Row > 1 ? cell.Row : null;
-            splitColumn = cell.Col > 1 ? cell.Col : null;
-        }
+        var (splitRow, splitColumn) = SplitAnchorResolver.Resolve(
+            cell.Row,
+            cell.Col,
+            wasSplit,
+            viewport.RowMetrics,
+            viewport.ColMetrics);
 
         var result = _session.ExecuteReviewCommand(
             new SetSplitPanesCommand(sheet.Id, splitRow, splitColumn));
