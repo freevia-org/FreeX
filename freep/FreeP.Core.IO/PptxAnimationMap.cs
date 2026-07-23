@@ -381,6 +381,23 @@ internal static class PptxAnimationMap
         return (kind, p);
     }
 
+    /// <summary>
+    /// Returns whether the OOXML preset pair has a faithful FreeP enum mapping.
+    /// Unknown pairs still use a deterministic playback fallback, but callers
+    /// can retain the source tokens for lossless package round-trip.
+    /// </summary>
+    internal static bool IsKnownOoxmlPreset(string? presetClass, int presetId)
+    {
+        if (presetClass is not ("entr" or "exit" or "emph"))
+            return false;
+
+        if (presetClass == "emph")
+            return presetId is 1 or 2 or 3 or 4 or 5 or 6 or 7 or 11 or 12 or 13 or 14 or 15;
+
+        return presetId is 1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11 or
+            13 or 14 or 16 or 17 or 18 or 19 or 21 or 22 or 23 or 24 or 25 or 26 or 27 or 28 or 29;
+    }
+
     // Animation direction string (accel direction / subtype)
     public static string? AnimationDirectionToSubtype(AnimationDirection? d) => d switch
     {

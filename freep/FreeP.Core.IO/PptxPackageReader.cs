@@ -4775,6 +4775,7 @@ public static class PptxPackageReader
         if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
+        bool knownPreset = PptxAnimationMap.IsKnownOoxmlPreset(presetClass, presetId);
         var direction = PptxAnimationMap.SubtypeToAnimationDirection(presetSubtype);
         var wheelSpokeCount = preset == AnimationPreset.Wheel
             ? ReadWheelSpokeCount(buildPar, cTn)
@@ -4791,6 +4792,9 @@ public static class PptxPackageReader
             Direction      = direction,
             WheelSpokeCount = wheelSpokeCount,
             TriggerShapeId = triggerShapeId,
+            RawPresetClass = knownPreset ? null : presetClass,
+            RawPresetId = knownPreset ? null : presetId,
+            RawPresetSubtype = knownPreset ? null : presetSubtype,
         };
     }
 

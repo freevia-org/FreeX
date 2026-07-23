@@ -40,6 +40,19 @@ public sealed class ShapeAnimation
     public int? WheelSpokeCount { get; set; }
 
     /// <summary>
+    /// Preserves an animation preset that is not represented by the current
+    /// <see cref="AnimationPreset"/> enum. Playback still uses the mapped
+    /// fallback, but package save can re-emit the authored PowerPoint token.
+    /// </summary>
+    public string? RawPresetClass { get; set; }
+
+    /// <summary>The authored OOXML presetID when <see cref="RawPresetClass"/> is set.</summary>
+    public int? RawPresetId { get; set; }
+
+    /// <summary>The authored OOXML presetSubtype when it is not modeled.</summary>
+    public string? RawPresetSubtype { get; set; }
+
+    /// <summary>
     /// Motion-path data. Non-null only when <see cref="Kind"/> is <see cref="AnimationKind.Motion"/>.
     /// Segments are expressed in slide-normalized coordinates (0..1) where the origin is the
     /// shape center at the start of the animation (as per the OOXML p:animMotion coordinate system).
