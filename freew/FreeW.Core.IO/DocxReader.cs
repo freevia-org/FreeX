@@ -1757,6 +1757,10 @@ public static class DocxReader
             // package custom-XML parts but not inline wrapper metadata, so retain the visible child runs.
             AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
+        else if (child.Name == W + "ruby")
+        {
+            AddRuby(paragraph, child, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
+        }
         else if (child.Name == W + "fldSimple")
         {
             AddSimpleField(paragraph, child);
@@ -1782,6 +1786,75 @@ public static class DocxReader
                 paragraph.BookmarkNames.Add(name);
         }
     }
+
+    /// <summary>
+    /// Reads a Word phonetic guide (<c>w:ruby</c>). The base characters remain the run's fallback text so
+    /// non-ruby-aware consumers keep the visible document content, while the fragment payload round-trips.
+    /// </summary>
+    private static void AddRuby(
+        Paragraph paragraph,
+        XElement ruby,
+        int? commentId,
+        RevisionInfo revision,
+        ContentControl? control,
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor,
+        string? hyperlinkTooltip)
+    {
+        var rubyPr = ruby.Element(W + "rubyPr");
+        var annotation = new RubyAnnotation
+        {
+            Alignment = ReadRubyAlignment(rubyPr?.Element(W + "rubyAlign")?.Attribute(W + "val")?.Value),
+            PhoneticSizeHalfPoints = ReadRubyHalfPoints(rubyPr?.Element(W + "hps")?.Attribute(W + "val")?.Value),
+            RaiseHalfPoints = ReadRubyHalfPoints(rubyPr?.Element(W + "hpsRaise")?.Attribute(W + "val")?.Value)
+        };
+
+        AddRubyFragments(ruby.Element(W + "rubyBase"), annotation.BaseFragments);
+        AddRubyFragments(ruby.Element(W + "rt"), annotation.PhoneticFragments);
+
+        var run = Run.FromRuby(annotation);
+        run.CommentId = commentId;
+        run.Control = control;
+        run.HyperlinkUrl = hyperlinkUrl;
+        run.HyperlinkAnchor = hyperlinkAnchor;
+        run.HyperlinkTooltip = hyperlinkTooltip;
+        if (revision.Kind != RevisionKind.None)
+        {
+            run.Revision = revision.Kind;
+            run.RevisionAuthor = revision.Author;
+            run.RevisionDateXml = revision.DateXml;
+        }
+
+        paragraph.Runs.Add(run);
+    }
+
+    private static void AddRubyFragments(XElement? container, List<RubyTextFragment> fragments)
+    {
+        if (container is null)
+            return;
+
+        foreach (var sourceRun in container.Elements(W + "r"))
+        {
+            var text = string.Concat(sourceRun.Elements(W + "t").Select(textElement => textElement.Value))
+                + string.Concat(sourceRun.Elements(W + "delText").Select(textElement => textElement.Value));
+            if (sourceRun.Elements(W + "tab").Any())
+                text += "\t";
+            if (text.Length > 0)
+                fragments.Add(new RubyTextFragment(text, ReadRunFormatting(sourceRun.Element(W + "rPr"))));
+        }
+    }
+
+    private static RubyAlignment ReadRubyAlignment(string? value) => value switch
+    {
+        "distributeLetter" => RubyAlignment.DistributeLetter,
+        "distributeSpace" => RubyAlignment.DistributeSpace,
+        "left" => RubyAlignment.Left,
+        "right" => RubyAlignment.Right,
+        _ => RubyAlignment.Center
+    };
+
+    private static int? ReadRubyHalfPoints(string? value) =>
+        int.TryParse(value, out var halfPoints) ? halfPoints : null;
 
     /// <summary>
     /// Reads a w:fldSimple. A recognised field (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES) becomes a

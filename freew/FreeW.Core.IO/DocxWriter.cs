@@ -3025,6 +3025,11 @@ public static class DocxWriter
         if (run.Equation is { } equation)
             return BuildOMath(equation);
 
+        // A ruby annotation is a paragraph-level sibling of w:r. Its base text remains mirrored in Run.Text
+        // for fallback consumers, but the emitted w:ruby preserves Word's phonetic-guide payload.
+        if (run.Ruby is { } ruby)
+            return BuildRubyRun(ruby);
+
         // An inline shape / text box serialises as a w:r wrapping a w:drawing/wp:inline/.../wps:wsp.
         if (run.Shape is { } shape)
         {
@@ -3110,6 +3115,48 @@ public static class DocxWriter
 
         return BuildTextRun(run, drawings, hyperlinks, preservedNumbering, restartOverrides);
     }
+
+    private static XElement BuildRubyRun(RubyAnnotation ruby)
+    {
+        var rubyPr = new XElement(W + "rubyPr");
+        if (ruby.Alignment != RubyAlignment.Center)
+            rubyPr.Add(new XElement(W + "rubyAlign", new XAttribute(W + "val", RubyAlignmentValue(ruby.Alignment))));
+        if (ruby.PhoneticSizeHalfPoints is { } phoneticSize)
+            rubyPr.Add(new XElement(W + "hps", new XAttribute(W + "val", phoneticSize)));
+        if (ruby.RaiseHalfPoints is { } raise)
+            rubyPr.Add(new XElement(W + "hpsRaise", new XAttribute(W + "val", raise)));
+
+        var result = new XElement(W + "ruby");
+        if (rubyPr.HasElements)
+            result.Add(rubyPr);
+        result.Add(BuildRubyText("rt", ruby.PhoneticFragments));
+        result.Add(BuildRubyText("rubyBase", ruby.BaseFragments));
+        return result;
+    }
+
+    private static XElement BuildRubyText(string elementName, IReadOnlyList<RubyTextFragment> fragments)
+    {
+        var container = new XElement(W + elementName);
+        foreach (var fragment in fragments)
+        {
+            var run = new XElement(W + "r");
+            var properties = BuildRunProperties(fragment.Formatting);
+            if (properties is not null)
+                run.Add(properties);
+            run.Add(new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(fragment.Text)));
+            container.Add(run);
+        }
+        return container;
+    }
+
+    private static string RubyAlignmentValue(RubyAlignment alignment) => alignment switch
+    {
+        RubyAlignment.DistributeLetter => "distributeLetter",
+        RubyAlignment.DistributeSpace => "distributeSpace",
+        RubyAlignment.Left => "left",
+        RubyAlignment.Right => "right",
+        _ => "center"
+    };
 
     // A textless marker run (footnote/endnote reference): carries the run's own formatting forced to
     // superscript, then the marker element. Preserves bold/colour/size that a caller put on the marker.

@@ -622,6 +622,17 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new(wordArt.Text) { WordArt = wordArt };
 
     /// <summary>
+    /// Optional Word ruby (phonetic guide) annotation. <see cref="Text"/> mirrors the base text so plain-text
+    /// consumers and renderers that do not yet paint phonetic guides still retain the visible characters.
+    /// The annotation preserves the base and guide fragments for lossless WordprocessingML round-tripping.
+    /// </summary>
+    public RubyAnnotation? Ruby { get; set; }
+
+    /// <summary>Creates a run carrying a Word ruby annotation and its base text fallback.</summary>
+    public static Run FromRuby(RubyAnnotation ruby) =>
+        new(ruby.BaseText, ruby.BaseFragments.FirstOrDefault()?.Formatting) { Ruby = ruby };
+
+    /// <summary>
     /// Optional inline chart (DrawingML). When non-null this run is an inline chart rather than literal
     /// text: on save it serialises as a separate chart part (<c>word/charts/chartN.xml</c>) referenced by an
     /// inline <c>w:drawing</c> in the run sequence, exactly as <see cref="Image"/> serialises a picture.
@@ -1028,6 +1039,35 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         {
             Control = new ContentControl(ContentControlKind.ComboBox, tag, alias, ListItems: items)
         };
+}
+
+/// <summary>A formatted fragment in the base or phonetic text of a Word ruby annotation.</summary>
+public sealed record RubyTextFragment(string Text, RunFormatting Formatting);
+
+/// <summary>
+/// WordprocessingML <c>w:ruby</c> phonetic-guide payload. The base text is the normal reading text; the
+/// phonetic text is typically rendered above it by Word. Size and raise use Word's half-point values.
+/// </summary>
+public sealed class RubyAnnotation
+{
+    public List<RubyTextFragment> BaseFragments { get; } = [];
+    public List<RubyTextFragment> PhoneticFragments { get; } = [];
+    public RubyAlignment Alignment { get; set; } = RubyAlignment.Center;
+    public int? PhoneticSizeHalfPoints { get; set; }
+    public int? RaiseHalfPoints { get; set; }
+
+    /// <summary>Concatenated base text, used by <see cref="Run.Text"/> as the visible fallback.</summary>
+    public string BaseText => string.Concat(BaseFragments.Select(fragment => fragment.Text));
+}
+
+/// <summary>Alignment values for WordprocessingML <c>w:rubyPr/w:rubyAlign</c>.</summary>
+public enum RubyAlignment
+{
+    Center,
+    DistributeLetter,
+    DistributeSpace,
+    Left,
+    Right
 }
 
 /// <summary>
