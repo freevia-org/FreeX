@@ -1271,7 +1271,7 @@ public static class DocxReader
             ApplyParagraphFormatRevision(paragraph, pPr);
             // When the paragraph carries a w:numPr that FreeW did NOT map to one of its own ListKinds, keep
             // the original numId+ilvl so the writer can re-emit it against the preserved numbering.xml (only
-            // for body / table-cell paragraphs — header/footer/footnote numbering is not modelled).
+            // for every Word story that has an ordinary paragraph modelled here).
             if (capturePreservedNumbering && paragraph.Formatting.ListKind == ListKind.None)
                 paragraph.PreservedNumbering = ReadPreservedNumbering(pPr);
             // A paragraph carrying a w:pPr/w:sectPr ends a non-final section; recover that section's page
@@ -1433,6 +1433,7 @@ public static class DocxReader
                     archive,
                     imageRelationships,
                     hyperlinkRelationships,
+                    numbering,
                     activeCommentId,
                     revision: default,
                     control: inheritedControl,
@@ -1588,6 +1589,7 @@ public static class DocxReader
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering,
         int? commentId,
         RevisionInfo revision,
         ContentControl? control,
@@ -1663,7 +1665,7 @@ public static class DocxReader
                 continue;
             }
 
-            AddParagraphContentElement(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+            AddParagraphContentElement(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
     }
 
@@ -1701,6 +1703,7 @@ public static class DocxReader
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering,
         int? commentId,
         RevisionInfo revision,
         ContentControl? control,
@@ -1717,7 +1720,7 @@ public static class DocxReader
             if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
                 paragraph.Runs.Add(Run.CommentReference(refId));
             else
-                AddRun(paragraph, child, archive, imageRelationships, hyperlinkRelationships, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+                AddRun(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "hyperlink")
         {
@@ -1725,18 +1728,18 @@ public static class DocxReader
             var id = child.Attribute(R + "id")?.Value;
             var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
             var tooltip = child.Attribute(W + "tooltip")?.Value;
-            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "ins" || child.Name == W + "del")
         {
             // A tracked insertion (w:ins) or deletion (w:del) wraps runs, hyperlinks, and sometimes SDTs.
             var kind = child.Name == W + "del" ? RevisionKind.Deleted : RevisionKind.Inserted;
             var childRevision = new RevisionInfo(kind, child.Attribute(W + "author")?.Value, child.Attribute(W + "date")?.Value);
-            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "sdt")
         {
-            AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, commentId, revision, preservedDrawingTarget, preservedDrawingRelationshipTargets, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
+            AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, preservedDrawingTarget, preservedDrawingRelationshipTargets, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
         }
         else if (child.Name == W + "fldSimple")
         {
@@ -2381,6 +2384,7 @@ public static class DocxReader
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering,
         int? commentId,
         RevisionInfo revision,
         TextDocument? preservedDrawingTarget,
@@ -2407,6 +2411,7 @@ public static class DocxReader
             archive,
             imageRelationships,
             hyperlinkRelationships,
+            numbering,
             commentId,
             revision,
             control ?? inheritedControl,
@@ -2513,6 +2518,7 @@ public static class DocxReader
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering,
         string? hyperlinkUrl,
         string? hyperlinkAnchor,
         int? commentId = null,
@@ -2547,7 +2553,7 @@ public static class DocxReader
             return;
         }
 
-        var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships, hyperlinkRelationships);
+        var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships, hyperlinkRelationships, numbering);
         if (drawingGroup is not null)
         {
             var groupRun = Run.FromDrawingGroup(drawingGroup);
@@ -2584,7 +2590,7 @@ public static class DocxReader
         }
 
         // A w:drawing wrapping a wps:wsp (not a pic:pic) is an inline shape / text box.
-        var shape = ReadShape(r, archive, imageRelationships, hyperlinkRelationships);
+        var shape = ReadShape(r, archive, imageRelationships, hyperlinkRelationships, numbering);
         if (shape is not null)
         {
             var shapeRun = Run.FromShape(shape);
@@ -3614,7 +3620,8 @@ public static class DocxReader
         XElement run,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
     {
         var drawing = run.Element(W + "drawing");
         var inline = drawing?.Element(Wp + "inline");
@@ -3792,15 +3799,19 @@ public static class DocxReader
         if (!string.IsNullOrEmpty(docPrDescr))
             shape.AltText = docPrDescr;
 
-        // Text-box body: parse each w:p inside w:txbxContent with the ordinary paragraph reader. Bodies do
-        // not carry hyperlink relationships or list numbering, so build them against empty maps (mirrors the
-        // writer, which emits txbx paragraphs without those).
+        // Text-box body paragraphs share the owning document's numbering.xml and story-local hyperlink
+        // relationships, just like ordinary paragraphs in that story.
         var txbxContent = wsp.Element(Wps + "txbx")?.Element(W + "txbxContent");
         if (txbxContent is not null)
         {
-            var noNumbering = new Dictionary<int, ListKind>();
             foreach (var p in txbxContent.Elements(W + "p"))
-                shape.TextParagraphs.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+                shape.TextParagraphs.Add(ReadParagraph(
+                    p,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    numbering,
+                    capturePreservedNumbering: true));
         }
 
         // Text direction: wps:bodyPr/@vert + @rot.
@@ -5749,7 +5760,8 @@ public static class DocxReader
         XElement run,
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
-        IReadOnlyDictionary<string, string> hyperlinkRelationships)
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
     {
         var drawing = run.Element(W + "drawing");
         var anchor = drawing?.Element(Wp + "anchor");
@@ -5810,7 +5822,7 @@ public static class DocxReader
             }
             else if (child is null && name.StartsWith("GroupChild:Shape:", StringComparison.Ordinal))
             {
-                child = ReadShape(fakeRun, archive, imageRelationships, hyperlinkRelationships);
+                child = ReadShape(fakeRun, archive, imageRelationships, hyperlinkRelationships, numbering);
                 if (child is null)
                 {
                     var kindStr = name["GroupChild:Shape:".Length..];
@@ -5838,7 +5850,7 @@ public static class DocxReader
             {
                 // Unknown child type — try the rich shape/WordArt readers before falling back to a rectangle.
                 child = ReadWordArt(fakeRun)
-                    ?? (object?)ReadShape(fakeRun, archive, imageRelationships, hyperlinkRelationships)
+                    ?? (object?)ReadShape(fakeRun, archive, imageRelationships, hyperlinkRelationships, numbering)
                     ?? new Shape(ShapeKind.Rectangle, cw, ch);
             }
 
