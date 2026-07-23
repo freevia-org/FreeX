@@ -992,6 +992,26 @@ public sealed class FreePRibbonDefinitionProfileTests
         presenterRecording.GetProperty("remainingWork").GetString()
             .Should()
             .Contain("external-link");
+        presenterRecording.GetProperty("remainingWork").GetString()
+            .Should()
+            .Contain("basic TTML/DFXP cue parsing");
+
+        var mediaCaptionDepth = workflowEvidence.Single(row =>
+            row.GetProperty("evidenceId").GetString() == "freep.media-caption.native-sidecar-depth");
+        mediaCaptionDepth.GetProperty("remainingWork").GetString()
+            .Should()
+            .Contain("shared planner parses paragraph cues");
+
+        var chartBaseline = workflowEvidence.Single(row =>
+            row.GetProperty("evidenceId").GetString() == "freep.chart.powerpoint-baseline-readiness");
+        chartBaseline.GetProperty("evidenceDocs")
+            .EnumerateArray()
+            .Select(path => path.GetString())
+            .Should()
+            .Contain("docs/parity/freep-chart-powerpoint-com-baseline-20260720.md");
+        chartBaseline.GetProperty("remainingWork").GetString()
+            .Should()
+            .Contain("fresh COM PNGs");
 
         var presenterSummary = workflowEvidence.Single(row =>
             row.GetProperty("evidenceId").GetString() == "freep.presenter.session.summary");
