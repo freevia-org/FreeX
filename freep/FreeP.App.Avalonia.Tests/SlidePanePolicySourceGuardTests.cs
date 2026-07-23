@@ -12,6 +12,11 @@ public sealed class SlidePanePolicySourceGuardTests
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
+        var slidePaneStart = source.IndexOf("private void RefreshSlidePane", StringComparison.Ordinal);
+        var slidePaneEnd = source.IndexOf("private void RefreshNotesPane", slidePaneStart, StringComparison.Ordinal);
+        slidePaneStart.Should().BeGreaterThanOrEqualTo(0);
+        slidePaneEnd.Should().BeGreaterThan(slidePaneStart);
+        var slidePaneSource = source[slidePaneStart..slidePaneEnd];
 
         source.Should().Contain("SlidePanePlanner.BuildSessionProjection(");
         source.Should().Contain("SlidePanePlanner.SetSelectedSlide(");
@@ -35,6 +40,10 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("_slidePaneRenderedThumbnailPlans.Add(plan)");
         source.Should().Contain("Width        = plan.ThumbnailWidth");
         source.Should().Contain("Height       = plan.ThumbnailHeight");
+        source.Should().Contain("FontSize            = plan.LabelFontSize");
+        source.Should().Contain("Margin              = new Thickness(0, 0, 0, plan.LabelBottomMargin)");
+        source.Should().Contain("BorderThickness = new Thickness(plan.ThumbnailBorderThickness)");
+        source.Should().Contain("Margin      = new Thickness(plan.ItemMarginHorizontal, plan.ItemMarginVertical)");
         source.Should().Contain("Foreground          = BrushFromHex(plan.LabelForegroundHex)");
         source.Should().Contain("Background      = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex)");
         source.Should().Contain("BorderBrush     = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex)");
@@ -83,9 +92,9 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("Text                = $\"{slideIdx + 1}\"");
         source.Should().NotContain("Width        = 148");
         source.Should().NotContain("Height       = 84");
-        source.Should().NotContain("Color.FromRgb(0xF5, 0xF5, 0xF5)");
-        source.Should().NotContain("Color.FromRgb(0xFF, 0xE0, 0xD6)");
-        source.Should().NotContain("Color.FromRgb(0xEB, 0xEB, 0xEB)");
+        slidePaneSource.Should().NotContain("Color.FromRgb(0xF5, 0xF5, 0xF5)");
+        slidePaneSource.Should().NotContain("Color.FromRgb(0xFF, 0xE0, 0xD6)");
+        slidePaneSource.Should().NotContain("Color.FromRgb(0xEB, 0xEB, 0xEB)");
         source.Should().NotContain("Math.Abs(itemPosition.Y - _slidePaneDragStartPoint.Y) < 5");
         source.Should().NotContain("Math.Abs(itemPosition.Y - _slidePaneDragStartPoint.Y) < SlidePanePlanner.DefaultDragStartThreshold");
         source.Should().NotContain("SlidePanePlanner.HitTestInsertionPoint(");
@@ -94,13 +103,13 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("_slidePaneDragSession");
         source.Should().NotContain("new Thickness(0, indicatorY - 1, 0, 0)");
         source.Should().NotContain("_slidePaneList.SelectedIndex = Editor.CurrentSlideIndex");
-        source.Should().NotContain("Editor.DuplicateCurrentSlide();");
-        source.Should().NotContain("Editor.DeleteCurrentSlide();");
-        source.Should().NotContain("Editor.MoveSlide(");
-        source.Should().NotContain("Editor.AddSectionAtSlide(action.SlideIndex");
-        source.Should().NotContain("Editor.RenameSection(action.SectionIndex");
-        source.Should().NotContain("Editor.RemoveSection(action.SectionIndex)");
-        source.Should().NotContain("Editor.RemoveAllSections()");
+        slidePaneSource.Should().NotContain("Editor.DuplicateCurrentSlide();");
+        slidePaneSource.Should().NotContain("Editor.DeleteCurrentSlide();");
+        slidePaneSource.Should().NotContain("Editor.MoveSlide(");
+        slidePaneSource.Should().NotContain("Editor.AddSectionAtSlide(action.SlideIndex");
+        slidePaneSource.Should().NotContain("Editor.RenameSection(action.SectionIndex");
+        slidePaneSource.Should().NotContain("Editor.RemoveSection(action.SectionIndex)");
+        slidePaneSource.Should().NotContain("Editor.RemoveAllSections()");
     }
 
 }

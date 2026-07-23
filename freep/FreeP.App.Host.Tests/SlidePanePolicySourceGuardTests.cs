@@ -35,6 +35,12 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePanePlanner.TryApplyBottomNewSlideAffordance(_editor)");
         source.Should().Contain("Width            = plan.ThumbnailWidth");
         source.Should().Contain("Height           = plan.ThumbnailHeight");
+        source.Should().Contain("FontSize            = plan.LabelFontSize");
+        source.Should().Contain("Margin              = new Thickness(0, 0, 0, plan.LabelBottomMargin)");
+        source.Should().Contain("BorderThickness = new Thickness(plan.ThumbnailBorderThickness)");
+        source.Should().Contain("Margin          = new Thickness(");
+        source.Should().Contain("plan.ItemMarginHorizontal");
+        source.Should().Contain("plan.ItemMarginVertical");
         source.Should().Contain("ToolTip         = plan.ToolTipText");
         source.Should().Contain("Text              = plan.DisclosureText");
         source.Should().Contain("Foreground        = BrushFromHex(plan.ForegroundHex)");
