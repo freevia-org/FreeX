@@ -1519,6 +1519,71 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Hyperlinks_InStoryParts_UseOwningPartRelationships_AndRoundTrip()
+    {
+        const string headerUrl = "https://example.com/header";
+        const string footnoteUrl = "https://example.com/footnote";
+        const string endnoteUrl = "https://example.com/endnote";
+        const string commentUrl = "https://example.com/comment";
+
+        var document = new TextDocument();
+        var body = new Paragraph("Body");
+        body.Runs.Add(Run.FootnoteReference(1));
+        body.Runs.Add(Run.EndnoteReference(1));
+        document.Blocks.Add(body);
+
+        var header = new HeaderFooter();
+        header.Paragraphs.Add(new Paragraph());
+        header.Paragraphs[0].Runs.Add(new Run("Header") { HyperlinkUrl = headerUrl });
+        document.FinalSectionHeadersFooters.Header = header;
+
+        var footnote = new Footnote(1);
+        footnote.Content.Add(new Paragraph());
+        footnote.Content[0].Runs.Add(new Run("Footnote") { HyperlinkUrl = footnoteUrl });
+        document.Footnotes[1] = footnote;
+
+        var endnote = new Endnote(1);
+        endnote.Content.Add(new Paragraph());
+        endnote.Content[0].Runs.Add(new Run("Endnote") { HyperlinkUrl = endnoteUrl });
+        document.Endnotes[1] = endnote;
+
+        var comment = new Comment(0, string.Empty, author: "A", initials: "A");
+        comment.Content[0].Runs.Add(new Run("Comment") { HyperlinkUrl = commentUrl });
+        document.Comments[0] = comment;
+
+        byte[] bytes;
+        using (var stream = new MemoryStream())
+        {
+            DocxWriter.Write(document, stream);
+            bytes = stream.ToArray();
+        }
+
+        using (var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        {
+            string ReadEntry(string path)
+            {
+                using var reader = new StreamReader(zip.GetEntry(path)!.Open());
+                return reader.ReadToEnd();
+            }
+
+            ReadEntry("word/_rels/header1.xml.rels").Should().Contain(headerUrl).And.Contain("TargetMode=\"External\"");
+            ReadEntry("word/_rels/footnotes.xml.rels").Should().Contain(footnoteUrl).And.Contain("TargetMode=\"External\"");
+            ReadEntry("word/_rels/endnotes.xml.rels").Should().Contain(endnoteUrl).And.Contain("TargetMode=\"External\"");
+            ReadEntry("word/_rels/comments.xml.rels").Should().Contain(commentUrl).And.Contain("TargetMode=\"External\"");
+
+            var documentRelationships = ReadEntry("word/_rels/document.xml.rels");
+            documentRelationships.Should().NotContain(headerUrl).And.NotContain(footnoteUrl)
+                .And.NotContain(endnoteUrl).And.NotContain(commentUrl);
+        }
+
+        var roundTripped = DocxReader.Read(new MemoryStream(bytes));
+        roundTripped.FinalSectionHeadersFooters.Header!.Paragraphs.Single().Runs.Single().HyperlinkUrl.Should().Be(headerUrl);
+        roundTripped.Footnotes[1].Content.Single().Runs.Single(run => run.Text == "Footnote").HyperlinkUrl.Should().Be(footnoteUrl);
+        roundTripped.Endnotes[1].Content.Single().Runs.Single(run => run.Text == "Endnote").HyperlinkUrl.Should().Be(endnoteUrl);
+        roundTripped.Comments[0].Content.Single().Runs.Single(run => run.Text == "Comment").HyperlinkUrl.Should().Be(commentUrl);
+    }
+
+    [Fact]
     public void Hyperlink_SharedUrl_UsesSingleRelationship()
     {
         var doc = new TextDocument();

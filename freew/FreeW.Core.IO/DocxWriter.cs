@@ -137,6 +137,15 @@ public static class DocxWriter
         var endnotePreservedDrawings = hasEndnotes
             ? CollectPartLocalPreservedDrawings(document.Endnotes.Values.SelectMany(note => note.Content), preservedParts)
             : [];
+        var footnoteHyperlinks = hasFootnotes
+            ? CollectHyperlinks(document.Footnotes.Values.OrderBy(note => note.Id).SelectMany(note => note.Content))
+            : new Dictionary<string, string>(StringComparer.Ordinal);
+        var endnoteHyperlinks = hasEndnotes
+            ? CollectHyperlinks(document.Endnotes.Values.OrderBy(note => note.Id).SelectMany(note => note.Content))
+            : new Dictionary<string, string>(StringComparer.Ordinal);
+        var commentHyperlinks = hasComments
+            ? CollectHyperlinks(FlattenComments(document).SelectMany(comment => comment.Content))
+            : new Dictionary<string, string>(StringComparer.Ordinal);
 
         // The watermark options (or legacy text) are persisted as custom document properties
         // (docProps/custom.xml). WatermarkOptions takes precedence; a legacy Watermark text is used
@@ -256,7 +265,7 @@ public static class DocxWriter
         {
             WritePart(archive, "word/" + part.FileName,
                 BuildHeaderFooter(part.IsHeader ? W + "hdr" : W + "ftr", part));
-            if (part.Images.Count > 0 || part.PreservedDrawings.Count > 0)
+            if (part.Images.Count > 0 || part.PreservedDrawings.Count > 0 || part.Hyperlinks.Count > 0)
             {
                 WritePart(archive, "word/_rels/" + part.FileName + ".rels", BuildHeaderFooterRels(part));
                 foreach (var image in part.Images)
@@ -265,35 +274,35 @@ public static class DocxWriter
         }
         if (hasFootnotes)
         {
-            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document, footnoteImages, footnotePreservedDrawings));
-            if (footnoteImages.Count > 0 || footnotePreservedDrawings.Count > 0)
+            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document, footnoteImages, footnotePreservedDrawings, footnoteHyperlinks));
+            if (footnoteImages.Count > 0 || footnotePreservedDrawings.Count > 0 || footnoteHyperlinks.Count > 0)
             {
-                WritePart(archive, "word/_rels/footnotes.xml.rels", BuildNoteRels(footnoteImages, footnotePreservedDrawings));
+                WritePart(archive, "word/_rels/footnotes.xml.rels", BuildNoteRels(footnoteImages, footnotePreservedDrawings, footnoteHyperlinks));
                 foreach (var image in footnoteImages)
                     WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
             }
         }
         if (hasEndnotes)
         {
-            WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document, endnoteImages, endnotePreservedDrawings));
-            if (endnoteImages.Count > 0 || endnotePreservedDrawings.Count > 0)
+            WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document, endnoteImages, endnotePreservedDrawings, endnoteHyperlinks));
+            if (endnoteImages.Count > 0 || endnotePreservedDrawings.Count > 0 || endnoteHyperlinks.Count > 0)
             {
-                WritePart(archive, "word/_rels/endnotes.xml.rels", BuildNoteRels(endnoteImages, endnotePreservedDrawings));
+                WritePart(archive, "word/_rels/endnotes.xml.rels", BuildNoteRels(endnoteImages, endnotePreservedDrawings, endnoteHyperlinks));
                 foreach (var image in endnoteImages)
                     WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
             }
         }
         if (hasComments)
         {
-            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages, commentPreservedDrawings));
+            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages, commentPreservedDrawings, commentHyperlinks));
             // word/commentsExtended.xml threads replies + carries resolved state. Always emitted alongside the
             // comments part (it has an entry per comment even for a flat, single-comment document) so modern
             // Word treats every comment as a thread root and the reply/resolve plumbing round-trips.
             WritePart(archive, CommentsExtendedPartName.TrimStart('/'), BuildCommentsExtended(document));
             // Comment media and preserved charts resolve through comments.xml.rels.
-            if (commentImages.Count > 0 || commentPreservedDrawings.Count > 0)
+            if (commentImages.Count > 0 || commentPreservedDrawings.Count > 0 || commentHyperlinks.Count > 0)
             {
-                WritePart(archive, "word/_rels/comments.xml.rels", BuildCommentsRels(commentImages, commentPreservedDrawings));
+                WritePart(archive, "word/_rels/comments.xml.rels", BuildCommentsRels(commentImages, commentPreservedDrawings, commentHyperlinks));
                 foreach (var image in commentImages)
                     WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
             }
@@ -575,6 +584,7 @@ public static class DocxWriter
         string RelationshipId,
         IReadOnlyList<ImagePart> Images,
         IReadOnlyList<PartLocalPreservedDrawingPart> PreservedDrawings,
+        IReadOnlyDictionary<string, string> Hyperlinks,
         WatermarkOptions? Watermark,
         ImagePart? WatermarkImage);
 
@@ -632,6 +642,7 @@ public static class DocxWriter
                 var relationshipId = (isHeader ? "rIdHeader" : "rIdFooter") + index;
                 var images = CollectHeaderFooterImages(content, fileName, usedPartNames);
                 var preservedDrawings = CollectPartLocalPreservedDrawings(content.Paragraphs, document.Preserved.Parts);
+                var hyperlinks = CollectHyperlinks(content.Paragraphs);
                 ImagePart? watermarkImage = null;
                 if (watermark?.IsPicture == true)
                 {
@@ -660,6 +671,7 @@ public static class DocxWriter
                     relationshipId,
                     images,
                     preservedDrawings,
+                    hyperlinks,
                     watermark,
                     watermarkImage));
             }
@@ -777,10 +789,13 @@ public static class DocxWriter
     };
 
     /// <summary>Maps each distinct hyperlink URL to one external relationship id (rIdLinkN).</summary>
-    private static Dictionary<string, string> CollectHyperlinks(TextDocument document)
+    private static Dictionary<string, string> CollectHyperlinks(TextDocument document) =>
+        CollectHyperlinks(EnumerateParagraphs(document));
+
+    private static Dictionary<string, string> CollectHyperlinks(IEnumerable<Paragraph> paragraphs)
     {
         var byUrl = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var paragraph in EnumerateParagraphs(document))
+        foreach (var paragraph in paragraphs)
             foreach (var run in paragraph.Runs)
                 if (run.HyperlinkUrl is { Length: > 0 } url && !byUrl.ContainsKey(url))
                     byUrl[url] = $"rIdLink{byUrl.Count + 1}";
@@ -1396,7 +1411,6 @@ public static class DocxWriter
             Images = imagesByRun,
             PreservedDrawingRelIds = preservedDrawingRelIds
         };
-        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         if (part.Watermark is not null)
             root.Add(BuildWatermarkParagraph(part.Watermark, part.WatermarkImage));
@@ -1405,7 +1419,7 @@ public static class DocxWriter
             root.Add(new XElement(W + "p"));
         else
             foreach (var paragraph in part.Content.Paragraphs)
-                root.Add(BuildParagraph(paragraph, drawings, noHyperlinks));
+                root.Add(BuildParagraph(paragraph, drawings, part.Hyperlinks));
 
         return new XDocument(root);
     }
@@ -1581,7 +1595,8 @@ public static class DocxWriter
     private static XDocument BuildFootnotes(
         TextDocument document,
         IReadOnlyList<ImagePart> images,
-        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
+        IReadOnlyDictionary<string, string> hyperlinks)
     {
         var footnotes = new XElement(W + "footnotes",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
@@ -1610,13 +1625,11 @@ public static class DocxWriter
             PreservedDrawingRelIds = preservedDrawings
                 .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal)
         };
-        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
-
         foreach (var footnote in document.Footnotes.Values.OrderBy(f => f.Id))
         {
             var element = new XElement(W + "footnote", new XAttribute(W + "id", footnote.Id));
             foreach (var paragraph in BuildNoteContent(
-                footnote.Content, noteDrawings, noHyperlinks, "footnoteRef"))
+                footnote.Content, noteDrawings, hyperlinks, "footnoteRef"))
                 element.Add(paragraph);
             footnotes.Add(element);
         }
@@ -1633,7 +1646,8 @@ public static class DocxWriter
     private static XDocument BuildEndnotes(
         TextDocument document,
         IReadOnlyList<ImagePart> images,
-        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
+        IReadOnlyDictionary<string, string> hyperlinks)
     {
         var endnotes = new XElement(W + "endnotes",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
@@ -1662,13 +1676,11 @@ public static class DocxWriter
             PreservedDrawingRelIds = preservedDrawings
                 .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal)
         };
-        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
-
         foreach (var endnote in document.Endnotes.Values.OrderBy(e => e.Id))
         {
             var element = new XElement(W + "endnote", new XAttribute(W + "id", endnote.Id));
             foreach (var paragraph in BuildNoteContent(
-                endnote.Content, noteDrawings, noHyperlinks, "endnoteRef"))
+                endnote.Content, noteDrawings, hyperlinks, "endnoteRef"))
                 element.Add(paragraph);
             endnotes.Add(element);
         }
@@ -1802,7 +1814,8 @@ public static class DocxWriter
     private static XDocument BuildComments(
         TextDocument document,
         IReadOnlyList<ImagePart> commentImages,
-        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
+        IReadOnlyDictionary<string, string> hyperlinks)
     {
         var comments = new XElement(W + "comments",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
@@ -1810,7 +1823,7 @@ public static class DocxWriter
 
         // Comment images map their runs → part-local image parts; the picture drawing uses the wp/a/pic
         // namespaces, declared on the root only when a comment actually carries an image (so a text-only
-        // comments part stays byte-equivalent to the historical output). Comments carry no hyperlinks.
+        // comments part stays byte-equivalent to the historical output).
         if (commentImages.Count > 0)
         {
             comments.Add(new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName));
@@ -1826,8 +1839,6 @@ public static class DocxWriter
             PreservedDrawingRelIds = preservedDrawings
                 .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal)
         };
-        var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
-
         // The w14 namespace is declared on the root only when a comment paragraph carries a paraId (i.e.
         // always, since every comment's last paragraph is stamped for commentsExtended threading). Mirrors
         // how the wp/a/pic namespaces are added only when needed.
@@ -1850,7 +1861,7 @@ public static class DocxWriter
             else
                 for (var pi = 0; pi < comment.Content.Count; pi++)
                 {
-                    var built = BuildParagraph(comment.Content[pi], drawings, noHyperlinks);
+                    var built = BuildParagraph(comment.Content[pi], drawings, hyperlinks);
                     // commentsExtended.xml references the comment's LAST paragraph; stamp paraId there.
                     if (pi == comment.Content.Count - 1)
                         built.SetAttributeValue(W14 + "paraId", paraId);
@@ -1900,7 +1911,8 @@ public static class DocxWriter
     /// <summary>Builds word/_rels/comments.xml.rels for comment media and preserved charts.</summary>
     private static XDocument BuildCommentsRels(
         IReadOnlyList<ImagePart> commentImages,
-        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
+        IReadOnlyDictionary<string, string> hyperlinks)
     {
         var relationships = OpcRelationships.CreateRoot();
         foreach (var image in commentImages)
@@ -1913,6 +1925,8 @@ public static class DocxWriter
                 drawing.RelationshipId,
                 drawing.RelationshipType,
                 DocumentRelativeTarget(drawing.PartName)));
+        foreach (var (url, relationshipId) in hyperlinks)
+            relationships.Add(OpcRelationships.CreateRelationship(relationshipId, HyperlinkRel, url, external: true));
         return new XDocument(relationships);
     }
 
@@ -6830,6 +6844,8 @@ public static class DocxWriter
                 drawing.RelationshipId,
                 drawing.RelationshipType,
                 DocumentRelativeTarget(drawing.PartName)));
+        foreach (var (url, relationshipId) in part.Hyperlinks)
+            relationships.Add(OpcRelationships.CreateRelationship(relationshipId, HyperlinkRel, url, external: true));
         return new XDocument(relationships);
     }
 
@@ -6847,7 +6863,8 @@ public static class DocxWriter
 
     private static XDocument BuildNoteRels(
         IReadOnlyList<ImagePart> images,
-        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
+        IReadOnlyDictionary<string, string> hyperlinks)
     {
         var relationships = OpcRelationships.CreateRoot();
         foreach (var image in images)
@@ -6860,6 +6877,8 @@ public static class DocxWriter
                 drawing.RelationshipId,
                 drawing.RelationshipType,
                 DocumentRelativeTarget(drawing.PartName)));
+        foreach (var (url, relationshipId) in hyperlinks)
+            relationships.Add(OpcRelationships.CreateRelationship(relationshipId, HyperlinkRel, url, external: true));
         return new XDocument(relationships);
     }
 
