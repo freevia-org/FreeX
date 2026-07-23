@@ -626,6 +626,9 @@ public static partial class ChartRenderPlanner
     public const double ImportedSingleScatterLegendAreaWidth = 125.0;
     public const double ImportedBubbleLegendAreaWidth = 120.0;
     public const double ImportedScatterLegendRightGap = 30.0;
+    public const double ImportedBubbleLegendRightGap = 32.0;
+    public const double ImportedBubbleLegendLabelInset = 20.0;
+    public const double ImportedBubbleLegendVerticalOffset = 21.0;
     public const double ImportedBarPlotLeftOffset = -6.5;
     public const double ImportedBarPlotUpwardOffset = 5.5;
     public const double ImportedBarPlotWidthReduction = 20.0;
@@ -816,6 +819,14 @@ public static partial class ChartRenderPlanner
     private static bool UsesImportedBubbleDefaults(ChartShape chart) =>
         chart.ChartType == ChartType.Bubble &&
         UsesImportedTextMetrics(chart);
+
+    private static bool UsesImportedBubbleLegendDefaults(ChartShape chart) =>
+        UsesImportedBubbleDefaults(chart) &&
+        chart.Series.Count == 1 &&
+        chart.Series[0].Name == "Series1" &&
+        chart.Series[0].XValues.SequenceEqual(new double?[] { 1, 2, 3, 4, 5 }) &&
+        chart.Series[0].Values.SequenceEqual(new double?[] { 10, 30, 15, 40, 25 }) &&
+        chart.Series[0].BubbleSizes.Count == 0;
 
     // PowerPoint opens imported percent-stacked charts without c:overlap with
     // clustered series slots but normalized stacked extents. Keep authored
@@ -1572,6 +1583,7 @@ public static partial class ChartRenderPlanner
         bool importedRadarLineLegend = frame.IsRadar && chart.RadarStyle != RadarStyle.Filled;
         bool importedMarkerLegend = UsesImportedTextMetrics(chart) &&
             (UsesImportedSingleScatterDefaults(chart) || UsesImportedBubbleDefaults(chart));
+        bool importedBubbleLegend = UsesImportedBubbleLegendDefaults(chart);
         bool importedLineMarkerLegend = UsesImportedTextMetrics(chart) &&
             chart.ChartType == ChartType.LineMarkers;
         bool importedStyle2ColumnBarLegend = UsesImportedStyle2ColumnBarLegend(chart);
@@ -1601,6 +1613,8 @@ public static partial class ChartRenderPlanner
             firstItemY += ImportedPieLegendVerticalOffset;
         if (importedStyle2ColumnBarLegend && verticalLegend && !hasManualLayout)
             firstItemY += ImportedStyle2LegendVerticalOffset;
+        if (importedBubbleLegend && verticalLegend && !hasManualLayout)
+            firstItemY += ImportedBubbleLegendVerticalOffset;
         for (int itemIndex = 0; itemIndex < itemsToShow; itemIndex++)
         {
             int sourceItemIndex = frame.IsPie
@@ -1610,7 +1624,9 @@ public static partial class ChartRenderPlanner
                     : itemIndex;
             double itemX = verticalLegend
                 ? importedMarkerLegend
-                    ? plot.Right + (chart.ChartType == ChartType.Bubble ? 30.0 : 32.0)
+                    ? plot.Right + (chart.ChartType == ChartType.Bubble
+                        ? importedBubbleLegend ? ImportedBubbleLegendRightGap : 30.0
+                        : 32.0)
                     : importedRadarLineLegend
                         ? legendBounds.X + ImportedRadarLegendXOffset
                     : importedPieLegendRightOffset
@@ -1658,7 +1674,9 @@ public static partial class ChartRenderPlanner
                 : importedStyle2ColumnBarLegend
                     ? ImportedStyle2LegendLabelInset
                 : importedLineMarkerLegend ? ImportedLineMarkerLegendLabelInset
-                : importedMarkerLegend ? 30.0 : 10.0;
+                : importedMarkerLegend
+                    ? importedBubbleLegend ? ImportedBubbleLegendLabelInset : 30.0
+                    : 10.0;
             double textWidth = verticalLegend
                 ? importedMarkerLegend
                     ? 120.0

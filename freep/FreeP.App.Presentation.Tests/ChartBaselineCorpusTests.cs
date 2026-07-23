@@ -295,6 +295,16 @@ public sealed class ChartBaselineCorpusTests
         var legend = scene.LegendItems.Should().ContainSingle().Subject;
         legend.Label.Text.Should().Be("Series1");
         legend.MarkerSymbol.Should().Be(ChartMarkerPrimitiveSymbol.Circle);
+        legend.SwatchBounds.X.Should().BeApproximately(
+            scene.Frame.Plot.Right + ChartRenderPlanner.ImportedBubbleLegendRightGap,
+            0.0001);
+        legend.SwatchBounds.Y.Should().BeApproximately(
+            scene.Frame.Plot.Y + (scene.Frame.Plot.Height - 28.0) / 2.0 +
+            ChartRenderPlanner.ImportedBubbleLegendVerticalOffset + 3.0,
+            0.0001);
+        legend.Label.Bounds.X.Should().BeApproximately(
+            legend.SwatchBounds.X + ChartRenderPlanner.ImportedBubbleLegendLabelInset,
+            0.0001);
     }
 
     [Fact]
