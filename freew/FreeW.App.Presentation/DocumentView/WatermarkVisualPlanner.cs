@@ -19,7 +19,8 @@ public sealed record TextWatermarkLayoutPlan(
     double YDip,
     double WidthDip,
     double HeightDip,
-    double RotationDegrees)
+    double RotationDegrees,
+    bool FitsShape)
 {
     public double CenterXDip => XDip + WidthDip / 2;
     public double CenterYDip => YDip + HeightDip / 2;
@@ -35,6 +36,7 @@ public static class WatermarkVisualPlanner
     // width-fit FormattedText. Keep the VML shape dimensions intact and share the glyph calibration
     // between the live WPF surface and the headless fidelity renderer.
     public const double TextPathGlyphScale = 0.50;
+    private const double VmlTextPathFontSizeDip = 4d / 3d;
 
     public static TextWatermarkLayoutPlan? BuildTextLayout(
         WatermarkOptions options,
@@ -64,7 +66,17 @@ public static class WatermarkVisualPlanner
             YDip: (pageHeightDip - height) / 2,
             WidthDip: width,
             HeightDip: height,
-            RotationDegrees: options.Layout == WatermarkLayout.Diagonal ? -45 : 0);
+            RotationDegrees: options.Layout == WatermarkLayout.Diagonal ? -45 : 0,
+            FitsShape: options.NativeVmlTextFitShape != false);
+    }
+
+    public static double ResolveTextPathFontSize(TextWatermarkLayoutPlan plan, double unitTextWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        return plan.FitsShape
+            ? Math.Clamp(plan.WidthDip / Math.Max(1, unitTextWidthDip), 1, 130) * TextPathGlyphScale
+            : VmlTextPathFontSizeDip;
     }
 
     public static PictureWatermarkLayoutPlan? BuildPictureLayout(

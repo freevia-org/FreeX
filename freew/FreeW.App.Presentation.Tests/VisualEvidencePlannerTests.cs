@@ -2470,6 +2470,28 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void TextWatermarkLayoutPlanner_UsesSerializedFitShapeToResolveTextPathFontSize()
+    {
+        var fitted = WatermarkVisualPlanner.BuildTextLayout(
+            new WatermarkOptions("DRAFT"),
+            pageWidthDip: 816,
+            pageHeightDip: 1056);
+        var unfitted = WatermarkVisualPlanner.BuildTextLayout(
+            new WatermarkOptions("DRAFT") { NativeVmlTextFitShape = false },
+            pageWidthDip: 816,
+            pageHeightDip: 1056);
+
+        fitted.Should().NotBeNull();
+        unfitted.Should().NotBeNull();
+        fitted!.FitsShape.Should().BeTrue();
+        unfitted!.FitsShape.Should().BeFalse();
+        WatermarkVisualPlanner.ResolveTextPathFontSize(fitted, unitTextWidthDip: 4)
+            .Should().Be(65);
+        WatermarkVisualPlanner.ResolveTextPathFontSize(unfitted, unitTextWidthDip: 4)
+            .Should().BeApproximately(4d / 3d, 0.001);
+    }
+
+    [Fact]
     public void ComputePixelStats_AndTrustGuard_RejectBlankAllBackgroundCapture()
     {
         var blank = new byte[20 * 20 * 4];
