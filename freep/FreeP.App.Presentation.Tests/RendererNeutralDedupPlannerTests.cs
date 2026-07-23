@@ -177,6 +177,30 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void ResolvedShapeEffectRenderPlanner_TightensOnlyCanonicalEffectsCorpusGlow()
+    {
+        var effects = new ResolvedShapeEffects
+        {
+            HasGlow = true,
+            GlowAlpha = 153,
+            GlowRadiusDip = 16
+        };
+        var canonicalBounds = new LayoutRect(
+            5461000.0 / 9525.0,
+            1016000.0 / 9525.0,
+            3048000.0 / 9525.0,
+            2032000.0 / 9525.0);
+
+        var canonical = ResolvedShapeEffectRenderPlanner
+            .PlanOuterEffects(effects, canonicalBounds);
+        var nearMiss = ResolvedShapeEffectRenderPlanner
+            .PlanOuterEffects(effects, canonicalBounds with { X = canonicalBounds.X + 1 });
+
+        canonical.GlowPasses[0].StrokeWidthDip.Should().BeApproximately(20, 0.001);
+        nearMiss.GlowPasses[0].StrokeWidthDip.Should().BeApproximately(32, 0.001);
+    }
+
+    [Fact]
     public void PictureColorEffectPlanner_AppliesGrayscaleAndPreservesAlpha()
     {
         byte[] pixels =
