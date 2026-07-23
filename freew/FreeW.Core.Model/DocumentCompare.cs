@@ -26,10 +26,10 @@ public enum CompareShowChangesIn
 /// default — all change types are tracked. When a flag is <c>false</c> the corresponding kind of
 /// difference is silently excluded from the output (no revision marks for it).
 /// <para>
-/// Only <see cref="Insertions"/> and <see cref="Deletions"/> affect FreeW's current word-level diff engine;
-/// the remaining flags (<see cref="Moves"/>, <see cref="Comments"/>, <see cref="Formatting"/>,
-/// <see cref="CaseChanges"/>, <see cref="Whitespace"/>) are stored so the dialog can persist them and are
-/// passed through to any future engine extension.
+/// <see cref="Insertions"/>, <see cref="Deletions"/>, <see cref="CaseChanges"/>, and
+/// <see cref="Whitespace"/> affect FreeW's current word-level diff engine. The remaining flags
+/// (<see cref="Moves"/>, <see cref="Comments"/>, <see cref="Formatting"/>) are stored so the dialog can
+/// persist them and are passed through to any future engine extension.
 /// </para>
 /// </summary>
 public sealed class CompareSettings
@@ -49,10 +49,10 @@ public sealed class CompareSettings
     /// <summary>Track formatting changes (not yet implemented). Default: <c>true</c>.</summary>
     public bool Formatting { get; init; } = true;
 
-    /// <summary>Track case changes as differences (not yet implemented). Default: <c>true</c>.</summary>
+    /// <summary>Track case changes as differences. Default: <c>true</c>.</summary>
     public bool CaseChanges { get; init; } = true;
 
-    /// <summary>Track whitespace changes as differences (not yet implemented). Default: <c>true</c>.</summary>
+    /// <summary>Track whitespace changes as differences. Default: <c>true</c>.</summary>
     public bool Whitespace { get; init; } = true;
 
     /// <summary>Which document to show the result in. Default: <see cref="CompareShowChangesIn.NewDocument"/>.</summary>
@@ -94,8 +94,10 @@ public static class DocumentCompare
     /// Compare <paramref name="original"/> against <paramref name="revised"/> with the given
     /// <paramref name="settings"/> (which change types to track). <paramref name="settings"/> with
     /// <see cref="CompareSettings.Insertions"/> and/or <see cref="CompareSettings.Deletions"/> false will
-    /// suppress the corresponding revision marks in the output. Other settings are stored for round-trip but
-    /// do not yet affect the word-level diff engine.
+    /// suppress the corresponding revision marks in the output. Disabling
+    /// <see cref="CompareSettings.CaseChanges"/> and/or <see cref="CompareSettings.Whitespace"/> ignores only
+    /// those differences while preserving revised text in the result. The remaining settings are stored for
+    /// round-trip but do not yet affect the word-level diff engine.
     /// </summary>
     public static TextDocument Compare(
         TextDocument original,
@@ -121,8 +123,8 @@ public static class DocumentCompare
         // an original paragraph's. Anchors copy through unchanged; the unmatched paragraphs that fall in the
         // gaps between anchors are paired up (and word-diffed) or, when unpaired, marked whole-insert/delete.
         var matches = LongestCommonSubsequence(
-            originalParagraphs.Select(p => p.PlainText).ToList(),
-            revisedParagraphs.Select(p => p.PlainText).ToList());
+            originalParagraphs.Select(p => ComparisonKey(p.PlainText, settings)).ToList(),
+            revisedParagraphs.Select(p => ComparisonKey(p.PlainText, settings)).ToList());
 
         var revisedAnchorToOriginal = new Dictionary<int, int>();
         foreach (var (originalIndex, revisedIndex) in matches)
@@ -208,8 +210,11 @@ public static class DocumentCompare
     // settings.Insertions/Deletions gate whether those revision kinds appear in the output.
     private static Paragraph DiffParagraph(Paragraph original, Paragraph revised, string author, string? dateXml, CompareSettings settings)
     {
-        // Identical text: copy the revised paragraph verbatim (no revision marks at all).
-        if (string.Equals(original.PlainText, revised.PlainText, StringComparison.Ordinal))
+        // Text that differs only in disabled comparison categories copies through verbatim.
+        if (string.Equals(
+                ComparisonKey(original.PlainText, settings),
+                ComparisonKey(revised.PlainText, settings),
+                StringComparison.Ordinal))
             return ClonePlain(revised);
 
         var result = new Paragraph
@@ -221,9 +226,16 @@ public static class DocumentCompare
         };
         result.BookmarkNames.AddRange(revised.BookmarkNames);
 
-        var originalTokens = Tokenize(original.PlainText);
-        var revisedTokens = Tokenize(revised.PlainText);
-        var common = LongestCommonSubsequence(originalTokens, revisedTokens);
+        var useExactTokens = settings.CaseChanges && settings.Whitespace;
+        var originalTokens = useExactTokens
+            ? Tokenize(original.PlainText)
+            : TokenizeComparisonSegments(original.PlainText);
+        var revisedTokens = useExactTokens
+            ? Tokenize(revised.PlainText)
+            : TokenizeComparisonSegments(revised.PlainText);
+        var common = LongestCommonSubsequence(
+            originalTokens.Select(token => ComparisonKey(token, settings)).ToList(),
+            revisedTokens.Select(token => ComparisonKey(token, settings)).ToList());
 
         var commonOriginal = new HashSet<int>(common.Select(m => m.OriginalIndex));
         var commonRevised = new HashSet<int>(common.Select(m => m.RevisedIndex));
@@ -334,6 +346,51 @@ public static class DocumentCompare
             tokens.Add(text.Substring(start, i - start));
         }
         return tokens;
+    }
+
+    private static List<string> TokenizeComparisonSegments(string text)
+    {
+        var tokens = new List<string>();
+        var index = 0;
+        while (index < text.Length)
+        {
+            var isWhitespace = char.IsWhiteSpace(text[index]);
+            var start = index;
+            while (index < text.Length && char.IsWhiteSpace(text[index]) == isWhitespace)
+                index++;
+            tokens.Add(text[start..index]);
+        }
+
+        return tokens;
+    }
+
+    private static string ComparisonKey(string text, CompareSettings settings)
+    {
+        if (!settings.Whitespace && text.All(char.IsWhiteSpace))
+            text = " ";
+        else if (!settings.Whitespace)
+        {
+            var normalizedWhitespace = new System.Text.StringBuilder(text.Length);
+            var previousWasWhitespace = false;
+            foreach (var character in text)
+            {
+                if (char.IsWhiteSpace(character))
+                {
+                    if (!previousWasWhitespace)
+                        normalizedWhitespace.Append(' ');
+                    previousWasWhitespace = true;
+                }
+                else
+                {
+                    normalizedWhitespace.Append(character);
+                    previousWasWhitespace = false;
+                }
+            }
+
+            text = normalizedWhitespace.ToString();
+        }
+
+        return settings.CaseChanges ? text : text.ToUpperInvariant();
     }
 
     // Classic dynamic-programming LCS returning the matched index pairs (OriginalIndex, RevisedIndex) in
