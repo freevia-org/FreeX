@@ -78,17 +78,24 @@ internal static class DelimitedTextWorkbookWriter
             ? index
             : 0;
         var sheet = workbook.Sheets[activeSheetIndex];
-        var rowCapacity = EstimateRowCapacity(sheet);
-        var cellsPerRowCapacity = EstimateCellsPerRowCapacity(sheet, rowCapacity);
+        // Materialize the cells before calculating output bounds. The save runs off the UI thread,
+        // so retaining the live sheet enumeration would allow a concurrent edit to change the
+        // values or row extent after the save has started. In particular, a new cell beyond the
+        // range that was previously measured must be part of the same snapshot as the bounds.
+        var cells = sheet.EnumerateCells()
+            .Where(static pair => IsValidCellAddress(pair.Address.Row, pair.Address.Col))
+            .Select(static pair => (pair.Address, Cell: pair.Cell.Clone()))
+            .ToArray();
+        if (cells.Length == 0) return;
+
+        var rowCapacity = EstimateRowCapacity(cells);
+        var cellsPerRowCapacity = EstimateCellsPerRowCapacity(cells.Length, rowCapacity);
         var rowLookup = new Dictionary<uint, DelimitedTextRowBucket>(rowCapacity);
         var rows = new List<DelimitedTextRowBucket>(rowCapacity);
         var endRow = 0u;
         var endCol = 0u;
-        foreach (var (address, cell) in sheet.EnumerateCells())
+        foreach (var (address, cell) in cells)
         {
-            if (!IsValidCellAddress(address.Row, address.Col))
-                continue;
-
             if (!rowLookup.TryGetValue(address.Row, out var row))
             {
                 row = new DelimitedTextRowBucket(address.Row, cellsPerRowCapacity);
@@ -100,8 +107,6 @@ internal static class DelimitedTextWorkbookWriter
             endRow = Math.Max(endRow, address.Row);
             endCol = Math.Max(endCol, address.Col);
         }
-
-        if (rows.Count == 0) return;
 
         rows.Sort(static (left, right) => left.Row.CompareTo(right.Row));
         foreach (var row in rows)
@@ -132,23 +137,21 @@ internal static class DelimitedTextWorkbookWriter
         row is >= 1 and <= CellAddress.MaxRow &&
         col is >= 1 and <= CellAddress.MaxCol;
 
-    private static int EstimateRowCapacity(Sheet sheet)
+    private static int EstimateRowCapacity(IReadOnlyList<(CellAddress Address, Cell Cell)> cells)
     {
-        if (sheet.CellCount == 0 ||
-            sheet.GetUsedRange() is not { } usedRange)
-        {
-            return 0;
-        }
+        var rows = new HashSet<uint>();
+        foreach (var (address, _) in cells)
+            rows.Add(address.Row);
 
-        return (int)Math.Min(sheet.CellCount, usedRange.RowCount);
+        return rows.Count;
     }
 
-    private static int EstimateCellsPerRowCapacity(Sheet sheet, int rowCapacity)
+    private static int EstimateCellsPerRowCapacity(int cellCount, int rowCapacity)
     {
         if (rowCapacity <= 0)
             return 0;
 
-        return Math.Max(1, (sheet.CellCount + rowCapacity - 1) / rowCapacity);
+        return Math.Max(1, (cellCount + rowCapacity - 1) / rowCapacity);
     }
 
     private sealed class DelimitedTextRowBucket(uint row, int cellCapacity)
