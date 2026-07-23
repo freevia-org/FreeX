@@ -65,8 +65,8 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
         AddField(panel, "Level 2 number style:", _level1Format);
         AddField(panel, "Level 3 number style:", _level2Format);
         panel.Children.Add(_status);
-        var ok = Button("OK", true, false, Accept);
-        var cancel = Button("Cancel", false, true, () => Close(null));
+        var ok = Button(ShellStrings.Current.Ok, true, false, Accept);
+        var cancel = Button(ShellStrings.Current.Cancel, false, true, () => Close(null));
         panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)));
         Content = panel;
         Opened += (_, _) => _levels.Focus();
@@ -136,8 +136,7 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
 
     private static Button Button(string text, bool isDefault, bool isCancel, Action click)
     {
-        var content = isDefault ? ShellStrings.Current.Ok : isCancel ? ShellStrings.Current.Cancel : text;
-        var button = new Button { Content = content, IsDefault = isDefault, IsCancel = isCancel };
+        var button = new Button { Content = text, IsDefault = isDefault, IsCancel = isCancel };
         AvaloniaCompactDialogChrome.ApplyButton(button, Chrome, 72, isDefault);
         button.Click += (_, _) => click();
         return button;

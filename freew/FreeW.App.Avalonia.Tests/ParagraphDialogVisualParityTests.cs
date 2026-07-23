@@ -75,7 +75,7 @@ public sealed class ParagraphDialogVisualParityTests
             "Program.cs"));
 
         avaloniaHarness.Should().Contain(
-            "scenario.RouteId is \"font\" or \"paragraph\" or \"paste-special\" or \"style\" or \"manage-styles\"");
+            "scenario.RouteId is \"font\" or \"paragraph\" or \"multilevel-list\" or \"paste-special\" or \"style\" or \"manage-styles\"");
         wpfHarness.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\"");
         wpfHarness.Should().Contain("Populate(dialog, scenario);");
     }
