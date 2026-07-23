@@ -32,7 +32,8 @@ public sealed class MailMergeCheckErrorsParityTests
     [Fact]
     public void Avalonia_check_for_errors_matches_WPF_feedback_cancel_and_focus_contract()
     {
-        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain(
             "Select recipients first (Mailings > Select Recipients), then check for errors.");

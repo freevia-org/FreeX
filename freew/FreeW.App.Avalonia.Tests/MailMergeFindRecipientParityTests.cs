@@ -33,7 +33,8 @@ public sealed class MailMergeFindRecipientParityTests
     [Fact]
     public void Avalonia_find_recipient_matches_WPF_modal_feedback_contract()
     {
-        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain(
             "Select recipients first (Mailings > Select Recipients), then find a recipient.");
