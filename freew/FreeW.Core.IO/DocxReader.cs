@@ -2479,6 +2479,19 @@ public static class DocxReader
         // A w:drawing whose anchor references a wpg:wgp group element is a floating drawing group.
         // Must be checked before every generic drawing decoder: native groups can now contain pic:pic,
         // charts, SmartArt and wps:wsp children that would otherwise claim the enclosing run.
+        // Grouped drawings can carry charts, SmartArt, and images whose relationships belong to a header/footer,
+        // comment, or note part. The modelled group writer only owns document-level child relationships, so retain
+        // a local group verbatim when it has a relationship-backed child graph.
+        if (preservedDrawingTarget is not null
+            && preservedDrawingRelationshipTargets is not null
+            && CapturePartLocalDrawingGroup(r, archive, preservedDrawingTarget, preservedDrawingRelationshipTargets) is { } localDrawingGroup)
+        {
+            var groupRun = new Run(string.Empty) { PreservedDrawing = localDrawingGroup, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(groupRun);
+            paragraph.Runs.Add(groupRun);
+            return;
+        }
+
         var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships);
         if (drawingGroup is not null)
         {
@@ -4121,6 +4134,91 @@ public static class DocxReader
         return references.Count == 0
             ? null
             : new PreservedDrawing(obj.ToString(SaveOptions.DisableFormatting), references);
+    }
+
+    /// <summary>
+    /// Preserves a relationship-backed WordprocessingDrawing group in a non-document story part. A native group
+    /// may mix pictures, charts, and SmartArt frames; all resolve through the enclosing story part rather than
+    /// document.xml.rels. Groups with only shape/text children remain modelled normally.
+    /// </summary>
+    private static PreservedDrawing? CapturePartLocalDrawingGroup(
+        XElement run,
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> partRelationshipTargets)
+    {
+        var drawing = run.Element(W + "drawing");
+        if (drawing?.Descendants(Wpg + "wgp").Any() != true)
+            return null;
+
+        var contentTypeOverrides = ReadContentTypeOverrides(archive);
+        var contentTypeDefaults = ReadContentTypeDefaults(archive);
+        var references = new List<PreservedDrawingReference>();
+        var diagramDataPartPaths = new List<string>();
+
+        string? RelationshipTypeFor(string partName)
+        {
+            if (!contentTypeOverrides.TryGetValue(partName, out var contentType))
+            {
+                var extension = partName.Contains('.') ? partName[(partName.LastIndexOf('.') + 1)..] : string.Empty;
+                contentTypeDefaults.TryGetValue(extension, out contentType);
+            }
+
+            return contentType switch
+            {
+                ChartContentType => ChartRelType,
+                ChartExContentType => ChartExRelType,
+                DiagramDataContentType => DiagramDataRelType,
+                DiagramLayoutContentType => DiagramLayoutRelType,
+                DiagramStyleContentType => DiagramStyleRelType,
+                DiagramColorsContentType => DiagramColorsRelType,
+                DiagramDrawingContentType => DiagramDrawingRelType,
+                OleObjectContentType => OleObjectRelType,
+                { } value when value.StartsWith("image/", StringComparison.OrdinalIgnoreCase) => ImageRelType,
+                _ => null
+            };
+        }
+
+        void CaptureLocalRelationship(string relationshipId)
+        {
+            if (references.Any(reference => reference.OriginalRelId == relationshipId)
+                || !partRelationshipTargets.TryGetValue(relationshipId, out var localPartPath))
+                return;
+
+            var partName = "/" + localPartPath.TrimStart('/');
+            var relationshipType = RelationshipTypeFor(partName);
+            if (relationshipType is null
+                || !CapturePreservedPart(archive, document, partName, contentTypeOverrides, contentTypeDefaults, relationshipType: null))
+                return;
+
+            CaptureReferencedParts(archive, document, partName, contentTypeOverrides, contentTypeDefaults);
+            references.Add(new PreservedDrawingReference(relationshipId, partName, relationshipType));
+            if (relationshipType == DiagramDataRelType)
+                diagramDataPartPaths.Add(localPartPath);
+        }
+
+        foreach (var relationshipId in drawing.DescendantsAndSelf()
+                     .Attributes()
+                     .Where(attribute => attribute.Name.Namespace == R)
+                     .Select(attribute => attribute.Value)
+                     .Distinct(StringComparer.Ordinal))
+            CaptureLocalRelationship(relationshipId);
+
+        // The rendered dsp:drawing is named by dgm:dataModelExt/@relId in dataN.xml but is still related from
+        // the enclosing document/story part. Capture this otherwise hidden local relationship for every group
+        // SmartArt frame.
+        foreach (var dataPartPath in diagramDataPartPaths)
+            if (LoadPart(archive, dataPartPath) is { } dataPart)
+                foreach (var relationshipId in dataPart.Descendants(Dsp + "dataModelExt")
+                             .Select(element => element.Attribute("relId")?.Value)
+                             .Where(relationshipId => relationshipId is not null)
+                             .Cast<string>()
+                             .Distinct(StringComparer.Ordinal))
+                    CaptureLocalRelationship(relationshipId);
+
+        return references.Count == 0
+            ? null
+            : new PreservedDrawing(drawing.ToString(SaveOptions.DisableFormatting), references);
     }
 
     /// <summary>
