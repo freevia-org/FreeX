@@ -80,4 +80,94 @@ public partial class PhaseCFinancialTests
         double count = Calc("COUPNUM(DATE(2023,9,1),DATE(2024,1,15),2,0)");
         count.Should().Be(1);
     }
+
+    // ── PRICE coupon-count parity for month-end maturities (CalcBondPrice) ──
+    //
+    // CalcBondPrice (BuiltInFunctions.Financial.Bonds.cs) counts the coupons between
+    // settlement and maturity to build the discounted cash-flow sum. It used to walk the
+    // schedule forward via d = d.AddMonths(months) starting from the next coupon date, which
+    // drifts the day-of-month for a month-end maturity crossing a shorter month (the same class
+    // of bug fixed in COUPNUM/COUPPCD above). Unlike DURATION/ODDFPRICE -- which gate the
+    // redemption cash flow on a date-equality test and therefore silently drop the principal when
+    // the schedule drifts -- CalcBondPrice adds the redemption unconditionally and only uses the
+    // *count* n, which stays correct because each drifted date remains in the same calendar month
+    // as the true schedule date. So there is no observable PRICE/YIELD defect; the count walk was
+    // still hardened to anchor off the original maturity to keep n exact against future changes.
+    //
+    // These tests pin that invariant: PRICE's implied coupon count must agree with the
+    // independently-anchored COUPNUM for a drift-prone month-end maturity (and for a plain one).
+
+    // Reconstruct CalcBondPrice's clean-price formula sourcing the coupon COUNT from COUPNUM and
+    // the partial-first-period fraction from COUPDAYSNC/COUPDAYS -- all anchored functions that
+    // are correct independently of CalcBondPrice's internal schedule walk. If PRICE ever miscounts
+    // coupons, it diverges from this reconstruction.
+    private double ReconstructCleanPrice(double settlement, double maturity, double rate, double yld,
+        double redemption, int frequency, int basis)
+    {
+        int n = (int)Calc($"COUPNUM({settlement},{maturity},{frequency},{basis})");
+        double daysToNext = Calc($"COUPDAYSNC({settlement},{maturity},{frequency},{basis})");
+        double daysInPeriod = Calc($"COUPDAYS({settlement},{maturity},{frequency},{basis})");
+        double a = daysInPeriod > 0 ? daysToNext / daysInPeriod : 1.0;
+        double c = rate / frequency * redemption;
+        double y = yld / frequency;
+        double price = 0;
+        for (int k = 1; k <= n; k++)
+            price += c / Math.Pow(1 + y, k - 1 + a);
+        price += redemption / Math.Pow(1 + y, n - 1 + a);
+        price -= c * (1 - a);
+        return price;
+    }
+
+    [Fact]
+    public void Price_MonthEndMaturityCrossingFebruary_UsesCoupnumAnchoredCount()
+    {
+        // Settlement 2023-08-30, Maturity 2025-08-31, semiannual (freq=2), US 30/360 (basis 0).
+        // The forward schedule from the next coupon (2023-08-31) drifts the intermediate dates
+        // (2024-02-29 -> 2024-08-29 -> 2025-02-28 -> 2025-08-28) because months are re-added to a
+        // clamped date. COUPNUM, anchored off maturity, reports 5 remaining coupons; PRICE must
+        // use the same count. A drifted miscount would make PRICE diverge from the reconstruction.
+        double settlement = Calc("DATE(2023,8,30)");
+        double maturity = Calc("DATE(2025,8,31)");
+        Calc($"COUPNUM({settlement},{maturity},2,0)").Should().Be(5);
+
+        double price = Calc($"PRICE({settlement},{maturity},0.05,0.06,100,2,0)");
+        price.Should().BeApproximately(
+            ReconstructCleanPrice(settlement, maturity, 0.05, 0.06, 100, 2, 0), 1e-9);
+
+        // Human-readable anchor: coupon (5%) < yield (6%) => below par, and the closed-form value
+        // for n=5, a=0 (30/360 makes Aug-30->Aug-31 a zero-day partial period) is ~98.14.
+        // An off-by-one count (n=4 -> ~98.59, n=6 -> ~97.71) would fall outside this band.
+        price.Should().BeApproximately(98.14, 0.05);
+        price.Should().BeLessThan(100.0);
+    }
+
+    [Fact]
+    public void Price_LeapDayMaturity_UsesCoupnumAnchoredCount()
+    {
+        // A Feb-29 maturity is the mirror drift case: its own anchored schedule already lands on
+        // day 29 (e.g. 2024-02-29 -> 2023-08-29), and a forward walk can drift further. PRICE's
+        // count must still match the anchored COUPNUM across the whole schedule.
+        double settlement = Calc("DATE(2021,5,15)");
+        double maturity = Calc("DATE(2024,2,29)");
+        int expectedCoupons = (int)Calc($"COUPNUM({settlement},{maturity},2,1)");
+
+        double price = Calc($"PRICE({settlement},{maturity},0.07,0.05,100,2,1)");
+        price.Should().BeApproximately(
+            ReconstructCleanPrice(settlement, maturity, 0.07, 0.05, 100, 2, 1), 1e-9);
+        expectedCoupons.Should().Be(6);
+    }
+
+    [Fact]
+    public void Price_NonMonthEndMaturity_MatchesCoupnumReconstruction()
+    {
+        // Sibling no-regression case: maturity 2024-01-15 has no clamped schedule candidates
+        // (day 15 exists every month), so the forward and anchored walks were always identical.
+        // PRICE must still agree with the COUPNUM-anchored reconstruction.
+        double settlement = Calc("DATE(2020,9,1)");
+        double maturity = Calc("DATE(2024,1,15)");
+
+        double price = Calc($"PRICE({settlement},{maturity},0.08,0.05,100,2,0)");
+        price.Should().BeApproximately(
+            ReconstructCleanPrice(settlement, maturity, 0.08, 0.05, 100, 2, 0), 1e-9);
+    }
 }
