@@ -589,9 +589,14 @@ public sealed partial class MainWindow
         var index = corners.IndexOf(_session.ActiveCell);
         var next = index < 0 ? range.Start : corners[(index + 1) % corners.Count];
 
-        // WorkbookSession currently models the primary selection start as the active cell. Keep the
-        // full rectangle in SelectedRanges while making the requested corner the primary active cell.
-        _session.SelectRanges(new GridRange(next, next), [range]);
+        // Keep the full rectangle selected while moving only the active cell to the requested corner --
+        // matching Excel and WPF's CycleSelectionCorner. The old form passed a 1x1 GridRange(next, next)
+        // as the primary range, collapsing SelectedRange to a single cell even though the full rectangle
+        // survived in SelectedRanges. Every consumer that reads the primary SelectedRange rather than
+        // SelectedRanges then saw just one cell: Define Name, Insert Chart and Conditional Format would
+        // target the corner cell, and multi-cell command gating (SelectedRange.RowCount/ColCount/
+        // CellCount, e.g. Merge/Sort enablement) would misreport the selection as 1x1.
+        _session.SelectRanges(range, [range], next);
         RefreshShell("Ready");
     }
 

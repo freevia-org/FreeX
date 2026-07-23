@@ -415,7 +415,22 @@ public sealed class WorkbookSession
         SelectRanges(range, [range]);
     }
 
-    public void SelectRanges(GridRange primaryRange, IReadOnlyList<GridRange> ranges)
+    public void SelectRanges(GridRange primaryRange, IReadOnlyList<GridRange> ranges) =>
+        SelectRanges(primaryRange, ranges, primaryRange.Start);
+
+    /// <summary>
+    /// Selects <paramref name="primaryRange"/> (plus any additional <paramref name="ranges"/> areas) and
+    /// pins <see cref="ActiveCell"/> to <paramref name="activeCell"/> -- the cell within the selection
+    /// that is "current" for editing and for commands that read the active cell -- while keeping the
+    /// selected rectangle itself intact. Unlike <see cref="SelectAnchoredRange"/> (which follows the
+    /// moving cursor end of a drag / shift-extend), the viewport scrolls to <paramref name="activeCell"/>
+    /// itself. Excel's Ctrl+. corner-cycling uses this to walk the active cell around the four corners of
+    /// a selection WITHOUT shrinking it (matching WPF's CycleSelectionCorner, MainWindow.Selection.cs,
+    /// which leaves SheetGrid.SelectedRange untouched and only moves _selectionAnchor). When
+    /// <paramref name="activeCell"/> falls outside <paramref name="primaryRange"/> it falls back to the
+    /// normalized top-left, preserving the active-cell-inside-selection invariant.
+    /// </summary>
+    public void SelectRanges(GridRange primaryRange, IReadOnlyList<GridRange> ranges, CellAddress activeCell)
     {
         ValidateSelectionRange(primaryRange, nameof(primaryRange));
         if (ranges.Count == 0)
@@ -424,7 +439,7 @@ public sealed class WorkbookSession
             ValidateSelectionRange(range, nameof(ranges));
 
         SetSelectedRanges(primaryRange, ranges);
-        ActiveCell = primaryRange.Start;
+        ActiveCell = primaryRange.Contains(activeCell) ? activeCell : primaryRange.Start;
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
         FormulaEditAddress = null;

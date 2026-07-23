@@ -303,6 +303,11 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
                 await Press(window, Key.OemPeriod, KeyModifiers.Control);
                 window.Session.ActiveCell.Should().Be(corner);
                 window.Session.SelectedRanges.Should().Contain(range);
+                // The full rectangle must stay the primary selection (not collapse to the 1x1 corner):
+                // Define Name, Insert Chart, Conditional Format and multi-cell command gating all read
+                // the primary SelectedRange, so a collapsed value would silently shrink the operation.
+                window.Session.SelectedRange.Should().Be(range);
+                window.Session.SelectedRange.CellCount.Should().Be(range.CellCount);
             }
         });
     }

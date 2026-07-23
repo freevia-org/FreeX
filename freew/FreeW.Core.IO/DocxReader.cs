@@ -760,7 +760,7 @@ public static class DocxReader
                 DateXml = element.Attribute(W + "date")?.Value
             };
             string? paraId = null;
-            foreach (var p in element.Elements(W + "p"))
+            foreach (var p in ReadStoryParagraphs(element))
             {
                 comment.Content.Add(ReadParagraph(
                     p,
@@ -858,7 +858,7 @@ public static class DocxReader
                 continue;
 
             var footnote = new Footnote(id);
-            foreach (var p in element.Elements(W + "p"))
+            foreach (var p in ReadStoryParagraphs(element))
                 footnote.Content.Add(ReadParagraph(
                     p,
                     archive,
@@ -903,7 +903,7 @@ public static class DocxReader
                 continue;
 
             var endnote = new Endnote(id);
-            foreach (var p in element.Elements(W + "p"))
+            foreach (var p in ReadStoryParagraphs(element))
                 endnote.Content.Add(ReadParagraph(
                     p,
                     archive,
@@ -1157,9 +1157,11 @@ public static class DocxReader
         // cells / SDTs rather than as direct children of w:hdr/w:ftr. Reading only direct-child w:p (as before)
         // recovered just the trailing empty paragraph, making the part IsEmpty so the writer dropped it — the
         // "headers dropped on round-trip" bug. Paragraphs never nest inside paragraphs in OOXML, so Descendants
-        // yields each content paragraph exactly once, in document order; we flatten any table/SDT structure to
-        // the model's paragraph list (the model carries no per-header table) but preserve all text + runs.
-        foreach (var p in root.Descendants(W + "p"))
+        // yields each content paragraph exactly once, in document order. A DrawingML text box contains its own
+        // w:p descendants, but ReadShape owns those paragraphs; flattening them here would duplicate the text
+        // when the header is saved again. We still flatten table/SDT structure to the model's paragraph list
+        // (the model carries no per-header table) and leave legacy VML text boxes on their existing path.
+        foreach (var p in ReadStoryParagraphs(root))
         {
             // FreeW's page watermark is stored in a VML-only paragraph in the header. It is also
             // represented by custom document properties. Remove only the known watermark run: Word
@@ -1190,6 +1192,11 @@ public static class DocxReader
         }
         return result;
     }
+
+    private static IEnumerable<XElement> ReadStoryParagraphs(XElement container) =>
+        container.Descendants(W + "p").Where(paragraph =>
+            !paragraph.Ancestors(W + "txbxContent")
+                .Any(textBoxContent => textBoxContent.Parent?.Name == Wps + "txbx"));
 
     /// <summary>
     /// Reads the image relationships of an arbitrary part (e.g. a header/footer part) from its own
@@ -1692,6 +1699,7 @@ public static class DocxReader
             run.Revision = revision.Kind;
             run.RevisionAuthor = revision.Author;
             run.RevisionDateXml = revision.DateXml;
+            run.MoveRevisionId = revision.MoveId;
         }
 
         paragraph.Runs.Add(run);
@@ -1730,20 +1738,62 @@ public static class DocxReader
             var tooltip = child.Attribute(W + "tooltip")?.Value;
             AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
-        else if (child.Name == W + "ins" || child.Name == W + "del")
+        else if (child.Name == W + "ins" || child.Name == W + "del" || child.Name == W + "moveTo" || child.Name == W + "moveFrom")
         {
-            // A tracked insertion (w:ins) or deletion (w:del) wraps runs, hyperlinks, and sometimes SDTs.
-            var kind = child.Name == W + "del" ? RevisionKind.Deleted : RevisionKind.Inserted;
-            var childRevision = new RevisionInfo(kind, child.Attribute(W + "author")?.Value, child.Attribute(W + "date")?.Value);
+            // Tracked moves use the same visible rendering categories as deletions/insertions, while their
+            // shared w:id preserves the move relationship for an exact package round-trip.
+            var kind = child.Name == W + "del" || child.Name == W + "moveFrom"
+                ? RevisionKind.Deleted
+                : RevisionKind.Inserted;
+            var isMove = child.Name == W + "moveFrom" || child.Name == W + "moveTo";
+            var childRevision = new RevisionInfo(
+                kind,
+                child.Attribute(W + "author")?.Value,
+                child.Attribute(W + "date")?.Value,
+                isMove && int.TryParse(child.Attribute(W + "id")?.Value, out var moveId) ? moveId : null);
             AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "sdt")
         {
             AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, preservedDrawingTarget, preservedDrawingRelationshipTargets, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
         }
+        else if (child.Name == W + "smartTag" || child.Name == W + "customXml")
+        {
+            // Legacy Word smart tags and custom-XML ranges annotate inline content. The model preserves the
+            // package custom-XML parts but not inline wrapper metadata, so retain the visible child runs.
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+        }
+        else if (child.Name == W + "dir" || child.Name == W + "bdo")
+        {
+            // Inline bidirectional containers wrap ordinary paragraph content. FreeW's run-level RTL property
+            // is the closest editable equivalent, so retain every child run and apply it to an RTL scope.
+            // LTR is already the model default and needs no synthetic run property.
+            var firstRun = paragraph.Runs.Count;
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+            if (string.Equals(child.Attribute(W + "val")?.Value, "rtl", StringComparison.OrdinalIgnoreCase))
+            {
+                for (var index = firstRun; index < paragraph.Runs.Count; index++)
+                    paragraph.Runs[index].Formatting = paragraph.Runs[index].Formatting with { Rtl = true };
+            }
+        }
+        else if (child.Name == W + "ruby")
+        {
+            AddRuby(paragraph, child, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
+        }
         else if (child.Name == W + "fldSimple")
         {
+            var firstRun = paragraph.Runs.Count;
             AddSimpleField(paragraph, child);
+            if (revision.Kind != RevisionKind.None)
+            {
+                for (var index = firstRun; index < paragraph.Runs.Count; index++)
+                {
+                    paragraph.Runs[index].Revision = revision.Kind;
+                    paragraph.Runs[index].RevisionAuthor = revision.Author;
+                    paragraph.Runs[index].RevisionDateXml = revision.DateXml;
+                    paragraph.Runs[index].MoveRevisionId = revision.MoveId;
+                }
+            }
         }
         else if (child.Name == M + "oMath")
         {
@@ -1753,6 +1803,13 @@ public static class DocxReader
             run.HyperlinkUrl = hyperlinkUrl;
             run.HyperlinkAnchor = hyperlinkAnchor;
             run.HyperlinkTooltip = hyperlinkTooltip;
+            if (revision.Kind != RevisionKind.None)
+            {
+                run.Revision = revision.Kind;
+                run.RevisionAuthor = revision.Author;
+                run.RevisionDateXml = revision.DateXml;
+                run.MoveRevisionId = revision.MoveId;
+            }
             paragraph.Runs.Add(run);
         }
         else if (child.Name == W + "bookmarkStart")
@@ -1766,6 +1823,76 @@ public static class DocxReader
                 paragraph.BookmarkNames.Add(name);
         }
     }
+
+    /// <summary>
+    /// Reads a Word phonetic guide (<c>w:ruby</c>). The base characters remain the run's fallback text so
+    /// non-ruby-aware consumers keep the visible document content, while the fragment payload round-trips.
+    /// </summary>
+    private static void AddRuby(
+        Paragraph paragraph,
+        XElement ruby,
+        int? commentId,
+        RevisionInfo revision,
+        ContentControl? control,
+        string? hyperlinkUrl,
+        string? hyperlinkAnchor,
+        string? hyperlinkTooltip)
+    {
+        var rubyPr = ruby.Element(W + "rubyPr");
+        var annotation = new RubyAnnotation
+        {
+            Alignment = ReadRubyAlignment(rubyPr?.Element(W + "rubyAlign")?.Attribute(W + "val")?.Value),
+            PhoneticSizeHalfPoints = ReadRubyHalfPoints(rubyPr?.Element(W + "hps")?.Attribute(W + "val")?.Value),
+            RaiseHalfPoints = ReadRubyHalfPoints(rubyPr?.Element(W + "hpsRaise")?.Attribute(W + "val")?.Value)
+        };
+
+        AddRubyFragments(ruby.Element(W + "rubyBase"), annotation.BaseFragments);
+        AddRubyFragments(ruby.Element(W + "rt"), annotation.PhoneticFragments);
+
+        var run = Run.FromRuby(annotation);
+        run.CommentId = commentId;
+        run.Control = control;
+        run.HyperlinkUrl = hyperlinkUrl;
+        run.HyperlinkAnchor = hyperlinkAnchor;
+        run.HyperlinkTooltip = hyperlinkTooltip;
+        if (revision.Kind != RevisionKind.None)
+        {
+            run.Revision = revision.Kind;
+            run.RevisionAuthor = revision.Author;
+            run.RevisionDateXml = revision.DateXml;
+            run.MoveRevisionId = revision.MoveId;
+        }
+
+        paragraph.Runs.Add(run);
+    }
+
+    private static void AddRubyFragments(XElement? container, List<RubyTextFragment> fragments)
+    {
+        if (container is null)
+            return;
+
+        foreach (var sourceRun in container.Elements(W + "r"))
+        {
+            var text = string.Concat(sourceRun.Elements(W + "t").Select(textElement => textElement.Value))
+                + string.Concat(sourceRun.Elements(W + "delText").Select(textElement => textElement.Value));
+            if (sourceRun.Elements(W + "tab").Any())
+                text += "\t";
+            if (text.Length > 0)
+                fragments.Add(new RubyTextFragment(text, ReadRunFormatting(sourceRun.Element(W + "rPr"))));
+        }
+    }
+
+    private static RubyAlignment ReadRubyAlignment(string? value) => value switch
+    {
+        "distributeLetter" => RubyAlignment.DistributeLetter,
+        "distributeSpace" => RubyAlignment.DistributeSpace,
+        "left" => RubyAlignment.Left,
+        "right" => RubyAlignment.Right,
+        _ => RubyAlignment.Center
+    };
+
+    private static int? ReadRubyHalfPoints(string? value) =>
+        int.TryParse(value, out var halfPoints) ? halfPoints : null;
 
     /// <summary>
     /// Reads a w:fldSimple. A recognised field (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES) becomes a
@@ -2509,8 +2636,8 @@ public static class DocxReader
         return items;
     }
 
-    /// <summary>Carries a tracked-change kind plus its author/date while reading runs inside a w:ins/w:del.</summary>
-    private readonly record struct RevisionInfo(RevisionKind Kind, string? Author, string? DateXml);
+    /// <summary>Carries a tracked-change kind plus its author/date and optional move id while reading revisions.</summary>
+    private readonly record struct RevisionInfo(RevisionKind Kind, string? Author, string? DateXml, int? MoveId = null);
 
     private static void AddRun(
         Paragraph paragraph,
@@ -2535,6 +2662,7 @@ public static class DocxReader
             run.Revision = revision.Kind;
             run.RevisionAuthor = revision.Author;
             run.RevisionDateXml = revision.DateXml;
+            run.MoveRevisionId = revision.MoveId;
         }
 
         // A w:drawing whose anchor references a wpg:wgp group element is a floating drawing group.

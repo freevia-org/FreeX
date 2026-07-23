@@ -570,7 +570,18 @@ public static class PictureStyleCatalog
 /// </summary>
 public sealed class Run(string text, RunFormatting? formatting = null)
 {
-    public string Text { get; set; } = text;
+    private string _text = text;
+
+    /// <summary>
+    /// The literal text for ordinary runs, or the concatenated base text for a ruby annotation. Keeping ruby
+    /// base fragments authoritative lets callers construct the annotation incrementally without leaving its
+    /// visible fallback stale.
+    /// </summary>
+    public string Text
+    {
+        get => Ruby?.BaseText ?? _text;
+        set => _text = value;
+    }
     public RunFormatting Formatting { get; set; } = formatting ?? RunFormatting.Default;
 
     /// <summary>Optional inline image. When non-null this run renders/serialises as a picture.</summary>
@@ -620,6 +631,17 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// <summary>Creates a run that carries inline WordArt. Its <see cref="Text"/> mirrors the WordArt text.</summary>
     public static Run FromWordArt(WordArt wordArt) =>
         new(wordArt.Text) { WordArt = wordArt };
+
+    /// <summary>
+    /// Optional Word ruby (phonetic guide) annotation. <see cref="Text"/> mirrors the base text so plain-text
+    /// consumers and renderers that do not yet paint phonetic guides still retain the visible characters.
+    /// The annotation preserves the base and guide fragments for lossless WordprocessingML round-tripping.
+    /// </summary>
+    public RubyAnnotation? Ruby { get; set; }
+
+    /// <summary>Creates a run carrying a Word ruby annotation and its base text fallback.</summary>
+    public static Run FromRuby(RubyAnnotation ruby) =>
+        new(ruby.BaseText, ruby.BaseFragments.FirstOrDefault()?.Formatting) { Ruby = ruby };
 
     /// <summary>
     /// Optional inline chart (DrawingML). When non-null this run is an inline chart rather than literal
@@ -859,6 +881,13 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public string? RevisionDateXml { get; set; }
 
     /// <summary>
+    /// The shared Word move-revision identifier (w:id on w:moveFrom/w:moveTo), or null for an ordinary
+    /// insertion/deletion. The move source still uses <see cref="RevisionKind.Deleted"/> and the destination
+    /// uses <see cref="RevisionKind.Inserted"/> so existing review rendering remains unchanged.
+    /// </summary>
+    public int? MoveRevisionId { get; set; }
+
+    /// <summary>
     /// A tracked <em>formatting</em> change on this run (Word's w:rPrChange), or null when the run's
     /// formatting was not changed under Track Changes. When set, <see cref="Formatting"/> is the new
     /// (current) formatting and <see cref="FormatRevision"/> carries the <em>previous</em> formatting plus
@@ -1028,6 +1057,35 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         {
             Control = new ContentControl(ContentControlKind.ComboBox, tag, alias, ListItems: items)
         };
+}
+
+/// <summary>A formatted fragment in the base or phonetic text of a Word ruby annotation.</summary>
+public sealed record RubyTextFragment(string Text, RunFormatting Formatting);
+
+/// <summary>
+/// WordprocessingML <c>w:ruby</c> phonetic-guide payload. The base text is the normal reading text; the
+/// phonetic text is typically rendered above it by Word. Size and raise use Word's half-point values.
+/// </summary>
+public sealed class RubyAnnotation
+{
+    public List<RubyTextFragment> BaseFragments { get; } = [];
+    public List<RubyTextFragment> PhoneticFragments { get; } = [];
+    public RubyAlignment Alignment { get; set; } = RubyAlignment.Center;
+    public int? PhoneticSizeHalfPoints { get; set; }
+    public int? RaiseHalfPoints { get; set; }
+
+    /// <summary>Concatenated base text, used by <see cref="Run.Text"/> as the visible fallback.</summary>
+    public string BaseText => string.Concat(BaseFragments.Select(fragment => fragment.Text));
+}
+
+/// <summary>Alignment values for WordprocessingML <c>w:rubyPr/w:rubyAlign</c>.</summary>
+public enum RubyAlignment
+{
+    Center,
+    DistributeLetter,
+    DistributeSpace,
+    Left,
+    Right
 }
 
 /// <summary>

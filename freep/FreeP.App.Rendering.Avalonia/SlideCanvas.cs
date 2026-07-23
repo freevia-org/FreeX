@@ -1035,7 +1035,7 @@ public sealed class SlideCanvas : Control
         dc.DrawRectangle(null, null, frameRect);
 
         if (scene.Title is { } title)
-            DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment), textColor: title.TextColor, fontFamily: title.FontFamily);
+            DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment), textColor: title.TextColor, fontFamily: title.FontFamily, maxLineCount: title.MaxLineCount);
 
         if (!scene.Frame.HasPlot)
             return;

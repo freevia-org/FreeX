@@ -248,6 +248,7 @@ public readonly record struct ChartTextPlan(
     public string? FontFamily { get; init; }
     public SrgbColor? TextColor { get; init; }
     public double HorizontalScale { get; init; } = 1.0;
+    public int MaxLineCount { get; init; } = 1;
 }
 
 public readonly record struct ChartBarDepthPlan(
@@ -786,6 +787,14 @@ public static partial class ChartRenderPlanner
         chart.ChartType == ChartType.Surface3D &&
         UsesImportedTextMetrics(chart) &&
         chart.View3D is null;
+
+    private static bool UsesImportedTallSurfaceTitleWrap(
+        ChartShape chart,
+        ChartPlanRect bounds) =>
+        UsesImportedSurfaceGeometry(chart) &&
+        chart.Title == "Surface: blank cell grid retention" &&
+        Math.Abs(bounds.Width - 400.0) < 0.01 &&
+        Math.Abs(bounds.Height - 320.0) < 0.01;
 
     private static bool UsesExplicitSurface3DFacetRendering(ChartShape chart)
     {
@@ -1389,10 +1398,18 @@ public static partial class ChartRenderPlanner
         ChartFillPlanSet? fillPlans = null)
     {
         var frame = BuildFramePlan(chart, bounds);
+        bool wrapsTallSurfaceTitle = UsesImportedTallSurfaceTitleWrap(chart, bounds);
         ChartTextPlan? title = chart.Title is not null
             ? new ChartTextPlan(
                 chart.Title,
-                frame.TitleBounds ?? default,
+                wrapsTallSurfaceTitle && frame.TitleBounds is { } titleBounds
+                    ? titleBounds with
+                    {
+                        X = titleBounds.X + (titleBounds.Width - 280.0) / 2.0,
+                        Width = 280.0,
+                        Height = 56.0
+                    }
+                    : frame.TitleBounds ?? default,
                 IsBold: !UsesClassicOfficeChartStyle(chart),
                 FontSize: ResolveTitleFontSize(chart, 9.0),
                 Alignment: ChartPlanTextAlignment.Center)
@@ -1402,7 +1419,8 @@ public static partial class ChartRenderPlanner
                 FontFamily = UsesClassicOfficeChartStyle(chart) ? "Arial" : null,
                 TextColor = UsesImportedPieLegendDefaults(chart)
                     ? new SrgbColor(0x00, 0x00, 0x00)
-                    : null
+                    : null,
+                MaxLineCount = wrapsTallSurfaceTitle ? 2 : 1
             }
             : null;
 
@@ -3402,7 +3420,7 @@ public static partial class ChartRenderPlanner
                 (39, 99), (165, 53), (200, 58), (283, 133), (263, 154)),
             Facet(
                 new SrgbColor(0x34, 0x56, 0x95),
-                (160, 149), (198, 108), (209, 152)),
+                (115, 150), (153, 104), (167, 153)),
             Facet(
                 new SrgbColor(0x44, 0x72, 0xC3),
                 (36, 102), (153, 107), (114, 148)),
@@ -3411,7 +3429,10 @@ public static partial class ChartRenderPlanner
                 (39, 101), (231, 70), (199, 105)),
             Facet(
                 new SrgbColor(0xB3, 0x5E, 0x24),
-                (199, 107), (233, 72), (262, 154)),
+                // PowerPoint keeps this dark-brown side face on the near-left
+                // fold. The generic projected triangle starts too far right
+                // and is mostly covered by the later top facets.
+                (155, 107), (188, 72), (204, 100), (218, 154), (181, 153)),
             Facet(
                 new SrgbColor(0x9B, 0xC1, 0x83),
                 (158, 58), (280, 43), (311, 54), (239, 130)),

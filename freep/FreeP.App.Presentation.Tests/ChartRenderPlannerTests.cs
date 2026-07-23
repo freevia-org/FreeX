@@ -39,6 +39,31 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_TallImportedSurfaceWrapsItsPowerPointTitle()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Surface3D,
+            Title = "Surface: blank cell grid retention",
+            TextStyle = new ChartTextStyle { FontSizePt = 18.0 }
+        };
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 400, 320));
+
+        scene.Title.Should().NotBeNull();
+        scene.Title!.Value.MaxLineCount.Should().Be(2);
+        scene.Title.Value.Bounds.Should().Be(new ChartPlanRect(60, 11, 280, 56));
+
+        var shortFrame = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 480, 288));
+
+        shortFrame.Title!.Value.MaxLineCount.Should().Be(1);
+    }
+
+    [Fact]
     public void BuildScenePlan_CorpusFamiliesCarryGeometryInSharedPlan()
     {
         var scatter = MakeTwoSeriesChart(ChartType.Scatter);
