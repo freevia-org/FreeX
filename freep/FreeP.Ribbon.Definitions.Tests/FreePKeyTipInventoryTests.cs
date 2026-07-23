@@ -26,7 +26,7 @@ public sealed class FreePKeyTipInventoryTests
                 group.KeyTip.Should().NotBeNullOrWhiteSpace(
                     $"group {tab.Id}/{group.Id} must be keyboard reachable");
                 var actionable = group.Controls
-                    .Where(control => control is not RibbonSeparator and not RibbonComboBox)
+                    .Where(control => control is not RibbonSeparator and not RibbonRowBreak and not RibbonLabel)
                     .ToArray();
                 actionable.Should().OnlyContain(
                     control => !string.IsNullOrWhiteSpace(control.KeyTip),
@@ -60,6 +60,31 @@ public sealed class FreePKeyTipInventoryTests
 
             avalonia[commandId].Should().Be(wpf[commandId],
                 $"shared command {commandId} must keep the same KeyTip");
+        }
+    }
+
+    [Fact]
+    public void ComboBoxKeyTipsMatchCanonicalWpfInventoryInBothProfiles()
+    {
+        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["freep.font-family"] = "FON",
+            ["freep.font-size"] = "SIZ",
+            ["freep.font-color"] = "FC",
+            ["freep.transition.duration"] = "DUR",
+            ["freep.transition.advance-after"] = "AFT",
+            ["freep.anim.trigger"] = "STA",
+            ["freep.anim.duration"] = "DUR",
+            ["freep.anim.delay"] = "DEL",
+        };
+        var wpf = FlattenControls(FreePRibbon.Build(FreePRibbonCapabilities.Wpf));
+        var avalonia = FlattenControls(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia));
+
+        foreach (var (commandId, keyTip) in expected)
+        {
+            wpf[commandId].Should().Be(keyTip, $"WPF combo {commandId} owns the canonical KeyTip");
+            avalonia[commandId].Should().Be(wpf[commandId],
+                $"Avalonia combo {commandId} must reuse the WPF KeyTip");
         }
     }
 

@@ -151,6 +151,15 @@
   <data name="Ribbon_Command_FontColor_Label" xml:space="preserve">
     <value>Font Color</value>
   </data>
+  <data name="Ribbon_Command_FontFamily_KeyTip" xml:space="preserve">
+    <value>FON</value>
+  </data>
+  <data name="Ribbon_Command_FontSize_KeyTip" xml:space="preserve">
+    <value>SIZ</value>
+  </data>
+  <data name="Ribbon_Command_FontColor_KeyTip" xml:space="preserve">
+    <value>FC</value>
+  </data>
   <data name="Ribbon_Command_Bullets_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
@@ -811,6 +820,9 @@
   <data name="Ribbon_Command_TransitionDuration_Label" xml:space="preserve">
     <value>Duration</value>
   </data>
+  <data name="Ribbon_Command_TransitionDuration_KeyTip" xml:space="preserve">
+    <value>DUR</value>
+  </data>
   <data name="Ribbon_Command_TransitionAdvanceOnClick_Label" xml:space="preserve">
     <value>On Mouse Click</value>
   </data>
@@ -819,6 +831,9 @@
   </data>
   <data name="Ribbon_Command_TransitionAdvanceAfter_Label" xml:space="preserve">
     <value>After</value>
+  </data>
+  <data name="Ribbon_Command_TransitionAdvanceAfter_KeyTip" xml:space="preserve">
+    <value>AFT</value>
   </data>
   <data name="Ribbon_Command_TransitionApplyAll_Label" xml:space="preserve">
     <value>Apply To All</value>
@@ -1066,11 +1081,20 @@
   <data name="Ribbon_Command_AnimationTrigger_Label" xml:space="preserve">
     <value>Start</value>
   </data>
+  <data name="Ribbon_Command_AnimationTrigger_KeyTip" xml:space="preserve">
+    <value>STA</value>
+  </data>
   <data name="Ribbon_Command_AnimationDuration_Label" xml:space="preserve">
     <value>Duration</value>
   </data>
+  <data name="Ribbon_Command_AnimationDuration_KeyTip" xml:space="preserve">
+    <value>DUR</value>
+  </data>
   <data name="Ribbon_Command_AnimationDelay_Label" xml:space="preserve">
     <value>Delay</value>
+  </data>
+  <data name="Ribbon_Command_AnimationDelay_KeyTip" xml:space="preserve">
+    <value>DEL</value>
   </data>
   <data name="Ribbon_Command_AnimationMoveEarlier_Label" xml:space="preserve">
     <value>Move Earlier</value>

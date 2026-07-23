@@ -1,10 +1,14 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Free.Shared.Drawing;
+using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -110,6 +114,188 @@ public sealed class KeyboardContextParityTests
             finally
             {
                 window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaAltKeyTipsEnterDropdownMenuAndExecuteNestedMenuCommand()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var shape = new SlideShape { Id = 703, Name = "Animation target" };
+                window.Editor.CurrentSlide!.Shapes.Add(shape);
+                window.Editor.Select(shape.Id);
+
+                Press(window, Key.LeftAlt).Handled.Should().BeTrue();
+                Press(window, Key.A).Handled.Should().BeTrue(); // Animations tab
+                Press(window, Key.N).Handled.Should().BeTrue(); // Animation group
+                Press(window, Key.B).Handled.Should().BeTrue(); // Blinds In dropdown prefix
+                Press(window, Key.I).Handled.Should().BeTrue(); // Blinds In dropdown
+                window.RibbonKeyTipMenuOpenForTests.Should().BeTrue();
+                Press(window, Key.C).Handled.Should().BeTrue(); // Checkerboard In menu prefix
+                Press(window, Key.I).Handled.Should().BeTrue(); // Checkerboard In menu item
+
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+                window.RibbonKeyTipMenuOpenForTests.Should().BeFalse();
+                window.Editor.CurrentSlide.Animations.Should().ContainSingle(animation =>
+                    animation.ShapeId == shape.Id && animation.Preset == AnimationPreset.Checkerboard);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaAltKeyTipsCancelAndRejectUnmatchedDropdownMenuInput()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                Press(window, Key.LeftAlt);
+                Press(window, Key.A);
+                Press(window, Key.N);
+                Press(window, Key.B);
+                Press(window, Key.I);
+                window.RibbonKeyTipMenuOpenForTests.Should().BeTrue();
+
+                Press(window, Key.Escape).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+                window.RibbonKeyTipMenuOpenForTests.Should().BeFalse();
+
+                Press(window, Key.LeftAlt);
+                Press(window, Key.A);
+                Press(window, Key.N);
+                Press(window, Key.B);
+                Press(window, Key.I);
+                Press(window, Key.Q).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+                window.RibbonKeyTipMenuOpenForTests.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaAltKeyTipsDoNotExecuteDisabledNestedMenuCommand()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var disabled = new DisabledRibbonCommand();
+            try
+            {
+                window.RibbonCommandRegistryForTests.Register(
+                    new RibbonCommandId("freep.anim.entrance.checkerboard"),
+                    disabled);
+
+                Press(window, Key.LeftAlt);
+                Press(window, Key.A);
+                Press(window, Key.N);
+                Press(window, Key.B);
+                Press(window, Key.I);
+                Press(window, Key.C);
+                Press(window, Key.I).Handled.Should().BeTrue();
+
+                disabled.ExecuteCount.Should().Be(0);
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+                window.RibbonKeyTipMenuOpenForTests.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaAltKeyTipsOpenComboBoxAndLeaveLeafCommandsUntouched()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                var combo = window.RibbonControlForTests!
+                    .GetLogicalDescendants()
+                    .OfType<ComboBox>()
+                    .First(control => Equals(control.Tag, "freep.font-family"));
+                var definition = FreePRibbonAvalonia.Build();
+                var home = definition.Tabs.Single(tab => tab.Id == "home");
+                var font = home.Groups.Single(group => group.Id == "font");
+                var comboDefinition = font.Controls.Single(control => control.CommandId.Value == "freep.font-family");
+
+                Press(window, Key.LeftAlt).Handled.Should().BeTrue();
+                PressKeyTip(window, home.KeyTip!);
+                PressKeyTip(window, font.KeyTip!);
+                PressKeyTip(window, comboDefinition.KeyTip!);
+
+                combo.IsDropDownOpen.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+                window.RibbonKeyTipMenuOpenForTests.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task RendererBackedLargeSplitKeyTipLookupOpensDropdownFlyout()
+    {
+        await Session.Dispatch(() =>
+        {
+            var commandId = new RibbonCommandId("test.large-split");
+            var menuCommandId = new RibbonCommandId("test.large-split.menu");
+            var definition = new RibbonDefinitionBuilder()
+                .Tab("home", "Home", "H", tab => tab.Group("clipboard", "Clipboard", "C", 100, group =>
+                    group.SplitButton(
+                        commandId.Value,
+                        "Paste",
+                        new RibbonMenu([new RibbonMenuItem("Paste Special", menuCommandId, "S")]),
+                        split => split with { PreferredLayout = RibbonCommandLayoutKind.Large })))
+                .Build();
+            var registry = new RibbonCommandRegistry();
+            registry.Register(commandId, new ActionRibbonCommand(() => { }));
+            registry.Register(menuCommandId, new ActionRibbonCommand(() => { }));
+            var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
+            var host = new Window
+            {
+                Width = 600,
+                Height = 200,
+                Content = ribbon,
+            };
+            FlyoutBase? flyout = null;
+            try
+            {
+                host.Show();
+                var dropdown = ribbon
+                    .GetVisualDescendants()
+                    .OfType<Button>()
+                    .Single(button => Equals(button.Tag, $"{commandId.Value}.Dropdown"));
+
+                dropdown.Flyout.Should().NotBeNull();
+                flyout = MainWindow.ShowRibbonFlyout(ribbon, commandId);
+
+                flyout.Should().BeSameAs(dropdown.Flyout);
+                flyout!.IsOpen.Should().BeTrue();
+            }
+            finally
+            {
+                flyout?.Hide();
+                host.Close();
             }
         }, CancellationToken.None);
     }
@@ -250,6 +436,17 @@ public sealed class KeyboardContextParityTests
         return args;
     }
 
+    private static void PressKeyTip(MainWindow window, string keyTip)
+    {
+        foreach (var character in keyTip)
+        {
+            var key = char.IsAsciiDigit(character)
+                ? Enum.Parse<Key>("D" + character)
+                : Enum.Parse<Key>(char.ToUpperInvariant(character).ToString());
+            Press(window, key).Handled.Should().BeTrue();
+        }
+    }
+
     private static KeyEventArgs RoutedKey(Key key, KeyModifiers modifiers, object source) => new()
     {
         RoutedEvent = InputElement.KeyDownEvent,
@@ -257,4 +454,13 @@ public sealed class KeyboardContextParityTests
         KeyModifiers = modifiers,
         Source = source,
     };
+
+    private sealed class DisabledRibbonCommand : IRibbonStatefulCommand
+    {
+        public int ExecuteCount { get; private set; }
+
+        public void Execute(RibbonCommandContext context) => ExecuteCount++;
+
+        public RibbonCommandState GetState() => new(IsEnabled: false);
+    }
 }

@@ -5,9 +5,11 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
@@ -223,6 +225,8 @@ public sealed partial class MainWindow : Window
     private string? _ribbonKeyTipTabId;
     private string? _ribbonKeyTipGroupId;
     private string _ribbonKeyTipSequence = string.Empty;
+    private IReadOnlyList<RibbonMenuItem>? _ribbonKeyTipMenuItems;
+    private FlyoutBase? _ribbonKeyTipFlyout;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
 
@@ -241,6 +245,8 @@ public sealed partial class MainWindow : Window
     /// <summary>Current slide index (0-based) — read by the launch-smoke coordinator.</summary>
     internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
     internal bool RibbonKeyTipsVisibleForTests => _ribbonKeyTipsVisible;
+    internal bool RibbonKeyTipMenuOpenForTests => _ribbonKeyTipMenuItems is not null;
+    internal RibbonCommandRegistry RibbonCommandRegistryForTests => _ribbonCommandRegistry!;
     internal Control? RibbonControlForTests => _ribbonControl;
     internal Border TitleBarForTests => _titleBar;
     internal IReadOnlyList<Button> QuickAccessButtonsForTests => _quickAccessButtons;
@@ -6548,6 +6554,13 @@ public sealed partial class MainWindow : Window
             return true;
         }
 
+        if (_ribbonKeyTipMenuItems is not null)
+        {
+            SetRibbonKeyTipsVisible(false);
+            args.Handled = true;
+            return true;
+        }
+
         // WPF keeps key-tip mode active after an unmatched character, so the
         // user can recover with another key or Escape without invoking a document shortcut.
         _ribbonKeyTipSequence = string.Empty;
@@ -6557,6 +6570,11 @@ public sealed partial class MainWindow : Window
 
     private void SetRibbonKeyTipsVisible(bool visible)
     {
+        if (!visible)
+            _ribbonKeyTipFlyout?.Hide();
+
+        _ribbonKeyTipFlyout = null;
+        _ribbonKeyTipMenuItems = null;
         _ribbonKeyTipsVisible = visible;
         _ribbonKeyTipTabId = null;
         _ribbonKeyTipGroupId = null;
@@ -6567,6 +6585,9 @@ public sealed partial class MainWindow : Window
 
     private bool TryHandleNestedRibbonKeyTip(string token)
     {
+        if (_ribbonKeyTipMenuItems is not null)
+            return TryHandleRibbonMenuKeyTip(token);
+
         var tab = _ribbonDefinition?.FindTab(_ribbonKeyTipTabId!);
         if (tab is null)
             return false;
@@ -6609,21 +6630,137 @@ public sealed partial class MainWindow : Window
             KeyTipStartsWith(control.KeyTip, _ribbonKeyTipSequence));
     }
 
-    private bool TryExecuteRibbonKeyTipCommand(RibbonControl control)
+    private bool TryHandleRibbonMenuKeyTip(string token)
     {
-        if (control is RibbonSeparator or RibbonRowBreak or RibbonComboBox or RibbonLabel ||
-            _ribbonCommandRegistry is null ||
-            !_ribbonCommandRegistry.TryGet(control.CommandId, out var command) ||
-            command is null)
+        var items = _ribbonKeyTipMenuItems;
+        if (items is null)
             return false;
 
-        if (command is IRibbonStatefulCommand stateful && !stateful.GetState().IsEnabled)
+        _ribbonKeyTipSequence += token;
+        var exactItem = items.FirstOrDefault(item =>
+            KeyTipEquals(item.KeyTip, _ribbonKeyTipSequence));
+        if (exactItem is not null)
+        {
+            if (!exactItem.IsEnabled)
+                return false;
+
+            if (exactItem.Children.Count > 0)
+            {
+                _ribbonKeyTipMenuItems = exactItem.Children;
+                _ribbonKeyTipSequence = string.Empty;
+                return true;
+            }
+
+            if (exactItem.CommandId is not { } commandId || !TryExecuteRibbonKeyTipCommand(commandId))
+                return false;
+
+            return true;
+        }
+
+        return items.Any(item =>
+            item.IsEnabled && KeyTipStartsWith(item.KeyTip, _ribbonKeyTipSequence));
+    }
+
+    private bool TryExecuteRibbonKeyTipCommand(RibbonControl control)
+    {
+        if (control is RibbonSeparator or RibbonRowBreak or RibbonLabel)
+            return false;
+
+        if (!IsRibbonCommandEnabled(control.CommandId))
+            return false;
+
+        if (control is RibbonComboBox)
+        {
+            var combo = FindRibbonComboBox(control.CommandId);
+            if (combo is null)
+                return false;
+
+            combo.Focus();
+            combo.IsDropDownOpen = true;
+            SetRibbonKeyTipsVisible(false);
+            return true;
+        }
+
+        if (control is RibbonSplitButton split && split.Menu.Items.Count > 0)
+            return EnterRibbonMenuKeyTipScope(split, split.Menu);
+
+        if (control is RibbonDropdown dropdown && dropdown.Menu.Items.Count > 0)
+            return EnterRibbonMenuKeyTipScope(dropdown, dropdown.Menu);
+
+        if (_ribbonCommandRegistry is null ||
+            !_ribbonCommandRegistry.TryGet(control.CommandId, out var command) ||
+            command is null)
             return false;
 
         command.Execute(RibbonCommandContext.Empty);
         SetRibbonKeyTipsVisible(false);
         return true;
     }
+
+    private bool TryExecuteRibbonKeyTipCommand(RibbonCommandId commandId)
+    {
+        if (!IsRibbonCommandEnabled(commandId) ||
+            _ribbonCommandRegistry is null ||
+            !_ribbonCommandRegistry.TryGet(commandId, out var command) ||
+            command is null)
+            return false;
+
+        command.Execute(RibbonCommandContext.Empty);
+        SetRibbonKeyTipsVisible(false);
+        return true;
+    }
+
+    private bool IsRibbonCommandEnabled(RibbonCommandId commandId)
+    {
+        if (_ribbonCommandRegistry is null ||
+            !_ribbonCommandRegistry.TryGet(commandId, out var command) ||
+            command is null)
+            return false;
+
+        return command is not IRibbonStatefulCommand stateful || stateful.GetState().IsEnabled;
+    }
+
+    private bool EnterRibbonMenuKeyTipScope(RibbonControl control, RibbonMenu menu)
+    {
+        _ribbonKeyTipMenuItems = menu.Items;
+        _ribbonKeyTipSequence = string.Empty;
+        _ribbonKeyTipFlyout = ShowRibbonFlyout(control.CommandId);
+        return true;
+    }
+
+    private FlyoutBase? ShowRibbonFlyout(RibbonCommandId commandId)
+    {
+        if (_ribbonControl is null)
+            return null;
+
+        return ShowRibbonFlyout(_ribbonControl, commandId);
+    }
+
+    internal static FlyoutBase? ShowRibbonFlyout(Control ribbon, RibbonCommandId commandId)
+    {
+        var buttons = ribbon
+            .GetVisualDescendants()
+            .OfType<Button>()
+            .Where(candidate => candidate.Flyout is not null)
+            .ToArray();
+        var dropdownTag = $"{commandId.Value}.Dropdown";
+        var button = buttons.FirstOrDefault(candidate =>
+                string.Equals(candidate.Tag as string, dropdownTag, StringComparison.Ordinal))
+            ?? buttons.FirstOrDefault(candidate =>
+                string.Equals(candidate.Tag as string, commandId.Value, StringComparison.Ordinal));
+        if (button?.Flyout is not { } flyout)
+            return null;
+
+        flyout.ShowAt(button);
+        return flyout;
+    }
+
+    private ComboBox? FindRibbonComboBox(RibbonCommandId commandId) =>
+        _ribbonControl?
+            .GetLogicalDescendants()
+            .OfType<ComboBox>()
+            .FirstOrDefault(combo =>
+                string.Equals(combo.Tag as string, commandId.Value, StringComparison.Ordinal));
 
     private string? GetSelectedRibbonTabId()
         => (_ribbonControl as TabControl)?.SelectedItem is TabItem { Tag: string tabId }

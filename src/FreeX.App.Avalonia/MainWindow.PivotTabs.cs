@@ -27,6 +27,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void RefreshPivotContextualTab()
         => _ribbonContextSource.OnPivotActive(
+            _selectedDrawingObjectKind is null &&
             PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
 
     /// <summary>

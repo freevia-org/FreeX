@@ -2129,6 +2129,8 @@ public sealed partial class MainWindow
             _ribbonContextSource.OnDrawingObjectSelected(kind);
         else
             _ribbonContextSource.OnSelectionCleared();
+        RefreshTableContextualTab();
+        RefreshPivotContextualTab();
         RefreshShell(_statusText.Text ?? "Ready");
     }
 
