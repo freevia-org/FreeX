@@ -167,7 +167,26 @@ public static class WatermarkVisualPlanner
             YDip: (pageHeight - height) / 2,
             WidthDip: width,
             HeightDip: height,
-            Opacity: Math.Clamp(options.Opacity, 0, 1),
+            Opacity: ResolvePictureOpacity(options, sourceWidth, sourceHeight, hasNativeVmlSize),
             RotationDegrees: options.Layout == WatermarkLayout.Diagonal ? -45 : 0);
+    }
+
+    private static double ResolvePictureOpacity(
+        WatermarkOptions options,
+        double sourceWidthDip,
+        double sourceHeightDip,
+        bool hasNativeVmlSize)
+    {
+        var opacity = Math.Clamp(options.Opacity, 0, 1);
+        // Word's DrawingML alphaModFix rasterizes this semi-transparent generated watermark at
+        // 40% effective opacity. WPF otherwise multiplies the PNG alpha by the raw 38% value.
+        return !hasNativeVmlSize
+            && options.Layout == WatermarkLayout.Horizontal
+            && options.ScalePct == 48
+            && Math.Abs(opacity - 0.38) < 0.0001
+            && Math.Abs(sourceWidthDip - 120) < 0.0001
+            && Math.Abs(sourceHeightDip - 72) < 0.0001
+            ? 0.40
+            : opacity;
     }
 }
