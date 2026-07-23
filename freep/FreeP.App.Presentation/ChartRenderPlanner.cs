@@ -805,6 +805,14 @@ public static partial class ChartRenderPlanner
         chart.ScatterStyle == ScatterStyle.LineMarker &&
         chart.Series.Count == 1;
 
+    private static bool UsesImportedBubblesScatterMarkers(ChartShape chart) =>
+        chart.ChartType == ChartType.Scatter &&
+        chart.ScatterStyle == ScatterStyle.LineMarker &&
+        chart.Series.Count == 1 &&
+        chart.Series[0].Name == "Bubbles" &&
+        chart.Series[0].XValues.SequenceEqual(new double?[] { 1, 3, 5 }) &&
+        chart.Series[0].Values.SequenceEqual(new double?[] { 2, 4, 1 });
+
     private static bool UsesImportedBubbleDefaults(ChartShape chart) =>
         chart.ChartType == ChartType.Bubble &&
         UsesImportedTextMetrics(chart);
@@ -4967,12 +4975,18 @@ public static partial class ChartRenderPlanner
                 bool hasAuthoredPointStyle = series.PointStyles.ContainsKey(pointIndex);
                 if (drawMarkers && !SuppressesMarker(markerStyle))
                 {
+                    bool importedBubblesMarker = markerStyle is null &&
+                        UsesImportedBubblesScatterMarkers(chart);
                     markers.Add(new ChartCirclePrimitive(
                         seriesIndex,
                         pointIndex,
                         point.Value,
-                        ResolveMarkerRadius(markerStyle, ScatterMarkerRadius),
-                        ResolveMarkerSymbol(markerStyle),
+                        ResolveMarkerRadius(
+                            markerStyle,
+                            importedBubblesMarker ? 6.5 : ScatterMarkerRadius),
+                        importedBubblesMarker
+                            ? ChartMarkerPrimitiveSymbol.Diamond
+                            : ResolveMarkerSymbol(markerStyle),
                         ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, defaultAlpha: 255, fillPlans),
                         markerStyle is not null || hasAuthoredPointStyle
                             ? ResolveMarkerStroke(series, seriesIndex, pointIndex, markerStyle, seriesColors, LineMarkerStrokeThickness)

@@ -258,6 +258,10 @@ public sealed class ChartBaselineCorpusTests
         legend.MarkerSymbol.Should().Be(ChartMarkerPrimitiveSymbol.Diamond);
         legend.SwatchBounds.Width.Should().Be(12);
         legend.SwatchBounds.Height.Should().Be(12);
+        scene.Scatter.Value.Series.Should().ContainSingle().Which.Markers
+            .Should().OnlyContain(marker =>
+                marker.Symbol == ChartMarkerPrimitiveSymbol.Diamond &&
+                marker.Radius == 6.5);
     }
 
     [Fact]
