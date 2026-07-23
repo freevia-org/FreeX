@@ -794,6 +794,15 @@ public sealed class ChartBaselineCorpusTests
             new SrgbColor(0xA9, 0xD1, 0x8D),
             new SrgbColor(0x91, 0xB5, 0x7C),
             new SrgbColor(0xEB, 0xB1, 0x00));
+
+        geometry.WpfRenderFacets.Single(facet =>
+                facet.Fill.Color == new SrgbColor(0xB3, 0x5E, 0x24))
+            .Points.Should().Equal(
+                new ChartPlanPoint(155, 107),
+                new ChartPlanPoint(188, 72),
+                new ChartPlanPoint(204, 100),
+                new ChartPlanPoint(218, 154),
+                new ChartPlanPoint(181, 153));
     }
 
     [Fact]
