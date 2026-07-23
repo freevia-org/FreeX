@@ -239,7 +239,7 @@ public static class DocxWriter
         {
             WritePart(archive, "word/" + part.FileName,
                 BuildHeaderFooter(part.IsHeader ? W + "hdr" : W + "ftr", part));
-            if (part.Images.Count > 0)
+            if (part.Images.Count > 0 || part.PreservedDrawings.Count > 0)
             {
                 WritePart(archive, "word/_rels/" + part.FileName + ".rels", BuildHeaderFooterRels(part));
                 foreach (var image in part.Images)
@@ -541,8 +541,15 @@ public static class DocxWriter
         string FileName,
         string RelationshipId,
         IReadOnlyList<ImagePart> Images,
+        IReadOnlyList<HeaderFooterPreservedDrawingPart> PreservedDrawings,
         WatermarkOptions? Watermark,
         ImagePart? WatermarkImage);
+
+    /// <summary>A header/footer-local relationship for a preserved chart drawing.</summary>
+    private sealed record HeaderFooterPreservedDrawingPart(
+        string PartName,
+        string RelationshipId,
+        string RelationshipType);
 
     /// <summary>
     /// Walks every section (the final/body-level section first, then each non-final section in document
@@ -591,6 +598,7 @@ public static class DocxWriter
                 var fileName = (isHeader ? "header" : "footer") + index + ".xml";
                 var relationshipId = (isHeader ? "rIdHeader" : "rIdFooter") + index;
                 var images = CollectHeaderFooterImages(content, fileName, usedPartNames);
+                var preservedDrawings = CollectHeaderFooterPreservedDrawings(content, document.Preserved.Parts);
                 ImagePart? watermarkImage = null;
                 if (watermark?.IsPicture == true)
                 {
@@ -618,6 +626,7 @@ public static class DocxWriter
                     fileName,
                     relationshipId,
                     images,
+                    preservedDrawings,
                     watermark,
                     watermarkImage));
             }
@@ -691,6 +700,36 @@ public static class DocxWriter
                 if (run.Image is not null && next < part.Images.Count)
                     map[run] = part.Images[next++];
         return map;
+    }
+
+    /// <summary>
+    /// Assigns a header/footer-local relationship to each preserved chart part referenced by its runs. Preserved
+    /// body drawings keep their document-level relationships; a header/footer drawing must instead resolve its
+    /// r:id against this part's own _rels file.
+    /// </summary>
+    private static IReadOnlyList<HeaderFooterPreservedDrawingPart> CollectHeaderFooterPreservedDrawings(
+        HeaderFooter content,
+        IReadOnlyList<PreservedPart> preservedParts)
+    {
+        var preservedByName = preservedParts.ToDictionary(part => part.PartName, StringComparer.Ordinal);
+        var result = new List<HeaderFooterPreservedDrawingPart>();
+        foreach (var paragraph in content.Paragraphs)
+            foreach (var run in paragraph.Runs)
+                if (run.PreservedDrawing is { } drawing)
+                    foreach (var reference in drawing.References)
+                    {
+                        if (result.Any(part => part.PartName == reference.PreservedPartName)
+                            || !preservedByName.TryGetValue(reference.PreservedPartName, out var preservedPart))
+                            continue;
+                        var relationshipType = preservedPart.ContentTypeOverride == ChartExContentType
+                            ? ChartExRelType
+                            : ChartRelType;
+                        result.Add(new HeaderFooterPreservedDrawingPart(
+                            reference.PreservedPartName,
+                            $"rIdPreservedChart{result.Count + 1}",
+                            relationshipType));
+                    }
+        return result;
     }
 
     /// <summary>Maps each distinct hyperlink URL to one external relationship id (rIdLinkN).</summary>
@@ -1288,9 +1327,8 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
 
-        // Header/footer runs may carry inline images; their part-local image parts are mapped here. They never
-        // carry charts/embedded objects/SmartArt/document hyperlinks (those walks target the body), so those
-        // maps stay empty. The IdAllocator is part-local so drawing ids are isolated from the body.
+        // Header/footer runs may carry inline images and verbatim-preserved charts; each resolves through the
+        // header/footer's local relationships. Other drawing maps remain empty. The IdAllocator is part-local.
         var hasImages = part.Images.Count > 0;
         if (hasImages)
         {
@@ -1307,7 +1345,13 @@ public static class DocxWriter
         }
 
         var imagesByRun = hasImages ? BuildHeaderFooterImagesByRun(part) : new Dictionary<Run, ImagePart>();
-        var drawings = RunDrawings.Empty() with { Images = imagesByRun };
+        var preservedDrawingRelIds = part.PreservedDrawings
+            .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal);
+        var drawings = RunDrawings.Empty() with
+        {
+            Images = imagesByRun,
+            PreservedDrawingRelIds = preservedDrawingRelIds
+        };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         if (part.Watermark is not null)
@@ -6657,6 +6701,11 @@ public static class DocxWriter
                 image.RelationshipId,
                 ImageRel,
                 "media/" + image.FileName));
+        foreach (var drawing in part.PreservedDrawings)
+            relationships.Add(OpcRelationships.CreateRelationship(
+                drawing.RelationshipId,
+                drawing.RelationshipType,
+                DocumentRelativeTarget(drawing.PartName)));
         return new XDocument(relationships);
     }
 

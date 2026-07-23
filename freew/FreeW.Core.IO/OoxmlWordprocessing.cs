@@ -53,8 +53,10 @@ internal static class Ooxml
     /// and by the a:graphicData that references the chart from the inline w:drawing.
     /// </summary>
     public static readonly XNamespace C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    public static readonly XNamespace Cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
 
     public const string ChartContentType = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+    public const string ChartExContentType = "application/vnd.ms-office.chartex+xml";
     public const string ChartRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
 
     /// <summary>
