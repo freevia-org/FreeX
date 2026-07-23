@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 using FluentAssertions;
+using FreeX.Core.Model;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -26,6 +27,17 @@ public sealed class XlsxStylesheetGradientFillWhitespaceRegressionTests
     [Fact]
     public void Preserve_DoesNotThrow_WhenSourceGradientFillHasInsignificantWhitespace()
     {
+        var gradientSpec = new CellGradientFill
+        {
+            Degree = 90,
+            Stops =
+            [
+                new CellGradientStop(0, new CellColor(0xFF, 0x00, 0x00)),
+                new CellGradientStop(1, new CellColor(0x00, 0x00, 0xFF)),
+            ],
+        };
+        var placeholderHex = ToArgbHex(XlsxClosedXmlCellMapper.ComputeGradientPlaceholderColor(gradientSpec));
+
         // Source fill[1] wraps <gradientFill> with indentation/newlines, exactly as a
         // pretty-printing tool (or a bare XDocument.Save with default formatting) would emit.
         using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(("xl/styles.xml", StyleSheet(
@@ -52,13 +64,13 @@ public sealed class XlsxStylesheetGradientFillWhitespaceRegressionTests
             """)));
 
         // Rebuilt target: the gradient's cell now carries a solid placeholder fill whose foreground
-        // is the gradient's first-stop colour (FFFF0000) — exactly what a full ClosedXML rebuild +
+        // is the gradient's stamped placeholder colour — exactly what a full ClosedXML rebuild +
         // ApplyStyle produces. The preserver correlates by that colour and swaps the gradient back in.
         using var targetPackage = XlsxPackageTestFixtures.CreatePackage(("xl/styles.xml", StyleSheet(
-            """
+            $"""
             <fills count="2">
               <fill><patternFill patternType="none"/></fill>
-              <fill><patternFill patternType="solid"><fgColor rgb="FFFF0000"/></patternFill></fill>
+              <fill><patternFill patternType="solid"><fgColor rgb="{placeholderHex}"/></patternFill></fill>
             </fills>
             """,
             """
@@ -87,6 +99,17 @@ public sealed class XlsxStylesheetGradientFillWhitespaceRegressionTests
     [Fact]
     public void Preserve_StillMergesGradient_WhenSourceHasNoInsignificantWhitespace()
     {
+        var gradientSpec = new CellGradientFill
+        {
+            Degree = 45,
+            Stops =
+            [
+                new CellGradientStop(0, new CellColor(0x00, 0xFF, 0x00)),
+                new CellGradientStop(1, new CellColor(0xFF, 0xFF, 0xFF)),
+            ],
+        };
+        var placeholderHex = ToArgbHex(XlsxClosedXmlCellMapper.ComputeGradientPlaceholderColor(gradientSpec));
+
         // Sibling/opposite case: a compact (non-indented) source, i.e. the shape that already
         // worked before the fix. The fix must not regress this already-working case.
         using var sourcePackage = XlsxPackageTestFixtures.CreatePackage(("xl/styles.xml", StyleSheet(
@@ -94,7 +117,7 @@ public sealed class XlsxStylesheetGradientFillWhitespaceRegressionTests
             """<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="1" borderId="0" xfId="0" applyFill="1"/></cellXfs>""")));
 
         using var targetPackage = XlsxPackageTestFixtures.CreatePackage(("xl/styles.xml", StyleSheet(
-            """<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00FF00"/></patternFill></fill></fills>""",
+            $"""<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="{placeholderHex}"/></patternFill></fill></fills>""",
             """<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="1" borderId="0" xfId="0" applyFill="1"/></cellXfs>""")));
 
         Preserve(sourcePackage, targetPackage);
@@ -109,6 +132,10 @@ public sealed class XlsxStylesheetGradientFillWhitespaceRegressionTests
         gradient!.Attribute("degree")!.Value.Should().Be("45");
         gradient.Elements(WorkbookNs + "stop").Should().HaveCount(2);
     }
+
+    // ARGB hex string matching the "rgb" attribute format XLSX solid fills use, e.g. "FFFF0000".
+    private static string ToArgbHex(CellColor color) =>
+        $"FF{color.R:X2}{color.G:X2}{color.B:X2}";
 
     private static void Preserve(MemoryStream sourcePackage, MemoryStream targetPackage)
     {

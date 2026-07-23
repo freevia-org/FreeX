@@ -26,6 +26,15 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             if (XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(conditionalFormat))
                 return true;
 
+            // R75-io-cf-classic-4-2: a classic (CellIs/Expression) rule can carry preserved
+            // <conditionalFormatting> container attributes (e.g. pivot="1") that ClosedXML's own
+            // Save path (XlsxConditionalFormatClosedXmlMapper.Save) has no API surface to emit --
+            // only this raw-XML post-processing pass (SplitAndRealignClassicRules below) can write
+            // them back onto the container ClosedXML already wrote. Report "true" here whenever one
+            // is present so that pass still runs even for a lone classic rule with no coalescing risk.
+            if (conditionalFormat.NativeContainerAttributes is { Count: > 0 })
+                return true;
+
             // R64-io-conditional-format-6-1: two or more classic (CellIs/Expression) rules risk being
             // coalesced by ClosedXML into a single physical <cfRule> when their criteria+style end up
             // byte-identical, losing their distinct ranges/priorities. Save's SplitAndRealignClassicRules
@@ -65,6 +74,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             List<ConditionalFormat>? advancedRules = null;
             List<ConditionalFormat>? rawX14PassthroughRules = null;
             var classicRuleCount = 0;
+            var hasClassicContainerAttributesToPreserve = false;
             foreach (var conditionalFormat in sheet.ConditionalFormats)
             {
                 if (!XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(conditionalFormat))
@@ -73,6 +83,12 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     // classic rules (coalescing risk) still gets the SplitAndRealignClassicRules pass
                     // below instead of being skipped outright.
                     classicRuleCount++;
+                    // R75-io-cf-classic-4-2: also run the pass for a LONE classic rule that carries a
+                    // preserved container attribute (e.g. pivot="1") -- see the matching check in
+                    // HasAdvancedConditionalFormats(Sheet) above for why ClosedXML's own Save path
+                    // cannot emit this itself.
+                    if (conditionalFormat.NativeContainerAttributes is { Count: > 0 })
+                        hasClassicContainerAttributesToPreserve = true;
                     continue;
                 }
 
@@ -92,7 +108,8 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 advancedRules.Add(conditionalFormat);
             }
 
-            if ((advancedRules is null && rawX14PassthroughRules is null && classicRuleCount < 2) ||
+            if ((advancedRules is null && rawX14PassthroughRules is null && classicRuleCount < 2 &&
+                 !hasClassicContainerAttributesToPreserve) ||
                 !worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
             {
                 continue;
@@ -243,6 +260,11 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             {
                 // Not actually coalesced (the common case) -- just fix up the priority in place.
                 cfRule.SetAttributeValue("priority", group[0].Priority);
+                // R75-io-cf-classic-4-2: also restore any preserved container attribute (e.g.
+                // pivot="1") ClosedXML's own Save has no API surface to emit -- see
+                // HasAdvancedConditionalFormats(Sheet) above for why this pass is guaranteed to run
+                // whenever one is present.
+                AddNativeAttributes(container, group[0].NativeContainerAttributes);
                 continue;
             }
 
@@ -251,10 +273,12 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             {
                 var clonedRule = new XElement(cfRule);
                 clonedRule.SetAttributeValue("priority", cf.Priority);
-                replacements.Add(new XElement(
+                var replacement = new XElement(
                     worksheetNs + "conditionalFormatting",
                     new XAttribute("sqref", BuildSqref(cf)),
-                    clonedRule));
+                    clonedRule);
+                AddNativeAttributes(replacement, cf.NativeContainerAttributes);
+                replacements.Add(replacement);
             }
 
             container.ReplaceWith(replacements);
@@ -436,10 +460,16 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                         : BuildSynthesizedTextRuleFormula(cf.RuleType, cf.TextRuleText, cf.AppliesTo.Start.ToA1())));
                 break;
             case CfRuleType.DateOccurring:
-                rule.SetAttributeValue("timePeriod", XlsxAdvancedConditionalFormatMetadata.NormalizeDateOccurringPeriod(cf.DateOccurringPeriod));
-                if (!string.IsNullOrWhiteSpace(cf.FormulaText))
-                    rule.Add(new XElement(worksheetNs + "formula", cf.FormulaText));
+            {
+                var normalizedPeriod = XlsxAdvancedConditionalFormatMetadata.NormalizeDateOccurringPeriod(cf.DateOccurringPeriod);
+                rule.SetAttributeValue("timePeriod", normalizedPeriod);
+                rule.Add(new XElement(
+                    worksheetNs + "formula",
+                    !string.IsNullOrWhiteSpace(cf.FormulaText)
+                        ? cf.FormulaText
+                        : BuildSynthesizedDateOccurringRuleFormula(normalizedPeriod, cf.AppliesTo.Start.ToA1())));
                 break;
+            }
             case CfRuleType.Blanks:
             case CfRuleType.NoBlanks:
             case CfRuleType.Errors:
@@ -519,6 +549,32 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         CfRuleType.Errors => $"ISERROR({topLeftReference})",
         CfRuleType.NoErrors => $"NOT(ISERROR({topLeftReference}))",
         _ => $"ISERROR({topLeftReference})",
+    };
+
+    /// <summary>
+    /// Synthesizes the boolean <c>&lt;formula&gt;</c> body real Excel writes for a freshly-created
+    /// "A Date Occurring" (<see cref="CfRuleType.DateOccurring"/>) rule, for the same reason as
+    /// <see cref="BuildSynthesizedTextRuleFormula"/> above -- FreeX's rule-creation path never
+    /// populates <see cref="ConditionalFormat.FormulaText"/> for this type either. Real Excel does
+    /// not read the "timePeriod" attribute to decide what to highlight -- it evaluates this formula
+    /// (relative to the rule's top-left cell), so a rule saved without one is inert on reopen even
+    /// though it round-trips through FreeX's own (timePeriod-attribute-driven) evaluator fine.
+    /// <paramref name="period"/> is expected to already be normalized (see
+    /// <see cref="XlsxAdvancedConditionalFormatMetadata.NormalizeDateOccurringPeriod"/>).
+    /// </summary>
+    private static string BuildSynthesizedDateOccurringRuleFormula(string period, string topLeftReference) => period switch
+    {
+        "yesterday" => $"FLOOR({topLeftReference},1)=TODAY()-1",
+        "today" => $"FLOOR({topLeftReference},1)=TODAY()",
+        "tomorrow" => $"FLOOR({topLeftReference},1)=TODAY()+1",
+        "last7Days" => $"AND(TODAY()-FLOOR({topLeftReference},1)>=0,TODAY()-FLOOR({topLeftReference},1)<=6)",
+        "thisWeek" => $"AND(TODAY()-ROUNDDOWN({topLeftReference},0)<=WEEKDAY(TODAY())-1,ROUNDDOWN({topLeftReference},0)-TODAY()<=7-WEEKDAY(TODAY()))",
+        "lastWeek" => $"AND(TODAY()-ROUNDDOWN({topLeftReference},0)>=(WEEKDAY(TODAY())),TODAY()-ROUNDDOWN({topLeftReference},0)<(WEEKDAY(TODAY())+7))",
+        "nextWeek" => $"AND(ROUNDDOWN({topLeftReference},0)-TODAY()>(7-WEEKDAY(TODAY())),ROUNDDOWN({topLeftReference},0)-TODAY()<(15-WEEKDAY(TODAY())))",
+        "thisMonth" => $"AND(MONTH({topLeftReference})=MONTH(TODAY()),YEAR({topLeftReference})=YEAR(TODAY()))",
+        "lastMonth" => $"AND(MONTH({topLeftReference})=MONTH(EDATE(TODAY(),0-1)),YEAR({topLeftReference})=YEAR(EDATE(TODAY(),0-1)))",
+        "nextMonth" => $"AND(MONTH({topLeftReference})=MONTH(EDATE(TODAY(),0+1)),YEAR({topLeftReference})=YEAR(EDATE(TODAY(),0+1)))",
+        _ => $"FLOOR({topLeftReference},1)=TODAY()",
     };
 
     /// <summary>

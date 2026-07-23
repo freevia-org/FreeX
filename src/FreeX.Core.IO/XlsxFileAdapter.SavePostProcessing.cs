@@ -373,6 +373,14 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             RewritePivotTableFilterState(packageStream, workbook);
+
+            // R75-io-pivottable-layout-4-1: sibling of RewritePivotTableFilterState above -- rewrites the
+            // preserved pivotTableDefinition's grand-total visibility, report-layout (compact/outline) form,
+            // and per-data-field summary function/number-format/showDataAs from the CURRENT model, all of
+            // which XlsxPivotTableWriter.Save (gated behind !hasSourcePackage) would otherwise silently drop
+            // on this source-package save path.
+            packageStream.Position = 0;
+            RewritePivotTableLayoutState(packageStream, workbook, numberFormatIdMap);
         }
 
         // P7: slicer/timeline selection/range/level lives in preserved native parts. PreserveSourcePackageParts
@@ -532,6 +540,204 @@ public sealed partial class XlsxFileAdapter
                     XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, pivotXml);
             }
         }
+    }
+
+    // R75-io-pivottable-layout-4-1: sibling of RewritePivotTableFilterState above, gated the same way (the
+    // hasSourcePackage save path never runs XlsxPivotTableWriter.Save, so nothing else ever rewrites a
+    // PRESERVED pivotTableDefinition part's grand-total visibility, report-layout form, or data-field
+    // summary settings from the CURRENT model). Rewrites, in place, ONLY what actually differs from the
+    // preserved XML so an untouched pivot table's saved part stays byte-stable.
+    private static void RewritePivotTableLayoutState(
+        Stream packageStream,
+        Workbook workbook,
+        IReadOnlyDictionary<int, int> numberFormatIdMap)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var pivot in sheet.PivotTables)
+            {
+                if (string.IsNullOrWhiteSpace(pivot.PackagePart))
+                    continue;
+
+                var pivotPath = XlsxPackagePath.NormalizePackagePath(pivot.PackagePart);
+                var entry = archive.GetEntry(pivotPath);
+                if (entry is null)
+                    continue;
+
+                var pivotXml = XlsxPackageXmlEditor.LoadXml(entry);
+                var root = pivotXml.Root;
+                if (root is null || root.Name != workbookNs + "pivotTableDefinition")
+                    continue;
+
+                var changedGrandTotals = RewritePreservedPivotGrandTotals(root, pivot);
+                var changedReportLayout = RewritePreservedPivotReportLayout(root, pivot, workbookNs);
+                var changedDataFields = RewritePreservedPivotDataFieldSummaries(root, pivot, workbookNs, numberFormatIdMap);
+                if (changedGrandTotals || changedReportLayout || changedDataFields)
+                    XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, pivotXml);
+            }
+        }
+    }
+
+    // OOXML CT_pivotTableDefinition spells grand-total visibility as rowGrandTotals/colGrandTotals, both
+    // defaulting to true when omitted (mirrors XlsxPivotTableReader.cs's ReadGrandTotal).
+    private static bool RewritePreservedPivotGrandTotals(XElement root, PivotTableModel pivot)
+    {
+        var changed = SetPreservedBoolAttribute(root, "rowGrandTotals", pivot.ShowRowGrandTotals, defaultValue: true);
+        changed |= SetPreservedBoolAttribute(root, "colGrandTotals", pivot.ShowColumnGrandTotals, defaultValue: true);
+        return changed;
+    }
+
+    // OOXML CT_pivotTableDefinition's compact/compactData default to true, outline/outlineData default to
+    // false, when omitted (see XlsxPivotTableWriter.Converters.cs's PivotReportLayoutAttributes, which this
+    // reuses for a fresh save). gridDropZones is Excel's separate "Classic PivotTable Layout" checkbox
+    // (driven by ShowClassicLayout, not ReportLayout) and is intentionally left untouched here.
+    private static readonly Dictionary<string, bool> PivotReportLayoutRootAttributeDefaults = new(StringComparer.Ordinal)
+    {
+        ["compact"] = true,
+        ["compactData"] = true,
+        ["outline"] = false,
+        ["outlineData"] = false,
+    };
+
+    private static bool RewritePreservedPivotReportLayout(XElement root, PivotTableModel pivot, XNamespace workbookNs)
+    {
+        var rootChanged = false;
+        foreach (var attribute in XlsxPivotTableWriter.PivotReportLayoutAttributes(pivot.ReportLayout))
+        {
+            var name = attribute.Name.LocalName;
+            if (!PivotReportLayoutRootAttributeDefaults.TryGetValue(name, out var defaultValue))
+                continue; // gridDropZones: not part of ReportLayout, left untouched.
+
+            if (SetPreservedBoolAttribute(root, name, attribute.Value == "1", defaultValue))
+                rootChanged = true;
+        }
+
+        // The table-wide report layout is unchanged from what the preserved part already encodes -- leave
+        // any existing per-field compact/outline settings (which may be genuinely distinct per field, e.g.
+        // set via a real Excel per-field Layout dialog) untouched rather than risk normalizing them away on
+        // every save that merely happens to touch this pivot table for an unrelated reason.
+        if (!rootChanged)
+            return false;
+
+        // R52-io-pivot-layout-3-4: CT_PivotField's OWN compact/outline attributes are what a real Excel
+        // client actually renders -- the root attributes above are only the defaults Excel seeds onto
+        // newly-added fields, not a live override of an existing field's own attributes. The table-wide
+        // report layout genuinely changed, so mirror what clicking Excel's PivotTable Layout ribbon command
+        // does: re-apply the newly-chosen form to EVERY existing row/column axis field, not just the
+        // table-level defaults future fields will inherit.
+        var pivotFieldsElement = root.Element(workbookNs + "pivotFields");
+        if (pivotFieldsElement is not null)
+        {
+            foreach (var fieldElement in pivotFieldsElement.Elements(workbookNs + "pivotField"))
+            {
+                if (fieldElement.Attribute("axis")?.Value is not ("axisRow" or "axisCol"))
+                    continue;
+
+                SetPreservedBoolAttribute(fieldElement, "compact", pivot.ReportLayout == PivotReportLayout.Compact, defaultValue: true);
+                SetPreservedBoolAttribute(fieldElement, "outline", pivot.ReportLayout != PivotReportLayout.Tabular, defaultValue: false);
+            }
+        }
+
+        return true;
+    }
+
+    // Sets a boolean attribute to its OOXML "1"/"0" wire form, but ONLY when the attribute's CURRENT
+    // effective value (an absent attribute takes on <paramref name="defaultValue"/> per schema) actually
+    // differs from the desired value -- keeps an untouched pivot's preserved definition byte-stable rather
+    // than adding a redundant explicit attribute every save.
+    private static bool SetPreservedBoolAttribute(XElement element, string name, bool value, bool defaultValue)
+    {
+        var existing = element.Attribute(name)?.Value;
+        var effective = existing is null
+            ? defaultValue
+            : existing == "1" || string.Equals(existing, "true", StringComparison.OrdinalIgnoreCase);
+        if (effective == value)
+            return false;
+
+        element.SetAttributeValue(name, value ? "1" : "0");
+        return true;
+    }
+
+    // R75-io-pivottable-layout-4-1: rewrites each preserved <dataField>'s summary function (subtotal),
+    // number format (numFmtId, remapped through the same numberFormatIdMap a fresh save applies), and
+    // showDataAs from the corresponding PivotDataFieldModel. Matched purely by position -- the same order
+    // XlsxPivotTableWriter.ToPivotDataFieldsXml emits them in and XlsxPivotTableReader.Fields.cs's
+    // ReadPivotDataFields reads them back in.
+    private static bool RewritePreservedPivotDataFieldSummaries(
+        XElement root,
+        PivotTableModel pivot,
+        XNamespace workbookNs,
+        IReadOnlyDictionary<int, int> numberFormatIdMap)
+    {
+        var dataFieldsElement = root.Element(workbookNs + "dataFields");
+        if (dataFieldsElement is null || pivot.DataFields.Count == 0)
+            return false;
+
+        var dataFieldElements = dataFieldsElement.Elements(workbookNs + "dataField").ToList();
+        var changed = false;
+        for (var index = 0; index < dataFieldElements.Count && index < pivot.DataFields.Count; index++)
+        {
+            var model = pivot.DataFields[index];
+            var element = dataFieldElements[index];
+
+            var desiredSubtotal = string.IsNullOrWhiteSpace(model.SummaryFunction) ? "sum" : model.SummaryFunction;
+            if (SetPreservedStringAttribute(element, "subtotal", desiredSubtotal, defaultValue: "sum"))
+                changed = true;
+
+            var desiredShowDataAs = model.ShowValuesAs == PivotShowValuesAs.None
+                ? null
+                : XlsxPivotTableWriter.ToPivotShowValuesAsText(model.ShowValuesAs);
+            if (SetPreservedOptionalAttribute(element, "showDataAs", desiredShowDataAs))
+                changed = true;
+
+            string? desiredNumFmtId = null;
+            if (model.NumberFormatId is { } numberFormatId)
+            {
+                var mappedId = numberFormatIdMap.TryGetValue(numberFormatId, out var remapped) ? remapped : numberFormatId;
+                desiredNumFmtId = mappedId.ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (SetPreservedOptionalAttribute(element, "numFmtId", desiredNumFmtId))
+                changed = true;
+        }
+
+        return changed;
+    }
+
+    // Sets attributeName to value when non-null, or removes it when null; returns true only when the XML
+    // actually changed. Mirrors XlsxSlicerTimelineStateRewriter.cs's SetOptionalAttribute.
+    private static bool SetPreservedOptionalAttribute(XElement element, string attributeName, string? value)
+    {
+        var attribute = element.Attribute(attributeName);
+        if (value is null)
+        {
+            if (attribute is null)
+                return false;
+            attribute.Remove();
+            return true;
+        }
+
+        if (attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal))
+            return false;
+
+        element.SetAttributeValue(attributeName, value);
+        return true;
+    }
+
+    // Like SetPreservedOptionalAttribute, but for a required-with-schema-default string attribute (e.g.
+    // CT_DataField's "subtotal", schema default "sum"): an absent attribute is treated as already carrying
+    // defaultValue, so writing exactly the default leaves an untouched part's omitted attribute omitted.
+    private static bool SetPreservedStringAttribute(XElement element, string attributeName, string value, string defaultValue)
+    {
+        var existing = element.Attribute(attributeName)?.Value ?? defaultValue;
+        if (string.Equals(existing, value, StringComparison.Ordinal))
+            return false;
+
+        element.SetAttributeValue(attributeName, value);
+        return true;
     }
 
     // Rewrites each preserved <pageFields>/<pageField>'s item/name selection from the corresponding

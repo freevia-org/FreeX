@@ -394,6 +394,13 @@ public sealed partial class MainWindow : Window
     // black cell text legible) instead of an opaque tint. Centralised here as the single Avalonia
     // grid selection-fill token, deriving its RGB from the SelectionBorder accent.
     private static readonly IBrush SelectionFill = Brush(32, 33, 115, 70);
+    // R75-render-selection-marquee-4-2: static (non-animated) marching-ants stand-in -- a plain
+    // black dashed rectangle around the Copy/Cut source range. The WPF host's GridView.Overlays.cs
+    // RenderMarchingAnts strokes a black pen then an offset-phase white pen on a repeating
+    // DispatcherTimer to fake alternating black/white "ants"; that overlay layer + timer
+    // infrastructure is out of scope for this minimal port (see the finding's ASSESS note), so this
+    // is deliberately just the dashed outline with no animation.
+    private static readonly IBrush ClipboardMarqueeBrush = Brushes.Black;
     private static readonly IBrush SelectionHeaderBackground = Brush(218, 232, 218);
     // Mirrors WPF's GridView.Rendering.Headers.cs ActiveHeaderHighlightBrush(151,181,135): within a
     // multi-cell selection, the active cell's own row/column header renders with this stronger tint
@@ -430,6 +437,15 @@ public sealed partial class MainWindow : Window
     private Border? _activeCellBorder;
     private Border? _activeSelectionOutlineVisual;
     private Border? _autofillHandleVisual;
+    // R75-render-selection-marquee-4-2: minimal port of the WPF host's GridView.ClipboardRange/
+    // ClipboardIsCut (GridView.Overlays.cs RenderMarchingAnts) -- this shell drew NO Copy/Cut
+    // marquee at all. Set by CopySelectedRangeToClipboardAsync/CutSelectedRangeToClipboardAsync,
+    // rendered by AddClipboardMarqueeOverlayToGrid as a static dashed rectangle (no march-offset
+    // animation -- see that method's doc comment), and cleared by every Paste* method, Escape
+    // (main grid key handler), and on committing an ordinary cell edit (CommitFormulaBox /
+    // CommitEditAcrossSelection), mirroring the WPF host's ClearClipboardVisualState call sites.
+    private GridRange? _clipboardMarqueeRange;
+    private bool _clipboardMarqueeIsCut;
     private bool _activeSelectionHasTopEdge;
     private bool _activeSelectionHasLeftEdge;
     private bool _activeSelectionHasBottomEdge;
@@ -909,6 +925,12 @@ public sealed partial class MainWindow : Window
     private bool _isApplyingFormulaBoxText;
     private bool _isOpening;
     private bool _isSaving;
+    // Set after opening a workbook whose FileSharing.ReadOnlyRecommended/ReservationPassword
+    // prompted the user and they accepted opening it read-only -- see
+    // ApplyReadOnlyRecommendedPromptIfNeeded (R75-services-protection-security-4-2). Mirrors the
+    // WPF host's field of the same name in MainWindow.xaml.cs; this is the same minimal fix scope
+    // noted there: the flag does not yet block Save-over or individual edit commands.
+    private bool _isWorkbookReadOnly;
     private bool _allowCloseWithoutDirtyPrompt;
     private bool _isDirtyCloseDialogOpen;
     private Task? _pendingDirtyWorkbookGate;
@@ -4512,6 +4534,12 @@ public sealed partial class MainWindow : Window
             colMetrics,
             headerOffset,
             zoomFactor);
+        AddClipboardMarqueeOverlayToGrid(
+            grid,
+            rowMetrics,
+            colMetrics,
+            headerOffset,
+            zoomFactor);
 
         var formulaReferenceOverlay = BuildFormulaReferenceGridOverlay(viewport, showHeadings, zoomFactor);
         AvaloniaGrid.SetRowSpan(formulaReferenceOverlay, grid.RowDefinitions.Count);
@@ -7910,6 +7938,136 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Test-only override for <see cref="ResolveReadOnlyRecommendedPrompt"/> -- headless tests
+    /// inject a canned decision here instead of driving the real
+    /// <see cref="ShowReadOnlyRecommendedPromptDialog"/> window. Not used by production code paths.
+    /// </summary>
+    internal Func<string, UserMessageResult>? ReadOnlyRecommendedPromptOverrideForTest;
+
+    /// <summary>Test-visible read of <see cref="_isWorkbookReadOnly"/> (see its declaration).</summary>
+    internal bool IsWorkbookReadOnlyForTest => _isWorkbookReadOnly;
+
+    private UserMessageResult ResolveReadOnlyRecommendedPrompt(string body) =>
+        ReadOnlyRecommendedPromptOverrideForTest?.Invoke(body) ?? ShowReadOnlyRecommendedPromptDialog(body);
+
+    /// <summary>
+    /// A workbook saved with "Read-Only Recommended" (<c>WorkbookFileSharingModel.ReadOnlyRecommended</c>)
+    /// or a write-reservation password (<c>ReservationPassword</c>) used to open fully editable on
+    /// this shell with no prompt at all -- the metadata round-tripped on Save but was never
+    /// enforced here (R75-services-protection-security-4-2). Mirrors the WPF host's
+    /// <c>MainWindow.Backstage.ApplyReadOnlyRecommendedPromptIfNeeded</c>: prompt once on open and,
+    /// if the user accepts read-only, mark this session's <see cref="_isWorkbookReadOnly"/> flag.
+    /// Same minimal fix scope as the WPF host: the flag itself does not yet block Save-over or
+    /// individual edit commands.
+    /// </summary>
+    private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
+    {
+        _isWorkbookReadOnly = false;
+
+        var sharing = workbook.FileSharing;
+        if (sharing is null ||
+            (sharing.ReadOnlyRecommended != true && string.IsNullOrEmpty(sharing.ReservationPassword)))
+        {
+            return;
+        }
+
+        var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", workbook.Name);
+        _isWorkbookReadOnly = ResolveReadOnlyRecommendedPrompt(body) == UserMessageResult.Yes;
+    }
+
+    /// <summary>
+    /// Test-only seam for <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/> -- mirrors the
+    /// <c>RaiseKeyDownForTest</c>/<c>RaiseAutofillHandleDoubleClickForTest</c> convention of driving
+    /// the real production method directly instead of a source-string proxy. Not used by production
+    /// code paths.
+    /// </summary>
+    internal void ApplyReadOnlyRecommendedPromptIfNeededForTest(Workbook workbook) =>
+        ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+
+    /// <summary>
+    /// Owned modal Yes/No prompt for the Read-Only-Recommended/write-reservation alert, mirroring
+    /// <see cref="ShowDataValidationPromptDialog"/>'s non-modal-dispatcher-pump technique (Avalonia
+    /// has no synchronous nested-pump equivalent to WPF's blocking <c>MessageBox.Show</c>).
+    /// </summary>
+    private UserMessageResult ShowReadOnlyRecommendedPromptDialog(string body)
+    {
+        var dialog = new Window
+        {
+            Title = UiText.Get("MainWindowMessage_ReadOnlyRecommendedTitle"),
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            MinHeight = 150,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var messageText = new TextBlock
+        {
+            Text = body,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 16, 16, 20),
+        };
+
+        var decision = UserMessageResult.No;
+        var done = false;
+        void Finish(UserMessageResult value)
+        {
+            decision = value;
+            done = true;
+            dialog.Close();
+        }
+
+        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
+        {
+            var button = new Button
+            {
+                Content = content,
+                MinWidth = 82,
+                IsDefault = isDefault,
+                IsCancel = isCancel,
+                Margin = new Thickness(8, 0, 0, 0),
+            };
+            button.Click += (_, _) => Finish(value);
+            return button;
+        }
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(16, 0, 16, 16),
+        };
+
+        var defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
+        buttonRow.Children.Add(defaultButton);
+        buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: true));
+
+        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
+        dialog.Opened += (_, _) => defaultButton.Focus();
+        dialog.Closed += (_, _) => done = true;
+
+        var wasEnabled = IsEnabled;
+        IsEnabled = false;
+        try
+        {
+            dialog.Show(this);
+            while (!done)
+            {
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                if (!done)
+                    System.Threading.Thread.Sleep(1);
+            }
+        }
+        finally
+        {
+            IsEnabled = wasEnabled;
+        }
+
+        return decision;
+    }
+
+    /// <summary>
     /// Reads every sparkline on <paramref name="sheet"/> into a per-cell lookup keyed by its anchor
     /// <see cref="SparklineModel.Location"/>, using the same numeric series read as the Windows host
     /// (<see cref="SparklineRenderPlanner.BuildValues"/>). Empty series are dropped so cells without
@@ -9232,6 +9390,69 @@ public sealed partial class MainWindow : Window
         AvaloniaGrid.SetColumn(activeCellBox, colIndex + headerOffset);
         AvaloniaGrid.SetColumnSpan(activeCellBox, colSpan);
         grid.Children.Add(activeCellBox);
+    }
+
+    /// <summary>
+    /// R75-render-selection-marquee-4-2: minimal port of the WPF host's GridView.Overlays.cs
+    /// RenderMarchingAnts -- this Avalonia shell drew NO Copy/Cut marquee at all around
+    /// <see cref="_clipboardMarqueeRange"/>, so a Paste happening well after a Copy/Cut gave the
+    /// user no visual reminder of which range was actually being pasted. This draws a static
+    /// (non-animated) black dashed rectangle around the source range instead of the WPF host's
+    /// animated black/white "marching ants" (a DispatcherTimer-driven dash-offset repaint over a
+    /// dedicated overlay layer) -- that animation infrastructure is out of scope for this minimal
+    /// port; a static dashed outline is still a large improvement over nothing.
+    /// </summary>
+    private void AddClipboardMarqueeOverlayToGrid(
+        AvaloniaGrid grid,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        int headerOffset,
+        double zoomFactor)
+    {
+        if (_clipboardMarqueeRange is not { } range)
+            return;
+
+        // The marquee only belongs on the sheet the range was copied/cut from -- Excel hides the
+        // marching ants while any other sheet is active. _clipboardMarqueeRange is not cleared on
+        // a sheet switch, so without this check a same-numbered range (e.g. A1:B2) on an unrelated
+        // sheet would draw a marquee for cells that were never copied there (matching the WPF
+        // host's identical ActiveSheetId guard in RenderMarchingAnts).
+        if (range.Start.Sheet != _session.ActiveSheet.Id || range.End.Sheet != _session.ActiveSheet.Id)
+            return;
+
+        if (!TryResolveVisibleSelectionGridSpan(
+                range,
+                rowMetrics,
+                colMetrics,
+                out var rowIndex,
+                out var rowSpan,
+                out var colIndex,
+                out var colSpan,
+                out _,
+                out _,
+                out _,
+                out _))
+        {
+            return;
+        }
+
+        var thickness = Math.Max(1.5, 1.5 * zoomFactor);
+        var marquee = new AvaloniaRectangle
+        {
+            Stroke = ClipboardMarqueeBrush,
+            StrokeThickness = thickness,
+            StrokeDashArray = new AvaloniaList<double>([4, 3]),
+            IsHitTestVisible = false,
+            ClipToBounds = false,
+            ZIndex = 90,
+        };
+        AutomationProperties.SetAutomationId(marquee,
+            _clipboardMarqueeIsCut ? "WorksheetClipboardCutMarquee" : "WorksheetClipboardCopyMarquee");
+        AvaloniaGrid.SetRow(marquee, rowIndex + headerOffset);
+        AvaloniaGrid.SetRowSpan(marquee, rowSpan);
+        AvaloniaGrid.SetColumn(marquee, colIndex + headerOffset);
+        AvaloniaGrid.SetColumnSpan(marquee, colSpan);
+        grid.Children.Add(marquee);
     }
 
     private static bool TryResolveVisibleSelectionGridSpan(
@@ -10832,9 +11053,20 @@ public sealed partial class MainWindow : Window
     internal void SelectClickedCell(CellAddress address, KeyModifiers modifiers)
     {
         if (modifiers.HasFlag(KeyModifiers.Shift) || _keyboardSelectionMode == ExcelSelectionMode.Extend)
+        {
             SelectRange(address);
-        else
-            SelectCell(address);
+            return;
+        }
+
+        // A plain click onto a locked cell on a protected sheet with "Select locked cells"
+        // unchecked must be refused outright -- Excel neither moves the active cell there nor
+        // opens it for editing (R75-services-protection-security-4-1). Shift-click/F8 extend
+        // above is left ungated for now; CommandGuards.CanSelectCell already exists for exactly
+        // this check (it returns true unconditionally on an unprotected sheet).
+        if (!CommandGuards.CanSelectCell(_session.Workbook, _session.ActiveSheet, address))
+            return;
+
+        SelectCell(address);
     }
 
     private void ClearSelectionExtensionState()
@@ -16602,6 +16834,11 @@ public sealed partial class MainWindow : Window
 
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
+        // R75-render-selection-marquee-4-2: mirrors the WPF host's TryExecuteEditCells, which
+        // cancels an active Copy/Cut marching-ants marquee as soon as an ordinary cell edit is
+        // committed -- a subsequent Paste must not silently move/copy a source range the user has
+        // since overwritten.
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell($"Edited {FormatCellReference(address)}");
         return true;
     }
@@ -16641,6 +16878,8 @@ public sealed partial class MainWindow : Window
 
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
+        // R75-render-selection-marquee-4-2: same edit-commit marquee cancellation as CommitFormulaBox.
+        SetClipboardMarquee(null, isCut: false);
         return true;
     }
 
@@ -21106,6 +21345,7 @@ public sealed partial class MainWindow : Window
         }
 
         await clipboard.SetTextAsync(cutResult.Text);
+        SetClipboardMarquee(_session.SelectedRange, isCut: true);
         RefreshShell(UiText.Format("MainLoc_CutX", rangeReference));
     }
 
@@ -21163,8 +21403,34 @@ public sealed partial class MainWindow : Window
             await clipboard.SetTextAsync(copiedText);
         }
 
+        SetClipboardMarquee(_session.SelectedRange, isCut: false);
         RefreshShell(UiText.Format("MainLoc_CopiedX", rangeReference));
     }
+
+    /// <summary>
+    /// R75-render-selection-marquee-4-2: sets (or clears, with a null <paramref name="range"/>) the
+    /// Copy/Cut marching-ants marquee state rendered by <see cref="AddClipboardMarqueeOverlayToGrid"/>.
+    /// Centralized so every set/clear call site (Copy, Cut, every Paste* method, Escape, and
+    /// committing an ordinary cell edit) goes through one place, matching how the WPF host's
+    /// SheetGrid.ClipboardRange/ClipboardIsCut dependency properties are the single source of truth
+    /// there.
+    /// </summary>
+    private void SetClipboardMarquee(GridRange? range, bool isCut)
+    {
+        _clipboardMarqueeRange = range;
+        _clipboardMarqueeIsCut = isCut;
+    }
+
+    /// <summary>Test-only seam: exercises <see cref="SetClipboardMarquee"/> without the real OS
+    /// clipboard write CopySelectedRangeToClipboardAsync/CutSelectedRangeToClipboardAsync require
+    /// (Avalonia's IClipboard is [NotClientImplementable] in a headless test, matching the existing
+    /// R66/R68 clipboard test rationale in this project).</summary>
+    internal void SetClipboardMarqueeForTest(GridRange? range, bool isCut = false) =>
+        SetClipboardMarquee(range, isCut);
+
+    internal GridRange? ClipboardMarqueeRangeForTest => _clipboardMarqueeRange;
+
+    internal bool ClipboardMarqueeIsCutForTest => _clipboardMarqueeIsCut;
 
     private void SelectCurrentRegionOrAll()
     {
@@ -21269,6 +21535,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedAt", FormatCellReference(destination)));
     }
 
@@ -21366,6 +21633,7 @@ public sealed partial class MainWindow : Window
             return true;
         }
 
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedPictureAt", FormatCellReference(destination)));
         return true;
     }
@@ -21420,6 +21688,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
@@ -21447,6 +21716,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
@@ -21474,6 +21744,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
@@ -21501,6 +21772,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
@@ -21528,6 +21800,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
@@ -21556,6 +21829,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
@@ -21583,6 +21857,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
 
@@ -24024,6 +24299,17 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            // R75-render-selection-marquee-4-2: Escape cancels an active Copy/Cut marching-ants
+            // marquee, mirroring the WPF host's ClearClipboardVisualState call on Escape
+            // (MainWindow.Editing.cs).
+            if (e.Key == Key.Escape && _clipboardMarqueeRange is not null)
+            {
+                e.Handled = true;
+                SetClipboardMarquee(null, isCut: false);
+                RefreshShell("Ready");
+                return;
+            }
+
             NavigateActiveCell(e);
             return;
         }
@@ -24625,10 +24911,76 @@ public sealed partial class MainWindow : Window
         var navigationTarget = moveOnly
             ? ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current, resolvedTarget)
             : resolvedTarget;
+
+        // Arrow/Tab/Enter navigation on a protected sheet must SKIP a locked cell it would
+        // otherwise land the active cell on (when "Select locked cells" is unchecked), stepping
+        // further in the same direction of travel until a selectable cell is found -- matching
+        // Excel -- rather than moving onto it (R75-services-protection-security-4-1). Only
+        // applies when this navigation will actually MOVE the active cell (not extend a range).
+        bool willMoveActiveCell = !(extendSelection && !moveOnly);
+        if (willMoveActiveCell &&
+            sheet is { IsProtected: true } &&
+            GetProtectedNavigationStep(navigationKey, extendSelection) is { } step &&
+            !CommandGuards.CanSelectCell(_session.Workbook, sheet, navigationTarget))
+        {
+            var adjustedTarget = FindNextSelectableCellInDirection(sheet, navigationTarget, step.RowStep, step.ColStep);
+            if (adjustedTarget is null)
+            {
+                // No selectable cell exists further in this direction (e.g. every remaining cell
+                // to the edge is locked) -- Excel simply doesn't move; consume the key anyway.
+                e.Handled = true;
+                return;
+            }
+
+            navigationTarget = adjustedTarget.Value;
+        }
+
         MoveOrExtendActiveCellTo(navigationTarget, extendSelection && !moveOnly);
         ClearSelectedDrawingObject();
         e.Handled = true;
         RefreshShell("Ready");
+    }
+
+    /// <summary>
+    /// The (row, column) step of travel a given navigation key moves the active cell by, used only
+    /// to know which direction to keep stepping in past a locked cell on a protected sheet
+    /// (R75-services-protection-security-4-1). Returns null for keys this protection-skip doesn't
+    /// cover (Home/End/PageUp/PageDown/data-boundary jumps) -- those land on their target
+    /// unadjusted, mirroring the WPF host's scope in MainWindow.Selection.cs.
+    /// </summary>
+    private static (int RowStep, int ColStep)? GetProtectedNavigationStep(ExcelWorksheetNavigationKey key, bool shiftHeld) =>
+        key switch
+        {
+            ExcelWorksheetNavigationKey.Up => (-1, 0),
+            ExcelWorksheetNavigationKey.Down => (1, 0),
+            ExcelWorksheetNavigationKey.Left => (0, -1),
+            ExcelWorksheetNavigationKey.Right => (0, 1),
+            ExcelWorksheetNavigationKey.Enter => shiftHeld ? (-1, 0) : (1, 0),
+            ExcelWorksheetNavigationKey.Tab => shiftHeld ? (0, -1) : (0, 1),
+            _ => null
+        };
+
+    /// <summary>
+    /// Starting at <paramref name="start"/> (already known not to be selectable), keeps stepping by
+    /// (<paramref name="rowStep"/>, <paramref name="colStep"/>) until a cell <see
+    /// cref="CommandGuards.CanSelectCell"/> allows is found, mirroring Excel's
+    /// protected-sheet navigation skip. Returns null if the worksheet bounds are reached with
+    /// nothing selectable in between (R75-services-protection-security-4-1).
+    /// </summary>
+    private CellAddress? FindNextSelectableCellInDirection(Sheet sheet, CellAddress start, int rowStep, int colStep)
+    {
+        var candidate = start;
+        while (!CommandGuards.CanSelectCell(_session.Workbook, sheet, candidate))
+        {
+            long nextRow = (long)candidate.Row + rowStep;
+            long nextCol = (long)candidate.Col + colStep;
+            if (nextRow < 1 || nextRow > CellAddress.MaxRow || nextCol < 1 || nextCol > CellAddress.MaxCol)
+                return null;
+
+            candidate = new CellAddress(candidate.Sheet, (uint)nextRow, (uint)nextCol);
+        }
+
+        return candidate;
     }
 
     private CellAddress OffsetAddress(CellAddress current, int rowDelta, int colDelta) =>
@@ -25014,6 +25366,12 @@ public sealed partial class MainWindow : Window
             ClearSelectedDrawingObject();
             RefreshShell(_session.StartupStatus);
             _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+            // A workbook saved with "Read-Only Recommended" or a write-reservation password used
+            // to open fully editable on this shell with no prompt at all until this fix
+            // (R75-services-protection-security-4-2); mirrors the WPF host's
+            // ApplyReadOnlyRecommendedPromptIfNeeded (MainWindow.Backstage.cs), called at the same
+            // point in the open sequence, right after the session/shell refresh.
+            ApplyReadOnlyRecommendedPromptIfNeeded(_session.Workbook);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
         {

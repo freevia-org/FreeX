@@ -73,6 +73,33 @@ public partial class GridView
         // would draw a marquee for cells that were never copied there.
         if (cbRange.Value.Start.Sheet != ActiveSheetId || cbRange.Value.End.Sheet != ActiveSheetId) return;
 
+        var phase = GetMarchingAntsPhase(_marchOffset);
+        var blackPen = MarchingAntsBlackPens[phase];
+        var overlayPen = ClipboardIsCut ? MarchingAntsCutOverlayPens[phase] : MarchingAntsCopyOverlayPens[phase];
+
+        // A Ctrl+click multi-area copy/cut populates ClipboardRanges with every copied area
+        // (R75-render-selection-marquee-4-3): stroke ants around EACH area instead of the single
+        // ClipboardRange bounding box, which would otherwise sweep in any untouched gap between them
+        // (e.g. column B between copied A:A and C:C).
+        if (ClipboardRanges is { Count: > 1 } areas)
+        {
+            foreach (var area in areas)
+            {
+                if (area.Start.Sheet != ActiveSheetId || area.End.Sheet != ActiveSheetId) continue;
+
+                var areaRect = CalculateClipboardMarquee(
+                    Viewport,
+                    area,
+                    ActualRowHeaderWidth,
+                    EffectiveColHeaderHeight);
+                if (areaRect is null) continue;
+
+                dc.DrawRectangle(null, blackPen, areaRect.Value);
+                dc.DrawRectangle(null, overlayPen, areaRect.Value);
+            }
+            return;
+        }
+
         var rect = CalculateClipboardMarquee(
             Viewport,
             cbRange.Value,
@@ -80,9 +107,8 @@ public partial class GridView
             EffectiveColHeaderHeight);
         if (rect is null) return;
 
-        var phase = GetMarchingAntsPhase(_marchOffset);
-        dc.DrawRectangle(null, MarchingAntsBlackPens[phase], rect.Value);
-        dc.DrawRectangle(null, ClipboardIsCut ? MarchingAntsCutOverlayPens[phase] : MarchingAntsCopyOverlayPens[phase], rect.Value);
+        dc.DrawRectangle(null, blackPen, rect.Value);
+        dc.DrawRectangle(null, overlayPen, rect.Value);
     }
 
     private void RenderFormulaTraceArrows(DrawingContext dc)

@@ -442,6 +442,20 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         }
     }
 
+    // R75-io-worksheet-props-4-3 (RE-DEFERRED): a row's whole-row default style (the "s" +
+    // "customFormat" pair that stamps a banner style on every cell in the row that has no explicit
+    // style of its own) is intentionally never read into the Sheet model here, so it cannot round-
+    // trip on a full rebuild. This is coupled to the same stale-index hazard 4-1 fixes for columns:
+    // a source row's "s" indexes the SOURCE stylesheet's cellXfs table, and the full-save path
+    // rebuilds styles.xml via ClosedXML (renumbering/shrinking cellXfs), so reattaching the source
+    // index verbatim can point past the end of the rebuilt table and crash FreeX's own reload.
+    // XlsxWorksheetMetadataPreserver.IsStylesheetIndexRowAttribute already guards the native-merge
+    // path against copying "s"/"customFormat" verbatim (see XlsxWorksheetMetadataPreserverRowStyleTests);
+    // this reader treats both as "modeled" (ModeledRowAttributes) purely so that guard's crash-safety
+    // holds even when nothing here captures the value. A FULL fix needs a per-row-style Sheet model
+    // (e.g. Sheet.RowStyles: Dictionary<uint, StyleId>) populated here and REMAPPED to the rebuilt
+    // cellXfs table at save time (mirroring how explicit per-cell styles are remapped) -- out of
+    // scope for this pass; the crash-safe drop remains the current behavior.
     private static void ReadRowLayout(
         XElement row,
         uint rowNumber,
@@ -502,6 +516,19 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             collapsedAnchorRows.Add(rowNumber);
     }
 
+    // R75-io-worksheet-props-4-2 (RE-DEFERRED): a non-narrow column's whole-column default style
+    // (a <col style="..."> that fills every cell in the column with a style when the cell itself
+    // has none) is intentionally never read into the Sheet model here, so it cannot round-trip on a
+    // full rebuild. This is the read-side half of 4-1's crash-safety fix: the source "style" indexes
+    // the SOURCE stylesheet's cellXfs table, and the full-save path rebuilds styles.xml via
+    // ClosedXML (renumbering/shrinking cellXfs), so reattaching the source index verbatim can point
+    // past the end of the rebuilt table and crash FreeX's own reload --
+    // XlsxWorksheetMetadataPreserver.IsStylesheetIndexColumnAttribute already guards the native-merge
+    // path against copying "style" verbatim for that reason (see
+    // XlsxWorksheetMetadataPreserverColumnStyleTests). A FULL fix needs a per-column-style Sheet
+    // model (e.g. Sheet.ColumnStyles: Dictionary<uint, StyleId>) populated here and REMAPPED to the
+    // rebuilt cellXfs table at save time -- out of scope for this pass; the crash-safe drop (never
+    // reading, never re-copying the stale index) remains the current behavior.
     private static void ReadColumnLayout(
         XElement col,
         HashSet<uint> hiddenCols,

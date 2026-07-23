@@ -2984,6 +2984,36 @@ public sealed class WorkbookSession
         return result;
     }
 
+    /// <summary>
+    /// R75-commands-clear-delete-4-1: Backspace on a (possibly multi-cell) selection clears ONLY the
+    /// active cell -- unlike Delete/Clear Contents (<see cref="ClearSelectedRangeContents"/>), which
+    /// clears the whole selection rectangle. Matches Excel: Backspace is never a bulk-clear
+    /// operation. Deliberately skips <see cref="ApplySuccessfulRangeEditResult"/> (which would
+    /// collapse SelectedRange down to the single cleared cell via SetSingleSelectedRange) so the
+    /// caller's existing multi-cell selection shape survives -- only the active cell's content is
+    /// blanked before the caller enters inline edit on it.
+    /// </summary>
+    public WorkbookCellEditResult ClearActiveCellContents()
+    {
+        var address = ActiveCell;
+        var range = new GridRange(address, address);
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            CreateRangeCommand(
+                range,
+                "Clear Contents",
+                static (sheetId, sheetRange) => new ClearContentsCommand(sheetId, sheetRange)));
+        if (!result.Success)
+            return result;
+
+        FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
+        MarkDirty();
+        RefreshViewport();
+        CancelPendingCutAfterMutatingEdit();
+        return result;
+    }
+
     public WorkbookCellEditResult ClearSelectedRangeAll()
     {
         var range = SelectedRange;

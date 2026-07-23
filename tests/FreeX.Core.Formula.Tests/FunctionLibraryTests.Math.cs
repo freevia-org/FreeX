@@ -438,7 +438,17 @@ public partial class FunctionLibraryTests
     [Fact]
     public void Randbetween_IntegerRangeOverflow_ReturnsNumError()
     {
-        _eval.Evaluate("=RANDBETWEEN(-9223372036854775808,9223372036854775807)", MakeSheet()).Should().Be(ErrorValue.Num);
+        // R75-formula-precision-4-2: a typed literal is now capped to Excel's 15-significant-digit
+        // storage precision, so typing the int64 boundaries directly as formula literals no longer
+        // reaches TryTruncateToLong's out-of-range guard (the truncated 19-digit literals land
+        // safely inside the long range). Supply the exact boundary values via cell references
+        // instead -- SetCell bypasses literal parsing entirely -- to keep exercising the guard this
+        // test targets.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-9223372036854775808d)),
+            (1, 2, new NumberValue(9223372036854775807d)));
+
+        _eval.Evaluate("=RANDBETWEEN(A1,B1)", sheet).Should().Be(ErrorValue.Num);
     }
 
     [Fact]
@@ -494,7 +504,15 @@ public partial class FunctionLibraryTests
     [Fact]
     public void Randarray_WholeNumberIntegerRangeOverflow_ReturnsValueError()
     {
-        _eval.Evaluate("=RANDARRAY(1,1,-9223372036854775808,9223372036854775807,TRUE)", MakeSheet()).Should().Be(ErrorValue.Value);
+        // R75-formula-precision-4-2: see Randbetween_IntegerRangeOverflow_ReturnsNumError -- the
+        // int64-boundary literals are now capped to Excel's 15-significant-digit storage precision
+        // and no longer land exactly at the out-of-long-range double that TryTruncateToLong guards
+        // against, so supply them via cell references (which bypass literal parsing) instead.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-9223372036854775808d)),
+            (1, 2, new NumberValue(9223372036854775807d)));
+
+        _eval.Evaluate("=RANDARRAY(1,1,A1,B1,TRUE)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

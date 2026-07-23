@@ -661,6 +661,19 @@ public partial class GridView
         set => SetValue(ClipboardIsCutProperty, value);
     }
 
+    // ClipboardRanges: when a Ctrl+click multi-area selection is copied/cut, holds every copied
+    // area so RenderMarchingAnts (GridView.Overlays.cs) can stroke ants around each one instead of
+    // the single ClipboardRange bounding box (which would span any untouched gap between areas).
+    // Null (the common single-area case) falls back to the ClipboardRange path unchanged.
+    public static readonly DependencyProperty ClipboardRangesProperty =
+        DependencyProperty.Register(nameof(ClipboardRanges), typeof(IReadOnlyList<GridRange>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<GridRange>? ClipboardRanges
+    {
+        get => (IReadOnlyList<GridRange>?)GetValue(ClipboardRangesProperty);
+        set => SetValue(ClipboardRangesProperty, value);
+    }
+
     private static void OnClipboardRangeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var gv = (GridView)d;

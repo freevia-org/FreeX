@@ -118,11 +118,26 @@ public static class ConditionalFormatRuleBuilder
             case CfRuleType.NotContainsText:
             case CfRuleType.BeginsWith:
             case CfRuleType.EndsWith:
-                cf.TextRuleText = ConditionalFormatInputParser.BlankToNull(input.Text);
+                var previousTextRuleText = cf.TextRuleText;
+                var newTextRuleText = ConditionalFormatInputParser.BlankToNull(input.Text);
+                cf.TextRuleText = newTextRuleText;
+                // The rule's FormulaText (if any) was cloned from the loaded rule and was generated
+                // for the OLD text -- once the user actually changes the text, that stale formula
+                // must be dropped so the writer's synthesis fallback (XlsxAdvancedConditionalFormatWriter)
+                // regenerates it from the new text on save instead of silently keeping the old condition.
+                if (!string.Equals(previousTextRuleText, newTextRuleText, StringComparison.Ordinal))
+                    cf.FormulaText = null;
                 break;
 
             case CfRuleType.DateOccurring:
-                cf.DateOccurringPeriod = ConditionalFormatInputParser.BlankToNull(input.DatePeriod ?? input.Text);
+                var previousDateOccurringPeriod = cf.DateOccurringPeriod;
+                var newDateOccurringPeriod = ConditionalFormatInputParser.BlankToNull(input.DatePeriod ?? input.Text);
+                cf.DateOccurringPeriod = newDateOccurringPeriod;
+                // Same staleness hazard as the text-rule case above: a formula cloned from the loaded
+                // rule was generated for the OLD period and must be cleared once the period actually
+                // changes, so the writer's synthesis fallback regenerates it for the new period.
+                if (!string.Equals(previousDateOccurringPeriod, newDateOccurringPeriod, StringComparison.Ordinal))
+                    cf.FormulaText = null;
                 break;
 
             case CfRuleType.DuplicateValues:

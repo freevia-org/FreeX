@@ -138,6 +138,16 @@ internal static partial class XlsxWorksheetMetadataPreserver
         attribute.Name.Namespace == XNamespace.None &&
         attribute.Name.LocalName is "s" or "customFormat";
 
+    // Same stale-index hazard as IsStylesheetIndexRowAttribute above, but for a <col>'s whole-column
+    // default style. The full-save path rebuilds styles.xml via ClosedXML (renumbering/shrinking
+    // cellXfs), so copying the source column's "style" index verbatim onto the rebuilt <col> can
+    // point past the end of the rebuilt table and crash FreeX's own reload (ClosedXML LoadStyle ->
+    // Enumerable.ElementAt -> ArgumentOutOfRangeException). Intentionally not preserved by the
+    // column-attribute merge -- the whole-column style is dropped rather than risking that crash.
+    private static bool IsStylesheetIndexColumnAttribute(XAttribute attribute) =>
+        attribute.Name.Namespace == XNamespace.None &&
+        attribute.Name.LocalName is "style";
+
     private static bool IsOfficeRevisionNamespace(string namespaceName) =>
         namespaceName.StartsWith("http://schemas.microsoft.com/office/spreadsheetml/", StringComparison.Ordinal) &&
         namespaceName.Contains("/revision", StringComparison.Ordinal);

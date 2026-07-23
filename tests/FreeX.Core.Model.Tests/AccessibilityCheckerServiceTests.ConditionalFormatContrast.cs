@@ -3659,7 +3659,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(7,37))", FormulaBaseConversionAllLocations);
         AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(7,2,-1))", FormulaBaseConversionAllLocations);
         AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(7,2,256))", FormulaBaseConversionAllLocations);
-        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(9007199254740992,2))", FormulaBaseConversionAllLocations);
+        // 9.01E15 is unambiguously >= 2^53 (BASE's overflow limit) even after Excel's 15-significant-
+        // digit literal cap; the exact-2^53 literal 9007199254740992 (16 sig digits) caps to
+        // 9007199254740990, which is BELOW the limit and so no longer errors -- matching real Excel.
+        AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(BASE(9010000000000000,2))", FormulaBaseConversionAllLocations);
         AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(DECIMAL(\"\",16))", FormulaBaseConversionAllLocations);
         AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(DECIMAL(\"2\",2))", FormulaBaseConversionAllLocations);
         AssertFormulaBaseConversionFunctionContrastLocations("ISERROR(DECIMAL(\"FF\",1))", FormulaBaseConversionAllLocations);

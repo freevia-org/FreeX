@@ -8,7 +8,26 @@ public static partial class BuiltInFunctions
     // corresponding logical value, the same way it coerces text conditions in IF/IFS (see
     // FormulaEvaluator.ControlFlow.cs's TryCoerceCondition). Any other non-blank text is not a valid
     // logical value here and yields #VALUE! (returning null tells the caller to do so).
-    private static bool? TryCoerceRangeLookupBool(ScalarValue v) => v switch
+    // Excel coerces a blank lookup_value to 0 for an approximate-match comparison (VLOOKUP/HLOOKUP
+    // approximate, MATCH match_type 1/-1, LOOKUP). Without this, ApproxLookupTypeClass(blank)
+    // yields the dedicated "blank" class (0), which the "skip when the candidate's type class
+    // differs from the lookup value's" filter then treats as never matching any numeric candidate
+    // row -- so a genuinely blank lookup_value always missed an otherwise-valid approximate match
+    // (R75-formula-lookup-vhx-4-2). This mirrors, for the LOOKUP-VALUE side, the same blank
+    // coercion CompareScalar's CoerceBlankForCompare already applies on the CANDIDATE side; only
+    // the type-class filter needed the equivalent fix here, since CompareScalar itself already
+    // coerces a blank lookup value against a non-blank candidate correctly.
+    // Internal (not private): FormulaEvaluator.LookupFastPaths.cs's direct-literal-range fast
+    // paths for VLOOKUP/HLOOKUP/MATCH/LOOKUP (EvaluateLegacyLookupDirectTable/
+    // EvaluateMatchDirectRange/EvaluateLookupDirectVectors) duplicate this same approximate-match
+    // scan and need the identical blank-lookup-value coercion (R75-formula-lookup-vhx-4-2) --
+    // reached even when the lookup_value argument is a single bare cell reference like "A1",
+    // since TryAsRangeRef (the fast path's own bail-to-slow-path guard) only recognizes multi-cell
+    // RangeRefNode/whole-row/whole-column shapes, not a plain CellRefNode.
+    internal static int ApproxLookupClassForLookupValue(ScalarValue lookupValue) =>
+        lookupValue is BlankValue ? ApproxLookupTypeClass(new NumberValue(0)) : ApproxLookupTypeClass(lookupValue);
+
+    internal static bool? TryCoerceRangeLookupBool(ScalarValue v) => v switch
     {
         BoolValue b => b.Value,
         NumberValue n => n.Value != 0.0,
@@ -60,7 +79,7 @@ public static partial class BuiltInFunctions
             // (text headers above numeric data do not abort the scan), but a genuinely blank cell
             // is coerced to 0/"" (like any other blank participating in a comparison) rather than
             // excluded outright, so it stays eligible as a candidate between real values.
-            int lookupClass = ApproxLookupTypeClass(lookupValue);
+            int lookupClass = ApproxLookupClassForLookupValue(lookupValue);
             int bestRow = -1;
             for (int r = 1; r <= table.RowCount; r++)
             {
@@ -126,7 +145,7 @@ public static partial class BuiltInFunctions
             // Skip entries whose type class differs from the lookup value's type class, but let a
             // genuinely blank cell through (see VlookupScalar) so it coerces to 0/"" instead of
             // being excluded outright.
-            int lookupClass = ApproxLookupTypeClass(lookupValue);
+            int lookupClass = ApproxLookupClassForLookupValue(lookupValue);
             int bestCol = -1;
             for (int c = 1; c <= table.ColCount; c++)
             {
@@ -285,7 +304,7 @@ public static partial class BuiltInFunctions
             // aborting on the first out-of-order value (see VlookupScalar for why).
             // Skip entries whose type class differs from the lookup value's type class, but let a
             // genuinely blank entry through so it coerces to 0/"" instead of being excluded outright.
-            int lookupClass = ApproxLookupTypeClass(lookupValue);
+            int lookupClass = ApproxLookupClassForLookupValue(lookupValue);
             int best = -1;
             for (int i = 0; i < vector.Count; i++)
             {
@@ -305,7 +324,7 @@ public static partial class BuiltInFunctions
             // the whole vector without aborting on the first out-of-order value (see VlookupScalar).
             // Skip entries whose type class differs from the lookup value's type class, but let a
             // genuinely blank entry through so it coerces to 0/"" instead of being excluded outright.
-            int lookupClass = ApproxLookupTypeClass(lookupValue);
+            int lookupClass = ApproxLookupClassForLookupValue(lookupValue);
             int best = -1;
             for (int i = 0; i < vector.Count; i++)
             {
@@ -347,7 +366,7 @@ public static partial class BuiltInFunctions
                 : new[] { args[2] })
             : lookupFlat;
         var lookupVal = args[0];
-        int lookupClass = ApproxLookupTypeClass(lookupVal);
+        int lookupClass = ApproxLookupClassForLookupValue(lookupVal);
         int matchIdx = -1;
         for (int i = 0; i < lookupFlat.Count; i++)
         {
@@ -364,7 +383,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue LookupVectorForm(ScalarValue lookupVal, LookupRangeVector lookupVector, LookupValueVector resultVector)
     {
-        int lookupClass = ApproxLookupTypeClass(lookupVal);
+        int lookupClass = ApproxLookupClassForLookupValue(lookupVal);
         int matchIdx = -1;
         for (int i = 0; i < lookupVector.Count; i++)
         {

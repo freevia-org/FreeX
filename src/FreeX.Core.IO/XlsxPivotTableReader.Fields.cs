@@ -222,8 +222,36 @@ internal static partial class XlsxPivotTableReader
                     ReadOptionalBoolAttribute(field, "dragToCol"),
                     ReadOptionalBoolAttribute(field, "dragToPage"),
                     ReadOptionalBoolAttribute(field, "dragToData"),
-                    ReadOptionalBoolAttribute(field, "showDropDowns"))))
+                    ReadOptionalBoolAttribute(field, "showDropDowns"),
+                    // R75-io-pivottable-layout-4-2: this field's own defaultSubtotal/subtotalTop, kept
+                    // separate from PivotTableModel.ShowSubtotals/SubtotalPlacement (previously read only
+                    // off the FIRST axis field via FindFirstPivotFieldElement, collapsing every axis
+                    // field's own setting into one table-wide value).
+                    ReadOptionalBoolAttribute(field, "defaultSubtotal"),
+                    ReadOptionalBoolAttribute(field, "subtotalTop") is { } subtotalTop
+                        ? subtotalTop ? PivotSubtotalPlacement.Top : PivotSubtotalPlacement.Bottom
+                        : null,
+                    // R75-io-pivottable-layout-4-3: this field's own compact/outline report form, kept
+                    // separate from PivotTableModel.ReportLayout (previously only a table-wide value).
+                    ReadPivotFieldReportLayout(field))))
             .ToDictionary(pair => pair.Key, pair => pair.Value);
+    }
+
+    // Sibling of XlsxPivotTableReader.Converters.cs's ReadPivotReportLayout(XElement root), scoped to a
+    // single <pivotField> rather than the <pivotTableDefinition> root. Only axis (row/column) fields ever
+    // carry these attributes (XlsxPivotTableWriter.cs only emits them for isAxisField); a field with
+    // neither attribute returns null so the table-wide PivotTableModel.ReportLayout is used instead.
+    private static PivotReportLayout? ReadPivotFieldReportLayout(XElement field)
+    {
+        if (field.Attribute("compact") is null && field.Attribute("outline") is null)
+            return null;
+
+        if (XlsxXmlAttributeReader.ReadBoolAttribute(field, "compact", defaultValue: true))
+            return PivotReportLayout.Compact;
+
+        return XlsxXmlAttributeReader.ReadBoolAttribute(field, "outline")
+            ? PivotReportLayout.Outline
+            : PivotReportLayout.Tabular;
     }
 
     private static List<PivotFieldModel> ReadPivotFieldIndexes(
@@ -356,7 +384,13 @@ internal static partial class XlsxPivotTableReader
             metadata?.DragToColumn,
             metadata?.DragToPage,
             metadata?.DragToData,
-            metadata?.ShowDropDowns);
+            metadata?.ShowDropDowns,
+            IsUnplacedFilterField: false,
+            GroupStartDate: null,
+            GroupEndDate: null,
+            ShowSubtotals: metadata?.ShowSubtotals,
+            SubtotalPlacement: metadata?.SubtotalPlacement,
+            ReportLayout: metadata?.ReportLayout);
 
     private static IReadOnlyList<string>? ReadNativePivotFieldSelection(
         IReadOnlyDictionary<int, IReadOnlyList<string>>? nativeFieldSelections,
@@ -395,5 +429,8 @@ internal static partial class XlsxPivotTableReader
         bool? DragToColumn,
         bool? DragToPage,
         bool? DragToData,
-        bool? ShowDropDowns);
+        bool? ShowDropDowns,
+        bool? ShowSubtotals,
+        PivotSubtotalPlacement? SubtotalPlacement,
+        PivotReportLayout? ReportLayout);
 }

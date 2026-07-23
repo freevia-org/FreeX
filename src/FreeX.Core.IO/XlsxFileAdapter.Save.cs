@@ -310,16 +310,22 @@ public sealed partial class XlsxFileAdapter
             // Excel's collapsed="1" outline marker. Collapse() is the only ClosedXML API that can set
             // the collapsed flag, but it also hides the row; Unhide() afterward clears that spurious
             // hidden flag so the anchor stays visible -- unless the same row is ALSO a genuinely
-            // hidden detail row of an outer group (already hidden above), in which case both flags are
-            // correct and it must stay hidden.
+            // hidden row for ANY reason (an outer group's detail row, a manually-hidden row, or a
+            // filter-hidden row), in which case both flags are correct and it must stay hidden.
+            // Checking GroupHiddenRows alone would wrongly resurrect an anchor row the user also
+            // hid manually or that a filter hides (R75-commands-outline-group-4-1).
             foreach (var rowNum in sheet.CollapsedAnchorRows)
             {
                 if (!IsValidWorksheetRow(rowNum))
                     continue;
                 var xlRow = xlSheet.Row((int)rowNum);
                 xlRow.Collapse();
-                if (!sheet.GroupHiddenRows.Contains(rowNum))
+                if (!sheet.GroupHiddenRows.Contains(rowNum) &&
+                    !sheet.HiddenRows.Contains(rowNum) &&
+                    !sheet.FilterHiddenRows.Contains(rowNum))
+                {
                     xlRow.Unhide();
+                }
             }
 
             foreach (var (colNum, width) in sheet.ColumnWidths)
@@ -349,16 +355,21 @@ public sealed partial class XlsxFileAdapter
             }
 
             // Mark the visible anchor column of each collapsed outline group with collapsed="1",
-            // un-hiding afterward unless that same column is also a genuinely hidden detail column
-            // of an outer group.
+            // un-hiding afterward unless that same column is also hidden for ANY reason -- a
+            // genuinely hidden detail column of an outer group, or a manually-hidden column.
+            // Checking GroupHiddenCols alone would wrongly resurrect an anchor column the user also
+            // hid manually (R75-commands-outline-group-4-1).
             foreach (var colNum in sheet.CollapsedAnchorCols)
             {
                 if (!IsValidWorksheetColumn(colNum))
                     continue;
                 var xlCol = xlSheet.Column((int)colNum);
                 xlCol.Collapse();
-                if (!sheet.GroupHiddenCols.Contains(colNum))
+                if (!sheet.GroupHiddenCols.Contains(colNum) &&
+                    !sheet.HiddenCols.Contains(colNum))
+                {
                     xlCol.Unhide();
+                }
             }
 
             foreach (var (address, commentText) in sheet.Comments)

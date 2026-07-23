@@ -505,4 +505,147 @@ public class GroupCommandTests
         var act = () => new GroupRowsCommand(sheet.Id, 1, 3, 9);
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
+
+    // R75-commands-outline-group-4-2: expanding an outer outline group must not force-expand an
+    // independently-collapsed nested subgroup -- Excel keeps the inner subgroup collapsed.
+
+    [Fact]
+    public void SetRowOutlineGroupCollapsed_ExpandOuter_LeavesStillCollapsedNestedSubgroupHidden()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 9, 1, preserveExistingHierarchy: true).Apply(ctx);
+        new GroupRowsCommand(sheet.Id, 4, 6, 2, preserveExistingHierarchy: true).Apply(ctx);
+
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 4, 6, 2, collapsed: true).Apply(ctx);
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 2, 9, 1, collapsed: true).Apply(ctx);
+        sheet.GroupHiddenRows.Should().BeEquivalentTo([2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u]);
+        sheet.CollapsedAnchorRows.Should().BeEquivalentTo([7u, 10u]);
+
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 2, 9, 1, collapsed: false).Apply(ctx);
+
+        sheet.GroupHiddenRows.Should().BeEquivalentTo([4u, 5u, 6u]);
+        sheet.CollapsedAnchorRows.Should().ContainSingle().Which.Should().Be(7u);
+        sheet.IsRowEffectivelyHidden(2).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(3).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(7).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(8).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(9).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(4).Should().BeTrue();
+        sheet.IsRowEffectivelyHidden(6).Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetRowOutlineGroupCollapsed_ExpandOuter_NoNestedSubgroup_RevealsAllRows()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 9, 1).Apply(ctx);
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 2, 9, 1, collapsed: true).Apply(ctx);
+
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 2, 9, 1, collapsed: false).Apply(ctx);
+
+        sheet.GroupHiddenRows.Should().BeEmpty();
+        sheet.CollapsedAnchorRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ExpandRowGroupCommand_SelectionScoped_ExpandOuter_LeavesStillCollapsedNestedSubgroupHidden()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 9, 1, preserveExistingHierarchy: true).Apply(ctx);
+        new GroupRowsCommand(sheet.Id, 4, 6, 2, preserveExistingHierarchy: true).Apply(ctx);
+
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 4, 6, 2, collapsed: true).Apply(ctx);
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 2, 9, 1, collapsed: true).Apply(ctx);
+
+        new ExpandRowGroupCommand(sheet.Id, 1, selectionStart: 2, selectionEnd: 2).Apply(ctx);
+
+        sheet.GroupHiddenRows.Should().BeEquivalentTo([4u, 5u, 6u]);
+        sheet.CollapsedAnchorRows.Should().ContainSingle().Which.Should().Be(7u);
+        sheet.IsRowEffectivelyHidden(2).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(9).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(5).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExpandRowGroupCommand_SelectionScoped_NoNestedSubgroup_RevealsAllRows()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new CollapseRowGroupCommand(sheet.Id, 1, selectionStart: 2).Apply(ctx);
+
+        new ExpandRowGroupCommand(sheet.Id, 1, selectionStart: 2, selectionEnd: 2).Apply(ctx);
+
+        sheet.GroupHiddenRows.Should().BeEmpty();
+        sheet.CollapsedAnchorRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SetColumnOutlineGroupCollapsed_ExpandOuter_LeavesStillCollapsedNestedSubgroupHidden()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 9, 1, preserveExistingHierarchy: true).Apply(ctx);
+        new GroupColumnsCommand(sheet.Id, 4, 6, 2, preserveExistingHierarchy: true).Apply(ctx);
+
+        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 4, 6, 2, collapsed: true).Apply(ctx);
+        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 2, 9, 1, collapsed: true).Apply(ctx);
+        sheet.GroupHiddenCols.Should().BeEquivalentTo([2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u]);
+        sheet.CollapsedAnchorCols.Should().BeEquivalentTo([7u, 10u]);
+
+        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 2, 9, 1, collapsed: false).Apply(ctx);
+
+        sheet.GroupHiddenCols.Should().BeEquivalentTo([4u, 5u, 6u]);
+        sheet.CollapsedAnchorCols.Should().ContainSingle().Which.Should().Be(7u);
+        sheet.IsColEffectivelyHidden(2).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(3).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(7).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(8).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(9).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(4).Should().BeTrue();
+        sheet.IsColEffectivelyHidden(6).Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetColumnOutlineGroupCollapsed_ExpandOuter_NoNestedSubgroup_RevealsAllColumns()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 9, 1).Apply(ctx);
+        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 2, 9, 1, collapsed: true).Apply(ctx);
+
+        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 2, 9, 1, collapsed: false).Apply(ctx);
+
+        sheet.GroupHiddenCols.Should().BeEmpty();
+        sheet.CollapsedAnchorCols.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ExpandColGroupCommand_SelectionScoped_ExpandOuter_LeavesStillCollapsedNestedSubgroupHidden()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 9, 1, preserveExistingHierarchy: true).Apply(ctx);
+        new GroupColumnsCommand(sheet.Id, 4, 6, 2, preserveExistingHierarchy: true).Apply(ctx);
+
+        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 4, 6, 2, collapsed: true).Apply(ctx);
+        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 2, 9, 1, collapsed: true).Apply(ctx);
+
+        new ExpandColGroupCommand(sheet.Id, 1, selectionStart: 2, selectionEnd: 2).Apply(ctx);
+
+        sheet.GroupHiddenCols.Should().BeEquivalentTo([4u, 5u, 6u]);
+        sheet.CollapsedAnchorCols.Should().ContainSingle().Which.Should().Be(7u);
+        sheet.IsColEffectivelyHidden(2).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(9).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(5).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExpandColGroupCommand_SelectionScoped_NoNestedSubgroup_RevealsAllColumns()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new CollapseColGroupCommand(sheet.Id, 1, selectionStart: 2).Apply(ctx);
+
+        new ExpandColGroupCommand(sheet.Id, 1, selectionStart: 2, selectionEnd: 2).Apply(ctx);
+
+        sheet.GroupHiddenCols.Should().BeEmpty();
+        sheet.CollapsedAnchorCols.Should().BeEmpty();
+    }
 }

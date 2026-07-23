@@ -72,7 +72,11 @@ internal static class XlsxDifferentialStyleReader
         {
             style.Bold = font.Element(workbookNs + "b") is not null;
             style.Italic = font.Element(workbookNs + "i") is not null;
-            style.Underline = font.Element(workbookNs + "u") is not null;
+            var underlineElement = font.Element(workbookNs + "u");
+            style.Underline = underlineElement is not null;
+            var underlineVal = underlineElement?.Attribute("val")?.Value;
+            style.DoubleUnderline = string.Equals(underlineVal, "double", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(underlineVal, "doubleAccounting", StringComparison.OrdinalIgnoreCase);
             style.Strikethrough = font.Element(workbookNs + "strike") is not null;
             var verticalAlignment = font.Element(workbookNs + "vertAlign")?.Attribute("val")?.Value;
             style.Superscript = string.Equals(verticalAlignment, "superscript", StringComparison.OrdinalIgnoreCase);

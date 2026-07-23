@@ -343,6 +343,20 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// </summary>
     public CellFontScheme FontScheme { get; set; } = CellFontScheme.None;
 
+    /// <summary>
+    /// Raw OOXML font charset code (<c>&lt;charset val="…"/&gt;</c>), e.g. 2 = Symbol, 128 = ShiftJIS.
+    /// Defaults to 1 ("Default"/unset) — ClosedXML's own sentinel for "no charset specified", which
+    /// keeps a plain font from emitting a spurious <c>charset</c> attribute on save.
+    /// </summary>
+    public int Charset { get; set; } = 1;
+
+    /// <summary>
+    /// Raw OOXML font family-numbering code (<c>&lt;family val="…"/&gt;</c>), e.g. 1 = Roman, 3 = Modern.
+    /// Defaults to 2 (Swiss) — ClosedXML's own sentinel for "no family specified", which keeps a
+    /// plain font from emitting a spurious <c>family</c> attribute on save.
+    /// </summary>
+    public int FontFamily { get; set; } = 2;
+
     /// <summary>Native dxf attributes not modeled by FreeX, retained for conditional-format XLSX fidelity.</summary>
     public IReadOnlyDictionary<string, string>? NativeDifferentialAttributes { get; set; }
 
@@ -392,6 +406,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
         Locked = Locked,
         Hidden = Hidden,
         FontScheme = FontScheme,
+        Charset = Charset,
+        FontFamily = FontFamily,
         NativeDifferentialAttributes = NativeDifferentialAttributes,
         NativeDifferentialChildXmls = NativeDifferentialChildXmls,
         NativeDifferentialElementXmls = NativeDifferentialElementXmls,
@@ -439,6 +455,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && Locked == other.Locked
             && Hidden == other.Hidden
             && FontScheme == other.FontScheme
+            && Charset == other.Charset
+            && FontFamily == other.FontFamily
             && DictionaryEquals(NativeDifferentialAttributes, other.NativeDifferentialAttributes)
             && ListEquals(NativeDifferentialChildXmls, other.NativeDifferentialChildXmls)
             && DictionaryEquals(NativeDifferentialElementXmls, other.NativeDifferentialElementXmls);
@@ -514,6 +532,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(Locked);
         h.Add(Hidden);
         h.Add(FontScheme);
+        h.Add(Charset);
+        h.Add(FontFamily);
         h.Add(GetDictionaryHashCode(NativeDifferentialAttributes));
         h.Add(GetListHashCode(NativeDifferentialChildXmls));
         h.Add(GetDictionaryHashCode(NativeDifferentialElementXmls));

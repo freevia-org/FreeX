@@ -89,11 +89,16 @@ public sealed class R66_ColumnBestFitStylePreservationTests
     }
 
     [Fact]
-    public void MergeWorksheetColumnAttributes_CopiesBestFitAndStyleOntoMatchingRebuiltColumn()
+    public void MergeWorksheetColumnAttributes_CopiesBestFitButNotStyleOntoMatchingRebuiltColumn()
     {
         // Unit-level check on the merge step itself (mirrors XlsxWorksheetMetadataPreserverRowStyleTests):
         // once the preflight correctly flags the sheet as preservable, the actual attribute merge
-        // must carry bestFit/style across for a column range that still exists in the rebuilt target.
+        // must carry bestFit across for a column range that still exists in the rebuilt target.
+        // R75-io-worksheet-props-4-1: "style" is a stylesheet-index attribute -- the source index
+        // is only valid against the SOURCE stylesheet, and the full-rebuild path renumbers/shrinks
+        // cellXfs via ClosedXML, so copying it verbatim risks an out-of-range reference that
+        // crashes FreeX's own reload. It must NOT be copied (mirrors the row "s"/"customFormat"
+        // guard in XlsxWorksheetMetadataPreserverRowStyleTests).
         XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var sourceColumns = new XElement(
             ns + "cols",
@@ -122,7 +127,9 @@ public sealed class R66_ColumnBestFitStylePreservationTests
         changed.Should().BeTrue();
         var targetColumn = targetRoot.Element(ns + "cols")!.Element(ns + "col")!;
         targetColumn.Attribute("bestFit")?.Value.Should().Be("1");
-        targetColumn.Attribute("style")?.Value.Should().Be("1");
+        targetColumn.Attribute("style").Should().BeNull(
+            "the source column's style index points into the stale source stylesheet and would be " +
+            "out of range against the rebuilt cellXfs");
     }
 
     private static string CreateWorksheetWithColumnXml(string colXml) => $"""

@@ -12,7 +12,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<CellStyle> differentialStyles,
         WorkbookTheme workbookTheme,
         WorkbookIndexedColorPalette indexedColors)
-        => ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles, workbookTheme, indexedColors, out _);
+        => ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles, workbookTheme, indexedColors, out _, out _);
 
     /// <summary>
     /// Reads every non-classic (colorScale/dataBar/iconSet/long-tail) conditional format rule from the
@@ -29,9 +29,29 @@ public sealed partial class XlsxFileAdapter
         WorkbookTheme workbookTheme,
         WorkbookIndexedColorPalette indexedColors,
         out IReadOnlyList<int> classicRulePriorities)
+        => ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles, workbookTheme, indexedColors, out classicRulePriorities, out _);
+
+    /// <summary>
+    /// Overload of the above that also captures each skipped classic rule's real
+    /// <c>&lt;conditionalFormatting&gt;</c> container's non-sqref attributes (e.g. <c>pivot="1"</c>),
+    /// in the SAME document order as <paramref name="classicRulePriorities"/>, so
+    /// <see cref="XlsxConditionalFormatClosedXmlMapper.Load"/> can restore
+    /// <see cref="ConditionalFormat.NativeContainerAttributes"/> on the classic rules it maps via
+    /// ClosedXML -- an attribute ClosedXML's own object model has no API surface to read at all
+    /// (R75-io-cf-classic-4-2).
+    /// </summary>
+    private static IReadOnlyList<ConditionalFormat> ReadAdvancedConditionalFormats(
+        XDocument worksheetXml,
+        XNamespace worksheetNs,
+        IReadOnlyList<CellStyle> differentialStyles,
+        WorkbookTheme workbookTheme,
+        WorkbookIndexedColorPalette indexedColors,
+        out IReadOnlyList<int> classicRulePriorities,
+        out IReadOnlyList<IReadOnlyDictionary<string, string>?> classicContainerAttributes)
     {
         var result = new List<ConditionalFormat>();
         var classicPriorities = new List<int>();
+        var classicContainerAttrs = new List<IReadOnlyDictionary<string, string>?>();
         var dataBarGuids = new Dictionary<string, ConditionalFormat>(StringComparer.OrdinalIgnoreCase);
         var iconSetGuids = new Dictionary<string, ConditionalFormat>(StringComparer.OrdinalIgnoreCase);
         // Every x14 id claimed by a classic-modeled rule (colorScale/dataBar/iconSet/long-tail), so the
@@ -164,6 +184,13 @@ public sealed partial class XlsxFileAdapter
                     // model), but capture the real file priority here, in true document order, so both
                     // rule families can share one priority sequence instead of two independent counters.
                     classicPriorities.Add(priority);
+                    // R75-io-cf-classic-4-2: also capture the container's non-sqref attributes (e.g.
+                    // pivot="1") in the same document order -- ClosedXML's own object model exposes no
+                    // such attribute at all, so it must be read straight from the raw XML here and
+                    // handed to XlsxConditionalFormatClosedXmlMapper.Load to restore onto the mapped
+                    // ConditionalFormat.
+                    var containerAttrs = ReadNativeConditionalFormattingContainerAttributes(conditionalFormatting);
+                    classicContainerAttrs.Add(containerAttrs.Count > 0 ? containerAttrs : null);
                 }
             }
         }
@@ -172,6 +199,7 @@ public sealed partial class XlsxFileAdapter
         ReadX14IconSetConditionalFormats(result, iconSetGuids, worksheetXml, tempSheet);
         ReadX14UnhandledConditionalFormatRules(result, claimedX14Ids, worksheetXml, tempSheet);
         classicRulePriorities = classicPriorities;
+        classicContainerAttributes = classicContainerAttrs;
         return result;
     }
 

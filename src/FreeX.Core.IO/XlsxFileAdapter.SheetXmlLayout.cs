@@ -78,6 +78,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<FormControlModel> FormControls,
         IReadOnlyList<ConditionalFormat> AdvancedConditionalFormats,
         IReadOnlyList<int> ClassicConditionalFormatPriorities,
+        IReadOnlyList<IReadOnlyDictionary<string, string>?> ClassicConditionalFormatContainerAttributes,
         IReadOnlyList<DataValidationNativeMetadata> DataValidationNativeMetadata,
         IReadOnlyList<X14DataValidationMetadata> X14DataValidations,
         IgnoredErrorLayout IgnoredErrors,
@@ -289,7 +290,8 @@ public sealed partial class XlsxFileAdapter
         var sparklines = XlsxSparklineMapper.Read(worksheetXml, workbookTheme, indexedColors);
         var formControls = XlsxFormControlMapper.ReadWorksheet(archive, worksheetPath, worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(
-            worksheetXml, worksheetNs, differentialStyles, workbookTheme, indexedColors, out var classicConditionalFormatPriorities);
+            worksheetXml, worksheetNs, differentialStyles, workbookTheme, indexedColors,
+            out var classicConditionalFormatPriorities, out var classicConditionalFormatContainerAttributes);
         var dataValidationNativeMetadata = XlsxDataValidationNativeMetadataMapper.Read(worksheetXml, worksheetNs);
         var x14DataValidations = XlsxX14DataValidationReader.Read(worksheetXml);
         var ignoredErrors = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrors(worksheetXml, worksheetNs);
@@ -415,6 +417,7 @@ public sealed partial class XlsxFileAdapter
             formControls,
             advancedConditionalFormats,
             classicConditionalFormatPriorities,
+            classicConditionalFormatContainerAttributes,
             dataValidationNativeMetadata,
             x14DataValidations,
             ignoredErrors,

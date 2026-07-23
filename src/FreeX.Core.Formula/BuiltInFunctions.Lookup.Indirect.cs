@@ -144,25 +144,41 @@ public static partial class BuiltInFunctions
         // Workbook.TryGetNamedRange(name, sheetId) already implements exactly that precedence.
         if (sheetName is not null &&
             ctx.CurrentWorkbook is { } qualifiedWorkbook &&
-            qualifiedWorkbook.GetSheet(sheetName) is { } qualifiedSheet &&
-            qualifiedWorkbook.TryGetNamedRange(refText, qualifiedSheet.Id, out var qualifiedNamedRange))
+            qualifiedWorkbook.GetSheet(sheetName) is { } qualifiedSheet)
         {
-            var qualifiedRangeSheetName = ctx.TryGetSheetName(qualifiedNamedRange.Start.Sheet);
-            if (qualifiedRangeSheetName is null)
+            // R75-meta-2: mirror FormulaEvaluator.TryResolveSheetQualifiedName's own
+            // scoped-formula-first precedence (a name's scope resolution is per-name, not
+            // per-kind -- see IsSheetScopedNamedFormula's summary above). Workbook.TryGetNamedRange
+            // below only ever sees ScopedNamedRanges (never ScopedNamedFormulas), so a named
+            // FORMULA scoped to the qualified sheet (e.g. INDIRECT("Sheet2!GrownName") where
+            // GrownName = OFFSET(...)) must be tried first, or it falls straight through to #REF!
+            // even though the equivalent unqualified INDIRECT("GrownName") (evaluated from Sheet2)
+            // and the direct =Sheet2!GrownName formula reference both already resolve it.
+            if (qualifiedWorkbook.ScopedNamedFormulas.ContainsKey((refText, qualifiedSheet.Id)))
             {
-                error = ErrorValue.Ref;
-                return false;
+                return FormulaEvaluator.TryResolveIndirectNamedFormulaScoped(refText, qualifiedSheet.Id, ctx, out var scopedFormulaRange, out error)
+                    && CompleteIndirectRangeFromNamedFormula(ctx, scopedFormulaRange, out range, out error);
             }
 
-            return CompleteIndirectRange(
-                ctx,
-                qualifiedRangeSheetName,
-                qualifiedNamedRange.Start.Row,
-                qualifiedNamedRange.Start.Col,
-                qualifiedNamedRange.End.Row,
-                qualifiedNamedRange.End.Col,
-                out range,
-                out error);
+            if (qualifiedWorkbook.TryGetNamedRange(refText, qualifiedSheet.Id, out var qualifiedNamedRange))
+            {
+                var qualifiedRangeSheetName = ctx.TryGetSheetName(qualifiedNamedRange.Start.Sheet);
+                if (qualifiedRangeSheetName is null)
+                {
+                    error = ErrorValue.Ref;
+                    return false;
+                }
+
+                return CompleteIndirectRange(
+                    ctx,
+                    qualifiedRangeSheetName,
+                    qualifiedNamedRange.Start.Row,
+                    qualifiedNamedRange.Start.Col,
+                    qualifiedNamedRange.End.Row,
+                    qualifiedNamedRange.End.Col,
+                    out range,
+                    out error);
+            }
         }
 
         return false;

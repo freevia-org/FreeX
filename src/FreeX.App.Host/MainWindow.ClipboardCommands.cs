@@ -39,6 +39,7 @@ public partial class MainWindow
     private void ClearClipboardVisualState()
     {
         SheetGrid.ClipboardRange = null;
+        SheetGrid.ClipboardRanges = null;
         SheetGrid.ClipboardIsCut = false;
     }
 
@@ -143,11 +144,13 @@ public partial class MainWindow
             catch { /* clipboard may be locked */ }
         }
 
-        // Show marching ants around the copied range. GridView.ClipboardRange only supports one
-        // rectangle (no multi-area marching-ants rendering), so a disjoint selection's visual
-        // indicator is the bounding box -- a pre-existing GridView (App.UI) limitation outside this
-        // file's scope; it does not affect what actually gets copied/pasted below.
+        // Show marching ants around the copied range(s). ClipboardRange stays the bounding box (used
+        // as the sheet-affinity check and by the internal-paste "preserve visual" path), while
+        // ClipboardRanges carries every individual area of a Ctrl+click multi-area copy so GridView
+        // (App.UI) can stroke ants around each one instead of the bounding box's untouched gaps
+        // (R75-render-selection-marquee-4-3).
         SheetGrid.ClipboardRange = copyRange;
+        SheetGrid.ClipboardRanges = areas.Count > 1 ? areas : null;
         SheetGrid.ClipboardIsCut = isCut;
 
         // Capture raw cells (including formulas) for paste formula adjustment -- from EVERY
@@ -1116,6 +1119,47 @@ public partial class MainWindow
         // R54-render-copy-cut-marquee-4-1: Delete/Clear Contents on a still-active Copy/Cut
         // marquee must cancel it, matching Excel -- otherwise a later Paste would silently
         // move/copy the source range using its now-cleared (not the originally copied) contents.
+        if (_internalClipboard is not null || SheetGrid.ClipboardRange is not null)
+        {
+            _internalClipboard = null;
+            ClearClipboardVisualState();
+        }
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+        if (SheetGrid.SelectedRange is { } selectedRange)
+        {
+            var activeCell = selectedRange.Start;
+            FormulaBar.Text = FormatFormulaBarText(
+                _workbook.GetSheet(_currentSheetId)?.GetCell(activeCell),
+                activeCell);
+        }
+    }
+
+    /// <summary>
+    /// R75-commands-clear-delete-4-1: Backspace on a (possibly multi-cell) selection clears ONLY the
+    /// active cell -- unlike Delete/Clear Contents (<see cref="ExecuteClearSelection"/>), which
+    /// clears the whole selection. Matches Excel: Backspace is never a bulk-clear operation. Uses
+    /// TryExecuteRepeatableGroupedSheetCommand (rather than
+    /// TryExecuteRepeatableCurrentSelectionRangesCommand, which always resolves the actual
+    /// multi-area SheetGrid selection) so only the single active cell is targeted, remapped per
+    /// grouped sheet like the keyboard Insert/Delete Cells paths above.
+    /// </summary>
+    private void ExecuteClearActiveCell()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Clear Contents",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var activeCellRange = new GridRange(currentRange.Start, currentRange.Start);
+                    return new ClearContentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(activeCellRange, sheetId));
+                },
+                out var outcome))
+            return;
+
         if (_internalClipboard is not null || SheetGrid.ClipboardRange is not null)
         {
             _internalClipboard = null;

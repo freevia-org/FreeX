@@ -807,7 +807,10 @@ public partial class GridView : FrameworkElement
     private static readonly Pen ValidationCirclePen = MakePen(MakeBrush(226, 28, 33), 1.5);
     private static readonly Pen[] MarchingAntsBlackPens = CreateMarchingAntsPens(Brushes.Black, 2.5);
     private static readonly Pen[] MarchingAntsCopyOverlayPens = CreateMarchingAntsPens(Brushes.White, 1.5);
-    private static readonly Pen[] MarchingAntsCutOverlayPens = CreateMarchingAntsPens(MakeBrush(245, 124, 0), 1.5);
+    // Excel does not color-differentiate a Cut marquee from a Copy marquee -- both use the same
+    // black/white marching ants (R75-render-selection-marquee-4-4). Route Cut through the same
+    // white overlay pens as Copy rather than a distinct orange.
+    private static readonly Pen[] MarchingAntsCutOverlayPens = MarchingAntsCopyOverlayPens;
 
     // Per-frame render caches: allocated once and cleared at the start of each render pass
     // to avoid GC pressure from fresh Dictionary allocations on every frame.

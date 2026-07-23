@@ -89,7 +89,11 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     style.Bold != def.Bold ? new XElement(workbookNs + "b") : null,
                     style.Italic != def.Italic ? new XElement(workbookNs + "i") : null,
                     style.Strikethrough != def.Strikethrough ? new XElement(workbookNs + "strike") : null,
-                    style.Underline != def.Underline ? new XElement(workbookNs + "u") : null,
+                    style.Underline != def.Underline || style.DoubleUnderline != def.DoubleUnderline
+                        ? style.DoubleUnderline
+                            ? new XElement(workbookNs + "u", new XAttribute("val", "double"))
+                            : new XElement(workbookNs + "u")
+                        : null,
                     style.Superscript != def.Superscript
                         ? new XElement(workbookNs + "vertAlign", new XAttribute("val", "superscript"))
                         : style.Subscript != def.Subscript
@@ -338,6 +342,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         return style.Bold != def.Bold ||
             style.Italic != def.Italic ||
             style.Underline != def.Underline ||
+            style.DoubleUnderline != def.DoubleUnderline ||
             style.Strikethrough != def.Strikethrough ||
             style.Superscript != def.Superscript ||
             style.Subscript != def.Subscript ||

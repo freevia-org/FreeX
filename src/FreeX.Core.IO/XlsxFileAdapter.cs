@@ -835,11 +835,15 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             // in document order) rather than a private counter, so they share one priority sequence
             // with the advanced (ColorScale/DataBar/IconSet/long-tail) rules already added above via
             // ApplySheetXmlLayout, preserving the original file's relative evaluation order.
+            // ClassicConditionalFormatContainerAttributes (same document order) restores each classic
+            // rule's preserved <conditionalFormatting> container attributes (e.g. pivot="1") that
+            // ClosedXML's own object model has no API surface to read (R75-io-cf-classic-4-2).
             try
             {
                 XlsxConditionalFormatClosedXmlMapper.Load(
                     xlSheet, sheet, workbook.Theme, XlsxClosedXmlCellMapper.MapStyle,
-                    xmlLayout?.ClassicConditionalFormatPriorities);
+                    xmlLayout?.ClassicConditionalFormatPriorities,
+                    xmlLayout?.ClassicConditionalFormatContainerAttributes);
             }
             catch (Exception ex) { warnings.Add($"[conditional-format] Sheet '{xlSheet.Name}': {ex.Message}"); }
 

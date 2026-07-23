@@ -458,16 +458,25 @@ internal static partial class XlsxPivotTableWriter
                     // home in the base spreadsheetml schema -- it is emitted below as the real x14
                     // fillDownLabels per-field extension (ToX14FillDownLabelsExtension).
                     isAxisField && pivot.BlankLineAfterItems ? new XAttribute("insertBlankRow", "1") : null,
-                    // R52-io-pivot-layout-3-4: CT_PivotField's own compact/outline attributes (both default
-                    // true when omitted) are what a real Excel client actually applies when rendering this
-                    // field's header form -- the table-level compact/outline/outlineData/compactData
-                    // attributes (PivotReportLayoutAttributes, written on the root <pivotTableDefinition>
-                    // above) are only the defaults Excel seeds onto newly-added fields, not a live override of
-                    // an existing field's own attributes. Without emitting these here, every axis field keeps
-                    // the schema default (Compact form) regardless of the table's actual ReportLayout choice.
-                    isAxisField ? new XAttribute("compact", pivot.ReportLayout == PivotReportLayout.Compact ? "1" : "0") : null,
-                    isAxisField ? new XAttribute("outline", pivot.ReportLayout == PivotReportLayout.Tabular ? "0" : "1") : null,
-                    pivot.ShowSubtotals ? new XAttribute("defaultSubtotal", "1") : null,
+                    // R52-io-pivot-layout-3-4 / R75-io-pivottable-layout-4-3: CT_PivotField's own
+                    // compact/outline attributes (both default true when omitted) are what a real Excel
+                    // client actually applies when rendering this field's header form -- the table-level
+                    // compact/outline/outlineData/compactData attributes (PivotReportLayoutAttributes,
+                    // written on the root <pivotTableDefinition> above) are only the defaults Excel seeds
+                    // onto newly-added fields, not a live override of an existing field's own attributes.
+                    // Prefer this field's OWN ReportLayout (metadataField?.ReportLayout) when the model
+                    // records one, falling back to the table-wide pivot.ReportLayout otherwise -- this is
+                    // what lets two axis fields carry independently different report forms.
+                    isAxisField ? new XAttribute("compact", (metadataField?.ReportLayout ?? pivot.ReportLayout) == PivotReportLayout.Compact ? "1" : "0") : null,
+                    isAxisField ? new XAttribute("outline", (metadataField?.ReportLayout ?? pivot.ReportLayout) == PivotReportLayout.Tabular ? "0" : "1") : null,
+                    // R75-io-pivottable-layout-4-2: prefer this field's OWN ShowSubtotals/SubtotalPlacement
+                    // when the model records one, falling back to the table-wide pivot.ShowSubtotals/
+                    // SubtotalPlacement otherwise -- mirrors the ReportLayout fallback above. Written
+                    // unconditionally (not gated on the effective value being true), matching subtotalTop's
+                    // own R60-io-pivot-layout-6-2 rationale: the OOXML schema default for an omitted
+                    // defaultSubtotal is TRUE, so omitting it for an off field would silently revert to
+                    // subtotals-shown on the next load.
+                    new XAttribute("defaultSubtotal", (metadataField?.ShowSubtotals ?? pivot.ShowSubtotals) ? "1" : "0"),
                     // R60-io-pivot-layout-6-2: the OOXML schema default for subtotalTop (when omitted) is
                     // TRUE (Top), so Bottom placement must explicitly write "0" -- omitting the attribute
                     // for Bottom (as before) is schema-identical to Top and silently reverts the user's
@@ -476,7 +485,7 @@ internal static partial class XlsxPivotTableWriter
                     // model's persisted top/bottom PREFERENCE, independent of whether subtotals currently
                     // display -- gating it on ShowSubtotals would silently forget a user's Bottom choice
                     // (defaulting back to Top on read) the moment subtotals are toggled off.
-                    new XAttribute("subtotalTop", pivot.SubtotalPlacement == PivotSubtotalPlacement.Top ? "1" : "0"),
+                    new XAttribute("subtotalTop", (metadataField?.SubtotalPlacement ?? pivot.SubtotalPlacement) == PivotSubtotalPlacement.Top ? "1" : "0"),
                     new XAttribute("showAll", metadataField?.ShowAll == true ? "1" : "0"),
                     ToOptionalBoolAttribute("includeNewItemsInFilter", metadataField?.IncludeNewItemsInFilter),
                     ToOptionalBoolAttribute("multipleItemSelectionAllowed", metadataField?.MultipleItemSelectionAllowed),

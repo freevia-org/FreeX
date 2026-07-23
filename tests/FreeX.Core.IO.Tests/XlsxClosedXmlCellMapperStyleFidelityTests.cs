@@ -113,7 +113,14 @@ public sealed class XlsxClosedXmlCellMapperStyleFidelityTests
         // CellStyle.Default and liable to be silently dropped by ClosedXML on save.
         cell.Style.Fill.PatternType.Should().NotBe(XLFillPatternValues.None);
         cell.Style.Fill.PatternType.Should().Be(XLFillPatternValues.Solid);
-        cell.Style.Fill.BackgroundColor.Color.Should().Be(System.Drawing.Color.FromArgb(255, 0, 112, 192));
+
+        // R75-io-styles-fonts-4-1: the placeholder is no longer the gradient's literal first-stop
+        // colour — its low-order bits are perturbed by ComputeGradientPlaceholderColor (a hash of the
+        // gradient's FULL content) so two distinct gradients sharing a first stop don't collide into
+        // one rebuilt fill. Compare against that same derivation rather than the raw stop colour.
+        var expectedPlaceholder = XlsxClosedXmlCellMapper.ComputeGradientPlaceholderColor(gradientOnlyStyle.GradientFill!);
+        cell.Style.Fill.BackgroundColor.Color.Should().Be(
+            System.Drawing.Color.FromArgb(255, expectedPlaceholder.R, expectedPlaceholder.G, expectedPlaceholder.B));
     }
 
     [Fact]

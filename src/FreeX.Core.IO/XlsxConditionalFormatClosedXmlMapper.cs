@@ -10,7 +10,8 @@ internal static class XlsxConditionalFormatClosedXmlMapper
         Sheet sheet,
         WorkbookTheme theme,
         Func<IXLStyle, WorkbookTheme, CellStyle> mapStyle,
-        IReadOnlyList<int>? classicRulePriorities = null)
+        IReadOnlyList<int>? classicRulePriorities = null,
+        IReadOnlyList<IReadOnlyDictionary<string, string>?>? classicContainerAttributes = null)
     {
         // Real per-rule priorities as read straight from the worksheet XML, in document order
         // (see XlsxFileAdapter.ReadAdvancedConditionalFormats). Using these instead of a private
@@ -22,6 +23,27 @@ internal static class XlsxConditionalFormatClosedXmlMapper
             : null;
         int fallbackPriority = 1;
         int NextPriority() => priorityQueue is { Count: > 0 } ? priorityQueue.Dequeue() : fallbackPriority++;
+
+        // R75-io-cf-classic-4-2: the real <conditionalFormatting> container's non-sqref attributes
+        // (e.g. pivot="1") in the SAME document order as classicRulePriorities above -- ClosedXML's
+        // own object model (IXLConditionalFormat/IXLConditionalFormats) exposes no such attribute at
+        // all, so a caller wanting these preserved must capture them straight from the raw worksheet
+        // XML (mirroring how classicRulePriorities itself is captured) and pass them here.
+        var containerAttributesQueue = classicContainerAttributes is { Count: > 0 }
+            ? new Queue<IReadOnlyDictionary<string, string>?>(classicContainerAttributes)
+            : null;
+        IReadOnlyDictionary<string, string>? NextContainerAttributes() =>
+            containerAttributesQueue is { Count: > 0 } ? containerAttributesQueue.Dequeue() : null;
+
+        // Advances both queues together -- every classic rule (matched or skipped) consumes exactly
+        // one slot from each, keeping them aligned the same way ReadAdvancedConditionalFormats
+        // recorded them (one entry per classic <cfRule> encountered, in document order).
+        (int Priority, IReadOnlyDictionary<string, string>? ContainerAttributes) NextClassicRuleMetadata()
+        {
+            var priority = NextPriority();
+            var containerAttributes = NextContainerAttributes();
+            return (priority, containerAttributes is { Count: > 0 } ? containerAttributes : null);
+        }
 
         foreach (var xlCf in xlSheet.ConditionalFormats)
         {
@@ -36,7 +58,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
             var xlRanges = xlCf.Ranges.Select(range => range.RangeAddress).ToArray();
             if (xlRanges.Length == 0)
             {
-                NextPriority();
+                NextClassicRuleMetadata();
                 continue;
             }
 
@@ -66,7 +88,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 var op = MapOperator(xlCf.Operator);
                 if (op is null)
                 {
-                    NextPriority();
+                    NextClassicRuleMetadata();
                     continue;
                 }
 
@@ -74,17 +96,19 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 string? v1 = values.TryGetValue(1, out var xv1) ? xv1.Value : null;
                 string? v2 = values.TryGetValue(2, out var xv2) ? xv2.Value : null;
 
+                var (cellIsPriority, cellIsContainerAttributes) = NextClassicRuleMetadata();
                 var fmt = new ConditionalFormat
                 {
                     AppliesTo = appliesTo,
                     AdditionalRanges = additionalRanges,
-                    Priority = NextPriority(),
+                    Priority = cellIsPriority,
                     RuleType = CfRuleType.CellValue,
                     Operator = op.Value,
                     Value1 = v1,
                     Value2 = v2,
                     StopIfTrue = xlCf.StopIfTrue,
-                    FormatIfTrue = mapStyle(xlCf.Style, theme)
+                    FormatIfTrue = mapStyle(xlCf.Style, theme),
+                    NativeContainerAttributes = cellIsContainerAttributes
                 };
                 sheet.ConditionalFormats.Add(fmt);
             }
@@ -94,22 +118,24 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 string? formula = values.TryGetValue(1, out var xvf) ? xvf.Value : null;
                 if (string.IsNullOrWhiteSpace(formula))
                 {
-                    NextPriority();
+                    NextClassicRuleMetadata();
                     continue;
                 }
 
                 if (formula.StartsWith('='))
                     formula = formula[1..];
 
+                var (expressionPriority, expressionContainerAttributes) = NextClassicRuleMetadata();
                 var fmt = new ConditionalFormat
                 {
                     AppliesTo = appliesTo,
                     AdditionalRanges = additionalRanges,
-                    Priority = NextPriority(),
+                    Priority = expressionPriority,
                     RuleType = CfRuleType.Formula,
                     FormulaText = formula,
                     StopIfTrue = xlCf.StopIfTrue,
-                    FormatIfTrue = mapStyle(xlCf.Style, theme)
+                    FormatIfTrue = mapStyle(xlCf.Style, theme),
+                    NativeContainerAttributes = expressionContainerAttributes
                 };
                 sheet.ConditionalFormats.Add(fmt);
             }

@@ -225,6 +225,12 @@ internal static partial class XlsxPivotTableReader
             .ToList();
     }
 
+    // ECMA-376's CT_Reference "field" attribute is an xsd:unsignedInt; the special sentinel Excel uses to
+    // mark "this reference identifies the Values/data axis, not an ordinary row/column field" is -2
+    // (mirroring the CT_Field @x="-2" "Σ Values" pseudo-field marker read elsewhere in this file), written
+    // in its unsigned wire form.
+    private const string PivotFieldDataAxisReferenceValue = "4294967294";
+
     private static List<PivotSortModel> ReadNativePivotFieldSorts(XElement? pivotFieldsElement, XNamespace workbookNs)
     {
         if (pivotFieldsElement is null)
@@ -242,16 +248,53 @@ internal static partial class XlsxPivotTableReader
                     return null;
                 }
 
-                return new PivotSortModel(
-                    PivotSortTarget.Label,
-                    string.Equals(sortType, "descending", StringComparison.OrdinalIgnoreCase)
-                        ? PivotSortDirection.Descending
-                        : PivotSortDirection.Ascending,
-                    FieldIndex: item.Index);
+                var direction = string.Equals(sortType, "descending", StringComparison.OrdinalIgnoreCase)
+                    ? PivotSortDirection.Descending
+                    : PivotSortDirection.Ascending;
+
+                // R75-io-pivottable-layout-4-4: a sort-by-data-field ("Sort by Total Revenue descending")
+                // is recorded as sortType PLUS an <autoSortScope> identifying which data field drives the
+                // order -- reading sortType alone (as before) silently turned it into a plain Label sort
+                // ("sort Product names Z-A"), the opposite of what the user actually configured.
+                if (ReadAutoSortScopeDataFieldIndex(item.Field, workbookNs) is { } dataFieldIndex)
+                {
+                    return new PivotSortModel(PivotSortTarget.Value, direction, DataFieldIndex: dataFieldIndex, FieldIndex: item.Index);
+                }
+
+                return new PivotSortModel(PivotSortTarget.Label, direction, FieldIndex: item.Index);
             })
             .Where(sort => sort is not null)
             .Select(sort => sort!)
             .ToList();
+    }
+
+    // Reads the data-field index a <pivotField>'s <autoSortScope> identifies, when present. Real Excel
+    // marks an auto-sort-by-value scope with a <reference field="4294967294"> (the sentinel above) whose
+    // single child <x v="N"/> names which data field -- by its position in <dataFields>, i.e.
+    // PivotTableModel.DataFields -- drives the sort. Returns null when the field has no autoSortScope at
+    // all, or the autoSortScope's references never identify a data field (an unusual/malformed shape);
+    // callers then fall back to treating the sort as a plain Label sort, exactly as before this fix.
+    private static int? ReadAutoSortScopeDataFieldIndex(XElement pivotFieldElement, XNamespace workbookNs)
+    {
+        var references = pivotFieldElement
+            .Element(workbookNs + "autoSortScope")?
+            .Element(workbookNs + "pivotArea")?
+            .Element(workbookNs + "references")?
+            .Elements(workbookNs + "reference");
+        if (references is null)
+            return null;
+
+        foreach (var reference in references)
+        {
+            if (!string.Equals(reference.Attribute("field")?.Value, PivotFieldDataAxisReferenceValue, StringComparison.Ordinal))
+                continue;
+
+            var xElement = reference.Element(workbookNs + "x");
+            if (xElement is not null && XlsxXmlAttributeReader.ReadIntAttribute(xElement, "v") is { } dataFieldIndex)
+                return dataFieldIndex;
+        }
+
+        return null;
     }
 
 }

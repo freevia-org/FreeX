@@ -248,6 +248,43 @@ public sealed class XlsxGradientFillRoundTripTests
     }
 
     [Fact]
+    public void XlsxAdapter_TwoDistinctGradientsSharingFirstStop_SaveAndReload_BothStayDistinct()
+    {
+        // R75-io-styles-fonts-4-1: A1 and B1 have DIFFERENT gradients that happen to share the same
+        // first stop (white). ApplyStyle previously stamped both placeholders as the identical solid
+        // white fill, so ClosedXML's style cache deduped them into ONE rebuilt <fill> and the merge
+        // could only restore one gradient — the other silently inherited it. The fix perturbs each
+        // placeholder with a hash of the gradient's FULL content, so the two placeholders differ and
+        // both gradients survive a full rebuild save independently.
+        var specA = new GradientSpec("linear", 90, 0, 0, 0, 0,
+            [(0.0, "FFFFFFFF"), (1.0, "FF0000FF")]); // white -> blue
+        var specB = new GradientSpec("linear", 90, 0, 0, 0, 0,
+            [(0.0, "FFFFFFFF"), (1.0, "FFFF0000")]); // white -> red (same first stop as specA)
+
+        using var initial = BuildXlsxWithGradients(specA, specB);
+        var wb1 = new XlsxFileAdapter().Load(initial);
+
+        using var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(wb1, saved);
+        saved.Position = 0;
+
+        var wb2 = new XlsxFileAdapter().Load(saved);
+        var sheet = wb2.GetSheetAt(0)!;
+
+        var styleA = wb2.GetStyle(sheet.GetStyleOnly(1u, 1u)!.Value);
+        var styleB = wb2.GetStyle(sheet.GetStyleOnly(2u, 1u)!.Value);
+
+        styleA.GradientFill.Should().NotBeNull("A1's gradient must survive the full rebuild");
+        styleB.GradientFill.Should().NotBeNull("B1's gradient must survive the full rebuild, independently of A1");
+        styleA.GradientFill!.Stops.Should().HaveCount(2);
+        styleB.GradientFill!.Stops.Should().HaveCount(2);
+
+        styleA.GradientFill!.Stops[1].Color.Should().Be(CC(0x00, 0x00, 0xFF), "A1 must stay white->blue");
+        styleB.GradientFill!.Stops[1].Color.Should().Be(CC(0xFF, 0x00, 0x00),
+            "B1 must stay white->red, not collapse onto A1's blue via a shared rebuilt fill");
+    }
+
+    [Fact]
     public void XlsxAdapter_DegenerateGradient_OnlyOneStop_IsIgnored()
     {
         // A gradient with only one stop is degenerate — reader must drop it silently.

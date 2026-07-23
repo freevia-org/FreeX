@@ -5,55 +5,61 @@ using FluentAssertions;
 namespace FreeX.Core.Formula.Tests;
 
 /// <summary>
-/// R72-formula-lambda-let-4-1: the shared MaxEvalDepth AST-node-depth guard
-/// (FormulaEvaluator.cs) used to be 256, which cuts off an ordinary self-recursive LAMBDA at
-/// only ~85-90 real recursion levels (each recursive call consumes ~3 EvaluateNode levels: the
-/// FunctionCallNode invocation, the IF condition, and the arithmetic on the recursive result) —
-/// well short of what Excel itself supports. MaxEvalDepth was raised to 1024 (~340 real levels)
-/// so ordinary recursive LAMBDA formulas to ~200+ levels now compute correctly, while a
-/// genuinely infinite recursive LAMBDA still returns #NUM! rather than crashing the process.
+/// R72-formula-lambda-let-4-1 / R75 crash-safety follow-up: the shared MaxEvalDepth AST-node-depth
+/// guard (FormulaEvaluator.cs) bounds recursion so a genuinely-infinite recursive LAMBDA returns
+/// #NUM! rather than crashing the process. Round 72 added a large-stack worker-thread escalation to
+/// let ordinary recursive LAMBDA formulas exceed the default ~85-level cap, but round 75 found that
+/// escalation could NOT bound a truly-infinite recursion before its worker stack overflowed (a
+/// StackOverflowException is uncatchable and terminated the whole process), so the escalation was
+/// removed. The default guard now cuts recursion off with #NUM! -- the graceful, Excel-consistent
+/// outcome. Shallow recursion still computes; deep/infinite recursion returns #NUM! and never
+/// crashes. A stack-SAFE deep-recursion path (bounded by real CLR stack headroom) is deferred.
 /// </summary>
 public sealed class R72_LambdaRecursionDepthTests
 {
     private readonly FormulaEvaluator _evaluator = new();
 
     [Fact]
-    public void RecursiveLambda_90Levels_ComputesCorrectSum()
+    public void ShallowRecursiveLambda_ComputesCorrectSum()
     {
         var wb = new Workbook("T");
         var sheet = wb.AddSheet("S");
 
-        // f(n) = n + (n-1) + ... + 1 + 0 = n*(n+1)/2. f(90) = 90*91/2 = 4095... wait, check formula.
+        // f(n) = n + (n-1) + ... + 1 + 0 = n*(n+1)/2. f(40) recurses ~40 levels (~120 EvaluateNode
+        // levels, well within the 256 default depth budget), so it computes correctly.
         var result = _evaluator.Evaluate(
-            "=LET(f, LAMBDA(n, IF(n=0,0,n+f(n-1))), f(90))",
+            "=LET(f, LAMBDA(n, IF(n=0,0,n+f(n-1))), f(40))",
             sheet, wb);
 
-        result.Should().Be(new NumberValue(90 * 91 / 2d));
+        result.Should().Be(new NumberValue(40 * 41 / 2d));
     }
 
     [Fact]
-    public void RecursiveLambda_150Levels_ComputesCorrectSum()
+    public void DeepRecursiveLambda_ReturnsNumError_NotCrashOrWrongValue()
     {
         var wb = new Workbook("T");
         var sheet = wb.AddSheet("S");
 
-        // Previously (MaxEvalDepth = 256) this cut off around ~85 real recursion levels and
-        // returned #NUM!; with the raised cap, 150 levels of ordinary recursion succeed.
+        // f(150) recurses far past the ~85-level (256 EvaluateNode) cut-off, so the depth guard
+        // returns #NUM! gracefully. (Round 72 briefly computed this via a worker-thread escalation,
+        // but that escalation could crash the process on a truly-infinite recursion and was removed
+        // in round 75 -- #NUM! is the safe, Excel-consistent behavior for over-deep recursion.)
         var result = _evaluator.Evaluate(
             "=LET(f, LAMBDA(n, IF(n=0,0,n+f(n-1))), f(150))",
             sheet, wb);
 
-        result.Should().Be(new NumberValue(150 * 151 / 2d));
+        result.Should().Be(ErrorValue.Num);
     }
 
     [Fact]
-    public void InfiniteRecursiveLambda_StillReturnsNumError_NotStackOverflow()
+    public void InfiniteRecursiveLambda_ReturnsNumError_NotStackOverflow()
     {
         var wb = new Workbook("T");
         var sheet = wb.AddSheet("S");
 
-        // A genuinely infinite recursive LAMBDA must still be cut off gracefully by the depth
-        // guard (raising MaxEvalDepth must not remove the backstop, only raise its ceiling).
+        // A genuinely infinite recursive LAMBDA must be cut off gracefully by the depth guard and
+        // return #NUM! -- never a StackOverflowException, which is uncatchable and would crash the
+        // whole process (this is exactly what the removed round-72 escalation risked).
         var result = _evaluator.Evaluate(
             "=LET(f, LAMBDA(n, f(n)), f(1))",
             sheet, wb);
@@ -68,8 +74,7 @@ public sealed class R72_LambdaRecursionDepthTests
         var wb = new Workbook("T");
         var sheet = wb.AddSheet("S");
 
-        // Sibling no-regression check: an ordinary (non-recursive) formula is unaffected by the
-        // raised depth cap.
+        // Sibling no-regression check: an ordinary (non-recursive) formula is unaffected.
         var result = _evaluator.Evaluate("=1+2*3-4/2+5", sheet, wb);
 
         result.Should().Be(new NumberValue(1 + 2 * 3 - 4 / 2d + 5));

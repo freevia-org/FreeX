@@ -238,6 +238,39 @@ internal static class RowGroupAnchorHelper
         target.Clear();
         target.UnionWith(values);
     }
+
+    /// <summary>
+    /// True when <paramref name="row"/> qualifies for an expand at <paramref name="expandLevel"/>
+    /// (its own level is deeper) but is still hidden by a nested subgroup that is independently
+    /// collapsed -- i.e. some level strictly between <paramref name="expandLevel"/> and the row's
+    /// own level has a contiguous run (containing this row) whose anchor is still in
+    /// <paramref name="anchors"/>. Expanding an outer group must not un-hide such a row; Excel
+    /// leaves the inner, still-collapsed subgroup collapsed (R75-commands-outline-group-4-2).
+    /// </summary>
+    public static bool IsHiddenByNestedCollapsedGroup(
+        IReadOnlyDictionary<uint, int> levels,
+        IReadOnlySet<uint> anchors,
+        bool summaryBelow,
+        uint row,
+        int expandLevel)
+    {
+        if (!levels.TryGetValue(row, out var rowLevel) || rowLevel <= expandLevel)
+            return false;
+
+        for (var lvl = expandLevel + 1; lvl <= rowLevel; lvl++)
+        {
+            var runStart = row;
+            while (runStart > 0 && levels.TryGetValue(runStart - 1, out var above) && above >= lvl)
+                runStart--;
+            var runEnd = row;
+            while (levels.TryGetValue(runEnd + 1, out var below) && below >= lvl)
+                runEnd++;
+
+            if (ComputeAnchor(summaryBelow, runStart, runEnd) is { } anchor && anchors.Contains(anchor))
+                return true;
+        }
+        return false;
+    }
 }
 
 /// <summary>
@@ -370,6 +403,11 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
                     continue;
                 if (!sheet.RowOutlineLevels.TryGetValue(row, out var lvl) || lvl < group.Level)
                     continue;
+                // A row hidden by a deeper, still-independently-collapsed nested subgroup must
+                // stay hidden when only the outer group is being expanded (R75-commands-outline-group-4-2).
+                if (RowGroupAnchorHelper.IsHiddenByNestedCollapsedGroup(
+                        sheet.RowOutlineLevels, sheet.CollapsedAnchorRows, summaryBelow, row, group.Level))
+                    continue;
                 sheet.GroupHiddenRows.Remove(row);
             }
 
@@ -456,6 +494,7 @@ public sealed class SetRowOutlineGroupCollapsedCommand : IWorkbookCommand
 
         _previousHiddenRows = [.. sheet.GroupHiddenRows];
         _previousCollapsedAnchors = [.. sheet.CollapsedAnchorRows];
+        var summaryBelow = sheet.OutlineSummaryBelow ?? true;
         var qualifyingRows = new List<uint>();
         foreach (var (row, level) in sheet.RowOutlineLevels)
         {
@@ -465,11 +504,12 @@ public sealed class SetRowOutlineGroupCollapsedCommand : IWorkbookCommand
             qualifyingRows.Add(row);
             if (_collapsed)
                 sheet.GroupHiddenRows.Add(row);
-            else
+            // A row hidden by a deeper, still-independently-collapsed nested subgroup must stay
+            // hidden when only this (outer) group is being expanded (R75-commands-outline-group-4-2).
+            else if (!RowGroupAnchorHelper.IsHiddenByNestedCollapsedGroup(
+                         sheet.RowOutlineLevels, sheet.CollapsedAnchorRows, summaryBelow, row, _level))
                 sheet.GroupHiddenRows.Remove(row);
         }
-
-        var summaryBelow = sheet.OutlineSummaryBelow ?? true;
         foreach (var run in RowGroupAnchorHelper.GetContiguousRuns(qualifyingRows))
         {
             if (_collapsed)

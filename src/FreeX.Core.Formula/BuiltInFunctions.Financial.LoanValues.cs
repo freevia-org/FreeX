@@ -67,7 +67,10 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
         double nper = nperValue;
-        if (nper == 0) return ErrorValue.DivByZero;
+        // Unlike PMT (where nper == 0 is a genuine division by zero), PV has no such
+        // singularity: when nper == 0, rn == (1+rate)^0 == 1 and the pmt term vanishes
+        // ((rn - 1) == 0), so the closed form below correctly falls through to -fv
+        // (matching Excel's PV(rate, 0, pmt, fv) == -fv) instead of #DIV/0!.
         if (Math.Abs(rate) < 1e-10)
             return NumberResult(-pmt * nper - fv);
         double rn = Math.Pow(1 + rate, nper);

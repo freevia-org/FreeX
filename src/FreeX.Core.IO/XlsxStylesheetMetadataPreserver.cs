@@ -395,7 +395,11 @@ internal static class XlsxStylesheetMetadataPreserver
             if (sourceGradientFill is null)
                 continue;
 
-            var placeholderRgb = RgbKey(gradient.Stops[0].Color);
+            // Must match XlsxClosedXmlCellMapper.ApplyStyle's placeholder colour exactly, including
+            // the low-bit perturbation ComputeGradientPlaceholderColor derives from the gradient's
+            // FULL content — not just its first stop — so two distinct gradients sharing a first
+            // stop colour resolve to two distinct target fills instead of colliding on one.
+            var placeholderRgb = RgbKey(XlsxClosedXmlCellMapper.ComputeGradientPlaceholderColor(gradient));
 
             // This colour is also a genuine solid cell's fill colour elsewhere in the workbook — the
             // rebuilt target fill for it may be shared between that cell and this gradient's

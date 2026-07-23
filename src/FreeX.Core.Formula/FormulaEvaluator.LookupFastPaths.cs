@@ -350,14 +350,23 @@ public sealed partial class FormulaEvaluator
 
         var lookupIndex = (int)rawIndex;
         bool approximate;
-        try
+        if (rangeLookupValue is BlankValue)
         {
-            approximate = rangeLookupValue is BlankValue || BuiltInFunctions.ToBool(rangeLookupValue);
+            approximate = true;
         }
-        catch (FormulaEvalException ex)
+        else
         {
-            result = ErrorFromCode(ex.ErrorCode);
-            return true;
+            // Coerce via the SAME helper the slow path (VlookupScalar/HlookupScalar in
+            // BuiltInFunctions.Lookup.Legacy.cs) uses, not the generic ToBool -- ToBool throws
+            // #VALUE! on a literal "TRUE"/"FALSE" text argument, which Excel (and the slow path)
+            // coerces to the corresponding logical value instead (R75-formula-lookup-vhx-4-1).
+            var coercedRangeLookup = BuiltInFunctions.TryCoerceRangeLookupBool(rangeLookupValue);
+            if (coercedRangeLookup is null)
+            {
+                result = ErrorValue.Value;
+                return true;
+            }
+            approximate = coercedRangeLookup.Value;
         }
 
         if (lookupIndex < 1)
@@ -447,7 +456,11 @@ public sealed partial class FormulaEvaluator
     {
         if (approximate)
         {
-            var lookupClass = BuiltInFunctions.ApproxLookupTypeClass(lookupValue);
+            // R75-formula-lookup-vhx-4-2: use the same blank-lookup-value coercion as the slow
+            // path (BuiltInFunctions.Lookup.Legacy.cs's ApproxLookupClassForLookupValue) -- this
+            // fast path is reached even for a bare cell reference lookup_value (e.g. "A1"), since
+            // TryAsRangeRef only bails to the slow path for a multi-cell range, not a single cell.
+            var lookupClass = BuiltInFunctions.ApproxLookupClassForLookupValue(lookupValue);
             var best = -1;
             for (var index = 0; index < lookupReader.Count; index++)
             {
@@ -508,7 +521,9 @@ public sealed partial class FormulaEvaluator
 
         if (matchType == 1)
         {
-            var lookupClass = BuiltInFunctions.ApproxLookupTypeClass(lookupValue);
+            // R75-formula-lookup-vhx-4-2: see EvaluateLegacyLookupDirectTable above for why the
+            // blank-lookup-value coercion is needed here too.
+            var lookupClass = BuiltInFunctions.ApproxLookupClassForLookupValue(lookupValue);
             var best = -1;
             for (var index = 0; index < reader.Count; index++)
             {
@@ -529,7 +544,9 @@ public sealed partial class FormulaEvaluator
         }
 
         {
-            var lookupClass = BuiltInFunctions.ApproxLookupTypeClass(lookupValue);
+            // R75-formula-lookup-vhx-4-2: see EvaluateLegacyLookupDirectTable above for why the
+            // blank-lookup-value coercion is needed here too.
+            var lookupClass = BuiltInFunctions.ApproxLookupClassForLookupValue(lookupValue);
             var descendingBest = -1;
             for (var index = 0; index < reader.Count; index++)
             {
@@ -890,7 +907,9 @@ public sealed partial class FormulaEvaluator
         DirectLookupRangeReader lookupReader,
         DirectLookupRangeReader resultReader)
     {
-        var lookupClass = BuiltInFunctions.ApproxLookupTypeClass(lookupValue);
+        // R75-formula-lookup-vhx-4-2: see EvaluateLegacyLookupDirectTable above for why the
+        // blank-lookup-value coercion is needed here too (LOOKUP's direct-vector fast path).
+        var lookupClass = BuiltInFunctions.ApproxLookupClassForLookupValue(lookupValue);
         var matchIndex = -1;
         for (var index = 0; index < lookupReader.Count; index++)
         {
@@ -1151,6 +1170,47 @@ public sealed partial class FormulaEvaluator
             : null;
 
         return new DirectLookupRangeReader(vector, context, sheet);
+    }
+
+    /// <summary>
+    /// INDIRECT("Sheet2!Name") support for a name whose RefersTo is a formula/dynamic expression
+    /// AND whose scope is explicitly the sheet named in the qualifier -- the sheet-qualified
+    /// counterpart of <see cref="TryResolveIndirectNamedFormula"/> (R75-meta-2). That method
+    /// always resolves <paramref name="name"/> against <c>context.CurrentSheet</c>'s own scope (via
+    /// <c>context.TryGetNamedFormulaText</c>, see <see cref="TryEvaluateNamedFormula"/>), so it
+    /// cannot see a formula scoped to a DIFFERENT sheet than the one currently evaluating --
+    /// exactly the case a sheet-qualified INDIRECT reference like "Sheet2!GrownName" needs when
+    /// GrownName is a formula scoped to Sheet2 but the formula containing INDIRECT lives on
+    /// Sheet1. Looks up <paramref name="sheetId"/>'s scoped named-formula dictionary directly and
+    /// evaluates it through the same cycle-guarded <see cref="EvaluateNamedFormulaText"/> body
+    /// <see cref="TryResolveSheetQualifiedName"/> already uses for the direct-formula-reference
+    /// form (e.g. a plain <c>=Sheet2!GrownName</c> formula), so both syntaxes agree.
+    /// </summary>
+    internal static bool TryResolveIndirectNamedFormulaScoped(
+        string name,
+        FreeX.Core.Model.SheetId sheetId,
+        IEvalContext context,
+        out RangeValue range,
+        out ScalarValue? error)
+    {
+        range = null!;
+        error = null;
+
+        var workbook = context.CurrentWorkbook;
+        if (workbook is null || !workbook.ScopedNamedFormulas.TryGetValue((name, sheetId), out var formulaText))
+            return false;
+
+        var result = EvaluateNamedFormulaText(name, formulaText, context, sheetId);
+        if (result is RangeValue rangeValue)
+        {
+            range = rangeValue;
+            return true;
+        }
+
+        if (result is ErrorValue namedFormulaError)
+            error = namedFormulaError;
+
+        return false;
     }
 
     private readonly record struct DirectLookupRangeReader(

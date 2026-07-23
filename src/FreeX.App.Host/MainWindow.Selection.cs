@@ -527,6 +527,17 @@ public partial class MainWindow
             }
             else
             {
+                // A plain click onto a locked cell on a protected sheet with "Select locked cells"
+                // unchecked must be refused outright -- Excel neither moves the active cell there
+                // nor opens it for editing (R75-services-protection-security-4-1). Shift-click/F8
+                // extend (TryHandleCellAreaExtendClick above) and Ctrl+click (Add mode) are left
+                // ungated for now.
+                if (!CanSelectCellForClick(newAddr))
+                {
+                    e.Handled = true;
+                    return;
+                }
+
                 SetActiveCell(newAddr);
                 if (e.ClickCount == 2)
                 {
@@ -548,6 +559,21 @@ public partial class MainWindow
 
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// Whether a plain (unmodified) click on <paramref name="newAddr"/> may select it, per
+    /// <see cref="CommandGuards.CanSelectCell"/> -- false when the current sheet is protected, the
+    /// cell is locked, and "Select locked cells" is unchecked (R75-services-protection-security-4-1).
+    /// Split out of SheetGrid_MouseDown's plain-click branch so this decision is directly testable
+    /// without driving a real, pixel-accurate WPF MouseButtonEventArgs through hit-testing (matching
+    /// the R49-render-multiarea-selection-3-2 precedent for <see cref="TryHandleCellAreaExtendClick"/>
+    /// below).
+    /// </summary>
+    private bool CanSelectCellForClick(CellAddress newAddr)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return sheet is null || CommandGuards.CanSelectCell(_workbook, sheet, newAddr);
     }
 
     /// <summary>
@@ -938,6 +964,32 @@ public partial class MainWindow
             return;
         }
 
+        // Arrow/Tab/Enter navigation on a protected sheet must SKIP a locked cell it would
+        // otherwise land the active cell on (when "Select locked cells" is unchecked), stepping
+        // further in the same direction of travel until a selectable cell is found -- matching
+        // Excel -- rather than landing on it like a plain click would refuse to
+        // (R75-services-protection-security-4-1). Only applies to the plain "move the active
+        // cell" outcome below (SetActiveCell); Add-mode and range-extension are left as-is.
+        bool willSetActiveCell = !(_selectionMode == ExcelSelectionMode.Add && !moveOnly) &&
+            !(extendSelection && !moveOnly && _selectionAnchor.HasValue);
+        if (willSetActiveCell &&
+            sheet is { IsProtected: true } &&
+            GetProtectedNavigationStep(e.Key, shiftHeld) is { } step &&
+            !CommandGuards.CanSelectCell(_workbook, sheet, target.Value))
+        {
+            var adjustedTarget = FindNextSelectableCellInDirection(sheet, target.Value, step.RowStep, step.ColStep);
+            if (adjustedTarget is null)
+            {
+                // No selectable cell exists further in this direction (e.g. every remaining cell
+                // to the edge is locked) -- Excel simply doesn't move; consume the key anyway so
+                // it doesn't fall through to any other handler.
+                e.Handled = true;
+                return;
+            }
+
+            target = adjustedTarget.Value;
+        }
+
         if (_selectionMode == ExcelSelectionMode.Add && !moveOnly)
             AddOrMoveAdditionalSelection(target.Value, extendSelection);
         else if (extendSelection && !moveOnly && _selectionAnchor.HasValue)
@@ -947,6 +999,48 @@ public partial class MainWindow
 
         EnsureCellVisible(target.Value);
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// The (row, column) step of travel a given navigation key moves the active cell by, used only
+    /// to know which direction to keep stepping in past a locked cell on a protected sheet
+    /// (R75-services-protection-security-4-1). Returns null for keys this protection-skip doesn't
+    /// cover (Home/End/PageUp/PageDown/data-boundary jumps) -- those simply land on their target
+    /// as before, unadjusted.
+    /// </summary>
+    private static (int RowStep, int ColStep)? GetProtectedNavigationStep(Key key, bool shiftHeld) =>
+        key switch
+        {
+            Key.Up => (-1, 0),
+            Key.Down => (1, 0),
+            Key.Left => (0, -1),
+            Key.Right => (0, 1),
+            Key.Enter => shiftHeld ? (-1, 0) : (1, 0),
+            Key.Tab => shiftHeld ? (0, -1) : (0, 1),
+            _ => null
+        };
+
+    /// <summary>
+    /// Starting at <paramref name="start"/> (already known not to be selectable), keeps stepping by
+    /// (<paramref name="rowStep"/>, <paramref name="colStep"/>) until a cell <see
+    /// cref="CommandGuards.CanSelectCell"/> allows is found, mirroring Excel's protected-sheet
+    /// navigation skip. Returns null if the worksheet bounds are reached with nothing selectable in
+    /// between (R75-services-protection-security-4-1).
+    /// </summary>
+    private CellAddress? FindNextSelectableCellInDirection(Sheet sheet, CellAddress start, int rowStep, int colStep)
+    {
+        var candidate = start;
+        while (!CommandGuards.CanSelectCell(_workbook, sheet, candidate))
+        {
+            long nextRow = (long)candidate.Row + rowStep;
+            long nextCol = (long)candidate.Col + colStep;
+            if (nextRow < 1 || nextRow > CellAddress.MaxRow || nextCol < 1 || nextCol > CellAddress.MaxCol)
+                return null;
+
+            candidate = new CellAddress(candidate.Sheet, (uint)nextRow, (uint)nextCol);
+        }
+
+        return candidate;
     }
 
     // True when `range` is exactly the merged region anchored at its own Start -- i.e. the

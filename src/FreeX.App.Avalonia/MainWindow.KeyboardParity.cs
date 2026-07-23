@@ -595,9 +595,19 @@ public sealed partial class MainWindow
         RefreshShell("Ready");
     }
 
+    /// <summary>
+    /// R75-commands-clear-delete-4-1: Backspace clears ONLY the active cell (via
+    /// WorkbookSession.ClearActiveCellContents) then enters edit -- unlike the Delete-key/ribbon
+    /// "Clear Contents" path (ClearSelectedRangeContents in MainWindow.cs), which clears the whole
+    /// selection. Excel's Backspace is never a bulk-clear operation, and a multi-cell selection's
+    /// shape must survive it.
+    /// </summary>
     private void ClearSelectionAndEdit()
     {
-        ClearSelectedRangeContents();
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        _session.ClearActiveCellContents();
         BeginInlineCellEdit(_session.ActiveCell, string.Empty, 0);
     }
 

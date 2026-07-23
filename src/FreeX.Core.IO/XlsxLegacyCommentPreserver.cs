@@ -595,14 +595,24 @@ internal static class XlsxLegacyCommentPreserver
         Sheet sheet,
         out CellAddress resolvedAddress)
     {
-        if (sheet.ThreadedComments.ContainsKey(oldAddress))
+        sourceThreadsByCell.TryGetValue((oldAddress.Row, oldAddress.Col), out var sourceThread);
+
+        // Same-address fast path -- but only when the thread now sitting at oldAddress is actually
+        // the shim's OWN thread (matched by stable Id against the source). A row/col delete can
+        // remove the shim's own thread while shifting an UNRELATED thread onto oldAddress; matching
+        // by address alone would silently reattach the shim to that unrelated thread instead of
+        // falling through to the Id-based search (which correctly purges it). When the source has no
+        // recorded thread at this address at all, there is nothing to cross-check against, so keep
+        // the address-only match (this mirrors the previous, pre-check behavior for that case).
+        if (sheet.ThreadedComments.TryGetValue(oldAddress, out var currentThreadAtOldAddress) &&
+            (string.IsNullOrEmpty(sourceThread?.Id) ||
+             string.Equals(currentThreadAtOldAddress.Id, sourceThread!.Id, StringComparison.Ordinal)))
         {
             resolvedAddress = oldAddress;
             return true;
         }
 
-        if (!sourceThreadsByCell.TryGetValue((oldAddress.Row, oldAddress.Col), out var sourceThread) ||
-            string.IsNullOrEmpty(sourceThread.Id))
+        if (string.IsNullOrEmpty(sourceThread?.Id))
         {
             resolvedAddress = default;
             return false;

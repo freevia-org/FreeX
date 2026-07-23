@@ -202,6 +202,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             {
                 if (IsOfficeRevisionAttribute(attribute) ||
                     IsOutlineStateAttribute(attribute) ||
+                    IsStylesheetIndexColumnAttribute(attribute) ||
                     targetColumn.Attribute(attribute.Name) is not null)
                 {
                     continue;

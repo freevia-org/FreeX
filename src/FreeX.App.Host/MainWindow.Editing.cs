@@ -75,7 +75,8 @@ public partial class MainWindow
         var colMetric = FindColMetric(vp.ColMetrics, addr.Col);
         if (rowMetric == null || colMetric == null) { FormulaBar.Focus(); return; }
 
-        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var cell = sheet?.GetCell(addr);
         var text = FormatFormulaBarText(cell, addr);
         _formulaEditCell = addr;
         _formulaRangeEntryMode = false;
@@ -138,6 +139,21 @@ public partial class MainWindow
         double cy = (rowMetric.TopOffset  + FreeX.App.UI.GridView.ColHeaderHeight) * zoom;
         double cellW = colMetric.Width  * zoom;
         double cellH = rowMetric.Height * zoom;
+
+        // R75-render-merged-cells-4-2: when addr is a merge anchor, widen the editor box to span
+        // the full merged rectangle instead of just the anchor's own single-cell box (mirrors
+        // GridView.Rendering.cs's RenderCells text pass, which sums the same extra column/row
+        // metrics for merged content).
+        if (sheet is { MergedRegions.Count: > 0 } && sheet.GetMergeRegion(addr) is { } merge && merge.Start == addr)
+        {
+            for (uint c2 = merge.Start.Col + 1; c2 <= merge.End.Col; c2++)
+                if (FindColMetric(vp.ColMetrics, c2) is { } extraCol)
+                    cellW += extraCol.Width * zoom;
+            for (uint r2 = merge.Start.Row + 1; r2 <= merge.End.Row; r2++)
+                if (FindRowMetric(vp.RowMetrics, r2) is { } extraRow)
+                    cellH += extraRow.Height * zoom;
+        }
+
         var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH);
 
         _inlineEditor.Text = text;

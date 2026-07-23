@@ -197,7 +197,26 @@ public sealed record PivotFieldModel(
     /// used as the return value of a cache-field-group parse (R36-io-pivot-cache-2-2).
     /// </summary>
     string? GroupStartDate = null,
-    string? GroupEndDate = null);
+    string? GroupEndDate = null,
+    /// <summary>
+    /// R75-io-pivottable-layout-4-2: this field's own CT_PivotField "defaultSubtotal" setting (whether
+    /// subtotals show for this specific row/column field), independent of any other axis field. Null means
+    /// the file carried no per-field override; callers fall back to <see
+    /// cref="PivotTableModel.ShowSubtotals"/> (the table-wide default previously the only place this was
+    /// modeled).
+    /// </summary>
+    bool? ShowSubtotals = null,
+    /// <summary>
+    /// R75-io-pivottable-layout-4-2: this field's own CT_PivotField "subtotalTop" setting. Null means no
+    /// per-field override; callers fall back to <see cref="PivotTableModel.SubtotalPlacement"/>.
+    /// </summary>
+    PivotSubtotalPlacement? SubtotalPlacement = null,
+    /// <summary>
+    /// R75-io-pivottable-layout-4-3: this field's own CT_PivotField compact/outline report form. Null means
+    /// no per-field override (e.g. a non-axis field, which never carries these attributes); callers fall
+    /// back to <see cref="PivotTableModel.ReportLayout"/>.
+    /// </summary>
+    PivotReportLayout? ReportLayout = null);
 
 public enum PivotFieldGrouping
 {

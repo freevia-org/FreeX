@@ -66,9 +66,26 @@ public partial class MainWindow
 
         if (choice is KeyboardInsertDeleteDialogChoice.EntireRow or KeyboardInsertDeleteDialogChoice.EntireColumn)
             ClearFormulaTraceArrowsAfterStructuralEdit();
+        ClearClipboardMarqueeAfterStructuralEdit();
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
+    }
+
+    /// <summary>
+    /// R75-render-selection-marquee-4-1: Insert/Delete Rows/Columns/Cells shift the grid
+    /// structurally, so an active Copy/Cut marching-ants marquee must be cancelled the same way an
+    /// ordinary cell edit already cancels it (R54, TryExecuteEditCells in
+    /// MainWindow.CommandExecution.cs). Without this, a subsequent Paste silently uses the STALE
+    /// pre-shift clip.SourceRange, moving/copying the wrong cells.
+    /// </summary>
+    private void ClearClipboardMarqueeAfterStructuralEdit()
+    {
+        if (_internalClipboard is not null || SheetGrid.ClipboardRange is not null)
+        {
+            _internalClipboard = null;
+            ClearClipboardVisualState();
+        }
     }
 
     private void InsertSheetMenuItem_Click(object sender, RoutedEventArgs e)   { AddSheetButton_Click(sender, e); }
@@ -107,6 +124,7 @@ public partial class MainWindow
 
         if (choice is KeyboardInsertDeleteDialogChoice.EntireRow or KeyboardInsertDeleteDialogChoice.EntireColumn)
             ClearFormulaTraceArrowsAfterStructuralEdit();
+        ClearClipboardMarqueeAfterStructuralEdit();
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
@@ -401,6 +419,7 @@ public partial class MainWindow
             return;
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
+        ClearClipboardMarqueeAfterStructuralEdit();
         RecalculateWorkbook();
         UpdateViewport();
     }
@@ -411,6 +430,7 @@ public partial class MainWindow
             return;
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
+        ClearClipboardMarqueeAfterStructuralEdit();
         RecalculateWorkbook();
         UpdateViewport();
     }
@@ -429,6 +449,7 @@ public partial class MainWindow
             return;
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
+        ClearClipboardMarqueeAfterStructuralEdit();
         RecalculateWorkbook();
         UpdateViewport();
     }
@@ -447,6 +468,7 @@ public partial class MainWindow
             return;
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
+        ClearClipboardMarqueeAfterStructuralEdit();
         RecalculateWorkbook();
         UpdateViewport();
     }
@@ -545,6 +567,7 @@ public partial class MainWindow
             return;
         }
 
+        ClearClipboardMarqueeAfterStructuralEdit();
         RecalculateWorkbook();
         UpdateViewport();
     }
@@ -585,6 +608,7 @@ public partial class MainWindow
             return;
         }
 
+        ClearClipboardMarqueeAfterStructuralEdit();
         RecalculateWorkbook();
         UpdateViewport();
     }

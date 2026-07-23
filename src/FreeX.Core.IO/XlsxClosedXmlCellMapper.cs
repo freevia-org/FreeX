@@ -228,6 +228,13 @@ internal static class XlsxClosedXmlCellMapper
                 XLFontScheme.Major => CellFontScheme.Major,
                 _ => CellFontScheme.None,
             },
+            // Raw OOXML charset/family codes — a direct cast round-trips faithfully since the
+            // underlying enum values match the raw numeric codes (mirrors the rich-text-run
+            // charset/family handling in XlsxFileAdapter.Save.cs). A font that never specified
+            // either reads back ClosedXML's own "unset" sentinels (Default=1 / Swiss=2), which
+            // matches CellStyle.Default so ApplyStyle emits neither attribute on save.
+            Charset = (int)xlStyle.Font.FontCharSet,
+            FontFamily = (int)xlStyle.Font.FontFamilyNumbering,
             FillColor = xlStyle.Fill.PatternType != XLFillPatternValues.None
                 ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor, theme, indexedColors)
                 : null,
@@ -376,6 +383,13 @@ internal static class XlsxClosedXmlCellMapper
                 CellFontScheme.Major => XLFontScheme.Major,
                 _ => XLFontScheme.None,
             };
+        // Raw OOXML charset/family codes — only set when they differ from CellStyle.Default's
+        // sentinels (which are themselves ClosedXML's own "unset" values), so a plain font that
+        // never carried either attribute keeps emitting neither on save (see MapStyle).
+        if (style.Charset != def.Charset)
+            xlStyle.Font.FontCharSet = (XLFontCharSet)style.Charset;
+        if (style.FontFamily != def.FontFamily)
+            xlStyle.Font.FontFamilyNumbering = (XLFontFamilyNumberingValues)style.FontFamily;
 
         if (style.GradientFill is { } gradientFill)
         {
@@ -387,9 +401,11 @@ internal static class XlsxClosedXmlCellMapper
             // indistinguishable from CellStyle.Default, so ClosedXML collapses it into the shared
             // default style and omits its <c> element entirely — the cell (and its restorable xf
             // slot) vanishes before the preserver ever runs. Stamp a solid placeholder (using the
-            // gradient's first stop color) so the cell keeps its own distinct, restorable cellXf;
-            // the preserver overwrites this placeholder with the real gradient content afterward.
-            var placeholderColor = gradientFill.Stops.Count > 0 ? gradientFill.Stops[0].Color : CellColor.White;
+            // gradient's first stop color, perturbed by ComputeGradientPlaceholderColor so two
+            // distinct gradients that merely share a first stop don't collide) so the cell keeps
+            // its own distinct, restorable cellXf; the preserver overwrites this placeholder with
+            // the real gradient content afterward.
+            var placeholderColor = ComputeGradientPlaceholderColor(gradientFill);
             xlStyle.Fill.PatternType = XLFillPatternValues.Solid;
             xlStyle.Fill.BackgroundColor = XLColor.FromArgb(255, placeholderColor.R, placeholderColor.G, placeholderColor.B);
         }
@@ -656,6 +672,28 @@ internal static class XlsxClosedXmlCellMapper
         XLThemeColor.FollowedHyperlink => WorkbookThemeColorSlot.FollowedHyperlink,
         _ => WorkbookThemeColorSlot.Dark1
     };
+
+    // Derives the solid placeholder colour ApplyStyle stamps for a gradient-filled cell (see the
+    // GradientFill branch above). The base colour is the gradient's first stop, but its low-order
+    // bits are overwritten with a hash of the gradient's FULL content (type, degree, insets, and
+    // every stop) so that two structurally-DIFFERENT gradients which merely share a first stop
+    // colour (e.g. white→blue and white→red) still stamp distinguishable placeholders. Without this,
+    // ClosedXML's style cache would dedup the two byte-identical placeholder fills into a single
+    // rebuilt <fill>, leaving XlsxStylesheetMetadataPreserver.MergeStylesheetGradientFills unable to
+    // tell which cellXf should get which gradient back. The perturbation is at most +/-7 per channel
+    // (imperceptible) so the placeholder still reads as the intended colour if it is ever left
+    // un-restored (e.g. the genuine-solid-collision guard in the preserver). Both this method and the
+    // preserver call it with the SAME CellGradientFill content, so the perturbation always agrees
+    // between the write side and the restore side.
+    internal static CellColor ComputeGradientPlaceholderColor(CellGradientFill gradientFill)
+    {
+        var baseColor = gradientFill.Stops.Count > 0 ? gradientFill.Stops[0].Color : CellColor.White;
+        var hash = unchecked((uint)gradientFill.GetHashCode());
+        var r = (byte)((baseColor.R & ~0b111) | (int)(hash & 0b111));
+        var g = (byte)((baseColor.G & ~0b111) | (int)((hash >> 3) & 0b111));
+        var b = (byte)((baseColor.B & ~0b111) | (int)((hash >> 6) & 0b111));
+        return new CellColor(r, g, b);
+    }
 
     private static CellBorder MapBorder(XLBorderStyleValues style, XLColor color, WorkbookTheme theme, WorkbookIndexedColorPalette indexedColors)
     {

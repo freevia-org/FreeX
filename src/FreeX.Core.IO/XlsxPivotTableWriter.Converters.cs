@@ -18,7 +18,10 @@ internal static partial class XlsxPivotTableWriter
 
     // Expresses the FreeX report layout as the OOXML CT_pivotTableDefinition layout attributes. There is
     // no single 'reportLayout' attribute in the schema; Excel derives the layout from these flags.
-    private static XAttribute[] PivotReportLayoutAttributes(PivotReportLayout layout) =>
+    // Internal (not private): also called from XlsxFileAdapter.SavePostProcessing.cs's
+    // RewritePivotTableLayoutState to regenerate these attributes on the hasSourcePackage (preserved-part)
+    // save path, where this class's own Save() never runs (R75-io-pivottable-layout-4-1).
+    internal static XAttribute[] PivotReportLayoutAttributes(PivotReportLayout layout) =>
         layout switch
         {
             PivotReportLayout.Compact =>
@@ -52,7 +55,9 @@ internal static partial class XlsxPivotTableWriter
     // are percentOfTotal/percentOfRow/percentOfCol/runTotal/difference/percentDiff/rankAscending/
     // rankDescending/percentOfParent* -- NOT the earlier FreeX-invented percentOf*Total/runningTotalIn/
     // differenceFrom/rankSmallest/rankLargest tokens, which real Excel silently ignores (R36-io-pivot-cache-2-1).
-    private static string ToPivotShowValuesAsText(PivotShowValuesAs showValuesAs) =>
+    // Internal (not private): also called from XlsxFileAdapter.SavePostProcessing.cs's
+    // RewritePivotTableDataFieldSummaries (R75-io-pivottable-layout-4-1).
+    internal static string ToPivotShowValuesAsText(PivotShowValuesAs showValuesAs) =>
         showValuesAs switch
         {
             PivotShowValuesAs.PercentOfGrandTotal => "percentOfTotal",

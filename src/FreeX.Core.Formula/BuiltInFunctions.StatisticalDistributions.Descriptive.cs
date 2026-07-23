@@ -58,11 +58,17 @@ public static partial class BuiltInFunctions
         // Collect data values — allow scalar or range
         // (TryCellNumber coerces DateTimeValue to its serial number too, matching every other
         // numeric aggregate — a hand-rolled `is NumberValue` check would silently drop date cells.)
+        // An error cell anywhere in data_array or bins_array propagates (Excel: the whole result
+        // becomes that error) rather than being silently dropped like a blank/text cell — mirrors
+        // CountRangeNumbers (BuiltInFunctions.StatisticalCore.Helpers.cs).
         var dataList = new List<double>();
         if (args[0] is RangeValue rvd)
         {
             foreach (var v in rvd.Flatten())
+            {
+                if (v is ErrorValue dve) return dve;
                 if (TryCellNumber(v, out double dv)) dataList.Add(dv);
+            }
         }
         else if (TryCellNumber(args[0], out double dva)) dataList.Add(dva);
 
@@ -71,7 +77,10 @@ public static partial class BuiltInFunctions
         if (args[1] is RangeValue rvb)
         {
             foreach (var v in rvb.Flatten())
+            {
+                if (v is ErrorValue bve) return bve;
                 if (TryCellNumber(v, out double bv)) binsList.Add(bv);
+            }
         }
         else if (TryCellNumber(args[1], out double bva)) binsList.Add(bva);
 

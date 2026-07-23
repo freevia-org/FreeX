@@ -90,9 +90,12 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SelectCellsWithComments, (_, _) => SelectGoToSpecialMatches(GoToSpecialKind.Comments, showEmptyMessage: true));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.EditCell, (_, _) => EnterEditMode());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ClearSelection, (_, _) => ExecuteClearSelection());
+        // R75-commands-clear-delete-4-1: Backspace clears ONLY the active cell before entering edit
+        // -- unlike the Delete key (ClearSelection above), which clears the whole selection. Matches
+        // Excel: Backspace is never a bulk-clear operation.
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ClearSelectionAndEdit, (_, _) =>
         {
-            ExecuteClearSelection();
+            ExecuteClearActiveCell();
             EnterEditMode();
         });
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.RepeatLastAction, (_, _) => ExecuteRepeatLast());
