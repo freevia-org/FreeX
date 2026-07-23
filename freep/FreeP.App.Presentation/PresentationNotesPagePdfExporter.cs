@@ -38,6 +38,10 @@ public static class PresentationNotesPagePdfExporter
     // Its 12 pt body text advances at roughly 15 pt, rather than the wider host fallback.
     internal const double NotesInset = 3.6;
     internal const double NotesLeading = 15;
+    private const double EmptyNativeFirstPageTextLeft = -3.6;
+    private const double EmptyNativeFirstPageTextTop = -4.32;
+    private const double EmptyNativeContinuationTextLeft = 57.624;
+    private const double EmptyNativeContinuationTextTop = 53.3;
     private const double AverageGlyphWidthPerFontSize = 0.55;
 
     public static byte[] ExportToBytes(
@@ -103,10 +107,8 @@ public static class PresentationNotesPagePdfExporter
 
     /// <summary>
     /// Builds one notes page for <paramref name="plan"/>'s slide, plus as many continuation pages
-    /// as needed when the speaker notes overflow the notes box. PowerPoint's own notes-page export
-    /// continues overflowing notes onto additional pages rather than silently dropping them, so
-    /// each continuation page repeats the slide thumbnail and notes-box border for context and
-    /// resumes the note text where the previous page left off.
+    /// as needed when the speaker notes overflow the notes box. Native notes masters without
+    /// renderable placeholder shapes follow PowerPoint's text-only continuation surface.
     /// </summary>
     private static IEnumerable<PdfContentPage> BuildNotesPages(
         Presentation presentation,
@@ -114,6 +116,7 @@ public static class PresentationNotesPagePdfExporter
     {
         foreach (var renderedPage in plan.RenderPages)
         {
+            var usesEmptyNativeNotesMaster = plan.UsesEmptyNativeNotesMaster;
             var ops = new List<PdfDrawOp>
             {
                 new PdfFillRect(
@@ -124,7 +127,8 @@ public static class PresentationNotesPagePdfExporter
                     PageBackground),
             };
 
-            if (plan.SlideIndex is { } slideIndex && slideIndex >= 0 && slideIndex < presentation.Slides.Count)
+            if (!usesEmptyNativeNotesMaster &&
+                plan.SlideIndex is { } slideIndex && slideIndex >= 0 && slideIndex < presentation.Slides.Count)
             {
                 var slidePage = PresentationPdfExporter.BuildSlidePage(
                     presentation.Slides[slideIndex],
@@ -133,9 +137,27 @@ public static class PresentationNotesPagePdfExporter
                 ops.AddRange(MapSlideOps(slidePage, plan.SlideBounds, plan.PageBounds.Height));
             }
 
-            ops.Add(ToPdfStrokeRect(plan.SlideBounds, plan.PageBounds.Height, SlideBorder, SlideBorderWidth));
-            ops.Add(ToPdfStrokeRect(plan.NotesBounds, plan.PageBounds.Height, NotesBorder, NotesBorderWidth));
-            AppendHeaderFooterPlaceholders(ops, plan);
+            if (!usesEmptyNativeNotesMaster)
+            {
+                ops.Add(ToPdfStrokeRect(plan.SlideBounds, plan.PageBounds.Height, SlideBorder, SlideBorderWidth));
+                ops.Add(ToPdfStrokeRect(plan.NotesBounds, plan.PageBounds.Height, NotesBorder, NotesBorderWidth));
+                AppendHeaderFooterPlaceholders(ops, plan);
+            }
+
+            var textPlan = usesEmptyNativeNotesMaster
+                ? plan with
+                {
+                    NotesBounds = new LayoutRect(
+                        renderedPage.IsContinuation
+                            ? EmptyNativeContinuationTextLeft
+                            : EmptyNativeFirstPageTextLeft,
+                        renderedPage.IsContinuation
+                            ? EmptyNativeContinuationTextTop
+                            : EmptyNativeFirstPageTextTop,
+                        plan.PageBounds.Width,
+                        plan.PageBounds.Height)
+                }
+                : plan;
 
             var pageLines = plan.NoteLines
                 .Skip(renderedPage.FirstNoteLineIndex)
@@ -145,7 +167,7 @@ public static class PresentationNotesPagePdfExporter
                 .Skip(renderedPage.FirstNoteLineIndex)
                 .Take(renderedPage.NoteLineCount)
                 .ToArray();
-            AppendNotesText(ops, plan, pageLines, styledPageLines, renderedPage.ShowsPlaceholder);
+            AppendNotesText(ops, textPlan, pageLines, styledPageLines, renderedPage.ShowsPlaceholder);
 
             yield return new PdfContentPage(plan.PageBounds.Width, plan.PageBounds.Height, ops);
         }
