@@ -256,8 +256,7 @@ public sealed class FidelityRenderCompositeTests
             {
                 var typeface = new Typeface(new FontFamily(options.FontFamily), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
                 var unitText = new FormattedText(options.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 1, foreground, 1);
-                var fontSize = Math.Clamp(plan.WidthDip / Math.Max(1, unitText.Width), 1, 130)
-                    * WatermarkVisualPlanner.TextPathGlyphScale;
+                var fontSize = WatermarkVisualPlanner.ResolveTextPathFontSize(plan, unitText.Width);
                 var text = new FormattedText(options.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, foreground, 1);
                 dc.PushClip(new RectangleGeometry(new Rect(0, 0, pixW, pixH)));
                 if (Math.Abs(plan.RotationDegrees) > 0.01)

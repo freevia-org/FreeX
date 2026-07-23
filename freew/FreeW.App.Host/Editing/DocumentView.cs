@@ -6466,8 +6466,7 @@ public sealed class DocumentView : RichTextBox
             1,
             foreground,
             1);
-        var fontSize = Math.Clamp(plan.WidthDip / Math.Max(1, unitText.Width), 1, 130)
-            * WatermarkVisualPlanner.TextPathGlyphScale;
+        var fontSize = WatermarkVisualPlanner.ResolveTextPathFontSize(plan, unitText.Width);
         var text = new FormattedText(
             options.Text,
             System.Globalization.CultureInfo.InvariantCulture,

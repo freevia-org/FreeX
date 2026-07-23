@@ -90,6 +90,8 @@ public static class SlideCloner
             Hyperlink      = PresentationModelCloneHelper.CloneHyperlink(shape.Hyperlink),
         };
 
+        copy.Media = shape.Media is null ? null : CloneMedia(shape.Media);
+
         foreach (var pair in shape.PresetGeometryAdjustments)
             copy.PresetGeometryAdjustments[pair.Key] = pair.Value;
 
@@ -130,6 +132,34 @@ public static class SlideCloner
 
     private static Placeholder ClonePlaceholder(Placeholder p) =>
         new() { Type = p.Type, Idx = p.Idx };
+
+    private static MediaInfo CloneMedia(MediaInfo source)
+    {
+        var copy = new MediaInfo
+        {
+            IsVideo = source.IsVideo,
+            Bytes = source.Bytes.ToArray(),
+            ContentType = source.ContentType,
+            SourcePackagePath = source.SourcePackagePath,
+            LinkUrl = source.LinkUrl,
+        };
+
+        foreach (var track in source.CaptionTracks)
+        {
+            copy.CaptionTracks.Add(new MediaCaptionTrackInfo
+            {
+                RelationshipId = track.RelationshipId,
+                Source = track.Source,
+                Bytes = track.Bytes.ToArray(),
+                ContentType = track.ContentType,
+                Language = track.Language,
+                Label = track.Label,
+                IsExternal = track.IsExternal,
+            });
+        }
+
+        return copy;
+    }
 
     private static ChartShape CloneChart(ChartShape src)
     {
