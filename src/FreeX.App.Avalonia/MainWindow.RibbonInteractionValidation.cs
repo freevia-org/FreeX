@@ -31,7 +31,8 @@ public sealed partial class MainWindow
         int DirtyGeneration,
         string Status,
         string WorkbookState,
-        string ShellState);
+        string ShellState,
+        string BorderPickerState);
 
     /// <summary>
     /// Executes each visible runtime command once in a reusable production window with a fresh session.
@@ -157,6 +158,8 @@ public sealed partial class MainWindow
 
             if (!TryPrepareRibbonContextFixture(placement.ActivationKey, out var fixtureEvidence))
                 return Failure(commandId, "context-fixture-failed", fixtureEvidence);
+
+            PrepareRibbonBorderPickerFixture(commandId);
 
             var registry = _ribbonCommandRegistry;
             if (registry is null || !registry.TryGet(commandId, out var command) || command is null)
@@ -468,11 +471,13 @@ public sealed partial class MainWindow
             $"{_formulaBarHost.IsVisible}|{_formulaBarExpanded}|{_session.IsShowingGridlines}|" +
             $"{_session.IsShowingHeadings}|{_selectedDrawingObjectKind}|{_selectedDrawingObjectId}|" +
             $"{IsVisible}|{WindowState}";
+        var borderPickerState = $"{_borderPickerStyle}|{_borderPickerColor.R},{_borderPickerColor.G},{_borderPickerColor.B}";
         return new RibbonLifecycleSnapshot(
             _session.DirtyGeneration,
             _statusText.Text ?? string.Empty,
             workbookState,
-            shellState);
+            shellState,
+            borderPickerState);
     }
 
     private static List<string> DescribeLifecycleChanges(
@@ -487,6 +492,8 @@ public sealed partial class MainWindow
             observations.Add("workbook-state-changed");
         if (!string.Equals(before.ShellState, after.ShellState, StringComparison.Ordinal))
             observations.Add("shell-state-changed");
+        if (!string.Equals(before.BorderPickerState, after.BorderPickerState, StringComparison.Ordinal))
+            observations.Add("border-picker-state-changed");
         if (!string.Equals(before.Status, after.Status, StringComparison.Ordinal))
             observations.Add($"status={after.Status}");
         if (newlyOwned.Count > 0)
@@ -548,6 +555,35 @@ public sealed partial class MainWindow
             return HomeNumberFormatDropdownPlanner.Options[0].Label;
         return "1";
     }
+
+    private void PrepareRibbonBorderPickerFixture(RibbonCommandId commandId)
+    {
+        switch (commandId.Value)
+        {
+            case "Black":
+            case "Gray":
+            case "Accent 1":
+            case "Accent 2":
+                _borderPickerColor = commandId.Value == "Black"
+                    ? new CellColor(0, 112, 192)
+                    : CellColor.Black;
+                break;
+            case "Thin":
+            case "Medium":
+            case "Thick":
+            case "Dashed":
+            case "Dotted":
+            case "Double":
+                _borderPickerStyle = commandId.Value == "Thin"
+                    ? BorderStyle.Medium
+                    : BorderStyle.Thin;
+                break;
+        }
+    }
+
+    private void SetRibbonBorderPickerColor(CellColor color) => _borderPickerColor = color;
+
+    private void SetRibbonBorderPickerStyle(BorderStyle style) => _borderPickerStyle = style;
 
     private static WorkbookSession CreateDisposableRibbonSession() =>
         new WorkbookSessionFactory().CreateParityDemo(
