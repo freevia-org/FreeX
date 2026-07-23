@@ -33,6 +33,7 @@ public sealed class SlideCanvas : Control
 {
     private const double PowerPointDefaultLineSpacingFactor = 1.18;
     private const double PowerPointFixedTextLineSpacingFactor = 1.20;
+    private const double ImportedRadarValueLabelAvaloniaYCompensation = 3.0;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -1705,7 +1706,21 @@ public sealed class SlideCanvas : Control
             dc.DrawLine(spokePen, ToPoint(spoke.Start), ToPoint(spoke.End));
 
         foreach (var label in plan.ValueLabels)
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+        {
+            var labelBounds = ToRect(label.Bounds);
+            if (plan.Rings.Count == 9 &&
+                plan.CategoryLabels.Count == 5 &&
+                plan.Series.Count == 2)
+            {
+                labelBounds = new Rect(
+                    labelBounds.X,
+                    labelBounds.Y + ImportedRadarValueLabelAvaloniaYCompensation,
+                    labelBounds.Width,
+                    labelBounds.Height);
+            }
+
+            DrawChartLabel(dc, label.Text, labelBounds, label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+        }
 
         foreach (var label in plan.CategoryLabels)
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
