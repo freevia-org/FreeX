@@ -162,7 +162,7 @@ public sealed partial class MainWindowXamlKeyTipTests
             var account = harness.RailButton("BackstageAccountButton")!;
             harness.AutomationName(account).Should().Be(UiText.Get("MainWindow_AutomationName_Account"));
             harness.AutomationHelpText(account).Should().Contain("Show local account information");
-            harness.KeyTip(account).Should().Be("AC");
+            harness.KeyTip(account).Should().Be("D");
             harness.TooltipTitle(account).Should().Contain("Local");
             harness.TooltipDescription(account).Should().Contain("Microsoft account");
             account.IsTabStop.Should().BeTrue();

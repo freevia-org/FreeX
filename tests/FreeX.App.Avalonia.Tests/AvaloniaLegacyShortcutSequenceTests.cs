@@ -7,6 +7,8 @@ using Avalonia.LogicalTree;
 
 using FluentAssertions;
 
+using FreeX.App.Presentation.Backstage;
+using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -202,6 +204,134 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
         });
     }
 
+    [Fact]
+    public async Task BackstageKeytipsActivateRenderedPaneAndKeepOverlayVisible()
+    {
+        await Run(async (window, _) =>
+        {
+            window.Show();
+
+            await PressHandled(window, Key.F, KeyModifiers.Alt);
+            window.IsBackstageOverlayVisibleForTest.Should().BeTrue();
+            window.RibbonKeyTipInputForTest.Should().Be("F");
+
+            var infoButton = window.BackstagePaneButtonForTest(FreeXBackstagePaneId.Info);
+            infoButton.Should().NotBeNull();
+            infoButton!.IsVisible.Should().BeTrue();
+            infoButton.IsEffectivelyEnabled.Should().BeTrue();
+
+            await PressHandled(window, Key.I);
+
+            window.IsBackstageOverlayVisibleForTest.Should().BeTrue();
+            window.ActiveBackstagePaneForTest.Should().Be(FreeXBackstagePaneId.Info);
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
+    public async Task BackstageCommandKeytipHonorsDisabledRenderedCommand()
+    {
+        await Run(async (window, _) =>
+        {
+            window.Show();
+            await PressHandled(window, Key.F, KeyModifiers.Alt);
+
+            var accountButton = window.BackstageCommandButtonForTest(FreeXBackstageCommandId.Account);
+            accountButton.Should().NotBeNull();
+            accountButton!.IsEnabled = false;
+
+            await PressHandled(window, Key.D);
+
+            window.IsBackstageOverlayVisibleForTest.Should().BeTrue();
+            window.ActiveBackstagePaneForTest.Should().Be(FreeXBackstagePaneId.Home);
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
+    public async Task BackstageSaveAsAndAccountKeytipsInvokeIndependentRenderedCommands()
+    {
+        await Run(async (window, _) =>
+        {
+            window.Show();
+            var activated = new List<FreeXBackstageCommandId>();
+            window.BackstageCommandActivationOverrideForTest = activated.Add;
+
+            await PressHandled(window, Key.F, KeyModifiers.Alt);
+            var saveAsButton = window.BackstageCommandButtonForTest(FreeXBackstageCommandId.SaveAs);
+            saveAsButton.Should().NotBeNull();
+            saveAsButton!.IsVisible.Should().BeTrue();
+
+            await PressHandled(window, Key.A);
+
+            activated.Should().ContainSingle().Which.Should().Be(FreeXBackstageCommandId.SaveAs);
+            window.IsBackstageOverlayVisibleForTest.Should().BeFalse();
+
+            await PressHandled(window, Key.F, KeyModifiers.Alt);
+            var accountButton = window.BackstageCommandButtonForTest(FreeXBackstageCommandId.Account);
+            accountButton.Should().NotBeNull();
+            accountButton!.IsVisible.Should().BeTrue();
+
+            await PressHandled(window, Key.D);
+
+            activated.Should().Equal(
+                FreeXBackstageCommandId.SaveAs,
+                FreeXBackstageCommandId.Account);
+            window.IsBackstageOverlayVisibleForTest.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public async Task BackstageKeytipEscapeAndUnmatchedContinuationCloseLiveOverlay()
+    {
+        await Run(async (window, _) =>
+        {
+            window.Show();
+
+            await PressHandled(window, Key.F, KeyModifiers.Alt);
+            await PressHandled(window, Key.Escape);
+            window.IsBackstageOverlayVisibleForTest.Should().BeFalse();
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+
+            await PressHandled(window, Key.F, KeyModifiers.Alt);
+            await PressHandled(window, Key.X);
+            window.IsBackstageOverlayVisibleForTest.Should().BeFalse();
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
+    public async Task QuickAccessKeytipRaisesTheRenderedButtonAndHonorsEffectiveEnabledState()
+    {
+        await Run(async (window, _) =>
+        {
+            window.Show();
+
+            var visibleButtons = window.AvaloniaQuickAccessToolbarForTest.Children
+                .OfType<Button>()
+                .Where(button => button.Tag is string tag &&
+                    !tag.EndsWith(".History", StringComparison.Ordinal) &&
+                    button.IsVisible)
+                .ToArray();
+            var redoIndex = Array.FindIndex(visibleButtons,
+                button => string.Equals(button.Tag as string, QuickAccessToolbarCommandIds.Redo,
+                    StringComparison.OrdinalIgnoreCase));
+            redoIndex.Should().BeInRange(0, 2);
+
+            var redoButton = visibleButtons[redoIndex];
+            var clicks = 0;
+            redoButton.Click += (_, _) => clicks++;
+
+            redoButton.IsEnabled = true;
+            await PressHandled(window, DigitKey(redoIndex + 1), KeyModifiers.Alt);
+            clicks.Should().Be(1);
+
+            redoButton.IsEnabled = false;
+            await PressHandled(window, DigitKey(redoIndex + 1), KeyModifiers.Alt);
+            clicks.Should().Be(1);
+        });
+    }
+
     private static async Task Run(Func<MainWindow, Sheet, Task> test)
     {
         await Session.Dispatch(async () =>
@@ -242,6 +372,15 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
         var args = await Press(window, key, modifiers);
         args.Handled.Should().BeTrue($"{modifiers}+{key} should be consumed");
     }
+
+    private static Key DigitKey(int digit) =>
+        digit switch
+        {
+            1 => Key.D1,
+            2 => Key.D2,
+            3 => Key.D3,
+            _ => throw new ArgumentOutOfRangeException(nameof(digit), digit, "QAT key tips use 1-3 in this host."),
+        };
 
     private static async Task<KeyEventArgs> Press(
         MainWindow window,

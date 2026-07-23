@@ -67,9 +67,12 @@ public sealed class FreeXBackstageNavigationPlannerTests
         var account = entries.Single(entry => entry.Command == FreeXBackstageCommandId.Account);
         account.DockBottom.Should().BeTrue();
         account.AutomationId.Should().Be("BackstageAccountButton");
-        account.KeyTip.Should().Be("AC");
+        account.KeyTip.Should().Be("D");
         account.TooltipTitleKey.Should().Be("MainWindow_TooltipTitle_LocalAccount");
         account.TooltipDescriptionKey.Should().Be("MainWindow_TooltipDescription_MicrosoftAccountIntegrationIsNotImplementedFreeXUsesLocalFilesAndLocalOp_EC989658");
+
+        entries.Single(entry => entry.Command == FreeXBackstageCommandId.Share)
+            .KeyTip.Should().Be("R");
     }
 
     [Fact]
@@ -97,6 +100,23 @@ public sealed class FreeXBackstageNavigationPlannerTests
         entries.Should().OnlyContain(entry => !string.IsNullOrWhiteSpace(entry.AutomationNameKey));
         entries.Should().OnlyContain(entry => !string.IsNullOrWhiteSpace(entry.AutomationHelpTextKey));
         entries.Should().OnlyContain(entry => !string.IsNullOrWhiteSpace(entry.TooltipTitleKey));
+    }
+
+    [Fact]
+    public void Build_InteractiveKeytipsArePrefixFreeForExactFirstRouting()
+    {
+        var keyTips = FreeXBackstageNavigationPlanner.Build()
+            .Where(entry => entry.Kind != FreeXBackstageNavigationEntryKind.Divider)
+            .Select(entry => entry.KeyTip!.Trim().ToUpperInvariant())
+            .ToArray();
+
+        keyTips.Should().OnlyHaveUniqueItems();
+        keyTips.SelectMany(first => keyTips
+                .Where(second => !string.Equals(first, second, StringComparison.Ordinal) &&
+                    second.StartsWith(first, StringComparison.Ordinal))
+                .Select(second => $"{first}->{second}"))
+            .Should()
+            .BeEmpty("exact-first activation must not hide a longer Backstage route");
     }
 
     private static string EntryLabel(FreeXBackstageNavigationEntry entry) =>

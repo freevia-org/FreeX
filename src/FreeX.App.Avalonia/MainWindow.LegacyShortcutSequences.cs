@@ -144,7 +144,10 @@ public sealed partial class MainWindow
 
         if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
         {
+            var closeBackstage = _backstageOverlay.IsVisible;
             ResetRibbonKeyTipSequence();
+            if (closeBackstage)
+                HideBackstageOverlay();
             args.Handled = true;
             return true;
         }
@@ -175,7 +178,10 @@ public sealed partial class MainWindow
                 return false;
 
             var consume = sequenceActive || visibleContinuation;
+            var closeBackstage = sequenceActive && _backstageOverlay.IsVisible;
             ResetRibbonKeyTipSequence();
+            if (closeBackstage)
+                HideBackstageOverlay();
             args.Handled = consume;
             return consume;
         }
@@ -205,14 +211,11 @@ public sealed partial class MainWindow
                 break;
             case AvaloniaRibbonKeyTipRouteKind.BackstagePane:
                 if (route.BackstagePane is { } pane)
-                    NavigateBackstageOverlay(pane);
+                    TryActivateBackstagePane(pane);
                 break;
             case AvaloniaRibbonKeyTipRouteKind.BackstageCommand:
                 if (route.BackstageCommand is { } command)
-                {
-                    HideBackstageOverlay();
-                    _ = ExecuteBackstageCommandWorkflowAsync(command);
-                }
+                    TryActivateBackstageCommand(command);
                 break;
             case AvaloniaRibbonKeyTipRouteKind.QuickAccessToolbar:
                 ExecuteQuickAccessKeyTip(route.QuickAccessIndex);
@@ -232,9 +235,11 @@ public sealed partial class MainWindow
     {
         var buttons = _avaloniaQuickAccessToolbar.Children
             .OfType<Button>()
-            .Where(button => button.Tag is string tag && !tag.EndsWith(".History", StringComparison.Ordinal))
+            .Where(button => button.Tag is string tag &&
+                !tag.EndsWith(".History", StringComparison.Ordinal) &&
+                button.IsVisible)
             .ToArray();
-        if (index < 0 || index >= buttons.Length || !buttons[index].IsEnabled)
+        if (index < 0 || index >= buttons.Length || !buttons[index].IsEffectivelyEnabled)
             return;
 
         var button = buttons[index];

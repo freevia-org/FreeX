@@ -120,9 +120,8 @@ internal static class AvaloniaRibbonKeyTipRoutes
             }
         }
 
-        // These legacy File-surface aliases remain catalogued by the Windows host. They keep the
-        // Backstage open when that older destination is not represented by the current rail.
-        foreach (var keyTip in new[] { "R", "D", "Z" })
+        // Keep only the legacy File-surface alias that is not represented by the current rail.
+        foreach (var keyTip in new[] { "Z" })
             Add(new("F" + keyTip, $"backstage:{keyTip}", AvaloniaRibbonKeyTipRouteKind.Scope));
 
         for (var index = 0; index < 3; index++)

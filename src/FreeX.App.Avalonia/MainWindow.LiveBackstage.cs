@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Ribbon.Avalonia;
@@ -24,9 +25,16 @@ public sealed partial class MainWindow
     private readonly AvaloniaGrid _backstageOverlay = new();
     private readonly ContentControl _backstageContentHost = new();
     private readonly Dictionary<FreeXBackstagePaneId, Button> _backstagePaneButtons = [];
+    private readonly Dictionary<FreeXBackstageCommandId, Button> _backstageCommandButtons = [];
     private FreeXBackstagePaneId _activeBackstagePane = FreeXBackstagePaneId.Home;
 
     internal bool IsBackstageOverlayVisibleForTest => _backstageOverlay.IsVisible;
+    internal FreeXBackstagePaneId ActiveBackstagePaneForTest => _activeBackstagePane;
+    internal Action<FreeXBackstageCommandId>? BackstageCommandActivationOverrideForTest { get; set; }
+    internal Button? BackstagePaneButtonForTest(FreeXBackstagePaneId pane) =>
+        _backstagePaneButtons.GetValueOrDefault(pane);
+    internal Button? BackstageCommandButtonForTest(FreeXBackstageCommandId command) =>
+        _backstageCommandButtons.GetValueOrDefault(command);
 
     private Control BuildBackstageOverlay()
     {
@@ -119,11 +127,19 @@ public sealed partial class MainWindow
             }
             else if (navigation.Command is { } command)
             {
+                button.Tag = command;
                 button.Click += async (_, _) =>
                 {
                     HideBackstageOverlay();
+                    if (BackstageCommandActivationOverrideForTest is { } testOverride)
+                    {
+                        testOverride(command);
+                        return;
+                    }
+
                     await ExecuteBackstageCommandWorkflowAsync(command);
                 };
+                _backstageCommandButtons[command] = button;
             }
 
             target.Children.Add(button);
@@ -213,6 +229,28 @@ public sealed partial class MainWindow
             FreeXBackstagePaneId.Print => BuildLiveBackstagePrintPane(),
             _ => BuildLiveBackstageHomePane(),
         };
+    }
+
+    private bool TryActivateBackstagePane(FreeXBackstagePaneId pane)
+    {
+        if (!_backstagePaneButtons.TryGetValue(pane, out var button) ||
+            !button.IsVisible ||
+            !button.IsEffectivelyEnabled)
+            return false;
+
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+        return true;
+    }
+
+    private bool TryActivateBackstageCommand(FreeXBackstageCommandId command)
+    {
+        if (!_backstageCommandButtons.TryGetValue(command, out var button) ||
+            !button.IsVisible ||
+            !button.IsEffectivelyEnabled)
+            return false;
+
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+        return true;
     }
 
     private Control BuildLiveBackstageHomePane()
