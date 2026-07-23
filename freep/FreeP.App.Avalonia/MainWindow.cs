@@ -1545,6 +1545,7 @@ public sealed partial class MainWindow : Window
 
         // Text editor: double-click a shape to edit its text.
         _textEditor = new AvaloniaInCanvasTextEditor(_slideCanvas, Editor, textOverlay);
+        WireTableContextMenu();
     }
 
     /// <summary>
@@ -1580,7 +1581,110 @@ public sealed partial class MainWindow : Window
             _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
             ApplyPresentationViewShowState(_viewShowState);
             _textEditor     = new AvaloniaInCanvasTextEditor(_slideCanvas, Editor, textOverlay);
+            WireTableContextMenu();
         }
+    }
+
+    private void WireTableContextMenu()
+    {
+        _slideCanvas.PointerPressed -= OnTableContextMenuPointerPressed;
+        _slideCanvas.PointerPressed += OnTableContextMenuPointerPressed;
+    }
+
+    private void OnTableContextMenuPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(_slideCanvas).Properties.IsRightButtonPressed)
+            return;
+
+        var slide = Editor.CurrentSlide;
+        if (slide is null || Editor.Presentation is null)
+            return;
+
+        var point = e.GetPosition(_slideCanvas);
+        var slidePoint = _slideCanvas.CurrentTransform.ScreenToSlide(point.X, point.Y);
+        var hitId = ShapeHitTester.HitTest(slide, Editor.Presentation, slidePoint.X, slidePoint.Y);
+        var shape = hitId.HasValue
+            ? slide.Shapes.FirstOrDefault(candidate => candidate.Id == hitId.Value)
+            : null;
+        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
+            return;
+
+        var cellHit = TableCellHitTester.HitTest(shape, slidePoint.X, slidePoint.Y);
+        if (!cellHit.HasValue)
+            return;
+
+        Editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
+        var menu = BuildTableContextMenu(shape);
+        _slideCanvas.ContextMenu = menu;
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    private ContextMenu BuildTableContextMenu(SlideShape shape)
+    {
+        var menu = new ContextMenu();
+
+        void Add(string header, Action action)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+        }
+
+        Add("Insert Row Above", () => { Editor.Select(shape.Id); Editor.InsertRowAbove(); });
+        Add("Insert Row Below", () => { Editor.Select(shape.Id); Editor.InsertRowBelow(); });
+        menu.Items.Add(new Separator());
+        Add("Insert Column Left", () => { Editor.Select(shape.Id); Editor.InsertColumnLeft(); });
+        Add("Insert Column Right", () => { Editor.Select(shape.Id); Editor.InsertColumnRight(); });
+        menu.Items.Add(new Separator());
+        Add("Delete Row", () => { Editor.Select(shape.Id); Editor.DeleteRow(); });
+        Add("Delete Column", () => { Editor.Select(shape.Id); Editor.DeleteColumn(); });
+        menu.Items.Add(new Separator());
+
+        var table = shape.Table;
+        var activeCell = Editor.ActiveTableCell;
+        var canMerge = activeCell.HasValue &&
+            (activeCell.Value.Col + 1 < table.ColumnWidthsEmu.Count ||
+             activeCell.Value.Row + 1 < table.Rows.Count);
+        var canSplit = activeCell.HasValue &&
+            table.Rows.Count > activeCell.Value.Row &&
+            table.Rows[activeCell.Value.Row].Cells.ElementAtOrDefault(activeCell.Value.Col) is { } cell &&
+            (cell.GridSpan > 1 || cell.RowSpan > 1);
+
+        var mergeItem = new MenuItem { Header = "Merge with Right Cell", IsEnabled = canMerge };
+        if (canMerge && activeCell is { } mergeCell)
+        {
+            var row = mergeCell.Row;
+            var col = mergeCell.Col;
+            var rightColumn = col + 1 < table.ColumnWidthsEmu.Count ? col + 1 : col;
+            var belowRow = row + 1 < table.Rows.Count && rightColumn == col ? row + 1 : row;
+            mergeItem.Click += (_, _) =>
+            {
+                Editor.Select(shape.Id);
+                Editor.MergeTableCells(row, col, belowRow, rightColumn);
+            };
+        }
+        menu.Items.Add(mergeItem);
+
+        var splitItem = new MenuItem { Header = "Split Cell", IsEnabled = canSplit };
+        if (canSplit && activeCell is { } splitCell)
+        {
+            splitItem.Click += (_, _) =>
+            {
+                Editor.Select(shape.Id);
+                Editor.SplitTableCell(splitCell.Row, splitCell.Col);
+            };
+        }
+        menu.Items.Add(splitItem);
+        return menu;
+    }
+
+    internal ContextMenu? BuildTableContextMenuForTests(uint shapeId)
+    {
+        var shape = Editor.CurrentSlide?.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        return shape?.Kind == SlideShapeKind.Table && shape.Table is not null
+            ? BuildTableContextMenu(shape)
+            : null;
     }
 
     // ── Ribbon ─────────────────────────────────────────────────────────────────
