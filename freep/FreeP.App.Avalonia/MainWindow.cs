@@ -865,7 +865,7 @@ public sealed partial class MainWindow : Window
             Width = FreePShellVisualMetrics.SlidePaneWidth,
             Background = BrushFromHex(SlidePanePlanner.DefaultPaneBackgroundHex),
         };
-        slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var slidePaneListHost = new Grid();
@@ -5503,17 +5503,24 @@ public sealed partial class MainWindow : Window
                 {
                     Text                = plan.LabelText,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    FontSize            = 10,
+                    FontSize            = plan.LabelFontSize,
+                    Height              = plan.LabelHeight,
                     MinHeight           = plan.LabelHeight,
-                    Margin              = new Thickness(0, 2, 0, 0),
+                    VerticalAlignment   = VerticalAlignment.Center,
+                    Margin              = new Thickness(0, 0, 0, plan.LabelBottomMargin),
                     Foreground          = BrushFromHex(plan.LabelForegroundHex),
                 };
 
-                var panel = new StackPanel
+                var thumbnailBorder = new Border
                 {
-                    Margin   = new Thickness(plan.ItemPadding * 0.5),
-                    Children = { thumb, label },
+                    BorderBrush     = BrushFromHex(plan.ThumbnailBorderHex),
+                    BorderThickness = new Thickness(plan.ThumbnailBorderThickness),
+                    Child           = thumb,
                 };
+
+                var panel = new StackPanel();
+                panel.Children.Add(label);
+                panel.Children.Add(thumbnailBorder);
 
                 var itemChrome = new Border
                 {
@@ -5521,7 +5528,7 @@ public sealed partial class MainWindow : Window
                     BorderBrush     = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex),
                     BorderThickness = new Thickness(plan.IsSelected ? plan.SelectedBorderThickness : plan.NormalBorderThickness),
                     CornerRadius    = new CornerRadius(plan.ItemCornerRadius),
-                    Padding         = new Thickness(plan.ItemPadding * 0.25),
+                    Padding         = new Thickness(plan.ItemPadding),
                     Child           = panel,
                 };
 
@@ -5529,7 +5536,8 @@ public sealed partial class MainWindow : Window
                 {
                     Tag         = plan.SlideIndex,
                     Content     = itemChrome,
-                    Padding     = new Thickness(2),
+                    Padding     = new Thickness(0),
+                    Margin      = new Thickness(plan.ItemMarginHorizontal, plan.ItemMarginVertical),
                     MinHeight   = plan.ItemHeight,
                     IsSelected  = plan.IsSelected,
                     ContextMenu = BuildSlidePaneContextMenu(plan.SlideIndex),

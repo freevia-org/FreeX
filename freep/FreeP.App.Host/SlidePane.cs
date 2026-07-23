@@ -242,12 +242,12 @@ public sealed class SlidePane : Border
         var label = new TextBlock
         {
             Text                = plan.LabelText,
-            FontSize            = 11,
+            FontSize            = plan.LabelFontSize,
             Foreground          = LabelBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             Height              = plan.LabelHeight,
             VerticalAlignment   = VerticalAlignment.Center,
-            Margin              = new Thickness(0, 0, 0, 4)
+            Margin              = new Thickness(0, 0, 0, plan.LabelBottomMargin)
         };
 
         // Thumbnail canvas (display-only, non-interactive).
@@ -264,7 +264,7 @@ public sealed class SlidePane : Border
         var thumbBorder = new Border
         {
             BorderBrush     = BrushFromHex(plan.ThumbnailBorderHex),
-            BorderThickness = new Thickness(plan.NormalBorderThickness),
+            BorderThickness = new Thickness(plan.ThumbnailBorderThickness),
             Child           = thumb
         };
 
@@ -283,7 +283,11 @@ public sealed class SlidePane : Border
             BorderBrush     = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex),
             BorderThickness = new Thickness(plan.IsSelected ? plan.SelectedBorderThickness : plan.NormalBorderThickness),
             CornerRadius    = new CornerRadius(plan.ItemCornerRadius),
-            Margin          = new Thickness(6, 4, 6, 4),
+            Margin          = new Thickness(
+                plan.ItemMarginHorizontal,
+                plan.ItemMarginVertical,
+                plan.ItemMarginHorizontal,
+                plan.ItemMarginVertical),
             Padding         = new Thickness(plan.ItemPadding),
             Child           = panel,
             Cursor          = Cursors.Hand,

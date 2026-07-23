@@ -183,6 +183,11 @@ public sealed class SlidePaneTests
         var panel = selected.Child.Should().BeOfType<StackPanel>().Subject;
         var label = panel.Children[0].Should().BeOfType<TextBlock>().Subject;
         BrushColor(label.Foreground).Should().Be(ColorFromHex(SlidePanePlanner.DefaultLabelForegroundHex));
+        label.FontSize.Should().Be(SlidePanePlanner.DefaultLabelFontSize);
+        label.Margin.Bottom.Should().Be(SlidePanePlanner.DefaultLabelBottomMargin);
+
+        var thumbnailBorder = panel.Children[1].Should().BeOfType<Border>().Subject;
+        thumbnailBorder.BorderThickness.Left.Should().Be(SlidePanePlanner.DefaultThumbnailBorderThickness);
     }
 
     [StaFact]

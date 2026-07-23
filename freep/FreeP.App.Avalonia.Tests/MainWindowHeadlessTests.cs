@@ -757,6 +757,11 @@ public sealed class MainWindowHeadlessTests
         firstPlan.ItemSelectedBorderHex.Should().Be(SlidePanePlanner.DefaultItemSelectedBorderHex);
         firstPlan.ThumbnailBorderHex.Should().Be(SlidePanePlanner.DefaultThumbnailBorderHex);
         firstPlan.LabelForegroundHex.Should().Be(SlidePanePlanner.DefaultLabelForegroundHex);
+        firstPlan.LabelFontSize.Should().Be(SlidePanePlanner.DefaultLabelFontSize);
+        firstPlan.LabelBottomMargin.Should().Be(SlidePanePlanner.DefaultLabelBottomMargin);
+        firstPlan.ThumbnailBorderThickness.Should().Be(SlidePanePlanner.DefaultThumbnailBorderThickness);
+        firstPlan.ItemMarginHorizontal.Should().Be(SlidePanePlanner.DefaultItemMarginHorizontal);
+        firstPlan.ItemMarginVertical.Should().Be(SlidePanePlanner.DefaultItemMarginVertical);
         firstPlan.ItemCornerRadius.Should().Be(SlidePanePlanner.DefaultItemCornerRadius);
         firstPlan.NormalBorderThickness.Should().Be(SlidePanePlanner.DefaultNormalBorderThickness);
         firstPlan.SelectedBorderThickness.Should().Be(SlidePanePlanner.DefaultSelectedBorderThickness);
