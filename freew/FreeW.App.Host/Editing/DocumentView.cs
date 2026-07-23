@@ -4456,6 +4456,8 @@ public sealed class DocumentView : RichTextBox
         var leadingWrapReservations = BuildLeadingWrapReservations(
             _model,
             out var suppressedFloatingWrapRuns);
+        ModelParagraph? previousBodyParagraph = null;
+        WpfParagraph? previousBodyWpfParagraph = null;
         var i = 0;
         while (i < blocks.Count)
         {
@@ -4464,6 +4466,8 @@ public sealed class DocumentView : RichTextBox
                 // Skip the hidden block but retain it (anchored to the visible blocks rendered so far)
                 // so the model is reconstructed faithfully on the next commit.
                 _hiddenBlocks.Add((visibleCount, blocks[i]));
+                previousBodyParagraph = null;
+                previousBodyWpfParagraph = null;
                 i++;
                 continue;
             }
@@ -4532,16 +4536,48 @@ public sealed class DocumentView : RichTextBox
                     list.ListItems.Add(new WpfListItem(wpfParagraph));
                 }
                 flow.Blocks.Add(list);
+                previousBodyParagraph = null;
+                previousBodyWpfParagraph = null;
             }
             else
             {
-                foreach (var block in BuildBlocks(
+                var renderedBlocks = BuildBlocks(
                     blocks[i],
                     _model,
                     i,
                     leadingWrapReservations.TryGetValue(i, out var reservations) ? reservations : null,
-                    suppressedFloatingWrapRuns))
+                    suppressedFloatingWrapRuns).ToList();
+                foreach (var block in renderedBlocks)
                     flow.Blocks.Add(block);
+
+                if (blocks[i] is ModelParagraph currentBodyParagraph
+                    && renderedBlocks.Count == 1
+                    && renderedBlocks[0] is WpfParagraph currentBodyWpfParagraph)
+                {
+                    if (previousBodyParagraph is not null
+                        && previousBodyWpfParagraph is not null
+                        && SuppressesContextualSpacing(previousBodyParagraph, currentBodyParagraph, _model))
+                    {
+                        previousBodyWpfParagraph.Margin = new Thickness(
+                            previousBodyWpfParagraph.Margin.Left,
+                            previousBodyWpfParagraph.Margin.Top,
+                            previousBodyWpfParagraph.Margin.Right,
+                            0);
+                        currentBodyWpfParagraph.Margin = new Thickness(
+                            currentBodyWpfParagraph.Margin.Left,
+                            0,
+                            currentBodyWpfParagraph.Margin.Right,
+                            currentBodyWpfParagraph.Margin.Bottom);
+                    }
+
+                    previousBodyParagraph = currentBodyParagraph;
+                    previousBodyWpfParagraph = currentBodyWpfParagraph;
+                }
+                else
+                {
+                    previousBodyParagraph = null;
+                    previousBodyWpfParagraph = null;
+                }
                 visibleCount++;
                 i++;
             }
@@ -14783,6 +14819,7 @@ public sealed class DocumentView : RichTextBox
             var lineFrom = p.LineSpacingIsSet ? p : sp.LineSpacingIsSet ? sp : p;
             return p with
             {
+                ContextualSpacing = p.ContextualSpacing ?? sp.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing,
                 Alignment = p.Alignment != d.Alignment ? p.Alignment : sp.Alignment,
                 // Space before/after cascade on the explicit flag, not value-vs-default: a read paragraph
                 // carries 0pt-after when it sets none, and 0 != the model's 8pt default would otherwise keep
@@ -14802,8 +14839,17 @@ public sealed class DocumentView : RichTextBox
                 ShadingColorHex = p.ShadingColorHex ?? sp.ShadingColorHex,
             };
         }
-        return p;
+        return p with { ContextualSpacing = p.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing };
     }
+
+    private static bool SuppressesContextualSpacing(
+        ModelParagraph previous,
+        ModelParagraph current,
+        TextDocument document) =>
+        previous.Formatting.ListKind == ListKind.None
+        && current.Formatting.ListKind == ListKind.None
+        && string.Equals(previous.StyleId, current.StyleId, StringComparison.OrdinalIgnoreCase)
+        && Resolve(current, document).ContextualSpacing is true;
 
     private static RunFormatting StyleRun(ModelParagraph paragraph, TextDocument document) =>
         paragraph.StyleId is { } id && document.Styles.TryGetValue(id, out var style)
