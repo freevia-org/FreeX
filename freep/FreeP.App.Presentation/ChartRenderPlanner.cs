@@ -700,6 +700,7 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceNearRowFalloff = 0.25;
     private const double ImportedSurfaceMinimumLightFactor = 0.72;
     private const double ImportedSurfaceMaximumLightFactor = 1.04;
+    private const double ImportedExplicitSurfaceHorizontalScale = 0.70;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -3579,7 +3580,7 @@ public static partial class ChartRenderPlanner
             double pivotX = plot.X + plot.Width * 0.586;
             double sourceTop = plot.Y - plot.Height * 0.235;
             double targetTop = plot.Y - plot.Height * 0.373;
-            x = pivotX + (x - pivotX) * 0.965 + 1.0;
+            x = pivotX + (x - pivotX) * ImportedExplicitSurfaceHorizontalScale + 1.0;
             y = targetTop + (y - sourceTop) * 0.745 + 31.0;
         }
 
