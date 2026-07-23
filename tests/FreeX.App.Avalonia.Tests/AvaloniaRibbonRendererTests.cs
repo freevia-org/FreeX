@@ -394,6 +394,94 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
+    public Task KeyTipPath_OpensRenderedMenuAndNestedSubmenu() => RunOnUiThread(() =>
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group =>
+                group.Dropdown("borders", "Borders", new RibbonMenu(new[]
+                {
+                    new RibbonMenuItem("Line Style", new RibbonCommandId(), "S", Children: new[]
+                    {
+                        new RibbonMenuItem("Dashed", "dashed", "D")
+                    })
+                }), control => control with { KeyTip = "B" })))
+            .Build();
+        var executed = 0;
+        var registry = new RibbonCommandRegistry();
+        registry.Register("borders", new NoOpCommand());
+        registry.Register("dashed", new RecordingCommand(() => executed++));
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
+        var window = new Window { Width = 640, Height = 180, Content = ribbon };
+        window.Show();
+        window.Measure(new Size(640, 180));
+        window.Arrange(new Rect(0, 0, 640, 180));
+
+        Assert.True(AvaloniaRibbonRenderer.TryActivateKeyTip(ribbon, "HB"));
+        var button = ribbon.GetLogicalDescendants().OfType<Button>()
+            .First(candidate => Equals(candidate.Tag, "borders"));
+        var flyout = Assert.IsType<MenuFlyout>(button.Flyout);
+        Assert.True(flyout.IsOpen);
+
+        Assert.True(AvaloniaRibbonRenderer.TryActivateKeyTip(ribbon, "HBS"));
+        var lineStyle = flyout.Items.OfType<MenuItem>().Single();
+        Assert.True(lineStyle.IsSubMenuOpen);
+        Assert.Equal(0, executed);
+
+        Assert.True(AvaloniaRibbonRenderer.TryActivateKeyTip(ribbon, "HBSD"));
+        Assert.Equal(1, executed);
+        AvaloniaRibbonRenderer.CloseKeyTipFlyouts(ribbon);
+        window.Close();
+    });
+
+    [Fact]
+    public Task KeyTipPath_DisabledRenderedCommandDoesNotOpenOrExecute() => RunOnUiThread(() =>
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group =>
+                group.Dropdown("locked", "Locked", new RibbonMenu(new[]
+                {
+                    new RibbonMenuItem("Action", "action", "A")
+                }), control => control with { KeyTip = "L" })))
+            .Build();
+        var executed = 0;
+        var registry = new RibbonCommandRegistry();
+        registry.Register("locked", new StatefulCommand(new RibbonCommandState(IsEnabled: false)));
+        registry.Register("action", new RecordingCommand(() => executed++));
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
+        var window = new Window { Width = 640, Height = 180, Content = ribbon };
+        window.Show();
+        window.Measure(new Size(640, 180));
+        window.Arrange(new Rect(0, 0, 640, 180));
+
+        Assert.False(AvaloniaRibbonRenderer.TryActivateKeyTip(ribbon, "HL"));
+        var button = ribbon.GetLogicalDescendants().OfType<Button>()
+            .First(candidate => Equals(candidate.Tag, "locked"));
+        Assert.False(button.Flyout is MenuFlyout { IsOpen: true });
+        Assert.Equal(0, executed);
+        window.Close();
+    });
+
+    [Fact]
+    public Task ContextualTabKeyTip_UsesRenderedActivationKey() => RunOnUiThread(() =>
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group => group.Button("home", "Home")))
+            .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green), tab =>
+                tab.Group("chartGroup", "Chart", "C", 1, group => group.Button("chart", "Chart")))
+            .Build();
+        var source = new FakeContextSource();
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, contextSource: source);
+        var window = new Window { Width = 640, Height = 180, Content = ribbon };
+        window.Show();
+        source.Raise(RibbonContextState.None.With("chart.selected"));
+
+        Assert.True(AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(ribbon, "JC"));
+        var tabControl = Assert.IsType<TabControl>(ribbon);
+        Assert.Equal("ChartDesignTab", ((TabItem)tabControl.SelectedItem!).Tag);
+        window.Close();
+    });
+
+    [Fact]
     public Task BuildRibbon_UsesCompactTabAndComboStyles() => RunOnUiThread(() =>
     {
         var definition = AvaloniaRibbonComposition.BuildDefinition();

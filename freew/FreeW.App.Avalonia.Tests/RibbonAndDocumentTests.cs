@@ -73,17 +73,69 @@ public class RibbonAndDocumentTests
                 .Should().BeTrue($"Avalonia compact File shell command '{id}' must be host-backed");
 
         definition.Tabs.Select(tab => tab.Id).Should().Contain("help");
-        commandIds.Should().Contain("freew.about");
-        commandIds.Should().Contain("freew.legal-notices");
-
-        commandIds.Should().NotContain(new[]
+        commandIds.Should().Contain(new[]
         {
             "freew.help-online",
             "freew.feedback",
             "freew.copy-diagnostics",
             "freew.check-updates",
-            "freew.arrange-all",
+            "freew.about",
+            "freew.legal-notices",
         });
+
+        foreach (var id in new[]
+                 {
+                     "freew.help-online",
+                     "freew.feedback",
+                     "freew.copy-diagnostics",
+                     "freew.check-updates",
+                     "freew.about",
+                     "freew.legal-notices",
+                 })
+            registry.TryGet(new RibbonCommandId(id), out _)
+                .Should().BeTrue($"Avalonia Help command '{id}' must be wired");
+    }
+
+    [Fact]
+    public void Avalonia_help_commands_route_callbacks_and_are_disabled_without_host_routes()
+    {
+        var calls = new List<string>();
+        var callbacks = NoopCallbacks() with
+        {
+            OpenHelpOnline = () => calls.Add("help-online"),
+            OpenFeedback = () => calls.Add("feedback"),
+            CopyDiagnostics = () => calls.Add("copy-diagnostics"),
+            CheckForUpdates = () => calls.Add("check-updates"),
+        };
+        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
+
+        foreach (var id in new[]
+                 {
+                     "freew.help-online",
+                     "freew.feedback",
+                     "freew.copy-diagnostics",
+                     "freew.check-updates",
+                 })
+        {
+            registry.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+        }
+
+        calls.Should().Equal("help-online", "feedback", "copy-diagnostics", "check-updates");
+
+        var unavailable = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), NoopCallbacks());
+        foreach (var id in new[]
+                 {
+                     "freew.help-online",
+                     "freew.feedback",
+                     "freew.copy-diagnostics",
+                     "freew.check-updates",
+                 })
+        {
+            unavailable.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
+            command.Should().BeAssignableTo<IRibbonStatefulCommand>();
+            ((IRibbonStatefulCommand)command!).GetState().IsEnabled.Should().BeFalse();
+        }
     }
 
     [Fact]

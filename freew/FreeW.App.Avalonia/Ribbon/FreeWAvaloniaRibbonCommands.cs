@@ -567,6 +567,10 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.inspect-document", new ActionRibbonCommand(callbacks.InspectDocument ?? (() => { })));
         r.Register("freew.compare", HostCommand(callbacks.CompareDocuments));
         r.Register("freew.combine", new ActionRibbonCommand(callbacks.CombineDocuments ?? (() => { })));
+        r.Register("freew.help-online", HostCommand(callbacks.OpenHelpOnline));
+        r.Register("freew.feedback", HostCommand(callbacks.OpenFeedback));
+        r.Register("freew.copy-diagnostics", HostCommand(callbacks.CopyDiagnostics));
+        r.Register("freew.check-updates", HostCommand(callbacks.CheckForUpdates));
         r.Register("freew.about", HostCommand(callbacks.OpenAbout));
         r.Register("freew.legal-notices", HostCommand(callbacks.OpenLegalNotices));
         r.Register("freew.mark-as-final", new ToggleActionCommand(

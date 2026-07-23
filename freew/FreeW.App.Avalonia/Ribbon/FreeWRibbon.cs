@@ -333,5 +333,13 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>Layout &gt; More Paper Sizes. Optional Page Setup route opened on the Paper tab.</summary>
     Action? OpenMorePaperSizesDialog = null,
     /// <summary>Host status for the bounded manual-hyphenation pass.</summary>
-    Action<string>? ShowHyphenationInfo = null);
+    Action<string>? ShowHyphenationInfo = null,
+    /// <summary>Help &gt; Help Online. Optional; the command is disabled when omitted.</summary>
+    Action? OpenHelpOnline = null,
+    /// <summary>Help &gt; Feedback. Optional; the command is disabled when omitted.</summary>
+    Action? OpenFeedback = null,
+    /// <summary>Help &gt; Copy Diagnostics. Optional; the command is disabled when omitted.</summary>
+    Action? CopyDiagnostics = null,
+    /// <summary>Help &gt; Check for Updates. Optional; the command is disabled when omitted.</summary>
+    Action? CheckForUpdates = null);
 

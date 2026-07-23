@@ -6,6 +6,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
@@ -44,6 +45,19 @@ public static class AvaloniaRibbonRenderer
     private const double RibbonCheckBoxHeight = 16;
     private const double RibbonCheckGlyphSize = 11;
     private const int MaxRowsPerColumn = 3;
+    private static readonly IReadOnlyDictionary<string, string> ContextualTabKeyTips =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PivotTableAnalyzeTab"] = "JA",
+            ["PivotTableDesignTab"] = "JD",
+            ["ChartDesignTab"] = "JC",
+            ["ChartFormatTab"] = "JF",
+            ["ShapeFormatTab"] = "JS",
+            ["PictureFormatTab"] = "JP",
+            ["TableDesignTab"] = "JT",
+        };
+    private static readonly AttachedProperty<string?> KeyTipProperty =
+        AvaloniaProperty.RegisterAttached<Control, string?>("KeyTip", typeof(AvaloniaRibbonRenderer));
     private static readonly IReadOnlySet<string> StaticDrawUnavailableCommandIds = new HashSet<string>(StringComparer.Ordinal)
     {
         "Crop Picture",
@@ -51,6 +65,12 @@ public static class AvaloniaRibbonRenderer
         "Shape Effects",
     };
     private static readonly ConditionalWeakTable<CheckBox, CheckBoxExecutionState> CheckBoxExecutionStates = new();
+    private static readonly ConditionalWeakTable<Control, KeyTipFlyoutState> KeyTipFlyoutStates = new();
+
+    private sealed class KeyTipFlyoutState
+    {
+        public List<FlyoutBase> OpenFlyouts { get; } = new();
+    }
 
     private sealed class CheckBoxExecutionState
     {
@@ -399,7 +419,8 @@ public static class AvaloniaRibbonRenderer
     /// <summary>Builds a single <see cref="TabItem"/> for a tab (header + content), tagged with the tab id.</summary>
     private static TabItem BuildTabItem(RibbonTab tab, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette) => new()
     {
-        Header = BuildTabHeader(tab.Header, tab.KeyTip, palette),
+        Header = BuildTabHeader(tab.Header, tab.KeyTip ??
+            (tab.IsContextual ? ContextualTabKeyTips.GetValueOrDefault(tab.Id) : null), palette),
         Content = BuildTabContent(tab, registry, afterExecute, palette),
         Tag = tab.Id,
     };
@@ -527,6 +548,151 @@ public static class AvaloniaRibbonRenderer
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Activates a catalogued ribbon key-tip path against the rendered controls. Menu paths open the
+    /// live flyout and submenu before a terminal menu item is invoked, matching the WPF access-key scope.
+    /// </summary>
+    public static bool TryActivateKeyTip(Control ribbon, string keyTip)
+    {
+        ArgumentNullException.ThrowIfNull(ribbon);
+        if (string.IsNullOrWhiteSpace(keyTip))
+            return false;
+
+        var tabControl = FindTabControl(ribbon);
+        if (tabControl is null)
+            return false;
+
+        var normalized = keyTip.Trim().ToUpperInvariant();
+        var tab = tabControl.Items.OfType<TabItem>()
+            .Select(item => (Item: item, KeyTip: GetTabKeyTip(item)))
+            .Where(candidate => candidate.KeyTip is not null &&
+                                normalized.StartsWith(candidate.KeyTip, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(candidate => candidate.KeyTip!.Length)
+            .FirstOrDefault();
+        if (tab.Item is null || tab.KeyTip is null)
+            return false;
+
+        tabControl.SelectedItem = tab.Item;
+        var remainder = normalized[tab.KeyTip.Length..];
+        if (remainder.Length == 0)
+            return true;
+
+        var controls = new List<Control>();
+        if (tab.Item.Content is Control content)
+            ForEachRibbonDescendant(content, controls.Add);
+
+        var candidateControl = controls
+            .Select(control => (Control: control, KeyTip: GetKeyTip(control)))
+            .Where(candidate => candidate.KeyTip is not null &&
+                                remainder.StartsWith(candidate.KeyTip, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(candidate => candidate.KeyTip!.Length)
+            .Select(candidate => (candidate.Control, KeyTip: candidate.KeyTip!))
+            .FirstOrDefault();
+        if (candidateControl.Control is null || !candidateControl.Control.IsEnabled)
+            return false;
+
+        var controlRemainder = remainder[candidateControl.KeyTip.Length..];
+        if (candidateControl.Control is ComboBox combo)
+        {
+            if (controlRemainder.Length != 0)
+                return false;
+
+            combo.Focus();
+            combo.IsDropDownOpen = true;
+            return true;
+        }
+
+        if (candidateControl.Control is not Button button)
+            return false;
+
+        if (button.Flyout is not { } flyout)
+        {
+            if (controlRemainder.Length != 0)
+                return false;
+
+            if (button is ToggleButton toggle)
+                toggle.IsChecked = toggle.IsChecked != true;
+            else
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+            return true;
+        }
+
+        if (flyout is not MenuFlyout menuFlyout)
+        {
+            if (controlRemainder.Length != 0)
+                return false;
+
+            OpenKeyTipFlyout(ribbon, flyout, button);
+            return true;
+        }
+
+        OpenKeyTipFlyout(ribbon, menuFlyout, button);
+        return controlRemainder.Length == 0 || TryActivateMenuKeyTip(menuFlyout, controlRemainder);
+    }
+
+    /// <summary>Closes flyouts opened by keyboard key-tip navigation without disturbing pointer flyouts.</summary>
+    public static void CloseKeyTipFlyouts(Control ribbon)
+    {
+        ArgumentNullException.ThrowIfNull(ribbon);
+        if (!KeyTipFlyoutStates.TryGetValue(ribbon, out var state))
+            return;
+
+        foreach (var flyout in state.OpenFlyouts)
+            flyout.Hide();
+        state.OpenFlyouts.Clear();
+    }
+
+    private static void OpenKeyTipFlyout(Control ribbon, FlyoutBase flyout, Control anchor)
+    {
+        CloseKeyTipFlyouts(ribbon);
+        flyout.ShowAt(anchor);
+        KeyTipFlyoutStates.GetOrCreateValue(ribbon).OpenFlyouts.Add(flyout);
+    }
+
+    private static bool TryActivateMenuKeyTip(MenuFlyout flyout, string input)
+    {
+        IReadOnlyList<MenuItem> items = flyout.Items.OfType<MenuItem>().ToArray();
+        var offset = 0;
+        while (offset < input.Length)
+        {
+            var match = items
+                .Select(item => (Item: item, KeyTip: GetKeyTip(item)))
+                .Where(candidate => candidate.KeyTip is not null &&
+                                    input[offset..].StartsWith(candidate.KeyTip, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(candidate => candidate.KeyTip!.Length)
+                .FirstOrDefault();
+            if (match.Item is null || match.KeyTip is null || !match.Item.IsEnabled)
+                return false;
+
+            offset += match.KeyTip.Length;
+            if (match.Item.Items.Count > 0)
+            {
+                match.Item.IsSubMenuOpen = true;
+                items = match.Item.Items.OfType<MenuItem>().ToArray();
+                continue;
+            }
+
+            if (offset != input.Length)
+                return false;
+
+            match.Item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, match.Item));
+            return true;
+        }
+
+        return true;
+    }
+
+    private static string? GetTabKeyTip(TabItem item) =>
+        FindKeyTipBadge(item.Header as Control)?.Child is TextBlock label ? label.Text : null;
+
+    private static string? GetKeyTip(Control control) => control.GetValue(KeyTipProperty);
+
+    private static void SetKeyTip(Control control, string? keyTip)
+    {
+        if (!string.IsNullOrWhiteSpace(keyTip))
+            control.SetValue(KeyTipProperty, keyTip.Trim().ToUpperInvariant());
     }
 
     private static TabControl? FindTabControl(Control control)
@@ -1139,15 +1305,20 @@ public static class AvaloniaRibbonRenderer
         RibbonControl control,
         IRibbonCommandRegistry? registry,
         Action? afterExecute,
-        AvaloniaRibbonPalette palette) => control switch
+        AvaloniaRibbonPalette palette)
     {
-        RibbonSeparator => BuildInlineDivider(palette),
-        RibbonComboBox combo => BuildComboControl(combo, registry, afterExecute, palette),
-        RibbonCheckBox check => BuildCheckControl(check, registry, afterExecute, palette),
-        { PreferredLayout: RibbonCommandLayoutKind.Large } => BuildLargeControl(control, registry, afterExecute, palette),
-        { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, registry, afterExecute, palette),
-        _ => BuildMediumControl(control, registry, afterExecute, palette),
-    };
+        var element = control switch
+        {
+            RibbonSeparator => BuildInlineDivider(palette),
+            RibbonComboBox combo => BuildComboControl(combo, registry, afterExecute, palette),
+            RibbonCheckBox check => BuildCheckControl(check, registry, afterExecute, palette),
+            { PreferredLayout: RibbonCommandLayoutKind.Large } => BuildLargeControl(control, registry, afterExecute, palette),
+            { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, registry, afterExecute, palette),
+            _ => BuildMediumControl(control, registry, afterExecute, palette),
+        };
+        SetKeyTip(element, control.KeyTip);
+        return element;
+    }
 
     // WPF BuildCheckControl: a real CheckBox carrying the label.
     private static Control BuildCheckControl(RibbonCheckBox check, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
@@ -1277,6 +1448,7 @@ public static class AvaloniaRibbonRenderer
             VerticalContentAlignment = VerticalAlignment.Center,
             Flyout = control.Menu.BuildFlyout(registry, afterExecute),
         };
+        SetKeyTip(dropdown, control.KeyTip);
 
         ApplyStateAndEnablement(primary, control.CommandId, registry, palette);
         ApplyStateAndEnablement(dropdown, control.CommandId, registry, palette);
@@ -1593,6 +1765,7 @@ public static class AvaloniaRibbonRenderer
             InputGesture = null,
             Tag = item.CommandId?.Value,
         };
+        SetKeyTip(menuItem, item.KeyTip);
 
         if (!string.IsNullOrEmpty(item.InputGesture))
             menuItem.InputGesture = TryParseGesture(item.InputGesture);

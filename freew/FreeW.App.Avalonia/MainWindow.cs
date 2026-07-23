@@ -20,6 +20,7 @@ using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Printing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.Dialogs;
@@ -33,7 +34,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     private const string DefaultTitle = "FreeW";
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Document;
@@ -1580,6 +1581,10 @@ public sealed class MainWindow : Window
             SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync(),
             CompareDocuments: () => _ = CompareDocumentsAsync(),
             CombineDocuments: () => _ = CombineDocumentsAsync(),
+            OpenHelpOnline: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.HelpUrl, "Help Online"),
+            OpenFeedback: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.FeedbackUrl, "Feedback"),
+            CopyDiagnostics: () => _ = CopyDiagnosticsAsync(),
+            CheckForUpdates: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.LatestReleaseUrl, "Check for Updates"),
             OpenAbout: () => _ = OpenAboutAsync(),
             OpenLegalNotices: () => _ = OpenLegalNoticesAsync(),
             ToggleReviewBalloons: ToggleReviewBalloons,

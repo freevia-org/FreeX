@@ -57,6 +57,7 @@ internal static class AvaloniaRibbonKeyTipRoutes
             ["ChartFormatTab"] = "JF",
             ["ShapeFormatTab"] = "JS",
             ["PictureFormatTab"] = "JP",
+            ["TableDesignTab"] = "JT",
         };
 
     private static readonly Lazy<IReadOnlyList<AvaloniaRibbonKeyTipRoute>> Routes =

@@ -226,6 +226,7 @@ public sealed partial class MainWindow : Window
     private string? _ribbonKeyTipGroupId;
     private string _ribbonKeyTipSequence = string.Empty;
     private IReadOnlyList<RibbonMenuItem>? _ribbonKeyTipMenuItems;
+    private IReadOnlyList<MenuItem>? _ribbonKeyTipRenderedMenuItems;
     private FlyoutBase? _ribbonKeyTipFlyout;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
@@ -246,6 +247,18 @@ public sealed partial class MainWindow : Window
     internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
     internal bool RibbonKeyTipsVisibleForTests => _ribbonKeyTipsVisible;
     internal bool RibbonKeyTipMenuOpenForTests => _ribbonKeyTipMenuItems is not null;
+    internal bool RibbonKeyTipFlyoutOpenForTests => _ribbonKeyTipFlyout?.IsOpen == true;
+    internal IReadOnlyList<MenuItem> RibbonKeyTipRenderedMenuItemsForTests =>
+        _ribbonKeyTipRenderedMenuItems ?? Array.Empty<MenuItem>();
+    internal void SetRibbonKeyTipMenuScopeForTests(RibbonMenu menu, MenuFlyout flyout)
+    {
+        _ribbonKeyTipsVisible = true;
+        _ribbonKeyTipMenuItems = menu.Items;
+        _ribbonKeyTipFlyout = flyout;
+        _ribbonKeyTipRenderedMenuItems = flyout.Items.OfType<MenuItem>().ToArray();
+        _ribbonKeyTipSequence = string.Empty;
+    }
+    internal bool HandleRibbonMenuKeyTipForTests(string token) => TryHandleRibbonMenuKeyTip(token);
     internal RibbonCommandRegistry RibbonCommandRegistryForTests => _ribbonCommandRegistry!;
     internal Control? RibbonControlForTests => _ribbonControl;
     internal Border TitleBarForTests => _titleBar;
@@ -6575,6 +6588,7 @@ public sealed partial class MainWindow : Window
 
         _ribbonKeyTipFlyout = null;
         _ribbonKeyTipMenuItems = null;
+        _ribbonKeyTipRenderedMenuItems = null;
         _ribbonKeyTipsVisible = visible;
         _ribbonKeyTipTabId = null;
         _ribbonKeyTipGroupId = null;
@@ -6597,15 +6611,17 @@ public sealed partial class MainWindow : Window
         if (_ribbonKeyTipGroupId is null)
         {
             var exactGroup = tab.Groups.FirstOrDefault(group =>
-                KeyTipEquals(group.KeyTip, _ribbonKeyTipSequence));
+                KeyTipEquals(GetVisibleRibbonGroupKeyTip(tab, group), _ribbonKeyTipSequence));
             if (exactGroup is not null)
             {
                 _ribbonKeyTipGroupId = exactGroup.Id;
                 _ribbonKeyTipSequence = string.Empty;
+                TryEnterCollapsedRibbonGroupKeyTipScope(exactGroup);
                 return true;
             }
 
-            if (tab.Groups.Any(group => KeyTipStartsWith(group.KeyTip, _ribbonKeyTipSequence)))
+            if (tab.Groups.Any(group =>
+                KeyTipStartsWith(GetVisibleRibbonGroupKeyTip(tab, group), _ribbonKeyTipSequence)))
                 return true;
 
             // Some WPF ribbons expose a command directly after the tab. Support that
@@ -6646,6 +6662,16 @@ public sealed partial class MainWindow : Window
 
             if (exactItem.Children.Count > 0)
             {
+                var renderedParent = FindRenderedMenuItem(exactItem, items);
+                if (_ribbonKeyTipFlyout is not null && renderedParent is null)
+                    return false;
+
+                if (renderedParent is not null)
+                {
+                    renderedParent.IsSubMenuOpen = true;
+                    _ribbonKeyTipRenderedMenuItems = renderedParent.Items.OfType<MenuItem>().ToArray();
+                }
+
                 _ribbonKeyTipMenuItems = exactItem.Children;
                 _ribbonKeyTipSequence = string.Empty;
                 return true;
@@ -6722,10 +6748,117 @@ public sealed partial class MainWindow : Window
 
     private bool EnterRibbonMenuKeyTipScope(RibbonControl control, RibbonMenu menu)
     {
+        var flyout = ShowRibbonFlyout(control.CommandId);
         _ribbonKeyTipMenuItems = menu.Items;
+        _ribbonKeyTipRenderedMenuItems = flyout is MenuFlyout menuFlyout
+            ? menuFlyout.Items.OfType<MenuItem>().ToArray()
+            : Array.Empty<MenuItem>();
         _ribbonKeyTipSequence = string.Empty;
-        _ribbonKeyTipFlyout = ShowRibbonFlyout(control.CommandId);
+        _ribbonKeyTipFlyout = flyout;
         return true;
+    }
+
+    private void TryEnterCollapsedRibbonGroupKeyTipScope(RibbonGroup group)
+    {
+        var button = FindCollapsedRibbonGroupButton(group);
+        if (button?.Flyout is not MenuFlyout flyout)
+            return;
+
+        flyout.ShowAt(button);
+        _ribbonKeyTipFlyout = flyout;
+        _ribbonKeyTipMenuItems = BuildCollapsedGroupKeyTipItems(group);
+        _ribbonKeyTipRenderedMenuItems = flyout.Items.OfType<MenuItem>().ToArray();
+    }
+
+    private Button? FindCollapsedRibbonGroupButton(RibbonGroup group) =>
+        _ribbonControl?
+            .GetVisualDescendants()
+            .OfType<Button>()
+            .FirstOrDefault(button =>
+                string.Equals(button.Tag as string, $"collapsed:{group.Id}", StringComparison.Ordinal));
+
+    private string? GetVisibleRibbonGroupKeyTip(RibbonTab tab, RibbonGroup group)
+    {
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in tab.Groups)
+        {
+            var keyTip = RibbonCollapsedGroupPresentationPlanner.DeriveGroupKeyTip(candidate.Header, used);
+            if (string.Equals(candidate.Id, group.Id, StringComparison.Ordinal))
+                return FindCollapsedRibbonGroupButton(candidate) is not null
+                    ? keyTip
+                    : candidate.KeyTip;
+        }
+
+        return group.KeyTip;
+    }
+
+    private IReadOnlyList<RibbonMenuItem> BuildCollapsedGroupKeyTipItems(RibbonGroup group)
+    {
+        var items = new List<RibbonMenuItem>();
+        foreach (var control in RibbonCollapsedGroupPresentationPlanner.GetOverflowControls(group, includeSeparators: true))
+        {
+            switch (control)
+            {
+                case RibbonSeparator:
+                    items.Add(RibbonMenuItem.Separator());
+                    break;
+                case RibbonComboBox combo:
+                    items.Add(new RibbonMenuItem(combo.Label) { IsEnabled = false });
+                    break;
+                case RibbonSplitButton split:
+                    items.Add(new RibbonMenuItem(split.Label, split.CommandId, split.KeyTip));
+                    foreach (var menuItem in split.Menu.Items)
+                    {
+                        if (menuItem.Kind != RibbonMenuItemKind.Separator &&
+                            menuItem.CommandId is { } commandId &&
+                            (commandId == split.CommandId ||
+                             string.Equals(menuItem.Header, split.Label, StringComparison.OrdinalIgnoreCase)))
+                            continue;
+
+                        items.Add(menuItem);
+                    }
+                    break;
+                default:
+                    var menu = GetRibbonMenu(control);
+                    items.Add(new RibbonMenuItem(
+                        control.Label,
+                        control.CommandId,
+                        control.KeyTip,
+                        Children: menu?.Items));
+                    break;
+            }
+        }
+
+        return items;
+    }
+
+    private static RibbonMenu? GetRibbonMenu(RibbonControl control) => control switch
+    {
+        RibbonSplitButton split => split.Menu,
+        RibbonDropdown dropdown => dropdown.Menu,
+        _ => null,
+    };
+
+    private MenuItem? FindRenderedMenuItem(RibbonMenuItem logicalItem, IReadOnlyList<RibbonMenuItem> scope)
+    {
+        if (_ribbonKeyTipRenderedMenuItems is null)
+            return null;
+
+        var renderedIndex = 0;
+        for (var index = 0; index < scope.Count; index++)
+        {
+            if (scope[index].Kind == RibbonMenuItemKind.Separator)
+                continue;
+
+            if (ReferenceEquals(scope[index], logicalItem))
+                return renderedIndex < _ribbonKeyTipRenderedMenuItems.Count
+                    ? _ribbonKeyTipRenderedMenuItems[renderedIndex]
+                    : null;
+
+            renderedIndex++;
+        }
+
+        return null;
     }
 
     private FlyoutBase? ShowRibbonFlyout(RibbonCommandId commandId)
