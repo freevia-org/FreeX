@@ -122,6 +122,12 @@ public static class DocxWriter
         // part-local media file + a relationship in word/_rels/comments.xml.rels, so comment-part images
         // round-trip referenced rather than orphaned. Empty for text-only comments.
         var commentImages = hasComments ? CollectCommentImages(document, usedPartNames) : new List<ImagePart>();
+        var footnotePreservedDrawings = hasFootnotes
+            ? CollectPartLocalPreservedDrawings(document.Footnotes.Values.SelectMany(note => note.Content), preservedParts)
+            : [];
+        var endnotePreservedDrawings = hasEndnotes
+            ? CollectPartLocalPreservedDrawings(document.Endnotes.Values.SelectMany(note => note.Content), preservedParts)
+            : [];
 
         // The watermark options (or legacy text) are persisted as custom document properties
         // (docProps/custom.xml). WatermarkOptions takes precedence; a legacy Watermark text is used
@@ -247,9 +253,17 @@ public static class DocxWriter
             }
         }
         if (hasFootnotes)
-            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document));
+        {
+            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document, footnotePreservedDrawings));
+            if (footnotePreservedDrawings.Count > 0)
+                WritePart(archive, "word/_rels/footnotes.xml.rels", BuildPartLocalPreservedDrawingRels(footnotePreservedDrawings));
+        }
         if (hasEndnotes)
-            WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document));
+        {
+            WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document, endnotePreservedDrawings));
+            if (endnotePreservedDrawings.Count > 0)
+                WritePart(archive, "word/_rels/endnotes.xml.rels", BuildPartLocalPreservedDrawingRels(endnotePreservedDrawings));
+        }
         if (hasComments)
         {
             WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages));
@@ -541,12 +555,12 @@ public static class DocxWriter
         string FileName,
         string RelationshipId,
         IReadOnlyList<ImagePart> Images,
-        IReadOnlyList<HeaderFooterPreservedDrawingPart> PreservedDrawings,
+        IReadOnlyList<PartLocalPreservedDrawingPart> PreservedDrawings,
         WatermarkOptions? Watermark,
         ImagePart? WatermarkImage);
 
-    /// <summary>A header/footer-local relationship for a preserved chart drawing.</summary>
-    private sealed record HeaderFooterPreservedDrawingPart(
+    /// <summary>A story-part-local relationship for a preserved chart drawing.</summary>
+    private sealed record PartLocalPreservedDrawingPart(
         string PartName,
         string RelationshipId,
         string RelationshipType);
@@ -598,7 +612,7 @@ public static class DocxWriter
                 var fileName = (isHeader ? "header" : "footer") + index + ".xml";
                 var relationshipId = (isHeader ? "rIdHeader" : "rIdFooter") + index;
                 var images = CollectHeaderFooterImages(content, fileName, usedPartNames);
-                var preservedDrawings = CollectHeaderFooterPreservedDrawings(content, document.Preserved.Parts);
+                var preservedDrawings = CollectPartLocalPreservedDrawings(content.Paragraphs, document.Preserved.Parts);
                 ImagePart? watermarkImage = null;
                 if (watermark?.IsPicture == true)
                 {
@@ -703,17 +717,17 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Assigns a header/footer-local relationship to each preserved chart part referenced by its runs. Preserved
-    /// body drawings keep their document-level relationships; a header/footer drawing must instead resolve its
-    /// r:id against this part's own _rels file.
+    /// Assigns a story-part-local relationship to each preserved chart part referenced by its runs. Preserved
+    /// body drawings keep their document-level relationships; header/footer/note drawings resolve against the
+    /// owning part's _rels file.
     /// </summary>
-    private static IReadOnlyList<HeaderFooterPreservedDrawingPart> CollectHeaderFooterPreservedDrawings(
-        HeaderFooter content,
+    private static IReadOnlyList<PartLocalPreservedDrawingPart> CollectPartLocalPreservedDrawings(
+        IEnumerable<Paragraph> paragraphs,
         IReadOnlyList<PreservedPart> preservedParts)
     {
         var preservedByName = preservedParts.ToDictionary(part => part.PartName, StringComparer.Ordinal);
-        var result = new List<HeaderFooterPreservedDrawingPart>();
-        foreach (var paragraph in content.Paragraphs)
+        var result = new List<PartLocalPreservedDrawingPart>();
+        foreach (var paragraph in paragraphs)
             foreach (var run in paragraph.Runs)
                 if (run.PreservedDrawing is { } drawing)
                     foreach (var reference in drawing.References)
@@ -724,7 +738,7 @@ public static class DocxWriter
                         var relationshipType = preservedPart.ContentTypeOverride == ChartExContentType
                             ? ChartExRelType
                             : ChartRelType;
-                        result.Add(new HeaderFooterPreservedDrawingPart(
+                        result.Add(new PartLocalPreservedDrawingPart(
                             reference.PreservedPartName,
                             $"rIdPreservedChart{result.Count + 1}",
                             relationshipType));
@@ -1534,7 +1548,9 @@ public static class DocxWriter
     /// (w:footnoteSeparator id=-1, w:continuationSeparator id=0) for Word-friendliness, then one
     /// w:footnote w:id="N" per modelled footnote (ascending id), each holding its paragraphs.
     /// </summary>
-    private static XDocument BuildFootnotes(TextDocument document)
+    private static XDocument BuildFootnotes(
+        TextDocument document,
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
     {
         var footnotes = new XElement(W + "footnotes",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
@@ -1550,8 +1566,12 @@ public static class DocxWriter
         footnotes.Add(Separator(-1, "separator"));
         footnotes.Add(Separator(0, "continuationSeparator"));
 
-        // Footnote paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noDrawings = RunDrawings.Empty();
+        // Footnote chart references resolve against word/_rels/footnotes.xml.rels.
+        var noDrawings = RunDrawings.Empty() with
+        {
+            PreservedDrawingRelIds = preservedDrawings
+                .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal)
+        };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var footnote in document.Footnotes.Values.OrderBy(f => f.Id))
@@ -1572,7 +1592,9 @@ public static class DocxWriter
     /// w:endnote w:id="N" per modelled endnote (ascending id), each holding its paragraphs. Mirrors
     /// <see cref="BuildFootnotes"/>.
     /// </summary>
-    private static XDocument BuildEndnotes(TextDocument document)
+    private static XDocument BuildEndnotes(
+        TextDocument document,
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
     {
         var endnotes = new XElement(W + "endnotes",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
@@ -1588,8 +1610,12 @@ public static class DocxWriter
         endnotes.Add(Separator(-1, "separator"));
         endnotes.Add(Separator(0, "continuationSeparator"));
 
-        // Endnote paragraphs carry no inline images or hyperlinks (those walks target the body).
-        var noDrawings = RunDrawings.Empty();
+        // Endnote chart references resolve against word/_rels/endnotes.xml.rels.
+        var noDrawings = RunDrawings.Empty() with
+        {
+            PreservedDrawingRelIds = preservedDrawings
+                .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal)
+        };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var endnote in document.Endnotes.Values.OrderBy(e => e.Id))
@@ -6702,6 +6728,18 @@ public static class DocxWriter
                 ImageRel,
                 "media/" + image.FileName));
         foreach (var drawing in part.PreservedDrawings)
+            relationships.Add(OpcRelationships.CreateRelationship(
+                drawing.RelationshipId,
+                drawing.RelationshipType,
+                DocumentRelativeTarget(drawing.PartName)));
+        return new XDocument(relationships);
+    }
+
+    private static XDocument BuildPartLocalPreservedDrawingRels(
+        IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings)
+    {
+        var relationships = OpcRelationships.CreateRoot();
+        foreach (var drawing in preservedDrawings)
             relationships.Add(OpcRelationships.CreateRelationship(
                 drawing.RelationshipId,
                 drawing.RelationshipType,

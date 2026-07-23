@@ -819,6 +819,7 @@ public static class DocxReader
             return;
 
         var noNumbering = new Dictionary<int, ListKind>();
+        var noteRelationships = ReadPartRelationships(archive, "word/footnotes.xml");
         foreach (var element in root.Elements(W + "footnote"))
         {
             var type = element.Attribute(W + "type")?.Value;
@@ -829,7 +830,14 @@ public static class DocxReader
 
             var footnote = new Footnote(id);
             foreach (var p in element.Elements(W + "p"))
-                footnote.Content.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+                footnote.Content.Add(ReadParagraph(
+                    p,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    noNumbering,
+                    preservedDrawingTarget: document,
+                    preservedDrawingRelationshipTargets: noteRelationships));
             if (footnote.Content.Count == 0)
                 footnote.Content.Add(new Paragraph());
             document.Footnotes[id] = footnote;
@@ -854,6 +862,7 @@ public static class DocxReader
             return;
 
         var noNumbering = new Dictionary<int, ListKind>();
+        var noteRelationships = ReadPartRelationships(archive, "word/endnotes.xml");
         foreach (var element in root.Elements(W + "endnote"))
         {
             var type = element.Attribute(W + "type")?.Value;
@@ -864,7 +873,14 @@ public static class DocxReader
 
             var endnote = new Endnote(id);
             foreach (var p in element.Elements(W + "p"))
-                endnote.Content.Add(ReadParagraph(p, archive, imageRelationships, hyperlinkRelationships, noNumbering));
+                endnote.Content.Add(ReadParagraph(
+                    p,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    noNumbering,
+                    preservedDrawingTarget: document,
+                    preservedDrawingRelationshipTargets: noteRelationships));
             if (endnote.Content.Count == 0)
                 endnote.Content.Add(new Paragraph());
             document.Endnotes[id] = endnote;
