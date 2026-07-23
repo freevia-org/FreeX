@@ -441,6 +441,8 @@ public sealed class ChartBaselineCorpusTests
                 ChartStockPriceMove.Unchanged);
 
         var surface = charts.Single(chart => chart.ChartType == ChartType.Surface3D);
+        surface.VaryColors.Should().BeTrue();
+        surface.View3D.Should().BeNull();
         scenes.Single(scene => scene.GeometryKind == ChartSceneGeometryKind.Surface)
             .Surface.Should().NotBeNull();
         var surfaceFrame = ChartRenderPlanner.BuildFramePlan(surface, new ChartPlanRect(0, 0, 480, 288));
@@ -739,14 +741,17 @@ public sealed class ChartBaselineCorpusTests
         var geometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
             surface,
             new ChartPlanRect(0, 0, 360, 189));
-        geometry.RenderFacets.Should().HaveCount(4,
-            "an authored camera should use the general complete-cell surface mesh");
+        geometry.RenderFacets.Should().HaveCount(8,
+            "this authored PowerPoint camera uses opaque triangulated facets for each complete cell");
         geometry.WireframeSegments.Should().BeEmpty(
             "an explicit c:wireframe=0 camera must not receive the default mesh overlay");
         geometry.FrameSegments.Should().HaveCount(5,
             "an explicit c:wireframe=0 camera keeps the outer frame without the default wall grid");
         geometry.FrameSegments.Select(segment => segment.Stroke.Thickness)
             .Should().OnlyContain(thickness => thickness == 0.7);
+        geometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
+        geometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255);
+        geometry.RenderFacets.Should().OnlyContain(facet => facet.Stroke.Alpha == 0);
     }
 
     [Fact]
