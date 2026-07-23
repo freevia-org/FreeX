@@ -1668,6 +1668,7 @@ public static class MailMerge
     {
         Paragraph p => CloneParagraph(p, row),
         Table t => CloneTable(t, row),
+        AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName) { BlockContentControl = altChunk.BlockContentControl },
         _ => new Paragraph()
     };
 
@@ -1745,6 +1746,7 @@ public static class MailMerge
     {
         Paragraph p => CloneParagraphWithRules(p, row, state, recordIndex),
         Table t => CloneTableWithRules(t, row, state, recordIndex),
+        AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName) { BlockContentControl = altChunk.BlockContentControl },
         _ => new Paragraph()
     };
 
