@@ -67,6 +67,7 @@ internal static class FreePRibbonText
     public static string EditGroupKeyTip => Get("Ribbon_Group_Edit_KeyTip");
     public static string EditingGroupLabel => Get("Ribbon_Group_Editing_Label");
     public static string EditingGroupKeyTip => Get("Ribbon_Group_Editing_KeyTip");
+    public static string EditingGroupAvaloniaKeyTip => Get("Ribbon_Group_Editing_AvaloniaKeyTip");
     public static string UndoLabel => Get("Ribbon_Command_Undo_Label");
     public static string UndoKeyTip => Get("Ribbon_Command_Undo_KeyTip");
     public static string RedoLabel => Get("Ribbon_Command_Redo_Label");

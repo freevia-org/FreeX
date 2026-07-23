@@ -150,6 +150,7 @@ public sealed class LocTests
             "Ribbon_Command_Redo_KeyTip",
             "Ribbon_Group_Editing_Label",
             "Ribbon_Group_Editing_KeyTip",
+            "Ribbon_Group_Editing_AvaloniaKeyTip",
             "Ribbon_Command_Find_Label",
             "Ribbon_Command_Find_KeyTip",
             "Ribbon_Command_Replace_Label",

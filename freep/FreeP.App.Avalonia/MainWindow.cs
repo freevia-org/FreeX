@@ -3140,6 +3140,7 @@ public sealed partial class MainWindow : Window
 
         _reviewCommentsPanePanel.Children.Clear();
         _reviewCommentsPanePanel.Children.Add(BuildReviewCommentsPaneHeader(plan));
+        _reviewCommentsPanePanel.Children.Add(BuildReviewCommentActions(plan.Actions));
         _reviewCommentsPanePanel.Children.Add(BuildAddCommentInput());
 
         if (plan.Comments.Count == 0)
