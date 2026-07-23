@@ -356,6 +356,56 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SelectRanges_WithExplicitActiveCell_PinsActiveCellWhileKeepingTheFullRectangle()
+    {
+        // Excel's Ctrl+. corner-cycling walks the active cell around the four corners of a selection
+        // without shrinking it. The explicit-active-cell overload must keep the full rectangle as the
+        // primary SelectedRange -- so every SelectedRange-based command (Define Name, Insert Chart,
+        // Conditional Format, multi-cell command gating) still sees the whole selection -- while placing
+        // the active cell on the requested corner.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 3),    // C2
+            new CellAddress(sheet.Id, 5, 7));   // G5
+        var bottomRightCorner = new CellAddress(sheet.Id, 5, 7);   // G5
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectRanges(range, [range], bottomRightCorner);
+
+        session.SelectedRange.Should().Be(range);                 // full rectangle, not collapsed to G5
+        session.SelectedRanges.Should().ContainSingle().Which.Should().Be(range);
+        session.ActiveCell.Should().Be(bottomRightCorner);        // G5
+    }
+
+    [Fact]
+    public void SelectRanges_WithActiveCellOutsidePrimaryRange_FallsBackToTopLeft()
+    {
+        // Defensive: an active cell outside the primary range would break the
+        // active-cell-inside-selection invariant, so it falls back to the normalized top-left Start.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 5, 7));
+        var outside = new CellAddress(sheet.Id, 20, 20);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectRanges(range, [range], outside);
+
+        session.SelectedRange.Should().Be(range);
+        session.ActiveCell.Should().Be(range.Start);              // fell back to C2
+    }
+
+    [Fact]
     public void GoToReference_SelectsRangeAcrossSheetsWithoutDirtyingWorkbook()
     {
         var workbook = CreateWorkbook();
