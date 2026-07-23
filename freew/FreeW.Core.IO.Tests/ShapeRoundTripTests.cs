@@ -167,6 +167,28 @@ public class ShapeRoundTripTests
     }
 
     [Fact]
+    public void HeaderTextBox_DoesNotDuplicateNestedParagraphOnRoundTrip()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Body"));
+        var header = new HeaderFooter();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(Run.FromShape(Shape.TextBoxWith("Header box", 180, 72)));
+        header.Paragraphs.Add(headerParagraph);
+        document.Header = header;
+
+        var once = RoundTrip(document);
+        once.Header!.Paragraphs.Should().ContainSingle();
+        once.Header.Paragraphs.Single().Runs.Single(run => run.Shape is not null).Shape!
+            .TextParagraphs.Single().PlainText.Should().Be("Header box");
+
+        var twice = RoundTrip(once);
+        twice.Header!.Paragraphs.Should().ContainSingle();
+        twice.Header.Paragraphs.Single().Runs.Single(run => run.Shape is not null).Shape!
+            .TextParagraphs.Single().PlainText.Should().Be("Header box");
+    }
+
+    [Fact]
     public void Shape_EmitsInlineWspWithNamespacesDeclared()
     {
         var xml = WriteDocumentXml(DocumentWith(Shape.Preset(ShapeKind.RoundedRectangle, 100, 50, "#00FF00")));

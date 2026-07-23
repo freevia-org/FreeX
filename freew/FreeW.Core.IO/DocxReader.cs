@@ -1157,9 +1157,13 @@ public static class DocxReader
         // cells / SDTs rather than as direct children of w:hdr/w:ftr. Reading only direct-child w:p (as before)
         // recovered just the trailing empty paragraph, making the part IsEmpty so the writer dropped it — the
         // "headers dropped on round-trip" bug. Paragraphs never nest inside paragraphs in OOXML, so Descendants
-        // yields each content paragraph exactly once, in document order; we flatten any table/SDT structure to
-        // the model's paragraph list (the model carries no per-header table) but preserve all text + runs.
-        foreach (var p in root.Descendants(W + "p"))
+        // yields each content paragraph exactly once, in document order. A DrawingML text box contains its own
+        // w:p descendants, but ReadShape owns those paragraphs; flattening them here would duplicate the text
+        // when the header is saved again. We still flatten table/SDT structure to the model's paragraph list
+        // (the model carries no per-header table) and leave legacy VML text boxes on their existing path.
+        foreach (var p in root.Descendants(W + "p").Where(paragraph =>
+                     !paragraph.Ancestors(W + "txbxContent")
+                         .Any(textBoxContent => textBoxContent.Parent?.Name == Wps + "txbx")))
         {
             // FreeW's page watermark is stored in a VML-only paragraph in the header. It is also
             // represented by custom document properties. Remove only the known watermark run: Word
