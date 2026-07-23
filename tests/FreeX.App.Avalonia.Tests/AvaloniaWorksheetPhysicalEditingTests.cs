@@ -7,6 +7,8 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using FreeX.App.Services;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -62,6 +64,69 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             finally
             {
                 window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ClickF2EditThenCtrlS_PersistsCellBeyondLoadedUsedRange()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var path = Path.Combine(
+                Path.GetTempPath(),
+                $"freex-avalonia-live-save-{Guid.NewGuid():N}.csv");
+            MainWindow? window = null;
+            try
+            {
+                File.WriteAllText(path, CreateCsvRows(11));
+                using var input = File.OpenRead(path);
+                var source = new StartupWorkbookLoadResult(
+                    new CsvFileAdapter().Load(input),
+                    Path.GetFileName(path),
+                    "Opened CSV.",
+                    IsFallback: false,
+                    SourcePath: path);
+                var session = new WorkbookSessionFactory().Create(
+                    source,
+                    viewportHeight: 240,
+                    viewportWidth: 320);
+                window = CreateShownWindow(session, out var sheet);
+
+                // The actual session is loaded from a CSV whose last populated row is 11. The
+                // second edit is the physical G12 scenario from the Linux probe. This drives the
+                // real click/F2/TextInput/Enter/Ctrl+S path rather than calling the writer.
+                var firstEdit = new CellAddress(sheet.Id, 8, 7);
+                await EditCellThroughPhysicalPath(window, firstEdit, "first-save");
+                await SaveThroughWindowHandler(window);
+
+                var beyondUsedRange = new CellAddress(sheet.Id, 12, 7);
+                FindByAutomationId<TextBox>(window, "FormulaBox").Focus().Should().BeTrue();
+                window.SelectClickedCell(beyondUsedRange, KeyModifiers.None);
+                await DrainInputAsync();
+                window.SheetGridHostForTest.IsFocused.Should().BeTrue(
+                    "a worksheet click must restore keyboard focus before F2 is dispatched");
+                await EditActiveCellThroughPhysicalPath(window, "X11ContextClear");
+                sheet.GetValue(beyondUsedRange).Should().Be(new TextValue("X11ContextClear"));
+
+                await SaveThroughWindowHandler(window);
+
+                using var stream = File.OpenRead(path);
+                var savedWorkbook = new DelimitedTextFileAdapter(".csv", "CSV", ',').Load(stream);
+                savedWorkbook.GetSheet(sheet.Name)!
+                    .GetValue(beyondUsedRange)
+                    .Should()
+                    .Be(new TextValue("X11ContextClear"));
+            }
+            finally
+            {
+                if (window is not null)
+                {
+                    window.WorkbookSaveAsPickerOverrideForTest = null;
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+                    window.Close();
+                }
+                File.Delete(path);
             }
         }, CancellationToken.None);
     }
@@ -327,15 +392,74 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
         return window;
     }
 
+    private static MainWindow CreateShownWindow(WorkbookSession session, out Sheet sheet)
+    {
+        var window = new MainWindow([], session);
+        sheet = window.Session.ActiveSheet;
+        window.Show();
+        window.Measure(new Size(1120, 720));
+        window.Arrange(new Rect(0, 0, 1120, 720));
+        Refresh(window);
+        return window;
+    }
+
+    private static string CreateCsvRows(int count) =>
+        string.Join("\r\n", Enumerable.Range(1, count).Select(row => $"r{row},c{row},v{row}")) + "\r\n";
+
     private static void Refresh(MainWindow window) =>
         typeof(MainWindow)
             .GetMethod("RefreshShell", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(window, ["Ready"]);
 
-    private static void Press(MainWindow window, Key key, PhysicalKey physicalKey)
+    private static void Press(
+        MainWindow window,
+        Key key,
+        PhysicalKey physicalKey,
+        RawInputModifiers modifiers = RawInputModifiers.None)
     {
-        window.KeyPress(key, RawInputModifiers.None, physicalKey, null);
-        window.KeyRelease(key, RawInputModifiers.None, physicalKey, null);
+        window.KeyPress(key, modifiers, physicalKey, null);
+        window.KeyRelease(key, modifiers, physicalKey, null);
+    }
+
+    private static async Task EditCellThroughPhysicalPath(
+        MainWindow window,
+        CellAddress address,
+        string text)
+    {
+        ClickCell(window, $"Cell_{CellAddress.NumberToColumnName(address.Col)}{address.Row}");
+        await DrainInputAsync();
+
+        await EditActiveCellThroughPhysicalPath(window, text);
+    }
+
+    private static async Task EditActiveCellThroughPhysicalPath(MainWindow window, string text)
+    {
+        Press(window, Key.F2, PhysicalKey.F2);
+        await DrainInputAsync();
+        FindByAutomationId<TextBox>(window, "WorksheetInlineCellEditor")
+            .Should()
+            .NotBeNull("a worksheet click must leave F2 routed to the inline editor");
+
+        Press(window, Key.A, PhysicalKey.A, RawInputModifiers.Control);
+        Press(window, Key.Back, PhysicalKey.Backspace);
+        window.KeyTextInput(text);
+        await DrainInputAsync();
+
+        Press(window, Key.Enter, PhysicalKey.Enter);
+        await DrainInputAsync();
+    }
+
+    private static async Task SaveThroughWindowHandler(MainWindow window)
+    {
+        var args = new KeyEventArgs
+        {
+            Key = Key.S,
+            KeyModifiers = KeyModifiers.Control,
+            PhysicalKey = PhysicalKey.None,
+        };
+        await window.RaiseKeyDownForTest(args);
+        args.Handled.Should().BeTrue();
+        await DrainInputAsync();
     }
 
     private static void RaiseRawTextInput(InputElement target, string text) =>

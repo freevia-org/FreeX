@@ -11267,6 +11267,10 @@ public sealed partial class MainWindow : Window
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         ApplyFormatPainterAfterTargetSelection();
+        // Avalonia does not transfer keyboard focus from a TextBox when a rebuilt cell Border is
+        // selected by pointer. WPF's worksheet control does this as part of its native click route;
+        // keep F2/Ctrl+S and subsequent text input on the selected worksheet cell as well.
+        FocusShellRegion(ShellFocusTarget.Worksheet);
     }
 
     private void SelectRange(CellAddress address)
@@ -11285,6 +11289,7 @@ public sealed partial class MainWindow : Window
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         ApplyFormatPainterAfterTargetSelection();
+        FocusShellRegion(ShellFocusTarget.Worksheet);
     }
 
     /// <summary>
