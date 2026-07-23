@@ -3293,9 +3293,7 @@ public static partial class ChartRenderPlanner
                 .Concat(BuildImportedSurfaceBoundaryFacets(plot))
                 .ToArray();
 
-            if (UsesImportedSurfaceDepthBaseline(chart) &&
-                Math.Abs(plot.Width - 360.0) < 0.001 &&
-                Math.Abs(plot.Height - 189.0) < 0.001)
+            if (UsesImportedSurfaceDepthBaseline(chart))
                 wpfRenderFacets = BuildImportedSurfaceDepthWpfFacets(renderFacets, plot);
         }
         else if (UsesExplicitSurface3DFacetRendering(chart))

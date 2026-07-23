@@ -1067,18 +1067,21 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
-    public void ChartBaselineDepthCorpus_DoesNotUseCanonicalWpfFacetForTallImportedFrame()
+    public void ChartBaselineDepthCorpus_UsesScaledCanonicalWpfFacetForTallImportedFrame()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
         var surfaceChart = PptxPackageReader.Read(deckPath).Slides[0].Shapes
             .Single(shape => shape.Chart?.ChartType == ChartType.Surface3D).Chart!;
 
-        ChartRenderPlanner.BuildSurfaceGeometryPlan(
-                surfaceChart,
-                new ChartPlanRect(596, 105, 360, 240))
-            .WpfRenderFacets
-            .Should()
-            .BeEmpty();
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            surfaceChart,
+            new ChartPlanRect(596, 105, 360, 240));
+
+        var blue = plan.WpfRenderFacets.Single(facet =>
+            facet.SeriesIndex == 0 &&
+            facet.CategoryIndex == 0 &&
+            facet.Fill.Color == new SrgbColor(0x44, 0x74, 0xC7));
+        blue.Points.Should().Contain(new ChartPlanPoint(601, 105 + 125 * 240.0 / 189.0));
     }
 
     [Fact]
