@@ -1748,10 +1748,10 @@ public static class DocxReader
         {
             AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, preservedDrawingTarget, preservedDrawingRelationshipTargets, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
         }
-        else if (child.Name == W + "smartTag")
+        else if (child.Name == W + "smartTag" || child.Name == W + "customXml")
         {
-            // Legacy Word smart tags annotate inline content. The model has no smart-tag metadata, but the
-            // wrapper must remain transparent so its visible runs survive the import.
+            // Legacy Word smart tags and custom-XML ranges annotate inline content. The model preserves the
+            // package custom-XML parts but not inline wrapper metadata, so retain the visible child runs.
             AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
         else if (child.Name == W + "fldSimple")
