@@ -4436,6 +4436,10 @@ public static class DocxReader
     private static ParagraphFormatting ReadDocDefaultParagraph(XElement ddPr)
     {
         var spacing = ddPr.Element(W + "spacing");
+        var contextualSpacingElement = ddPr.Element(W + "contextualSpacing");
+        var contextualSpacing = contextualSpacingElement is null
+            ? (bool?)null
+            : ReadToggle(ddPr, "contextualSpacing");
         var beforeAuto = spacing?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
         var afterAuto = spacing?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
         const double autoSpacingPt = 14.0;
@@ -4461,6 +4465,7 @@ public static class DocxReader
             SpaceAfterPt = after,
             BeforeAutoSpacing = beforeAuto,
             AfterAutoSpacing = afterAuto,
+            ContextualSpacing = contextualSpacing,
             LineRule = rule,
             LineSpacing = ls,
             LineHeightPt = lh,
@@ -4516,6 +4521,10 @@ public static class DocxReader
         // Word treats an absent token as enabled, while an explicit val="0" remains disabled.
         var keepWithNext = ReadToggle(pPr, "keepNext");
         var keepLinesTogether = ReadToggle(pPr, "keepLines");
+        var contextualSpacingElement = pPr.Element(W + "contextualSpacing");
+        var contextualSpacing = contextualSpacingElement is null
+            ? (bool?)null
+            : ReadToggle(pPr, "contextualSpacing");
         var widowControl = ReadToggle(pPr, "widowControl");
         var widowControlIsSet = pPr.Element(W + "widowControl") is not null;
         // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens), read as a toggle.
@@ -4584,6 +4593,7 @@ public static class DocxReader
             SpaceAfterPt = spaceAfterPt,
             BeforeAutoSpacing = beforeAuto,
             AfterAutoSpacing = afterAuto,
+            ContextualSpacing = contextualSpacing,
             // As for line spacing: explicit only when this pPr sets its own before/after (or an autospacing
             // toggle). Otherwise the render cascade inherits the paragraph's style rather than 0/docDefault.
             SpaceBeforeIsSet = beforeAuto || spacing?.Attribute(W + "before") is not null,

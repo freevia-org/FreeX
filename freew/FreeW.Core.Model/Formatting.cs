@@ -362,6 +362,13 @@ public sealed record ParagraphFormatting
     public bool AfterAutoSpacing { get; init; }
 
     /// <summary>
+    /// Word's <c>w:contextualSpacing</c> state: enabled suppresses the before/after gap between adjacent
+    /// paragraphs of the same effective style, disabled preserves an explicit <c>w:val="0"</c>, and null
+    /// leaves the token absent so the surrounding style/document default remains authoritative.
+    /// </summary>
+    public bool? ContextualSpacing { get; init; }
+
+    /// <summary>
     /// Whether <see cref="SpaceBeforePt"/> / <see cref="SpaceAfterPt"/> were set *explicitly* on this
     /// paragraph or style (a direct <c>w:spacing/@w:before</c>/<c>@w:after</c> or an autospacing toggle), as
     /// opposed to an inherited document-default/built-in value. Lets the render-time cascade inherit the

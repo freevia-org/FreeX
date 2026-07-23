@@ -88,6 +88,7 @@ public class PprChildOrderSchemaTests
             IndentLeftPt = 36,          // 0.5 in
             SpaceBeforePt = 12,
             SpaceAfterPt = 6,
+            ContextualSpacing = true,
         };
         paragraph.ParagraphFormatRevision = new ParagraphFormatRevision(
             previousFormatting, "Dave", "2026-06-26T12:00:00Z");
@@ -119,20 +120,26 @@ public class PprChildOrderSchemaTests
 
         var childNames = nestedPPr!.Elements().Select(e => e.Name.LocalName).ToList();
 
-        // All three elements must be present.
+        // All four elements must be present.
         childNames.Should().Contain("spacing", "previous-pPr had before/after spacing");
         childNames.Should().Contain("ind",     "previous-pPr had a left indent");
+        childNames.Should().Contain("contextualSpacing", "previous-pPr enabled contextual spacing");
         childNames.Should().Contain("jc",      "previous-pPr had center alignment");
 
-        // Schema order: spacing < ind < jc (all indices must be strictly ascending).
+        // Schema order: spacing < ind < contextualSpacing < jc (all indices must be strictly ascending).
         var idxSpacing = childNames.IndexOf("spacing");
         var idxInd     = childNames.IndexOf("ind");
+        var idxContextualSpacing = childNames.IndexOf("contextualSpacing");
         var idxJc      = childNames.IndexOf("jc");
 
         idxSpacing.Should().BeLessThan(idxInd,
             "CT_PPr requires w:spacing before w:ind");
         idxInd.Should().BeLessThan(idxJc,
             "CT_PPr requires w:ind before w:jc");
+        idxInd.Should().BeLessThan(idxContextualSpacing,
+            "CT_PPr requires w:ind before w:contextualSpacing");
+        idxContextualSpacing.Should().BeLessThan(idxJc,
+            "CT_PPr requires w:contextualSpacing before w:jc");
     }
 
     /// <summary>
@@ -172,6 +179,7 @@ public class PprChildOrderSchemaTests
                 IndentLeftPt = 36,      // 0.5 in
                 SpaceBeforePt = 12,
                 SpaceAfterPt  = 6,
+                ContextualSpacing = true,
             });
 
         var bytes   = WriteDocx(doc);
@@ -189,16 +197,22 @@ public class PprChildOrderSchemaTests
 
         childNames.Should().Contain("spacing");
         childNames.Should().Contain("ind");
+        childNames.Should().Contain("contextualSpacing");
         childNames.Should().Contain("jc");
 
         var idxSpacing = childNames.IndexOf("spacing");
         var idxInd     = childNames.IndexOf("ind");
+        var idxContextualSpacing = childNames.IndexOf("contextualSpacing");
         var idxJc      = childNames.IndexOf("jc");
 
         idxSpacing.Should().BeLessThan(idxInd,
             "CT_PPr requires w:spacing before w:ind in a style definition");
         idxInd.Should().BeLessThan(idxJc,
             "CT_PPr requires w:ind before w:jc in a style definition");
+        idxInd.Should().BeLessThan(idxContextualSpacing,
+            "CT_PPr requires w:ind before w:contextualSpacing in a style definition");
+        idxContextualSpacing.Should().BeLessThan(idxJc,
+            "CT_PPr requires w:contextualSpacing before w:jc in a style definition");
     }
 
     /// <summary>
@@ -219,6 +233,7 @@ public class PprChildOrderSchemaTests
                 IndentLeftPt  = 36,
                 SpaceBeforePt = 12,
                 SpaceAfterPt  = 6,
+                ContextualSpacing = true,
             });
 
         var errors = SchemaErrors(WriteDocx(doc));

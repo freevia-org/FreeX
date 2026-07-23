@@ -207,4 +207,61 @@ public class DocDefaultsSpacingReaderTests
         reread.DefaultParagraph.AfterAutoSpacing.Should().BeTrue();
         reread.Styles["AutoBody"].Paragraph.AfterAutoSpacing.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("", null)]
+    [InlineData("<w:contextualSpacing/>", true)]
+    [InlineData("<w:contextualSpacing w:val=\"0\"/>", false)]
+    public void ContextualSpacing_RetainsAbsentEnabledAndExplicitOffStates(string token, bool? expected)
+    {
+        var source = Read($"<w:p><w:pPr>{token}</w:pPr><w:r><w:t>x</w:t></w:r></w:p>");
+        FirstFormatting(source).ContextualSpacing.Should().Be(expected);
+
+        var bytes = Write(source);
+        if (expected is null)
+        {
+            EntryXml(bytes, "word/document.xml").Descendants(W + "contextualSpacing").Should().BeEmpty();
+        }
+        else
+        {
+            var pPr = EntryXml(bytes, "word/document.xml").Descendants(W + "pPr").Single();
+            var contextual = pPr.Element(W + "contextualSpacing");
+            contextual.Should().NotBeNull();
+            contextual!.Attribute(W + "val")?.Value.Should().Be(expected.Value ? null : "0");
+        }
+
+        FirstFormatting(DocxReader.Read(new MemoryStream(bytes))).ContextualSpacing.Should().Be(expected);
+    }
+
+    [Fact]
+    public void StyleAndDocDefaultContextualSpacing_RoundTrip()
+    {
+        var document = new TextDocument
+        {
+            DefaultParagraph = ParagraphFormatting.Default with { ContextualSpacing = true }
+        };
+        document.Styles["ContextBody"] = new DocumentStyle
+        {
+            Id = "ContextBody",
+            Name = "Context Body",
+            Paragraph = ParagraphFormatting.Default with { ContextualSpacing = false }
+        };
+        var paragraph = new Paragraph { StyleId = "ContextBody" };
+        paragraph.Runs.Add(new Run("body"));
+        document.Blocks.Add(paragraph);
+
+        var bytes = Write(document);
+        var styles = EntryXml(bytes, "word/styles.xml");
+        var defaultContextual = styles.Descendants(W + "docDefaults").Descendants(W + "contextualSpacing").Single();
+        var styleContextual = styles.Descendants(W + "style")
+            .Single(style => style.Attribute(W + "styleId")?.Value == "ContextBody")
+            .Descendants(W + "contextualSpacing").Single();
+
+        defaultContextual.Attribute(W + "val").Should().BeNull();
+        styleContextual.Attribute(W + "val")?.Value.Should().Be("0");
+
+        var reread = DocxReader.Read(new MemoryStream(bytes));
+        reread.DefaultParagraph.ContextualSpacing.Should().BeTrue();
+        reread.Styles["ContextBody"].Paragraph.ContextualSpacing.Should().BeFalse();
+    }
 }
