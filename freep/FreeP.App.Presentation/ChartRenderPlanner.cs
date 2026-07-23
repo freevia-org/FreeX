@@ -649,7 +649,7 @@ public static partial class ChartRenderPlanner
     public const double BubbleStrokeThickness = 0.8;
     public const byte RadarFillAlpha = 80;
     public const double RadarSeriesStrokeThickness = 1.5;
-    public const double ImportedRadarSeriesStrokeThickness = 3.0;
+    public const double ImportedRadarSeriesStrokeThickness = 4.0;
     public const double ImportedChartTitleRasterFontSize = 24.0;
     public const double ImportedAutomaticTitleVerticalAdjustment = -4.0;
     public const double RadarMarkerRadius = 3.0;
