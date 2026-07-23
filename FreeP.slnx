@@ -38,5 +38,6 @@
     <Project Path="tools/FreeP.GenerateFixtures/FreeP.GenerateFixtures.csproj" />
     <Project Path="tools/FreeP.RenderCompare/FreeP.RenderCompare.csproj" />
     <Project Path="tools/FreeP.RenderCompare.Tests/FreeP.RenderCompare.Tests.csproj" />
+    <Project Path="tools/FreeP.RenderSlideshowMediaParityEvidence/FreeP.RenderSlideshowMediaParityEvidence.csproj" />
   </Folder>
 </Solution>

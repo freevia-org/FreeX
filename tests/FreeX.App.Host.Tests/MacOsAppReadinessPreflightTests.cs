@@ -479,7 +479,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeUnmergeCellsMenuItem &&");
         script.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
         script.Should().Contain("ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);");
-        script.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();");
+        script.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);");
         script.Should().Contain("ApplyNativeFileMenuAvailability(isIdle);");
         script.Should().Contain("src\\FreeX.App.Presentation\\Shell\\NativeMenuCatalog.cs");
         script.Should().Contain("new(NativeMenuTopLevelId.View, `\"View`\")");
@@ -693,8 +693,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CreateFindReplaceFormatButton(`\"ReplaceWithClearFormatButton`\", `\"Clear Format`\")");
         script.Should().Contain("CreateFindReplaceFormatRow(`\"Find format`\",");
         script.Should().Contain("CreateFindReplaceFormatRow(`\"Replace format`\",");
-        script.Should().Contain("CreateFindOptions(optionsControls, findFormat)");
-        script.Should().Contain("RequiredFormat: requiredFormat);");
+        script.Should().Contain("CreateFindOptions(optionsControls, findFormat, selectionScopeAtOpen)");
+        script.Should().Contain("RequiredFormat: requiredFormat,");
+        script.Should().Contain("SelectionScope: selectionScope);");
         script.Should().Contain("ShowFindReplaceTabbedDialogAsync(replaceMode: true)");
         script.Should().Contain("_session.ReplaceNextValue(");
         script.Should().Contain("public WorkbookReplaceResult ReplaceNextValue(");
@@ -716,10 +717,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FindResultTarget.ThreadedCommentReply,");
         script.Should().Contain("_bordersButton.Flyout = CreateBorderPresetFlyout();");
         script.Should().Contain("_bordersMenuItem.Menu = CreateNativeBorderPresetMenu();");
-        script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed)");
+        script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed, html: html)");
         script.Should().Contain("CreatePasteSpecialTextMenuItem(`\"Text`\")");
         script.Should().Contain("CreateNativePasteSpecialTextMenuItem(`\"Unicode Text`\")");
-        script.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed)");
+        script.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed, html: html)");
         script.Should().Contain("CreatePastePictureMenuItem(`\"Picture`\", linkedPicture: false)");
         script.Should().Contain("CreateNativePastePictureMenuItem(`\"Linked Picture`\", linkedPicture: true)");
         script.Should().Contain("ShellFocusTarget.Worksheet");
@@ -740,12 +741,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_session.SheetTabs, sheetId, direction, static tab => tab.Id)");
         script.Should().Contain("SheetTabFocusPlanner.EdgeTab(_session.SheetTabs, first, static tab => tab.Id)");
         script.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
-        script.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)");
+        script.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)");
         script.Should().Contain("await clipboard.TryGetBitmapAsync()");
         script.Should().Contain("bitmap.Save(stream)");
         script.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");
         script.Should().Contain("internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()");
-        script.Should().Contain("return await TryPasteClipboardImageAsync(clipboard, _session.ActiveCell);");
+        script.Should().Contain("return await TryPasteClipboardImageAsync(clipboard);");
         script.Should().Contain("ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length");
         script.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
         script.Should().Contain("VerifyImageClipboardPasteArgument");
@@ -762,7 +763,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_paste_special_unicode_text_menu_item=true");
         script.Should().Contain("native_paste_special_picture_menu_item=true");
         script.Should().Contain("native_paste_special_linked_picture_menu_item=true");
-        script.Should().Contain("AddStyledCellBorderOverlay(content, style);");
+        script.Should().Contain("AddStyledCellBorderOverlay(content, style, borderNeighbors);");
         script.Should().Contain("DrawingObjectRenderPlanner.Plan(viewport)");
         script.Should().Contain("CreateSelectableDrawingObjectVisual(renderPlan, width, height)");
         script.Should().Contain("AutomationProperties.SetItemStatus(container, selected ? `\"Selected`\" : `\"Not selected`\")");
@@ -2238,7 +2239,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _clearCommentsMenuItem.Header = "Clear Comments and Notes";
                     _clearCommentsMenuItem.Click += (_, _) => ClearSelectedRangeComments();
                     _clearHyperlinksMenuItem.Header = "Clear Hyperlinks";
-                    _clearHyperlinksMenuItem.Click += (_, _) => ClearSelectedRangeHyperlinks();
+                    _clearHyperlinksMenuItem.Click += (_, _) => RemoveSelectedRangeHyperlinks();
                     homeMenu.Items.Add(_clearMenuItem);
                     _clearButton.IsEnabled = isIdle;
                     _clearMenuItem.IsEnabled = _clearButton.IsEnabled;
@@ -2251,8 +2252,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     _bordersButton.IsEnabled = isIdle;
                     _bordersMenuItem.IsEnabled = _bordersButton.IsEnabled;
                     CreateNativePasteSpecialMenu();
-                    PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed);
-                    _session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed);
+                    PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed, html: html);
+                    _session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed, html: html);
                     /*
                     CreatePasteCommentsMenuItem("Comments and Notes")
                     CreatePasteDataValidationMenuItem("Validation")
@@ -2304,12 +2305,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateNativePastePictureMenuItem("Linked Picture", linkedPicture: true);
                     _session.PasteClipboardTextAtActiveCell(text, preserveText: true);
                     _session.ShouldPreferExternalClipboardImage(text);
-                    private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)
+                    private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)
                     await clipboard.TryGetBitmapAsync()
                     bitmap.Save(stream)
                     _session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight);
                     internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()
-                    return await TryPasteClipboardImageAsync(clipboard, _session.ActiveCell);
+                    return await TryPasteClipboardImageAsync(clipboard);
                     private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)
                     _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
                     HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Text");
@@ -2330,7 +2331,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme);
                     CreateDrawingImageSourceRect(crop);
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
-                    AddStyledCellBorderOverlay(content, style);
+                    AddStyledCellBorderOverlay(content, style, borderNeighbors);
                     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
                     _newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
                     ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);
@@ -2361,11 +2362,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
                     await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
                     ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
-                    _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
+                    _workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);
                     ApplyNativeFileMenuAvailability(isIdle);
                     private readonly NativeMenuItem _optionsMenuItem = new();
                     ConfigureNativeFileMenuItem(_optionsMenuItem, NativeFileMenuItemId.Options);
-                    _optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);
+                    _optionsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options);
                     NativeFileMenuItemId.Options => _optionsMenuItem,
                     Text = UiText.Get("FormatCells_ProtectionExplanation"),
                     CreateFormatCellsField(UiText.Get("FormatCells_PatternStyle"), fillPatternStyleBox)
@@ -2374,11 +2375,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     private readonly NativeMenuItem _backstageInfoMenuItem = new();
                     private readonly NativeMenuItem _backstageAccountMenuItem = new();
                     ConfigureNativeFileMenuItem(_backstageInfoMenuItem, NativeFileMenuItemId.BackstageInfo);
-                    _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
+                    _backstageInfoMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageInfo);
                     ConfigureNativeFileMenuItem(_backstageExportMenuItem, NativeFileMenuItemId.BackstageExport);
-                    _backstageExportMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Export);
+                    _backstageExportMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageExport);
                     ConfigureNativeFileMenuItem(_backstageAccountMenuItem, NativeFileMenuItemId.BackstageAccount);
-                    _backstageAccountMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Account);
+                    _backstageAccountMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageAccount);
                     NativeFileMenuItemId.BackstageExport => _backstageExportMenuItem,
                     NativeFileMenuItemId.BackstageInfo => _backstageInfoMenuItem,
                     NativeFileMenuItemId.BackstageAccount => _backstageAccountMenuItem,
@@ -2388,7 +2389,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     NativeFileMenuItemId.Print => _printMenuItem,
                     private readonly NativeMenuItem _printPreviewMenuItem = new();
                     ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);
-                    _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
+                    _printPreviewMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PrintPreview);
                     HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)
                     case WorkbookShortcutRoute.WorkbookStatistics:
                     private async Task ShowWorkbookStatisticsDialogAsync()
@@ -2639,9 +2640,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     "GoToSpecialLogicalsBox"
                     "GoToSpecialErrorsBox"
                     "GoToSpecialOkButton"
-                    private FindOptions CreateFindOptions(FindOptionsControls controls, StyleDiff? requiredFormat = null)
-                    CreateFindOptions(optionsControls, findFormat)
-                    RequiredFormat: requiredFormat);
+                    private FindOptions CreateFindOptions(
+                    IReadOnlyList<GridRange>? selectionScope = null)
+                    CreateFindOptions(optionsControls, findFormat, selectionScopeAtOpen)
+                    RequiredFormat: requiredFormat,
+                    SelectionScope: selectionScope);
                     private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
                     private static Button CreateFindReplaceFormatButton(string automationId, string content)
                     private static StackPanel CreateFindReplaceFormatRow(string label, Button chooseButton, Button clearButton)
