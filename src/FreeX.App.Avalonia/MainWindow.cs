@@ -59,6 +59,7 @@ using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 using CellVAlign = FreeX.Core.Model.VerticalAlignment;
+using AutoFilterDropdownMenuPlanner = FreeX.App.Presentation.Filtering.AutoFilterDropdownMenuPlanner;
 
 namespace FreeX.App.Avalonia;
 
@@ -9792,19 +9793,32 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Creates the worksheet cell <see cref="ContextMenu"/> from the shared neutral plan. The
     /// dropdown-target flag is computed from the active cell so "Pick From Drop-down List" is enabled
-    /// exactly when the cell carries an in-cell list validation; the remaining state-driven enablement
-    /// (comments/notes/hyperlinks/filter) is derivable later once the Avalonia session exposes those
-    /// flags.
+    /// exactly when the cell carries an in-cell list validation or is an AutoFilter header. The other
+    /// state flags mirror the WPF host's worksheet context state so comments, notes, filters, pivots,
+    /// and hyperlinks expose the same enabled commands on both shells.
     /// </summary>
     private ContextMenu BuildWorksheetCellContextMenu()
     {
+        var sheet = _session.ActiveSheet;
+        var address = _session.ActiveCell;
+        sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
+        var hasAutoFilterHeaderTarget =
+            SelectionRangeService.GetCurrentRegion(sheet, address) is { } currentRegion &&
+            AutoFilterDropdownMenuPlanner.TryPlan(currentRegion, address, out _);
+        var hasValidationDropdown =
+            sheet.DataValidations.Count > 0 &&
+            DataValidationService.GetApplicable(sheet, address)
+                .Any(rule => rule.Type == DvType.List && rule.ShowDropdown);
         var state = WorksheetContextMenuState.Default with
         {
-            HasHyperlink = _session.ActiveSheet.Hyperlinks.ContainsKey(_session.ActiveCell),
-            HasDropdownTarget = DataValidationDropdownPlanner.HasDropdownList(
-                _session.Workbook,
-                _session.ActiveSheet,
-                _session.ActiveCell),
+            HasThreadedComment = threadedComment is not null,
+            IsThreadedCommentResolved = threadedComment?.IsResolved == true,
+            HasNote = sheet.Comments.ContainsKey(address),
+            HasHyperlink = sheet.Hyperlinks.ContainsKey(address),
+            HasAutoFilterHeaderTarget = hasAutoFilterHeaderTarget,
+            HasDropdownTarget = hasAutoFilterHeaderTarget || hasValidationDropdown,
+            HasPivotTableTarget = PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null,
+            NoteIsShown = sheet.ShownComments.Contains(address),
         };
         var commands = WorksheetContextMenuPlanner.BuildCommands(
             WorksheetContextMenuTargetKind.Worksheet,
@@ -9879,15 +9893,27 @@ public sealed partial class MainWindow : Window
                 AutoFitSelectedColumnWidth();
                 break;
             case WorksheetContextMenuAction.InsertRowAbove:
+                InsertContextRow(_session.ActiveCell.Row);
+                break;
             case WorksheetContextMenuAction.InsertRowBelow:
+                InsertContextRow(Math.Min(CellAddress.MaxRow, _session.ActiveCell.Row + 1));
+                break;
             case WorksheetContextMenuAction.InsertColumnLeft:
+                InsertContextColumn(_session.ActiveCell.Col);
+                break;
             case WorksheetContextMenuAction.InsertColumnRight:
+                InsertContextColumn(Math.Min(CellAddress.MaxCol, _session.ActiveCell.Col + 1));
+                break;
             case WorksheetContextMenuAction.InsertCells:
             case WorksheetContextMenuAction.InsertCopiedCells:
                 _ = ShowInsertCellsDialogAsync();
                 break;
             case WorksheetContextMenuAction.DeleteRows:
+                DeleteSheetRows();
+                break;
             case WorksheetContextMenuAction.DeleteColumns:
+                DeleteSheetColumns();
+                break;
             case WorksheetContextMenuAction.DeleteCells:
                 _ = ShowDeleteCellsDialogAsync();
                 break;
@@ -9999,7 +10025,8 @@ public sealed partial class MainWindow : Window
                     RefreshShell(UiText.Get("DrawingInteract_PickListNoList"));
                 break;
             default:
-                // TODO(avalonia-shell): wire remaining context-menu actions as Avalonia document commands land (ref: docs/parity/command-surface.md#deferred-architectural-features)
+                // The generic worksheet planner emits only the actions handled above. Drawing-only
+                // actions are dispatched by the selected-object context menus in DrawingObjectInteraction.
                 break;
         }
     }
