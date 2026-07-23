@@ -5588,11 +5588,12 @@ public static class DocxReader
     /// Recovers Word's native VML watermark when a document was not produced by FreeW and therefore
     /// has no FreeW watermark custom properties. Word serializes canonical text and picture watermarks
     /// in a header as <c>PowerPlusWaterMarkObject</c> and <c>PowerPlusPictureWaterMarkObject</c>.
-    /// The visible VML payload is the authority for this fallback; FreeW metadata, when present,
-    /// remains authoritative.
+    /// The visible VML payload is the authority for rendering: FreeW text metadata without that
+    /// payload remains editable, but must not create a watermark Word itself does not show.
     /// </summary>
     private static void ReadNativeVmlWatermark(ZipArchive archive, TextDocument document)
     {
+        var customTextWatermark = document.Page.WatermarkOptions is { IsPicture: false };
         if (document.Page.WatermarkOptions is { IsPicture: true } existingPictureWatermark)
         {
             ApplyNativeVmlPictureGeometry(archive, document, existingPictureWatermark);
@@ -5689,6 +5690,15 @@ public static class DocxReader
                 Opacity = ParseVmlOpacity(pictureFill?.Attribute("opacity")?.Value)
             };
             return;
+        }
+
+        // A FreeW custom-property payload is not a Word-visible watermark on its own.
+        // Preserve it for editing/round-trip, but prevent the host from synthesizing a text path
+        // unless the package also supplied Word's canonical VML shape above.
+        if (customTextWatermark
+            && document.Page.WatermarkOptions is { IsPicture: false, NativeVmlTextPathEnabled: null } textWatermark)
+        {
+            document.Page.WatermarkOptions = textWatermark with { NativeVmlTextPathEnabled = false };
         }
     }
 
