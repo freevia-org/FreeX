@@ -62,6 +62,17 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithoutWordVisibleWatermarkPayload(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+            zip.GetEntry("word/header1.xml")!.Delete();
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument ReadWithMutatedVmlText(TextDocument document, string replacementText)
     {
         using var stream = new MemoryStream();
@@ -425,6 +436,32 @@ public class WatermarkOptionsRoundTripTests
         var loaded = ReadWithMutatedVmlText(doc, "STALE VML");
 
         loaded.Page.WatermarkOptions!.Text.Should().Be("AUTHORITATIVE");
+    }
+
+    [Fact]
+    public void CustomTextWatermarkWithoutWordVisibleVmlPayload_RemainsEditableButIsNotRendered()
+    {
+        var loaded = ReadWithoutWordVisibleWatermarkPayload(new TextDocument
+        {
+            Page =
+            {
+                WatermarkOptions = new WatermarkOptions("CONFIDENTIAL")
+                {
+                    FontFamily = "Arial",
+                    FontColorHex = "#123456",
+                    Layout = WatermarkLayout.Diagonal,
+                    Opacity = 0.4
+                }
+            }
+        });
+
+        var watermark = loaded.Page.WatermarkOptions;
+        watermark.Should().NotBeNull();
+        watermark!.Text.Should().Be("CONFIDENTIAL");
+        watermark.FontFamily.Should().Be("Arial");
+        watermark.NativeVmlTextPathEnabled.Should().BeFalse();
+        ReadHeaderXml(loaded).Descendants(XNamespace.Get("urn:schemas-microsoft-com:vml") + "textpath")
+            .Last().Attribute("on")!.Value.Should().Be("f");
     }
 
     [Fact]
