@@ -1,5 +1,4 @@
 using FluentAssertions;
-using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
 
@@ -16,8 +15,7 @@ public sealed class SlideCanvasLineSpacingTests
     {
         SlideCanvas.ResolvePowerPointLineHeight(fontSizePx)
             .Should().BeApproximately(expected, 0.000001);
-    }
-
+}
     [Theory]
     [InlineData(24.0, 28.8)]
     [InlineData(37.3333333333, 44.8)]
