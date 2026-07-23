@@ -9896,13 +9896,13 @@ public sealed partial class MainWindow : Window
                 InsertContextRow(_session.ActiveCell.Row);
                 break;
             case WorksheetContextMenuAction.InsertRowBelow:
-                InsertContextRow(Math.Min(CellAddress.MaxRow, _session.ActiveCell.Row + 1));
+                InsertContextRow(_session.ActiveCell.Row + 1);
                 break;
             case WorksheetContextMenuAction.InsertColumnLeft:
                 InsertContextColumn(_session.ActiveCell.Col);
                 break;
             case WorksheetContextMenuAction.InsertColumnRight:
-                InsertContextColumn(Math.Min(CellAddress.MaxCol, _session.ActiveCell.Col + 1));
+                InsertContextColumn(_session.ActiveCell.Col + 1);
                 break;
             case WorksheetContextMenuAction.InsertCells:
             case WorksheetContextMenuAction.InsertCopiedCells:

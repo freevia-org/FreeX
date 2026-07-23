@@ -102,6 +102,35 @@ public sealed class AvaloniaWorksheetContextMenuBehaviorTests
     }, CancellationToken.None);
 
     [Fact]
+    public Task InsertBelowAndRightAtWorksheetBounds_DoNotInsertBeforeTheActiveCell() => Session.Dispatch(() =>
+    {
+        var window = new MainWindow([]);
+        try
+        {
+            var sheet = window.Session.ActiveSheet;
+            var lastRow = new CellAddress(sheet.Id, CellAddress.MaxRow, 2);
+            sheet.SetCell(lastRow, new TextValue("last row"));
+            window.Session.SelectCell(lastRow);
+
+            ClickWorksheetAction(window, WorksheetContextMenuAction.InsertRowBelow);
+
+            sheet.GetValue(lastRow).Should().Be(new TextValue("last row"));
+
+            var lastColumn = new CellAddress(sheet.Id, 2, CellAddress.MaxCol);
+            sheet.SetCell(lastColumn, new TextValue("last column"));
+            window.Session.SelectCell(lastColumn);
+
+            ClickWorksheetAction(window, WorksheetContextMenuAction.InsertColumnRight);
+
+            sheet.GetValue(lastColumn).Should().Be(new TextValue("last column"));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }, CancellationToken.None);
+
+    [Fact]
     public Task CellMenu_UsesWpfStateForCommentsNotesAndValidationDropdown() => Session.Dispatch(() =>
     {
         var window = new MainWindow([]);
