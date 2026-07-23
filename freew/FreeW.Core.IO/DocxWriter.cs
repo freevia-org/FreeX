@@ -1309,6 +1309,9 @@ public static class DocxWriter
         var nativeTextShapeType = watermarkImage is null
             ? TryParseNativeVmlTextShapeType(options.NativeVmlTextShapeTypeXml)
             : null;
+        var nativeTextPath = watermarkImage is null
+            ? TryParseNativeVmlTextPath(options.NativeVmlTextPathXml)
+            : null;
         var shapeSize = watermarkImage is null
             ? options.NativeVmlTextWidthPt is > 0 and var textWidthPt
                 && options.NativeVmlTextHeightPt is > 0 and var textHeightPt
@@ -1377,11 +1380,7 @@ public static class DocxWriter
             watermarkImage is null ? new XAttribute("fillcolor", color) : null,
             fill,
             watermarkImage is null
-                ? new XElement(V + "textpath",
-                    new XAttribute("on", "t"),
-                    new XAttribute("fitshape", options.NativeVmlTextFitShape == false ? "f" : "t"),
-                    new XAttribute("style", $"font-family:{options.FontFamily};font-size:1pt"),
-                    new XAttribute("string", options.Text))
+                ? BuildVmlTextPath(options, nativeTextPath)
                 : null,
             new XElement(W10 + "wrap", new XAttribute("anchorx", "margin"), new XAttribute("anchory", "margin")));
 
@@ -1409,6 +1408,48 @@ public static class DocxWriter
         {
             return null;
         }
+    }
+
+    private static XElement BuildVmlTextPath(WatermarkOptions options, XElement? nativeTextPath)
+    {
+        var textPath = nativeTextPath is null
+            ? new XElement(V + "textpath")
+            : new XElement(nativeTextPath);
+        textPath.SetAttributeValue("on", "t");
+        textPath.SetAttributeValue("fitshape", options.NativeVmlTextFitShape == false ? "f" : "t");
+        textPath.SetAttributeValue("style", UpdateVmlTextPathStyle(
+            textPath.Attribute("style")?.Value,
+            options.FontFamily));
+        textPath.SetAttributeValue("string", options.Text);
+        return textPath;
+    }
+
+    private static XElement? TryParseNativeVmlTextPath(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+
+        try
+        {
+            var textPath = XElement.Parse(xml, LoadOptions.PreserveWhitespace);
+            return textPath.Name == V + "textpath" ? textPath : null;
+        }
+        catch (System.Xml.XmlException)
+        {
+            return null;
+        }
+    }
+
+    private static string UpdateVmlTextPathStyle(string? style, string fontFamily)
+    {
+        var properties = (style ?? string.Empty)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(property => !property.StartsWith("font-family:", StringComparison.OrdinalIgnoreCase)
+                && !property.StartsWith("font-size:", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        properties.Insert(0, $"font-size:1pt");
+        properties.Insert(0, $"font-family:{fontFamily}");
+        return string.Join(';', properties);
     }
 
     private static string NormalizeHex(string? value, string fallback)

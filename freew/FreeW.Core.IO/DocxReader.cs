@@ -5128,6 +5128,7 @@ public static class DocxReader
                 var (textWidthPt, textHeightPt) = ParseVmlShapeSize(textShape.Attribute("style")?.Value);
                 var fitShape = ParseVmlBoolean(textPath?.Attribute("fitshape")?.Value);
                 var shapeTypeXml = ReadNativeVmlTextShapeTypeXml(root, textShape);
+                var textPathXml = textPath?.ToString(SaveOptions.DisableFormatting);
                 if (document.Page.WatermarkOptions is { IsPicture: false } existingTextWatermark)
                 {
                     document.Page.WatermarkOptions = existingTextWatermark with
@@ -5136,6 +5137,7 @@ public static class DocxReader
                         NativeVmlTextHeightPt = textHeightPt > 0 ? textHeightPt : null,
                         NativeVmlTextFitShape = fitShape,
                         NativeVmlTextRotationDegrees = rotation,
+                        NativeVmlTextPathXml = textPathXml,
                         NativeVmlTextShapeTypeXml = shapeTypeXml
                     };
                     return;
@@ -5156,6 +5158,7 @@ public static class DocxReader
                     NativeVmlTextHeightPt = textHeightPt > 0 ? textHeightPt : null,
                     NativeVmlTextFitShape = fitShape,
                     NativeVmlTextRotationDegrees = rotation,
+                    NativeVmlTextPathXml = textPathXml,
                     NativeVmlTextShapeTypeXml = shapeTypeXml
                 };
                 return;

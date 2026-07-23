@@ -2400,6 +2400,13 @@ public sealed record WatermarkOptions(string Text)
     public double? NativeVmlTextRotationDegrees { get; init; }
 
     /// <summary>
+    /// Optional serialized <c>v:textpath</c> payload recovered from a native VML text watermark.
+    /// FreeW updates its editable text and font fields on save while retaining unmodeled path
+    /// controls such as <c>fitpath</c>, <c>trim</c>, and <c>xscale</c>.
+    /// </summary>
+    public string? NativeVmlTextPathXml { get; init; }
+
+    /// <summary>
     /// Optional serialized <c>v:shapetype</c> payload referenced by an imported native VML text
     /// watermark. Retaining the path, formulas, and text-path settings prevents a custom Word
     /// watermark from being rewritten as FreeW's canonical <c>_x0000_t136</c> prototype.

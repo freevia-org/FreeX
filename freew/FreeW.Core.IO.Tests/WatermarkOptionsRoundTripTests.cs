@@ -189,6 +189,32 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithMutatedVmlTextPathControls(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            var textPath = xml.Descendants(vml + "textpath").Last();
+            textPath.SetAttributeValue("fitpath", "t");
+            textPath.SetAttributeValue("trim", "t");
+            textPath.SetAttributeValue("xscale", "f");
+            textPath.SetAttributeValue("style", "font-family:Arial;font-size:72pt;v-text-kern:t");
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument ReadWithVmlPictureImageData(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -440,6 +466,30 @@ public class WatermarkOptionsRoundTripTests
         var reopened = RoundTrip(loaded);
         XElement.Parse(reopened.Page.WatermarkOptions!.NativeVmlTextShapeTypeXml!)
             .Attribute("path")!.Value.Should().Be("m0,0l21600,0e");
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_PreservesUnmodeledTextPathControls()
+    {
+        var loaded = ReadWithMutatedVmlTextPathControls(new TextDocument
+        {
+            Page = { WatermarkOptions = new WatermarkOptions("AUTHORITATIVE") }
+        });
+
+        var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+        var payload = XElement.Parse(loaded.Page.WatermarkOptions!.NativeVmlTextPathXml!);
+        payload.Attribute("fitpath")!.Value.Should().Be("t");
+        payload.Attribute("trim")!.Value.Should().Be("t");
+        payload.Attribute("xscale")!.Value.Should().Be("f");
+        payload.Attribute("style")!.Value.Should().Contain("v-text-kern:t");
+
+        var rewritten = ReadHeaderXml(loaded).Descendants(vml + "textpath").Last();
+        rewritten.Attribute("fitpath")!.Value.Should().Be("t");
+        rewritten.Attribute("trim")!.Value.Should().Be("t");
+        rewritten.Attribute("xscale")!.Value.Should().Be("f");
+        rewritten.Attribute("style")!.Value.Should().Contain("v-text-kern:t");
+        rewritten.Attribute("style")!.Value.Should().Contain("font-family:Calibri");
+        rewritten.Attribute("style")!.Value.Should().Contain("font-size:1pt");
     }
 
     [Fact]
