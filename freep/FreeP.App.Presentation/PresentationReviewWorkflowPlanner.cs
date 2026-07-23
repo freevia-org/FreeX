@@ -755,8 +755,6 @@ public static class PresentationReviewWorkflowPlanner
         "Select one shape before changing reading order.";
     public const string EmptyReadingOrderMessage =
         "Current slide has no shapes in the reading order.";
-    public const string ReadingOrderReorderDeferredMessage =
-        "Reading order mutation is deferred; this shared plan exposes stable shape order for a visible pane follow-up.";
     public const string NestedReadingOrderReorderDeferredMessage =
         "Nested/group child reading-order moves are deferred; select a top-level shape first.";
     public const string ReadingOrderAlreadyEarliestMessage =
@@ -2004,7 +2002,7 @@ public static class PresentationReviewWorkflowPlanner
                 null,
                 -1,
                 [],
-                BuildReadingOrderActions(hasItems: false, hasSingleSelectedItem: false));
+                BuildReadingOrderActions(hasItems: false));
         }
 
         var items = EnumerateShapesWithDepth(slide.Shapes)
@@ -2069,7 +2067,7 @@ public static class PresentationReviewWorkflowPlanner
                 shapeId,
                 -1,
                 -1,
-                ReadingOrderReorderDeferredMessage);
+                ReadingOrderItemNotFoundMessage);
         }
 
         return new PresentationReadingOrderMutationPlan(
@@ -3616,14 +3614,11 @@ public static class PresentationReviewWorkflowPlanner
         };
 
     private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildReadingOrderActions(
-        bool hasItems,
-        bool hasSingleSelectedItem)
+        bool hasItems)
     {
         var reorderReason = !hasItems
             ? EmptyReadingOrderMessage
-            : !hasSingleSelectedItem
-                ? MissingReadingOrderSelectionMessage
-                : ReadingOrderReorderDeferredMessage;
+            : MissingReadingOrderSelectionMessage;
 
         return
         [
@@ -3725,7 +3720,9 @@ public static class PresentationReviewWorkflowPlanner
             label,
             intent,
             disabledReason is null,
-            PresentationWorkflowCapabilityStatus.Available,
+            disabledReason == NestedReadingOrderReorderDeferredMessage
+                ? PresentationWorkflowCapabilityStatus.Deferred
+                : PresentationWorkflowCapabilityStatus.Available,
             disabledReason);
     }
 
@@ -3746,10 +3743,15 @@ public static class PresentationReviewWorkflowPlanner
             return MissingReadingOrderSelectionMessage;
         }
 
+        if (items[selectedItemIndex].NestingDepth > 0)
+        {
+            return NestedReadingOrderReorderDeferredMessage;
+        }
+
         var moveTarget = FindReadingOrderMoveTarget(slide, selectedShapeId.Value, offset);
         if (moveTarget is null)
         {
-            return ReadingOrderReorderDeferredMessage;
+            return ReadingOrderItemNotFoundMessage;
         }
 
         if (moveTarget.TargetIndex < 0)
@@ -5631,13 +5633,7 @@ public static class PresentationReviewWorkflowPlanner
         uint shapeId,
         int offset)
     {
-        var siblings = FindContainingShapeList(slide.Shapes, shapeId);
-        if (siblings is null)
-        {
-            return null;
-        }
-
-        var sourceIndex = FindShapeIndex(siblings, shapeId);
+        var sourceIndex = FindShapeIndex(slide.Shapes, shapeId);
         if (sourceIndex < 0)
         {
             return null;
@@ -5646,28 +5642,7 @@ public static class PresentationReviewWorkflowPlanner
         return new ReadingOrderMoveTarget(
             sourceIndex,
             sourceIndex + offset,
-            siblings.Count);
-    }
-
-    private static IReadOnlyList<SlideShape>? FindContainingShapeList(
-        IReadOnlyList<SlideShape> shapes,
-        uint shapeId)
-    {
-        if (FindShapeIndex(shapes, shapeId) >= 0)
-        {
-            return shapes;
-        }
-
-        foreach (var shape in shapes)
-        {
-            var childShapes = FindContainingShapeList(shape.Children, shapeId);
-            if (childShapes is not null)
-            {
-                return childShapes;
-            }
-        }
-
-        return null;
+            slide.Shapes.Count);
     }
 
     private static int FindShapeIndex(IReadOnlyList<SlideShape> shapes, uint shapeId)

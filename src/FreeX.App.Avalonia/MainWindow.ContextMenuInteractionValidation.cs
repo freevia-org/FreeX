@@ -200,7 +200,9 @@ public sealed partial class MainWindow
             .Where(observed.ContainsKey)
             .Select(key => observed[key].Status)
             .ToArray();
-        var status = batchStatus == "failed"
+        var status = selectedKeys.Count == 0
+            ? "skipped"
+            : batchStatus == "failed"
             ? "failed"
             : selectedKeys.Count == executionKeys.Length
                 ? batchStatus
@@ -743,13 +745,7 @@ public sealed partial class MainWindow
         return row.ActionKey is nameof(WorksheetContextMenuAction.PasteSpecial) or
             nameof(WorksheetContextMenuAction.InsertCopiedCells) or
             nameof(WorksheetContextMenuAction.InsertCells) or
-            nameof(WorksheetContextMenuAction.InsertRowAbove) or
-            nameof(WorksheetContextMenuAction.InsertRowBelow) or
-            nameof(WorksheetContextMenuAction.InsertColumnLeft) or
-            nameof(WorksheetContextMenuAction.InsertColumnRight) or
             nameof(WorksheetContextMenuAction.DeleteCells) or
-            nameof(WorksheetContextMenuAction.DeleteRows) or
-            nameof(WorksheetContextMenuAction.DeleteColumns) or
             nameof(WorksheetContextMenuAction.CustomSort) or
             nameof(WorksheetContextMenuAction.DefineName) or
             nameof(WorksheetContextMenuAction.CreateTable) or

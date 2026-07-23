@@ -1167,7 +1167,11 @@ public sealed class MediaFieldsTests
 
         Assert.Equal(SlideShapeKind.Media, cs.Kind);
         Assert.Same(shape.Picture, cs.Picture);  // bytes shared (immutable)
-        Assert.Same(shape.Media,   cs.Media);    // MediaInfo shared (immutable)
+        Assert.NotSame(shape.Media, cs.Media);   // mutable caption state is isolated
+        Assert.NotSame(shape.Media!.Bytes, cs.Media!.Bytes);
+        Assert.Equal(shape.Media.Bytes, cs.Media.Bytes);
+        Assert.Equal(shape.Media.ContentType, cs.Media.ContentType);
+        Assert.Equal(shape.Media.IsVideo, cs.Media.IsVideo);
     }
 
     [Fact]

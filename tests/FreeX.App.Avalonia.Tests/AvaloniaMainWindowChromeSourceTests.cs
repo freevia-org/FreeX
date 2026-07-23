@@ -663,7 +663,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         duplicates.Should().BeEmpty("Avalonia NativeMenuItem instances can only have one NativeMenu parent");
         source.Should().Contain("ConfigurePageSetupNativeMenuItem(_filePageSetupMenuItem);");
-        source.Should().Contain("_pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();");
+        source.Should().Contain(
+            "_pageSetupMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PageSetup);");
+        source.Should().Contain("private void ConfigurePageSetupNativeMenuItem(NativeMenuItem item)");
+        source.Should().Contain("item.Click += async (_, _) => await ShowPageSetupDialogAsync();");
     }
 
     [Fact]

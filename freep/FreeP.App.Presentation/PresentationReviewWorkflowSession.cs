@@ -287,6 +287,23 @@ public sealed class PresentationReviewWorkflowSession
     public PresentationReadingOrderPlan RefreshReadingOrderPlan()
         => RefreshReadingOrderPlanCore();
 
+    public PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        var editor = _getEditor();
+        var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(editor, intent);
+        RefreshReadingOrderPlanCore();
+        return plan;
+    }
+
+    public PresentationReadingOrderSelectionPlan SelectReadingOrderItem(uint shapeId)
+    {
+        var editor = _getEditor();
+        var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderSelection(editor, shapeId);
+        RefreshReadingOrderPlanCore();
+        return plan;
+    }
+
     public PresentationProofingPanePlan ShowProofingPane()
     {
         RefreshProofingRequestPlan();

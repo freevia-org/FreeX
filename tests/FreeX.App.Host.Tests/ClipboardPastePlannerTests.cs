@@ -152,7 +152,7 @@ public sealed class ClipboardPastePlannerTests
     [WindowsClipboardFact]
     public void ExternalPaste_UsesRealWindowsClipboardTextAndRejectsStaleInternalCopy()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var hadPreviousText = TryReadClipboardText(out var previousText);
             try

@@ -4,10 +4,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using FluentAssertions;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
@@ -250,9 +252,8 @@ public sealed class SlideCanvasAvaloniaTests
     {
         SlideShape? shape = null;
         EditingSession? editor = null;
-        var overlayBold = false;
 
-        await Run(() =>
+        await Session.Dispatch(async () =>
         {
             var presentation = MakePresentation(pres =>
             {
@@ -272,31 +273,55 @@ public sealed class SlideCanvasAvaloniaTests
             var bus = new PresentationCommandBus(presentation);
             editor = new EditingSession(presentation, bus);
             var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
-            var overlay = new global::Avalonia.Controls.Canvas();
+            var overlay = new Canvas();
+            var window = new Window
+            {
+                Width = 320,
+                Height = 180,
+                Content = overlay,
+            };
+            window.Show();
+            window.Measure(new Size(320, 180));
+            window.Arrange(new Rect(0, 0, 320, 180));
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
-            textEditor.Activate(shape!.Id);
-            textEditor.TrySelectTextRange(1, 7).Should().BeTrue();
-            textEditor.SelectedText.Should().Be("ello w");
-            textEditor.IsEditorFocused.Should().BeTrue();
-            var box = RichInput(overlay);
-            box.Text.Should().Be("Hello world");
+            try
+            {
+                textEditor.Activate(shape!.Id);
+                await DrainInputAsync();
+                textEditor.TrySelectTextRange(1, 7).Should().BeTrue();
+                textEditor.SelectedText.Should().Be("ello w");
+                textEditor.IsEditorFocused.Should().BeTrue();
+                var box = RichInput(overlay);
+                box.Text.Should().Be("Hello world");
 
-            textEditor.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
-            overlayBold = box.FontWeight == FontWeight.Bold;
+                textEditor.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold).Should().BeTrue();
+                RichEditor(overlay).CurrentPlan().InitialSelectionStyle.Bold.Should().BeTrue(
+                    "the shared plan should report the selected subrange as bold");
 
-            textEditor.Commit();
-        });
+                textEditor.Commit();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
 
-        overlayBold.Should().BeTrue("whole-shape overlay formatting should mirror on the plain TextBox");
         editor!.CanUndo.Should().BeTrue("the shared shape planner should issue the formatting command");
 
         var runs = shape!.TextBody!.Paragraphs[0].Runs;
-        runs.Should().HaveCount(2, "unchanged-text commit must not flatten the original mixed runs");
-        runs[0].Text.Should().Be("Hello");
-        runs[1].Text.Should().Be(" world");
-        runs.Should().OnlyContain(r => r.Bold);
-        runs[1].Italic.Should().BeTrue();
+        runs.Should().HaveCount(4, "formatting a subrange should preserve mixed runs at the selection boundaries");
+        runs[0].Text.Should().Be("H");
+        runs[0].Bold.Should().BeFalse();
+        runs[1].Text.Should().Be("ello");
+        runs[1].Bold.Should().BeTrue();
+        runs[1].Italic.Should().BeFalse();
+        runs[2].Text.Should().Be(" w");
+        runs[2].Bold.Should().BeTrue();
+        runs[2].Italic.Should().BeTrue();
+        runs[3].Text.Should().Be("orld");
+        runs[3].Bold.Should().BeFalse();
+        runs[3].Italic.Should().BeTrue();
 
         editor.Undo();
         shape.TextBody!.Paragraphs[0].Runs.Should().OnlyContain(r => !r.Bold);
@@ -2734,6 +2759,12 @@ public sealed class SlideCanvasAvaloniaTests
         });
         thrown.Should().BeNull(
             "Wave 22A: combo chart with OverrideChartType=Line (no markers) must render without throwing");
+    }
+
+    private static async Task DrainInputAsync()
+    {
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
     }
 
     private static global::Avalonia.Controls.TextBox RichInput(global::Avalonia.Controls.Canvas overlay) =>

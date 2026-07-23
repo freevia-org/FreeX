@@ -423,11 +423,7 @@ public sealed class MainWindowHeadlessTests
     {
         var definition = FreePRibbonAvalonia.Build();
         var animations = definition.Tabs.Single(t => t.Id == "animations");
-        var commandIds = animations.Groups
-            .SelectMany(group => group.Controls)
-            .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
-            .Select(control => control.CommandId.Value)
-            .ToArray();
+        var commandIds = EnumerateRibbonCommandIds(animations).ToArray();
 
         commandIds.Should().Contain(PresentationAnimationCommandPlanner.BuiltInPlans.Select(plan => plan.CommandId));
     }
@@ -460,6 +456,8 @@ public sealed class MainWindowHeadlessTests
 
         source.Should().Contain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
+        source.Should().Contain("_reviewWorkflowSession.ApplyReadingOrderMove(");
+        source.Should().Contain("_reviewWorkflowSession.SelectReadingOrderItem(");
     }
 
     [Fact]
@@ -670,11 +668,7 @@ public sealed class MainWindowHeadlessTests
     {
         var definition = FreePRibbonAvalonia.Build();
         var transitions = definition.Tabs.Single(t => t.Id == "transitions");
-        var commandIds = transitions.Groups
-            .SelectMany(group => group.Controls)
-            .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
-            .Select(control => control.CommandId.Value)
-            .ToArray();
+        var commandIds = EnumerateRibbonCommandIds(transitions).ToArray();
 
         commandIds.Should().Contain(PresentationTransitionCommandPlanner.BuiltInPlans.Select(plan => plan.CommandId));
     }
@@ -2140,14 +2134,14 @@ public sealed class MainWindowHeadlessTests
         renderedOptionLines.Where(line => line.StartsWith("Selected:", StringComparison.Ordinal))
             .Should()
             .Equal(
-                "Selected: Copies: 3 copies: Set the number of copies from 1 to 999 before handing the package to the native printer dialog.",
-                "Selected: Collation: Uncollated: Print all copies of each page before moving to the next page.",
-                "Selected: Color: Pure Black and White: Use a high-contrast black-and-white print intent.",
-                "Selected: Content: Print hidden slides: Include hidden slides in the normalized print range.",
-                "Selected: Output: Frame slides: Draw a frame around each slide thumbnail/page.",
-                "Selected: Output: Print comments and ink markup: Reserve print intent for comments and ink markup.");
+                "Selected: Copies: 3 copies\nSet the number of copies from 1 to 999 before handing the package to the native printer dialog.",
+                "Selected: Collation: Uncollated\nPrint all copies of each page before moving to the next page.",
+                "Selected: Color: Pure Black and White\nUse a high-contrast black-and-white print intent.",
+                "Selected: Content: Print hidden slides\nInclude hidden slides in the normalized print range.",
+                "Selected: Output: Frame slides\nDraw a frame around each slide thumbnail/page.",
+                "Selected: Output: Print comments and ink markup\nReserve print intent for comments and ink markup.");
         renderedPreviewRows.Should().ContainSingle()
-            .Which.Should().Be("Selected: Handout page 1: Handout with slides 1, 3");
+            .Which.Should().Be("Selected: Handout page 1\nHandout with slides 1, 3");
         renderedLayoutRows.Should().HaveCount(printPlan.LayoutChoices.Count);
         renderedLayoutRows.Should().Contain(row => row.StartsWith("Selected: Handouts (3 slides per page)", StringComparison.Ordinal));
         renderedRangeRows.Should().HaveCount(printPlan.RangeChoices.Count);
@@ -3230,7 +3224,7 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public async Task ReadingOrderPane_moves_nested_group_child_through_shared_plan()
+    public async Task ReadingOrderPane_defers_nested_group_child_move_through_shared_plan()
     {
         PresentationReadingOrderPlan? initialPlan = null;
         PresentationReadingOrderMutationPlan? nestedMove = null;
@@ -3310,19 +3304,19 @@ public sealed class MainWindowHeadlessTests
         initialPlan.SelectedItem!.ShapeId.Should().Be(702);
         initialPlan.SelectedItem.NestingDepth.Should().Be(1);
         moveEarlierEnabled.Should().BeFalse();
-        moveEarlierDisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ReadingOrderAlreadyEarliestMessage);
-        moveLaterEnabled.Should().BeTrue();
-        moveLaterDisabledReason.Should().BeNull();
+        moveEarlierDisabledReason.Should().Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
+        moveLaterEnabled.Should().BeFalse();
+        moveLaterDisabledReason.Should().Be(PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage);
         nestedMove.Should().Be(new PresentationReadingOrderMutationPlan(
             PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
-            true,
+            false,
             0,
             702,
-            0,
-            1,
-            null));
-        childOrderAfterMove.Should().Equal(703u, 702u);
-        paneOrderAfterMove.Should().Equal(700u, 701u, 703u, 702u);
+            -1,
+            -1,
+            PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
+        childOrderAfterMove.Should().Equal(702u, 703u);
+        paneOrderAfterMove.Should().Equal(700u, 701u, 702u, 703u);
         boundaryMove.Should().Be(new PresentationReadingOrderMutationPlan(
             PresentationReviewWorkflowIntentKind.MoveReadingOrderLater,
             false,
@@ -3330,7 +3324,7 @@ public sealed class MainWindowHeadlessTests
             702,
             -1,
             -1,
-            PresentationReviewWorkflowPlanner.ReadingOrderAlreadyLatestMessage));
+            PresentationReviewWorkflowPlanner.NestedReadingOrderReorderDeferredMessage));
     }
 
     [Fact]
@@ -5362,7 +5356,58 @@ public sealed class MainWindowHeadlessTests
     {
         var prefix = choice.IsSelected ? "Selected: " : string.Empty;
         var availability = choice.IsAvailable ? string.Empty : " (unavailable)";
-        return $"{prefix}{choice.Group}: {choice.DisplayName}{availability}: {choice.Description}";
+        return $"{prefix}{choice.Group}: {choice.DisplayName}{availability}\n{choice.Description}";
+    }
+
+    private static IEnumerable<string> EnumerateRibbonCommandIds(RibbonTab tab)
+    {
+        foreach (var group in tab.Groups)
+        {
+            foreach (var control in group.Controls)
+            {
+                if (!string.IsNullOrEmpty(control.CommandId.Value))
+                    yield return control.CommandId.Value;
+
+                switch (control)
+                {
+                    case RibbonSplitButton split:
+                        foreach (var commandId in EnumerateRibbonMenuCommandIds(split.Menu))
+                            yield return commandId;
+                        break;
+                    case RibbonDropdown dropdown:
+                        foreach (var commandId in EnumerateRibbonMenuCommandIds(dropdown.Menu))
+                            yield return commandId;
+                        break;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateRibbonMenuCommandIds(RibbonMenu menu)
+    {
+        foreach (var item in menu.Items)
+        {
+            var itemCommandId = item.CommandId?.Value;
+            if (!string.IsNullOrEmpty(itemCommandId))
+                yield return itemCommandId;
+
+            foreach (var childCommandId in EnumerateRibbonMenuItemsCommandIds(item.Children))
+                yield return childCommandId;
+        }
+    }
+
+    private static IEnumerable<string> EnumerateRibbonMenuItemsCommandIds(
+        IReadOnlyList<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            var itemCommandId = item.CommandId?.Value;
+            if (!string.IsNullOrEmpty(itemCommandId))
+                yield return itemCommandId;
+
+            foreach (var childCommandId in EnumerateRibbonMenuItemsCommandIds(item.Children))
+                yield return childCommandId;
+        }
     }
 
     private static TextBody MakeLinkedTextBody(string text, Hyperlink hyperlink)

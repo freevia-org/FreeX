@@ -398,6 +398,11 @@ public sealed class EditingSession
         Bus.Execute(new ReorderShapeCommand(_currentSlideIndex, id, idx - 1));
     }
 
+    /// <summary>
+    /// Moves one selected top-level shape within the slide reading order.
+    /// Group children remain selectable in the pane, but their move actions are deferred
+    /// until the model has an explicit group-level reading-order contract.
+    /// </summary>
     public bool MoveSelectedShapeInReadingOrder(int offset)
     {
         if (CurrentSlide is null || _selectedShapeIds.Count != 1) return false;
@@ -405,14 +410,12 @@ public sealed class EditingSession
         if (step == 0) return false;
 
         var id = _selectedShapeIds[0];
-        var shapes = FindContainingShapeList(CurrentSlide.Shapes, id);
-        if (shapes is null) return false;
-
+        var shapes = CurrentSlide.Shapes;
         var idx = shapes.FindIndex(s => s.Id == id);
         var targetIndex = idx + step;
         if (idx < 0 || targetIndex < 0 || targetIndex >= shapes.Count) return false;
 
-        Bus.Execute(new ReorderShapeInReadingOrderCommand(_currentSlideIndex, id, targetIndex));
+        Bus.Execute(new ReorderShapeCommand(_currentSlideIndex, id, targetIndex));
         return true;
     }
 
@@ -1952,41 +1955,6 @@ public sealed class EditingSession
 
     private enum RunToggleKind { Bold, Italic, Underline }
 
-    private sealed class ReorderShapeInReadingOrderCommand : IPresentationCommand
-    {
-        private readonly int _slideIndex;
-        private readonly uint _shapeId;
-        private readonly int _newIndex;
-        private int _oldIndex = -1;
-
-        public ReorderShapeInReadingOrderCommand(int slideIndex, uint shapeId, int newIndex)
-        {
-            _slideIndex = slideIndex;
-            _shapeId = shapeId;
-            _newIndex = newIndex;
-        }
-
-        public string Label => "Reorder Reading Order";
-
-        public void Apply(Presentation p)
-        {
-            var shapes = FindContainingShapeList(GetSlideShapes(p, _slideIndex), _shapeId);
-            if (shapes is null) return;
-
-            _oldIndex = shapes.FindIndex(shape => shape.Id == _shapeId);
-            MoveInList(shapes, _oldIndex, _newIndex);
-        }
-
-        public void Revert(Presentation p)
-        {
-            var shapes = FindContainingShapeList(GetSlideShapes(p, _slideIndex), _shapeId);
-            if (shapes is null || _oldIndex < 0) return;
-
-            var currentIndex = shapes.FindIndex(shape => shape.Id == _shapeId);
-            MoveInList(shapes, currentIndex, _oldIndex);
-        }
-    }
-
     private void ClampCurrentSlide()
     {
         if (Presentation.Slides.Count == 0)
@@ -2016,43 +1984,6 @@ public sealed class EditingSession
         RunToggleKind.Underline => new ToggleRunUnderlineCommand(si, id, pi, ri),
         _                       => throw new ArgumentOutOfRangeException(nameof(k))
     };
-
-    private static List<SlideShape>? GetSlideShapes(Presentation presentation, int slideIndex)
-        => slideIndex >= 0 && slideIndex < presentation.Slides.Count
-            ? presentation.Slides[slideIndex].Shapes
-            : null;
-
-    private static List<SlideShape>? FindContainingShapeList(List<SlideShape>? shapes, uint shapeId)
-    {
-        if (shapes is null)
-        {
-            return null;
-        }
-
-        if (shapes.Any(shape => shape.Id == shapeId))
-        {
-            return shapes;
-        }
-
-        foreach (var shape in shapes)
-        {
-            var childShapes = FindContainingShapeList(shape.Children, shapeId);
-            if (childShapes is not null)
-            {
-                return childShapes;
-            }
-        }
-
-        return null;
-    }
-
-    private static void MoveInList<T>(List<T> list, int from, int to)
-    {
-        if (from == to || from < 0 || from >= list.Count || to < 0 || to >= list.Count) return;
-        var item = list[from];
-        list.RemoveAt(from);
-        list.Insert(to, item);
-    }
 
     private void TogglePropOnSelection(RunToggleKind kind)
     {

@@ -217,6 +217,9 @@
   <data name="Ribbon_Group_Editing_KeyTip" xml:space="preserve">
     <value>E</value>
   </data>
+  <data name="Ribbon_Group_Editing_AvaloniaKeyTip" xml:space="preserve">
+    <value>FN</value>
+  </data>
   <data name="Ribbon_Command_Find_Label" xml:space="preserve">
     <value>Find</value>
   </data>

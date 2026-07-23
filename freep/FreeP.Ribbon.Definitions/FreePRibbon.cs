@@ -100,6 +100,11 @@ public static class FreePRibbon
         for (var suffix = 2; ; suffix++)
         {
             var candidate = $"{normalized}{suffix}";
+            if (normalized.StartsWith("[[", StringComparison.Ordinal) &&
+                normalized.EndsWith("]]", StringComparison.Ordinal))
+            {
+                candidate = $"{normalized[..^2]}{suffix}]]";
+            }
             if (used.Add(candidate))
                 return candidate;
         }
@@ -139,7 +144,7 @@ public static class FreePRibbon
                 case FreePRibbonHomeGroupId.Editing:
                     tab.Group("editing", FreePRibbonText.EditingGroupLabel,
                         profile.HomeGroups.Contains(FreePRibbonHomeGroupId.Edit)
-                            ? "FN"
+                            ? FreePRibbonText.EditingGroupAvaloniaKeyTip
                             : FreePRibbonText.EditingGroupKeyTip,
                         priority, AddEditingControls);
                     break;
@@ -152,7 +157,7 @@ public static class FreePRibbon
     private static void AddSlidesControls(RibbonGroupBuilder group, FreePRibbonProfile profile)
     {
         group.Large("freep.new-slide", FreePRibbonText.NewSlideLabel, RibbonCommandIconKind.Insert,
-            profile.NewSlideKeyTip);
+            profile.NewSlideKeyTip());
         group.Medium("freep.duplicate-slide", FreePRibbonText.DuplicateSlideLabel, RibbonCommandIconKind.Copy,
             FreePRibbonText.DuplicateSlideKeyTip);
         group.Medium("freep.delete-slide", FreePRibbonText.DeleteSlideLabel, RibbonCommandIconKind.Delete,
@@ -367,7 +372,7 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Refresh, FreePRibbonText.TransitionApplyAllCommand.KeyTip);
         });
         tab.Group("slideshow-from-transitions", FreePRibbonText.SlideShowGroupLabel,
-            profile.SlideShowGroupKeyTip, 80, group => AddSlideShowControls(group, profile));
+            profile.SlideShowGroupKeyTip(), 80, group => AddSlideShowControls(group, profile));
     }
 
     private static void AddAnimationGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)

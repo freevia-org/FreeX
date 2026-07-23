@@ -21,7 +21,7 @@ public sealed class FreeXCleanupB8Tests
     [Fact]
     public void Copy_SelectionTallerThanViewport_ClipboardTextIncludesOffScreenRows()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");

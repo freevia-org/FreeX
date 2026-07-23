@@ -2628,8 +2628,7 @@ public sealed partial class MainWindow : Window
 
     internal PresentationReadingOrderSelectionPlan ApplyReadingOrderSelectItem(uint shapeId)
     {
-        var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderSelection(Editor, shapeId);
-        RefreshReadingOrderPlan();
+        var plan = _reviewWorkflowSession.SelectReadingOrderItem(shapeId);
         if (IsReadingOrderPaneVisible && LastReadingOrderPlan is not null)
             RenderReadingOrderPane(LastReadingOrderPlan);
         return plan;
@@ -2638,8 +2637,7 @@ public sealed partial class MainWindow : Window
     private PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
         PresentationReviewWorkflowIntentKind intent)
     {
-        var plan = PresentationReviewWorkflowPlanner.TryApplyReadingOrderMove(Editor, intent);
-        RefreshReadingOrderPlan();
+        var plan = _reviewWorkflowSession.ApplyReadingOrderMove(intent);
         if (IsReadingOrderPaneVisible && LastReadingOrderPlan is not null)
             RenderReadingOrderPane(LastReadingOrderPlan);
         return plan;

@@ -499,7 +499,7 @@ public sealed class AvaloniaShellSourceTests
         menuSource.Should().Contain("private readonly NativeMenuItem _optionsMenuItem = new();");
         menuSource.Should().Contain("ConfigureNativeFileMenuItem(_optionsMenuItem, NativeFileMenuItemId.Options);");
         catalogSource.Should().Contain("\"Options_Title\"");
-        menuSource.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);");
+        menuSource.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options);");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.Options)");
 
         // The dialog edits the shared AppOptions via the portable store and planner — no bespoke model.
@@ -625,9 +625,9 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_CloseWorkbook\"");
         catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.W, NativeMenuGestureModifiers.Meta)");
         source.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);");
-        source.Should().Contain("_backstageExportMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Export);");
-        source.Should().Contain("_backstageAccountMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Account);");
-        source.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);");
+        source.Should().Contain("_backstageExportMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageExport);");
+        source.Should().Contain("_backstageAccountMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageAccount);");
+        source.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options);");
         workflowSource.Should().Contain("private Task ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId command)");
         workflowSource.Should().Contain("FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(");
         workflowSource.Should().Contain("CreateBackstageCommandHandlers()");
@@ -5351,7 +5351,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_WorkbookStatistics\"");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.WorkbookStatistics)");
-        source.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();");
+        source.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.WorkbookStatistics)");
         catalogSource.Should().Contain("new(NativeFileMenuItemId.WorkbookStatistics, context.IsIdle)");
         source.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)");

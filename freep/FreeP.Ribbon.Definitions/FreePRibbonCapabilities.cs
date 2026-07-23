@@ -40,8 +40,8 @@ internal enum FreePRibbonHomeGroupId
 internal sealed record FreePRibbonProfile(
     IReadOnlyList<FreePRibbonHomeGroupId> HomeGroups,
     IReadOnlyDictionary<FreePRibbonHomeGroupId, int> HomeGroupPriorities,
-    string NewSlideKeyTip,
-    string SlideShowGroupKeyTip,
+    Func<string> NewSlideKeyTip,
+    Func<string> SlideShowGroupKeyTip,
     RibbonCommandIconKind SlideShowFromCurrentSlideIcon,
     bool IncludeAnimationSeparators,
     int AnimationTriggerWidth)
@@ -65,8 +65,8 @@ internal sealed record FreePRibbonProfile(
             [FreePRibbonHomeGroupId.Arrange] = 70,
             [FreePRibbonHomeGroupId.Editing] = 70,
         },
-        NewSlideKeyTip: FreePRibbonText.NewSlideKeyTip,
-        SlideShowGroupKeyTip: FreePRibbonText.SlideShowGroupWpfKeyTip,
+        NewSlideKeyTip: () => FreePRibbonText.NewSlideKeyTip,
+        SlideShowGroupKeyTip: () => FreePRibbonText.SlideShowGroupWpfKeyTip,
         SlideShowFromCurrentSlideIcon: RibbonCommandIconKind.Previous,
         IncludeAnimationSeparators: true,
         AnimationTriggerWidth: 130);
@@ -92,8 +92,8 @@ internal sealed record FreePRibbonProfile(
             [FreePRibbonHomeGroupId.Edit] = 80,
             [FreePRibbonHomeGroupId.Editing] = 75,
         },
-        NewSlideKeyTip: FreePRibbonText.NewSlideAvaloniaKeyTip,
-        SlideShowGroupKeyTip: FreePRibbonText.SlideShowGroupWpfKeyTip,
+        NewSlideKeyTip: () => FreePRibbonText.NewSlideAvaloniaKeyTip,
+        SlideShowGroupKeyTip: () => FreePRibbonText.SlideShowGroupWpfKeyTip,
         SlideShowFromCurrentSlideIcon: RibbonCommandIconKind.Previous,
         IncludeAnimationSeparators: false,
         AnimationTriggerWidth: 120);

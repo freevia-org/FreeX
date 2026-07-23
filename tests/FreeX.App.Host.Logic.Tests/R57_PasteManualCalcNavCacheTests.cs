@@ -25,7 +25,7 @@ public sealed class R57_PasteManualCalcNavCacheTests
     [Fact]
     public void ExecutePaste_ManualCalcMode_InvalidatesNavigationCaches()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -69,7 +69,7 @@ public sealed class R57_PasteManualCalcNavCacheTests
     [Fact]
     public void ExecutePaste_AutomaticCalcMode_StillInvalidatesNavigationCaches()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try

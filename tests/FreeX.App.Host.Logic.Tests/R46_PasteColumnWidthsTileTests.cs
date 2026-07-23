@@ -32,7 +32,7 @@ public sealed class R46_PasteColumnWidthsTileTests
     [Fact]
     public void ExecutePasteColumnWidthsOnly_WiderDestination_TilesSourceWidthAcrossEveryColumn()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             using var harness = PasteColumnWidthsHarness.Create();
 
@@ -61,7 +61,7 @@ public sealed class R46_PasteColumnWidthsTileTests
         // copied source must still behave as a single, untiled application anchored at the
         // destination's start column -- confirming the tiling fix doesn't over-apply when there's
         // nothing to tile.
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             using var harness = PasteColumnWidthsHarness.Create();
 

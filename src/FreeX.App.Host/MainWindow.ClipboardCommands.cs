@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using FreeX.App.Presentation.Editing;
@@ -114,35 +115,26 @@ public partial class MainWindow
         var fullRangeViewport = BuildFullRangeViewportForClipboard(copyRange) ?? viewport;
 
         var text = ClipboardSerializer.Serialize(fullRangeViewport, copyRange);
-        try
-        {
-            // Place plain text AND an HTML table fragment (CF_HTML) on the OS clipboard together,
-            // matching real Excel: destination apps that understand HTML (Word, Outlook, browsers,
-            // LibreOffice Calc) pick the richer format and preserve bold/fill/merges/number-format
-            // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
-            var data = new DataObject();
-            data.SetText(text);
-            var html = BuildHtmlClipboardFragment(fullRangeViewport, sheet, copyRange, _workbook.Theme);
-            if (!string.IsNullOrEmpty(html))
-                data.SetData(System.Windows.DataFormats.Html, html);
+        // Place plain text AND an HTML table fragment (CF_HTML) on the OS clipboard together,
+        // matching real Excel: destination apps that understand HTML (Word, Outlook, browsers,
+        // LibreOffice Calc) pick the richer format and preserve bold/fill/merges/number-format
+        // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
+        var data = new DataObject();
+        data.SetText(text);
+        var html = BuildHtmlClipboardFragment(fullRangeViewport, sheet, copyRange, _workbook.Theme);
+        if (!string.IsNullOrEmpty(html))
+            data.SetData(System.Windows.DataFormats.Html, html);
 
-            // R57-services-clipboard-formats-5-3: real Excel places a comma-delimited "CSV" clipboard
-            // format alongside Text/Unicode Text/HTML on every cell-range copy, so a destination that
-            // specifically enumerates for CSV (skipping plain Text) still gets a payload. Re-parse the
-            // already-built TSV/newline `text` (same field values/escaping semantics as ClipboardSerializer
-            // production, just re-delimited) and re-emit it RFC4180-quoted with commas.
-            var csv = BuildCsvClipboardText(text);
-            if (!string.IsNullOrEmpty(csv))
-                data.SetData(System.Windows.DataFormats.CommaSeparatedValue, csv);
+        // R57-services-clipboard-formats-5-3: real Excel places a comma-delimited "CSV" clipboard
+        // format alongside Text/Unicode Text/HTML on every cell-range copy, so a destination that
+        // specifically enumerates for CSV (skipping plain Text) still gets a payload. Re-parse the
+        // already-built TSV/newline `text` (same field values/escaping semantics as ClipboardSerializer
+        // production, just re-delimited) and re-emit it RFC4180-quoted with commas.
+        var csv = BuildCsvClipboardText(text);
+        if (!string.IsNullOrEmpty(csv))
+            data.SetData(System.Windows.DataFormats.CommaSeparatedValue, csv);
 
-            System.Windows.Clipboard.SetDataObject(data, copy: true);
-        }
-        catch
-        {
-            // Clipboard may be locked by another process — fall back to plain text only.
-            try { System.Windows.Clipboard.SetText(text); }
-            catch { /* clipboard may be locked */ }
-        }
+        SetClipboardDataWithRetry(data, text);
 
         // Show marching ants around the copied range(s). ClipboardRange stays the bounding box (used
         // as the sheet-affinity check and by the internal-paste "preserve visual" path), while
@@ -182,6 +174,51 @@ public partial class MainWindow
             text,
             isCut,
             areas.Count > 1 ? areas : null);
+    }
+
+    private static void SetClipboardDataWithRetry(DataObject data, string text)
+    {
+        const int attempts = 20;
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                System.Windows.Clipboard.SetDataObject(data, copy: true);
+                if (System.Windows.Clipboard.GetText() == text)
+                    return;
+            }
+            catch (ExternalException) when (attempt < attempts)
+            {
+            }
+            catch
+            {
+                break;
+            }
+
+            if (attempt < attempts)
+                Thread.Sleep(50);
+        }
+
+        // Some clipboard providers reject richer formats even after the lock clears.
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                System.Windows.Clipboard.SetText(text);
+                if (System.Windows.Clipboard.GetText() == text)
+                    return;
+            }
+            catch (ExternalException) when (attempt < attempts)
+            {
+            }
+            catch
+            {
+                return;
+            }
+
+            if (attempt < attempts)
+                Thread.Sleep(50);
+        }
     }
 
     /// <summary>
@@ -564,16 +601,26 @@ public partial class MainWindow
     /// </summary>
     private static string? TryGetClipboardText(out bool readFailed)
     {
-        try
+        const int attempts = 20;
+        for (var attempt = 1; attempt <= attempts; attempt++)
         {
-            readFailed = false;
-            return System.Windows.Clipboard.GetText();
+            try
+            {
+                readFailed = false;
+                return System.Windows.Clipboard.GetText();
+            }
+            catch (ExternalException) when (attempt < attempts)
+            {
+                Thread.Sleep(50);
+            }
+            catch
+            {
+                break;
+            }
         }
-        catch
-        {
-            readFailed = true;
-            return null;
-        }
+
+        readFailed = true;
+        return null;
     }
 
     private static bool TryClipboardContainsImage()

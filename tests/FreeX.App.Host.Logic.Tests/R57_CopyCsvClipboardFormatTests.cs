@@ -28,7 +28,7 @@ public sealed class R57_CopyCsvClipboardFormatTests
     [Fact]
     public void BuildCsvClipboardText_PlainFields_JoinsWithCommasAndCrlfRows()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var tsv = "Name\tAge\r\nJohn\t30";
 
@@ -44,7 +44,7 @@ public sealed class R57_CopyCsvClipboardFormatTests
     [Fact]
     public void BuildCsvClipboardText_FieldContainingCommaOrQuote_IsRfc4180Quoted()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var tsv = "Smith, John\tHe said \"hi\"";
 

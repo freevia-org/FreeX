@@ -86,8 +86,10 @@
     <Project Path="tools/FreeP.RandomTransitionEvidence/FreeP.RandomTransitionEvidence.csproj" />
     <Project Path="tools/FreeW.BackstageParityEvidence/FreeW.BackstageParityEvidence.csproj" />
     <Project Path="tools/FreeP.GenerateFixtures/FreeP.GenerateFixtures.csproj" />
+    <Project Path="tools/FreeP.MediaRuntimeProbe/FreeP.MediaRuntimeProbe.csproj" />
     <Project Path="tools/FreeP.RenderCompare/FreeP.RenderCompare.csproj" />
     <Project Path="tools/FreeP.RenderCompare.Tests/FreeP.RenderCompare.Tests.csproj" />
+    <Project Path="tools/FreeP.RenderSlideshowMediaParityEvidence/FreeP.RenderSlideshowMediaParityEvidence.csproj" />
     <Project Path="tools/FreeX.SheetFidelity/FreeX.SheetFidelity.csproj" />
     <Project Path="tools/FreeX.SheetGridImageCompare/FreeX.SheetGridImageCompare.csproj" />
     <Project Path="tools/FreeX.SheetImageCompare/FreeX.SheetImageCompare.csproj" />

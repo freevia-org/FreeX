@@ -274,7 +274,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var isValueColumn = _grid.CurrentColumn?.DisplayIndex > 0;
         if (isValueColumn && editor is not null &&
             !string.IsNullOrWhiteSpace(editor.Text) &&
-            !double.TryParse(editor.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out _))
+            ChartDataDialogPlanner.ParseCellValue(editor.Text, CultureInfo.CurrentCulture) is null)
         {
             ShowValidation();
             editor.Focus();
