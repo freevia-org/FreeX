@@ -22,6 +22,14 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     /// <summary>
+    /// Recomputes the PivotTable contextual-tab state from the active cell. This mirrors the WPF
+    /// viewport refresh, which reevaluates pivot context whenever selection/navigation changes.
+    /// </summary>
+    private void RefreshPivotContextualTab()
+        => _ribbonContextSource.OnPivotActive(
+            PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null);
+
+    /// <summary>
     /// When true the user has explicitly closed the PivotTable field pane via the Analyze ▸ Field List
     /// toggle, so the pane stays hidden even when the active cell is inside a pivot. Cleared when the user
     /// toggles it back on. <see cref="RefreshPivotFieldPane"/> honors this flag (see wiring note in the

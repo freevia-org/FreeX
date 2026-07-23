@@ -9490,10 +9490,66 @@ public sealed class DocumentView : Control
                     insLink?.Url,
                     insLink?.Anchor,
                     insLink?.Tooltip));
+            CoalesceAdjacentHyperlinkRuns(p);
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
         _selectionAnchor = _caret;
     }
+
+    /// <summary>
+    /// Word keeps ordinary text typed inside one hyperlink as one contiguous link span. The shared edit
+    /// planner intentionally splits runs at the insertion boundary, so restore that representation here
+    /// for plain hyperlink runs only. Revision, field, drawing, comment, and content-control runs remain
+    /// separate because their boundaries carry document semantics.
+    /// </summary>
+    private static void CoalesceAdjacentHyperlinkRuns(Paragraph paragraph)
+    {
+        for (var index = 0; index < paragraph.Runs.Count - 1; index++)
+        {
+            var left = paragraph.Runs[index];
+            var right = paragraph.Runs[index + 1];
+            if (!CanCoalesceHyperlinkRuns(left, right))
+                continue;
+
+            left.Text += right.Text;
+            paragraph.Runs.RemoveAt(index + 1);
+            index--;
+        }
+    }
+
+    private static bool CanCoalesceHyperlinkRuns(Run left, Run right) =>
+        left.Text.Length > 0
+        && right.Text.Length > 0
+        && (left.HyperlinkUrl is { Length: > 0 } || left.HyperlinkAnchor is { Length: > 0 })
+        && (right.HyperlinkUrl is { Length: > 0 } || right.HyperlinkAnchor is { Length: > 0 })
+        && string.Equals(left.HyperlinkUrl, right.HyperlinkUrl, StringComparison.Ordinal)
+        && string.Equals(left.HyperlinkAnchor, right.HyperlinkAnchor, StringComparison.Ordinal)
+        && string.Equals(left.HyperlinkTooltip, right.HyperlinkTooltip, StringComparison.Ordinal)
+        && left.Formatting.Equals(right.Formatting)
+        && left.Image is null && right.Image is null
+        && left.Equation is null && right.Equation is null
+        && left.Shape is null && right.Shape is null
+        && left.WordArt is null && right.WordArt is null
+        && left.Ruby is null && right.Ruby is null
+        && left.Chart is null && right.Chart is null
+        && left.EmbeddedObject is null && right.EmbeddedObject is null
+        && left.SmartArt is null && right.SmartArt is null
+        && left.PreservedDrawing is null && right.PreservedDrawing is null
+        && left.DrawingGroup is null && right.DrawingGroup is null
+        && left.FieldKind == RunFieldKind.None && right.FieldKind == RunFieldKind.None
+        && left.TableFormula is null && right.TableFormula is null
+        && left.Citation is null && right.Citation is null
+        && left.CrossReference is null && right.CrossReference is null
+        && left.ComplexField is null && right.ComplexField is null
+        && left.FootnoteId is null && right.FootnoteId is null
+        && left.EndnoteId is null && right.EndnoteId is null
+        && left.CommentId is null && right.CommentId is null
+        && !left.IsCommentReference && !right.IsCommentReference
+        && !left.IsPageBreak && !right.IsPageBreak
+        && left.Revision == RevisionKind.None && right.Revision == RevisionKind.None
+        && left.Control is null && right.Control is null
+        && left.MoveRevisionId is null && right.MoveRevisionId is null
+        && left.FormatRevision is null && right.FormatRevision is null;
 
     /// <summary>
     /// Inserts a plain-text content control at the body caret. A selected body range becomes the control

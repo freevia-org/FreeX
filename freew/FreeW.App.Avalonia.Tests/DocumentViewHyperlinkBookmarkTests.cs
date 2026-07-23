@@ -527,6 +527,32 @@ public sealed class DocumentViewHyperlinkBookmarkTests
         linkText.Should().Be("AcXme", "typing inside the link extends the same hyperlink span");
     }
 
+    [Fact]
+    public async Task Repeated_typing_inside_a_hyperlink_keeps_one_contiguous_link_span()
+    {
+        var linkRuns = 0;
+        var linkText = "";
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Go Acme now");
+            view.SetSelectionRangePublic(0, 3, 0, 7);
+            view.InsertHyperlink("Acme", "https://acme.example");
+
+            view.MoveCaretToBlock(0, 4);
+            view.InsertText("1");
+            view.InsertText("2");
+
+            var paragraph = (Paragraph)view.Document.Blocks[0];
+            var runs = paragraph.Runs.Where(run => run.HyperlinkUrl == "https://acme.example").ToArray();
+            linkRuns = runs.Length;
+            linkText = string.Concat(runs.Select(run => run.Text));
+        });
+
+        if (!ran) return;
+        linkRuns.Should().Be(1);
+        linkText.Should().Be("A12cme");
+    }
+
     // ── Regression: plain text unaffected ───────────────────────────────────────
 
     [Fact]
