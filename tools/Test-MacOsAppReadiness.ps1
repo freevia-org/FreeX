@@ -1931,7 +1931,7 @@ function Test-SourceWiring {
                 "WindowTitlePlanner.Compose(",
                 "applicationName: ApplicationTitle",
                 "groupSuffix: _session.IsWorkbookGrouped ? GroupTitleSuffix : `"`"",
-                "applicationPlacement: WindowTitleApplicationPlacement.ApplicationThenDocument",
+                "applicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication",
                 "Title = FormatWindowWorkbookTitle();",
                 "var isGroupedTab = tab.IsGrouped && _session.IsWorkbookGrouped;",
                 "tab.TabColor is { } tabColor ? Brush(tabColor) : Brushes.Transparent",
