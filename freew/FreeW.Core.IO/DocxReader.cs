@@ -38,6 +38,7 @@ public static class DocxReader
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
         var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
+        var altChunkRelationships = ReadAltChunkRelationships(archive);
         var (numbering, startOverrides) = ReadNumbering(archive, document);
 
         var body = documentXml.Root?.Element(W + "body");
@@ -51,7 +52,7 @@ public static class DocxReader
             Paragraph? prevPara = null;
             var prevAfterAuto = false;
             foreach (var element in body.Elements())
-                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto);
+                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, altChunkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto);
         }
 
         if (document.Blocks.Count == 0)
@@ -268,6 +269,25 @@ public static class DocxReader
         if (archive.GetEntry("word/webSettings.xml") is not null)
             Capture("/word/webSettings.xml",
                 docRelTypesByTarget.GetValueOrDefault("webSettings.xml") ?? WebSettingsRelType);
+
+        // Body-level altChunk imports are unresolved source payloads (HTML, RTF, or a nested Word package) that
+        // Word imports on open. Keep the body marker plus its payload and any local relationship graph intact.
+        foreach (var altChunk in document.Blocks.OfType<AltChunkBlock>())
+        {
+            CapturePreservedPart(
+                archive,
+                document,
+                altChunk.PreservedPartName,
+                overrides,
+                contentTypeDefaults,
+                AltChunkRelType);
+            CaptureReferencedParts(
+                archive,
+                document,
+                altChunk.PreservedPartName,
+                overrides,
+                contentTypeDefaults);
+        }
 
         // word/glossary/*: Word building blocks / AutoText live in a glossary document part plus optional
         // glossary-local rels, styles, media and other satellites. Preserve the glossary subtree as package
@@ -1481,6 +1501,7 @@ public static class DocxReader
         ZipArchive archive,
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<string, string> altChunkRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
         IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
         ref Paragraph? prevPara,
@@ -1520,6 +1541,20 @@ public static class DocxReader
             prevPara = null;
             prevAfterAuto = false;
         }
+        else if (element.Name == W + "altChunk")
+        {
+            var relationshipId = element.Attribute(R + "id")?.Value;
+            if (relationshipId is not null && altChunkRelationships.TryGetValue(relationshipId, out var partName))
+            {
+                var altChunk = new AltChunkBlock(partName)
+                {
+                    BlockContentControl = inheritedBlockContentControl
+                };
+                document.Blocks.Add(altChunk);
+            }
+            prevPara = null;
+            prevAfterAuto = false;
+        }
         else if (element.Name == W + "sdt")
         {
             var blockControl = ReadBlockContentControl(element.Element(W + "sdtPr"));
@@ -1531,6 +1566,7 @@ public static class DocxReader
                     archive,
                     imageRelationships,
                     hyperlinkRelationships,
+                    altChunkRelationships,
                     numbering,
                     startOverrides,
                     ref prevPara,
@@ -4681,6 +4717,16 @@ public static class DocxReader
             "word/_rels/document.xml.rels",
             relationship => relationship.Target,
             relationship => relationship.Type.EndsWith("/hyperlink", StringComparison.Ordinal));
+
+    /// <summary>Maps a body <c>w:altChunk/@r:id</c> to its package-local source payload.</summary>
+    private static Dictionary<string, string> ReadAltChunkRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/document.xml.rels",
+            relationship => "/" + OpcPathHelper.ResolveRelativeZipPath("word", relationship.Target),
+            relationship =>
+                !relationship.IsExternal &&
+                relationship.Type == AltChunkRelType);
 
     private static byte[]? LoadMedia(ZipArchive archive, string entryPath)
     {

@@ -1939,6 +1939,9 @@ public static class DocxWriter
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null) => block switch
     {
         Table table => BuildTable(table, drawings, hyperlinks, preservedNumbering, restartOverrides),
+        AltChunkBlock altChunk when drawings.PreservedDrawingRelIds is { } preservedRelIds
+            && preservedRelIds.TryGetValue(altChunk.PreservedPartName, out var relationshipId)
+            => new XElement(W + "altChunk", new XAttribute(R + "id", relationshipId)),
         // Only top-level body paragraphs can end a non-final section, so the per-section header/footer map
         // is threaded here (and nowhere else); table-cell/header/footer/footnote paragraphs pass no map.
         Paragraph paragraph => BuildParagraph(paragraph, drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides),

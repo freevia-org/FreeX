@@ -95,6 +95,9 @@ internal static class Ooxml
     /// <summary>The relationship type for an inline image / OLE presentation media part (shared with pictures).</summary>
     public const string ImageRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 
+    /// <summary>The document relationship type used by body-level <c>w:altChunk</c> import payloads.</summary>
+    public const string AltChunkRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk";
+
     /// <summary>
     /// The DrawingML diagram namespace (dgm / "diagram"), used by the SmartArt data/layout/quickStyle/colors
     /// parts (dgm:dataModel / dgm:ptLst / dgm:pt / dgm:t / …) and the dgm:relIds element that references the
