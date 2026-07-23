@@ -1106,6 +1106,33 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_RepeatHeader_ExplicitOffToggle_ReadsDisabledAndIsCanonicallyOmittedOnSave()
+    {
+        var document = ReadHandAuthoredDocx(
+            """
+            <w:tbl>
+              <w:tblPr><w:tblLook w:firstRow="1"/></w:tblPr>
+              <w:tr>
+                <w:trPr><w:tblHeader w:val="0"/></w:trPr>
+                <w:tc><w:p><w:r><w:t>Header</w:t></w:r></w:p></w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:sectPr/>
+            """);
+
+        var table = document.Blocks.OfType<Table>().Single();
+        table.Formatting.HeaderRow.Should().BeTrue();
+        table.Formatting.RepeatHeaderRow.Should().BeFalse("w:tblHeader is an OOXML on/off toggle");
+
+        var xml = WriteDocumentXml(document);
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        xml.Descendants(ns + "tblHeader").Should().BeEmpty();
+
+        var reopened = RoundTrip(document).Blocks.OfType<Table>().Single();
+        reopened.Formatting.RepeatHeaderRow.Should().BeFalse();
+    }
+
+    [Fact]
     public void Table_HeaderRow_EmitsBoldShadedTblHeader()
     {
         var doc = new TextDocument();
