@@ -41,7 +41,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
     [Fact]
     public void LegacyAltEditPasteSpecialKeyTip_ES_RoutesToPasteSpecialAndClosesKeyTips()
     {
-        RunSta(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             System.Windows.Clipboard.Clear();
             using var harness = MainWindowHarness.Create();

@@ -26,7 +26,7 @@ public sealed class R49_MultiAreaClipboardCopyTests
     [Fact]
     public void ExecuteCopy_MultiAreaSelection_PastesBothAreasAtDestination_LeavesGapUntouched()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try
@@ -91,7 +91,7 @@ public sealed class R49_MultiAreaClipboardCopyTests
     [Fact]
     public void ExecuteCopy_SingleAreaSelection_StillPastesAtDestination()
     {
-        StaTestRunner.Run(() =>
+        StaTestRunner.RunClipboardIsolated(() =>
         {
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
             try

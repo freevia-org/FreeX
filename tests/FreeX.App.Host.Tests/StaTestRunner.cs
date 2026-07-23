@@ -1,6 +1,7 @@
 using System.Windows.Threading;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
+using System.Windows;
 
 namespace FreeX.App.Host.Tests;
 
@@ -8,6 +9,9 @@ internal static class StaTestRunner
 {
     private static readonly Lazy<Dispatcher> StaDispatcher = new(CreateDispatcher);
     private static readonly object RunLock = new();
+    private static readonly Mutex ClipboardRunMutex = new(
+        initiallyOwned: false,
+        "Local\\FreeX.App.Host.Tests.WindowsClipboard");
     private const int KeyEventKeyUp = 0x0002;
     private const int KeyStatePressedMask = 0x8000;
     private static readonly byte[] ModifierVirtualKeys =
@@ -66,6 +70,43 @@ internal static class StaTestRunner
         }
     }
 
+    public static void RunClipboardIsolated(Action action)
+    {
+        var ownsMutex = false;
+        try
+        {
+            try
+            {
+                ownsMutex = ClipboardRunMutex.WaitOne(TimeSpan.FromMinutes(2));
+            }
+            catch (AbandonedMutexException)
+            {
+                ownsMutex = true;
+            }
+
+            if (!ownsMutex)
+                throw new TimeoutException("Timed out waiting for the shared Windows clipboard test lock.");
+
+            Run(() =>
+            {
+                ResetClipboard();
+                try
+                {
+                    action();
+                }
+                finally
+                {
+                    ResetClipboard();
+                }
+            });
+        }
+        finally
+        {
+            if (ownsMutex)
+                ClipboardRunMutex.ReleaseMutex();
+        }
+    }
+
     private static Dispatcher CreateDispatcher()
     {
         Dispatcher? dispatcher = null;
@@ -91,6 +132,24 @@ internal static class StaTestRunner
         {
             if ((GetKeyState(virtualKey) & KeyStatePressedMask) != 0)
                 keybd_event(virtualKey, 0, KeyEventKeyUp, UIntPtr.Zero);
+        }
+    }
+
+    private static void ResetClipboard()
+    {
+        const int attempts = 10;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Clipboard.Clear();
+                Clipboard.Flush();
+                return;
+            }
+            catch (ExternalException) when (attempt < attempts)
+            {
+                Thread.Sleep(10);
+            }
         }
     }
 
