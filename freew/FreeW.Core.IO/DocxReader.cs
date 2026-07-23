@@ -715,7 +715,7 @@ public static class DocxReader
         // comment image's r:embed resolves only against the comment part's own relationships. Read that map and
         // use it (in place of the body's image relationships) so an image inside a comment becomes a real
         // Run.Image — which the writer re-emits as a comment media part + comments.xml.rels (see BuildComments).
-        var commentRelationships = ReadPartImageRelationships(archive, "word/_rels/comments.xml.rels", "word/");
+        var commentRelationships = ReadPartRelationships(archive, "word/comments.xml");
 
         // Modern (threaded) comments: word/commentsExtended.xml threads replies via w15:paraId /
         // w15:paraIdParent and marks resolved threads with w15:done. Parse it first so the comment loop
@@ -742,7 +742,14 @@ public static class DocxReader
             string? paraId = null;
             foreach (var p in element.Elements(W + "p"))
             {
-                comment.Content.Add(ReadParagraph(p, archive, commentRelationships, hyperlinkRelationships, noNumbering));
+                comment.Content.Add(ReadParagraph(
+                    p,
+                    archive,
+                    commentRelationships,
+                    hyperlinkRelationships,
+                    noNumbering,
+                    preservedDrawingTarget: document,
+                    preservedDrawingRelationshipTargets: commentRelationships));
                 // The last paragraph's w14:paraId is what commentsExtended references for this comment.
                 if (p.Attribute(W14 + "paraId")?.Value is { Length: > 0 } pid)
                     paraId = pid;
