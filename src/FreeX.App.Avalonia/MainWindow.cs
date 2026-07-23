@@ -757,6 +757,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal WorkbookSession Session => _session;
 
+    internal static AvaloniaWorkbookWindowRegistry WindowRegistryForTest => WindowRegistry;
+
     internal RibbonContextState RibbonContextStateForTest => _ribbonContextSource.Current;
 
     internal static IReadOnlySet<string> InteractiveValidationKeyboardShortcutScenarioIds { get; } =

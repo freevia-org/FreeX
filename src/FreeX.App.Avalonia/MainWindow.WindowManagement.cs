@@ -66,6 +66,27 @@ public sealed partial class MainWindow : Window
         RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
     }
 
+    internal void ActivateWorkbookWindow()
+    {
+        if (!IsVisible)
+            Show();
+
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+
+        Activate();
+
+        // WPF's ActivateWindow uses a topmost nudge before focusing the target. X11 window
+        // managers may otherwise leave the old workbook active after a _NET_ACTIVE_WINDOW
+        // request, especially immediately after Arrange All changed both window bounds.
+        Topmost = true;
+        Topmost = false;
+        Activate();
+        X11WindowActivator.Activate(this);
+        Focus();
+        _sheetGridHost.Focus();
+    }
+
     private void Session_WorkbookChanged(object? sender, EventArgs e)
     {
         WindowRegistry.NotifyWorkbookChanged(this);

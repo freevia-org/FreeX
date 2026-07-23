@@ -624,18 +624,7 @@ public sealed partial class MainWindow
 
     private void SwitchWorkbookWindow(bool forward)
     {
-        var windows = AllTopLevelWindows.Where(static window => window.IsVisible).ToList();
-        if (windows.Count <= 1)
-            return;
-
-        var currentIndex = windows.IndexOf(this);
-        if (currentIndex < 0)
-            currentIndex = 0;
-        var nextIndex = (currentIndex + (forward ? 1 : -1) + windows.Count) % windows.Count;
-        var next = windows[nextIndex];
-        if (next.WindowState == WindowState.Minimized)
-            next.WindowState = WindowState.Normal;
-        next.Activate();
+        WindowRegistry.SwitchToWindow(this, forward);
     }
 
     private const uint WindowSystemCommandMessage = 0x0112;

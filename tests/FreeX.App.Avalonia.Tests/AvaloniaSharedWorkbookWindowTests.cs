@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Input;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -167,6 +168,67 @@ public sealed class AvaloniaSharedWorkbookWindowTests
                 first.AllowCloseWithoutDirtyPromptForParityCapture();
                 second?.AllowCloseWithoutDirtyPromptForParityCapture();
                 second?.Close();
+                first.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task CtrlF6_CyclesRealWorkbookWindowsThroughRegistryForwardAndBackward()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var first = new MainWindow([]);
+            var second = first.CreateSharedViewForTest();
+            var third = first.CreateSharedViewForTest();
+            Show(first);
+            Show(second);
+            Show(third);
+
+            try
+            {
+                MainWindow? activeBefore = null;
+                first.Activated += (_, _) => activeBefore = first;
+                second.Activated += (_, _) => activeBefore = second;
+                third.Activated += (_, _) => activeBefore = third;
+
+                first.ActivateWorkbookWindow();
+                MainWindow.WindowRegistryForTest.NextWindowTarget(first, forward: true)
+                    .Should().BeSameAs(second);
+                MainWindow.WindowRegistryForTest.NextWindowTarget(second, forward: true)
+                    .Should().BeSameAs(third);
+                MainWindow.WindowRegistryForTest.NextWindowTarget(first, forward: false)
+                    .Should().BeSameAs(third);
+
+                await first.RaiseKeyDownForTest(new KeyEventArgs
+                {
+                    Key = Key.F6,
+                    KeyModifiers = KeyModifiers.Control,
+                });
+                second.IsActive.Should().BeTrue();
+
+                await second.RaiseKeyDownForTest(new KeyEventArgs
+                {
+                    Key = Key.F6,
+                    KeyModifiers = KeyModifiers.Control,
+                });
+                third.IsActive.Should().BeTrue();
+
+                await third.RaiseKeyDownForTest(new KeyEventArgs
+                {
+                    Key = Key.F6,
+                    KeyModifiers = KeyModifiers.Control | KeyModifiers.Shift,
+                });
+                second.IsActive.Should().BeTrue();
+                activeBefore.Should().BeSameAs(second);
+            }
+            finally
+            {
+                first.AllowCloseWithoutDirtyPromptForParityCapture();
+                second.AllowCloseWithoutDirtyPromptForParityCapture();
+                third.AllowCloseWithoutDirtyPromptForParityCapture();
+                third.Close();
+                second.Close();
                 first.Close();
             }
         }, CancellationToken.None);

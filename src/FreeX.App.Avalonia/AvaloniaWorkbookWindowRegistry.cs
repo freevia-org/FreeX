@@ -14,6 +14,9 @@ internal sealed class AvaloniaWorkbookWindowRegistry
 
     internal IReadOnlyList<MainWindow> Windows => _windows;
 
+    internal IReadOnlyList<MainWindow> VisibleWindows =>
+        _windows.Where(static window => window.IsVisible).ToArray();
+
     internal void Register(MainWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
@@ -54,6 +57,33 @@ internal sealed class AvaloniaWorkbookWindowRegistry
     }
 
     internal void RefreshWindowNumbering() => RenumberTitles();
+
+    internal MainWindow? NextWindowTarget(MainWindow currentWindow, bool forward)
+    {
+        ArgumentNullException.ThrowIfNull(currentWindow);
+
+        var visibleWindows = VisibleWindows.ToList();
+        if (visibleWindows.Count <= 1)
+            return null;
+
+        var currentIndex = visibleWindows.IndexOf(currentWindow);
+        if (currentIndex < 0)
+            return null;
+
+        var nextIndex = (currentIndex + (forward ? 1 : -1) + visibleWindows.Count) % visibleWindows.Count;
+        var target = visibleWindows[nextIndex];
+        return ReferenceEquals(target, currentWindow) ? null : target;
+    }
+
+    internal bool SwitchToWindow(MainWindow currentWindow, bool forward)
+    {
+        var target = NextWindowTarget(currentWindow, forward);
+        if (target is null)
+            return false;
+
+        target.ActivateWorkbookWindow();
+        return true;
+    }
 
     private void RenumberTitles()
     {
