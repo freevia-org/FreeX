@@ -821,7 +821,13 @@ try {
     $x11ReportDirectory = Join-Path $reportDirectory "x11-validation"
     New-Item -ItemType Directory -Path $x11ReportDirectory -Force | Out-Null
     foreach ($evidenceFile in Get-ChildItem -LiteralPath $x11EvidenceDirectory -File) {
-        Copy-Item -LiteralPath $evidenceFile.FullName -Destination (Join-Path $x11ReportDirectory $evidenceFile.Name) -Force
+        $evidenceDestination = Join-Path $x11ReportDirectory $evidenceFile.Name
+        if (-not [string]::Equals(
+            [IO.Path]::GetFullPath($evidenceFile.FullName),
+            [IO.Path]::GetFullPath($evidenceDestination),
+            [StringComparison]::OrdinalIgnoreCase)) {
+            Copy-Item -LiteralPath $evidenceFile.FullName -Destination $evidenceDestination -Force
+        }
     }
 
     # Phase two uses a fresh X11 process for each bounded dialog slice. Avalonia retains native modal/input
