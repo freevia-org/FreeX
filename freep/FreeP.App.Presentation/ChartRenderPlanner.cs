@@ -516,6 +516,9 @@ public sealed class ChartScenePlan
     public bool UsesStockLineFallback { get; init; }
     public ChartTextPlan? Title { get; init; }
     public bool DrawFlatGrid { get; init; }
+    // WPF consumes this as a host-local raster hint. Avalonia intentionally
+    // ignores it because its canvas has different pixel snapping semantics.
+    public bool UseWpfPixelSnappedImportedGrid { get; init; }
     public bool DrawProjectedThreeDBarFrame { get; init; }
     public ChartMajorGridLinePrimitivePlan GridLines { get; init; }
     public ChartMajorAxisTickPrimitivePlan AxisTicks { get; init; }
@@ -1508,6 +1511,7 @@ public static partial class ChartRenderPlanner
             DrawFlatGrid = !UsesProjectedSurfaceFrame(chart) &&
                 !UsesImportedThreeDColumnDefaults(chart) &&
                 !frame.IsScatterLike,
+            UseWpfPixelSnappedImportedGrid = UsesImportedLabeledColumnWidth(chart),
             DrawProjectedThreeDBarFrame = UsesImportedThreeDColumnDefaults(chart),
             GridLines = BuildMajorGridLinePrimitivePlan(chart, frame),
             AxisTicks = BuildMajorAxisTickPrimitivePlan(chart, frame),
