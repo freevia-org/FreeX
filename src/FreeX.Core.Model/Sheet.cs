@@ -712,6 +712,15 @@ public sealed partial class Sheet
     /// </summary>
     public Dictionary<CellAddress, IReadOnlyList<CellTextRun>> RichTextRuns { get; } = [];
 
+    /// <summary>
+    /// Per-cell phonetic-guide (furigana) native passthrough for rich-text cells, keyed by the
+    /// same <see cref="CellAddress"/> as <see cref="RichTextRuns"/>. Populated from a cell's
+    /// <c>&lt;is&gt;</c>/<c>&lt;si&gt;</c> <c>&lt;rPh&gt;</c>/<c>&lt;phoneticPr&gt;</c> children
+    /// on load and re-emitted verbatim alongside the rewritten runs on save, so an edit to a
+    /// run's formatting does not drop the phonetic guide.
+    /// </summary>
+    public Dictionary<CellAddress, CellPhoneticGuide> CellPhoneticGuides { get; } = [];
+
     private bool _isProtected;
 
     /// <summary>

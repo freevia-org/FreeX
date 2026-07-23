@@ -87,6 +87,9 @@ public static partial class BuiltInFunctions
             case "width":
             {
                 if (sheet is null) return new NumberValue(8);
+                // Excel reports 0 for a hidden or outline-collapsed column's width, not the
+                // width it would display if shown (IsColEffectivelyHidden ORs both mechanisms).
+                if (sheet.IsColEffectivelyHidden(col)) return new NumberValue(0);
                 var width = sheet.ColumnWidths.TryGetValue(col, out var w)
                     ? w
                     : sheet.DefaultColumnWidth;

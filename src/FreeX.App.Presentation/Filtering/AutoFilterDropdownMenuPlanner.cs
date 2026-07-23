@@ -27,7 +27,14 @@ public static class AutoFilterDropdownMenuPlanner
         Sheet sheet,
         AutoFilterDropdownPlan plan,
         string blankDisplayText) =>
-        AutoFilterChecklistPlanner.CreateItems(sheet, plan, blankDisplayText);
+        AutoFilterChecklistPlanner.CreateItems(null, sheet, plan, blankDisplayText);
+
+    public static IReadOnlyList<AutoFilterChecklistItem> CreateChecklistItems(
+        Workbook? workbook,
+        Sheet sheet,
+        AutoFilterDropdownPlan plan,
+        string blankDisplayText) =>
+        AutoFilterChecklistPlanner.CreateItems(workbook, sheet, plan, blankDisplayText);
 
     public static AutoFilterMenuPlan CreateMenuPlan(
         Sheet sheet,
@@ -62,15 +69,20 @@ public static class AutoFilterDropdownMenuPlanner
         {
             new(sortLabels.Ascending, AutoFilterMenuEntryKind.SortAscending),
             new(sortLabels.Descending, AutoFilterMenuEntryKind.SortDescending),
-            CreateSeparator(),
-            new(textProvider.Format("AutoFilter_ClearFilterFrom", headerText), AutoFilterMenuEntryKind.ClearFilter, isEnabled: hasActiveFilter)
         };
+        // R76-render-autofilter-dropdown-4-2: Excel offers "Sort by Color" right alongside the
+        // A-Z/Z-A sort entries whenever the column has fill/font colors to sort by -- it sits next
+        // to the sort entries, not down in the filter section where "Filter by Color" lives.
+        if (colorOptions.Count > 0)
+            entries.Add(new AutoFilterMenuEntry(textProvider.Get("AutoFilter_SortByColor"), AutoFilterMenuEntryKind.SortByColor));
+        entries.Add(CreateSeparator());
+        entries.Add(new(textProvider.Format("AutoFilter_ClearFilterFrom", headerText), AutoFilterMenuEntryKind.ClearFilter, isEnabled: hasActiveFilter));
         if (colorOptions.Count > 0)
             entries.Add(new AutoFilterMenuEntry(textProvider.Get("AutoFilter_FilterByColor"), AutoFilterMenuEntryKind.FilterByColor));
         entries.Add(filterEntry);
         entries.Add(CreateSeparator());
         entries.Add(new AutoFilterMenuEntry(textProvider.Get("AutoFilter_Search"), AutoFilterMenuEntryKind.Search));
-        var checklistEntries = CreateChecklistEntries(sheet, plan, blankDisplayText);
+        var checklistEntries = CreateChecklistEntries(workbook, sheet, plan, blankDisplayText);
         entries.Add(new AutoFilterMenuEntry(
             textProvider.Get("AutoFilter_SelectAll"),
             AutoFilterMenuEntryKind.SelectAll,
@@ -107,11 +119,12 @@ public static class AutoFilterDropdownMenuPlanner
         };
 
     private static IReadOnlyList<AutoFilterMenuEntry> CreateChecklistEntries(
+        Workbook? workbook,
         Sheet sheet,
         AutoFilterDropdownPlan plan,
         string blankDisplayText)
     {
-        var items = CreateChecklistItems(sheet, plan, blankDisplayText);
+        var items = CreateChecklistItems(workbook, sheet, plan, blankDisplayText);
         if (items.Count == 0)
             return items.Select(item => new AutoFilterMenuEntry(item)).ToList();
 
@@ -222,6 +235,29 @@ public static class AutoFilterDropdownMenuPlanner
         options.AddRange(fontColors.Select(color =>
             new AutoFilterColorOption(FormatHexColor(color), AutoFilterColorFilterKind.FontColor, color)));
         return options;
+    }
+
+    /// <summary>
+    /// Builds the <see cref="SortCommand"/> a shell runs when the user picks one of the
+    /// <see cref="AutoFilterMenuPlan.ColorOptions"/> swatches under the Sort-by-Color entry: rows
+    /// whose effective cell/font color matches <paramref name="option"/> move to the top (mirroring
+    /// Excel's "Sort by Color"), using <see cref="SortOn.CellColor"/>/<see cref="SortOn.FontColor"/>
+    /// with that color as the <see cref="SortKey.TargetColor"/>. "No Fill" has no single target
+    /// color to sort toward, so it is not offered as a Sort-by-Color choice (only as Filter by
+    /// Color) -- callers should only invoke this for options with a non-null <see cref="AutoFilterColorOption.Color"/>.
+    /// </summary>
+    public static SortCommand CreateSortByColorCommand(
+        SheetId sheetId,
+        GridRange range,
+        uint columnOffset,
+        AutoFilterColorOption option)
+    {
+        ArgumentNullException.ThrowIfNull(option);
+        if (option.Color is not { } color)
+            throw new ArgumentException("Sort by Color requires a specific color, not No Fill.", nameof(option));
+
+        var sortOn = option.Kind == AutoFilterColorFilterKind.FontColor ? SortOn.FontColor : SortOn.CellColor;
+        return new SortCommand(sheetId, range, [new SortKey(columnOffset, Ascending: true, sortOn, color)]);
     }
 
     public static bool HasActiveFilter(Sheet sheet, GridRange range)

@@ -74,6 +74,9 @@ public sealed partial class AutoFilterDialog : Window
     private readonly GroupBox _filterByColorGroup = new() { Header = UiText.Get("AutoFilter_FilterByColor2"), Visibility = Visibility.Collapsed };
     private readonly StackPanel _filterByColorPanel = new();
     private readonly List<Button> _colorChoiceButtons = [];
+    private readonly GroupBox _sortByColorGroup = new() { Header = UiText.Get("AutoFilter_SortByColor"), Visibility = Visibility.Collapsed };
+    private readonly StackPanel _sortByColorPanel = new();
+    private readonly List<Button> _sortByColorButtons = [];
     private readonly Button _textFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_TextFilters"), RibbonCommandIconKind.Filter, Visibility.Collapsed);
     private readonly Button _numberFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_NumberFilters"), RibbonCommandIconKind.Filter, Visibility.Collapsed);
     private readonly Button _dateFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_DateFilters"), RibbonCommandIconKind.Filter, Visibility.Collapsed);
@@ -147,6 +150,12 @@ public sealed partial class AutoFilterDialog : Window
         var colorOptions = menuPlan.ColorOptions ?? [];
         if (colorOptions.Count > 0 && HasFilterByColorEntry(menuPlan))
             PopulateColorChoices(colorOptions);
+
+        // R76-render-autofilter-dropdown-4-2: "No Fill" has no single color to sort toward (see
+        // AutoFilterDropdownMenuPlanner.CreateSortByColorCommand), so only actual colors are offered.
+        var sortColorOptions = colorOptions.Where(option => option.Color is not null).ToList();
+        if (sortColorOptions.Count > 0 && HasSortByColorEntry(menuPlan))
+            PopulateSortByColorChoices(sortColorOptions);
     }
 
     private static AutoFilterMenuEntry? FindClearFilterEntry(AutoFilterMenuPlan menuPlan)
@@ -214,6 +223,9 @@ public sealed partial class AutoFilterDialog : Window
         _sortDescendingButton.Click += (_, _) => ApplySortCommand(AutoFilterSortDirection.Descending);
         stack.Children.Add(_sortAscendingButton);
         stack.Children.Add(_sortDescendingButton);
+        _sortByColorGroup.Content = _sortByColorPanel;
+        _sortByColorGroup.Margin = new Thickness(0, 8, 0, 0);
+        stack.Children.Add(_sortByColorGroup);
         AddFilterMenuSeparator(stack);
         _clearFilterButton.Click += (_, _) =>
         {

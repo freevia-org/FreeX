@@ -18,12 +18,15 @@ public sealed partial class FormulaEvaluator
     /// on <c>the former expanded depth budget</c>) to be safe on the default ~1MB thread stack even for
     /// the tightest recursion shape (a bare self-call with no intervening arithmetic).
     /// Trade-off: a formula that legitimately needs to recurse deeper than this (e.g. an ordinary
-    /// recursive LAMBDA to ~200+ levels) is retried on a dedicated large-stack worker thread with
-    /// <c>the former expanded depth budget</c> — see <see cref="RunWithDepthEscalation"/> — rather than
-    /// simply raising this constant, because raising it directly was found (empirically — an
+    /// recursive LAMBDA to ~200+ levels) simply returns #NUM! rather than being retried with a
+    /// raised budget, because raising this constant directly was found (empirically — an
     /// earlier attempt to raise this to 1024 crashed the process with a real
     /// StackOverflowException around ~430 real recursion levels, well before the raised guard
     /// itself would have tripped) to risk a genuine stack overflow on the default thread stack.
+    /// (Round 72 tried a large-stack worker-thread escalation instead of raising this constant, but
+    /// round 75 found it could not bound a truly-infinite recursion before its own stack overflowed
+    /// — an uncatchable StackOverflowException that terminated the whole process — so it was
+    /// removed; a stack-SAFE deep-recursion path is deferred to its own task.)
     /// </summary>
     private const int MaxEvalDepth = 256;
 
@@ -36,43 +39,14 @@ public sealed partial class FormulaEvaluator
     private static int _evalDepth;
 
     /// <summary>
-    /// Per-thread effective recursion budget EvaluateNode checks against — <see cref="MaxEvalDepth"/>
-    /// for a normal (caller's-thread) evaluation attempt, or <c>the former expanded depth budget</c> when
-    /// running on the large-stack retry thread <see cref="RunWithDepthEscalation"/> spins up. Set at
-    /// the start of every evaluation attempt (see <see cref="RunWithDepthEscalation"/>).
+    /// Per-thread effective recursion budget EvaluateNode checks against — always <see cref="MaxEvalDepth"/>
+    /// for a normal (caller's-thread) evaluation attempt (the round-72 large-stack escalation that used
+    /// to raise this on a worker thread was removed in round 75; see <see cref="MaxEvalDepth"/>'s remarks).
+    /// Set at the start of every public Evaluate() entry point, immediately before resetting
+    /// <see cref="_evalDepth"/> to 0.
     /// </summary>
     [ThreadStatic]
     private static int _effectiveMaxEvalDepth;
-
-    /// <summary>
-    /// Runs <paramref name="attempt"/> (a top-level evaluation) with <see cref="MaxEvalDepth"/> as
-    /// its recursion budget. Recursion deeper than that budget is cut off with #NUM! on the
-    /// caller's own thread — the graceful, Excel-consistent outcome for an over-deep or infinite
-    /// recursive formula. (Round 72 added a large-stack worker-thread escalation here to let
-    /// ordinary recursive LAMBDA formulas exceed the default cap, but round 75 found it could not
-    /// bound a truly-infinite recursion before its worker stack overflowed — an uncatchable
-    /// StackOverflowException that terminated the whole process — so it was removed. A stack-SAFE
-    /// deep-recursion path, bounded by real CLR stack headroom rather than an eval-depth count, is
-    /// deferred to its own task.)
-    /// </summary>
-    private static ScalarValue RunWithDepthEscalation(Func<ScalarValue> attempt)
-    {
-        _effectiveMaxEvalDepth = MaxEvalDepth;
-        var result = attempt();
-
-        // NOTE (r75): the large-stack retry escalation that used to run here was REMOVED because it
-        // could crash the whole process. It re-ran a depth-guard-tripped formula on a worker thread
-        // with a much higher ExpandedMaxEvalDepth budget, but a genuinely-infinite recursion (e.g.
-        // =LET(f, LAMBDA(n, f(n)), f(1))) consumes several KB of CLR stack per EvaluateNode level, so
-        // the expanded budget could not be reached before the worker thread overflowed its stack
-        // (even a 64 MB stack), and a StackOverflowException is uncatchable -- it terminated the
-        // whole process (crashing FreeX, and aborting the test host) rather than returning #NUM!.
-        // The default MaxEvalDepth guard on the caller's own thread already bounds recursion safely
-        // and returns #NUM!, which is the graceful, Excel-consistent outcome for a formula that
-        // recurses too deeply. Restoring a stack-SAFE deep-recursion path (bounding by real CLR
-        // stack headroom, not an eval-depth count) is deferred to its own task.
-        return result;
-    }
 
     private const int CachedIntegerNumberMax = 64;
     private static readonly BoolValue TrueValue = new(true);
@@ -121,11 +95,9 @@ public sealed partial class FormulaEvaluator
             var context = workbook is null && currentCell is null
                 ? GetSingleSheetEvalContext(sheet)
                 : new SheetEvalContext(sheet, workbook, this, currentCell);
-            return RunWithDepthEscalation(() =>
-            {
-                _evalDepth = 0;
-                return NormalizeTopLevelResult(EvaluateNode(ast, context));
-            });
+            _effectiveMaxEvalDepth = MaxEvalDepth;
+            _evalDepth = 0;
+            return NormalizeTopLevelResult(EvaluateNode(ast, context));
         }
         catch (FormulaEvalException ex)
         {
@@ -153,11 +125,9 @@ public sealed partial class FormulaEvaluator
             var context = workbook is null && currentCell is null
                 ? GetSingleSheetEvalContext(sheet)
                 : new SheetEvalContext(sheet, workbook, this, currentCell);
-            return RunWithDepthEscalation(() =>
-            {
-                _evalDepth = 0;
-                return NormalizeTopLevelResult(EvaluateNode(ast, context));
-            });
+            _effectiveMaxEvalDepth = MaxEvalDepth;
+            _evalDepth = 0;
+            return NormalizeTopLevelResult(EvaluateNode(ast, context));
         }
         catch (FormulaEvalException ex)
         {
@@ -185,21 +155,19 @@ public sealed partial class FormulaEvaluator
                 ? GetSingleSheetEvalContext(sheet)
                 : new SheetEvalContext(sheet, workbook, this, currentCell);
 
-            return RunWithDepthEscalation(() =>
-            {
-                _evalDepth = 0;
+            _effectiveMaxEvalDepth = MaxEvalDepth;
+            _evalDepth = 0;
 
-                // Only top-level reference nodes need the spilling treatment; every other node
-                // already produces a RangeValue when it yields an array (functions, operators,
-                // array constants).
-                var result = ast is RangeRefNode or FullColumnRangeRefNode or FullRowRangeRefNode
-                        or NamedRangeNode or StructuredReferenceNode or StructuredCurrentRowReferenceNode
-                        or IntersectionNode or NamedRangeEndpointNode
-                    ? EvaluateArrayOperand(ast, context)
-                    : EvaluateNode(ast, context);
+            // Only top-level reference nodes need the spilling treatment; every other node
+            // already produces a RangeValue when it yields an array (functions, operators,
+            // array constants).
+            var result = ast is RangeRefNode or FullColumnRangeRefNode or FullRowRangeRefNode
+                    or NamedRangeNode or StructuredReferenceNode or StructuredCurrentRowReferenceNode
+                    or IntersectionNode or NamedRangeEndpointNode
+                ? EvaluateArrayOperand(ast, context)
+                : EvaluateNode(ast, context);
 
-                return NormalizeTopLevelResult(result);
-            });
+            return NormalizeTopLevelResult(result);
         }
         catch (FormulaEvalException ex)
         {

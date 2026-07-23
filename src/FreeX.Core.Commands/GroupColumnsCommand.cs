@@ -241,36 +241,71 @@ internal static class ColumnGroupAnchorHelper
     }
 
     /// <summary>
-    /// True when <paramref name="col"/> qualifies for an expand at <paramref name="expandLevel"/>
-    /// (its own level is deeper) but is still hidden by a nested subgroup that is independently
-    /// collapsed -- i.e. some level strictly between <paramref name="expandLevel"/> and the
-    /// column's own level has a contiguous run (containing this column) whose anchor is still in
-    /// <paramref name="anchors"/>. Expanding an outer group must not un-hide such a column; Excel
-    /// leaves the inner, still-collapsed subgroup collapsed (R75-commands-outline-group-4-2).
+    /// Precomputes the full set of columns that are hidden by some still-independently-collapsed
+    /// nested subgroup with level in (<paramref name="expandLevel"/>, 7] -- i.e. every column for
+    /// which a per-column, per-level run-boundary walk would answer "yes, a deeper subgroup still
+    /// covers this column and is collapsed". Expanding an outer group must not un-hide such a
+    /// column; Excel leaves the inner, still-collapsed subgroup collapsed
+    /// (R75-commands-outline-group-4-2).
+    /// <para/>
+    /// Doing this once per <c>Apply</c> call -- a single sort plus, for each of the (constant) 7
+    /// possible levels, one linear pass building contiguous runs -- is O(N log N) overall. The
+    /// previous approach re-walked run boundaries from scratch for every qualifying column
+    /// (O(N) columns * up to 7 levels * O(N) walk), which degenerated to O(N^2) on a heavily
+    /// nested/grouped sheet (R76-perf-recursion-sweep-2).
     /// </summary>
-    public static bool IsHiddenByNestedCollapsedGroup(
+    public static HashSet<uint> BuildNestedCollapsedHiddenSet(
         IReadOnlyDictionary<uint, int> levels,
         IReadOnlySet<uint> anchors,
         bool summaryRight,
-        uint col,
         int expandLevel)
     {
-        if (!levels.TryGetValue(col, out var colLevel) || colLevel <= expandLevel)
-            return false;
+        var hidden = new HashSet<uint>();
+        if (anchors.Count == 0 || levels.Count == 0 || expandLevel >= 7)
+            return hidden;
 
-        for (var lvl = expandLevel + 1; lvl <= colLevel; lvl++)
+        var sortedCols = new List<uint>(levels.Keys);
+        sortedCols.Sort();
+
+        for (var lvl = expandLevel + 1; lvl <= 7; lvl++)
         {
-            var runStart = col;
-            while (runStart > 0 && levels.TryGetValue(runStart - 1, out var before) && before >= lvl)
-                runStart--;
-            var runEnd = col;
-            while (levels.TryGetValue(runEnd + 1, out var after) && after >= lvl)
-                runEnd++;
+            var haveRun = false;
+            uint runStart = 0, runEnd = 0;
 
-            if (ComputeAnchor(summaryRight, runStart, runEnd) is { } anchor && anchors.Contains(anchor))
-                return true;
+            void CloseRun()
+            {
+                if (!haveRun)
+                    return;
+                if (ComputeAnchor(summaryRight, runStart, runEnd) is { } anchor && anchors.Contains(anchor))
+                {
+                    for (var c = runStart; c <= runEnd; c++)
+                        hidden.Add(c);
+                }
+                haveRun = false;
+            }
+
+            foreach (var col in sortedCols)
+            {
+                if (levels[col] < lvl)
+                {
+                    CloseRun();
+                    continue;
+                }
+                if (haveRun && col == runEnd + 1)
+                {
+                    runEnd = col;
+                }
+                else
+                {
+                    CloseRun();
+                    runStart = runEnd = col;
+                    haveRun = true;
+                }
+            }
+            CloseRun();
         }
-        return false;
+
+        return hidden;
     }
 }
 
@@ -398,6 +433,8 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
             if (ColumnOutlineGroupScope.Resolve(sheet.ColOutlineLevels, selStart, _selectionEnd ?? selStart) is not { } group)
                 return new CommandOutcome(true);
 
+            var nestedHidden = ColumnGroupAnchorHelper.BuildNestedCollapsedHiddenSet(
+                sheet.ColOutlineLevels, sheet.CollapsedAnchorCols, summaryRight, group.Level);
             foreach (var col in sheet.GroupHiddenCols.ToList())
             {
                 if (col < group.Start || col > group.End)
@@ -406,8 +443,7 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
                     continue;
                 // A column hidden by a deeper, still-independently-collapsed nested subgroup must
                 // stay hidden when only the outer group is being expanded (R75-commands-outline-group-4-2).
-                if (ColumnGroupAnchorHelper.IsHiddenByNestedCollapsedGroup(
-                        sheet.ColOutlineLevels, sheet.CollapsedAnchorCols, summaryRight, col, group.Level))
+                if (nestedHidden.Contains(col))
                     continue;
                 sheet.GroupHiddenCols.Remove(col);
             }
@@ -496,6 +532,13 @@ public sealed class SetColumnOutlineGroupCollapsedCommand : IWorkbookCommand
         _previousHiddenCols = [.. sheet.GroupHiddenCols];
         _previousCollapsedAnchors = [.. sheet.CollapsedAnchorCols];
         var summaryRight = sheet.OutlineSummaryRight ?? true;
+        // Only the expand path needs to know which columns are still hidden by an independently
+        // collapsed nested subgroup, so build this set once here (not per-column) rather than
+        // re-walking run boundaries for every qualifying column (R76-perf-recursion-sweep-2).
+        var nestedHidden = _collapsed
+            ? null
+            : ColumnGroupAnchorHelper.BuildNestedCollapsedHiddenSet(
+                sheet.ColOutlineLevels, sheet.CollapsedAnchorCols, summaryRight, _level);
         var qualifyingCols = new List<uint>();
         foreach (var (col, level) in sheet.ColOutlineLevels)
         {
@@ -507,8 +550,7 @@ public sealed class SetColumnOutlineGroupCollapsedCommand : IWorkbookCommand
                 sheet.GroupHiddenCols.Add(col);
             // A column hidden by a deeper, still-independently-collapsed nested subgroup must stay
             // hidden when only this (outer) group is being expanded (R75-commands-outline-group-4-2).
-            else if (!ColumnGroupAnchorHelper.IsHiddenByNestedCollapsedGroup(
-                         sheet.ColOutlineLevels, sheet.CollapsedAnchorCols, summaryRight, col, _level))
+            else if (!nestedHidden!.Contains(col))
                 sheet.GroupHiddenCols.Remove(col);
         }
         foreach (var run in ColumnGroupAnchorHelper.GetContiguousRuns(qualifyingCols))

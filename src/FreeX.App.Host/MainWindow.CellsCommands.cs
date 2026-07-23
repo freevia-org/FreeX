@@ -68,6 +68,13 @@ public partial class MainWindow
             ClearFormulaTraceArrowsAfterStructuralEdit();
         ClearClipboardMarqueeAfterStructuralEdit();
 
+        // R76-render-freeze-scroll-4-1: an EntireRow/EntireColumn insert renumbers every row/col
+        // at or below it, so keep the same content on screen if the edit is at/above the view.
+        if (choice == KeyboardInsertDeleteDialogChoice.EntireRow)
+            ShiftScrollOriginForRowEdit(range.Start.Row, (int)range.RowCount);
+        else if (choice == KeyboardInsertDeleteDialogChoice.EntireColumn)
+            ShiftScrollOriginForColEdit(range.Start.Col, (int)range.ColCount);
+
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
@@ -125,6 +132,13 @@ public partial class MainWindow
         if (choice is KeyboardInsertDeleteDialogChoice.EntireRow or KeyboardInsertDeleteDialogChoice.EntireColumn)
             ClearFormulaTraceArrowsAfterStructuralEdit();
         ClearClipboardMarqueeAfterStructuralEdit();
+
+        // R76-render-freeze-scroll-4-1: an EntireRow/EntireColumn delete renumbers every row/col
+        // at or below it, so keep the same content on screen if the edit is at/above the view.
+        if (choice == KeyboardInsertDeleteDialogChoice.EntireRow)
+            ShiftScrollOriginForRowEdit(range.Start.Row, -(int)range.RowCount);
+        else if (choice == KeyboardInsertDeleteDialogChoice.EntireColumn)
+            ShiftScrollOriginForColEdit(range.Start.Col, -(int)range.ColCount);
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
@@ -420,6 +434,7 @@ public partial class MainWindow
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
         ClearClipboardMarqueeAfterStructuralEdit();
+        ShiftScrollOriginForRowEdit(beforeRow, 1);
         RecalculateWorkbook();
         UpdateViewport();
     }
@@ -431,6 +446,7 @@ public partial class MainWindow
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
         ClearClipboardMarqueeAfterStructuralEdit();
+        ShiftScrollOriginForColEdit(beforeCol, 1);
         RecalculateWorkbook();
         UpdateViewport();
     }
@@ -438,6 +454,8 @@ public partial class MainWindow
     private void DeleteSelectedRows()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        var startRow = range.Start.Row;
+        var rowCount = range.End.Row - range.Start.Row + 1;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Delete Row",
                 sheetId =>
@@ -450,6 +468,7 @@ public partial class MainWindow
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
         ClearClipboardMarqueeAfterStructuralEdit();
+        ShiftScrollOriginForRowEdit(startRow, -(int)rowCount);
         RecalculateWorkbook();
         UpdateViewport();
     }
@@ -457,6 +476,8 @@ public partial class MainWindow
     private void DeleteSelectedColumns()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        var startCol = range.Start.Col;
+        var colCount = range.End.Col - range.Start.Col + 1;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Delete Column",
                 sheetId =>
@@ -469,6 +490,7 @@ public partial class MainWindow
 
         ClearFormulaTraceArrowsAfterStructuralEdit();
         ClearClipboardMarqueeAfterStructuralEdit();
+        ShiftScrollOriginForColEdit(startCol, -(int)colCount);
         RecalculateWorkbook();
         UpdateViewport();
     }

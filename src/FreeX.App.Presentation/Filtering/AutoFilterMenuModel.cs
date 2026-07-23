@@ -123,6 +123,7 @@ public enum AutoFilterMenuEntryKind
     Separator,
     ClearFilter,
     FilterByColor,
+    SortByColor,
     FilterFamily,
     FilterFamilyCommand,
     Search,
@@ -149,6 +150,10 @@ public sealed record AutoFilterMenuEntryPresentation(
                 RibbonCommandIconKind.Clear,
                 AutoFilterMenuEntryFocusRole.Command),
             AutoFilterMenuEntryKind.FilterByColor => new(
+                RibbonCommandIconKind.Color,
+                AutoFilterMenuEntryFocusRole.Command,
+                ShowsContinuation: true),
+            AutoFilterMenuEntryKind.SortByColor => new(
                 RibbonCommandIconKind.Color,
                 AutoFilterMenuEntryFocusRole.Command,
                 ShowsContinuation: true),

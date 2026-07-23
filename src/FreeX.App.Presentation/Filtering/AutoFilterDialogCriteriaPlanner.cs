@@ -100,6 +100,22 @@ public static class AutoFilterDialogCriteriaPlanner
             colorFilter);
     }
 
+    /// <summary>
+    /// Builds the result a Sort-by-Color swatch click commits: unlike <see cref="BuildResult"/>'s
+    /// <c>colorFilter</c> (which filters the column down to that color), this leaves the checklist
+    /// selection untouched and only carries <paramref name="colorFilter"/> in
+    /// <see cref="AutoFilterDialogResult.SortByColorFilter"/> for the host to turn into a Sort.
+    /// </summary>
+    public static AutoFilterDialogResult BuildSortByColorResult(AutoFilterColorFilter colorFilter) =>
+        new(
+            AutoFilterSortDirection.None,
+            [],
+            string.Empty,
+            string.Empty,
+            ColorFilter: null,
+            Action: AutoFilterDialogAction.Apply,
+            SortByColorFilter: colorFilter);
+
     public static AutoFilterDialogResult CreateClearFilterResult() =>
         new(
             AutoFilterSortDirection.None,
@@ -189,6 +205,9 @@ public static class AutoFilterDialogCriteriaPlanner
 
     public static bool HasFilterByColorEntry(AutoFilterMenuPlan menuPlan) =>
         menuPlan.Entries.Any(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
+
+    public static bool HasSortByColorEntry(AutoFilterMenuPlan menuPlan) =>
+        menuPlan.Entries.Any(entry => entry.Kind == AutoFilterMenuEntryKind.SortByColor);
 
     public static bool IsBetweenOption(AutoFilterCriteriaOption option) =>
         AutoFilterMenuCatalog.IsBetweenCriteriaPrefix(option.CriteriaPrefix);

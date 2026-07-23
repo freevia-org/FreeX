@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -647,5 +648,122 @@ public class GroupCommandTests
 
         sheet.GroupHiddenCols.Should().BeEmpty();
         sheet.CollapsedAnchorCols.Should().BeEmpty();
+    }
+
+    // R76-perf-recursion-sweep-2: the r75 nested-collapsed-group guard used to re-walk run
+    // boundaries from scratch for every qualifying column/row, per level -- O(N columns * levels *
+    // O(N) walk). On a heavily nested/grouped sheet this made a single Expand-group command
+    // O(N^2), freezing the UI. The fix precomputes the still-collapsed nested-run coverage once
+    // per Apply. These tests use a large N (well beyond what an O(N^2) walk could finish quickly)
+    // and assert both correctness (the inner, still-independently-collapsed subgroup stays hidden)
+    // and that the call completes fast.
+
+    private static (Sheet sheet, ICommandContext ctx, uint n) SetupLargeNestedColumnSheet()
+    {
+        var (_, sheet, ctx) = Setup();
+        const uint n = 8000;
+
+        // Outer group spans the whole range at level 1; columns 2..n-1 are nested seven levels
+        // deep (level 7), so expanding the outer group must, for every one of those ~n-2 columns,
+        // determine whether a still-collapsed nested subgroup covers it.
+        new GroupColumnsCommand(sheet.Id, 1, n, 1).Apply(ctx);
+        for (var lvl = 1; lvl < 7; lvl++)
+            new GroupColumnsCommand(sheet.Id, 2, n - 1, 1, preserveExistingHierarchy: true).Apply(ctx);
+
+        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 2, n - 1, 7, collapsed: true).Apply(ctx);
+        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 1, n, 1, collapsed: true).Apply(ctx);
+
+        return (sheet, ctx, n);
+    }
+
+    [Fact]
+    public void SetColumnOutlineGroupCollapsed_ExpandOuter_LargeNestedSheet_CompletesFastAndLeavesNestedSubgroupHidden()
+    {
+        var (sheet, ctx, n) = SetupLargeNestedColumnSheet();
+
+        var sw = Stopwatch.StartNew();
+        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 1, n, 1, collapsed: false).Apply(ctx);
+        sw.Stop();
+
+        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+            "expanding the outer group must not re-walk O(N) run boundaries per column (O(N^2))");
+
+        sheet.IsColEffectivelyHidden(1).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(n).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(2).Should().BeTrue();
+        sheet.IsColEffectivelyHidden(n - 1).Should().BeTrue();
+        sheet.IsColEffectivelyHidden(n / 2).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExpandColGroupCommand_SelectionScoped_LargeNestedSheet_CompletesFastAndLeavesNestedSubgroupHidden()
+    {
+        var (sheet, ctx, n) = SetupLargeNestedColumnSheet();
+
+        var sw = Stopwatch.StartNew();
+        new ExpandColGroupCommand(sheet.Id, 1, selectionStart: 1, selectionEnd: 1).Apply(ctx);
+        sw.Stop();
+
+        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+            "expanding the outer group must not re-walk O(N) run boundaries per column (O(N^2))");
+
+        sheet.IsColEffectivelyHidden(1).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(n).Should().BeFalse();
+        sheet.IsColEffectivelyHidden(2).Should().BeTrue();
+        sheet.IsColEffectivelyHidden(n - 1).Should().BeTrue();
+        sheet.IsColEffectivelyHidden(n / 2).Should().BeTrue();
+    }
+
+    private static (Sheet sheet, ICommandContext ctx, uint n) SetupLargeNestedRowSheet()
+    {
+        var (_, sheet, ctx) = Setup();
+        const uint n = 8000;
+
+        new GroupRowsCommand(sheet.Id, 1, n, 1).Apply(ctx);
+        for (var lvl = 1; lvl < 7; lvl++)
+            new GroupRowsCommand(sheet.Id, 2, n - 1, 1, preserveExistingHierarchy: true).Apply(ctx);
+
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 2, n - 1, 7, collapsed: true).Apply(ctx);
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 1, n, 1, collapsed: true).Apply(ctx);
+
+        return (sheet, ctx, n);
+    }
+
+    [Fact]
+    public void SetRowOutlineGroupCollapsed_ExpandOuter_LargeNestedSheet_CompletesFastAndLeavesNestedSubgroupHidden()
+    {
+        var (sheet, ctx, n) = SetupLargeNestedRowSheet();
+
+        var sw = Stopwatch.StartNew();
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 1, n, 1, collapsed: false).Apply(ctx);
+        sw.Stop();
+
+        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+            "expanding the outer group must not re-walk O(N) run boundaries per row (O(N^2))");
+
+        sheet.IsRowEffectivelyHidden(1).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(n).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(2).Should().BeTrue();
+        sheet.IsRowEffectivelyHidden(n - 1).Should().BeTrue();
+        sheet.IsRowEffectivelyHidden(n / 2).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExpandRowGroupCommand_SelectionScoped_LargeNestedSheet_CompletesFastAndLeavesNestedSubgroupHidden()
+    {
+        var (sheet, ctx, n) = SetupLargeNestedRowSheet();
+
+        var sw = Stopwatch.StartNew();
+        new ExpandRowGroupCommand(sheet.Id, 1, selectionStart: 1, selectionEnd: 1).Apply(ctx);
+        sw.Stop();
+
+        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+            "expanding the outer group must not re-walk O(N) run boundaries per row (O(N^2))");
+
+        sheet.IsRowEffectivelyHidden(1).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(n).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(2).Should().BeTrue();
+        sheet.IsRowEffectivelyHidden(n - 1).Should().BeTrue();
+        sheet.IsRowEffectivelyHidden(n / 2).Should().BeTrue();
     }
 }

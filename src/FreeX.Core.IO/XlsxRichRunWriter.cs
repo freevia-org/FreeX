@@ -23,7 +23,8 @@ internal static class XlsxRichRunWriter
     /// </summary>
     internal static XElement CreateRichInlineStringElement(
         XNamespace worksheetNs,
-        IReadOnlyList<CellTextRun> runs)
+        IReadOnlyList<CellTextRun> runs,
+        CellPhoneticGuide? phoneticGuide = null)
     {
         var is_ = new XElement(worksheetNs + "is");
         foreach (var run in runs)
@@ -120,7 +121,44 @@ internal static class XlsxRichRunWriter
             is_.Add(r);
         }
 
+        if (phoneticGuide is { } guide)
+            AppendPhoneticGuide(is_, guide);
+
         return is_;
+    }
+
+    /// <summary>
+    /// Re-emits a preserved phonetic guide's <c>&lt;rPh&gt;</c> run(s) and <c>&lt;phoneticPr&gt;</c>
+    /// element (see <see cref="CellPhoneticGuide"/>) after the <c>&lt;r&gt;</c> children, per
+    /// CT_Rst schema order (<c>t?, r*, rPh*, phoneticPr?</c>). Malformed preserved XML is skipped
+    /// defensively rather than throwing, mirroring <c>ConditionalFormatNativeMetadata</c>'s
+    /// native-passthrough parsing.
+    /// </summary>
+    private static void AppendPhoneticGuide(XElement is_, CellPhoneticGuide guide)
+    {
+        foreach (var rawRPh in guide.RunPhoneticXmls)
+        {
+            if (TryParseNativeXml(rawRPh) is { } rPhElement)
+                is_.Add(rPhElement);
+        }
+
+        if (guide.PhoneticPropertiesXml is { } rawPhoneticPr &&
+            TryParseNativeXml(rawPhoneticPr) is { } phoneticPrElement)
+        {
+            is_.Add(phoneticPrElement);
+        }
+    }
+
+    private static XElement? TryParseNativeXml(string xml)
+    {
+        try
+        {
+            return XElement.Parse(xml);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>

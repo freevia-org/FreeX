@@ -71,4 +71,10 @@ public sealed partial class AutoFilterDialog
 
     public static bool HasFilterByColorEntry(AutoFilterMenuPlan menuPlan) =>
         AutoFilterDialogCriteriaPlanner.HasFilterByColorEntry(menuPlan);
+
+    public static bool HasSortByColorEntry(AutoFilterMenuPlan menuPlan) =>
+        AutoFilterDialogCriteriaPlanner.HasSortByColorEntry(menuPlan);
+
+    public static AutoFilterDialogResult BuildSortByColorResult(AutoFilterColorFilter colorFilter) =>
+        AutoFilterDialogCriteriaPlanner.BuildSortByColorResult(colorFilter);
 }

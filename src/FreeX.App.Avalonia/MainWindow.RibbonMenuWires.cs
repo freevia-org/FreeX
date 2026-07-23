@@ -158,7 +158,10 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(
             new InsertRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
         if (result.Success)
+        {
             ClearFormulaTraceArrowsAfterStructuralEdit();
+            ShiftScrollOriginForRowEdit(range.Start.Row, (int)range.RowCount);
+        }
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_InsertedSheetRows")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetRowsFailed"));
@@ -170,7 +173,10 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(
             new InsertColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
         if (result.Success)
+        {
             ClearFormulaTraceArrowsAfterStructuralEdit();
+            ShiftScrollOriginForColEdit(range.Start.Col, (int)range.ColCount);
+        }
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_InsertedSheetColumns")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_InsertSheetColumnsFailed"));
@@ -182,7 +188,10 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(
             new DeleteRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
         if (result.Success)
+        {
             ClearFormulaTraceArrowsAfterStructuralEdit();
+            ShiftScrollOriginForRowEdit(range.Start.Row, -(int)range.RowCount);
+        }
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_DeletedSheetRows")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_DeleteSheetRowsFailed"));
@@ -194,7 +203,10 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(
             new DeleteColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
         if (result.Success)
+        {
             ClearFormulaTraceArrowsAfterStructuralEdit();
+            ShiftScrollOriginForColEdit(range.Start.Col, -(int)range.ColCount);
+        }
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_DeletedSheetColumns")
             : result.ErrorMessage ?? UiText.Get("RibbonWire_DeleteSheetColumnsFailed"));
@@ -211,6 +223,42 @@ public sealed partial class MainWindow
     private void ClearFormulaTraceArrowsAfterStructuralEdit()
     {
         _formulaTraceArrows.Clear();
+    }
+
+    /// <summary>
+    /// R76-render-freeze-scroll-4-1: Insert/Delete Rows renumbers every row at or below the edit
+    /// point, so if the edit happens AT OR ABOVE the current viewport's top-left anchor
+    /// (<see cref="Sheet.ViewTopRow"/>), the same anchor now points at DIFFERENT worksheet
+    /// content -- the view visibly jumps even though nothing scrolled. Excel instead keeps the
+    /// same content on screen by shifting the anchor by the inserted/deleted row count. Only
+    /// applies when the edit is at/above the view; an edit strictly below the view never moves
+    /// it. Mirrors the WPF host's ShiftScrollOriginForRowEdit (MainWindow.Viewport.cs); must run
+    /// before the RefreshShell() call every caller already makes, since that is what rebuilds the
+    /// grid from ActiveSheet.ViewTopRow.
+    /// </summary>
+    private void ShiftScrollOriginForRowEdit(uint editRow, int rowDelta)
+    {
+        if (rowDelta == 0) return;
+
+        var sheet = _session.ActiveSheet;
+        var currentTopRow = sheet.ViewTopRow ?? Math.Max(1, sheet.FrozenRows + 1);
+        if (editRow > currentTopRow) return;
+
+        sheet.ViewTopRow = (uint)Math.Clamp((long)currentTopRow + rowDelta, 1, CellAddress.MaxRow);
+    }
+
+    /// <summary>
+    /// Column counterpart of <see cref="ShiftScrollOriginForRowEdit"/> for Insert/Delete Columns.
+    /// </summary>
+    private void ShiftScrollOriginForColEdit(uint editCol, int colDelta)
+    {
+        if (colDelta == 0) return;
+
+        var sheet = _session.ActiveSheet;
+        var currentLeftCol = sheet.ViewLeftCol ?? Math.Max(1, sheet.FrozenCols + 1);
+        if (editCol > currentLeftCol) return;
+
+        sheet.ViewLeftCol = (uint)Math.Clamp((long)currentLeftCol + colDelta, 1, CellAddress.MaxCol);
     }
 
     // ── Home ▸ Cells ▸ Format ▸ Lock Cell ────────────────────────────────────────

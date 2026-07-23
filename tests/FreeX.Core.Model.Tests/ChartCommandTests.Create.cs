@@ -492,4 +492,57 @@ public sealed partial class ChartCommandTests
         wb.Sheets.Should().NotContain(sheet => sheet.Name == "Sales Chart");
         source.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
     }
+
+    // R76-io-chartsheet-4-1: "Move Chart > New Sheet" is documented (and behaves, for undo/redo
+    // and Charts placement) as creating a real chartsheet, but previously left the new sheet's
+    // Kind at its SheetKind.Worksheet default -- so the in-memory model never recorded that this
+    // sheet is supposed to be a full-page chartsheet, and a save could never even attempt to emit
+    // an xl/chartsheets/ part for it. Kind must be Chartsheet on the freshly created sheet.
+    [Fact]
+    public void MoveChartToNewSheetCommand_MarksNewSheetAsChartsheet()
+    {
+        var wb = new Workbook("test");
+        var source = wb.AddSheet("Source");
+        var ctx = new TestCommandContext(wb);
+        var range = new GridRange(
+            new CellAddress(source.Id, 1, 1),
+            new CellAddress(source.Id, 4, 3));
+        new AddChartCommand(source.Id, range, ChartType.Line, "Sales").Apply(ctx);
+        var chart = source.Charts[0];
+
+        var command = new MoveChartToNewSheetCommand(source.Id, chart.Id, "Sales Chart");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var chartSheet = wb.Sheets.Single(sheet => sheet.Name == "Sales Chart");
+        chartSheet.Kind.Should().Be(SheetKind.Chartsheet);
+
+        // Redo (Apply again after Revert) must re-create the sheet with the same Kind, not silently
+        // fall back to a plain worksheet on the redo path.
+        command.Revert(ctx);
+        command.Apply(ctx).Success.Should().BeTrue();
+        wb.Sheets.Single(sheet => sheet.Name == "Sales Chart").Kind.Should().Be(SheetKind.Chartsheet);
+    }
+
+    // Sibling no-regression check: moving a chart onto an ALREADY-EXISTING worksheet (MoveChartCommand,
+    // as opposed to MoveChartToNewSheetCommand) must not be affected by the chartsheet fix above --
+    // the destination stays an ordinary worksheet.
+    [Fact]
+    public void MoveChartCommand_ToExistingSheet_LeavesDestinationSheetKindAsWorksheet()
+    {
+        var wb = new Workbook("test");
+        var source = wb.AddSheet("Source");
+        var target = wb.AddSheet("Target");
+        var ctx = new TestCommandContext(wb);
+        var range = new GridRange(
+            new CellAddress(source.Id, 1, 1),
+            new CellAddress(source.Id, 4, 3));
+        new AddChartCommand(source.Id, range, ChartType.Line, "Sales").Apply(ctx);
+        var chart = source.Charts[0];
+
+        new MoveChartCommand(source.Id, chart.Id, target.Id).Apply(ctx).Success.Should().BeTrue();
+
+        target.Kind.Should().Be(SheetKind.Worksheet);
+        target.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
+    }
 }

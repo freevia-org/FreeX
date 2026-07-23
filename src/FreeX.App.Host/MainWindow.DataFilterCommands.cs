@@ -332,6 +332,24 @@ public partial class MainWindow
             return true;
         }
 
+        // R76-render-autofilter-dropdown-4-2: Sort by Color -- moves rows matching the chosen
+        // color to the top (AutoFilterDropdownMenuPlanner.CreateSortByColorCommand), distinct from
+        // ColorFilter below (which hides non-matching rows instead of reordering).
+        if (result.SortByColorFilter is { Color: { } sortByColor } sortByColorFilter)
+        {
+            if (!TryExecuteAutoFilterSortCommand(
+                    "Sort by Color",
+                    range,
+                    currentRange => AutoFilterDropdownMenuPlanner.CreateSortByColorCommand(
+                        _currentSheetId,
+                        currentRange,
+                        filterColOffset,
+                        new AutoFilterColorOption(string.Empty, sortByColorFilter.Kind, sortByColor))))
+                return false;
+            RestoreAutoFilterRangeSelection(range);
+            return true;
+        }
+
         var value = result.CriteriaText;
         var filterText = value.TrimStart();
         if (result.ColorFilter is { } colorFilter)

@@ -21,6 +21,7 @@ public sealed class InvariantAutoFilterMenuTextProvider : IAutoFilterMenuTextPro
         "AutoFilter_SortOldestToNewest" => "Sort Oldest to Newest",
         "AutoFilter_SortNewestToOldest" => "Sort Newest to Oldest",
         "AutoFilter_FilterByColor" => "Filter by Color",
+        "AutoFilter_SortByColor" => "Sort by Color",
         "AutoFilter_Search" => "Search",
         "AutoFilter_SelectAll" => "(Select All)",
         "AutoFilter_NoFill" => "No Fill",

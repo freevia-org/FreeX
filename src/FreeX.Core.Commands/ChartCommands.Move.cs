@@ -117,6 +117,17 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
             target = ctx.Workbook.AddSheet(_sheetName);
             _createdSheetId = target.Id;
         }
+        // R76-io-chartsheet-4-1: Excel's "Move Chart > New Sheet" creates a real CHARTSHEET (a
+        // full-page chart-only sheet, xl/chartsheets/sheetN.xml on save), not a normal worksheet
+        // that merely hosts an embedded chart. Marking the new sheet's Kind accordingly keeps the
+        // in-memory model faithful to what the command is documented to do; see this command's
+        // XML doc and R76-io-chartsheet-4-1 in the review log for the residual on the SAVE side --
+        // XlsxFileAdapter's full (ClosedXML) save path has no writer that can emit a chartsheet part
+        // for a freshly-created sheet (only XlsxChartsheetReader + the source-package byte-preservation
+        // path round-trip an ALREADY-LOADED chartsheet; there is no chartsheet part generator at all),
+        // so a workbook containing this new chartsheet still saves it as a worksheet embedding the
+        // chart until that IO-side writer exists.
+        target.Kind = SheetKind.Chartsheet;
         target.ResetViewStateToA1();
         source.Charts.Remove(chart);
         target.Charts.Add(chart);

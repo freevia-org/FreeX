@@ -169,7 +169,10 @@ public sealed class R19_sourcepkg_snapshot_Tests
     private static void InvokeRewriteLiteralCellValue(XElement cell, XNamespace worksheetNs, ScalarValue value)
     {
         var method = FindPrivateStaticMethod("RewriteLiteralCellValue");
-        method.Invoke(null, [cell, worksheetNs, value, null]);
+        // R76-io-richtext-runs-4-1 added a trailing phoneticGuide parameter (default null) after
+        // richRuns; MethodInfo.Invoke requires every parameter to be supplied explicitly (it does
+        // not fill in C# default values), so both trailing optional args must be passed here.
+        method.Invoke(null, [cell, worksheetNs, value, null, null]);
     }
 
     // The two methods under test are private static members declared on XlsxFileAdapter (or one of its

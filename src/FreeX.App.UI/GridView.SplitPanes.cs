@@ -152,7 +152,7 @@ public partial class GridView
         SplitPaneScrollbar scrollbar,
         uint currentIndex,
         int notches,
-        uint step = 3) =>
+        uint step = SplitPaneScrollbarLayoutPlanner.DefaultWheelScrollStep) =>
         SplitPaneViewportChrome.CalculateWheelTarget(scrollbar, currentIndex, notches, step);
 
     public static SplitPaneWheelTarget ResolveSplitPaneWheelTarget(

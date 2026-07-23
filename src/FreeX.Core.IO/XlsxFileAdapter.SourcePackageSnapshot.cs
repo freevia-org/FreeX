@@ -6715,7 +6715,14 @@ public sealed partial class XlsxFileAdapter
                                   (patchKind == XlsxCellValuePatchKind.CellStyle && patchRichRunsChanged)
                             ? currentRichRuns
                             : null,
-                        RichRunsChanged: patchRichRunsChanged));
+                        RichRunsChanged: patchRichRunsChanged,
+                        // R76-io-richtext-runs-4-1: only a run-formatting-only edit (CellStyle
+                        // patch whose runs changed) needs the preserved phonetic guide re-emitted;
+                        // a plain literal-value edit rewrites the text itself, for which any prior
+                        // phonetic guide's <rPh> base-text offsets would no longer apply.
+                        PhoneticGuide: patchKind == XlsxCellValuePatchKind.CellStyle && patchRichRunsChanged
+                            ? sheet.CellPhoneticGuides.GetValueOrDefault(new CellAddress(baseline.SheetId, row, col))
+                            : null));
                     if (changes.Count > changeLimit)
                         return Fail("change_limit_cells", out blockReason);
                 }
@@ -6970,7 +6977,7 @@ public sealed partial class XlsxFileAdapter
             removedSharedStringReference = false;
             if (change.Kind == XlsxCellValuePatchKind.LiteralValue)
             {
-                removedSharedStringReference = RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns);
+                removedSharedStringReference = RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns, change.PhoneticGuide);
             }
             else if (change.Kind == XlsxCellValuePatchKind.FormulaCachedValue)
             {
@@ -6984,7 +6991,9 @@ public sealed partial class XlsxFileAdapter
                 // per-run formatting) -- rewrite the <is>/run content so that edit isn't silently
                 // dropped from the saved package. change.NewValue is the cell's own (unchanged)
                 // current value here, so this only touches run formatting, not the text itself.
-                removedSharedStringReference = RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns);
+                // R76-io-richtext-runs-4-1: change.PhoneticGuide re-emits the cell's preserved
+                // <rPh>/<phoneticPr> so a run-formatting-only edit doesn't drop it.
+                removedSharedStringReference = RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns, change.PhoneticGuide);
             }
 
             if (change.HasStyleChange)
@@ -7090,7 +7099,8 @@ public sealed partial class XlsxFileAdapter
                             change.Col,
                             change.NewValue,
                             change.NewSourceStyleIndex,
-                            change.RichRuns))
+                            change.RichRuns,
+                            change.PhoneticGuide))
                         {
                             return false;
                         }
@@ -7099,7 +7109,7 @@ public sealed partial class XlsxFileAdapter
                     }
 
                     if (!change.ConsumesSourceStyleOnlyCell ||
-                        !RewriteStyleOnlyCellAsLiteral(cell, worksheetNs, change.NewValue, change.NewSourceStyleIndex, change.RichRuns))
+                        !RewriteStyleOnlyCellAsLiteral(cell, worksheetNs, change.NewValue, change.NewSourceStyleIndex, change.RichRuns, change.PhoneticGuide))
                     {
                         return false;
                     }
@@ -7149,14 +7159,14 @@ public sealed partial class XlsxFileAdapter
                     // command clearing stale per-run formatting. change.NewValue is the cell's own
                     // (unchanged) current value here, so this only rewrites run formatting.
                     if (change.RichRunsChanged &&
-                        RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns))
+                        RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns, change.PhoneticGuide))
                     {
                         sharedStringReferencesRemoved++;
                     }
                 }
                 else
                 {
-                    if (RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns))
+                    if (RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns, change.PhoneticGuide))
                         sharedStringReferencesRemoved++;
                 }
 
@@ -8825,7 +8835,8 @@ public sealed partial class XlsxFileAdapter
             XElement cell,
             XNamespace worksheetNs,
             ScalarValue value,
-            IReadOnlyList<CellTextRun>? richRuns = null)
+            IReadOnlyList<CellTextRun>? richRuns = null,
+            CellPhoneticGuide? phoneticGuide = null)
         {
             var wasSharedStringReference = string.Equals(cell.Attribute("t")?.Value, "s", StringComparison.Ordinal);
 
@@ -8858,7 +8869,7 @@ public sealed partial class XlsxFileAdapter
                 case TextValue text:
                     cell.SetAttributeValue("t", "inlineStr");
                     AddCellValueElement(cell, worksheetNs, richRuns is { Count: > 0 }
-                        ? CreateRichInlineStringElement(worksheetNs, richRuns)
+                        ? CreateRichInlineStringElement(worksheetNs, richRuns, phoneticGuide)
                         : new XElement(
                             worksheetNs + "is",
                             CreateInlineTextElement(worksheetNs, text.Value)));
@@ -8980,7 +8991,8 @@ public sealed partial class XlsxFileAdapter
             uint col,
             ScalarValue value,
             string? sourceStyleIndex,
-            IReadOnlyList<CellTextRun>? richRuns = null)
+            IReadOnlyList<CellTextRun>? richRuns = null,
+            CellPhoneticGuide? phoneticGuide = null)
         {
             var rowElement = FindOrCreateRow(sheetData, worksheetNs, row);
             if (rowElement is null)
@@ -8988,7 +9000,7 @@ public sealed partial class XlsxFileAdapter
 
             var cellElement = new XElement(worksheetNs + "c", new XAttribute("r", ToReference(row, col)));
             ApplyCellStyle(cellElement, sourceStyleIndex);
-            RewriteLiteralCellValue(cellElement, worksheetNs, value, richRuns);
+            RewriteLiteralCellValue(cellElement, worksheetNs, value, richRuns, phoneticGuide);
             InsertCellInColumnOrder(rowElement, worksheetNs, cellElement, col);
             return true;
         }
@@ -8998,13 +9010,14 @@ public sealed partial class XlsxFileAdapter
             XNamespace worksheetNs,
             ScalarValue value,
             string? sourceStyleIndex,
-            IReadOnlyList<CellTextRun>? richRuns = null)
+            IReadOnlyList<CellTextRun>? richRuns = null,
+            CellPhoneticGuide? phoneticGuide = null)
         {
             if (cell.Elements().Any(child => child.Name != worksheetNs + "extLst"))
                 return false;
 
             ApplyCellStyle(cell, sourceStyleIndex);
-            RewriteLiteralCellValue(cell, worksheetNs, value, richRuns);
+            RewriteLiteralCellValue(cell, worksheetNs, value, richRuns, phoneticGuide);
             return true;
         }
 
@@ -9176,8 +9189,9 @@ public sealed partial class XlsxFileAdapter
         /// </summary>
         private static XElement CreateRichInlineStringElement(
             XNamespace worksheetNs,
-            IReadOnlyList<CellTextRun> runs)
-            => XlsxRichRunWriter.CreateRichInlineStringElement(worksheetNs, runs);
+            IReadOnlyList<CellTextRun> runs,
+            CellPhoneticGuide? phoneticGuide = null)
+            => XlsxRichRunWriter.CreateRichInlineStringElement(worksheetNs, runs, phoneticGuide);
 
         private static string ToReference(uint row, uint col)
         {
@@ -11106,7 +11120,12 @@ public sealed partial class XlsxFileAdapter
         // unchanged. Distinct from "RichRuns is null", which for a CellStyle-kind patch is
         // ambiguous between "runs didn't change" (leave content alone) and "runs were cleared to
         // none" (must still rewrite as plain text) — see the CellStyle branches below.
-        bool RichRunsChanged = false)
+        bool RichRunsChanged = false,
+        // R76-io-richtext-runs-4-1: the cell's preserved phonetic-guide (furigana) passthrough,
+        // set only when RichRuns is also being rewritten (RichRunsChanged for a CellStyle-kind
+        // patch) so a run-formatting-only edit (e.g. Bold the whole cell) re-emits the original
+        // <rPh>/<phoneticPr> alongside the rebuilt <r> runs instead of silently dropping them.
+        CellPhoneticGuide? PhoneticGuide = null)
     {
         public bool HasStyleChange => OriginalStyleId != NewStyleId;
     }

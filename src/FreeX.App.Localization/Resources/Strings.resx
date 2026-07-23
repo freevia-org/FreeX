@@ -4496,6 +4496,9 @@
   <data name="ShellLoc_SortedAToZ" xml:space="preserve">
     <value>Sorted A to Z</value>
   </data>
+  <data name="ShellLoc_SortedByColor" xml:space="preserve">
+    <value>Sorted by Color</value>
+  </data>
   <data name="ShellLoc_SortedZToA" xml:space="preserve">
     <value>Sorted Z to A</value>
   </data>
@@ -14219,6 +14222,9 @@ Saved XPS file:&#xD;
   <data name="AutoFilter_FilterByColor" xml:space="preserve">
     <value>Filter by Color</value>
   </data>
+  <data name="AutoFilter_SortByColor" xml:space="preserve">
+    <value>Sort by Color</value>
+  </data>
   <data name="MainWindow_TooltipDescription_MakeTheSelectedTextBoldCtrlB" xml:space="preserve">
     <value>Make the selected text bold (Ctrl+B).</value>
   </data>
@@ -16363,6 +16369,15 @@ Continue saving?</value>
   </data>
   <data name="AutoFilter_FilterByCellColor" xml:space="preserve">
     <value>Filter by cell color {0}</value>
+  </data>
+  <data name="AutoFilter_SortByCellColor" xml:space="preserve">
+    <value>Sort by cell color {0}</value>
+  </data>
+  <data name="AutoFilter_SortByFontColor" xml:space="preserve">
+    <value>Sort by font color {0}</value>
+  </data>
+  <data name="AutoFilter_ApplyThisSortByColor" xml:space="preserve">
+    <value>Sort this column so rows matching this color move to the top.</value>
   </data>
   <data name="ObjectSizing_TopLabel" xml:space="preserve">
     <value>_Top:</value>

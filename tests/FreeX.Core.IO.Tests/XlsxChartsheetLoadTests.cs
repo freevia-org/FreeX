@@ -12,6 +12,108 @@ public class XlsxChartsheetLoadTests
         TestWorkspaceFiles.FindWorkspaceFile(
             "test-corpus", "public", "tealeg-xlsx", "testchartsheet.xlsx");
 
+    // R76-io-chartsheet-4-2: renaming a loaded chartsheet used to fail to rename it on save --
+    // the reclaim loop matched the source <sheet> (old name) against the ClosedXML-generated
+    // targets (new name) by name only, missed, and fell into the "add a brand-new <sheet>" branch
+    // under the OLD name while leaving the stray placeholder worksheet under the NEW name behind,
+    // producing 3 sheets on reload instead of 2.
+    [Fact]
+    public void Save_AfterRenamingChartsheet_RenamesInPlaceWithoutStrayPlaceholder()
+    {
+        var adapter = new XlsxFileAdapter();
+        using var source = File.OpenRead(ChartsheetCorpusPath());
+        var workbook = adapter.Load(source);
+        var originalSheetCount = workbook.Sheets.Count;
+        var chart = workbook.GetSheet("Chart1")!;
+        chart.Name = "RenamedChart";
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+
+        reloaded.Sheets.Should().HaveCount(originalSheetCount,
+            "renaming a chartsheet must not leave a stray empty placeholder worksheet behind");
+        reloaded.Sheets.Select(s => s.Name).Should().NotContain("Chart1",
+            "the old chartsheet name must not survive as a second, resurrected sheet");
+        var renamed = reloaded.GetSheet("RenamedChart");
+        renamed.Should().NotBeNull();
+        renamed!.IsChartsheet.Should().BeTrue("the renamed sheet must still be recognized as a chartsheet");
+    }
+
+    // Sibling no-regression: an untouched chartsheet elsewhere in the same save must still
+    // round-trip exactly as before (already covered by Save_AfterEditingAnotherSheet_
+    // PreservesTheChartsheetReference below); this adds the same guarantee from the rename
+    // scenario's own perspective -- the OTHER (normal) sheet must be unaffected by the rename.
+    [Fact]
+    public void Save_AfterRenamingChartsheet_OtherWorksheetRoundTripsUnchanged()
+    {
+        var adapter = new XlsxFileAdapter();
+        using var source = File.OpenRead(ChartsheetCorpusPath());
+        var workbook = adapter.Load(source);
+        workbook.GetSheet("Chart1")!.Name = "RenamedChart";
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+
+        var sheet1 = reloaded.GetSheet("Sheet1");
+        sheet1.Should().NotBeNull();
+        sheet1!.IsChartsheet.Should().BeFalse();
+    }
+
+    // R76-io-chartsheet-4-3: deleting a loaded chartsheet used to fail to delete it on save --
+    // the reclaim loop is driven only by the source archive and the ClosedXML output, never the
+    // live workbook.Sheets model, so the "add a brand-new <sheet>" fallback branch re-added the
+    // chartsheet from the source archive even though the user had removed it from the model.
+    [Fact]
+    public void Save_AfterDeletingChartsheet_ChartsheetIsNotResurrected()
+    {
+        var adapter = new XlsxFileAdapter();
+        using var source = File.OpenRead(ChartsheetCorpusPath());
+        var workbook = adapter.Load(source);
+        var chart = workbook.GetSheet("Chart1")!;
+        workbook.RemoveSheet(chart.Id);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+
+        reloaded.Sheets.Select(s => s.Name).Should().NotContain("Chart1",
+            "a chartsheet removed from the model must not be resurrected on save");
+        reloaded.Sheets.Should().ContainSingle().Which.Name.Should().Be("Sheet1");
+    }
+
+    // Sibling no-regression: deleting a normal worksheet (never touched by this reclaim loop at
+    // all, since it only processes non-worksheet relationship types) must leave an untouched
+    // chartsheet elsewhere in the workbook completely unaffected. Inspect the saved package
+    // directly rather than reloading it -- a workbook left with only a chartsheet and no real
+    // worksheet is a pre-existing, unrelated ClosedXML/Excel restriction (a workbook needs at
+    // least one worksheet), not something this fix is responsible for.
+    [Fact]
+    public void Save_AfterDeletingNormalWorksheet_ChartsheetStillRoundTrips()
+    {
+        var adapter = new XlsxFileAdapter();
+        using var source = File.OpenRead(ChartsheetCorpusPath());
+        var workbook = adapter.Load(source);
+        var sheet1 = workbook.GetSheet("Sheet1")!;
+        workbook.RemoveSheet(sheet1.Id);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        archive.GetEntry("xl/chartsheets/sheet1.xml").Should().NotBeNull(
+            "the chartsheet package part must survive a save even after the sheet worksheet is deleted");
+        ChartsheetReferenceTargets(archive)
+            .Should().ContainSingle()
+            .Which.Should().EndWith("chartsheets/sheet1.xml",
+                "the workbook <sheet> entry must still point at the chartsheet part");
+    }
+
     [Fact]
     public void Load_Testchartsheet_LoadsBothSheetsIncludingTheChartsheet()
     {

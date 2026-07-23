@@ -191,6 +191,28 @@ internal static class XlsxRichRunReader
     }
 
     /// <summary>
+    /// Reads a cell's phonetic-guide (furigana) markup -- the <c>&lt;rPh&gt;</c> run(s) and the
+    /// <c>&lt;phoneticPr&gt;</c> element -- from an <c>&lt;is&gt;</c> or <c>&lt;si&gt;</c>
+    /// element, captured verbatim as native XML passthrough (see <see cref="CellPhoneticGuide"/>).
+    /// Returns <c>null</c> when the element has neither.
+    /// </summary>
+    public static CellPhoneticGuide? ReadPhoneticGuide(XElement richStringElement, XNamespace workbookNs)
+    {
+        var rPhElements = richStringElement.Elements(workbookNs + "rPh").ToList();
+        var phoneticPrElement = richStringElement.Element(workbookNs + "phoneticPr");
+        if (rPhElements.Count == 0 && phoneticPrElement is null)
+            return null;
+
+        var runPhoneticXmls = rPhElements.Count == 0
+            ? Array.Empty<string>()
+            : rPhElements.Select(e => e.ToString(SaveOptions.DisableFormatting)).ToArray();
+
+        return new CellPhoneticGuide(
+            runPhoneticXmls,
+            phoneticPrElement?.ToString(SaveOptions.DisableFormatting));
+    }
+
+    /// <summary>
     /// Reads a <c>&lt;color&gt;</c> element and returns a <see cref="CellRunColor"/> that
     /// preserves the original reference kind (theme index, indexed palette, explicit RGB, or auto)
     /// so the writer can round-trip the same form without flattening to RGB.

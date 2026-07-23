@@ -51,14 +51,14 @@ internal static class XlsxRichRunLoader
         {
             using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
 
-            // 1. Build SST rich-run map (index → runs | null).
-            var sstRuns = LoadSstRichRuns(archive, theme, indexedColors);
+            // 1. Build SST rich-run map (index → runs/phonetic-guide | null).
+            var sstEntries = LoadSstRichRuns(archive, theme, indexedColors);
 
             // 2. Resolve worksheet → sheet, then scan each worksheet XML.
             var sheetByPath = BuildSheetPathMap(archive, workbook);
 
             foreach (var (worksheetPath, sheet) in sheetByPath)
-                LoadWorksheetRichRuns(archive, worksheetPath, sheet, sstRuns, theme, indexedColors);
+                LoadWorksheetRichRuns(archive, worksheetPath, sheet, sstEntries, theme, indexedColors);
         }
         catch
         {
@@ -68,7 +68,12 @@ internal static class XlsxRichRunLoader
 
     // ── SST ─────────────────────────────────────────────────────────────────
 
-    private static IReadOnlyList<IReadOnlyList<CellTextRun>?>? LoadSstRichRuns(
+    /// <summary>Per-shared-string-index rich-run runs and phonetic-guide passthrough, if any.</summary>
+    private readonly record struct SstRichEntry(
+        IReadOnlyList<CellTextRun>? Runs,
+        CellPhoneticGuide? PhoneticGuide);
+
+    private static IReadOnlyList<SstRichEntry>? LoadSstRichRuns(
         ZipArchive archive,
         WorkbookTheme theme,
         WorkbookIndexedColorPalette indexedColors)
@@ -85,14 +90,15 @@ internal static class XlsxRichRunLoader
         var siElements = root.Elements(WorkbookNs + "si").ToList();
         if (siElements.Count == 0) return null;
 
-        var result = new List<IReadOnlyList<CellTextRun>?>(siElements.Count);
+        var result = new List<SstRichEntry>(siElements.Count);
         var anyRich = false;
 
         foreach (var si in siElements)
         {
             var runs = XlsxRichRunReader.ReadRuns(si, WorkbookNs, theme, indexedColors);
-            result.Add(runs);
-            if (runs is not null)
+            var phoneticGuide = XlsxRichRunReader.ReadPhoneticGuide(si, WorkbookNs);
+            result.Add(new SstRichEntry(runs, phoneticGuide));
+            if (runs is not null || phoneticGuide is not null)
                 anyRich = true;
         }
 
@@ -141,7 +147,7 @@ internal static class XlsxRichRunLoader
         ZipArchive archive,
         string worksheetPath,
         Sheet sheet,
-        IReadOnlyList<IReadOnlyList<CellTextRun>?>? sstRuns,
+        IReadOnlyList<SstRichEntry>? sstEntries,
         WorkbookTheme theme,
         WorkbookIndexedColorPalette indexedColors)
     {
@@ -183,21 +189,27 @@ internal static class XlsxRichRunLoader
                     var runs = XlsxRichRunReader.ReadRuns(isEl, WorkbookNs, theme, indexedColors);
                     if (runs is not null)
                         sheet.RichTextRuns[addr] = runs;
+
+                    var phoneticGuide = XlsxRichRunReader.ReadPhoneticGuide(isEl, WorkbookNs);
+                    if (phoneticGuide is not null)
+                        sheet.CellPhoneticGuides[addr] = phoneticGuide;
                 }
                 else if (string.Equals(cellType, "s", StringComparison.OrdinalIgnoreCase) &&
-                         sstRuns is not null)
+                         sstEntries is not null)
                 {
                     // Shared-string: look up the SST index.
                     var vEl = cellElement.Element(vName);
                     if (vEl is null) continue;
                     if (!int.TryParse(vEl.Value, NumberStyles.Integer,
                             CultureInfo.InvariantCulture, out var sstIndex) ||
-                        sstIndex < 0 || sstIndex >= sstRuns.Count)
+                        sstIndex < 0 || sstIndex >= sstEntries.Count)
                         continue;
 
-                    var runs = sstRuns[sstIndex];
-                    if (runs is not null)
-                        sheet.RichTextRuns[addr] = runs;
+                    var sstEntry = sstEntries[sstIndex];
+                    if (sstEntry.Runs is not null)
+                        sheet.RichTextRuns[addr] = sstEntry.Runs;
+                    if (sstEntry.PhoneticGuide is not null)
+                        sheet.CellPhoneticGuides[addr] = sstEntry.PhoneticGuide;
                 }
             }
         }

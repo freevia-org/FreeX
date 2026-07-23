@@ -17,6 +17,17 @@ public static class FormatPainterCommandFactory
         GridRange sourceRange,
         GridRange targetRange)
     {
+        // A click on a merged cell selects the FULL merge range (1xN or Nx1), but a merge renders
+        // ONLY the anchor cell's style -- the covered cells' styles are hidden pre-merge leftovers
+        // the user never saw. When the whole source range is exactly one merged region, collapse it
+        // to the anchor cell so this paints that single visible format uniformly across the target
+        // instead of tiling each target cell from a different (hidden) source-column/row style.
+        var mergeRegion = sourceSheet.GetMergeRegion(sourceRange.Start);
+        if (mergeRegion is not null && mergeRegion.Value == sourceRange)
+        {
+            sourceRange = new GridRange(mergeRegion.Value.Start, mergeRegion.Value.Start);
+        }
+
         var commands = new List<IWorkbookCommand>();
         if (sourceRange.RowCount == 1 && sourceRange.ColCount == 1)
         {

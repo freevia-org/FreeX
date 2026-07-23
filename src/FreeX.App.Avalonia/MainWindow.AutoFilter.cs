@@ -325,6 +325,22 @@ public sealed partial class MainWindow
                                 addSelectionBox.IsChecked == true));
                     }));
                     break;
+                // R76-render-autofilter-dropdown-4-2: "No Fill" has no single color to sort toward
+                // (see AutoFilterDropdownMenuPlanner.CreateSortByColorCommand), so only options with
+                // an actual color are offered here -- unlike the Filter-by-Color panel above, which
+                // legitimately offers "No Fill" as a filter target.
+                case AutoFilterMenuItemKind.SortByColor when model.ColorOptions.Any(option => option.Color is not null):
+                    panel.Children.Add(CreateAutoFilterColorPanel(
+                        model.ColorOptions.Where(option => option.Color is not null).ToList(),
+                        option =>
+                        {
+                            flyout.Hide();
+                            RunAutoFilterCommand(
+                                AutoFilterDropdownMenuPlanner.CreateSortByColorCommand(_session.ActiveSheet.Id, range, columnOffset, option),
+                                UiText.Get("ShellLoc_SortedByColor"));
+                        },
+                        "AutoFilter_SortByColor"));
+                    break;
                 case AutoFilterMenuItemKind.FilterFamily:
                     panel.Children.Add(CreateAutoFilterCriteriaPanel(model, criteriaBox));
                     break;
@@ -505,12 +521,15 @@ public sealed partial class MainWindow
         return panel;
     }
 
-    private Control CreateAutoFilterColorPanel(IReadOnlyList<AutoFilterColorOption> options, Action<AutoFilterColorOption> apply)
+    private Control CreateAutoFilterColorPanel(
+        IReadOnlyList<AutoFilterColorOption> options,
+        Action<AutoFilterColorOption> apply,
+        string headerResourceKey = "AutoFilter_FilterByColor")
     {
         var root = new StackPanel { Spacing = 4 };
         root.Children.Add(new TextBlock
         {
-            Text = UiText.Get("AutoFilter_FilterByColor"),
+            Text = UiText.Get(headerResourceKey),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,

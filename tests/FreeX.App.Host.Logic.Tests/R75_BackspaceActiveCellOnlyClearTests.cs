@@ -49,6 +49,50 @@ public sealed class R75_BackspaceActiveCellOnlyClearTests
         });
     }
 
+    /// <summary>
+    /// R76-meta-1: the r75 test above (and the original ExecuteClearActiveCell implementation it
+    /// was covering) assumed the active cell is always the selection's normalized top-left
+    /// corner (SelectedRange.Start) -- true only for a downward/rightward extension. After an
+    /// EXTENDED selection where the anchor is instead the range's END (e.g. Shift+click UP/LEFT
+    /// of the anchor, or Ctrl+Shift+Home), SheetGrid.ActiveCell differs from Start, and Backspace
+    /// must clear THAT cell, not the corner -- otherwise it silently clears the wrong cell and
+    /// leaves the real active cell (with its stale value) untouched, a data-loss regression.
+    /// </summary>
+    [Fact]
+    public void Backspace_OnExtendedSelectionWithActiveCellAtEnd_ClearsActiveCell_NotStartCorner()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
+            try
+            {
+                var sheet = workbook.GetSheetAt(0);
+                var a1 = new CellAddress(sheet.Id, 1, 1);
+                var a2 = new CellAddress(sheet.Id, 2, 1);
+                var c3 = new CellAddress(sheet.Id, 3, 3);
+                sheet.SetCell(a1, new NumberValue(1));
+                sheet.SetCell(a2, new NumberValue(2));
+                sheet.SetCell(c3, new NumberValue(99));
+
+                // Selection A1:C3, but the ACTIVE cell is C3 (the range's own End corner) --
+                // e.g. the user Shift+clicked from C3 up/left to A1, so the anchor stayed at C3
+                // while SelectedRange.Start normalized to A1.
+                SetSelectedRange(window, new GridRange(a1, c3));
+                window.SheetGrid.ActiveCell = c3;
+
+                InvokePrivate(window, "ExecuteClearActiveCell");
+
+                sheet.GetValue(c3).Should().Be(BlankValue.Instance, "Backspace must clear the true active cell (C3), not SelectedRange.Start");
+                sheet.GetCell(a1)!.Value.Should().Be(new NumberValue(1), "Backspace must NOT touch A1 -- it is only the normalized selection corner, not the active cell here");
+                sheet.GetCell(a2)!.Value.Should().Be(new NumberValue(2), "Backspace must NOT touch any other cell in the selection");
+            }
+            finally
+            {
+                R49MainWindowTestHarness.Close(window);
+            }
+        });
+    }
+
     [Fact]
     public void DeleteKey_OnMultiCellSelection_StillClearsWholeSelection()
     {

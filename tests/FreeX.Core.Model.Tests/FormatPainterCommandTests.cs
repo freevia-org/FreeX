@@ -356,6 +356,80 @@ public sealed class FormatPainterCommandTests
         wb.GetStyle(sheet.GetStyleOnly(target.Row, target.Col)!.Value).Bold.Should().BeTrue();
     }
 
+    // ---- R76-commands-format-painter-4-1 ----------------------------------------------------
+    // A click on a merged cell selects the FULL merge range (1xN), but a merge renders ONLY the
+    // anchor cell's style -- the covered cells' styles are hidden pre-merge leftovers the user
+    // never saw. Format Painter from such a source must paint that single visible (anchor) format
+    // uniformly across the target, not tile each target cell from a different hidden per-column
+    // source style.
+
+    [Fact]
+    public void CreateApplyFormatPainterCommand_MergedSourceRange_PaintsAnchorStyleUniformlyNotHiddenPerColumnStyles()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var mergeRange = new GridRange(a1, c1);
+        var targetTopLeft = new CellAddress(sheet.Id, 1, 5);
+        var targetBottomRight = new CellAddress(sheet.Id, 1, 7);
+        var targetRange = new GridRange(targetTopLeft, targetBottomRight);
+
+        var anchorStyle = wb.RegisterStyle(new CellStyle { Bold = true, FontColor = new CellColor(0, 0, 255) });
+        var hiddenRedStyle = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 0, 0) });
+        sheet.SetStyleOnly(a1.Row, a1.Col, anchorStyle);
+        sheet.SetStyleOnly(b1.Row, b1.Col, hiddenRedStyle);
+        // C1 is left at the default style -- the merge covers A1:C1 as a single visible block.
+        sheet.AddMergedRegion(mergeRange);
+
+        var command = FormatPainterCommandFactory.Create(wb, sheet, mergeRange, targetRange);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        StyleId StyleAt(CellAddress addr) =>
+            sheet.GetCell(addr)?.StyleId ?? sheet.GetStyleOnly(addr.Row, addr.Col) ?? StyleId.Default;
+
+        foreach (var address in targetRange.AllCells())
+            wb.GetStyle(StyleAt(address)).Should().Be(wb.GetStyle(anchorStyle));
+    }
+
+    [Fact]
+    public void CreateApplyFormatPainterCommand_SourceRangePartiallyOverlapsMerge_StillTilesPerColumn_NoRegression()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var sourceRange = new GridRange(a1, c1);
+        var targetTopLeft = new CellAddress(sheet.Id, 1, 5);
+        var targetBottomRight = new CellAddress(sheet.Id, 1, 7);
+        var targetRange = new GridRange(targetTopLeft, targetBottomRight);
+
+        var redStyle = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 0, 0) });
+        var greenStyle = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(0, 255, 0) });
+        sheet.SetStyleOnly(a1.Row, a1.Col, redStyle);
+        sheet.SetStyleOnly(b1.Row, b1.Col, redStyle);
+        sheet.SetStyleOnly(c1.Row, c1.Col, greenStyle);
+        // The merge (A1:B1) does NOT cover the whole 3-wide source range (A1:C1), so this must
+        // still tile per-column like an ordinary multi-cell source.
+        sheet.AddMergedRegion(new GridRange(a1, b1));
+
+        var command = FormatPainterCommandFactory.Create(wb, sheet, sourceRange, targetRange);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        StyleId StyleAt(CellAddress addr) =>
+            sheet.GetCell(addr)?.StyleId ?? sheet.GetStyleOnly(addr.Row, addr.Col) ?? StyleId.Default;
+
+        StyleAt(targetTopLeft).Should().Be(redStyle);
+        StyleAt(new CellAddress(sheet.Id, 1, 6)).Should().Be(redStyle);
+        StyleAt(targetBottomRight).Should().Be(greenStyle);
+    }
+
     private static GridRange Range(SheetId sheetId, uint startRow, uint startCol, uint endRow, uint endCol) =>
         new(
             new CellAddress(sheetId, startRow, startCol),

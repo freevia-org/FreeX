@@ -111,11 +111,12 @@ public partial class MainWindow
         if (horizontal)
         {
             var sheet = _workbook.GetSheet(_currentSheetId);
+            var step = NormalizeWheelScrollLines(GetSystemWheelScrollLines(), HorizontalScroll.ViewportSize);
             var (maximum, value) = CalculateWheelScroll(
                 HorizontalScroll.Value,
                 HorizontalScroll.Maximum,
                 notches,
-                3,
+                step,
                 HorizontalScroll.ViewportSize,
                 GetScrollableColumnLimit(sheet));
             HorizontalScroll.Maximum = maximum;
@@ -124,17 +125,70 @@ public partial class MainWindow
         else
         {
             var sheet = _workbook.GetSheet(_currentSheetId);
+            var step = NormalizeWheelScrollLines(GetSystemWheelScrollLines(), VerticalScroll.ViewportSize);
             var (maximum, value) = CalculateWheelScroll(
                 VerticalScroll.Value,
                 VerticalScroll.Maximum,
                 notches,
-                3,
+                step,
                 VerticalScroll.ViewportSize,
                 GetScrollableRowLimit(sheet));
             VerticalScroll.Maximum = maximum;
             VerticalScroll.Value = value;
         }
         e.Handled = true;
+    }
+
+    /// <summary>Default rows/cols scrolled per wheel notch when the OS setting is unavailable or invalid.</summary>
+    public const int DefaultWheelScrollLinesPerNotch = 3;
+
+    /// <summary>Upper bound on a single wheel notch's step, guarding against an absurd jump if the
+    /// OS setting (or the "one screen at a time" fallback below) resolves to something enormous.</summary>
+    private const int MaxWheelScrollLinesPerNotch = 100;
+
+    /// <summary>
+    /// R76-render-freeze-scroll-4-2: the mouse-wheel step was hardcoded to 3 rows/cols per notch,
+    /// ignoring the OS "Number of lines to scroll" setting Excel honors
+    /// (SystemParameters.WheelScrollLines). Pure/testable: takes the raw OS value (or the
+    /// <see cref="DefaultWheelScrollLinesPerNotch"/> fallback when it could not be read) plus the
+    /// current visible span, and resolves the actual per-notch step -- clamped to a sane range,
+    /// and mapping the Windows "-1 = scroll one screen at a time" sentinel to the visible span
+    /// itself (also clamped) rather than a negative/nonsensical step.
+    /// </summary>
+    public static int NormalizeWheelScrollLines(int wheelScrollLines, double visibleSpan)
+    {
+        if (wheelScrollLines < 0)
+            return (int)Math.Clamp(Math.Max(1, Math.Round(visibleSpan)), 1, MaxWheelScrollLinesPerNotch);
+
+        if (wheelScrollLines == 0)
+            return DefaultWheelScrollLinesPerNotch;
+
+        return Math.Clamp(wheelScrollLines, 1, MaxWheelScrollLinesPerNotch);
+    }
+
+    /// <summary>
+    /// Test-only override for <see cref="GetSystemWheelScrollLines"/>'s OS read (set via reflection
+    /// -- see R76_WheelScrollLinesTests), so a unit test can drive <c>SheetGrid_MouseWheel</c>
+    /// deterministically instead of depending on the real machine's live "Number of lines to
+    /// scroll" setting. Always null in production.
+    /// </summary>
+    private static int? _wheelScrollLinesTestOverride = null;
+
+    private static int GetSystemWheelScrollLines()
+    {
+        if (_wheelScrollLinesTestOverride is { } testOverride)
+            return testOverride;
+
+        try
+        {
+            return SystemParameters.WheelScrollLines;
+        }
+        catch
+        {
+            // SystemParameters can throw in atypical hosting scenarios (e.g. no desktop session);
+            // fall back to the previous hardcoded behavior rather than letting the wheel handler fail.
+            return DefaultWheelScrollLinesPerNotch;
+        }
     }
 
     private void OnAutofillEdgeScrollRequested(FreeX.App.Presentation.GridInteraction.GridAutoScrollRequest request)
@@ -496,6 +550,57 @@ public partial class MainWindow
         RefreshViewportSlicerTimelinePane();
         RefreshTextBoxInlineEditorPosition();
         UpdateChartsheetPresentation(sheet);
+    }
+
+    /// <summary>
+    /// R76-render-freeze-scroll-4-1: Insert/Delete Rows renumbers every row at or below the edit
+    /// point, so if the edit happens AT OR ABOVE the current viewport's top-left anchor
+    /// (ViewTopRow), the same scrollbar Value now points at DIFFERENT worksheet content -- the
+    /// view visibly jumps even though nothing scrolled. Excel instead keeps the same content on
+    /// screen by shifting the anchor by the inserted/deleted row count. Only applies when the
+    /// edit is at/above the view; an edit strictly below the view never moves it. Must be called
+    /// BEFORE <see cref="UpdateViewport"/> so the shifted Value is honored on the next viewport
+    /// rebuild instead of being silently overwritten by the stale one (mirrors the
+    /// preTopRow/newVerticalValue pattern in <c>SetFreezePanes</c>, MainWindow.ViewCommands.cs).
+    /// </summary>
+    private void ShiftScrollOriginForRowEdit(uint editRow, int rowDelta)
+    {
+        if (rowDelta == 0) return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var (topRow, _) = CalculateViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
+        if (editRow > topRow) return;
+
+        var frozenRows = sheet?.FrozenRows ?? 0;
+        var newTopRow = (uint)Math.Clamp((long)topRow + rowDelta, 1, CellAddress.MaxRow);
+        var newVerticalValue = WorksheetIndexToScrollbarValue(newTopRow, frozenRows);
+
+        // Bump Maximum first if needed so assigning Value below isn't silently clamped by a
+        // range still sized for the pre-edit row count; UpdateViewport() (called next)
+        // recalculates the real Maximum right after.
+        if (newVerticalValue > VerticalScroll.Maximum)
+            VerticalScroll.Maximum = newVerticalValue;
+        VerticalScroll.Value = newVerticalValue;
+    }
+
+    /// <summary>
+    /// Column counterpart of <see cref="ShiftScrollOriginForRowEdit"/> for Insert/Delete Columns.
+    /// </summary>
+    private void ShiftScrollOriginForColEdit(uint editCol, int colDelta)
+    {
+        if (colDelta == 0) return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var (_, leftCol) = CalculateViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
+        if (editCol > leftCol) return;
+
+        var frozenCols = sheet?.FrozenCols ?? 0;
+        var newLeftCol = (uint)Math.Clamp((long)leftCol + colDelta, 1, CellAddress.MaxCol);
+        var newHorizontalValue = WorksheetIndexToScrollbarValue(newLeftCol, frozenCols);
+
+        if (newHorizontalValue > HorizontalScroll.Maximum)
+            HorizontalScroll.Maximum = newHorizontalValue;
+        HorizontalScroll.Value = newHorizontalValue;
     }
 
     private static IReadOnlyDictionary<(uint Row, uint Col), PivotHeaderDropdownTarget> BuildPivotHeaderDropdownTargetLookup(

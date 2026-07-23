@@ -1144,6 +1144,14 @@ public partial class MainWindow
     /// TryExecuteRepeatableCurrentSelectionRangesCommand, which always resolves the actual
     /// multi-area SheetGrid selection) so only the single active cell is targeted, remapped per
     /// grouped sheet like the keyboard Insert/Delete Cells paths above.
+    ///
+    /// R76-meta-1: the active cell is <see cref="GridView.ActiveCell"/> (SheetGrid's tracked
+    /// anchor), NOT the normalized top-left corner of the selection
+    /// (<c>SelectedRange.Start</c>) -- those differ after an extended selection (e.g. Shift+click
+    /// up/left of the anchor) or a Tab-within-selection. Using Start there cleared the wrong cell
+    /// and left the true active cell untouched (data loss). Mirrors the correct pattern already
+    /// used by GridView.cs/GridView.Rendering.Selection.cs, which prefer ActiveCell over
+    /// SelectedRange.Start.
     /// </summary>
     private void ExecuteClearActiveCell()
     {
@@ -1154,7 +1162,8 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    var activeCellRange = new GridRange(currentRange.Start, currentRange.Start);
+                    var activeCell = SheetGrid.ActiveCell ?? currentRange.Start;
+                    var activeCellRange = new GridRange(activeCell, activeCell);
                     return new ClearContentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(activeCellRange, sheetId));
                 },
                 out var outcome))

@@ -156,8 +156,10 @@ public static class SheetPdfPageSetupResolver
                 var bodyCols = CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns);
                 if (bodyCols > 0)
                 {
+                    var titleCols = CountRepeatItems(sheet.PrintTitleColumns, CellAddress.MaxCol);
                     var wide = scaleToFit.FitToPagesWide!.Value;
-                    baseColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)wide));
+                    var bodyColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)wide));
+                    baseColsPerPage = Math.Max(1u, bodyColsPerPage + titleCols);
                     var uniformScale = ComputeScaleFraction(naturalColsPerPage, baseColsPerPage);
                     baseRowsPerPage = ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
                 }
@@ -167,8 +169,10 @@ public static class SheetPdfPageSetupResolver
                 var bodyRows = CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows);
                 if (bodyRows > 0)
                 {
+                    var titleRows = CountRepeatItems(sheet.PrintTitleRows, CellAddress.MaxRow);
                     var tall = scaleToFit.FitToPagesTall!.Value;
-                    baseRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)tall));
+                    var bodyRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)tall));
+                    baseRowsPerPage = Math.Max(1u, bodyRowsPerPage + titleRows);
                     var uniformScale = ComputeScaleFraction(naturalRowsPerPage, baseRowsPerPage);
                     baseColsPerPage = ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
                 }
@@ -181,14 +185,22 @@ public static class SheetPdfPageSetupResolver
                 {
                     var bodyRows = CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows);
                     if (bodyRows > 0)
-                        baseRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)scaleToFit.FitToPagesTall!.Value));
+                    {
+                        var titleRows = CountRepeatItems(sheet.PrintTitleRows, CellAddress.MaxRow);
+                        var bodyRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)scaleToFit.FitToPagesTall!.Value));
+                        baseRowsPerPage = Math.Max(1u, bodyRowsPerPage + titleRows);
+                    }
                 }
 
                 if (wideConstrained)
                 {
                     var bodyCols = CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns);
                     if (bodyCols > 0)
-                        baseColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)scaleToFit.FitToPagesWide!.Value));
+                    {
+                        var titleCols = CountRepeatItems(sheet.PrintTitleColumns, CellAddress.MaxCol);
+                        var bodyColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)scaleToFit.FitToPagesWide!.Value));
+                        baseColsPerPage = Math.Max(1u, bodyColsPerPage + titleCols);
+                    }
                 }
             }
         }
@@ -299,6 +311,19 @@ public static class SheetPdfPageSetupResolver
 
         var percent = Math.Clamp(scaleFraction * 100.0, 10.0, 400.0);
         return Math.Max(1u, (uint)Math.Floor(naturalItemsPerPage * (100d / percent)));
+    }
+
+    /// <summary>
+    /// Counts the rows/columns in a repeat (print titles) range, clipped to <paramref name="maxItem"/>.
+    /// Mirrors <c>PagePaginationPlanner.CountRepeatItems</c> so the title count added back onto the
+    /// body-only capacity (R76-services-print-pagination-4-1) matches the WPF path exactly.
+    /// </summary>
+    private static uint CountRepeatItems(WorksheetRepeatRange? repeat, uint maxItem)
+    {
+        if (repeat is not { } range || range.Start == 0 || range.Start > maxItem || range.End < range.Start)
+            return 0;
+
+        return Math.Min(range.End, maxItem) - range.Start + 1;
     }
 
     private static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat)

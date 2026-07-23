@@ -5,9 +5,19 @@ namespace FreeX.Core.IO;
 
 /// <summary>
 /// Reads the VML drawing for a worksheet and returns the 1-based (row, col) addresses of note
-/// shapes that carry an <c>&lt;x:Visible/&gt;</c> element in their ClientData — i.e. notes
-/// whose comment box is pinned open ("Show Comment" in Excel).
+/// shapes that are shown/pinned open ("Show Comment" in Excel).
 /// </summary>
+/// <remarks>
+/// R76-io-vml-legacy-4-3: a note's shown/pinned state has TWO signals in the VML — the
+/// ClientData <c>&lt;x:Visible/&gt;</c> element, and the shape's own CSS
+/// <c>style="...;visibility:visible|hidden"</c> property. Real Excel (and FreeX's own writer,
+/// see <c>XlsxLegacyCommentPreserver.ApplyVisibleFlag</c>) treats the CSS style as the
+/// authoritative paint state and keeps both signals in sync. When a file has the two signals
+/// disagree (e.g. hand-edited, or produced by a different writer), the style must win — otherwise
+/// FreeX models the note as shown/hidden opposite to what Excel actually paints, and then bakes
+/// that wrong state back in on resave. <c>&lt;x:Visible/&gt;</c> is honored only as a legacy
+/// fallback when the shape has no <c>visibility</c> style property at all.
+/// </remarks>
 internal static class XlsxWorksheetCommentVisibilityReader
 {
     private const string VmlDrawingRelationshipType =
@@ -90,9 +100,12 @@ internal static class XlsxWorksheetCommentVisibilityReader
                 if (clientData is null)
                     continue;
 
-                // Check for <x:Visible/> element.
+                // The CSS visibility style is authoritative (matches the writer's precedence);
+                // <x:Visible/> is honored only as a legacy fallback when the style is absent.
+                var styleVisible = TryGetStyleVisibility(shape.Attribute("style")?.Value);
                 var hasVisible = clientData.Element(ExcelVmlNs + "Visible") is not null;
-                if (!hasVisible)
+                var isShown = styleVisible ?? hasVisible;
+                if (!isShown)
                     continue;
 
                 var rowText = clientData.Element(ExcelVmlNs + "Row")?.Value;
@@ -111,5 +124,38 @@ internal static class XlsxWorksheetCommentVisibilityReader
         {
             return [];
         }
+    }
+
+    /// <summary>
+    /// Parses the shape's <c>style</c> attribute for an explicit <c>visibility:</c> CSS property
+    /// (mirroring <c>XlsxLegacyCommentPreserver.ApplyVisibilityStyle</c>'s format). Returns
+    /// <see langword="true"/> for <c>visible</c>, <see langword="false"/> for <c>hidden</c>, or
+    /// <see langword="null"/> when the shape has no <c>style</c> attribute or no
+    /// <c>visibility</c> property within it (i.e. the style signal is absent).
+    /// </summary>
+    private static bool? TryGetStyleVisibility(string? styleValue)
+    {
+        if (string.IsNullOrEmpty(styleValue))
+            return null;
+
+        foreach (var property in styleValue.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var colonIndex = property.IndexOf(':');
+            if (colonIndex < 0 ||
+                !string.Equals(property[..colonIndex].Trim(), "visibility", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var value = property[(colonIndex + 1)..].Trim();
+            if (string.Equals(value, "hidden", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (string.Equals(value, "visible", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return null;
+        }
+
+        return null;
     }
 }

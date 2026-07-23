@@ -296,4 +296,114 @@ public sealed class R38_CommandsCutMoveTests
             "only a Cut's tail-end clear does");
         sheet.GetCell(a1)!.Value.Should().Be(BlankValue.Instance);
     }
+
+    // ── R76-commands-cut-move-4-1: cross-sheet Cut+Paste migrates named ranges and plain ─────────
+    // ── chart/sparkline DataRange to the destination sheet, matching real Excel ──────────────────
+
+    [Fact]
+    public void MoveRange_CrossSheetCut_NamedRangeFullyContainedFollowsToDestinationSheet()
+    {
+        var workbook = new Workbook("test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+        var context = new TestCommandContext(workbook);
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 5, 1)); // Sheet1!A1:A5
+        workbook.DefineNamedRange("Sales", sourceRange);
+
+        var destination = new CellAddress(sheet2.Id, 1, 3); // Sheet2!C1
+        var command = new MoveRangeCommand(sheet1.Id, sourceRange, destination);
+
+        var outcome = command.Apply(context);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+
+        var expectedRange = new GridRange(
+            new CellAddress(sheet2.Id, 1, 3), new CellAddress(sheet2.Id, 5, 3)); // Sheet2!C1:C5
+        workbook.NamedRanges["Sales"].Should().Be(
+            expectedRange,
+            "a name fully contained in the cut range must be re-anchored to the destination SHEET, " +
+            "not just shifted by row/col delta while staying on the vacated source sheet");
+
+        command.Revert(context);
+        workbook.NamedRanges["Sales"].Should().Be(sourceRange, "undo must restore the name to its original sheet/range");
+    }
+
+    [Fact]
+    public void MoveRange_CrossSheetCut_ChartAndSparklineDataRangeFullyContainedFollowToDestinationSheet()
+    {
+        var workbook = new Workbook("test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+        var context = new TestCommandContext(workbook);
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 4, 1)); // Sheet1!A1:A4
+
+        // A chart hosted on sheet1 itself, plotting the range being cut.
+        var chart = new ChartModel { Type = ChartType.Line, DataRange = sourceRange, Name = "Series" };
+        sheet1.Charts.Add(chart);
+
+        // A sparkline hosted OUTSIDE the cut range (at Sheet1!F1) whose data lives inside it -- the
+        // sparkline's own Location must stay put; only its DataRange follows the moved data.
+        var sparklineLocation = new CellAddress(sheet1.Id, 1, 6); // Sheet1!F1
+        var sparkline = new SparklineModel
+        {
+            DataRange = sourceRange,
+            Location = sparklineLocation,
+            Kind = SparklineKind.Line,
+            GroupId = 1
+        };
+        sheet1.Sparklines.Add(sparkline);
+
+        var destination = new CellAddress(sheet2.Id, 1, 3); // Sheet2!C1
+        var command = new MoveRangeCommand(sheet1.Id, sourceRange, destination);
+
+        var outcome = command.Apply(context);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+
+        var expectedRange = new GridRange(
+            new CellAddress(sheet2.Id, 1, 3), new CellAddress(sheet2.Id, 4, 3)); // Sheet2!C1:C4
+        chart.DataRange.Should().Be(
+            expectedRange,
+            "a plain chart DataRange fully contained in the cut range must follow the data to the " +
+            "destination sheet, not keep pointing at the now-vacated source range");
+        sparkline.Location.Should().Be(sparklineLocation, "the sparkline itself did not move");
+        sparkline.DataRange.Should().Be(
+            expectedRange,
+            "the sparkline's DataRange must also follow the moved data across sheets");
+
+        command.Revert(context);
+        chart.DataRange.Should().Be(sourceRange, "undo must restore the chart's DataRange to its original sheet/range");
+        sparkline.DataRange.Should().Be(sourceRange, "undo must restore the sparkline's DataRange to its original sheet/range");
+    }
+
+    // Sibling/no-regression: the pre-existing SAME-SHEET named-range migration (already working
+    // before this fix) must keep working after threading the destination sheet through
+    // TranslateFullyContainedNamedRanges -- a same-sheet move's destination is on the same sheet as
+    // the source, so it must behave identically to a plain in-place row/col shift.
+    [Fact]
+    public void MoveRange_SameSheetMove_NamedRangeFullyContainedStillFollowsWithinSheet()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)); // A1:A5
+        workbook.DefineNamedRange("Sales", sourceRange);
+
+        var destination = new CellAddress(sheet.Id, 1, 3); // C1
+        var command = new MoveRangeCommand(sheet.Id, sourceRange, destination);
+
+        var outcome = command.Apply(context);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+
+        var expectedRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 3), new CellAddress(sheet.Id, 5, 3)); // C1:C5
+        workbook.NamedRanges["Sales"].Should().Be(expectedRange);
+
+        command.Revert(context);
+        workbook.NamedRanges["Sales"].Should().Be(sourceRange);
+    }
 }

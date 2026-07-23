@@ -8,6 +8,15 @@ public static class SplitPaneScrollbarLayoutPlanner
     public const double Thickness = 10;
     public const double MinThumbLength = 24;
 
+    /// <summary>
+    /// R76-render-freeze-scroll-4-2: default rows/cols scrolled per wheel notch when no explicit
+    /// step is supplied. Named (rather than a bare literal) so it stays in lockstep with the main
+    /// scrollbar's own default (MainWindow.Viewport.cs's DefaultWheelScrollLinesPerNotch in the
+    /// WPF host, which additionally honors the live OS "wheel scroll lines" setting where this
+    /// split-pane-scrollbar-specific path currently does not).
+    /// </summary>
+    public const uint DefaultWheelScrollStep = 3;
+
     public static Rect CalculateThumb(
         SplitPaneScrollbarOrientation orientation,
         Rect track,
@@ -70,7 +79,7 @@ public static class SplitPaneScrollbarLayoutPlanner
         SplitPaneScrollbar scrollbar,
         uint currentIndex,
         int notches,
-        uint step = 3)
+        uint step = DefaultWheelScrollStep)
     {
         var next = (long)Math.Max(1, currentIndex) - (long)notches * step;
         var clamped = ClampStartIndex(scrollbar.MaxStartIndex, next);

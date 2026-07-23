@@ -137,6 +137,8 @@ public sealed partial class Sheet
             copy.HyperlinkMetadata[RemapAddress(address, newId)] = metadata;
         foreach (var (address, runs) in RichTextRuns)
             copy.RichTextRuns[RemapAddress(address, newId)] = runs;
+        foreach (var (address, guide) in CellPhoneticGuides)
+            copy.CellPhoneticGuides[RemapAddress(address, newId)] = guide;
 
         // Allow-edit ranges (protection)
         copy.ProtectionPermissions.Clear();

@@ -481,6 +481,67 @@ public sealed partial class AutoFilterDialog
             _addCurrentSelectionToFilterBox.IsChecked == true));
     }
 
+    // R76-render-autofilter-dropdown-4-2: Sort by Color mirrors Excel's swatch picker next to
+    // Filter by Color, but moves the matching rows to the top instead of hiding non-matching ones --
+    // see AutoFilterDropdownMenuPlanner.CreateSortByColorCommand for the SortCommand it produces.
+    private void PopulateSortByColorChoices(IReadOnlyList<AutoFilterColorOption> colorOptions)
+    {
+        _sortByColorPanel.Children.Clear();
+        _sortByColorButtons.Clear();
+        foreach (var section in colorOptions.GroupBy(option => option.Kind == AutoFilterColorFilterKind.FontColor ? UiText.Get("AutoFilter_FontColor") : UiText.Get("AutoFilter_CellColor")))
+        {
+            _sortByColorPanel.Children.Add(new TextBlock
+            {
+                Text = section.Key,
+                Margin = new Thickness(0, _sortByColorPanel.Children.Count == 0 ? 0 : 8, 0, 4)
+            });
+
+            var swatches = new WrapPanel();
+            KeyboardNavigation.SetDirectionalNavigation(swatches, KeyboardNavigationMode.Contained);
+            foreach (var option in section)
+            {
+                var button = CreateSortByColorChoiceButton(option);
+                _sortByColorButtons.Add(button);
+                swatches.Children.Add(button);
+            }
+
+            _sortByColorPanel.Children.Add(swatches);
+        }
+
+        _sortByColorGroup.Visibility = Visibility.Visible;
+    }
+
+    private Button CreateSortByColorChoiceButton(AutoFilterColorOption option)
+    {
+        var colorFilter = new AutoFilterColorFilter(option.Kind, option.Color);
+        var button = new Button
+        {
+            Width = 92,
+            Height = 24,
+            Margin = new Thickness(0, 0, 6, 6),
+            ToolTip = option.Label
+        };
+        AutomationProperties.SetName(button, option.Kind == AutoFilterColorFilterKind.FontColor
+            ? UiText.Format("AutoFilter_SortByFontColor", option.Label)
+            : UiText.Format("AutoFilter_SortByCellColor", option.Label));
+        AutomationProperties.SetHelpText(button, UiText.Get("AutoFilter_ApplyThisSortByColor"));
+
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        content.Children.Add(CreateColorSwatch(option));
+        content.Children.Add(new TextBlock
+        {
+            Text = ColorInputParser.FormatHexColor(option.Color!.Value),
+            Margin = new Thickness(4, 0, 0, 0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        button.Content = content;
+        button.Click += (_, _) => ApplySortByColorChoice(colorFilter);
+        return button;
+    }
+
+    private void ApplySortByColorChoice(AutoFilterColorFilter colorFilter) =>
+        CommitResult(BuildSortByColorResult(colorFilter));
+
     private void ApplySearchTextChange()
     {
         ReplaceItems(FilterItems(_allItems, _searchBox.Text));

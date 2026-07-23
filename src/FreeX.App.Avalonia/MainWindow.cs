@@ -25121,13 +25121,65 @@ public sealed partial class MainWindow : Window
         if (rowDelta == 0 && colDelta == 0)
             return;
 
-        if (_session.PanViewport(rowDelta * 3, colDelta * 3))
+        var step = GetWheelScrollLinesPerNotch();
+        if (_session.PanViewport(rowDelta * step, colDelta * step))
         {
             RefreshShell("Ready");
             BroadcastScrollOffsetToSideBySidePartner();
         }
 
         e.Handled = true;
+    }
+
+    /// <summary>Default rows/cols scrolled per wheel notch when the OS setting is unavailable or
+    /// invalid (mirrors the WPF host's DefaultWheelScrollLinesPerNotch, MainWindow.Viewport.cs).</summary>
+    private const int DefaultWheelScrollLinesPerNotch = 3;
+
+    private const int MaxWheelScrollLinesPerNotch = 100;
+
+    /// <summary>
+    /// R76-render-freeze-scroll-4-2: the mouse-wheel step was hardcoded to 3 rows/cols per notch,
+    /// ignoring the OS "Number of lines to scroll" setting Excel honors (on Windows: the
+    /// SPI_GETWHEELSCROLLLINES system parameter, exposed to the WPF host via
+    /// SystemParameters.WheelScrollLines). Pure/testable clamp of the raw OS value; the
+    /// "-1 = scroll one screen at a time" sentinel falls back to the same default here rather
+    /// than a full pixel-to-row/col visible-span translation, which this call site does not have
+    /// on hand (the WPF host's twin, MainWindow.NormalizeWheelScrollLines, does have the
+    /// ScrollBar's row/col ViewportSize on hand and honors it precisely).
+    /// </summary>
+    public static int NormalizeWheelScrollLines(int wheelScrollLines)
+    {
+        if (wheelScrollLines <= 0)
+            return DefaultWheelScrollLinesPerNotch;
+
+        return Math.Clamp(wheelScrollLines, 1, MaxWheelScrollLinesPerNotch);
+    }
+
+    private static int GetWheelScrollLinesPerNotch()
+    {
+        if (!OperatingSystem.IsWindows())
+            return DefaultWheelScrollLinesPerNotch;
+
+        try
+        {
+            return NativeMethods.SystemParametersInfo(NativeMethods.SPI_GETWHEELSCROLLLINES, 0, out var value, 0)
+                ? NormalizeWheelScrollLines(unchecked((int)value))
+                : DefaultWheelScrollLinesPerNotch;
+        }
+        catch
+        {
+            // Mirrors the WPF host's try/catch fallback: never let a wheel-scroll-lines lookup
+            // failure break the wheel handler itself.
+            return DefaultWheelScrollLinesPerNotch;
+        }
+    }
+
+    private static class NativeMethods
+    {
+        public const uint SPI_GETWHEELSCROLLLINES = 0x0068;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, out uint pvParam, uint fWinIni);
     }
 
     private void SheetScrollViewer_SizeChanged(object? sender, SizeChangedEventArgs e)

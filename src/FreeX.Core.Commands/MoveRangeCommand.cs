@@ -48,10 +48,19 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     // address-bearing state that a Cut+Paste move must relocate along with the cells themselves —
     // otherwise they keep pointing at the now-vacated source range/cell. Verbatim series formulas
     // are already handled above by _chartVerbatimSnapshot/RewriteChartVerbatimFormulas; these three
-    // cover the remaining plain-range/address cases that formula rewriting does not touch. NOTE:
-    // for a cross-sheet move (R38-commands-cut-move-2-1) these fully-contained migrations are
-    // intentionally skipped -- see the isCrossSheet branch in Apply -- matching the pre-existing
-    // fallback copy+clear path, which never migrated them across sheets either.
+    // cover the remaining plain-range/address cases that formula rewriting does not touch.
+    // R76-commands-cut-move-4-1: named ranges (both workbook- and sheet-scoped) and plain chart/
+    // sparkline DataRange ARE now re-anchored to the destination sheet for a cross-sheet move too
+    // (see TranslateFullyContainedNamedRanges/-ChartDataRanges/-SparklineDataRanges, which now take
+    // the destination sheet explicitly) -- Excel migrates these across sheets, and each one only
+    // carries a self-contained GridRange rather than living in a per-sheet collection, so re-homing
+    // the range's Sheet in place is enough; no object needs to move between sheets' collections.
+    // Conditional-format and data-validation rules remain a documented residual for the cross-sheet
+    // case (see the isCrossSheet branch in Apply): unlike the state above, DV/CF rules live in each
+    // Sheet's own DataValidations/ConditionalFormats collection, so migrating one across sheets would
+    // require removing it from the source sheet's list and adding it to the destination's -- and
+    // reversing that same cross-collection move again on Revert -- which is a materially larger,
+    // structurally different change from the in-place range translation the rest of this file does.
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartDataRangeSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
@@ -274,14 +283,18 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         var rowDelta = checked((int)((long)_destination.Row - _sourceRange.Start.Row));
         var colDelta = checked((int)((long)_destination.Col - _sourceRange.Start.Col));
 
+        // R76-commands-cut-move-4-1: named-range migration runs for BOTH the same-sheet and
+        // cross-sheet case -- a name whose range is fully contained in the cut range just carries
+        // its own (Sheet, GridRange) pair, so re-homing it to the destination sheet needs no
+        // collection move (see TranslateFullyContainedNamedRanges).
+        _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+        _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
+        TranslateFullyContainedNamedRanges(ctx.Workbook, _sourceRange, _destination);
+
         if (!isCrossSheet)
         {
             (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sourceSheet);
             TranslateFullyContainedRules(sourceSheet, _sourceRange, _destination);
-
-            _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
-            _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
-            TranslateFullyContainedNamedRanges(ctx.Workbook, _sourceRange, _destination);
         }
 
         if (movingMerges.Count > 0)
@@ -341,9 +354,6 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             RowColumnShiftHelpers.RewriteRuleFormulas(sourceSheet, moveOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
             _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
             RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, moveOp);
-            _chartDataRangeSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
-            TranslateFullyContainedChartDataRanges(ctx.Workbook, _sourceRange, moveOp.RowDelta, moveOp.ColDelta);
-            _sparklineDataRangeSnapshot = TranslateFullyContainedSparklineDataRanges(ctx.Workbook, _sourceRange, moveOp.RowDelta, moveOp.ColDelta);
         }
         else
         {
@@ -356,13 +366,13 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             // existing MoveRangeOp/FormulaRewriter machinery has no notion of "the host sheet changed"
             // (RewriteCellRefMove only ever adjusts row/col, never SheetName).
             //
-            // Residual/documented limitation: conditional-format & data-validation rule formulas,
-            // chart verbatim series formulas, plain chart/sparkline DataRange migration, and named
-            // ranges are intentionally NOT migrated to the destination sheet here (they stay behind,
-            // referencing the now-vacated source range) -- matching the pre-existing copy+clear
-            // fallback path, which never migrated any of those cross-sheet either. Only cell values,
-            // styles, comments, hyperlinks, rich text, co-located sparklines, merged regions,
-            // structured tables, and formula references are relocated across sheets.
+            // Residual/documented limitation: conditional-format & data-validation rule formulas AND
+            // rule ranges, plus chart verbatim series formulas, are intentionally NOT migrated to the
+            // destination sheet here (they stay behind, referencing the now-vacated source range) --
+            // matching the pre-existing copy+clear fallback path, which never migrated any of those
+            // cross-sheet either (see R76-commands-cut-move-4-1 above _dataValidationSnapshot for the
+            // rationale). Named ranges and plain chart/sparkline DataRange, by contrast, ARE migrated
+            // for a cross-sheet move too -- see the unconditional calls just below this if/else.
             var crossOp = new CrossSheetMoveOp(
                 sourceSheet.Name,
                 destSheet.Name,
@@ -374,6 +384,14 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                 colDelta);
             RewriteAllFormulasCrossSheet(ctx.Workbook, crossOp, _formulaSnapshot);
         }
+
+        // R76-commands-cut-move-4-1: unlike the DV/CF rules above, a plain chart/sparkline DataRange
+        // is a self-contained (Sheet, GridRange) property on the chart/sparkline object itself (not a
+        // member of a per-sheet collection), so re-homing it to the destination sheet for a
+        // cross-sheet move needs no object to move between sheets -- runs for both move kinds.
+        _chartDataRangeSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
+        TranslateFullyContainedChartDataRanges(ctx.Workbook, _sourceRange, _destination.Sheet, rowDelta, colDelta);
+        _sparklineDataRangeSnapshot = TranslateFullyContainedSparklineDataRanges(ctx.Workbook, _sourceRange, _destination.Sheet, rowDelta, colDelta);
 
         var payloads = CaptureSourcePayloads(sourceSheet, _sourceRange, _destination);
         // R20-array-dynamic-spill-1: capture any live spill rooted at a source cell BEFORE
@@ -926,18 +944,23 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     /// its new location instead of the now-vacated source (R16-structural-edit-shift-sweep-1).
     /// Mirrors <see cref="TranslateFullyContainedRules"/>'s "fully contained only" convention for
     /// DV/CF ranges; a name that only partially overlaps the moved range is left unchanged.
+    /// R76-commands-cut-move-4-1: <paramref name="destination"/>'s sheet may differ from
+    /// <paramref name="sourceRange"/>'s (a cross-sheet Cut+Paste) -- the re-anchored name's range is
+    /// re-homed onto that destination sheet via <see cref="TranslateRangeToSheet"/> (a same-sheet
+    /// move passes a destination on the same sheet, so this is a strict superset of the previous
+    /// same-sheet-only behavior).
     /// </summary>
     private static void TranslateFullyContainedNamedRanges(Workbook workbook, GridRange sourceRange, CellAddress destination)
     {
         var rowDelta = (long)destination.Row - sourceRange.Start.Row;
         var colDelta = (long)destination.Col - sourceRange.Start.Col;
-        if (rowDelta == 0 && colDelta == 0)
+        if (rowDelta == 0 && colDelta == 0 && destination.Sheet == sourceRange.Start.Sheet)
             return;
 
         foreach (var (name, range) in workbook.NamedRanges.ToList())
         {
             if (sourceRange.Contains(range))
-                workbook.NamedRanges[name] = TranslateRange(range, rowDelta, colDelta);
+                workbook.NamedRanges[name] = TranslateRangeToSheet(range, destination.Sheet, rowDelta, colDelta);
         }
 
         foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
@@ -945,7 +968,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             if (sourceRange.Contains(range))
             {
                 workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
-                workbook.DefineNamedRange(name, TranslateRange(range, rowDelta, colDelta), metadata, scopeSheet);
+                workbook.DefineNamedRange(name, TranslateRangeToSheet(range, destination.Sheet, rowDelta, colDelta), metadata, scopeSheet);
             }
         }
     }
@@ -957,11 +980,14 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     /// Verbatim series formulas are already rewritten above via
     /// <see cref="RowColumnShiftHelpers.RewriteChartVerbatimFormulas(Workbook, RewriteOperation)"/>;
     /// this covers the plain-DataRange chart case that formula rewriting does not touch
-    /// (R16-structural-edit-shift-sweep-1, R16-chart-datasource-editing-2).
+    /// (R16-structural-edit-shift-sweep-1, R16-chart-datasource-editing-2). R76-commands-cut-move-4-1:
+    /// <paramref name="destinationSheet"/> may differ from <paramref name="sourceRange"/>'s sheet for a
+    /// cross-sheet Cut+Paste; the DataRange is re-homed onto it via <see cref="TranslateRangeToSheet"/>.
     /// </summary>
-    private static void TranslateFullyContainedChartDataRanges(Workbook workbook, GridRange sourceRange, int rowDelta, int colDelta)
+    private static void TranslateFullyContainedChartDataRanges(
+        Workbook workbook, GridRange sourceRange, SheetId destinationSheet, int rowDelta, int colDelta)
     {
-        if (rowDelta == 0 && colDelta == 0)
+        if (rowDelta == 0 && colDelta == 0 && destinationSheet == sourceRange.Start.Sheet)
             return;
 
         foreach (var hostSheet in workbook.Sheets)
@@ -969,7 +995,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             foreach (var chart in hostSheet.Charts)
             {
                 if (sourceRange.Contains(chart.DataRange))
-                    chart.DataRange = TranslateRange(chart.DataRange, rowDelta, colDelta);
+                    chart.DataRange = TranslateRangeToSheet(chart.DataRange, destinationSheet, rowDelta, colDelta);
             }
         }
     }
@@ -986,12 +1012,15 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     /// the sparkline and its data move together -- so the two methods cover disjoint cases and never
     /// double-translate the same sparkline. Returns the original (sparkline, DataRange) pairs so
     /// <see cref="Revert"/> can restore them via <see cref="RestoreSparklineDataRanges"/>.
+    /// R76-commands-cut-move-4-1: <paramref name="destinationSheet"/> may differ from
+    /// <paramref name="sourceRange"/>'s sheet for a cross-sheet Cut+Paste; the DataRange is re-homed
+    /// onto it via <see cref="TranslateRangeToSheet"/>.
     /// </summary>
     private static List<(SparklineModel Sparkline, GridRange OriginalDataRange)> TranslateFullyContainedSparklineDataRanges(
-        Workbook workbook, GridRange sourceRange, int rowDelta, int colDelta)
+        Workbook workbook, GridRange sourceRange, SheetId destinationSheet, int rowDelta, int colDelta)
     {
         var snapshot = new List<(SparklineModel, GridRange)>();
-        if (rowDelta == 0 && colDelta == 0)
+        if (rowDelta == 0 && colDelta == 0 && destinationSheet == sourceRange.Start.Sheet)
             return snapshot;
 
         foreach (var hostSheet in workbook.Sheets)
@@ -1004,7 +1033,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                 if (sourceRange.Contains(sparkline.DataRange))
                 {
                     snapshot.Add((sparkline, sparkline.DataRange));
-                    sparkline.DataRange = TranslateRange(sparkline.DataRange, rowDelta, colDelta);
+                    sparkline.DataRange = TranslateRangeToSheet(sparkline.DataRange, destinationSheet, rowDelta, colDelta);
                 }
             }
         }

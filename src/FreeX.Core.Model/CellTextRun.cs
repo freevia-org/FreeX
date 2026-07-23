@@ -158,3 +158,22 @@ public sealed record CellTextRun(
     int? Family = null,
     // Raw OOXML <scheme val="major|minor|none"/> value, if present.
     string? Scheme = null);
+
+/// <summary>
+/// Native XML passthrough for a rich-text cell's phonetic guide (furigana) markup -- the
+/// <c>&lt;rPh&gt;</c> run(s) and the <c>&lt;phoneticPr&gt;</c> element captured verbatim from
+/// the cell's <c>&lt;is&gt;</c>/<c>&lt;si&gt;</c> (CT_Rst).
+/// </summary>
+/// <remarks>
+/// Captured as raw XML rather than modeled fields: <c>&lt;rPh&gt;</c> elements reference
+/// base-text offsets (<c>sb</c>/<c>eb</c>) that describe ranges of the CT_Rst's combined text,
+/// independent of any <see cref="CellTextRun"/> run boundaries or formatting, so there is no
+/// natural per-run home for them. Carrying the XML through unchanged lets the writer re-emit it
+/// after the <c>&lt;is&gt;</c>/<c>&lt;si&gt;</c> is rebuilt from (possibly edited) run
+/// formatting, so an edit to a run's formatting does not silently drop the phonetic guide.
+/// </remarks>
+/// <param name="RunPhoneticXmls">Serialized <c>&lt;rPh&gt;</c> elements, in document order.</param>
+/// <param name="PhoneticPropertiesXml">Serialized <c>&lt;phoneticPr&gt;</c> element, if present.</param>
+public sealed record CellPhoneticGuide(
+    IReadOnlyList<string> RunPhoneticXmls,
+    string? PhoneticPropertiesXml);

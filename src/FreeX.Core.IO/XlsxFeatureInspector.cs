@@ -104,18 +104,37 @@ public static class XlsxFeatureInspector
             yield break;
         }
 
-        if (normalized.StartsWith("xl/queries/", StringComparison.Ordinal) ||
-            normalized.StartsWith("xl/querytables/", StringComparison.Ordinal))
+        if (normalized.StartsWith("xl/queries/", StringComparison.Ordinal))
         {
+            // xl/queries/ parts hold the actual Power Query M-code — a genuine PQ signal.
             yield return Feature(XlsxUnsupportedFeatureKind.PowerQuery);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/querytables/", StringComparison.Ordinal))
+        {
+            // R76-io-external-data-4-2: a queryTable part by itself is the generic OOXML mechanism
+            // for ANY external data range (classic Text/Database/ODBC/classic-Web queries included)
+            // and round-trips byte-for-byte. It is not, on its own, evidence of Power Query — the
+            // real PQ signal (if any) lives in the paired xl/connections.xml (Mashup provider) or
+            // xl/queries/ (M-code), both handled by their own branches. Do not flag it here.
             yield break;
         }
 
         if (normalized is "xl/connections.xml")
         {
-            yield return Feature(ConnectionsHaveLiveWebQuery(entry)
-                ? XlsxUnsupportedFeatureKind.LiveWebQueries
-                : XlsxUnsupportedFeatureKind.PowerQuery);
+            if (ConnectionsHaveLiveWebQuery(entry))
+            {
+                yield return Feature(XlsxUnsupportedFeatureKind.LiveWebQueries);
+            }
+            else if (ConnectionsHavePowerQuerySignal(entry))
+            {
+                yield return Feature(XlsxUnsupportedFeatureKind.PowerQuery);
+            }
+
+            // A classic Text/Database/ODBC connection (no webPr, no Mashup provider signal) is a
+            // preserved, round-tripped external data connection — not Power Query — so it is not
+            // reported as an excluded/unsupported feature at all.
             yield break;
         }
 
@@ -495,6 +514,28 @@ public static class XlsxFeatureInspector
     private static bool ConnectionsHaveLiveWebQuery(ZipArchiveEntry entry) =>
         XmlHasElement(entry, reader =>
             string.Equals(reader.LocalName, "webPr", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// R76-io-external-data-4-2: detects the genuine Power Query signal in a connections.xml part —
+    /// a <c>dbPr</c> (or <c>olapPr</c>) connection/command string that references the
+    /// "Microsoft.Mashup" OLE DB provider, which is how Excel marks a connection as backed by a
+    /// Power Query (as opposed to a classic Text/Database/ODBC external data connection).
+    /// </summary>
+    private static bool ConnectionsHavePowerQuerySignal(ZipArchiveEntry entry) =>
+        XmlHasElement(entry, reader =>
+        {
+            if (!string.Equals(reader.LocalName, "dbPr", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(reader.LocalName, "olapPr", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return HasMashupSignal(reader.GetAttribute("connection")) ||
+                   HasMashupSignal(reader.GetAttribute("command"));
+        });
+
+    private static bool HasMashupSignal(string? value) =>
+        !string.IsNullOrEmpty(value) && value.Contains("Mashup", StringComparison.OrdinalIgnoreCase);
 
     private static bool WorksheetHasSparklines(ZipArchiveEntry entry)
     {

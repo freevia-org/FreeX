@@ -55,6 +55,32 @@ internal static class XlsxUnsupportedSheetReferencePreserver
                 targetSheetsByName.TryAdd(targetName, targetSheet);
         }
         var targetSheetNames = new HashSet<string>(targetSheetsByName.Keys, StringComparer.OrdinalIgnoreCase);
+
+        // R76-io-chartsheet-4-2/4-3: a chartsheet (unlike a dialog/macro sheet) IS modeled as a
+        // live Sheet, so a name mismatch here can mean either "the user renamed it" (its generated
+        // placeholder now lives under a different name) or "the user deleted it" (no placeholder
+        // exists at all anymore) -- name alone can't tell those apart, and the source archive is
+        // immutable so re-checking the OLD name is not the same as consulting the live model.
+        // Instead, pair every source sheet name that ClosedXML did NOT reproduce in the target
+        // against every target sheet name that has NO counterpart anywhere in the source -- the
+        // latter set is exactly the placeholders ClosedXML wrote under a brand-new name for a
+        // renamed sheet (a genuinely deleted sheet leaves no such orphaned target name behind, so
+        // the queue is correctly empty for it). Pairing is by relative order among these "orphaned"
+        // names only, so unrelated sheets that kept their name (or were added/removed elsewhere)
+        // never shift the match, unlike pairing by raw absolute position would.
+        var sourceSheetNamesAll = sourceSheets
+            .Elements(workbookNs + "sheet")
+            .Select(sheet => sheet.Attribute("name")?.Value)
+            .Where(sheetName => !string.IsNullOrWhiteSpace(sheetName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var unclaimedRenamedTargetSheets = new Queue<XElement>(
+            targetSheets.Elements(workbookNs + "sheet")
+                .Where(sheet =>
+                {
+                    var targetName = sheet.Attribute("name")?.Value;
+                    return !string.IsNullOrWhiteSpace(targetName) && !sourceSheetNamesAll.Contains(targetName);
+                }));
+
         var usedSheetIds = targetSheets
             .Elements(workbookNs + "sheet")
             .Select(sheet => XlsxXmlAttributeReader.ReadIntAttribute(sheet, "sheetId"))
@@ -92,7 +118,13 @@ internal static class XlsxUnsupportedSheetReferencePreserver
             // Case 1: the generated workbook already lists this sheet name (FreeX modeled the
             // chartsheet as a Sheet, so ClosedXML emitted a placeholder worksheet). Re-point that
             // entry at the preserved chartsheet part and schedule the stray worksheet for removal.
-            if (targetSheetsByName.TryGetValue(name, out var collidingTargetSheet))
+            var collidingTargetSheet = targetSheetsByName.TryGetValue(name, out var sameNameTargetSheet)
+                ? sameNameTargetSheet
+                : IsChartsheetRelationshipType(relationshipType) && unclaimedRenamedTargetSheets.Count > 0
+                    ? unclaimedRenamedTargetSheets.Dequeue()
+                    : null;
+
+            if (collidingTargetSheet is not null)
             {
                 var collidingRelId = collidingTargetSheet.Attribute(relNs + "id")?.Value;
                 var collidingWorksheetPart = ResolveSheetRelationshipPart(
@@ -116,6 +148,14 @@ internal static class XlsxUnsupportedSheetReferencePreserver
                 changed = true;
                 continue;
             }
+
+            // R76-io-chartsheet-4-3: a chartsheet has no surviving placeholder under any name
+            // (Case 1 and the rename queue above both missed) -- the user removed it from the
+            // live model. Re-adding it here would resurrect a sheet the user deleted, so unlike a
+            // dialog/macro sheet (which is never modeled and always falls through to the
+            // unconditional re-add below), a chartsheet is simply dropped.
+            if (IsChartsheetRelationshipType(relationshipType))
+                continue;
 
             while (usedSheetIds.Contains(nextSheetId))
                 nextSheetId++;
@@ -156,6 +196,12 @@ internal static class XlsxUnsupportedSheetReferencePreserver
 
     private static bool IsWorksheetRelationshipType(string relationshipType) =>
         relationshipType.EndsWith("/worksheet", StringComparison.OrdinalIgnoreCase);
+
+    // Chartsheets are the only unsupported-sheet-type kind FreeX models as a live Sheet (dialog
+    // sheets and macro sheets are never modeled for XLSX -- see Sheet.Kind/SheetKind), so only a
+    // chartsheet can genuinely be renamed or deleted from the model between load and save.
+    private static bool IsChartsheetRelationshipType(string relationshipType) =>
+        relationshipType.EndsWith("/chartsheet", StringComparison.OrdinalIgnoreCase);
 
     private static string? ResolveSheetRelationshipPart(
         XDocument workbookRelsXml,
