@@ -127,6 +127,20 @@ function Get-RelativePath {
     $Path.Substring($resolvedRoot.Length).TrimStart('\', '/').Replace('\', '/')
 }
 
+function Get-NormalizedTextSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $content = [IO.File]::ReadAllText($Path).Replace("`r`n", "`n").Replace("`r", "`n")
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes($content)
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try {
+        [BitConverter]::ToString($hasher.ComputeHash($bytes)).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        $hasher.Dispose()
+    }
+}
+
 $files = Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File |
     Where-Object { $_.FullName -ne $resolvedManifest } |
     Sort-Object { Get-RelativePath -Path $_.FullName } |
@@ -164,7 +178,7 @@ $inputs = foreach ($relativePath in $inputPaths) {
     $path = Join-Path $repoRoot $relativePath
     [ordered]@{
         path = $relativePath.Replace('\', '/')
-        sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        sha256 = Get-NormalizedTextSha256 -Path $path
     }
 }
 
