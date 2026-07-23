@@ -556,6 +556,10 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.eraser", "shared-profile");
         AssertGapClassification(commands, "freew.bookmark", "shared-profile");
         AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");
+        AssertGapClassification(commands, "freew.check-updates", "shared-profile");
+        AssertGapClassification(commands, "freew.copy-diagnostics", "shared-profile");
+        AssertGapClassification(commands, "freew.feedback", "shared-profile");
+        AssertGapClassification(commands, "freew.help-online", "shared-profile");
         AssertGapClassification(commands, "freew.about", "shared-profile");
         AssertGapClassification(commands, "freew.cc-text", "shared-profile");
         AssertGapClassification(commands, "freew.cc-richtext", "shared-profile");
@@ -612,10 +616,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
             {
                 "freew.arrange-all",
                 "freew.backstage",
-                "freew.check-updates",
-                "freew.copy-diagnostics",
-                "freew.feedback",
-                "freew.help-online",
                 "freew.import-pdf-text",
                 "freew.new",
                 "freew.open",
@@ -629,34 +629,10 @@ public sealed class FreeWRibbonDefinitionProfileTests
         }
         AssertPlatformOnlyNote(commands, "freew.arrange-all", "WPF desktop multi-window tiling command");
         AssertPlatformOnlyNote(commands, "freew.backstage", "Avalonia compact File entry");
-        AssertPlatformOnlyNote(commands, "freew.check-updates", "WPF desktop Help/Product update command");
-        AssertPlatformOnlyNote(commands, "freew.copy-diagnostics", "WPF desktop diagnostics shortcut");
-        AssertPlatformOnlyNote(commands, "freew.feedback", "WPF desktop support shortcut");
-        AssertPlatformOnlyNote(commands, "freew.help-online", "WPF desktop Help shortcut");
         AssertPlatformOnlyNote(commands, "freew.import-pdf-text", "Avalonia compact File command makes PDF text import explicit");
         AssertPlatformOnlyNote(commands, "freew.new", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.open", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.save", "Avalonia compact File command");
-        AssertBehaviorEvidence(
-            commands,
-            "freew.check-updates",
-            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
-            "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
-            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
-            "freew.platform-only.wpf-help-shell",
-            "WPF Help shell variance",
-            "platform-only");
-        AssertBehaviorEvidence(
-            commands,
-            "freew.help-online",
-            "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
-            "FreeWRibbonParityTests.HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands",
-            "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
-            "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed",
-            "freew.platform-only.wpf-help-shell",
-            "WPF Help shell variance",
-            "platform-only");
         AssertBehaviorEvidence(
             commands,
             "freew.arrange-all",

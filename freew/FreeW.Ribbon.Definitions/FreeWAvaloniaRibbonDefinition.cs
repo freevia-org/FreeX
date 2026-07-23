@@ -1040,8 +1040,39 @@ internal static class FreeWAvaloniaRibbonDefinition
             })
             .Tab("help", "Help", "Y", tab =>
             {
+                tab.Group("help", "Help", null, 100, g =>
+                {
+                    g.Button("freew.help-online", "Help Online", button => button with
+                    {
+                        KeyTip = "H",
+                        Icon = new RibbonCommandIcon(
+                            RibbonCommandIconKind.Help,
+                            RibbonCommandIconAccent.Help),
+                    });
+                    g.Button("freew.feedback", "Feedback", button => button with
+                    {
+                        KeyTip = "F",
+                        Icon = new RibbonCommandIcon(
+                            RibbonCommandIconKind.Feedback,
+                            RibbonCommandIconAccent.Help),
+                    });
+                    g.Button("freew.copy-diagnostics", "Copy Diagnostics", button => button with
+                    {
+                        KeyTip = "D",
+                        Icon = new RibbonCommandIcon(
+                            RibbonCommandIconKind.Info,
+                            RibbonCommandIconAccent.Help),
+                    });
+                });
                 tab.Group("product", "Product", null, 90, g =>
                 {
+                    g.Button("freew.check-updates", "Check for Updates", button => button with
+                    {
+                        KeyTip = "U",
+                        Icon = new RibbonCommandIcon(
+                            RibbonCommandIconKind.Refresh,
+                            RibbonCommandIconAccent.Help),
+                    });
                     g.Button("freew.about", "About FreeW", button => button with
                     {
                         Icon = new RibbonCommandIcon(

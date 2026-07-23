@@ -259,9 +259,9 @@ internal sealed class BuildingBlocksOrganizerDialog : FreeWDialogWindow
 
 internal sealed class FreeWInfoDialog : FreeWDialogWindow
 {
-    private FreeWInfoDialog(string message)
+    private FreeWInfoDialog(string message, string title)
     {
-        Title = "FreeW";
+        Title = title;
         Width = 430;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -276,6 +276,6 @@ internal sealed class FreeWInfoDialog : FreeWDialogWindow
         QuickPartNameDialog.CloseOnEscape(this);
     }
 
-    public static Task ShowAsync(Window owner, string message) =>
-        new FreeWInfoDialog(message).ShowDialog(owner);
+    public static Task ShowAsync(Window owner, string message, string title = "FreeW") =>
+        new FreeWInfoDialog(message, title).ShowDialog(owner);
 }
