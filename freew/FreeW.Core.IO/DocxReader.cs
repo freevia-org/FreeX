@@ -2565,9 +2565,21 @@ public static class DocxReader
             return;
         }
 
-        // A run whose w:drawing references a SmartArt diagram (a:graphicData/dgm:relIds) becomes a SmartArt
-        // run. imageRelationships maps EVERY document relationship id → part path, so the diagram data part
-        // resolves through it via the dgm:relIds/@r:dm id.
+        // Header/footer/comment/note SmartArt resolves through the owning story part. The modelled SmartArt
+        // writer only emits document-level diagram relationships, so preserve the local diagram graph verbatim
+        // before the generic reader claims it. This includes the cached diagram-drawing relationship referenced
+        // from the data model, which must retain its original story-part relationship id.
+        if (preservedDrawingTarget is not null
+            && preservedDrawingRelationshipTargets is not null
+            && CapturePartLocalSmartArtDrawing(r, archive, preservedDrawingTarget, preservedDrawingRelationshipTargets) is { } localSmartArtDrawing)
+        {
+            var drawingRun = new Run(string.Empty) { PreservedDrawing = localSmartArtDrawing, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(drawingRun);
+            paragraph.Runs.Add(drawingRun);
+            return;
+        }
+
+        // A body/table run whose w:drawing references a SmartArt diagram becomes a modelled SmartArt run.
         var smartArt = ReadSmartArt(r, archive, imageRelationships);
         if (smartArt is not null)
         {
@@ -3997,6 +4009,64 @@ public static class DocxReader
             return null;
 
         return new PreservedDrawing(drawing.ToString(SaveOptions.DisableFormatting), references);
+    }
+
+    /// <summary>
+    /// Captures a SmartArt drawing from a non-document story part (header/footer/comment/note) verbatim.
+    /// Diagram data, layout, quick-style and colours are direct <c>dgm:relIds</c> relationships; the cached
+    /// rendered drawing is referenced from the data model using a second relationship in the owning story part.
+    /// All of these relationships retain their source ids because the data model itself carries the cached-drawing
+    /// id and is preserved byte-for-byte.
+    /// </summary>
+    private static PreservedDrawing? CapturePartLocalSmartArtDrawing(
+        XElement run,
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> partRelationshipTargets)
+    {
+        var drawing = run.Element(W + "drawing");
+        var relIds = drawing?.Descendants(Dgm + "relIds").FirstOrDefault();
+        if (drawing is null || relIds is null)
+            return null;
+
+        var contentTypeOverrides = ReadContentTypeOverrides(archive);
+        var contentTypeDefaults = ReadContentTypeDefaults(archive);
+        var references = new List<PreservedDrawingReference>();
+
+        void CaptureLocalRelationship(string relationshipId)
+        {
+            if (!partRelationshipTargets.TryGetValue(relationshipId, out var localPartPath))
+                return;
+            var partName = "/" + localPartPath.TrimStart('/');
+            if (!CapturePreservedPart(archive, document, partName, contentTypeOverrides, contentTypeDefaults, relationshipType: null))
+                return;
+            CaptureReferencedParts(archive, document, partName, contentTypeOverrides, contentTypeDefaults);
+            if (!references.Any(reference => reference.OriginalRelId == relationshipId))
+                references.Add(new PreservedDrawingReference(relationshipId, partName));
+        }
+
+        var dataRelationshipId = relIds.Attribute(R + "dm")?.Value;
+        foreach (var relationshipId in relIds.Attributes()
+                     .Where(attribute => attribute.Name.Namespace == R)
+                     .Select(attribute => attribute.Value)
+                     .Distinct(StringComparer.Ordinal))
+            CaptureLocalRelationship(relationshipId);
+
+        // Word stores the cached dsp:drawing's relationship on the document/story part, not under dataN.xml.rels.
+        // Its id is carried in dgm:dataModelExt/@relId, so capture that extra story-local hop as well.
+        if (dataRelationshipId is not null
+            && partRelationshipTargets.TryGetValue(dataRelationshipId, out var dataPartPath)
+            && LoadPart(archive, dataPartPath) is { } dataPart)
+            foreach (var relationshipId in dataPart.Descendants(Dsp + "dataModelExt")
+                         .Select(element => element.Attribute("relId")?.Value)
+                         .Where(relationshipId => relationshipId is not null)
+                         .Cast<string>()
+                         .Distinct(StringComparer.Ordinal))
+                CaptureLocalRelationship(relationshipId);
+
+        return references.Count == 0
+            ? null
+            : new PreservedDrawing(drawing.ToString(SaveOptions.DisableFormatting), references);
     }
 
     /// <summary>

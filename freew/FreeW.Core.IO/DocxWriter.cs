@@ -720,9 +720,10 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Assigns a story-part-local relationship to each preserved chart part referenced by its runs. Preserved
+    /// Assigns a story-part-local relationship to each preserved drawing part referenced by its runs. Preserved
     /// body drawings keep their document-level relationships; header/footer/note drawings resolve against the
-    /// owning part's _rels file.
+    /// owning part's _rels file. Original relationship ids are retained: a preserved SmartArt data model refers
+    /// to its cached diagram drawing by that story-part id.
     /// </summary>
     private static IReadOnlyList<PartLocalPreservedDrawingPart> CollectPartLocalPreservedDrawings(
         IEnumerable<Paragraph> paragraphs,
@@ -738,16 +739,25 @@ public static class DocxWriter
                         if (result.Any(part => part.PartName == reference.PreservedPartName)
                             || !preservedByName.TryGetValue(reference.PreservedPartName, out var preservedPart))
                             continue;
-                        var relationshipType = preservedPart.ContentTypeOverride == ChartExContentType
-                            ? ChartExRelType
-                            : ChartRelType;
+                        var relationshipType = PreservedDrawingRelationshipType(preservedPart.ContentTypeOverride);
                         result.Add(new PartLocalPreservedDrawingPart(
                             reference.PreservedPartName,
-                            $"rIdPreservedChart{result.Count + 1}",
+                            reference.OriginalRelId,
                             relationshipType));
                     }
         return result;
     }
+
+    private static string PreservedDrawingRelationshipType(string? contentType) => contentType switch
+    {
+        ChartExContentType => ChartExRelType,
+        DiagramDataContentType => DiagramDataRelType,
+        DiagramLayoutContentType => DiagramLayoutRelType,
+        DiagramStyleContentType => DiagramStyleRelType,
+        DiagramColorsContentType => DiagramColorsRelType,
+        DiagramDrawingContentType => DiagramDrawingRelType,
+        _ => ChartRelType
+    };
 
     /// <summary>Maps each distinct hyperlink URL to one external relationship id (rIdLinkN).</summary>
     private static Dictionary<string, string> CollectHyperlinks(TextDocument document)
