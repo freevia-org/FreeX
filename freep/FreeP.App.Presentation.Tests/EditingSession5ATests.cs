@@ -577,6 +577,26 @@ public sealed class EditingSession5ATests
         source.Fill.Should().BeSameAs(originalSourceFill);
     }
 
+    [Fact]
+    public void CancelFormatPainter_LeavesSourceAndTargetUnchanged()
+    {
+        var sess = Make();
+        var source = MakeShape(1, withText: true);
+        var target = MakeShape(2);
+        var originalSourceFill = source.Fill;
+        var originalTargetFill = target.Fill;
+        sess.CurrentSlide!.Shapes.AddRange([source, target]);
+
+        sess.Select(1u);
+        sess.BeginFormatPainter().Should().BeTrue();
+        sess.CancelFormatPainter();
+
+        sess.IsFormatPainterActive.Should().BeFalse();
+        sess.TryApplyFormatPainterToShape(2u).Should().BeFalse();
+        source.Fill.Should().BeSameAs(originalSourceFill);
+        target.Fill.Should().BeSameAs(originalTargetFill);
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     // BUILT-IN THEMES CATALOGUE
     // ════════════════════════════════════════════════════════════════════════════════

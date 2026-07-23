@@ -516,6 +516,13 @@ public sealed class CanvasGestureHandler
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && _editor.IsFormatPainterActive)
+        {
+            _editor.CancelFormatPainter();
+            e.Handled = true;
+            return;
+        }
+
         if (_editor.SelectedShapeIds.Count == 0) return;
 
         bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;

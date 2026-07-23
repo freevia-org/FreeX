@@ -102,6 +102,12 @@ public sealed class AvaloniaCanvasGestureHandler
     /// </summary>
     public bool HandleKeyDown(Key key, KeyModifiers modifiers)
     {
+        if (key == Key.Escape && _editor.IsFormatPainterActive)
+        {
+            _editor.CancelFormatPainter();
+            return true;
+        }
+
         if (_editor.SelectedShapeIds.Count == 0) return false;
 
         bool shift = (modifiers & KeyModifiers.Shift) != 0;
