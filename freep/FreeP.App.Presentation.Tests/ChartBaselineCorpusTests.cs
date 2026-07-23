@@ -782,7 +782,8 @@ public sealed class ChartBaselineCorpusTests
             .Should().OnlyContain(thickness => thickness == 0.7);
         geometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
         geometry.WpfRenderFacets.Should().OnlyContain(facet =>
-            facet.Points.Count == 3 || facet.Points.Count == 4 || facet.Points.Count == 5);
+            facet.Points.Count == 3 || facet.Points.Count == 4 || facet.Points.Count == 5 ||
+            facet.Points.Count == 11 || facet.Points.Count == 16);
         geometry.WpfRenderFacets
             .Single(facet => facet.Fill.Color == new SrgbColor(0x34, 0x56, 0x95))
             .Points
@@ -806,11 +807,36 @@ public sealed class ChartBaselineCorpusTests
         geometry.WpfRenderFacets.Single(facet =>
                 facet.Fill.Color == new SrgbColor(0xB3, 0x5E, 0x24))
             .Points.Should().Equal(
-                new ChartPlanPoint(155, 107),
-                new ChartPlanPoint(188, 72),
-                new ChartPlanPoint(204, 100),
-                new ChartPlanPoint(218, 154),
-                new ChartPlanPoint(181, 153));
+                new ChartPlanPoint(154, 108),
+                new ChartPlanPoint(164, 97),
+                new ChartPlanPoint(180, 80),
+                new ChartPlanPoint(187, 73),
+                new ChartPlanPoint(188, 73),
+                new ChartPlanPoint(191, 78),
+                new ChartPlanPoint(203, 101),
+                new ChartPlanPoint(208, 120),
+                new ChartPlanPoint(214, 143),
+                new ChartPlanPoint(217, 155),
+                new ChartPlanPoint(201, 155),
+                new ChartPlanPoint(180, 154),
+                new ChartPlanPoint(166, 153),
+                new ChartPlanPoint(165, 150),
+                new ChartPlanPoint(163, 143),
+                new ChartPlanPoint(157, 120));
+        geometry.WpfRenderFacets.Single(facet =>
+                facet.Fill.Color == new SrgbColor(0xEB, 0x7C, 0x30))
+            .Points.Should().Equal(
+                new ChartPlanPoint(34, 100),
+                new ChartPlanPoint(104, 84),
+                new ChartPlanPoint(155, 72),
+                new ChartPlanPoint(168, 69),
+                new ChartPlanPoint(196, 72),
+                new ChartPlanPoint(173, 84),
+                new ChartPlanPoint(157, 101),
+                new ChartPlanPoint(154, 106),
+                new ChartPlanPoint(131, 106),
+                new ChartPlanPoint(83, 104),
+                new ChartPlanPoint(60, 103));
     }
 
     [Fact]
