@@ -9507,7 +9507,7 @@ public sealed class DocumentView : Control
         for (var index = 0; index < paragraph.Runs.Count - 1; index++)
         {
             var left = paragraph.Runs[index];
-        var right = paragraph.Runs[index + 1];
+            var right = paragraph.Runs[index + 1];
             if (!CanCoalesceHyperlinkRuns(left, right))
                 continue;
 
