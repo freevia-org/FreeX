@@ -1342,9 +1342,9 @@ public static partial class ChartRenderPlanner
             // series-axis band and a deep lower projection band.
             plot = new ChartPlanRect(
                 bounds.X + 44.0,
-                bounds.Y + 57.0,
+                bounds.Y + (UsesImportedTallSurfaceTitleWrap(chart, bounds) ? 95.0 : 57.0),
                 bounds.Width - 120.0,
-                bounds.Height - 99.0);
+                bounds.Height - (UsesImportedTallSurfaceTitleWrap(chart, bounds) ? 149.0 : 99.0));
         }
         else if (chart.ChartType == ChartType.ColumnStacked100 && UsesImportedTextMetrics(chart))
         {
