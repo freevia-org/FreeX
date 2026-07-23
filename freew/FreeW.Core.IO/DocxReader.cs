@@ -1748,6 +1748,12 @@ public static class DocxReader
         {
             AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, preservedDrawingTarget, preservedDrawingRelationshipTargets, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
         }
+        else if (child.Name == W + "smartTag")
+        {
+            // Legacy Word smart tags annotate inline content. The model has no smart-tag metadata, but the
+            // wrapper must remain transparent so its visible runs survive the import.
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+        }
         else if (child.Name == W + "fldSimple")
         {
             AddSimpleField(paragraph, child);
