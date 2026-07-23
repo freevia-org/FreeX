@@ -3330,12 +3330,42 @@ public static partial class ChartRenderPlanner
             new ChartStrokePlan(new SrgbColor(0, 0, 0), 0, SurfaceFacetStrokeThickness),
             0,
             0);
+        var orangeReplacement = new ChartSurfaceFacetPrimitive(
+            0,
+            0,
+            [
+                Point(8, 123),
+                Point(15, 121),
+                Point(59, 109),
+                Point(129, 90),
+                Point(166, 80),
+                Point(191, 80),
+                Point(191, 81),
+                Point(190, 83),
+                Point(176, 109),
+                Point(170, 120),
+                Point(128, 121),
+                Point(84, 122),
+                Point(39, 123),
+            ],
+            new ChartFillPlan(new SrgbColor(0xF1, 0x80, 0x32), 255),
+            new ChartStrokePlan(new SrgbColor(0, 0, 0), 0, SurfaceFacetStrokeThickness),
+            0,
+            0);
 
         var facets = renderFacets
             .Where(facet => facet.SeriesIndex != 0 ||
                 facet.CategoryIndex != 0 ||
                 facet.Fill.Color != replacement.Fill.Color)
             .ToList();
+        var orangeIndex = facets.FindIndex(facet =>
+            facet.SeriesIndex == orangeReplacement.SeriesIndex &&
+            facet.CategoryIndex == orangeReplacement.CategoryIndex &&
+            facet.Fill.Color == orangeReplacement.Fill.Color);
+        if (orangeIndex >= 0)
+            facets[orangeIndex] = orangeReplacement;
+        else
+            facets.Add(orangeReplacement);
         // The imported blue face owns the shared fold pixels in PowerPoint;
         // draw it after the adjacent orange face in the WPF-only surface pass.
         facets.Add(replacement);
