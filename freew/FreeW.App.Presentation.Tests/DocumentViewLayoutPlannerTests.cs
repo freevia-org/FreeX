@@ -268,6 +268,20 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildTableLayoutPlans_AccountsForLeadingDocumentContentWhenEstimatingFirstTablePage()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument();
+
+        var pagination = DocumentViewLayoutPlanner.BuildTableLayoutPlans(document).Single().Pagination;
+
+        pagination.EstimatedPageCount.Should().Be(3);
+        pagination.Pages.Should().HaveCount(3);
+        pagination.Pages[0].AvailableHeightDip.Should().BeLessThan(pagination.AvailableBodyHeightDip);
+        pagination.Pages[1].IncludesRepeatedHeader.Should().BeTrue();
+        pagination.Pages[2].IncludesRepeatedHeader.Should().BeTrue();
+    }
+
+    [Fact]
     public void BuildTablePaginationPlan_MarksPlannedPageStartsWithoutRepeatedHeaders()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
