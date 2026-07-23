@@ -419,7 +419,7 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close((DrawingShapeEffectPreset?)null);
         ok.Click += (_, _) => dialog.Close(effectBox.SelectedItem is ShapeEffectsChoice choice ? (DrawingShapeEffectPreset?)choice.Preset : null);
 
-        dialog.Content = new StackPanel
+        var content = new StackPanel
         {
             Margin = new Thickness(16),
             Spacing = 8,
@@ -431,6 +431,9 @@ public sealed partial class MainWindow
                 AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 4, 0, 0)),
             },
         };
+        dialog.Content = content;
+        ConfigureDialogTabCycle(dialog, content);
+        ConfigureNativeDialogInitialFocus(dialog, content, effectBox);
 
         UpdateDescription();
 
