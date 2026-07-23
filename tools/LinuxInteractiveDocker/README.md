@@ -137,11 +137,12 @@ clipboard owner. The worksheet popup rows do not claim activation of platform
 native Avalonia `NativeMenuItem` menus; that boundary remains explicitly skipped
 where only an application-native menu can be tested.
 
-The New Window row is deliberately shell-scoped: it proves an additional
-workbook-shaped top-level window, valid Arrange All geometry, and physical
-window switching. It does not claim Excel/WPF shared-workbook second-view
-semantics until the shared-session product fix supplies an edit/switch/save
-postcondition.
+The New Window row is deliberately physical-shell scoped: it proves an
+additional workbook-shaped top-level window, valid Arrange All geometry, and
+physical window switching. Shared-workbook model identity, local view state,
+document detach, title numbering, and close lifecycle are proven separately by
+`AvaloniaSharedWorkbookWindowTests`; the physical row does not substitute for
+those behavior assertions.
 
 ## Environment Boundaries
 

@@ -102,7 +102,7 @@ on_error() {
 }
 trap on_error ERR
 
-window_id="$(xdotool search --onlyvisible --name '^FreeX - .+$' 2>/dev/null | tail -1 || true)"
+window_id="$(xdotool search --onlyvisible --name '^.+ - FreeX$' 2>/dev/null | tail -1 || true)"
 if [[ -z "$window_id" ]]; then
     calibration_reason="No visible FreeX window."
     record "x11-window-discovery" "failed" "x11-input-results.json" "$calibration_reason"
@@ -418,9 +418,9 @@ visible_window_count() {
 }
 
 freex_window_ids() {
-    # WindowTitlePlanner composes workbook titles as "FreeX - <document>".
+    # WindowTitlePlanner composes WPF-compatible workbook titles as "<document> - FreeX".
     # The exact shape excludes dialogs, pickers, and other transient windows.
-    xdotool search --onlyvisible --name '^FreeX - .+$' 2>/dev/null | sort -n || true
+    xdotool search --onlyvisible --name '^.+ - FreeX$' 2>/dev/null | sort -n || true
 }
 
 freex_window_count() {
@@ -655,7 +655,7 @@ probe_window_management() {
 
     if window_bounds_are_valid "$after_bounds" && [[ "$after_bounds" != "$pre_arrange_bounds" ]] &&
        [[ -n "$active_after" && "$active_after" != "$active_before" && "$active_after_is_created" == true ]]; then
-        record "window-new-arrange-switch-physical" "passed" "window-new-before.png; window-new-after.png; window-arrange-after.png; window-switch-after.png; window-management-postcondition.txt; visible-count=$after_count; active-window-switched=true; shared-workbook-parity=not-claimed" "Physical View key-tip New Window created one additional top-level shell window, Arrange All changed valid bounds, and Ctrl+F6 switched to the created window. This probe intentionally does not claim a shared-workbook second view." "$artifacts"
+        record "window-new-arrange-switch-physical" "passed" "window-new-before.png; window-new-after.png; window-arrange-after.png; window-switch-after.png; window-management-postcondition.txt; visible-count=$after_count; active-window-switched=true; shared-workbook-parity=managed-behavior-tested" "Physical View key-tip New Window created one additional top-level workbook window, Arrange All changed valid bounds, and Ctrl+F6 switched to the created window. Shared-workbook model, view-state, detach, title, and close lifecycle semantics are covered by AvaloniaSharedWorkbookWindowTests." "$artifacts"
     else
         record "window-new-arrange-switch-physical" "failed" "window-new-before.png; window-new-after.png; window-arrange-after.png; window-switch-after.png; window-management-postcondition.txt; visible-count=$after_count; active-before=$active_before; active-after=$active_after" "Window management did not satisfy exact count, bounds, and active-window postconditions." "$artifacts"
     fi

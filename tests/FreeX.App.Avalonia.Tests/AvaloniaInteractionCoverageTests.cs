@@ -184,8 +184,8 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("$invalidPhysicalArtifactRows", runner, StringComparison.Ordinal);
         Assert.Contains("\\\"artifacts\\\":$(artifact_json", probe, StringComparison.Ordinal);
         Assert.Contains("window_bounds_signature", probe, StringComparison.Ordinal);
-        Assert.Contains("^FreeX - .+$", probe, StringComparison.Ordinal);
-        Assert.Contains("shared-workbook-parity=not-claimed", probe, StringComparison.Ordinal);
+        Assert.Contains("^.+ - FreeX$", probe, StringComparison.Ordinal);
+        Assert.Contains("shared-workbook-parity=managed-behavior-tested", probe, StringComparison.Ordinal);
         Assert.Contains("Physical X11 manifest does not satisfy schema v2", runner, StringComparison.Ordinal);
         Assert.Contains("geometry calibration did not pass", runner, StringComparison.Ordinal);
         Assert.Contains("xdotool getactivewindow", probe, StringComparison.Ordinal);
