@@ -2613,6 +2613,9 @@ public static class DocxWriter
             pPr.Add(indEl);
         }
         // w:jc (alignment) — CT_PPrBase order: after ind, before textDirection.
+        if (f.ContextualSpacing is { } contextualSpacing)
+            pPr.Add(new XElement(W + "contextualSpacing",
+                contextualSpacing ? null : new XAttribute(W + "val", "0")));
         if (f.Alignment != TextAlignment.Left)
             pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
             {
@@ -7937,32 +7940,40 @@ public static class DocxWriter
     {
         var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
             || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
-        if (f.SpaceBeforePt <= 0 && f.SpaceAfterPt <= 0 && !f.BeforeAutoSpacing && !f.AfterAutoSpacing && !hasLineSpacing)
+        if (f.SpaceBeforePt <= 0 && f.SpaceAfterPt <= 0 && !f.BeforeAutoSpacing && !f.AfterAutoSpacing
+            && !f.ContextualSpacing.HasValue && !hasLineSpacing)
             return null;
         var pPr = new XElement(W + "pPr");
-        var spacing = new XElement(W + "spacing");
-        var hasNumericSpacing = !f.BeforeAutoSpacing && f.SpaceBeforePt > 0
-            || !f.AfterAutoSpacing && f.SpaceAfterPt > 0;
-        if (f.BeforeAutoSpacing)
-            spacing.Add(new XAttribute(W + "beforeAutospacing", "1"));
-        else if (hasNumericSpacing)
-            spacing.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
-        if (f.AfterAutoSpacing)
-            spacing.Add(new XAttribute(W + "afterAutospacing", "1"));
-        else if (hasNumericSpacing)
-            spacing.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
-        if (hasLineSpacing)
+        var hasSpacing = f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || f.BeforeAutoSpacing || f.AfterAutoSpacing || hasLineSpacing;
+        if (hasSpacing)
         {
-            var (line, rule) = f.LineRule switch
+            var spacing = new XElement(W + "spacing");
+            var hasNumericSpacing = !f.BeforeAutoSpacing && f.SpaceBeforePt > 0
+                || !f.AfterAutoSpacing && f.SpaceAfterPt > 0;
+            if (f.BeforeAutoSpacing)
+                spacing.Add(new XAttribute(W + "beforeAutospacing", "1"));
+            else if (hasNumericSpacing)
+                spacing.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
+            if (f.AfterAutoSpacing)
+                spacing.Add(new XAttribute(W + "afterAutospacing", "1"));
+            else if (hasNumericSpacing)
+                spacing.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
+            if (hasLineSpacing)
             {
-                LineSpacingRule.Exact => ((int)System.Math.Round(f.LineHeightPt * 20), "exact"),
-                LineSpacingRule.AtLeast => ((int)System.Math.Round(f.LineHeightPt * 20), "atLeast"),
-                _ => ((int)System.Math.Round(f.LineSpacing * 240), "auto")
-            };
-            spacing.Add(new XAttribute(W + "line", line));
-            spacing.Add(new XAttribute(W + "lineRule", rule));
+                var (line, rule) = f.LineRule switch
+                {
+                    LineSpacingRule.Exact => ((int)System.Math.Round(f.LineHeightPt * 20), "exact"),
+                    LineSpacingRule.AtLeast => ((int)System.Math.Round(f.LineHeightPt * 20), "atLeast"),
+                    _ => ((int)System.Math.Round(f.LineSpacing * 240), "auto")
+                };
+                spacing.Add(new XAttribute(W + "line", line));
+                spacing.Add(new XAttribute(W + "lineRule", rule));
+            }
+            pPr.Add(spacing);
         }
-        pPr.Add(spacing);
+        if (f.ContextualSpacing is { } contextualSpacing)
+            pPr.Add(new XElement(W + "contextualSpacing",
+                contextualSpacing ? null : new XAttribute(W + "val", "0")));
         return pPr;
     }
 
@@ -8033,6 +8044,9 @@ public static class DocxWriter
         }
 
         // w:jc (alignment) — CT_PPrBase order: after ind, before textDirection.
+        if (f.ContextualSpacing is { } contextualSpacing)
+            pPr.Add(new XElement(W + "contextualSpacing",
+                contextualSpacing ? null : new XAttribute(W + "val", "0")));
         if (f.Alignment != TextAlignment.Left)
             pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
             {
