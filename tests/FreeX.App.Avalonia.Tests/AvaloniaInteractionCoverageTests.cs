@@ -163,6 +163,11 @@ public sealed class AvaloniaInteractionCoverageTests
             "keytips-f10",
             "worksheet-context-shift-f10",
             "worksheet-context-right-click",
+            "worksheet-context-copy-physical",
+            "worksheet-context-clear-physical",
+            "clipboard-copy-paste-roundtrip",
+            "clipboard-cut-paste-roundtrip",
+            "window-new-arrange-switch-physical",
             "dialog-format-cells-keyboard",
             "native-save-as-f12-cancel",
             "native-open-ctrl-f12-cancel",
@@ -175,6 +180,12 @@ public sealed class AvaloniaInteractionCoverageTests
         }
 
         Assert.Contains("$physicalSchemaValid", runner, StringComparison.Ordinal);
+        Assert.Contains("$missingPhysicalArtifactIds", runner, StringComparison.Ordinal);
+        Assert.Contains("$invalidPhysicalArtifactRows", runner, StringComparison.Ordinal);
+        Assert.Contains("\\\"artifacts\\\":$(artifact_json", probe, StringComparison.Ordinal);
+        Assert.Contains("window_bounds_signature", probe, StringComparison.Ordinal);
+        Assert.Contains("^.+ - FreeX$", probe, StringComparison.Ordinal);
+        Assert.Contains("shared-workbook-parity=managed-behavior-tested", probe, StringComparison.Ordinal);
         Assert.Contains("Physical X11 manifest does not satisfy schema v2", runner, StringComparison.Ordinal);
         Assert.Contains("geometry calibration did not pass", runner, StringComparison.Ordinal);
         Assert.Contains("xdotool getactivewindow", probe, StringComparison.Ordinal);

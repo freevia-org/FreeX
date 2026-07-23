@@ -653,12 +653,18 @@ try {
         "keytips-f10",
         "worksheet-context-shift-f10",
         "worksheet-context-right-click",
+        "worksheet-context-copy-physical",
+        "worksheet-context-clear-physical",
+        "clipboard-copy-paste-roundtrip",
+        "clipboard-cut-paste-roundtrip",
+        "window-new-arrange-switch-physical",
         "dialog-format-cells-keyboard",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
         "print-preview-ctrl-shift-f12-cancel"
     )
     $physicalProbeResults = @($x11Manifest.results)
+    $x11EvidenceDirectory = Split-Path -Parent $x11ManifestPath
     $physicalProbeIds = @($physicalProbeResults | ForEach-Object { [string]$_.id })
     $missingPhysicalProbeIds = @($requiredPhysicalProbeIds | Where-Object { $_ -notin $physicalProbeIds })
     $duplicatePhysicalProbeIds = @($physicalProbeIds | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
@@ -668,6 +674,48 @@ try {
         [string]$_.status -notin @("passed", "failed") -or
         [string]::IsNullOrWhiteSpace([string]$_.evidence)
     })
+    $artifactRequiredPhysicalProbeIds = @(
+        "worksheet-context-copy-physical",
+        "worksheet-context-clear-physical",
+        "clipboard-copy-paste-roundtrip",
+        "clipboard-cut-paste-roundtrip",
+        "window-new-arrange-switch-physical",
+        "native-save-as-f12-cancel",
+        "native-open-ctrl-f12-cancel",
+        "print-preview-ctrl-shift-f12-cancel"
+    )
+    $missingPhysicalArtifactIds = @()
+    $invalidPhysicalArtifactRows = @()
+    foreach ($physicalRow in $physicalProbeResults) {
+        $rowArtifactProperty = $physicalRow.PSObject.Properties["artifacts"]
+        if ($null -eq $rowArtifactProperty) {
+            continue
+        }
+        $rowArtifacts = @($rowArtifactProperty.Value | ForEach-Object { [string]$_ })
+        foreach ($artifact in $rowArtifacts) {
+            $artifactPath = Join-Path $x11EvidenceDirectory $artifact
+            $validArtifactName = -not [string]::IsNullOrWhiteSpace($artifact) -and
+                -not [System.IO.Path]::IsPathRooted($artifact) -and
+                $artifact -notmatch "[\\/]" -and
+                $artifact -notmatch "(^|[\\/])\.\.([\\/]|$)"
+            if (-not $validArtifactName -or -not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
+                $invalidPhysicalArtifactRows += "$( [string]$physicalRow.id ):$artifact"
+                continue
+            }
+            $artifactInfo = Get-Item -LiteralPath $artifactPath
+            if ($artifactInfo.Length -le 0) {
+                $invalidPhysicalArtifactRows += "$( [string]$physicalRow.id ):$artifact(empty)"
+            }
+        }
+    }
+    foreach ($requiredArtifactId in $artifactRequiredPhysicalProbeIds) {
+        $artifactRow = @($physicalProbeResults | Where-Object { [string]$_.id -eq $requiredArtifactId } | Select-Object -First 1)
+        $artifactProperty = if ($artifactRow.Count -eq 1) { $artifactRow[0].PSObject.Properties["artifacts"] } else { $null }
+        $artifacts = if ($null -eq $artifactProperty) { @() } else { @($artifactProperty.Value | ForEach-Object { [string]$_ }) }
+        if ($artifacts.Count -eq 0) {
+            $missingPhysicalArtifactIds += $requiredArtifactId
+        }
+    }
     $reportedPhysicalPassed = @($physicalProbeResults | Where-Object status -eq "passed").Count
     $reportedPhysicalFailed = @($physicalProbeResults | Where-Object status -eq "failed").Count
     $physicalSchemaValid =
@@ -683,16 +731,17 @@ try {
         [int]$x11Manifest.calibration.grid.cellHeight -gt 0 -and
         $missingPhysicalProbeIds.Count -eq 0 -and
         $duplicatePhysicalProbeIds.Count -eq 0 -and
-        $invalidPhysicalRows.Count -eq 0
+        $invalidPhysicalRows.Count -eq 0 -and
+        $missingPhysicalArtifactIds.Count -eq 0 -and
+        $invalidPhysicalArtifactRows.Count -eq 0
     if (-not $physicalSchemaValid) {
-        throw "Physical X11 manifest does not satisfy schema v2 (missing='$($missingPhysicalProbeIds -join ',')'; duplicate='$($duplicatePhysicalProbeIds -join ',')'; invalidRows=$($invalidPhysicalRows.Count))."
+        throw "Physical X11 manifest does not satisfy schema v2 (missing='$($missingPhysicalProbeIds -join ',')'; duplicate='$($duplicatePhysicalProbeIds -join ',')'; invalidRows=$($invalidPhysicalRows.Count); missingArtifacts='$($missingPhysicalArtifactIds -join ',')'; invalidArtifacts='$($invalidPhysicalArtifactRows -join ','))."
     }
 
     if ([string]$x11Manifest.calibration.status -ne "passed") {
         $reason = [string]$x11Manifest.calibration.reason
         throw "Physical X11 evidence is not authoritative because geometry calibration did not pass: $reason"
     }
-    $x11EvidenceDirectory = Split-Path -Parent $x11ManifestPath
     $x11ReportDirectory = Join-Path $reportDirectory "x11-validation"
     New-Item -ItemType Directory -Path $x11ReportDirectory -Force | Out-Null
     foreach ($evidenceFile in Get-ChildItem -LiteralPath $x11EvidenceDirectory -File) {

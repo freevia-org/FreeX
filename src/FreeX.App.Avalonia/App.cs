@@ -103,7 +103,7 @@ public sealed class App : Application
             AppCrashHandlers.Register(
                 recordCrash: (exception, source) => Diagnostics?.RecordCrash(exception, source),
                 subscribeDispatcher: null,
-                onAfterFault: autosaveCoordinator.TryEmergencySnapshot);
+                onAfterFault: AvaloniaAutosaveCoordinator.TryEmergencySnapshots);
             autosaveCoordinator.Start();
             mainWindow.Closed += (_, _) => autosaveCoordinator.OnWindowClosed();
 
@@ -248,20 +248,18 @@ public sealed class App : Application
 /// all wired.
 ///
 /// <para>
-/// <b>Known gap:</b> <c>LoadRecoverySnapshotAsync</c> loads the recovered workbook into a fresh
-/// <c>WorkbookSession</c> (via <c>WorkbookSessionFactory.Create</c>), which starts
-/// <c>IsDirty == false</c> — <c>WorkbookSession</c> has no public API to force it dirty, and
-/// <c>WorkbookSession.cs</c> is out of scope for this change (owned by a different pass). The
-/// recovered content is fully loaded and saveable either way; the only user-visible gap is that
-/// the modified indicator does not light up and closing the window without an explicit Save will
-/// not prompt, until a small public hook (analogous to WPF's <c>MarkWorkbookDirtyForRecovery</c>)
-/// lands on <c>WorkbookSession</c>.
+/// Recovery loads into a fresh <c>WorkbookSession</c>, associates the original file path, and
+/// explicitly marks the recovered document dirty so the modified indicator and close prompt are
+/// preserved. Each live workbook view has its own coordinator and snapshot identity; crash
+/// handling fans out to all coordinators.
 /// </para>
 /// </summary>
 internal sealed class AvaloniaAutosaveCoordinator
 {
     // Matches the WPF host's DispatcherTimer interval (see AutosaveService.DefaultInterval).
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);
+    private static readonly object ActiveCoordinatorsGate = new();
+    private static readonly List<AvaloniaAutosaveCoordinator> ActiveCoordinators = [];
 
     private readonly MainWindow _mainWindow;
     private readonly AutosaveSnapshotStore _store;
@@ -277,10 +275,15 @@ internal sealed class AvaloniaAutosaveCoordinator
         _mainWindow = mainWindow;
         _store = store;
 
-        // One snapshot per process launch — this shell only ever has a single MainWindow, so
-        // (unlike WPF's per-window registry) there is no need for a per-window discriminator.
+        // Keep a unique snapshot per live workbook view so sibling windows own independent
+        // autosave lifecycles and recovery artifacts.
         var launchTag = AutosaveSnapshotStore.LaunchId.ToString("N")[..8];
-        _coordinator = new AutosaveSnapshotCoordinator(_store, $"recovery-{Environment.ProcessId}-{launchTag}");
+        var windowTag = Guid.NewGuid().ToString("N")[..8];
+        _coordinator = new AutosaveSnapshotCoordinator(
+            _store,
+            $"recovery-{Environment.ProcessId}-{launchTag}-{windowTag}");
+        lock (ActiveCoordinatorsGate)
+            ActiveCoordinators.Add(this);
     }
 
     /// <summary>Starts the periodic autosave timer. Safe to call once, on the UI thread.</summary>
@@ -305,6 +308,17 @@ internal sealed class AvaloniaAutosaveCoordinator
     public void TryEmergencySnapshot() =>
         _coordinator.TryEmergencySnapshot(new SessionSnapshotSource(_mainWindow, _adapter));
 
+    /// <summary>Attempts an emergency snapshot for every live workbook view.</summary>
+    public static void TryEmergencySnapshots()
+    {
+        AvaloniaAutosaveCoordinator[] coordinators;
+        lock (ActiveCoordinatorsGate)
+            coordinators = ActiveCoordinators.ToArray();
+
+        foreach (var coordinator in coordinators)
+            coordinator.TryEmergencySnapshot();
+    }
+
     /// <summary>
     /// Called on a normal window close. Stops the timer and deletes the session's snapshot —
     /// there is nothing left to recover from a clean shutdown.
@@ -314,6 +328,8 @@ internal sealed class AvaloniaAutosaveCoordinator
         _timer?.Stop();
         _timer = null;
         _coordinator.DeleteSnapshot();
+        lock (ActiveCoordinatorsGate)
+            ActiveCoordinators.Remove(this);
     }
 
     /// <summary>

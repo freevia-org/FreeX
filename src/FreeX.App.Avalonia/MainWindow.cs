@@ -746,7 +746,9 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _legalNoticesMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
+    private static readonly AvaloniaWorkbookWindowRegistry WindowRegistry = new();
     private WorkbookSession _session;
+    private string _windowTitleSuffix = string.Empty;
 
     /// <summary>
     /// Test-only accessor for the active <see cref="WorkbookSession"/> so headless regression tests
@@ -1021,11 +1023,36 @@ public sealed partial class MainWindow : Window
     {
     }
 
+    internal MainWindow(IReadOnlyList<string> startupArguments, WorkbookSession sharedSession)
+        : this(
+            startupArguments,
+            WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
+            WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
+            new CupsPlatformPrinter(),
+            sharedSession)
+    {
+    }
+
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
         IWorkbookShareSheetService workbookShareSheetService,
         IWorkbookFileAccessService workbookFileAccessService,
         IPlatformPrinter platformPrinter)
+        : this(
+            startupArguments,
+            workbookShareSheetService,
+            workbookFileAccessService,
+            platformPrinter,
+            sharedSession: null)
+    {
+    }
+
+    private MainWindow(
+        IReadOnlyList<string> startupArguments,
+        IWorkbookShareSheetService workbookShareSheetService,
+        IWorkbookFileAccessService workbookFileAccessService,
+        IPlatformPrinter platformPrinter,
+        WorkbookSession? sharedSession)
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
         ArgumentNullException.ThrowIfNull(workbookFileAccessService);
@@ -1040,9 +1067,13 @@ public sealed partial class MainWindow : Window
         // real fixture workbook inside CaptureGridRangeAsync.  Every other startup path keeps the normal
         // loader/fallback behavior.
         StartupWorkbookLoadResult? source = null;
-        if (App.ParityCaptureOptions is not null ||
-            App.GridCaptureOptions is not null ||
-            App.InteractionValidationOptions is not null)
+        if (sharedSession is not null)
+        {
+            _session = sharedSession;
+        }
+        else if (App.ParityCaptureOptions is not null ||
+                 App.GridCaptureOptions is not null ||
+                 App.InteractionValidationOptions is not null)
         {
             _session = _sessionFactory.CreateParityDemo(InitialViewportHeight, InitialViewportWidth, includeObjects: true);
         }
@@ -1068,6 +1099,7 @@ public sealed partial class MainWindow : Window
         }
 
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+        _session.WorkbookChanged += Session_WorkbookChanged;
 
         Title = FormatWindowWorkbookTitle();
         ApplyWindowIcon();
@@ -1084,6 +1116,7 @@ public sealed partial class MainWindow : Window
         KeyDown += MainWindow_KeyDown;
         TextInput += MainWindow_TextInput;
         Closing += MainWindow_Closing;
+        WindowRegistry.Register(this);
         RefreshShell(_session.StartupStatus);
     }
 
@@ -3939,8 +3972,9 @@ public sealed partial class MainWindow : Window
             isDirty: _session.IsDirty,
             dirtyMarker: DirtyTitleSuffix,
             separator: TitleSeparator,
+            windowSuffix: _windowTitleSuffix,
             groupSuffix: _session.IsWorkbookGrouped ? GroupTitleSuffix : "",
-            applicationPlacement: WindowTitleApplicationPlacement.ApplicationThenDocument);
+            applicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication);
 
     private void RefreshShell(string status)
     {
@@ -8508,6 +8542,14 @@ public sealed partial class MainWindow : Window
                 _session.Workbook.Theme),
             borderNeighbors: borderNeighbors);
 
+        // The outer cell border is the worksheet hit target.  Keep rendered content out of the
+        // hit-test tree so an overflowing TextBlock cannot capture a pointer over the adjacent
+        // cell; WPF paints cell text directly into its DrawingContext and has no equivalent child
+        // visual.  Inline editing replaces this child with a live TextBox below, so edit gestures
+        // remain interactive.
+        if (border.Child is { } cellContent)
+            cellContent.IsHitTestVisible = false;
+
         // Comment/note corner indicator + hover card: mirrors WPF's GridView.Rendering.cs
         // DrawCommentIndicator (small top-right triangle, red for a legacy note, purple for a
         // threaded comment or a cell that mixes both) and GridView.CommentPreview.cs (hover shows
@@ -11536,7 +11578,7 @@ public sealed partial class MainWindow : Window
             return;
 
         var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
-        _session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
+        ReplaceSession(_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true));
         RefreshViewportSizeForZoom();
         ClearSelectedDrawingObject();
         RefreshShell(_session.StartupStatus);
@@ -11560,7 +11602,7 @@ public sealed partial class MainWindow : Window
     private void ResetToNewWorkbook(string status)
     {
         var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
-        _session = _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
+        ReplaceSession(_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true));
         RefreshViewportSizeForZoom();
         ClearSelectedDrawingObject();
         RefreshShell(status);
@@ -25728,7 +25770,7 @@ public sealed partial class MainWindow : Window
                 target.Format,
                 progress);
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
-            _session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);
+            ReplaceSession(_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true));
             RefreshViewportSizeForZoom();
             RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
             ClearSelectedDrawingObject();
@@ -25778,7 +25820,7 @@ public sealed partial class MainWindow : Window
                 SourcePath: originalFilePath);
 
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
-            _session = _sessionFactory.Create(source, viewportHeight, viewportWidth, includeObjects: true);
+            ReplaceSession(_sessionFactory.Create(source, viewportHeight, viewportWidth, includeObjects: true));
             _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
             // Mark the recovered session dirty so the user sees the modified indicator and is
             // prompted to save rather than risk silently losing the recovered data — mirrors the

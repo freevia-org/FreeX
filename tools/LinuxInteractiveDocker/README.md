@@ -115,19 +115,34 @@ contract is:
   origin, cell pitch, and the three calibration screenshots.
 - `summary`: exact passed, failed, and total counts for the physical rows.
 - `results`: unique `x11-input` rows with `physical-x11-input` evidence, a
-  `passed` or `failed` status, and one or more retained evidence files.
+  `passed` or `failed` status, and an `artifacts` array naming retained evidence
+  files. The runner verifies those files exist and are non-empty for the native
+  boundary rows.
 
 Calibration is derived from visible Ctrl+Home, A1-to-B1, and A1-to-A2 selection
 transitions. The aggregator accepts the physical stream only when calibration
-passes, geometry is positive, counts match, row IDs are unique, and all required
-physical probes are present. Those probes cover F2 cancel and commit, Ctrl+S,
-Shift+F12 Save, F12 Save As cancel, inline and formula-bar point mode, standalone
-Alt and F10 keytips, Shift+F10 and right-click worksheet context menus, Format
-Cells keyboard traversal, Ctrl+F12 Open cancel, and Ctrl+Shift+F12 Print Preview
-cancel. Cell value/formula and save assertions use the X11 clipboard and the
-harness-owned CSV only; empty-cell cancellation uses exact calibrated cell-pixel
+passes, geometry is positive, counts match, row IDs are unique, required
+physical probes are present, and required native-boundary artifacts exist and
+are non-empty. Those probes cover F2 cancel and commit, Ctrl+S, Shift+F12 Save,
+F12 Save As cancel, inline and formula-bar point mode, standalone Alt and F10
+keytips, rendered Shift+F10 and right-click worksheet context menus, physical
+Copy and Clear activation in that rendered popup, clipboard Copy/Paste and
+Cut/Paste roundtrips, deterministic View key-tip New Window/Arrange All/Ctrl+F6
+switching, Format Cells keyboard traversal, Ctrl+F12 Open cancel, and
+Ctrl+Shift+F12 Print Preview cancel. Cell value/formula, clipboard, and save
+assertions use concrete X11 clipboard and harness-owned CSV/file-hash
+postconditions. Empty-cell cancellation uses exact calibrated cell-pixel
 restoration because copying an empty grid cell does not guarantee a new X11
-clipboard owner.
+clipboard owner. The worksheet popup rows do not claim activation of platform
+native Avalonia `NativeMenuItem` menus; that boundary remains explicitly skipped
+where only an application-native menu can be tested.
+
+The New Window row is deliberately physical-shell scoped: it proves an
+additional workbook-shaped top-level window, valid Arrange All geometry, and
+physical window switching. Shared-workbook model identity, local view state,
+document detach, title numbering, and close lifecycle are proven separately by
+`AvaloniaSharedWorkbookWindowTests`; the physical row does not substitute for
+those behavior assertions.
 
 ## Environment Boundaries
 

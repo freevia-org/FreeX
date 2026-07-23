@@ -35,9 +35,24 @@ json_escape() {
     printf '%s' "$value"
 }
 
+artifact_json() {
+    local value="${1:-}" token first=true
+    local -a tokens=()
+    printf '['
+    IFS=';' read -ra tokens <<< "$value"
+    for token in "${tokens[@]}"; do
+        token="${token#${token%%[![:space:]]*}}"
+        token="${token%${token##*[![:space:]]}}"
+        [[ -z "$token" ]] && continue
+        if $first; then first=false; else printf ','; fi
+        printf '"%s"' "$(json_escape "$token")"
+    done
+    printf ']'
+}
+
 record() {
-    local id="$1" status="$2" evidence="$3" note="${4:-}"
-    results+=("{\"id\":\"$(json_escape "$id")\",\"category\":\"x11-input\",\"status\":\"$status\",\"evidenceLevel\":\"physical-x11-input\",\"evidence\":\"$(json_escape "$evidence")\",\"note\":\"$(json_escape "$note")\"}")
+    local id="$1" status="$2" evidence="$3" note="${4:-}" artifacts="${5:-}"
+    results+=("{\"id\":\"$(json_escape "$id")\",\"category\":\"x11-input\",\"status\":\"$status\",\"evidenceLevel\":\"physical-x11-input\",\"evidence\":\"$(json_escape "$evidence")\",\"artifacts\":$(artifact_json "$artifacts"),\"note\":\"$(json_escape "$note")\"}")
 }
 
 write_manifest() {
@@ -87,7 +102,7 @@ on_error() {
 }
 trap on_error ERR
 
-window_id="$(xdotool search --onlyvisible --name '^FreeX' 2>/dev/null | tail -1 || true)"
+window_id="$(xdotool search --onlyvisible --name '^.+ - FreeX$' 2>/dev/null | tail -1 || true)"
 if [[ -z "$window_id" ]]; then
     calibration_reason="No visible FreeX window."
     record "x11-window-discovery" "failed" "x11-input-results.json" "$calibration_reason"
@@ -116,6 +131,61 @@ type_text() {
 
 clipboard_text() {
     xclip -selection clipboard -out 2>/dev/null | tr -d '\r\n'
+}
+
+wait_for_clipboard() {
+    local expected="$1" value
+    for _ in $(seq 1 10); do
+        value="$(clipboard_text)"
+        if [[ "$value" == "$expected" ]]; then
+            printf '%s' "$value"
+            return 0
+        fi
+        sleep 0.12
+    done
+    printf '%s' "$(clipboard_text)"
+    return 1
+}
+
+set_cell_text() {
+    local column_offset="$1" row_offset="$2" address="$3" value="$4"
+    select_cell "$column_offset" "$row_offset" "$address" || return 1
+    send_key F2
+    send_key ctrl+a
+    # xdotool type with an empty string is a no-op; erase explicitly so an empty
+    # destination is genuinely seeded as empty.
+    send_key BackSpace
+    if [[ -n "$value" ]]; then
+        type_text "$value"
+    fi
+    send_key Enter
+    select_cell "$column_offset" "$row_offset" "$address"
+}
+
+csv_cell_value() {
+    local column_offset="$1" row_offset="$2"
+    [[ -f "$document_path" ]] || return 1
+    # CSV rows map directly to worksheet rows; row offset 0 is the first row.
+    awk -F',' -v row="$((row_offset + 1))" -v column="$((column_offset + 1))" \
+        'NR == row { print $column; found = 1; exit } END { if (!found) print "" }' \
+        "$document_path" | tr -d '\r'
+}
+
+wait_for_csv_cell() {
+    local column_offset="$1" row_offset="$2" expected="$3" value
+    for _ in $(seq 1 12); do
+        value="$(csv_cell_value "$column_offset" "$row_offset")"
+        if [[ "$value" == "$expected" ]]; then
+            return 0
+        fi
+        sleep 0.2
+    done
+    return 1
+}
+
+write_artifact() {
+    local name="$1" contents="$2"
+    printf '%b\n' "$contents" > "$output/$name"
 }
 
 copy_cell_display() {
@@ -347,10 +417,270 @@ visible_window_count() {
     wmctrl -l 2>/dev/null | wc -l
 }
 
+freex_window_ids() {
+    # WindowTitlePlanner composes WPF-compatible workbook titles as "<document> - FreeX".
+    # The exact shape excludes dialogs, pickers, and other transient windows.
+    xdotool search --onlyvisible --name '^.+ - FreeX$' 2>/dev/null | sort -n || true
+}
+
+freex_window_count() {
+    freex_window_ids | awk 'NF { count += 1 } END { print count + 0 }'
+}
+
+window_bounds_signature() {
+    local id
+    while read -r id; do
+        [[ -z "$id" ]] && continue
+        eval "$(xdotool getwindowgeometry --shell "$id" 2>/dev/null)" || continue
+        printf '%s:%s,%s,%s,%s\n' "$id" "$X" "$Y" "$WIDTH" "$HEIGHT"
+    done < <(freex_window_ids)
+}
+
+window_bounds_are_valid() {
+    local signature="$1" line id bounds x y width height count=0
+    while IFS=: read -r id bounds; do
+        [[ -z "$id" ]] && continue
+        IFS=',' read -r x y width height <<< "$bounds"
+        [[ "$x" =~ ^-?[0-9]+$ && "$y" =~ ^-?[0-9]+$ &&
+           "$width" =~ ^[0-9]+$ && "$height" =~ ^[0-9]+$ ]] || return 1
+        (( width > 0 && height > 0 )) || return 1
+        ((count += 1))
+    done <<< "$signature"
+    (( count >= 2 ))
+}
+
+enter_keytip_mode() {
+    focus_app
+    xdotool keydown --window "$window_id" Alt_L
+    sleep 0.18
+    xdotool keyup --window "$window_id" Alt_L
+    sleep "$settle_seconds"
+}
+
+keytip_key() {
+    xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$window_id" "$1"
+    sleep "$settle_seconds"
+}
+
+enter_view_keytip() {
+    enter_keytip_mode
+    keytip_key w
+}
+
+send_active_key() {
+    xdotool key --clearmodifiers --delay "$input_delay_ms" "$@"
+    sleep "$settle_seconds"
+}
+
+probe_worksheet_context_copy() {
+    local value="X11ContextCopy" clipboard="" artifacts="worksheet-context-copy-before.png;worksheet-context-copy-open.png;worksheet-context-copy-after.png;worksheet-context-copy-postcondition.txt"
+    if set_cell_text 6 10 G11 "$value"; then
+        printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
+        capture "worksheet-context-copy-before.png"
+        send_key shift+F10
+        capture "worksheet-context-copy-open.png"
+        send_active_key Home Down Return
+        clipboard="$(wait_for_clipboard "$value" || true)"
+        capture "worksheet-context-copy-after.png"
+        write_artifact "worksheet-context-copy-postcondition.txt" "expected=$value\nclipboard=$clipboard\ncell=G11"
+        if [[ "$clipboard" == "$value" ]]; then
+            record "worksheet-context-copy-physical" "passed" "worksheet-context-copy-before.png; worksheet-context-copy-open.png; worksheet-context-copy-after.png; clipboard=$clipboard" "The rendered worksheet popup was opened through X11 and its Copy item changed the X11 clipboard to the exact selected-cell value." "$artifacts"
+        else
+            record "worksheet-context-copy-physical" "failed" "worksheet-context-copy-before.png; worksheet-context-copy-open.png; worksheet-context-copy-after.png; clipboard=$clipboard" "The worksheet popup opened, but its physical Copy activation did not produce the expected clipboard value." "$artifacts"
+        fi
+    else
+        write_artifact "worksheet-context-copy-postcondition.txt" "seeded=false\ncell=G11"
+        record "worksheet-context-copy-physical" "failed" "worksheet-context-copy-postcondition.txt" "Could not seed calibrated G11 for the physical worksheet context Copy probe." "worksheet-context-copy-postcondition.txt"
+    fi
+    dismiss_overlays
+}
+
+probe_worksheet_context_clear() {
+    local value="X11ContextClear" before_hash="" after_hash="" observed="" artifacts="worksheet-context-clear-before.png;worksheet-context-clear-open.png;worksheet-context-clear-after.png;worksheet-context-clear-postcondition.txt"
+    if set_cell_text 6 11 G12 "$value"; then
+        before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}')"
+        capture "worksheet-context-clear-before.png"
+        send_key shift+F10
+        capture "worksheet-context-clear-open.png"
+        # Clear is the final top-level item; Right opens its submenu, then Home selects
+        # Clear Contents. This is physical keyboard navigation of the rendered popup.
+        send_active_key End Right Home Return
+        capture "worksheet-context-clear-after.png"
+        send_key ctrl+s
+        for _ in $(seq 1 12); do
+            after_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}')"
+            [[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && break
+            sleep 0.25
+        done
+        observed="$(csv_cell_value 6 11)"
+        write_artifact "worksheet-context-clear-postcondition.txt" "expected-empty=true\nobserved=$(json_escape "$observed")\nfile-hash-before=$before_hash\nfile-hash-after=$after_hash\ncell=G12"
+        if [[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && wait_for_csv_cell 6 11 ""; then
+            record "worksheet-context-clear-physical" "passed" "worksheet-context-clear-before.png; worksheet-context-clear-open.png; worksheet-context-clear-after.png; cell=G12; saved-value-empty=true; file-hash-changed=true" "The rendered Clear submenu was physically activated and the saved harness CSV proves G12 is empty." "$artifacts"
+        else
+            record "worksheet-context-clear-physical" "failed" "worksheet-context-clear-before.png; worksheet-context-clear-open.png; worksheet-context-clear-after.png; cell=G12; observed-value=$observed; file-hash-changed=$([[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && printf true || printf false)" "Clear Contents did not produce the required saved-cell and file-hash postconditions." "$artifacts"
+        fi
+    else
+        write_artifact "worksheet-context-clear-postcondition.txt" "seeded=false\ncell=G12"
+        record "worksheet-context-clear-physical" "failed" "worksheet-context-clear-postcondition.txt" "Could not seed calibrated G12 for the physical worksheet context Clear probe." "worksheet-context-clear-postcondition.txt"
+    fi
+    dismiss_overlays
+}
+
+probe_clipboard_roundtrips() {
+    local copy_value="X11CopyPaste" cut_value="X11CutPaste"
+    local clipboard="" before_hash="" after_hash="" copy_destination="" cut_destination="" cut_source=""
+    local copy_artifacts="clipboard-copy-paste-before.png;clipboard-copy-paste-after.png;clipboard-copy-paste-postcondition.txt"
+    local cut_artifacts="clipboard-cut-paste-before.png;clipboard-cut-paste-after.png;clipboard-cut-paste-postcondition.txt"
+
+    if set_cell_text 6 12 G13 "$copy_value" && set_cell_text 7 12 H13 ""; then
+        printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
+        select_cell 6 12 G13
+        capture "clipboard-copy-paste-before.png"
+        send_key ctrl+c
+        clipboard="$(wait_for_clipboard "$copy_value" || true)"
+        select_cell 7 12 H13
+        send_key ctrl+v
+        capture "clipboard-copy-paste-after.png"
+        send_key ctrl+s
+        sleep "$dialog_settle_seconds"
+        copy_destination="$(csv_cell_value 7 12)"
+        write_artifact "clipboard-copy-paste-postcondition.txt" "expected=$copy_value\nclipboard=$clipboard\ndestination=H13\nsaved-destination=$copy_destination"
+        if [[ "$clipboard" == "$copy_value" ]] && wait_for_csv_cell 7 12 "$copy_value"; then
+            record "clipboard-copy-paste-roundtrip" "passed" "clipboard-copy-paste-before.png; clipboard-copy-paste-after.png; clipboard=$clipboard; saved-cell=H13:$copy_destination" "Physical Ctrl+C/Ctrl+V roundtrip produced the exact clipboard text and saved destination value." "$copy_artifacts"
+        else
+            record "clipboard-copy-paste-roundtrip" "failed" "clipboard-copy-paste-before.png; clipboard-copy-paste-after.png; clipboard=$clipboard; saved-cell=H13:$copy_destination" "Copy/paste did not satisfy the exact clipboard and saved-cell postconditions." "$copy_artifacts"
+        fi
+    else
+        write_artifact "clipboard-copy-paste-postcondition.txt" "seeded=false\nsource=G13\ndestination=H13"
+        record "clipboard-copy-paste-roundtrip" "failed" "clipboard-copy-paste-postcondition.txt" "Could not seed the copy/paste roundtrip cells." "clipboard-copy-paste-postcondition.txt"
+    fi
+    dismiss_overlays
+
+    if set_cell_text 6 13 G14 "$cut_value" && set_cell_text 7 13 H14 ""; then
+        printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
+        before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}')"
+        select_cell 6 13 G14
+        capture "clipboard-cut-paste-before.png"
+        send_key ctrl+x
+        clipboard="$(wait_for_clipboard "$cut_value" || true)"
+        select_cell 7 13 H14
+        send_key ctrl+v
+        capture "clipboard-cut-paste-after.png"
+        send_key ctrl+s
+        for _ in $(seq 1 12); do
+            after_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}')"
+            [[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && break
+            sleep 0.25
+        done
+        cut_destination="$(csv_cell_value 7 13)"
+        cut_source="$(csv_cell_value 6 13)"
+        write_artifact "clipboard-cut-paste-postcondition.txt" "expected=$cut_value\nclipboard=$clipboard\nsource=G14\ndestination=H14\nsaved-source=$(json_escape "$cut_source")\nsaved-destination=$cut_destination\nfile-hash-before=$before_hash\nfile-hash-after=$after_hash"
+        if [[ "$clipboard" == "$cut_value" && "$cut_source" == "" && "$cut_destination" == "$cut_value" && -n "$before_hash" && "$after_hash" != "$before_hash" ]]; then
+            record "clipboard-cut-paste-roundtrip" "passed" "clipboard-cut-paste-before.png; clipboard-cut-paste-after.png; clipboard=$clipboard; saved-source=G14:empty; saved-destination=H14:$cut_destination; file-hash-changed=true" "Physical Ctrl+X/Ctrl+V roundtrip proves the clipboard value, cleared source, destination value, and changed saved file." "$cut_artifacts"
+        else
+            record "clipboard-cut-paste-roundtrip" "failed" "clipboard-cut-paste-before.png; clipboard-cut-paste-after.png; clipboard=$clipboard; saved-source=G14:$cut_source; saved-destination=H14:$cut_destination; file-hash-changed=$([[ -n "$before_hash" && "$after_hash" != "$before_hash" ]] && printf true || printf false)" "Cut/paste did not satisfy the exact clipboard, source, destination, and file-hash postconditions." "$cut_artifacts"
+        fi
+    else
+        write_artifact "clipboard-cut-paste-postcondition.txt" "seeded=false\nsource=G14\ndestination=H14"
+        record "clipboard-cut-paste-roundtrip" "failed" "clipboard-cut-paste-postcondition.txt" "Could not seed the cut/paste roundtrip cells." "clipboard-cut-paste-postcondition.txt"
+    fi
+    dismiss_overlays
+}
+
+probe_window_management() {
+    local before_count after_count active_before active_after candidate existing known
+    local pre_arrange_bounds after_bounds active_after_is_created=false
+    local artifacts="window-new-before.png;window-new-after.png;window-arrange-after.png;window-switch-after.png;window-bounds-before.txt;window-bounds-after-arrange.txt;window-management-postcondition.txt"
+    local -a baseline_window_ids=() current_window_ids=() created_window_ids=()
+    mapfile -t baseline_window_ids < <(freex_window_ids)
+    before_count="${#baseline_window_ids[@]}"
+    capture "window-new-before.png"
+    enter_view_keytip
+    keytip_key n
+    keytip_key w
+    after_count=0
+    for _ in $(seq 1 12); do
+        after_count="$(freex_window_count)"
+        if (( after_count > before_count )); then
+            break
+        fi
+        sleep 0.25
+    done
+    capture "window-new-after.png"
+    mapfile -t current_window_ids < <(freex_window_ids)
+    for candidate in "${current_window_ids[@]}"; do
+        known=false
+        for existing in "${baseline_window_ids[@]}"; do
+            if [[ "$candidate" == "$existing" ]]; then
+                known=true
+                break
+            fi
+        done
+        if ! $known; then
+            created_window_ids+=("$candidate")
+        fi
+    done
+    if (( after_count != before_count + 1 )); then
+        write_artifact "window-management-postcondition.txt" "before-count=$before_count\nafter-new-count=$after_count\nnew-window=false"
+        record "window-new-arrange-switch-physical" "failed" "window-new-before.png; window-new-after.png; window-management-postcondition.txt; before-count=$before_count; after-new-count=$after_count" "The rendered View key-tip route did not create exactly one additional visible workbook window." "window-new-before.png;window-new-after.png;window-management-postcondition.txt"
+        for candidate in "${created_window_ids[@]}"; do
+            [[ -z "$candidate" || "$candidate" == "$window_id" ]] && continue
+            xdotool windowclose "$candidate" 2>/dev/null || true
+        done
+        dismiss_overlays
+        return
+    fi
+
+    pre_arrange_bounds="$(window_bounds_signature)"
+    write_artifact "window-bounds-before.txt" "$pre_arrange_bounds"
+    focus_app
+    enter_view_keytip
+    keytip_key a
+    keytip_key t
+    sleep "$dialog_settle_seconds"
+    after_bounds="$(window_bounds_signature)"
+    write_artifact "window-bounds-after-arrange.txt" "$after_bounds"
+    capture "window-arrange-after.png"
+    active_before="$(xdotool getactivewindow 2>/dev/null || true)"
+    send_active_key ctrl+F6
+    active_after="$(xdotool getactivewindow 2>/dev/null || true)"
+    capture "window-switch-after.png"
+    for candidate in "${created_window_ids[@]}"; do
+        if [[ "$candidate" == "$active_after" ]]; then
+            active_after_is_created=true
+            break
+        fi
+    done
+    write_artifact "window-management-postcondition.txt" "before-count=$before_count\nafter-new-count=$after_count\ncreated-ids=${created_window_ids[*]}\nactive-before-switch=$active_before\nactive-after-switch=$active_after\nactive-after-is-created=$active_after_is_created\nbounds-before-arrange=$pre_arrange_bounds\nbounds-after-arrange=$after_bounds"
+
+    if window_bounds_are_valid "$after_bounds" && [[ "$after_bounds" != "$pre_arrange_bounds" ]] &&
+       [[ -n "$active_after" && "$active_after" != "$active_before" && "$active_after_is_created" == true ]]; then
+        record "window-new-arrange-switch-physical" "passed" "window-new-before.png; window-new-after.png; window-arrange-after.png; window-switch-after.png; window-management-postcondition.txt; visible-count=$after_count; active-window-switched=true; shared-workbook-parity=managed-behavior-tested" "Physical View key-tip New Window created one additional top-level workbook window, Arrange All changed valid bounds, and Ctrl+F6 switched to the created window. Shared-workbook model, view-state, detach, title, and close lifecycle semantics are covered by AvaloniaSharedWorkbookWindowTests." "$artifacts"
+    else
+        record "window-new-arrange-switch-physical" "failed" "window-new-before.png; window-new-after.png; window-arrange-after.png; window-switch-after.png; window-management-postcondition.txt; visible-count=$after_count; active-before=$active_before; active-after=$active_after" "Window management did not satisfy exact count, bounds, and active-window postconditions." "$artifacts"
+    fi
+
+    # Close only windows observed after New Window that were absent from the
+    # baseline; unrelated workbook windows are never touched by this probe.
+    for candidate in "${created_window_ids[@]}"; do
+        [[ -z "$candidate" || "$candidate" == "$window_id" ]] && continue
+        xdotool windowclose "$candidate" 2>/dev/null || true
+    done
+    for _ in $(seq 1 10); do
+        (( $(freex_window_count) <= before_count )) && break
+        sleep 0.25
+    done
+    focus_app
+    dismiss_overlays
+}
+
 probe_cancelable_window() {
     local id="$1" keys="$2" screenshot_name="$3"
     local before after dialog_id opened=false closed=false
+    local before_screenshot="${id}-before.png" after_screenshot="${id}-after-open.png" cancel_screenshot="${id}-after-cancel.png"
+    local artifacts="${before_screenshot};${after_screenshot};${cancel_screenshot};${id}-postcondition.txt"
     before="$(visible_window_count)"
+    capture "$before_screenshot"
     send_key "$keys"
     for _ in $(seq 1 8); do
         after="$(visible_window_count)"
@@ -360,7 +690,7 @@ probe_cancelable_window() {
         fi
         sleep 0.2
     done
-    capture "$screenshot_name"
+    capture "$after_screenshot"
     if $opened; then
         dialog_id="$(xdotool getactivewindow 2>/dev/null || true)"
         if [[ -n "$dialog_id" && "$dialog_id" != "$window_id" ]]; then
@@ -378,6 +708,8 @@ probe_cancelable_window() {
                 sleep 0.2
             done
         fi
+        capture "$cancel_screenshot"
+        write_artifact "${id}-postcondition.txt" "shortcut=$keys\nwindow-count-before=$before\nwindow-count-after-open=$after\nwindow-count-after-cancel=$(visible_window_count)\ndialog-window-id=$dialog_id\nopened=$opened\nclosed=$closed"
         if $closed; then
             # A native GTK picker and Avalonia ShowDialog can remove their X11 window before the
             # owner's modal loop has unwound. The owner already reports focused at that point, but
@@ -386,13 +718,15 @@ probe_cancelable_window() {
             focus_app
             xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$window_id" Escape 2>/dev/null || true
             sleep "$dialog_settle_seconds"
-            record "$id" "passed" "$screenshot_name"
+            record "$id" "passed" "$before_screenshot; $after_screenshot; $cancel_screenshot; dialog-window-id=$dialog_id; window-count-before=$before; window-count-after-open=$after; window-count-after-cancel=$(visible_window_count)" "The cancel-only native flow opened a distinct top-level window and Escape returned to the workbook with the original window count." "$artifacts"
         else
-            record "$id" "failed" "$screenshot_name" "$keys opened a window, but targeted Escape did not close it."
+            record "$id" "failed" "$before_screenshot; $after_screenshot; $cancel_screenshot; dialog-window-id=$dialog_id; window-count-before=$before; window-count-after-open=$after" "$keys opened a window, but targeted Escape did not close it." "$artifacts"
             dismiss_overlays
         fi
     else
-        record "$id" "failed" "$screenshot_name" "$keys did not open a cancelable window."
+        capture "$cancel_screenshot"
+        write_artifact "${id}-postcondition.txt" "shortcut=$keys\nwindow-count-before=$before\nwindow-count-after-open=$after\ndialog-window-id=$dialog_id\nopened=$opened\nclosed=$closed"
+        record "$id" "failed" "$before_screenshot; $after_screenshot; $cancel_screenshot; window-count-before=$before; window-count-after-open=$after" "$keys did not open a cancelable window." "$artifacts"
         dismiss_overlays
     fi
 }
@@ -677,6 +1011,15 @@ else
     record "worksheet-context-shift-f10" "failed" "selection-B2.png" "Could not physically select calibrated B2."
     record "worksheet-context-right-click" "failed" "selection-B2.png" "Could not physically select calibrated B2."
 fi
+
+# The worksheet context menu is an Avalonia-rendered popup, not an application NativeMenu. These
+# probes credit only physical X11 navigation of that popup and assert the command's real clipboard
+# or saved-cell effect; application-level NativeMenuItem activation remains an explicit managed-lane
+# boundary in the exhaustive report.
+probe_worksheet_context_copy
+probe_worksheet_context_clear
+probe_clipboard_roundtrips
+probe_window_management
 
 # Real shortcut-to-dialog path, followed by paced focus traversal and Escape cancellation.
 send_key ctrl+1

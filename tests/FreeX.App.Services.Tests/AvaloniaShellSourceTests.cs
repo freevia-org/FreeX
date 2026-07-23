@@ -4848,7 +4848,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WindowTitlePlanner.Compose(");
         source.Should().Contain("applicationName: ApplicationTitle");
         source.Should().Contain("groupSuffix: _session.IsWorkbookGrouped ? GroupTitleSuffix : \"\"");
-        source.Should().Contain("applicationPlacement: WindowTitleApplicationPlacement.ApplicationThenDocument");
+        source.Should().Contain("applicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication");
         source.Should().Contain("Title = FormatWindowWorkbookTitle();");
         source.Should().Contain("var isGroupedTab = tab.IsGrouped && _session.IsWorkbookGrouped;");
         source.Should().Contain(": isGroupedTab");

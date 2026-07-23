@@ -1689,12 +1689,24 @@ public sealed partial class MainWindow : Window
             new TableRibbonContextSource(_editor),
             new HeaderFooterRibbonContextSource(_editor),
             new FloatingRibbonContextSource(_editor));
+        // The shared Avalonia renderer owns the shell File tab so its F key tip can route
+        // through the same Backstage callback as FreeP. FreeW's canonical definition keeps
+        // its Avalonia-only File command group for the portable catalog, but it must not be
+        // rendered a second time beside the shell tab.
+        var canonicalDefinition = FreeWRibbon.BuildDefinition();
+        var definition = canonicalDefinition with
+        {
+            Tabs = canonicalDefinition.Tabs
+                .Where(tab => !string.Equals(tab.Id, "file", StringComparison.Ordinal))
+                .ToArray(),
+        };
         _ribbonControl = AvaloniaRibbonRenderer.BuildRibbon(
-            FreeWRibbon.BuildDefinition(),
+            definition,
             registry,
             contextSource: contextSource,
             afterExecute: () => _editor.Focus(),
-            palette: RibbonVisualPalette.FromTheme(App.ActiveTheme));
+            palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
+            onFileTabSelected: () => _ = ShowBackstageAsync());
         HasToolbar = true;
         return new Border
         {
@@ -2354,6 +2366,13 @@ public sealed partial class MainWindow : Window
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)
     {
         if (args.Key is Key.LeftAlt or Key.RightAlt)
+        {
+            SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
+            args.Handled = true;
+            return true;
+        }
+
+        if (args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None)
         {
             SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
             args.Handled = true;

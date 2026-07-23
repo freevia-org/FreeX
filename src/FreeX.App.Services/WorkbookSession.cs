@@ -1,4 +1,5 @@
 using FreeX.App.Presentation.Editing;
+using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -135,6 +136,12 @@ public sealed class WorkbookSession
     private readonly WorkbookSheetSelectionService _sheetSelectionService;
     private readonly IViewportService _viewportService;
     private readonly bool _includeObjects;
+    private readonly WorkbookSession? _sharedDocumentStateOwner;
+    private string? _currentFilePath;
+    private WorkbookFileAccessIdentity? _currentFileAccessIdentity;
+    private XlsxFeatureReport? _currentXlsxFeatureReport;
+    private bool _isDirty;
+    private int _dirtyGeneration;
     private readonly WorkbookSelectionStatsCache _selectionStatsCache = new();
     private readonly WorksheetSelectionStore _worksheetSelections = new();
     private readonly HashSet<SheetId> _groupedSheetIds = [];
@@ -155,6 +162,7 @@ public sealed class WorkbookSession
     /// small and never grows unbounded across many sheets.
     /// </summary>
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
+    private readonly Dictionary<SheetId, (uint TopRow, uint LeftCol)> _viewViewportOrigins = [];
     private ulong _selectionStatsRevision;
     private string? _lastFindText;
     private FindOptions? _lastFindOptions;
@@ -180,6 +188,30 @@ public sealed class WorkbookSession
     /// </summary>
     private long? _savedUndoStackVersion;
 
+    private int SavedUndoDepth
+    {
+        get => _sharedDocumentStateOwner?.SavedUndoDepth ?? _savedUndoDepth;
+        set
+        {
+            if (_sharedDocumentStateOwner is { } owner)
+                owner.SavedUndoDepth = value;
+            else
+                _savedUndoDepth = value;
+        }
+    }
+
+    private long? SavedUndoStackVersion
+    {
+        get => _sharedDocumentStateOwner?.SavedUndoStackVersion ?? _savedUndoStackVersion;
+        set
+        {
+            if (_sharedDocumentStateOwner is { } owner)
+                owner.SavedUndoStackVersion = value;
+            else
+                _savedUndoStackVersion = value;
+        }
+    }
+
     internal WorkbookSession(
         StartupWorkbookLoadResult source,
         IReadOnlyList<IFileAdapter> adapters,
@@ -188,7 +220,8 @@ public sealed class WorkbookSession
         IViewportService viewportService,
         double viewportHeight,
         double viewportWidth,
-        bool includeObjects)
+        bool includeObjects,
+        WorkbookSession? sharedDocumentStateOwner = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(adapters);
@@ -204,11 +237,15 @@ public sealed class WorkbookSession
         _viewportHeight = NormalizeViewportDimension(viewportHeight, fallback: 1);
         _viewportWidth = NormalizeViewportDimension(viewportWidth, fallback: 1);
         _includeObjects = includeObjects;
+        _sharedDocumentStateOwner = sharedDocumentStateOwner;
 
         Workbook = source.Workbook;
-        CurrentFilePath = source.OpenedAsTemplate ? null : source.SourcePath;
-        CurrentFileAccessIdentity = ResolveCurrentFileAccessIdentity(source);
-        CurrentXlsxFeatureReport = source.FeatureReport;
+        if (sharedDocumentStateOwner is null)
+        {
+            CurrentFilePath = source.OpenedAsTemplate ? null : source.SourcePath;
+            CurrentFileAccessIdentity = ResolveCurrentFileAccessIdentity(source);
+            CurrentXlsxFeatureReport = source.FeatureReport;
+        }
         OpenFormats = BuildFormats(adapters, static format => format.CanOpen);
         SaveFormats = BuildFormats(adapters, static format => format.CanSave);
 
@@ -222,7 +259,49 @@ public sealed class WorkbookSession
         Viewport = BuildViewport();
     }
 
+    /// <summary>
+    /// Creates a view-local session over this session's document. Workbook, command history,
+    /// save/dirty metadata, and file identity remain shared; selection, viewport, formula-edit,
+    /// grouped-sheet, clipboard, and prompt state belong to the returned view.
+    /// </summary>
+    public WorkbookSession CreateSiblingView(double viewportHeight, double viewportWidth)
+    {
+        var documentOwner = _sharedDocumentStateOwner ?? this;
+        var sibling = new WorkbookSession(
+            _source,
+            _adapters,
+            _cellEditService,
+            new WorkbookSheetSelectionService(),
+            new ViewportService(),
+            viewportHeight,
+            viewportWidth,
+            _includeObjects,
+            documentOwner);
+        sibling.InitializeSiblingView(ActiveSheet.Id);
+        return sibling;
+    }
+
+    private void InitializeSiblingView(SheetId sheetId)
+    {
+        ActiveSheet = Workbook.GetSheet(sheetId) ?? ActiveSheet;
+        RefreshSheetTabsForActiveSheet();
+        ActiveCell = new CellAddress(ActiveSheet.Id, 1, 1);
+        SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+        FormulaEditAddress = null;
+        _viewViewportOrigins[ActiveSheet.Id] = (
+            GetScrollableRowStart(),
+            GetScrollableColumnStart());
+        Viewport = BuildViewport();
+    }
+
     public Workbook Workbook { get; }
+
+    /// <summary>
+    /// Raised after a workbook or its document metadata changes. Hosts with multiple views can
+    /// use this to refresh sibling viewports without polling or wiring every individual command
+    /// entry point.
+    /// </summary>
+    public event EventHandler? WorkbookChanged;
 
     /// <summary>
     /// Cells the session's <c>RecalcEngine</c> most recently classified as part of a non-iterative
@@ -290,20 +369,70 @@ public sealed class WorkbookSession
     public bool CanHideActiveSheet =>
         Workbook.Sheets.Any(sheet => sheet.Id != ActiveSheet.Id && !sheet.IsHidden && !sheet.IsVeryHidden);
 
-    public string? CurrentFilePath { get; private set; }
+    public string? CurrentFilePath
+    {
+        get => _sharedDocumentStateOwner?.CurrentFilePath ?? _currentFilePath;
+        private set
+        {
+            if (_sharedDocumentStateOwner is { } owner)
+                owner.CurrentFilePath = value;
+            else
+                _currentFilePath = value;
+        }
+    }
 
-    public WorkbookFileAccessIdentity? CurrentFileAccessIdentity { get; private set; }
+    public WorkbookFileAccessIdentity? CurrentFileAccessIdentity
+    {
+        get => _sharedDocumentStateOwner?.CurrentFileAccessIdentity ?? _currentFileAccessIdentity;
+        private set
+        {
+            if (_sharedDocumentStateOwner is { } owner)
+                owner.CurrentFileAccessIdentity = value;
+            else
+                _currentFileAccessIdentity = value;
+        }
+    }
 
-    public XlsxFeatureReport? CurrentXlsxFeatureReport { get; private set; }
+    public XlsxFeatureReport? CurrentXlsxFeatureReport
+    {
+        get => _sharedDocumentStateOwner?.CurrentXlsxFeatureReport ?? _currentXlsxFeatureReport;
+        private set
+        {
+            if (_sharedDocumentStateOwner is { } owner)
+                owner.CurrentXlsxFeatureReport = value;
+            else
+                _currentXlsxFeatureReport = value;
+        }
+    }
 
-    public bool IsDirty { get; private set; }
+    public bool IsDirty
+    {
+        get => _sharedDocumentStateOwner?.IsDirty ?? _isDirty;
+        private set
+        {
+            if (_sharedDocumentStateOwner is { } owner)
+                owner.IsDirty = value;
+            else
+                _isDirty = value;
+        }
+    }
 
     /// <summary>
     /// Monotonically-increasing counter, incremented with every transition to dirty.
     /// The async save path captures this before awaiting and compares afterwards to detect
     /// edits that arrived mid-save — the same pattern used by <see cref="WorkbookDocumentState"/>.
     /// </summary>
-    public int DirtyGeneration { get; private set; }
+    public int DirtyGeneration
+    {
+        get => _sharedDocumentStateOwner?.DirtyGeneration ?? _dirtyGeneration;
+        private set
+        {
+            if (_sharedDocumentStateOwner is { } owner)
+                owner.DirtyGeneration = value;
+            else
+                _dirtyGeneration = value;
+        }
+    }
 
     public bool IsFallback => _source.IsFallback;
 
@@ -1223,8 +1352,8 @@ public sealed class WorkbookSession
 
     public bool PanViewport(int rowDelta, int colDelta)
     {
-        var nextTopRow = Offset(ActiveSheet.ViewTopRow ?? GetScrollableRowStart(), rowDelta, CellAddress.MaxRow);
-        var nextLeftCol = Offset(ActiveSheet.ViewLeftCol ?? GetScrollableColumnStart(), colDelta, CellAddress.MaxCol);
+        var nextTopRow = Offset(GetViewTopRow(), rowDelta, CellAddress.MaxRow);
+        var nextLeftCol = Offset(GetViewLeftCol(), colDelta, CellAddress.MaxCol);
         return SetViewportOrigin(nextTopRow, nextLeftCol);
     }
 
@@ -1232,16 +1361,18 @@ public sealed class WorkbookSession
     {
         var normalizedTopRow = Math.Clamp(topRow, GetScrollableRowStart(), CellAddress.MaxRow);
         var normalizedLeftCol = Math.Clamp(leftCol, GetScrollableColumnStart(), CellAddress.MaxCol);
-        var currentTopRow = ActiveSheet.ViewTopRow ?? GetScrollableRowStart();
-        var currentLeftCol = ActiveSheet.ViewLeftCol ?? GetScrollableColumnStart();
+        var currentTopRow = GetViewTopRow();
+        var currentLeftCol = GetViewLeftCol();
         if (normalizedTopRow == currentTopRow && normalizedLeftCol == currentLeftCol)
             return false;
 
-        ActiveSheet.ViewTopRow = normalizedTopRow;
-        ActiveSheet.ViewLeftCol = normalizedLeftCol;
+        SetViewViewportOrigin(normalizedTopRow, normalizedLeftCol);
         RefreshViewport();
         return true;
     }
+
+    /// <summary>Current scroll origin for this view; unlike the workbook's persisted sheet view, this is per-window.</summary>
+    public (uint TopRow, uint LeftCol) ViewportOrigin => (GetViewTopRow(), GetViewLeftCol());
 
     /// <summary>
     /// True when the active sheet has a Window ▸ Split column boundary (<see cref="Sheet.SplitColumn"/>),
@@ -1277,13 +1408,13 @@ public sealed class WorkbookSession
     public uint GetSplitPaneTopRightLeftCol() =>
         _splitPaneViewportOffsets.TryGetValue(ActiveSheet.Id, out var offsets) && offsets.TopRightLeftCol is { } leftCol
             ? leftCol
-            : ActiveSheet.ViewLeftCol ?? GetScrollableColumnStart();
+            : GetViewLeftCol();
 
     /// <summary>Current first-visible row of the BottomLeft split-pane quadrant, defaulting to the main pane's when no independent offset has been recorded yet.</summary>
     public uint GetSplitPaneBottomLeftTopRow() =>
         _splitPaneViewportOffsets.TryGetValue(ActiveSheet.Id, out var offsets) && offsets.BottomLeftTopRow is { } topRow
             ? topRow
-            : ActiveSheet.ViewTopRow ?? GetScrollableRowStart();
+            : GetViewTopRow();
 
     /// <summary>Sets the TopRight split-pane quadrant's first-visible column directly (e.g. from a dedicated scrollbar drag).</summary>
     public bool SetSplitPaneTopRightLeftCol(uint leftCol)
@@ -3855,6 +3986,7 @@ public sealed class WorkbookSession
         CurrentXlsxFeatureReport = null;
         Workbook.Name = Path.GetFileName(path);
         RecordUndoSavePoint();
+        NotifyWorkbookChanged();
     }
 
     /// <summary>
@@ -3913,6 +4045,9 @@ public sealed class WorkbookSession
             CurrentXlsxFeatureReport = null;
             Workbook.Name = fileContext.DisplayName;
         }
+
+        if (plan.MarkSaved || plan.ApplyFileContext)
+            NotifyWorkbookChanged();
 
         return plan.MarkSaved;
     }
@@ -4971,13 +5106,16 @@ public sealed class WorkbookSession
     {
         IsDirty = true;
         DirtyGeneration++;
+        NotifyWorkbookChanged();
     }
+
+    private void NotifyWorkbookChanged() => WorkbookChanged?.Invoke(this, EventArgs.Empty);
 
     /// <summary>Captures the undo stack's current depth/version as the "clean" save point.</summary>
     private void RecordUndoSavePoint()
     {
-        _savedUndoDepth = _cellEditService.GetUndoStackDepth(Workbook.Id);
-        _savedUndoStackVersion = _cellEditService.GetUndoStackVersion(Workbook.Id);
+        SavedUndoDepth = _cellEditService.GetUndoStackDepth(Workbook.Id);
+        SavedUndoStackVersion = _cellEditService.GetUndoStackVersion(Workbook.Id);
     }
 
     /// <summary>
@@ -4991,18 +5129,21 @@ public sealed class WorkbookSession
     /// </summary>
     private bool TryMarkCleanIfAtSavePoint()
     {
-        if (_savedUndoDepth < 0)
+        if (SavedUndoDepth < 0)
             return false;
 
         var currentUndoDepth = _cellEditService.GetUndoStackDepth(Workbook.Id);
-        if (currentUndoDepth != _savedUndoDepth)
+        if (currentUndoDepth != SavedUndoDepth)
             return false;
 
-        if (_savedUndoStackVersion is { } savedVersion &&
+        if (SavedUndoStackVersion is { } savedVersion &&
             _cellEditService.GetUndoStackVersion(Workbook.Id) != savedVersion)
             return false;
 
+        var wasDirty = IsDirty;
         IsDirty = false;
+        if (wasDirty)
+            NotifyWorkbookChanged();
         return true;
     }
 
@@ -5999,12 +6140,13 @@ public sealed class WorkbookSession
             !IsFrozenRow(cell.Row) &&
             (cell.Row < firstRow || cell.Row > lastRow))
         {
-            ActiveSheet.ViewTopRow = CalculateScrollOrigin(
+            var topRow = CalculateScrollOrigin(
                 cell.Row,
                 firstRow,
                 lastRow,
-                ActiveSheet.ViewTopRow ?? GetScrollableRowStart(),
+                GetViewTopRow(),
                 CellAddress.MaxRow);
+            SetViewViewportOrigin(topRow, GetViewLeftCol());
             changed = true;
         }
 
@@ -6012,12 +6154,13 @@ public sealed class WorkbookSession
             !IsFrozenColumn(cell.Col) &&
             (cell.Col < firstCol || cell.Col > lastCol))
         {
-            ActiveSheet.ViewLeftCol = CalculateScrollOrigin(
+            var leftCol = CalculateScrollOrigin(
                 cell.Col,
                 firstCol,
                 lastCol,
-                ActiveSheet.ViewLeftCol ?? GetScrollableColumnStart(),
+                GetViewLeftCol(),
                 CellAddress.MaxCol);
+            SetViewViewportOrigin(GetViewTopRow(), leftCol);
             changed = true;
         }
 
@@ -6169,13 +6312,33 @@ public sealed class WorkbookSession
             .Select(group => group.First())
             .ToList();
 
+    private uint GetViewTopRow() =>
+        _viewViewportOrigins.TryGetValue(ActiveSheet.Id, out var origin)
+            ? origin.TopRow
+            : ActiveSheet.ViewTopRow ?? GetScrollableRowStart();
+
+    private uint GetViewLeftCol() =>
+        _viewViewportOrigins.TryGetValue(ActiveSheet.Id, out var origin)
+            ? origin.LeftCol
+            : ActiveSheet.ViewLeftCol ?? GetScrollableColumnStart();
+
+    private void SetViewViewportOrigin(uint topRow, uint leftCol)
+    {
+        _viewViewportOrigins[ActiveSheet.Id] = (topRow, leftCol);
+        if (_sharedDocumentStateOwner is null)
+        {
+            ActiveSheet.ViewTopRow = topRow;
+            ActiveSheet.ViewLeftCol = leftCol;
+        }
+    }
+
     private ViewportModel BuildViewport() =>
         _viewportService.GetViewport(
             Workbook,
             ActiveSheet.Id,
             new ViewportRequest(
-                ActiveSheet.ViewTopRow ?? 1,
-                ActiveSheet.ViewLeftCol ?? 1,
+                GetViewTopRow(),
+                GetViewLeftCol(),
                 AvailableHeight: _viewportHeight,
                 AvailableWidth: _viewportWidth,
                 IncludeObjects: _includeObjects,
