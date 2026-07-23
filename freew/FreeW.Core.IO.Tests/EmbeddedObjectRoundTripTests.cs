@@ -61,6 +61,85 @@ public class EmbeddedObjectRoundTripTests
         return doc;
     }
 
+    /// <summary>Moves a writer-authored OLE object and its two relationships from document.xml into header1.xml.</summary>
+    private static byte[] AuthorHeaderEmbeddedObjectPackage()
+    {
+        var sourceBytes = WriteBytes(ExcelObjectDocument());
+        using var sourceStream = new MemoryStream(sourceBytes);
+        using var source = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+
+        static XDocument ReadEntry(ZipArchive zip, string path)
+        {
+            using var stream = zip.GetEntry(path)!.Open();
+            return XDocument.Load(stream);
+        }
+
+        var sourceDocument = ReadEntry(source, "word/document.xml");
+        var obj = new XElement(sourceDocument.Descendants(W + "object").Single());
+        var sourceRelationships = ReadEntry(source, "word/_rels/document.xml.rels");
+        var allRelationships = sourceRelationships.Root!.Elements(Rel + "Relationship").ToList();
+        var objectRelationships = allRelationships
+            .Where(relationship => relationship.Attribute("Type")!.Value.EndsWith("/oleObject", StringComparison.Ordinal)
+                                || relationship.Attribute("Type")!.Value.EndsWith("/image", StringComparison.Ordinal))
+            .Select(relationship => new XElement(relationship))
+            .ToList();
+        objectRelationships.Should().HaveCount(2);
+
+        var documentRelationships = new XDocument(new XElement(Rel + "Relationships",
+            allRelationships
+                .Where(relationship => !objectRelationships.Any(candidate => candidate.Attribute("Id")!.Value == relationship.Attribute("Id")!.Value))
+                .Select(relationship => new XElement(relationship)),
+            new XElement(Rel + "Relationship",
+                new XAttribute("Id", "rIdHeader1"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"),
+                new XAttribute("Target", "header1.xml"))));
+        var headerRelationships = new XDocument(new XElement(Rel + "Relationships", objectRelationships));
+        var document = new XDocument(new XElement(W + "document",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+            new XElement(W + "body",
+                new XElement(W + "p", new XElement(W + "r", new XElement(W + "t", "Body text"))),
+                new XElement(W + "sectPr", new XElement(W + "headerReference",
+                    new XAttribute(W + "type", "default"),
+                    new XAttribute(R + "id", "rIdHeader1"))))));
+        var header = new XDocument(new XElement(W + "hdr",
+            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+            new XElement(W + "p", new XElement(W + "r", obj))));
+        var contentTypes = ReadEntry(source, "[Content_Types].xml");
+        contentTypes.Root!.Add(new XElement(Ct + "Override",
+            new XAttribute("PartName", "/word/header1.xml"),
+            new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml")));
+
+        using var output = new MemoryStream();
+        using (var destination = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void AddXml(string path, XDocument xml)
+            {
+                var entry = destination.CreateEntry(path, CompressionLevel.Optimal);
+                using var stream = entry.Open();
+                xml.Save(stream);
+            }
+
+            foreach (var sourceEntry in source.Entries)
+            {
+                if (sourceEntry.FullName is "[Content_Types].xml" or "word/document.xml" or "word/_rels/document.xml.rels")
+                    continue;
+                var entry = destination.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+                using var input = sourceEntry.Open();
+                using var target = entry.Open();
+                input.CopyTo(target);
+            }
+
+            AddXml("[Content_Types].xml", contentTypes);
+            AddXml("word/document.xml", document);
+            AddXml("word/_rels/document.xml.rels", documentRelationships);
+            AddXml("word/header1.xml", header);
+            AddXml("word/_rels/header1.xml.rels", headerRelationships);
+        }
+        return output.ToArray();
+    }
+
     [Fact]
     public void EmbeddedObject_PayloadProgIdAndIcon_SurviveRoundTrip()
     {
@@ -129,6 +208,45 @@ public class EmbeddedObjectRoundTripTests
         var documentXml = EntryXml(docx, "word/document.xml");
         var imagedata = documentXml.Descendants(V + "imagedata").Single();
         imagedata.Attribute(R + "id")!.Value.Should().Be(imageRel.Attribute("Id")!.Value);
+    }
+
+    [Fact]
+    public void HeaderEmbeddedObject_PreservesPartLocalPayloadAndIconRelationships()
+    {
+        var source = AuthorHeaderEmbeddedObjectPackage();
+        var read = DocxReader.Read(new MemoryStream(source));
+        var runs = read.FinalSectionHeadersFooters.Header!.Paragraphs.SelectMany(paragraph => paragraph.Runs).ToList();
+        runs.Should().ContainSingle(run => run.PreservedDrawing != null);
+        runs.Should().NotContain(run => run.EmbeddedObject != null);
+
+        var rewritten = WriteBytes(read);
+        using var sourceZip = new ZipArchive(new MemoryStream(source), ZipArchiveMode.Read);
+        using var rewrittenZip = new ZipArchive(new MemoryStream(rewritten), ZipArchiveMode.Read);
+        foreach (var part in new[] { "word/embeddings/oleObject1.bin", "word/media/image1.png" })
+        {
+            using var sourcePart = sourceZip.GetEntry(part)!.Open();
+            using var rewrittenPart = rewrittenZip.GetEntry(part)!.Open();
+            using var sourceBytes = new MemoryStream();
+            using var rewrittenBytes = new MemoryStream();
+            sourcePart.CopyTo(sourceBytes);
+            rewrittenPart.CopyTo(rewrittenBytes);
+            rewrittenBytes.ToArray().Should().Equal(sourceBytes.ToArray());
+        }
+
+        var headerRels = EntryXml(rewritten, "word/_rels/header1.xml.rels").Root!.Elements(Rel + "Relationship").ToList();
+        var oleRelationship = headerRels.Single(relationship => relationship.Attribute("Type")!.Value.EndsWith("/oleObject", StringComparison.Ordinal));
+        var imageRelationship = headerRels.Single(relationship => relationship.Attribute("Type")!.Value.EndsWith("/image", StringComparison.Ordinal));
+        EntryXml(rewritten, "word/header1.xml").Descendants(O + "OLEObject").Single()
+            .Attribute(R + "id")!.Value.Should().Be(oleRelationship.Attribute("Id")!.Value);
+        EntryXml(rewritten, "word/header1.xml").Descendants(V + "imagedata").Single()
+            .Attribute(R + "id")!.Value.Should().Be(imageRelationship.Attribute("Id")!.Value);
+        EntryXml(rewritten, "word/_rels/document.xml.rels").Root!.Elements(Rel + "Relationship")
+            .Should().NotContain(relationship => relationship.Attribute("Type")!.Value.EndsWith("/oleObject", StringComparison.Ordinal)
+                                           || relationship.Attribute("Type")!.Value.EndsWith("/image", StringComparison.Ordinal));
+
+        var secondRead = DocxReader.Read(new MemoryStream(rewritten));
+        secondRead.FinalSectionHeadersFooters.Header!.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().ContainSingle(run => run.PreservedDrawing != null);
     }
 
     [Fact]

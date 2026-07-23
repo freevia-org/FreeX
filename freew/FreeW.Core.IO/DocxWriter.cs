@@ -739,7 +739,8 @@ public static class DocxWriter
                         if (result.Any(part => part.PartName == reference.PreservedPartName)
                             || !preservedByName.TryGetValue(reference.PreservedPartName, out var preservedPart))
                             continue;
-                        var relationshipType = PreservedDrawingRelationshipType(preservedPart.ContentTypeOverride);
+                        var relationshipType = reference.RelationshipType
+                            ?? PreservedDrawingRelationshipType(preservedPart.ContentTypeOverride);
                         result.Add(new PartLocalPreservedDrawingPart(
                             reference.PreservedPartName,
                             reference.OriginalRelId,
