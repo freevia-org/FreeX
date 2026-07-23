@@ -218,14 +218,12 @@ public sealed partial class MainWindow
                 ExecuteQuickAccessKeyTip(route.QuickAccessIndex);
                 break;
             case AvaloniaRibbonKeyTipRouteKind.RibbonCommand:
-                if (route.CommandId is { } commandId &&
-                    _ribbonCommandRegistry?.TryGet(commandId, out var ribbonCommand) == true &&
-                    ribbonCommand is not null)
-                {
-                    ribbonCommand.Execute(RibbonCommandContext.Empty);
-                }
+                if (_ribbonControl is not null)
+                    AvaloniaRibbonRenderer.TryActivateKeyTip(_ribbonControl, route.Input);
                 break;
             case AvaloniaRibbonKeyTipRouteKind.Scope:
+                if (_ribbonControl is not null)
+                    AvaloniaRibbonRenderer.TryActivateKeyTip(_ribbonControl, route.Input);
                 break;
         }
     }
@@ -247,5 +245,7 @@ public sealed partial class MainWindow
     {
         _ribbonKeyTipInput = "";
         SetRibbonKeyTipsVisible(false);
+        if (_ribbonControl is not null)
+            AvaloniaRibbonRenderer.CloseKeyTipFlyouts(_ribbonControl);
     }
 }

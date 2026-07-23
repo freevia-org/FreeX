@@ -14,6 +14,7 @@ public sealed partial class MainWindow
     internal bool RibbonKeyTipsVisibleForTest => _ribbonKeyTipsVisible;
     internal bool HasWindowIconForTest => Icon is not null;
     internal IRibbonCommandRegistry? RibbonCommandRegistryForTest => _ribbonCommandRegistry;
+    internal Control? RibbonControlForTest => _ribbonControl;
     internal Thickness CellAddressPaddingForTest => _cellAddressText.Padding;
 
     internal void ShowBackstageOverlayForTest() => ShowBackstageOverlay();

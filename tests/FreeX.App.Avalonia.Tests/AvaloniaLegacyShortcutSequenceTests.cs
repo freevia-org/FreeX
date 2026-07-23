@@ -1,7 +1,9 @@
 using System.Threading;
 
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 
 using FluentAssertions;
 
@@ -169,6 +171,34 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
             window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
             window.LegacyDataFilterSequenceStateForTest.Should().Be(
                 MainWindow.LegacyDataFilterSequenceState.None);
+        });
+    }
+
+    [Fact]
+    public async Task RibbonMenuKeyTip_EscapeAndUnmatchedInputCloseLiveFlyout()
+    {
+        await Run(async (window, _) =>
+        {
+            window.Show();
+            var borders = window.RibbonControlForTest!.GetLogicalDescendants()
+                .OfType<Button>()
+                .First(button => Equals(button.Tag, "Borders"));
+            var flyout = borders.Flyout.Should().BeOfType<MenuFlyout>().Subject;
+
+            await PressHandled(window, Key.H, KeyModifiers.Alt);
+            await PressHandled(window, Key.B);
+            flyout.IsOpen.Should().BeTrue();
+
+            await PressHandled(window, Key.Escape);
+            flyout.IsOpen.Should().BeFalse();
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+
+            await PressHandled(window, Key.H, KeyModifiers.Alt);
+            await PressHandled(window, Key.B);
+            flyout.IsOpen.Should().BeTrue();
+            await PressHandled(window, Key.X);
+            flyout.IsOpen.Should().BeFalse();
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
         });
     }
 
