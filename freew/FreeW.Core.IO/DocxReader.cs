@@ -1737,10 +1737,13 @@ public static class DocxReader
             var tooltip = child.Attribute(W + "tooltip")?.Value;
             AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
-        else if (child.Name == W + "ins" || child.Name == W + "del")
+        else if (child.Name == W + "ins" || child.Name == W + "del" || child.Name == W + "moveTo" || child.Name == W + "moveFrom")
         {
-            // A tracked insertion (w:ins) or deletion (w:del) wraps runs, hyperlinks, and sometimes SDTs.
-            var kind = child.Name == W + "del" ? RevisionKind.Deleted : RevisionKind.Inserted;
+            // Tracked moves use the same inline content shape as insertions/deletions. FreeW does not model
+            // move ids, so map the source half to Deleted and the destination half to Inserted.
+            var kind = child.Name == W + "del" || child.Name == W + "moveFrom"
+                ? RevisionKind.Deleted
+                : RevisionKind.Inserted;
             var childRevision = new RevisionInfo(kind, child.Attribute(W + "author")?.Value, child.Attribute(W + "date")?.Value);
             AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
