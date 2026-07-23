@@ -102,6 +102,20 @@ public sealed class NotesSlideTests : IDisposable
     }
 
     [Fact]
+    public void Corpus_CommentsNotes_ReportsImportedSlidesAndNotesPageCardinality()
+    {
+        var presentation = PptxPackageReader.Read(FindCorpusFile("21-comments-notes.pptx"));
+        presentation.Slides.Should().HaveCount(2);
+        presentation.Slides.Select(slide => slide.Notes).Should().OnlyContain(notes => notes != null);
+
+        var renderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(presentation);
+        renderPlan.PreviewPlans.Should().HaveCount(2);
+        renderPlan.PreviewPlans.Select(plan => plan.NoteLines.Count).Should().Equal(2, 1);
+        renderPlan.PreviewPlans.Select(plan => plan.RenderedPageCount).Should().Equal(2, 1);
+        renderPlan.Pages.Should().HaveCount(3);
+    }
+
+    [Fact]
     public void Slide_Notes_DefaultIsNull()
     {
         var slide = new Slide();
@@ -371,5 +385,17 @@ public sealed class NotesSlideTests : IDisposable
         {
             window.Close();
         }
+    }
+
+    private static string FindCorpusFile(string fileName)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus", fileName);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new FileNotFoundException($"Could not locate the RenderCompare corpus file '{fileName}'.");
     }
 }
