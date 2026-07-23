@@ -2,7 +2,9 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -11,7 +13,11 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class MultilevelListDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(AvaloniaCompactDialogChrome.WindowsUiFontFamily)
+    {
+        ControlHeight = 20,
+        ButtonHeight = 20,
+    };
     private readonly ComboBox _levels;
     private readonly TextBox _level0Start;
     private readonly TextBox _level1Start;
@@ -24,23 +30,34 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
     {
         var state = MultilevelListDialogPlanner.BuildInitialState(currentFormats, CultureInfo.CurrentCulture);
         Title = MultilevelListDialogPlanner.Title;
-        Width = 400;
+        // Match the WPF prompt's outer width. The visual harness subtracts the native
+        // frame when arranging Avalonia, so this remains the same content contract in
+        // both the desktop app and paired evidence captures.
+        Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _levels = Combo(Enumerable.Range(1, 9).Select(value => value.ToString(CultureInfo.CurrentCulture)), state.LevelsIndex);
-        _level0Start = TextBox(state.Level0StartAtText);
-        _level1Start = TextBox(state.Level1StartAtText);
+        _levels = Combo(Enumerable.Range(1, 9).Select(value => value.ToString(CultureInfo.CurrentCulture)), state.LevelsIndex, 80);
+        _level0Start = TextBox(state.Level0StartAtText, 60);
+        _level1Start = TextBox(state.Level1StartAtText, 60);
         var labels = MultilevelListDialogPlanner.NumberFormatChoices.Select(choice => choice.Label).ToArray();
-        _level0Format = Combo(labels, state.Level0FormatIndex);
-        _level1Format = Combo(labels, state.Level1FormatIndex);
-        _level2Format = Combo(labels, state.Level2FormatIndex);
+        _level0Format = Combo(labels, state.Level0FormatIndex, 130);
+        _level1Format = Combo(labels, state.Level1FormatIndex, 130);
+        _level2Format = Combo(labels, state.Level2FormatIndex, 130);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome, new Thickness(0, 6, 0, 0));
 
         var panel = new StackPanel { Margin = new Thickness(14) };
-        panel.Children.Add(new TextBlock { Text = "Configure multilevel list levels.", Margin = new Thickness(0, 0, 0, 8) });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Configure multilevel list levels.",
+            Foreground = Brushes.Black,
+            FontFamily = Chrome.FontFamily,
+            FontSize = Chrome.FontSize,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10),
+        });
         AddField(panel, "Number of levels (1-9):", _levels);
         AddField(panel, "Level 1 start at:", _level0Start);
         AddField(panel, "Level 2 start at:", _level1Start);
@@ -83,27 +100,44 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
 
     private static void AddField(StackPanel panel, string label, Control control)
     {
-        panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 4, 0, 2) });
+        panel.Children.Add(new TextBlock
+        {
+            Text = label,
+            Foreground = Brushes.Black,
+            FontFamily = Chrome.FontFamily,
+            FontSize = Chrome.FontSize,
+            Margin = new Thickness(0, 0, 0, 2),
+        });
+        control.HorizontalAlignment = HorizontalAlignment.Stretch;
+        // Avalonia's text line metrics are taller than WPF's default TextBlock line box;
+        // use the equivalent visual rhythm so the action row remains inside the WPF client height.
+        control.Margin = new Thickness(0, 0, 0, 4);
         panel.Children.Add(control);
     }
 
-    private static ComboBox Combo(IEnumerable<string> items, int selectedIndex)
+    private static ComboBox Combo(IEnumerable<string> items, int selectedIndex, double minWidth)
     {
-        var combo = new ComboBox { ItemsSource = items.ToArray(), SelectedIndex = selectedIndex };
+        var combo = new ComboBox
+        {
+            ItemsSource = items.ToArray(),
+            SelectedIndex = selectedIndex,
+            MinWidth = minWidth,
+        };
         AvaloniaCompactDialogChrome.ApplyComboBox(combo, Chrome);
         return combo;
     }
 
-    private static TextBox TextBox(string text)
+    private static TextBox TextBox(string text, double minWidth)
     {
-        var box = new TextBox { Text = text };
+        var box = new TextBox { Text = text, MinWidth = minWidth };
         AvaloniaCompactDialogChrome.ApplyTextBox(box, Chrome);
         return box;
     }
 
     private static Button Button(string text, bool isDefault, bool isCancel, Action click)
     {
-        var button = new Button { Content = text, IsDefault = isDefault, IsCancel = isCancel };
+        var content = isDefault ? ShellStrings.Current.Ok : isCancel ? ShellStrings.Current.Cancel : text;
+        var button = new Button { Content = content, IsDefault = isDefault, IsCancel = isCancel };
         AvaloniaCompactDialogChrome.ApplyButton(button, Chrome, 72, isDefault);
         button.Click += (_, _) => click();
         return button;
