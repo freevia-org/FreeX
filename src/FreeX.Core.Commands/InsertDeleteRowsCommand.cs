@@ -22,6 +22,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
+    private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
@@ -112,6 +113,12 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             ctx.Workbook, sheet, new InsertRowsOp(sheet.Name, _beforeRow, _count), sheet.Name);
         _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.RichTextRuns, _beforeRow, _count);
+        // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides is RichTextRuns' address-keyed
+        // companion (furigana annotations for the same cell) and must shift in lockstep with it,
+        // or an inserted row leaves a phonetic guide keyed to the cell's stale pre-insert address
+        // while the rich text it decorates moves on to the new address.
+        _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
+        RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.CellPhoneticGuides, _beforeRow, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         RowColumnShiftHelpers.ShiftRuleRowsUp(sheet, _beforeRow, _count);
@@ -331,6 +338,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);

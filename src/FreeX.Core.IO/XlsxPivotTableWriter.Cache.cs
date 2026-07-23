@@ -189,7 +189,22 @@ internal static partial class XlsxPivotTableWriter
                 isDateGrouping && !string.IsNullOrWhiteSpace(field.GroupEndDate)
                     ? new XAttribute("endDate", field.GroupEndDate)
                     : field.GroupEnd is { } groupEnd ? new XAttribute("endNum", groupEnd.ToString(CultureInfo.InvariantCulture)) : null,
-                field.GroupInterval is { } groupInterval ? new XAttribute("groupInterval", groupInterval.ToString(CultureInfo.InvariantCulture)) : null));
+                field.GroupInterval is { } groupInterval ? new XAttribute("groupInterval", groupInterval.ToString(CultureInfo.InvariantCulture)) : null),
+            // R78-io-pivotcache-5-2: the group's own label list (CT_GroupItems, ECMA-376 18.10.1.36) that
+            // the pivotTable definition's pivotField/items index into to render the grouped field's
+            // headers. Previously never emitted, leaving those indexes pointing at nothing on reopen.
+            ToPivotCacheGroupItemsXml(field.GroupItems, workbookNs));
+    }
+
+    private static XElement? ToPivotCacheGroupItemsXml(IReadOnlyList<string>? groupItems, XNamespace workbookNs)
+    {
+        if (groupItems is null || groupItems.Count == 0)
+            return null;
+
+        return new XElement(
+            workbookNs + "groupItems",
+            new XAttribute("count", groupItems.Count.ToString(CultureInfo.InvariantCulture)),
+            groupItems.Select(item => new XElement(workbookNs + "s", new XAttribute("v", item))));
     }
 
     private static XElement ToPivotCacheSharedItemsXml(PivotCacheFieldModel field, XNamespace workbookNs)
@@ -374,31 +389,55 @@ internal static partial class XlsxPivotTableWriter
     {
         sourceSheet = null!;
         sourceRange = default;
-        if (cache.SourceType is PivotCacheSourceType.External or PivotCacheSourceType.Consolidation or PivotCacheSourceType.Scenario ||
-            string.IsNullOrWhiteSpace(cache.SourceSheetName) ||
-            string.IsNullOrWhiteSpace(cache.SourceReference))
+        if (cache.SourceType is PivotCacheSourceType.External or PivotCacheSourceType.Consolidation or PivotCacheSourceType.Scenario)
         {
             return false;
         }
 
-        var matchedSheet = workbook.GetSheet(cache.SourceSheetName);
-        if (matchedSheet is null)
-            return false;
+        if (!string.IsNullOrWhiteSpace(cache.SourceSheetName) && !string.IsNullOrWhiteSpace(cache.SourceReference))
+        {
+            var matchedSheet = workbook.GetSheet(cache.SourceSheetName);
+            if (matchedSheet is null)
+                return false;
 
-        sourceSheet = matchedSheet;
-        try
-        {
-            sourceRange = GridRange.Parse(NormalizePivotCacheSourceReference(cache.SourceReference), sourceSheet.Id);
-            return true;
+            sourceSheet = matchedSheet;
+            try
+            {
+                sourceRange = GridRange.Parse(NormalizePivotCacheSourceReference(cache.SourceReference), sourceSheet.Id);
+                return true;
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
         }
-        catch (FormatException)
+
+        // R78-io-pivotcache-5-1: per CT_WorksheetSource (ECMA-376 18.10.2.42), a Table-sourced
+        // worksheetSource omits @sheet/@ref when @name is present, so a cache reloaded from a real xlsx
+        // (or round-tripped through the FreeX-native format, which copies these fields through unchanged)
+        // carries only SourceTableName here. Resolve the source range via the workbook's own ListObject
+        // registry instead of giving up, so the records loop below still finds the live data.
+        if (!string.IsNullOrWhiteSpace(cache.SourceTableName))
         {
-            return false;
+            foreach (var sheet in workbook.Sheets)
+            {
+                var table = sheet.StructuredTables.FirstOrDefault(t =>
+                    string.Equals(t.Name, cache.SourceTableName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(t.DisplayName, cache.SourceTableName, StringComparison.OrdinalIgnoreCase));
+                if (table is null)
+                    continue;
+
+                sourceSheet = sheet;
+                sourceRange = table.Range;
+                return true;
+            }
         }
-        catch (ArgumentException)
-        {
-            return false;
-        }
+
+        return false;
     }
 
     private static string NormalizePivotCacheSourceReference(string reference)

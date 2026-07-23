@@ -12,7 +12,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _edits;
     private readonly IReadOnlyList<CellAddress> _affectedCells;
-    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata, bool HadPhoneticGuide, CellPhoneticGuide? OldPhoneticGuide)>? _snapshot;
 
     // N33/N34: sub-commands run in the same undo transaction as the edit itself — table
     // auto-expand (growing a table when the edit lands one row/column past its current range)
@@ -75,6 +75,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(addr, out var oldRuns);
             var hadHyperlink = sheet.Hyperlinks.TryGetValue(addr, out var oldHyperlink);
             var hadHyperlinkMetadata = sheet.HyperlinkMetadata.TryGetValue(addr, out var oldHyperlinkMetadata);
+            var hadPhoneticGuide = sheet.CellPhoneticGuides.TryGetValue(addr, out var oldPhoneticGuide);
             _snapshot.Add((
                 addr,
                 oldCell,
@@ -84,7 +85,9 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
                 hadHyperlink,
                 oldHyperlink,
                 hadHyperlinkMetadata,
-                oldHyperlinkMetadata));
+                oldHyperlinkMetadata,
+                hadPhoneticGuide,
+                oldPhoneticGuide));
 
             // Apply new state while preserving the cell's existing formatting.
             var appliedCell = newCell.Clone();
@@ -92,12 +95,16 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
                 appliedCell.StyleId = oldCell.StyleId;
             sheet.SetCell(addr, appliedCell);
 
-            // The cell's content is being replaced, so any rich-text runs and hyperlink that
-            // belonged to the old content are stale and must not carry over to the new content
-            // (matching ClearContentsCommand/FillCellsCommand's handling of the same dictionaries).
+            // The cell's content is being replaced, so any rich-text runs, hyperlink, and phonetic
+            // guide (furigana) that belonged to the old content are stale and must not carry over
+            // to the new content (matching ClearContentsCommand/FillCellsCommand's handling of the
+            // same dictionaries). Leaving sheet.CellPhoneticGuides[addr] behind would let a later
+            // run-formatting-only edit on this address re-emit the OLD guide's <rPh> offsets
+            // against the brand-new, textually-unrelated content (R78-meta-1).
             sheet.RichTextRuns.Remove(addr);
             sheet.Hyperlinks.Remove(addr);
             sheet.HyperlinkMetadata.Remove(addr);
+            sheet.CellPhoneticGuides.Remove(addr);
         }
 
         var extraAffectedCells = StructuredTableEditEffects.Apply(ctx, _edits, _appliedTableEffects);
@@ -118,7 +125,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         var sheet = ctx.GetSheet(_sheetId);
 
-        foreach (var (addr, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata) in _snapshot)
+        foreach (var (addr, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata, hadPhoneticGuide, oldPhoneticGuide) in _snapshot)
         {
             if (oldCell is null)
             {
@@ -144,6 +151,11 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
                 sheet.HyperlinkMetadata[addr] = oldHyperlinkMetadata;
             else
                 sheet.HyperlinkMetadata.Remove(addr);
+
+            if (hadPhoneticGuide && oldPhoneticGuide is not null)
+                sheet.CellPhoneticGuides[addr] = oldPhoneticGuide;
+            else
+                sheet.CellPhoneticGuides.Remove(addr);
         }
     }
 

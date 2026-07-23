@@ -367,22 +367,25 @@ public sealed class Parser
     {
         var node = ParsePrimary();
 
-        // INDEX(...) used as one side of ':' -- real Excel's "reference form" of INDEX, e.g. the
-        // classic SUM(INDEX(A1:C3,1,1):INDEX(A1:C3,3,3)) technique. Only the CellRef-token range
-        // path in ParsePrimary's TokenType.CellRef case (below) currently builds a RangeRefNode
-        // from ':'; a FunctionCallNode result like INDEX(...) otherwise falls straight through the
+        // INDEX(...)/CHOOSE(...) used as one side of ':' -- real Excel's "reference form" of these
+        // functions, e.g. the classic SUM(INDEX(A1:C3,1,1):INDEX(A1:C3,3,3)) technique, or
+        // SUM(A1:CHOOSE(2,B5,C5)). Only the CellRef-token range path in ParsePrimary's
+        // TokenType.CellRef case (below) currently builds a RangeRefNode from ':'; a
+        // FunctionCallNode result like INDEX(...)/CHOOSE(...) otherwise falls straight through the
         // loop below to the 'break' at the end, leaving the trailing ':' unconsumed -- Parse() then
         // rejects it as "Unexpected token", which FormulaEvaluator surfaces as #VALUE! for the
-        // whole formula. Fold INDEX(...) to the CellRefNode it targets when that's knowable at
-        // parse time (a literal range shape and literal row/column indices) -- see
-        // TryFoldIndexReferenceToCellRef for exactly what qualifies. A dynamically-indexed INDEX
-        // (e.g. INDEX(A:A,MATCH(...)), the classic dynamic named-range pattern) can't be resolved
-        // this way since the parser has no access to cell values; that shape is left unhandled here
-        // exactly as before (still #VALUE!, not a regression). This only ever applies directly to a
-        // FunctionCallNode fresh off ParsePrimary -- never after '%'/'#'/chained-call has already
-        // been applied to it -- so it's checked once here, before the postfix loop below.
+        // whole formula. Fold INDEX(...)/CHOOSE(...) to the CellRefNode it targets when that's
+        // knowable at parse time (a literal range shape and literal row/column indices for INDEX; a
+        // literal index_num selecting a literal reference branch for CHOOSE) -- see
+        // TryFoldFunctionEndpointToCellRef for exactly what qualifies. A dynamically-indexed INDEX
+        // (e.g. INDEX(A:A,MATCH(...)), the classic dynamic named-range pattern) or a
+        // dynamically-indexed CHOOSE can't be resolved this way since the parser has no access to
+        // cell values; that shape is left unhandled here exactly as before (still #VALUE!, not a
+        // regression). This only ever applies directly to a FunctionCallNode fresh off ParsePrimary
+        // -- never after '%'/'#'/chained-call has already been applied to it -- so it's checked
+        // once here, before the postfix loop below.
         if (Current.Type == TokenType.Colon && node is FunctionCallNode indexCall &&
-            TryFoldIndexReferenceToCellRef(indexCall, out var startEndpoint))
+            TryFoldFunctionEndpointToCellRef(indexCall, out var startEndpoint))
         {
             Advance();
             // Parse (and consume) the end endpoint unconditionally, even if the start already
@@ -495,14 +498,15 @@ public sealed class Parser
             : throw new FormulaParseException($"Unexpected '#' at position {hashToken.Position}");
     }
 
-    // Parses the end endpoint of an INDEX(...)-anchored range, e.g. the 'C3' or
-    // 'INDEX(A1:C3,3,3)' half of INDEX(A1:C3,1,1):C3 / INDEX(A1:C3,1,1):INDEX(A1:C3,3,3). Mirrors
-    // the plain CellRef range path in ParsePrimary's TokenType.CellRef case: a malformed cell-ref
-    // token still yields ErrorNode(#REF!) via ParseCellRef rather than throwing, and a second
-    // INDEX(...) call is folded the same way the start endpoint was (see
-    // TryFoldIndexReferenceToCellRef). Anything else -- a non-INDEX function call, a dynamically
-    // indexed INDEX, or a token that isn't a reference at all -- throws, exactly as the pre-existing
-    // "Expected cell reference after ':'" case does for the plain CellRef path.
+    // Parses the end endpoint of an INDEX(...)/CHOOSE(...)-anchored range, e.g. the 'C3' or
+    // 'INDEX(A1:C3,3,3)'/'CHOOSE(2,B5,C5)' half of INDEX(A1:C3,1,1):C3 /
+    // INDEX(A1:C3,1,1):INDEX(A1:C3,3,3) / A1:CHOOSE(2,B5,C5). Mirrors the plain CellRef range path
+    // in ParsePrimary's TokenType.CellRef case: a malformed cell-ref token still yields
+    // ErrorNode(#REF!) via ParseCellRef rather than throwing, and a second INDEX(...)/CHOOSE(...)
+    // call is folded the same way the start endpoint was (see TryFoldFunctionEndpointToCellRef).
+    // Anything else -- an unsupported function call, a dynamically indexed INDEX/CHOOSE, or a token
+    // that isn't a reference at all -- throws, exactly as the pre-existing "Expected cell reference
+    // after ':'" case does for the plain CellRef path.
     private FormulaNode ParseIndexRangeEndpoint()
     {
         if (Current.Type == TokenType.CellRef)
@@ -523,12 +527,30 @@ public sealed class Parser
             var args = ParseArgumentList();
             Expect(TokenType.CloseParen);
             var call = new FunctionCallNode(name.Value, args);
-            if (TryFoldIndexReferenceToCellRef(call, out var endResult))
+            if (TryFoldFunctionEndpointToCellRef(call, out var endResult))
                 return endResult;
         }
 
         throw new FormulaParseException(
             $"Expected cell reference after ':' at position {Current.Position}");
+    }
+
+    // Dispatches a FunctionCallNode used as one side of ':' to whichever reference-returning-
+    // function fold applies -- INDEX's "reference form" or CHOOSE's -- matching real Excel, where
+    // both (alongside IF/OFFSET/INDIRECT) can yield a genuine reference usable as a range endpoint.
+    // Only these two are foldable purely from the parsed AST (no cell values available at parse
+    // time); anything else returns false so the caller falls back to the pre-existing "unexpected
+    // token" #VALUE! behavior, unchanged from before either fold existed.
+    private static bool TryFoldFunctionEndpointToCellRef(FunctionCallNode call, out FormulaNode result)
+    {
+        if (call.FunctionName == "INDEX")
+            return TryFoldIndexReferenceToCellRef(call, out result);
+
+        if (call.FunctionName == "CHOOSE")
+            return TryFoldChooseReferenceToCellRef(call, out result);
+
+        result = null!;
+        return false;
     }
 
     // INDEX's "reference form": resolves INDEX(range, row_num[, column_num]) to the CellRefNode it
@@ -597,6 +619,44 @@ public sealed class Parser
         var targetCol = startCol + (uint)(colNum - 1);
         result = new CellRefNode(Model.CellAddress.NumberToColumnName(targetCol), targetRow, SheetName: sheetName);
         return true;
+    }
+
+    // CHOOSE's "reference form": resolves CHOOSE(index_num, ref1, ref2, ...) to the CellRefNode its
+    // selected branch names, when index_num is a literal number and that branch is itself a plain
+    // cell reference (or another foldable reference-returning call, e.g. a nested INDEX/CHOOSE).
+    // This covers real Excel's classic CHOOSE-as-range-endpoint idiom verbatim, e.g.
+    // SUM(A1:CHOOSE(2,B5,C5)) or SUM(CHOOSE(1,A1,B1):C10). Returns false (no fold; caller falls
+    // back to the pre-existing "unexpected token" #VALUE! behavior) for anything dynamic -- e.g. a
+    // MATCH(...)-computed index_num -- since the parser has no access to cell values to resolve
+    // that, and for a selected branch that isn't itself a single-cell reference (e.g. a literal or
+    // a whole-range branch) -- not a shape this fold supports. A literal index_num outside CHOOSE's
+    // valid 1..(Arguments.Count-1) span yields ErrorNode(#VALUE!), matching EvaluateChoose's own
+    // out-of-range handling exactly (see FormulaEvaluator.ControlFlow.cs's EvaluateChoose).
+    private static bool TryFoldChooseReferenceToCellRef(FunctionCallNode call, out FormulaNode result)
+    {
+        result = null!;
+
+        if (call.FunctionName != "CHOOSE" || call.Arguments.Count < 2)
+            return false;
+
+        if (call.Arguments[0] is not NumberNode indexArgNode ||
+            !TryTruncateNonNegative(indexArgNode.Value, out var indexNum) || indexNum < 1)
+            return false;
+
+        if (indexNum >= call.Arguments.Count)
+        {
+            result = new ErrorNode(Model.ErrorValue.Value);
+            return true;
+        }
+
+        var selected = call.Arguments[indexNum];
+        if (selected is CellRefNode)
+        {
+            result = selected;
+            return true;
+        }
+
+        return selected is FunctionCallNode nestedCall && TryFoldFunctionEndpointToCellRef(nestedCall, out result);
     }
 
     // Resolves the shape of an INDEX reference argument -- its top-left cell (sheetName/startRow/

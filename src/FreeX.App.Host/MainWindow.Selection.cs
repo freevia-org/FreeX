@@ -612,6 +612,10 @@ public partial class MainWindow
         if (_selectionAnchor.HasValue)
         {
             ShowInlineEditor(_selectionAnchor.Value);
+            // R78-render-inplace-editor-5-1: ShowInlineEditor defaults every session to Edit mode
+            // (F2/double-click's semantics); a typed character overtypes the selection instead, so
+            // this is Excel's "Enter" mode -- override the flag it just set.
+            _formulaEditEnteredViaEditKey = false;
             if (_inlineEditor != null)
             {
                 _inlineEditor.Text = e.Text;

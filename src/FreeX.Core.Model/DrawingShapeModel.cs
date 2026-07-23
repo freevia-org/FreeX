@@ -58,6 +58,14 @@ public sealed record DrawingArrowhead(
 }
 
 /// <summary>
+/// One adjust-handle value for a preset geometry shape, from <c>&lt;a:gd name="..." fmla="val N"/&gt;</c>
+/// inside <c>&lt;a:avLst&gt;</c> (e.g. a rounded rectangle's corner-radius handle or a block arrow's
+/// head-size handle). <see cref="Name"/> is the <c>gd</c> guide name (typically "adj", "adj1", "adj2", ...)
+/// and <see cref="Formula"/> is the raw <c>fmla</c> attribute value (typically "val N").
+/// </summary>
+public sealed record DrawingShapeAdjustValue(string Name, string Formula);
+
+/// <summary>
 /// Dash style for a shape outline, matching OOXML <c>&lt;a:prstDash val="..."/&gt;</c> presets.
 /// </summary>
 public enum DrawingShapeOutlineDash
@@ -184,6 +192,16 @@ public sealed class DrawingShapeModel
     /// Only meaningful when <see cref="DrawingShapeKindSupport.IsLineLike"/> is <see langword="true"/>.
     /// </summary>
     public DrawingArrowhead? TailArrowhead { get; set; }
+
+    /// <summary>
+    /// Adjust-handle values for the shape's preset geometry, from <c>&lt;a:avLst&gt;&lt;a:gd .../&gt;</c>
+    /// (e.g. a rounded rectangle's dragged corner-radius handle, or a block arrow's head-size handle).
+    /// <see langword="null"/> or empty means "use the geometry's built-in default handle positions".
+    /// Populated when reading a source shape so a customized handle survives a save even after an
+    /// edit (fill/outline/effect change) clears <see cref="IsSourceLoaded"/> and routes the shape
+    /// through the generated-geometry writer path instead of verbatim passthrough.
+    /// </summary>
+    public IReadOnlyList<DrawingShapeAdjustValue>? AdjustValues { get; set; }
 
     // ── WordArt / text effects ──────────────────────────────────────────────
 

@@ -60,6 +60,37 @@ public sealed class FormulaInlineEditorLayoutPlannerTests
     }
 
     [Fact]
+    public void Create_WithMultipleLines_GrowsEditorHeightByLineCount()
+    {
+        // R78-render-inplace-editor-5-3: Alt+Enter-inserted line breaks (or a pre-existing
+        // multi-line cell value) must grow the editor box downward one cell-row-height per line,
+        // instead of staying clipped to a single row.
+        var layout = FormulaInlineEditorLayoutPlanner.Create(
+            cellLeft: 100,
+            cellTop: 40,
+            cellWidth: 64,
+            cellHeight: 20,
+            lineCount: 3);
+
+        layout.EditorRect.Should().Be(new FormulaEditorRect(100, 40, 64, 60));
+        layout.TextOverlayRect.Height.Should().Be(60);
+    }
+
+    [Fact]
+    public void Create_WithDefaultLineCount_KeepsSingleRowHeight()
+    {
+        // Sibling no-regression: omitting lineCount (single-line entry, the overwhelmingly common
+        // case) must keep the pre-existing single-row height untouched.
+        var layout = FormulaInlineEditorLayoutPlanner.Create(
+            cellLeft: 100,
+            cellTop: 40,
+            cellWidth: 64,
+            cellHeight: 20);
+
+        layout.EditorRect.Height.Should().Be(20);
+    }
+
+    [Fact]
     public void GetChromeBorderThickness_RemovesOverflowSideBorders()
     {
         FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(FormulaInlineEditorOverflow.None)

@@ -683,6 +683,17 @@ public partial class MainWindow
                 }
 
                 var text = DecodeHtmlCellText(cellInfo.InnerHtml);
+
+                // R78-services-clipboard-formats-5-1: a <td> carrying the "mso-number-format:'\@'"
+                // marker (written by ClipboardHtmlSerializer.RequiresTextFormatMarker for a Text-typed
+                // source cell, and by real Excel for the same reason) must round-trip through this
+                // HTML-preferred paste path with the identical leading-apostrophe escape the plain-text
+                // clipboard sibling already carries -- otherwise a Text-formatted "00501" silently
+                // becomes the number 501 whenever CF_HTML is present (the common case, since ExecuteCopy
+                // always places CF_HTML alongside plain text).
+                if (cellInfo.IsTextFormat)
+                    text = ClipboardSerializer.EscapeTextCellForPaste(text);
+
                 var colSpan = Math.Max(1, cellInfo.ColSpan);
                 var rowSpan = Math.Max(1, cellInfo.RowSpan);
                 var endCol = col + colSpan - 1;
@@ -781,8 +792,21 @@ public partial class MainWindow
 
     /// <summary>One &lt;td&gt;/&lt;th&gt; cell's inner HTML plus its colspan/rowspan (each defaulted to 1
     /// when absent or non-positive), used by <see cref="TryParseHtmlClipboardTableRows"/> to keep
-    /// merged-header columns aligned with their data (R57-services-clipboard-formats-5-2).</summary>
-    private readonly record struct HtmlCellSpan(string InnerHtml, int ColSpan, int RowSpan);
+    /// merged-header columns aligned with their data (R57-services-clipboard-formats-5-2), plus
+    /// whether the cell's own style carries the "mso-number-format:'\@'" Text marker
+    /// (R78-services-clipboard-formats-5-1).</summary>
+    private readonly record struct HtmlCellSpan(string InnerHtml, int ColSpan, int RowSpan, bool IsTextFormat);
+
+    /// <summary>Matches the "mso-number-format" Text (@) marker ClipboardHtmlSerializer writes for a
+    /// Text-typed source cell -- and that real Excel writes for the same reason -- regardless of
+    /// which quote style wraps the style attribute itself (single vs. double) or the format code
+    /// inside it (Excel emits <c>mso-number-format:"\@"</c>; FreeX's own writer emits
+    /// <c>mso-number-format:'\@'</c>). Searched directly against the tag's raw attribute text rather
+    /// than against an extracted "style" attribute value, since a simple quote-delimited attribute
+    /// extractor cannot reliably handle one quote style nested inside the other.</summary>
+    private static readonly System.Text.RegularExpressions.Regex MsoTextNumberFormatRegex = new(
+        @"mso-number-format\s*:\s*[""']\\?@[""']",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     private static IEnumerable<HtmlCellSpan> EnumerateHtmlCells(string rowInner)
     {
@@ -801,9 +825,10 @@ public partial class MainWindow
                 var tagContent = rowInner[(lt + 1)..tagEnd];
                 var colSpan = ParseHtmlSpanAttribute(tagContent, "colspan");
                 var rowSpan = ParseHtmlSpanAttribute(tagContent, "rowspan");
+                var isTextFormat = MsoTextNumberFormatRegex.IsMatch(tagContent);
                 int closeStart = FindMatchingHtmlClose(rowInner, tagEnd + 1, name);
                 string inner = closeStart < 0 ? rowInner[(tagEnd + 1)..] : rowInner[(tagEnd + 1)..closeStart];
-                yield return new HtmlCellSpan(inner, colSpan, rowSpan);
+                yield return new HtmlCellSpan(inner, colSpan, rowSpan, isTextFormat);
                 i = closeStart < 0 ? rowInner.Length : SkipHtmlClosingTag(rowInner, closeStart);
             }
             else
@@ -918,7 +943,9 @@ public partial class MainWindow
     }
 
     /// <summary>Strips tags from a cell's inner HTML -- turning &lt;br&gt; into a literal newline
-    /// kept WITHIN the cell's own text (never a row separator) -- decodes entities, and trims.</summary>
+    /// kept WITHIN the cell's own text (never a row separator), and an &lt;img&gt; into its alt text
+    /// when present (R78-services-clipboard-formats-5-3, see below) -- decodes entities, and
+    /// trims.</summary>
     private static string DecodeHtmlCellText(string innerHtml)
     {
         var sb = new StringBuilder(innerHtml.Length);
@@ -933,7 +960,23 @@ public partial class MainWindow
                 if (gt < 0)
                     break;
                 if (name is "br")
+                {
                     sb.Append('\n');
+                }
+                else if (name is "img")
+                {
+                    // Full picture-paste (fetching/decoding the src and creating a floating Picture
+                    // object the way TryPasteClipboardImage does for a pure CF_Bitmap payload) is a
+                    // larger follow-up out of scope here. But silently emptying the cell would lose
+                    // the only content the source page associated with it (e.g. a product thumbnail
+                    // next to its price) with no way to recover it from the paste and no user-visible
+                    // sign anything was dropped. Falling back to the img's alt text -- the HTML
+                    // author's own stand-in for the image's content -- keeps that content in the
+                    // pasted cell instead of a blank, unexplained gap.
+                    var alt = ExtractHtmlAttributeValue(innerHtml[(i + 1)..gt], "alt");
+                    if (!string.IsNullOrEmpty(alt))
+                        sb.Append(alt);
+                }
                 i = gt + 1;
             }
             else
@@ -944,6 +987,57 @@ public partial class MainWindow
         }
 
         return System.Net.WebUtility.HtmlDecode(sb.ToString()).Trim();
+    }
+
+    /// <summary>Reads a quoted string attribute's value (e.g. <c>alt="Widget"</c>) from a tag's raw
+    /// attribute text. Returns null if absent or malformed (unquoted/unterminated). Mirrors
+    /// <see cref="ParseHtmlSpanAttribute"/>'s boundary-checked forward search but reads an arbitrary
+    /// quoted value instead of a trailing digit run.</summary>
+    private static string? ExtractHtmlAttributeValue(string tagContent, string attributeName)
+    {
+        var searchFrom = 0;
+        while (searchFrom < tagContent.Length)
+        {
+            var idx = tagContent.IndexOf(attributeName, searchFrom, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+                return null;
+
+            var afterIdx = idx + attributeName.Length;
+            var boundaryOk = idx == 0 || char.IsWhiteSpace(tagContent[idx - 1]);
+            if (!boundaryOk)
+            {
+                searchFrom = afterIdx;
+                continue;
+            }
+
+            var p = afterIdx;
+            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
+                p++;
+            if (p >= tagContent.Length || tagContent[p] != '=')
+            {
+                searchFrom = afterIdx;
+                continue;
+            }
+
+            p++;
+            while (p < tagContent.Length && char.IsWhiteSpace(tagContent[p]))
+                p++;
+            if (p >= tagContent.Length || (tagContent[p] != '"' && tagContent[p] != '\''))
+            {
+                searchFrom = afterIdx;
+                continue;
+            }
+
+            var quote = tagContent[p];
+            var valueStart = p + 1;
+            var valueEnd = tagContent.IndexOf(quote, valueStart);
+            if (valueEnd < 0)
+                return null;
+
+            return tagContent[valueStart..valueEnd];
+        }
+
+        return null;
     }
 
     private void ExecuteInsertCopiedCells()
@@ -1292,7 +1386,10 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    return new PasteColumnWidthsCommand(sheetId, clip.SourceRange, currentRange.Start.Col, currentRange.ColCount);
+                    // R78-commands-paste-special-5-1: forward clip.SourceAreas so a multi-area
+                    // (Ctrl+click) source's gap columns (never actually selected) are left untouched
+                    // at the destination instead of being clobbered.
+                    return new PasteColumnWidthsCommand(sheetId, clip.SourceRange, currentRange.Start.Col, currentRange.ColCount, clip.SourceAreas);
                 },
                 out var outcome))
             return;
@@ -1326,11 +1423,15 @@ public partial class MainWindow
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
                     var destinationRange = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId);
+                    // R78-commands-paste-special-5-3: forward clip.SourceAreas so a multi-area
+                    // (Ctrl+click) source's gap cells (never actually selected) don't leak a
+                    // comment/note into the destination.
                     return new PasteCommentsCommand(
                         sheetId,
                         clip.SourceRange,
                         destinationRange,
-                        transpose);
+                        transpose,
+                        clip.SourceAreas);
                 },
                 out var outcome))
             return;
@@ -1363,11 +1464,15 @@ public partial class MainWindow
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
                     var destinationRange = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId);
+                    // R78-commands-paste-special-5-4: forward clip.SourceAreas so a multi-area
+                    // (Ctrl+click) source's gap cells (never actually selected) don't leak a
+                    // validation rule into the destination.
                     return new PasteDataValidationCommand(
                         sheetId,
                         clip.SourceRange,
                         destinationRange,
-                        transpose);
+                        transpose,
+                        clip.SourceAreas);
                 },
                 out var outcome))
             return;
@@ -1445,12 +1550,16 @@ public partial class MainWindow
             // WorkbookSession.PasteLinkFromClipboardAtActiveCell/CreatePasteLinkCommand -- so a
             // copied source tiles its linked formulas across the whole destination selection
             // instead of only ever filling the source range's own footprint.
+            // R78-commands-paste-special-5-2: forward clip.SourceAreas so a multi-area (Ctrl+click)
+            // source's gap cells (never actually selected) don't get planted with a spurious link
+            // formula at the destination.
             var linkedCells = PasteLinkService.CreateLinkedCells(
                 clip.SourceRange,
                 currentRange.Start,
                 currentRange,
                 sourceSheet.Name,
-                transpose);
+                transpose,
+                clip.SourceAreas);
             var targetSheetIds = CurrentGroupedEditSheetIds();
             IWorkbookCommand linkCommand = targetSheetIds.Count > 1
                 ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, linkedCells)
@@ -1460,7 +1569,7 @@ public partial class MainWindow
                     "Paste Link",
                     [
                         linkCommand,
-                        new PasteColumnWidthsCommand(_currentSheetId, clip.SourceRange, currentRange.Start.Col, currentRange.ColCount)
+                        new PasteColumnWidthsCommand(_currentSheetId, clip.SourceRange, currentRange.Start.Col, currentRange.ColCount, clip.SourceAreas)
                     ])
                 : linkCommand;
         }

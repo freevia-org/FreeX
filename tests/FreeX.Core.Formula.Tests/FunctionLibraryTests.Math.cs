@@ -247,6 +247,29 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=ROUND(1,309)", MakeSheet()).Should().Be(new NumberValue(1));
     }
 
+    // num_digits so far negative it overflows int (Math.Truncate/(int) cast saturates to
+    // int.MinValue), whose own negation also overflows -- ROUND must zero out the number
+    // just like ROUNDUP/ROUNDDOWN do for the identical extreme digits, not return #NUM!.
+    [Fact]
+    public void Round_ExtremeNegativeDigits_MatchesRoundupRounddown_ReturnsZero()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=ROUND(123,-3000000000)", sheet).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=ROUNDDOWN(123,-3000000000)", sheet).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=ROUNDUP(123,-3000000000)", sheet).Should().Be(new NumberValue(0));
+    }
+
+    // No-regression sibling: ordinary (non-extreme) negative num_digits must still round
+    // normally through the decimal-corrected path, unaffected by the factor==0 guard added
+    // for the extreme case above.
+    [Fact]
+    public void Round_OrdinaryNegativeDigits_StillRoundsNormally()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=ROUND(31415.92654,-2)", sheet).Should().Be(new NumberValue(31400));
+        _eval.Evaluate("=ROUND(1234,-2)", sheet).Should().Be(new NumberValue(1200));
+    }
+
     [Fact]
     public void Rounding_RangeNumberArgument_SpillsElementwise()
     {
@@ -1141,6 +1164,26 @@ public partial class FunctionLibraryTests
 
     [Fact]
     public void Mround_OverflowingResult_ReturnsNumError()
+    {
+        _eval.Evaluate("=MROUND(1E308,0.1)", MakeSheet()).Should().Be(ErrorValue.Num);
+    }
+
+    // number and multiple each individually fit decimal's ~7.9e28 range, but their
+    // quotient (1e15 / 1e-15 = 1e30) does not -- MROUND must fall back to double math
+    // (like CeilingToMultiple/FloorToMultiple/TruncateToMultiple already do) instead of
+    // letting the decimal division's OverflowException bubble up to #NUM!.
+    [Fact]
+    public void Mround_WideMagnitudeGap_FallsBackToDoubleMath()
+    {
+        _eval.Evaluate("=MROUND(1000000000000000,0.000000000000001)", MakeSheet())
+            .Should().Be(new NumberValue(1000000000000000));
+    }
+
+    // No-regression sibling: a genuinely unrepresentable result (number itself outside
+    // decimal range) must still surface #NUM! -- the new try/catch fallback must not mask
+    // that case with a silently wrong double-math answer.
+    [Fact]
+    public void Mround_GenuineOverflow_StillReturnsNumError()
     {
         _eval.Evaluate("=MROUND(1E308,0.1)", MakeSheet()).Should().Be(ErrorValue.Num);
     }

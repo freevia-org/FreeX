@@ -134,6 +134,88 @@ public static class WorkbookReferenceNavigator
         return false;
     }
 
+    public static bool TryParseReferenceRanges(
+        string text,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, GridRange>? definedNames,
+        out IReadOnlyList<GridRange> ranges) =>
+        TryParseReferenceRanges(text, sheetId, static _ => null, definedNames, out ranges);
+
+    public static bool TryParseReferenceRanges(
+        string text,
+        SheetId defaultSheetId,
+        Func<string, SheetId?> resolveSheetId,
+        IReadOnlyDictionary<string, GridRange>? definedNames,
+        out IReadOnlyList<GridRange> ranges) =>
+        TryParseReferenceRanges(text, defaultSheetId, resolveSheetId, definedNames, resolveScopedName: null, out ranges);
+
+    /// <summary>
+    /// Multi-area sibling of <see cref="TryParseReferenceRange(string,SheetId,Func{string,SheetId?},IReadOnlyDictionary{string,GridRange},Func{string,SheetId,GridRange?},out GridRange)"/>,
+    /// matching Excel's Name Box behavior of splitting a comma-separated reference (e.g. "A1,C3" or
+    /// "A1:B2,D4") into a disjoint multi-area selection -- the same result Ctrl+clicking each area
+    /// individually would produce. A single-area reference containing no top-level comma (including a
+    /// plain defined-name lookup, which can never contain a comma -- commas are illegal in Excel
+    /// defined-name syntax) parses identically to the singular overload. A comma inside a quoted sheet
+    /// name (e.g. "'Q1, Actuals'!A1") is not treated as an area separator. Fails (returning no ranges)
+    /// if any individual area fails to parse, matching Excel's all-or-nothing Name Box behavior.
+    /// </summary>
+    public static bool TryParseReferenceRanges(
+        string text,
+        SheetId defaultSheetId,
+        Func<string, SheetId?> resolveSheetId,
+        IReadOnlyDictionary<string, GridRange>? definedNames,
+        Func<string, SheetId, GridRange?>? resolveScopedName,
+        out IReadOnlyList<GridRange> ranges)
+    {
+        var parsed = new List<GridRange>();
+        foreach (var area in SplitReferenceAreas(text))
+        {
+            if (!TryParseReferenceRange(area, defaultSheetId, resolveSheetId, definedNames, resolveScopedName, out var range))
+            {
+                ranges = [];
+                return false;
+            }
+
+            parsed.Add(range);
+        }
+
+        ranges = parsed;
+        return parsed.Count > 0;
+    }
+
+    // Splits on top-level commas only -- a comma inside a single-quoted sheet name (which may
+    // legally contain one, e.g. 'Q1, Actuals'!A1) is not an area separator. Mirrors
+    // WorkbookRangeTextCodec.SplitReferences.
+    private static IEnumerable<string> SplitReferenceAreas(string input)
+    {
+        var start = 0;
+        var inQuotedSheetName = false;
+        for (var index = 0; index < input.Length; index++)
+        {
+            if (input[index] == '\'')
+            {
+                if (index + 1 < input.Length && input[index + 1] == '\'')
+                {
+                    index++;
+                    continue;
+                }
+
+                inQuotedSheetName = !inQuotedSheetName;
+            }
+            else if (input[index] == ',' && !inQuotedSheetName)
+            {
+                var segment = input[start..index].Trim();
+                if (segment.Length > 0)
+                    yield return segment;
+                start = index + 1;
+            }
+        }
+
+        var finalSegment = input[start..].Trim();
+        if (finalSegment.Length > 0)
+            yield return finalSegment;
+    }
+
     /// <summary>
     /// Whether <paramref name="text"/> already names an existing named FORMULA/constant (e.g.
     /// "TaxRate" = "0.08") rather than a plain named range -- used by a Name Box "define on Enter"

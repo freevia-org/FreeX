@@ -475,6 +475,8 @@ public sealed partial class MainWindow : Window
     private bool _cellAddressBoxHasPendingEdit;
     private readonly TextBox _formulaBox = new();
     private TextBox? _inlineCellEditor;
+    private TextBlock? _inlineCellReferenceTextOverlay;
+    private IBrush? _inlineCellEditorForeground;
     private CellAddress? _inlineCellEditAddress;
     private string? _inlineCellEditText;
     private int? _inlineCellEditSelectionStart;
@@ -862,6 +864,17 @@ public sealed partial class MainWindow : Window
     internal bool FormulaPointModeForTest => _formulaRangeEntryMode;
 
     internal string? InlineCellEditorTextForTest => _inlineCellEditor?.Text ?? _inlineCellEditText;
+
+    /// <summary>
+    /// R78-render-inplace-editor-5-2 test seam: whether the in-cell editor's own reference-highlight
+    /// overlay (mirroring the formula bar's <c>_formulaReferenceTextOverlay</c>) is currently showing
+    /// colored reference runs over the cell being edited in place.
+    /// </summary>
+    internal bool InlineCellReferenceOverlayVisibleForTest => _inlineCellReferenceTextOverlay?.IsVisible ?? false;
+
+    internal int InlineCellReferenceOverlayRunCountForTest => _inlineCellReferenceTextOverlay?.Inlines?.Count ?? 0;
+
+    internal IBrush? InlineCellEditorForegroundForTest => _inlineCellEditor?.Foreground;
 
     internal void BeginInlineCellEditForTest(CellAddress address, string text, int caretIndex)
     {
@@ -8605,7 +8618,7 @@ public sealed partial class MainWindow : Window
         return isDoubleClick;
     }
 
-    private TextBox CreateInlineCellEditor(
+    private Control CreateInlineCellEditor(
         CellAddress address,
         IBrush background,
         IBrush foreground,
@@ -8678,12 +8691,40 @@ public sealed partial class MainWindow : Window
         };
         editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
 
+        // R78-render-inplace-editor-5-2: mirrors the WPF host's second inline overlay
+        // (_inlineFormulaReferenceOverlay in MainWindow.Editing.cs), stacked on top of the editor
+        // itself in a Grid so the colored reference text renders at the cell the user is actually
+        // typing into, not only in the (possibly scrolled-out-of-view) formula bar above.
+        var referenceOverlay = new TextBlock
+        {
+            Foreground = foreground,
+            Padding = new Thickness((8 + indentPadding) * zoomFactor, 0, 8 * zoomFactor, 0),
+            FontSize = Math.Max(1, fontSize * zoomFactor),
+            FontFamily = fontFamily,
+            FontWeight = fontWeight,
+            FontStyle = fontStyle,
+            TextAlignment = textAlignment,
+            TextWrapping = TextWrapping.NoWrap,
+            Height = cellHeight,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            IsHitTestVisible = false,
+            IsVisible = false,
+            ClipToBounds = true,
+        };
+        AutomationProperties.SetAutomationId(referenceOverlay, "WorksheetInlineCellReferenceOverlay");
+
+        var container = new AvaloniaGrid();
+        container.Children.Add(editor);
+        container.Children.Add(referenceOverlay);
+
         _inlineCellEditor = editor;
+        _inlineCellReferenceTextOverlay = referenceOverlay;
+        _inlineCellEditorForeground = foreground;
         Dispatcher.UIThread.Post(
             () => FocusInlineCellEditor(address, editor),
             DispatcherPriority.Input);
 
-        return editor;
+        return container;
     }
 
     private void FocusInlineCellEditor(CellAddress address, TextBox editor)
@@ -8786,9 +8827,16 @@ public sealed partial class MainWindow : Window
             pageSize: Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(address.Sheet)) - 1),
             allowFormulaBarNavigationKeys: false,
             formulaRangeEntryActive: formulaRangeEntryActive,
+            // R78-render-inplace-editor-5-1: unlike the WPF host's shared inline editor, this
+            // in-cell overlay is only ever attached via BeginInlineCellEdit, whose sole callers are
+            // F2 and double-click (a typed fresh character instead routes through BeginFormulaEdit /
+            // the formula box). Every session here is therefore Excel's "Edit" mode, so arrows
+            // always reposition the caret and never commit -- entering the reference-entry span is
+            // already handled above by formulaRangeEntryActive/TryHandleFormulaRangeEntryNavigation.
             inlineEditorCommitsOnArrow: FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
                 editor.Text,
-                _formulaRangeEntryMode),
+                _formulaRangeEntryMode,
+                enteredViaEditKey: true),
             moveSelectionAfterEnter: MoveSelectionAfterEnter,
             enterDirection: AfterEnterDirection);
 
@@ -8881,6 +8929,8 @@ public sealed partial class MainWindow : Window
     private void ClearInlineCellEditorState()
     {
         _inlineCellEditor = null;
+        _inlineCellReferenceTextOverlay = null;
+        _inlineCellEditorForeground = null;
         _inlineCellEditAddress = null;
         _inlineCellEditText = null;
         _inlineCellEditSelectionStart = null;
@@ -9686,7 +9736,22 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        ApplyFormulaReferenceTextOverlay(_formulaBox.Text ?? "", GetFormulaReferenceHighlights(_formulaBox.Text ?? ""));
+        var text = _formulaBox.Text ?? "";
+        var highlights = GetFormulaReferenceHighlights(text);
+        ApplyFormulaReferenceTextOverlay(_formulaBox, _formulaReferenceTextOverlay, PrimaryInk, text, highlights);
+
+        // R78-render-inplace-editor-5-2: keep the in-cell editor's own overlay in sync too, so the
+        // colored reference text renders at the cell being edited in place, not only in the formula
+        // bar above (matches the WPF host's dual inline/formula-bar overlay update).
+        if (_inlineCellEditor is { } inlineEditor && _inlineCellReferenceTextOverlay is { } inlineOverlay)
+        {
+            ApplyFormulaReferenceTextOverlay(
+                inlineEditor,
+                inlineOverlay,
+                _inlineCellEditorForeground ?? PrimaryInk,
+                text,
+                highlights);
+        }
     }
 
     private void AddFormulaReferenceHighlightOverlay(
@@ -9751,14 +9816,30 @@ public sealed partial class MainWindow : Window
         _formulaReferenceGridHighlightVisuals.Clear();
     }
 
-    private void ApplyFormulaReferenceTextOverlay(
+    /// <summary>
+    /// Test-only seam onto the static reference-coloring decision logic below (which cell/overlay
+    /// pair receives which run gets exercised in production via <see cref="RefreshFormulaReferenceHighlights"/>
+    /// for both the formula bar and, since R78-render-inplace-editor-5-2, the in-cell editor).
+    /// </summary>
+    internal static void ApplyFormulaReferenceTextOverlayForTest(
+        TextBox editor,
+        TextBlock overlay,
+        IBrush plainBrush,
+        string text,
+        IReadOnlyList<FormulaReferenceHighlight> highlights) =>
+        ApplyFormulaReferenceTextOverlay(editor, overlay, plainBrush, text, highlights);
+
+    private static void ApplyFormulaReferenceTextOverlay(
+        TextBox editor,
+        TextBlock overlay,
+        IBrush plainBrush,
         string text,
         IReadOnlyList<FormulaReferenceHighlight> highlights)
     {
-        _formulaReferenceTextOverlay.Inlines?.Clear();
+        overlay.Inlines?.Clear();
         if (!text.StartsWith("=", StringComparison.Ordinal) || highlights.Count == 0)
         {
-            ClearFormulaReferenceTextOverlay();
+            ClearFormulaReferenceTextOverlay(editor, overlay, plainBrush);
             return;
         }
 
@@ -9774,29 +9855,38 @@ public sealed partial class MainWindow : Window
 
             var highlightEnd = Math.Min(text.Length, highlight.TextStart + highlight.TextLength);
             if (highlight.TextStart > index)
-                AddFormulaReferenceRun(text[index..highlight.TextStart], PrimaryInk);
+                AddFormulaReferenceRun(overlay, text[index..highlight.TextStart], plainBrush);
 
             AddFormulaReferenceRun(
+                overlay,
                 text[highlight.TextStart..highlightEnd],
                 FormulaReferenceBrushes[highlight.PaletteIndex % FormulaReferenceBrushes.Count]);
             index = highlightEnd;
         }
 
         if (index < text.Length)
-            AddFormulaReferenceRun(text[index..], PrimaryInk);
+            AddFormulaReferenceRun(overlay, text[index..], plainBrush);
 
-        _formulaReferenceTextOverlay.IsVisible = true;
-        _formulaBox.Foreground = Brushes.Transparent;
+        overlay.IsVisible = true;
+        editor.Foreground = Brushes.Transparent;
     }
 
-    private void AddFormulaReferenceRun(string text, IBrush brush) =>
-        _formulaReferenceTextOverlay.Inlines?.Add(new Run(text) { Foreground = brush });
+    private static void AddFormulaReferenceRun(TextBlock overlay, string text, IBrush brush) =>
+        overlay.Inlines?.Add(new Run(text) { Foreground = brush });
 
     private void ClearFormulaReferenceTextOverlay()
     {
-        _formulaReferenceTextOverlay.Inlines?.Clear();
-        _formulaReferenceTextOverlay.IsVisible = false;
-        _formulaBox.Foreground = PrimaryInk;
+        ClearFormulaReferenceTextOverlay(_formulaBox, _formulaReferenceTextOverlay, PrimaryInk);
+
+        if (_inlineCellEditor is { } inlineEditor && _inlineCellReferenceTextOverlay is { } inlineOverlay)
+            ClearFormulaReferenceTextOverlay(inlineEditor, inlineOverlay, _inlineCellEditorForeground ?? PrimaryInk);
+    }
+
+    private static void ClearFormulaReferenceTextOverlay(TextBox editor, TextBlock overlay, IBrush plainBrush)
+    {
+        overlay.Inlines?.Clear();
+        overlay.IsVisible = false;
+        editor.Foreground = plainBrush;
     }
 
     private static IBrush CreateFormulaReferenceFill(IBrush brush)
@@ -24926,6 +25016,31 @@ public sealed partial class MainWindow : Window
         if (_endMode)
             _endMode = false;
 
+        // R78-render-selection-namebox-5-2: when a single multi-cell rectangular range is already
+        // selected (no Ctrl-added extra areas), Enter/Tab should move the active cell WITHIN the
+        // range -- wrapping at its edges -- and keep the whole range highlighted, matching Excel
+        // and the WPF host (MainWindow.Selection.cs), instead of collapsing the selection down to
+        // one cell. A lone selected MERGED cell also satisfies Start != End but is logically a
+        // single cell, not a real multi-cell selection -- Tab/Enter skips past it instead (see
+        // IsSingleMergedCellRange), falling through to the plain move-active-cell path below.
+        if (moveOnly &&
+            _session.SelectedRanges.Count <= 1 &&
+            _session.SelectedRange is { } activeMultiRange &&
+            activeMultiRange.Start != activeMultiRange.End &&
+            !IsSingleMergedCellRange(sheet, activeMultiRange))
+        {
+            var withinRangeTarget = AdvanceActiveCellWithinRange(
+                activeMultiRange,
+                current,
+                isTab: navigationKey == ExcelWorksheetNavigationKey.Tab,
+                forward: !extendSelection);
+            _session.MoveActiveCellWithinSelection(withinRangeTarget);
+            ClearSelectedDrawingObject();
+            e.Handled = true;
+            RefreshShell("Ready");
+            return;
+        }
+
         // Alt+PageUp/Alt+PageDown resolve to a horizontal screen-page move (Excel/WPF parity)
         // before falling back to the vertical PageUp/PageDown handling below.
         CellAddress? target = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
@@ -25043,6 +25158,85 @@ public sealed partial class MainWindow : Window
         }
 
         return candidate;
+    }
+
+    // True when `range` is exactly the merged region anchored at its own Start -- i.e. the
+    // "selection" is really just one logical merged cell, not a genuine multi-cell range
+    // (mirrors the WPF host's MainWindow.Selection.cs IsSingleMergedCellRange, R51-render-merged-
+    // cell-edit-nav-3-2).
+    private static bool IsSingleMergedCellRange(Sheet? sheet, GridRange range)
+    {
+        if (sheet is not { MergedRegions.Count: > 0 })
+            return false;
+
+        return sheet.GetMergeRegion(range.Start) is { } merge &&
+            merge.Start == range.Start &&
+            merge.End == range.End;
+    }
+
+    // Advances the active cell within an already-selected multi-cell range for Enter/Tab (and
+    // their Shift-reversed variants), wrapping at the range's edges the way Excel does: Tab moves
+    // right and wraps to the start of the next row; Enter moves down and wraps to the top of the
+    // next column; reaching the last cell in the direction of travel wraps back around to the
+    // opposite edge of the range (R78-render-selection-namebox-5-2, mirrors the WPF host's
+    // MainWindow.Selection.cs AdvanceActiveCellWithinRange).
+    private static CellAddress AdvanceActiveCellWithinRange(GridRange range, CellAddress current, bool isTab, bool forward)
+    {
+        var minRow = range.Start.Row;
+        var maxRow = range.End.Row;
+        var minCol = range.Start.Col;
+        var maxCol = range.End.Col;
+        var row = Math.Clamp(current.Row, minRow, maxRow);
+        var col = Math.Clamp(current.Col, minCol, maxCol);
+
+        if (isTab)
+        {
+            if (forward)
+            {
+                if (col < maxCol)
+                    col++;
+                else
+                {
+                    col = minCol;
+                    row = row < maxRow ? row + 1 : minRow;
+                }
+            }
+            else
+            {
+                if (col > minCol)
+                    col--;
+                else
+                {
+                    col = maxCol;
+                    row = row > minRow ? row - 1 : maxRow;
+                }
+            }
+        }
+        else
+        {
+            if (forward)
+            {
+                if (row < maxRow)
+                    row++;
+                else
+                {
+                    row = minRow;
+                    col = col < maxCol ? col + 1 : minCol;
+                }
+            }
+            else
+            {
+                if (row > minRow)
+                    row--;
+                else
+                {
+                    row = maxRow;
+                    col = col > minCol ? col - 1 : maxCol;
+                }
+            }
+        }
+
+        return new CellAddress(current.Sheet, row, col);
     }
 
     private CellAddress OffsetAddress(CellAddress current, int rowDelta, int colDelta) =>

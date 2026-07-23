@@ -240,6 +240,58 @@ public sealed class WorkbookReferenceNavigatorTests
     }
 
     [Fact]
+    public void TryParseReferenceRanges_ParsesDisjointSingleCellAreas()
+    {
+        // R78-render-selection-namebox-5-1: typing "A1,C3" into the Name Box must select a two-area
+        // (disjoint) selection -- A1 and C3 -- exactly like Ctrl+clicking both cells in real Excel.
+        var sheetId = SheetId.New();
+
+        WorkbookReferenceNavigator.TryParseReferenceRanges("A1,C3", sheetId, definedNames: null, out var ranges)
+            .Should().BeTrue();
+
+        ranges.Should().Equal(
+            new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 1, 1)),
+            new GridRange(new CellAddress(sheetId, 3, 3), new CellAddress(sheetId, 3, 3)));
+    }
+
+    [Fact]
+    public void TryParseReferenceRanges_ParsesMixedSingleCellAndRangeAreas()
+    {
+        var sheetId = SheetId.New();
+
+        WorkbookReferenceNavigator.TryParseReferenceRanges("A1:B2,D4", sheetId, definedNames: null, out var ranges)
+            .Should().BeTrue();
+
+        ranges.Should().Equal(
+            new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            new GridRange(new CellAddress(sheetId, 4, 4), new CellAddress(sheetId, 4, 4)));
+    }
+
+    [Fact]
+    public void TryParseReferenceRanges_SingleAreaWithNoCommaMatchesSingularOverload()
+    {
+        // No-regression sibling: a plain single-area reference (no top-level comma) must still parse
+        // identically to the singular TryParseReferenceRange overload.
+        var sheetId = SheetId.New();
+
+        WorkbookReferenceNavigator.TryParseReferenceRanges("A1:C3", sheetId, definedNames: null, out var ranges)
+            .Should().BeTrue();
+
+        ranges.Should().Equal(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)));
+    }
+
+    [Fact]
+    public void TryParseReferenceRanges_FailsWhenAnyAreaIsInvalid()
+    {
+        var sheetId = SheetId.New();
+
+        WorkbookReferenceNavigator.TryParseReferenceRanges("A1,NotACell", sheetId, definedNames: null, out var ranges)
+            .Should().BeFalse();
+
+        ranges.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildReferenceChoices_PutsDefaultThenRecentThenSortedNamesWithoutDuplicates()
     {
         var choices = WorkbookReferenceNavigator.BuildReferenceChoices(

@@ -146,9 +146,27 @@ public static class ClipboardSerializer
         if (cell.RawValue is not TextValue || string.IsNullOrEmpty(cell.DisplayText))
             return cell.DisplayText;
 
-        return RequiresLeadingApostropheEscape(cell.DisplayText)
-            ? "'" + cell.DisplayText
-            : cell.DisplayText;
+        return EscapeTextCellForPaste(cell.DisplayText);
+    }
+
+    /// <summary>Prefixes a leading apostrophe (Excel's text-escape convention, as consumed by
+    /// PasteCommandFactory.ParseClipboardValue) onto <paramref name="displayText"/> when it is known
+    /// to belong to a Text-typed cell but would otherwise round-trip through a subsequent paste as a
+    /// number/boolean/apostrophe-escape. Shared by the plain-text clipboard path above (<see
+    /// cref="GetSerializedFieldText"/>) and by MainWindow.ClipboardCommands' HTML-clipboard-paste
+    /// path, which needs the identical escape applied to a &lt;td&gt; carrying the
+    /// "mso-number-format:'\@'" text marker (see ClipboardHtmlSerializer.RequiresTextFormatMarker) --
+    /// without it, the HTML-preferred paste branch silently re-coerces a Text-formatted "00501" back
+    /// into the number 501, even though the plain-text sibling on the same clipboard already carries
+    /// this exact escape (R78-services-clipboard-formats-5-1).</summary>
+    public static string EscapeTextCellForPaste(string displayText)
+    {
+        if (string.IsNullOrEmpty(displayText))
+            return displayText;
+
+        return RequiresLeadingApostropheEscape(displayText)
+            ? "'" + displayText
+            : displayText;
     }
 
     /// <summary>Mirrors the coercions PasteCommandFactory.ParseClipboardValue applies to pasted plain

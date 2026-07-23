@@ -180,7 +180,8 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                     : null,
                 sheet.Hyperlinks.TryGetValue(source, out var hyperlink) ? hyperlink : null,
                 sheet.HyperlinkMetadata.TryGetValue(source, out var metadata) ? metadata : null,
-                sheet.RichTextRuns.TryGetValue(source, out var richRuns) ? richRuns : null));
+                sheet.RichTextRuns.TryGetValue(source, out var richRuns) ? richRuns : null,
+                sheet.CellPhoneticGuides.TryGetValue(source, out var phoneticGuide) ? phoneticGuide : null));
         }
 
         return payloads;
@@ -203,7 +204,8 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                     : null,
                 sheet.Hyperlinks.TryGetValue(address, out var hyperlink) ? hyperlink : null,
                 sheet.HyperlinkMetadata.TryGetValue(address, out var metadata) ? metadata : null,
-                sheet.RichTextRuns.TryGetValue(address, out var richRuns) ? richRuns : null));
+                sheet.RichTextRuns.TryGetValue(address, out var richRuns) ? richRuns : null,
+                sheet.CellPhoneticGuides.TryGetValue(address, out var phoneticGuide) ? phoneticGuide : null));
         }
 
         return snapshots;
@@ -258,6 +260,14 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.RichTextRuns[payload.Target] = payload.RichTextRuns;
         else
             sheet.RichTextRuns.Remove(payload.Target);
+
+        // R78-selfreg-twin-sweep-5: a phonetic guide (furigana) is RichTextRuns' companion for the
+        // same cell and must be carried/cleared alongside it at the paste target, or a copied
+        // furigana cell arrives with correct run formatting but a silently dropped guide.
+        if (payload.PhoneticGuide is not null)
+            sheet.CellPhoneticGuides[payload.Target] = payload.PhoneticGuide;
+        else
+            sheet.CellPhoneticGuides.Remove(payload.Target);
     }
 
     private static void RestoreCellSnapshot(Sheet sheet, CellSnapshot snapshot)
@@ -309,6 +319,11 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.RichTextRuns[snapshot.Address] = snapshot.RichTextRuns;
         else
             sheet.RichTextRuns.Remove(snapshot.Address);
+
+        if (snapshot.PhoneticGuide is not null)
+            sheet.CellPhoneticGuides[snapshot.Address] = snapshot.PhoneticGuide;
+        else
+            sheet.CellPhoneticGuides.Remove(snapshot.Address);
     }
 
     private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
@@ -359,7 +374,8 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         ThreadedComment? ThreadedComment,
         string? Hyperlink,
         HyperlinkMetadata? HyperlinkMetadata,
-        IReadOnlyList<CellTextRun>? RichTextRuns);
+        IReadOnlyList<CellTextRun>? RichTextRuns,
+        CellPhoneticGuide? PhoneticGuide = null);
 
     private sealed record CopyPayload(
         CellAddress Target,
@@ -371,5 +387,6 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         ThreadedComment? ThreadedComment,
         string? Hyperlink,
         HyperlinkMetadata? HyperlinkMetadata,
-        IReadOnlyList<CellTextRun>? RichTextRuns);
+        IReadOnlyList<CellTextRun>? RichTextRuns,
+        CellPhoneticGuide? PhoneticGuide = null);
 }

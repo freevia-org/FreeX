@@ -406,8 +406,27 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         foreach (var payload in payloads)
             WritePayload(ResolveSheet, payload);
 
+        // R78-formula-dynamic-spill-5-1: SetSpillRange's contract requires the caller to check
+        // IsSpillBlocked first (Sheet.cs) -- mirror RecalcEngine's own spill-writing branch here.
+        // Without this check, relocating a spill anchor onto a destination whose footprint overlaps
+        // pre-existing unrelated content wrote live spill values straight over/around that content
+        // instead of surfacing #SPILL! at the anchor, leaving orphaned phantom spill entries that
+        // only stay masked by luck (Sheet.GetValue prefers _cells over _spillValues) until the real
+        // content is cleared, at which point the stale spill value leaks through.
         foreach (var (_, target, spillPayload) in _spillRelocations)
-            ResolveSheet(target.Sheet).SetSpillRange(target, spillPayload);
+        {
+            var targetSheet = ResolveSheet(target.Sheet);
+            if (targetSheet.IsSpillBlocked(target, spillPayload.RowCount, spillPayload.ColCount))
+            {
+                var anchorCell = targetSheet.GetCell(target);
+                if (anchorCell is not null)
+                    anchorCell.Value = ErrorValue.Spill;
+            }
+            else
+            {
+                targetSheet.SetSpillRange(target, spillPayload);
+            }
+        }
 
         _affectedCells = MergeAffectedCells(affected, _formulaSnapshot.Keys);
         return new CommandOutcome(true, AffectedCells: _affectedCells);

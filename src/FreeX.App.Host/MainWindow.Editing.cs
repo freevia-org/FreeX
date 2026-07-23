@@ -80,6 +80,7 @@ public partial class MainWindow
         var text = FormatFormulaBarText(cell, addr);
         _formulaEditCell = addr;
         _formulaRangeEntryMode = false;
+        _formulaEditEnteredViaEditKey = true;
         ClearFormulaReferenceEntrySpan();
 
         if (_inlineEditor == null)
@@ -154,9 +155,14 @@ public partial class MainWindow
                     cellH += extraRow.Height * zoom;
         }
 
-        var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH);
+        _inlineEditorSingleLineHeight = cellH;
+        var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH, lineCount: CountInlineEditorLines(text));
 
         _inlineEditor.Text = text;
+        // R78-render-inplace-editor-5-4: match the cell's own effective horizontal alignment
+        // (mirrors the Avalonia shell's CreateInlineCellEditor, which threads the same
+        // style/value-derived alignment into its TextBox) instead of always defaulting to left.
+        _inlineEditor.TextAlignment = ResolveInlineEditorTextAlignment(sheet, cell);
         AutomationProperties.SetAutomationId(_inlineEditor, "WorksheetInlineCellEditor");
         AutomationProperties.SetName(_inlineEditor, UiText.Format("MainWindow_AutomationName_InlineCellEditorFormat", FormatCellReference(addr)));
         _inlineEditorChromeBaseRect = layout.EditorRect;
@@ -279,22 +285,82 @@ public partial class MainWindow
             return;
 
         var desiredTextWidth = MeasureEditorTextWidth(_inlineEditor);
+        // R78-render-inplace-editor-5-3: always multiply from the fixed single-line height
+        // baseline (not chromeBaseRect.Height, which this method itself grows below) so a
+        // multi-line recompute never compounds off the previous pass's already-grown height.
+        var lineCount = CountInlineEditorLines(_inlineEditor.Text);
         var layout = FormulaInlineEditorLayoutPlanner.Create(
             chromeBaseRect.Left,
             chromeBaseRect.Top,
             chromeBaseRect.Width,
-            chromeBaseRect.Height,
+            _inlineEditorSingleLineHeight,
             desiredTextWidth,
-            EditOverlay.ActualWidth);
+            EditOverlay.ActualWidth,
+            lineCount);
 
         System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.TextOverlayRect.Left - 4);
         _inlineEditor.Width = layout.TextOverlayRect.Width + 8;
+        _inlineEditor.Height = layout.EditorRect.Height;
+        _inlineEditorChromeBaseRect = chromeBaseRect with { Height = layout.EditorRect.Height };
 
         if (_inlineFormulaReferenceOverlay is not null)
         {
             System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
             _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
+            _inlineFormulaReferenceOverlay.Height = layout.TextOverlayRect.Height;
         }
+    }
+
+    /// <summary>
+    /// R78-render-inplace-editor-5-4: resolves the WPF <see cref="TextAlignment"/> the inline
+    /// editor should use so it matches the cell's own effective horizontal alignment (e.g. a
+    /// right-aligned/"General" numeric cell edits with right-aligned text) instead of always
+    /// defaulting to left. Mirrors the Avalonia shell's MapCellTextAlignment / this file's own
+    /// GridView.Rendering.cs ResolveWrapTextAlignment: explicit Left/Right/Center/Justify/
+    /// Distributed are direction-agnostic, while General resolves to the "end" of the cell's
+    /// effective reading order for numeric/date content and the "start" for everything else.
+    /// </summary>
+    private TextAlignment ResolveInlineEditorTextAlignment(Sheet? sheet, Cell? cell)
+    {
+        var style = cell is null ? null : _workbook.GetStyle(cell.StyleId);
+        var hAlign = style?.HorizontalAlignment ?? FreeX.Core.Model.HorizontalAlignment.General;
+        var isNumeric = cell?.Value is NumberValue or DateTimeValue;
+        var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+            style?.ReadingOrder ?? CellReadingOrder.Context, sheet?.IsRightToLeft ?? false);
+
+        return hAlign switch
+        {
+            FreeX.Core.Model.HorizontalAlignment.Left => TextAlignment.Left,
+            FreeX.Core.Model.HorizontalAlignment.Center
+                or FreeX.Core.Model.HorizontalAlignment.Justify
+                or FreeX.Core.Model.HorizontalAlignment.Distributed => TextAlignment.Center,
+            FreeX.Core.Model.HorizontalAlignment.Right => TextAlignment.Right,
+            FreeX.Core.Model.HorizontalAlignment.General when isNumeric =>
+                isEffectivelyRightToLeft ? TextAlignment.Left : TextAlignment.Right,
+            FreeX.Core.Model.HorizontalAlignment.General =>
+                isEffectivelyRightToLeft ? TextAlignment.Right : TextAlignment.Left,
+            _ => TextAlignment.Left
+        };
+    }
+
+    /// <summary>
+    /// Counts the number of display lines in inline-editor text, i.e. one more than the number of
+    /// line breaks (Alt+Enter inserts <see cref="Environment.NewLine"/>, but a cell value loaded
+    /// from a file may carry a bare "\n"; both are counted the same way as a line separator).
+    /// </summary>
+    private static int CountInlineEditorLines(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 1;
+
+        var lineCount = 1;
+        foreach (var ch in text)
+        {
+            if (ch == '\n')
+                lineCount++;
+        }
+
+        return lineCount;
     }
 
     private void RefreshInlineEditorChromeBorder()
@@ -420,7 +486,8 @@ public partial class MainWindow
         var formulaRangeEntryActive = IsFormulaRangeEntryActive(_inlineEditor);
         var inlineEditorCommitsOnArrow = FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
             _inlineEditor?.Text,
-            _formulaRangeEntryMode);
+            _formulaRangeEntryMode,
+            _formulaEditEnteredViaEditKey);
         var formulaReferenceCurrent = formulaRangeEntryActive
             ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
             : selectedRange.Value.Start;

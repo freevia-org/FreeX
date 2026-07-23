@@ -748,13 +748,48 @@ internal static class XlsxWorksheetDrawingObjectWriter
         DrawingShapeModel shape,
         int shapeIndex,
         XNamespace spreadsheetDrawingNs,
-        XNamespace drawingNs) =>
-        new(spreadsheetDrawingNs + "oneCellAnchor",
-            ToDrawingAnchorFrom(shape.Anchor, spreadsheetDrawingNs, shape.AnchorOffsetX, shape.AnchorOffsetY),
-            new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(shape.Width)),
-                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(shape.Height))),
-            new XElement(spreadsheetDrawingNs + "sp",
+        XNamespace drawingNs)
+    {
+        var shapeProperties = ToShapePropertiesForDrawingObject(
+            DrawingMlPresetGeometryMap.GetPreset(shape.Kind),
+            shape.RotationDegrees,
+            shape.FlipHorizontal,
+            shape.FlipVertical,
+            shape.HasFill,
+            shape.FillThemeColor,
+            shape.FillColor,
+            shape.OutlineThemeColor,
+            shape.OutlineColor,
+            spreadsheetDrawingNs,
+            drawingNs,
+            shape.GradientFillEndColor,
+            shape.GetEffectiveGradientFillDirection(),
+            shape.GetEffectiveEffectPreset(),
+            shape.Width,
+            shape.Height,
+            shape.OutlineWidthPoints,
+            shape.OutlineHasNoFill,
+            shape.OutlineDash,
+            shape.HeadArrowhead,
+            shape.TailArrowhead,
+            shape.AdjustValues);
+
+        // R78-io-shape-geometry-5-2: connector kinds (Line/ElbowConnector/CurvedConnector) must be
+        // packaged as <xdr:cxnSp> (with <xdr:nvCxnSpPr>/<xdr:cNvCxnSpPr>), not the generic <xdr:sp> --
+        // otherwise Excel treats the object as a plain autoshape: no connection-site glue, and it is
+        // listed as a generic shape rather than "Connector" in the Selection Pane. Connectors carry no
+        // txBody per the OOXML CT_Connector schema, so text (which they never have anyway) is omitted.
+        XElement shapeOrConnectorElement = DrawingShapeKindSupport.IsLineLike(shape.Kind)
+            ? new XElement(spreadsheetDrawingNs + "cxnSp",
+                new XElement(spreadsheetDrawingNs + "nvCxnSpPr",
+                    new XElement(spreadsheetDrawingNs + "cNvPr",
+                        new XAttribute("id", shapeIndex + 200),
+                        new XAttribute("name", DrawingName(shape.Name, $"Shape {shapeIndex}")),
+                        string.IsNullOrWhiteSpace(shape.Title) ? null : new XAttribute("title", shape.Title),
+                        string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText)),
+                    new XElement(spreadsheetDrawingNs + "cNvCxnSpPr")),
+                shapeProperties)
+            : new XElement(spreadsheetDrawingNs + "sp",
                 new XElement(spreadsheetDrawingNs + "nvSpPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", shapeIndex + 200),
@@ -762,30 +797,17 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         string.IsNullOrWhiteSpace(shape.Title) ? null : new XAttribute("title", shape.Title),
                         string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText)),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr")),
-                ToShapePropertiesForDrawingObject(
-                    DrawingMlPresetGeometryMap.GetPreset(shape.Kind),
-                    shape.RotationDegrees,
-                    shape.FlipHorizontal,
-                    shape.FlipVertical,
-                    shape.HasFill,
-                    shape.FillThemeColor,
-                    shape.FillColor,
-                    shape.OutlineThemeColor,
-                    shape.OutlineColor,
-                    spreadsheetDrawingNs,
-                    drawingNs,
-                    shape.GradientFillEndColor,
-                    shape.GetEffectiveGradientFillDirection(),
-                    shape.GetEffectiveEffectPreset(),
-                    shape.Width,
-                    shape.Height,
-                    shape.OutlineWidthPoints,
-                    shape.OutlineHasNoFill,
-                    shape.OutlineDash,
-                    shape.HeadArrowhead,
-                    shape.TailArrowhead),
-                shape.HasShapeText ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null),
+                shapeProperties,
+                shape.HasShapeText ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null);
+
+        return new(spreadsheetDrawingNs + "oneCellAnchor",
+            ToDrawingAnchorFrom(shape.Anchor, spreadsheetDrawingNs, shape.AnchorOffsetX, shape.AnchorOffsetY),
+            new XElement(spreadsheetDrawingNs + "ext",
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(shape.Width)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(shape.Height))),
+            shapeOrConnectorElement,
             new XElement(spreadsheetDrawingNs + "clientData"));
+    }
 
     /// <summary>
     /// Builds a minimal <c>&lt;xdr:txBody&gt;</c> element that round-trips shape text with
@@ -931,14 +953,15 @@ internal static class XlsxWorksheetDrawingObjectWriter
         bool outlineHasNoFill = false,
         DrawingShapeOutlineDash outlineDash = DrawingShapeOutlineDash.Solid,
         DrawingArrowhead? headArrowhead = null,
-        DrawingArrowhead? tailArrowhead = null)
+        DrawingArrowhead? tailArrowhead = null,
+        IReadOnlyList<DrawingShapeAdjustValue>? adjustValues = null)
     {
         return new XElement(spreadsheetDrawingNs + "spPr",
             ToDrawingTransform(rotationDegrees, flipHorizontal, flipVertical, drawingNs,
                 shapeWidthPixels, shapeHeightPixels),
             new XElement(drawingNs + "prstGeom",
                 new XAttribute("prst", preset),
-                new XElement(drawingNs + "avLst")),
+                ToAdjustValueList(adjustValues, drawingNs)),
             !hasFill
                 ? new XElement(drawingNs + "noFill")
                 : gradientFillEndColor is { } gradientEndColor && fillColor is { } gradientStartColor
@@ -949,6 +972,32 @@ internal static class XlsxWorksheetDrawingObjectWriter
             ToEffectList(effectPreset, drawingNs),
             ToScene3dProperties(effectPreset, drawingNs),
             ToShape3dProperties(effectPreset, drawingNs));
+    }
+
+    /// <summary>
+    /// Builds the <c>&lt;a:avLst&gt;</c> child of <c>&lt;a:prstGeom&gt;</c>, emitting one <c>&lt;a:gd&gt;</c>
+    /// per preserved adjust-handle value (R78-io-shape-geometry-5-3). An empty <c>&lt;a:avLst&gt;</c> --
+    /// which is what OOXML uses to mean "use this preset's built-in default handle positions" -- is
+    /// emitted when no adjust values were preserved, matching prior behavior for shapes that never had
+    /// a customized handle.
+    /// </summary>
+    private static XElement ToAdjustValueList(IReadOnlyList<DrawingShapeAdjustValue>? adjustValues, XNamespace drawingNs)
+    {
+        var avLst = new XElement(drawingNs + "avLst");
+        if (adjustValues is null)
+            return avLst;
+
+        foreach (var adjustValue in adjustValues)
+        {
+            if (string.IsNullOrEmpty(adjustValue.Name) || string.IsNullOrEmpty(adjustValue.Formula))
+                continue;
+
+            avLst.Add(new XElement(drawingNs + "gd",
+                new XAttribute("name", adjustValue.Name),
+                new XAttribute("fmla", adjustValue.Formula)));
+        }
+
+        return avLst;
     }
 
     private static XElement ToDrawingTransform(

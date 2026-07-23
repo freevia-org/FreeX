@@ -110,6 +110,42 @@ public sealed class ClipboardHtmlSerializerTests
         payload.Fragment.Should().Contain("501");
     }
 
+    [Fact]
+    public void Serialize_MultilineCell_ConvertsEmbeddedNewlineToBreakTag()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var viewport = new ViewportModel(
+            [new DisplayCell(1, 1, new TextValue("a\nb"), "a\nb", null, default, null)],
+            [],
+            []);
+
+        var payload = ClipboardHtmlSerializer.Serialize(viewport, sheet, new GridRange(address, address), workbook.Theme);
+
+        payload.Should().NotBeNull();
+        payload!.Fragment.Should().Contain("a<br>b");
+        payload.Fragment.Should().NotContain("a\nb");
+    }
+
+    [Fact]
+    public void Serialize_SingleLineCell_DoesNotEmitBreakTag()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var viewport = new ViewportModel(
+            [new DisplayCell(1, 1, new TextValue("ab"), "ab", null, default, null)],
+            [],
+            []);
+
+        var payload = ClipboardHtmlSerializer.Serialize(viewport, sheet, new GridRange(address, address), workbook.Theme);
+
+        payload.Should().NotBeNull();
+        payload!.Fragment.Should().NotContain("<br>");
+        payload.Fragment.Should().Contain("ab");
+    }
+
     private static int ParseOffset(string payload, string field)
     {
         var start = payload.IndexOf(field, StringComparison.Ordinal) + field.Length;

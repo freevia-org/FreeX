@@ -27,6 +27,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
+    private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
@@ -124,6 +125,11 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
             ctx.Workbook, sheet, new DeleteRowsOp(sheet.Name, _startRow, _count), sheet.Name);
         _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.RichTextRuns, _startRow, _count);
+        // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides must shift/delete in lockstep with its
+        // RichTextRuns companion, or a deleted row's phonetic guide survives orphaned while a
+        // surviving row's guide is left behind at its stale pre-delete address.
+        _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
+        RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.CellPhoneticGuides, _startRow, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         RowColumnShiftHelpers.ShiftRuleRowsDown(sheet, _startRow, _count);
@@ -272,6 +278,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         // Full-rebuild overload: rules removed during deletion must be re-added here.
         RowColumnShiftHelpers.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);

@@ -233,10 +233,10 @@ internal static class XlsxX14DataValidationWriter
             x14Dv.SetAttributeValue("showDropDown", "1");
         if (dv.AlertStyle != DvAlertStyle.Stop)
             x14Dv.SetAttributeValue("errorStyle", ToAlertStyleString(dv.AlertStyle));
-        if (!dv.ShowInputMessage)
-            x14Dv.SetAttributeValue("showInputMessage", "0");
-        if (!dv.ShowErrorMessage)
-            x14Dv.SetAttributeValue("showErrorMessage", "0");
+        if (dv.ShowInputMessage)
+            x14Dv.SetAttributeValue("showInputMessage", "1");
+        if (dv.ShowErrorMessage)
+            x14Dv.SetAttributeValue("showErrorMessage", "1");
         if (!string.IsNullOrEmpty(dv.ErrorTitle))
             x14Dv.SetAttributeValue("errorTitle", dv.ErrorTitle);
         if (!string.IsNullOrEmpty(dv.ErrorMessage))

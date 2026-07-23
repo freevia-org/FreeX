@@ -201,7 +201,25 @@ public static partial class BuiltInFunctions
         return new TextValue(addr);
     }
 
-    private static string FormatAddressSheetText(string sheetText) =>
-        SheetNameFormatter.QuoteIfNeeded(sheetText);
+    private static string FormatAddressSheetText(string sheetText)
+    {
+        // ADDRESS's sheet_text argument is an opaque display string (no external-workbook
+        // resolution happens here). Excel leaves the "[Book]Sheet" external-workbook prefix
+        // unquoted as long as the sheet-name portion after the ']' doesn't itself need
+        // quoting, e.g. ADDRESS(2,3,1,FALSE,"[Book1]Sheet1") -> [Book1]Sheet1!R2C3 (unquoted).
+        if (TryExternalWorkbookPrefix(sheetText, out var remainder) && !SheetNameFormatter.NeedsQuoting(remainder))
+            return sheetText;
+        return SheetNameFormatter.QuoteIfNeeded(sheetText);
+    }
+
+    private static bool TryExternalWorkbookPrefix(string sheetText, out string remainder)
+    {
+        remainder = string.Empty;
+        if (sheetText.Length < 3 || sheetText[0] != '[') return false;
+        var closeIdx = sheetText.IndexOf(']');
+        if (closeIdx < 1 || closeIdx == sheetText.Length - 1) return false;
+        remainder = sheetText[(closeIdx + 1)..];
+        return remainder.Length > 0;
+    }
 }
 

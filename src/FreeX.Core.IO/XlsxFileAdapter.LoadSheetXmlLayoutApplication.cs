@@ -240,7 +240,8 @@ public sealed partial class XlsxFileAdapter
                 ShapeTextGradientAngle = shapePart.ShapeTextGradientAngle,
                 ShapeTextOutlineColor = shapePart.ShapeTextOutlineColor,
                 ShapeTextOutlineThemeColor = shapePart.ShapeTextOutlineThemeColor,
-                ShapeTextOutlineWidthPoints = shapePart.ShapeTextOutlineWidthPoints
+                ShapeTextOutlineWidthPoints = shapePart.ShapeTextOutlineWidthPoints,
+                AdjustValues = shapePart.AdjustValues
             };
             XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet,
                 shapePart.XfrmWidthPixels, shapePart.XfrmHeightPixels);

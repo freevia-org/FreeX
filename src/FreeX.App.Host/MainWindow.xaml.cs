@@ -244,6 +244,11 @@ public partial class MainWindow : Window, IWorkbookWindow
     private System.Windows.Controls.TextBox? _inlineEditor;
     private System.Windows.Controls.Border? _inlineEditorChrome;
     private FormulaEditorRect? _inlineEditorChromeBaseRect;
+    // R78-render-inplace-editor-5-3: the single-row (one line of text) height the inline editor
+    // was opened at, kept separate from _inlineEditorChromeBaseRect.Height (which grows on every
+    // keystroke to fit the current line count) so each recompute always multiplies from the same
+    // fixed per-line unit instead of compounding off the previous pass's already-grown height.
+    private double _inlineEditorSingleLineHeight;
     private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
     private System.Windows.Controls.TextBox? _textBoxInlineEditor;
     private System.Windows.Controls.Border? _textBoxInlineEditorChrome;
@@ -261,6 +266,12 @@ public partial class MainWindow : Window, IWorkbookWindow
     private int? _formulaReferenceStart;
     private int? _formulaReferenceLength;
     private bool _formulaRangeEntryMode;
+    // R78-render-inplace-editor-5-1: whether the current inline-edit session was opened via F2 /
+    // double-click (Excel's "Edit" mode -- caret lands in existing content, arrows reposition it)
+    // vs. by typing a fresh character over the selection (Excel's "Enter" mode -- arrows commit the
+    // freshly-typed non-formula text and move the active cell). Set true in ShowInlineEditor
+    // (F2/double-click's common path) and overridden false by MainWindow_TextInput's typed-entry.
+    private bool _formulaEditEnteredViaEditKey;
     // Border pool: Borders are allocated once and reused across keystrokes (show/hide + reposition)
     // instead of being created and removed on every refresh. _formulaReferenceGridOverlayActiveCount
     // tracks how many pool entries are currently visible.
