@@ -37,6 +37,72 @@ public sealed class FreeWKeyboardAndKeyTipParityTests
     }
 
     [Fact]
+    public async Task StandaloneF10UsesTheSameKeyTipModeAsAlt()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                Press(window, Key.F10).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTest.Should().BeTrue();
+
+                Press(window, Key.Escape).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ShiftF10RemainsAvailableToTheContextMenuRoute()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var shortcut = Press(window, Key.F10, KeyModifiers.Shift);
+
+                shortcut.Handled.Should().BeFalse();
+                window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaShellRendersOneAuthoritativeFileKeyTip()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var tabs = window.RibbonControlForTest.Should().BeOfType<TabControl>().Subject;
+                tabs.Items.OfType<TabItem>().Count(item => item.Tag?.ToString() == "FileTab")
+                    .Should().Be(1);
+                tabs.Items.OfType<TabItem>().Count(item => item.Tag?.ToString() == "file")
+                    .Should().Be(0);
+
+                Press(window, Key.LeftAlt).Handled.Should().BeTrue();
+                Press(window, Key.F).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task VisibleKeyTipActivatesMatchingTopLevelTab()
     {
         await Session.Dispatch(() =>

@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.AppServices;
@@ -118,6 +119,15 @@ internal sealed class BackstageView : Window
             if (IsVisible)
                 Close();
         };
+        AddHandler(
+            InputElement.KeyDownEvent,
+            (_, e) =>
+            {
+                if (_frame.HandleKey(e.Key))
+                    e.Handled = true;
+            },
+            RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
+            handledEventsToo: true);
         Content = _frame;
         _frame.Show(PaneLabel(initialPane));
     }
