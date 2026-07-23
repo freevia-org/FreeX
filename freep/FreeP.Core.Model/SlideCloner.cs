@@ -26,6 +26,10 @@ public static class SlideCloner
             Id      = Guid.NewGuid().ToString("N"), // new identity so it is truly a distinct slide
             NumericId = null, // a duplicated slide receives a fresh package id when written
             LayoutId   = slide.LayoutId,
+            IsHidden   = slide.IsHidden,
+            ColorMapOverride = slide.ColorMapOverride is null
+                ? null
+                : new Dictionary<string, string>(slide.ColorMapOverride, StringComparer.OrdinalIgnoreCase),
             Background = slide.Background,           // ShapeFill is immutable — share reference
             Notes      = PresentationModelCloneHelper.CloneTextBody(slide.Notes),
             HfVisibility = slide.HfVisibility is null ? null : new HfFlags

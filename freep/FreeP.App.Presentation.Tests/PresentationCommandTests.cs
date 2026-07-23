@@ -685,6 +685,31 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SlideCloner_CloneSlide_PreservesHiddenAndColorMapOverride()
+    {
+        var slide = new Slide
+        {
+            IsHidden = true,
+            ColorMapOverride = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["tx1"] = "lt1",
+                ["bg1"] = "dk1",
+            },
+        };
+
+        var clone = SlideCloner.CloneSlide(slide);
+
+        clone.IsHidden.Should().BeTrue();
+        clone.ColorMapOverride.Should().NotBeNull();
+        clone.ColorMapOverride.Should().NotBeSameAs(slide.ColorMapOverride);
+        clone.ColorMapOverride!["tx1"].Should().Be("lt1");
+        clone.ColorMapOverride["BG1"].Should().Be("dk1");
+
+        clone.ColorMapOverride["tx1"] = "dk2";
+        slide.ColorMapOverride!["tx1"].Should().Be("lt1");
+    }
+
+    [Fact]
     public void SlideCloner_MutatingCloneDoesNotTouchOriginal()
     {
         var slide = new Slide();
