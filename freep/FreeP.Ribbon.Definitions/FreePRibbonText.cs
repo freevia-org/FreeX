@@ -44,8 +44,11 @@ internal static class FreePRibbonText
     public static string FontGroupLabel => Get("Ribbon_Group_Font_Label");
     public static string FontGroupKeyTip => Get("Ribbon_Group_Font_KeyTip");
     public static string FontFamilyLabel => Get("Ribbon_Command_FontFamily_Label");
+    public static string FontFamilyKeyTip => Get("Ribbon_Command_FontFamily_KeyTip");
     public static string FontSizeLabel => Get("Ribbon_Command_FontSize_Label");
+    public static string FontSizeKeyTip => Get("Ribbon_Command_FontSize_KeyTip");
     public static string FontColorLabel => Get("Ribbon_Command_FontColor_Label");
+    public static string FontColorKeyTip => Get("Ribbon_Command_FontColor_KeyTip");
     public static string BoldLabel => Get("Ribbon_Command_Bold_Label");
     public static string BoldKeyTip => Get("Ribbon_Command_Bold_KeyTip");
     public static string ItalicLabel => Get("Ribbon_Command_Italic_Label");
@@ -224,9 +227,9 @@ internal static class FreePRibbonText
     public static RibbonText TransitionDrapeCommand { get; } = new("Ribbon_Command_TransitionDrape_Label");
     public static RibbonText TransitionPrestigeCommand { get; } = new("Ribbon_Command_TransitionPrestige_Label");
     public static RibbonText TransitionTimingGroup { get; } = new("Ribbon_Group_TransitionTiming_Label", "Ribbon_Group_TransitionTiming_KeyTip");
-    public static RibbonText TransitionDurationCommand { get; } = new("Ribbon_Command_TransitionDuration_Label");
+    public static RibbonText TransitionDurationCommand { get; } = new("Ribbon_Command_TransitionDuration_Label", "Ribbon_Command_TransitionDuration_KeyTip");
     public static RibbonText TransitionAdvanceOnClickCommand { get; } = new("Ribbon_Command_TransitionAdvanceOnClick_Label", "Ribbon_Command_TransitionAdvanceOnClick_KeyTip");
-    public static RibbonText TransitionAdvanceAfterCommand { get; } = new("Ribbon_Command_TransitionAdvanceAfter_Label");
+    public static RibbonText TransitionAdvanceAfterCommand { get; } = new("Ribbon_Command_TransitionAdvanceAfter_Label", "Ribbon_Command_TransitionAdvanceAfter_KeyTip");
     public static RibbonText TransitionApplyAllCommand { get; } = new("Ribbon_Command_TransitionApplyAll_Label", "Ribbon_Command_TransitionApplyAll_KeyTip");
     public static string TransitionAdvanceAfterNoneOption => Get("Ribbon_Option_TransitionAdvanceAfterNone_Label");
 
@@ -269,9 +272,9 @@ internal static class FreePRibbonText
     public static RibbonText AnimationExitRandomBarsCommand { get; } = new("Ribbon_Command_AnimationExitRandomBars_Label", "Ribbon_Command_AnimationExitRandomBars_KeyTip");
     public static RibbonText AnimationNoneCommand { get; } = new("Ribbon_Command_AnimationNone_Label", "Ribbon_Command_AnimationNone_KeyTip");
     public static RibbonText AnimationTimingGroup { get; } = new("Ribbon_Group_AnimationTiming_Label", "Ribbon_Group_AnimationTiming_KeyTip");
-    public static RibbonText AnimationTriggerCommand { get; } = new("Ribbon_Command_AnimationTrigger_Label");
-    public static RibbonText AnimationDurationCommand { get; } = new("Ribbon_Command_AnimationDuration_Label");
-    public static RibbonText AnimationDelayCommand { get; } = new("Ribbon_Command_AnimationDelay_Label");
+    public static RibbonText AnimationTriggerCommand { get; } = new("Ribbon_Command_AnimationTrigger_Label", "Ribbon_Command_AnimationTrigger_KeyTip");
+    public static RibbonText AnimationDurationCommand { get; } = new("Ribbon_Command_AnimationDuration_Label", "Ribbon_Command_AnimationDuration_KeyTip");
+    public static RibbonText AnimationDelayCommand { get; } = new("Ribbon_Command_AnimationDelay_Label", "Ribbon_Command_AnimationDelay_KeyTip");
     public static RibbonText AnimationMoveEarlierCommand { get; } = new("Ribbon_Command_AnimationMoveEarlier_Label", "Ribbon_Command_AnimationMoveEarlier_KeyTip");
     public static RibbonText AnimationMoveLaterCommand { get; } = new("Ribbon_Command_AnimationMoveLater_Label", "Ribbon_Command_AnimationMoveLater_KeyTip");
     public static RibbonText AdvancedAnimationGroup { get; } = new("Ribbon_Group_AdvancedAnimation_Label", "Ribbon_Group_AdvancedAnimation_KeyTip");

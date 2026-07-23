@@ -63,6 +63,31 @@ public sealed class FreePKeyTipInventoryTests
         }
     }
 
+    [Fact]
+    public void ComboBoxKeyTipsMatchCanonicalWpfInventoryInBothProfiles()
+    {
+        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["freep.font-family"] = "FON",
+            ["freep.font-size"] = "SIZ",
+            ["freep.font-color"] = "FC",
+            ["freep.transition.duration"] = "DUR",
+            ["freep.transition.advance-after"] = "AFT",
+            ["freep.anim.trigger"] = "STA",
+            ["freep.anim.duration"] = "DUR",
+            ["freep.anim.delay"] = "DEL",
+        };
+        var wpf = FlattenControls(FreePRibbon.Build(FreePRibbonCapabilities.Wpf));
+        var avalonia = FlattenControls(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia));
+
+        foreach (var (commandId, keyTip) in expected)
+        {
+            wpf[commandId].Should().Be(keyTip, $"WPF combo {commandId} owns the canonical KeyTip");
+            avalonia[commandId].Should().Be(wpf[commandId],
+                $"Avalonia combo {commandId} must reuse the WPF KeyTip");
+        }
+    }
+
     private static Dictionary<string, string?> FlattenControls(RibbonDefinition definition) =>
         definition.Tabs
             .SelectMany(tab => tab.Groups)
