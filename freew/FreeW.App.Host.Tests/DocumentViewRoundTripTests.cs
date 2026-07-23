@@ -274,6 +274,86 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void ContextualSpacing_SuppressesSharedMarginInsideConstrainedRotatedTableCell()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Styles["CellBody"] = new DocumentStyle
+        {
+            Id = "CellBody",
+            Name = "Cell Body",
+            Paragraph = ParagraphFormatting.Default with
+            {
+                SpaceBeforePt = 6,
+                SpaceAfterPt = 10,
+                SpaceBeforeIsSet = true,
+                SpaceAfterIsSet = true,
+                ContextualSpacing = true
+            }
+        };
+        var table = Table.Create(1, 1);
+        table.Rows[0].HeightPt = 60;
+        var sourceCell = table.Rows[0].Cells[0];
+        sourceCell.TextDirection = CellTextDirection.Rotate90;
+        sourceCell.Paragraphs.Clear();
+        sourceCell.Paragraphs.Add(new Paragraph("first") { StyleId = "CellBody" });
+        sourceCell.Paragraphs.Add(new Paragraph("second") { StyleId = "CellBody" });
+        document.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var cell = view.Document.Blocks.OfType<System.Windows.Documents.Table>().Single()
+            .RowGroups.Single().Rows.Single().Cells.Single();
+        var contentHost = cell.Blocks.OfType<BlockUIContainer>().Single().Child;
+        contentHost.Should().NotBeNull();
+        var paragraphs = LogicalDescendants<TextBlock>(contentHost!).ToList();
+
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Margin.Bottom.Should().Be(0);
+        paragraphs[1].Margin.Top.Should().Be(0);
+    }
+
+    [StaFact]
+    public void ContextualSpacing_ExplicitOffKeepsMarginsInsideConstrainedRotatedTableCell()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Styles["CellBody"] = new DocumentStyle
+        {
+            Id = "CellBody",
+            Name = "Cell Body",
+            Paragraph = ParagraphFormatting.Default with
+            {
+                SpaceBeforePt = 6,
+                SpaceAfterPt = 10,
+                SpaceBeforeIsSet = true,
+                SpaceAfterIsSet = true,
+                ContextualSpacing = false
+            }
+        };
+        var table = Table.Create(1, 1);
+        table.Rows[0].HeightPt = 60;
+        var sourceCell = table.Rows[0].Cells[0];
+        sourceCell.TextDirection = CellTextDirection.Rotate90;
+        sourceCell.Paragraphs.Clear();
+        sourceCell.Paragraphs.Add(new Paragraph("first") { StyleId = "CellBody" });
+        sourceCell.Paragraphs.Add(new Paragraph("second") { StyleId = "CellBody" });
+        document.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var cell = view.Document.Blocks.OfType<System.Windows.Documents.Table>().Single()
+            .RowGroups.Single().Rows.Single().Cells.Single();
+        var contentHost = cell.Blocks.OfType<BlockUIContainer>().Single().Child;
+        contentHost.Should().NotBeNull();
+        var paragraphs = LogicalDescendants<TextBlock>(contentHost!).ToList();
+
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Margin.Bottom.Should().BeApproximately(10 * 96.0 / 72.0, 0.001);
+        paragraphs[1].Margin.Top.Should().BeApproximately(6 * 96.0 / 72.0, 0.001);
+    }
+
+    [StaFact]
     public void Table_ExplicitBorderPayload_SurvivesViewRoundTrip()
     {
         var document = TextDocument.CreateEmpty();
