@@ -431,6 +431,34 @@ public sealed class WorkbookSession
         EnsureActiveCellVisible();
     }
 
+    /// <summary>
+    /// Selects the rectangle spanning <paramref name="anchor"/>..<paramref name="cursor"/> and pins
+    /// <see cref="ActiveCell"/> to <paramref name="anchor"/> -- the fixed corner the user started the
+    /// drag / shift-extend from. That corner is NOT the range's normalized top-left
+    /// <see cref="GridRange.Start"/> whenever the gesture ran upward or leftward (e.g. click C5, drag to
+    /// A1), so plain <see cref="SelectRange(GridRange)"/> -- which always collapses <see cref="ActiveCell"/>
+    /// onto Start -- would lose the true anchor. Excel keeps the active cell at that original corner so
+    /// View &gt; Split, Freeze Panes and the active-cell box resolve against it, while the viewport
+    /// follows the moving <paramref name="cursor"/>. Mirrors the WPF host, whose persistent
+    /// _selectionAnchor / _selectionCursor stay distinct (MainWindow.xaml.cs / MainWindow.Selection.cs);
+    /// the Avalonia shell used to keep the anchor only in gesture-scoped fields that were cleared the
+    /// instant the drag ended, leaving just the collapsed Start behind (split-creation-selection-anchor
+    /// parity).
+    /// </summary>
+    public void SelectAnchoredRange(CellAddress anchor, CellAddress cursor)
+    {
+        var range = new GridRange(anchor, cursor);
+        ValidateSelectionRange(range, nameof(anchor));
+        SetSingleSelectedRange(range);
+        ActiveCell = anchor;
+        ActiveSheet.ActiveRow = anchor.Row;
+        ActiveSheet.ActiveCol = anchor.Col;
+        FormulaEditAddress = null;
+        // Follow the moving end of the gesture, not the (stationary) anchor -- otherwise an upward /
+        // leftward shift-extend would stop scrolling to reveal the cursor once it left the viewport.
+        EnsureCellVisible(cursor);
+    }
+
     private void ValidateSelectionRange(GridRange range, string paramName)
     {
         if (!range.Start.Sheet.Equals(ActiveSheet.Id))
@@ -5922,15 +5950,23 @@ public sealed class WorkbookSession
         SetSingleSelectedRange(new GridRange(start, end));
     }
 
-    private void EnsureActiveCellVisible()
+    private void EnsureActiveCellVisible() => EnsureCellVisible(ActiveCell);
+
+    /// <summary>
+    /// Scrolls the minimum amount needed to bring <paramref name="cell"/> into the scrollable viewport.
+    /// Callers pass the cell the user is navigating toward: the active cell for a plain move, but the
+    /// moving CURSOR end for a drag / shift-extend (see <see cref="SelectAnchoredRange"/>) where the
+    /// anchor stays put while the viewport follows the cursor -- matching Excel and the WPF host.
+    /// </summary>
+    private void EnsureCellVisible(CellAddress cell)
     {
         var changed = false;
         if (TryGetScrollableRowRange(out var firstRow, out var lastRow) &&
-            !IsFrozenRow(ActiveCell.Row) &&
-            (ActiveCell.Row < firstRow || ActiveCell.Row > lastRow))
+            !IsFrozenRow(cell.Row) &&
+            (cell.Row < firstRow || cell.Row > lastRow))
         {
             ActiveSheet.ViewTopRow = CalculateScrollOrigin(
-                ActiveCell.Row,
+                cell.Row,
                 firstRow,
                 lastRow,
                 ActiveSheet.ViewTopRow ?? GetScrollableRowStart(),
@@ -5939,11 +5975,11 @@ public sealed class WorkbookSession
         }
 
         if (TryGetScrollableColumnRange(out var firstCol, out var lastCol) &&
-            !IsFrozenColumn(ActiveCell.Col) &&
-            (ActiveCell.Col < firstCol || ActiveCell.Col > lastCol))
+            !IsFrozenColumn(cell.Col) &&
+            (cell.Col < firstCol || cell.Col > lastCol))
         {
             ActiveSheet.ViewLeftCol = CalculateScrollOrigin(
-                ActiveCell.Col,
+                cell.Col,
                 firstCol,
                 lastCol,
                 ActiveSheet.ViewLeftCol ?? GetScrollableColumnStart(),

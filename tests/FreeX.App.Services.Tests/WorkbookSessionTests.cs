@@ -281,6 +281,81 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SelectAnchoredRange_PinsActiveCellToAnchorEvenWhenGestureRanUpAndLeft()
+    {
+        // Reproduces the reported gap: click C5, drag (or Shift-extend) up-left to A1, selecting
+        // A1:C5. The active cell must stay at the pressed corner C5 -- the anchor Excel and the WPF
+        // host resolve View > Split / Freeze Panes against -- rather than collapse onto the range's
+        // normalized top-left A1 the way plain SelectRange does.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var anchor = new CellAddress(sheet.Id, 5, 3);   // C5 (first click)
+        var cursor = new CellAddress(sheet.Id, 1, 1);   // A1 (gesture end)
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectAnchoredRange(anchor, cursor);
+
+        session.SelectedRange.Should().Be(new GridRange(anchor, cursor));   // normalized to A1:C5
+        session.ActiveCell.Should().Be(anchor);                             // C5, not A1
+        session.ActiveSheet.ActiveRow.Should().Be(5);
+        session.ActiveSheet.ActiveCol.Should().Be(3);
+        session.FormulaEditAddress.Should().BeNull();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FreezePanesAtActiveCell_FreezesRelativeToTrueAnchorAfterUpLeftGesture()
+    {
+        // With the active cell pinned to the drag's start corner C5, Freeze Panes must pin the 4 rows
+        // and 2 columns above/left of C5 -- matching WPF's `_selectionAnchor ?? range.Start`. Before
+        // the fix the active cell collapsed to A1, so this froze 0 rows and 0 columns (a silent no-op).
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAnchoredRange(
+            new CellAddress(sheet.Id, 5, 3),    // C5
+            new CellAddress(sheet.Id, 1, 1));   // A1
+
+        var result = session.FreezePanesAtActiveCell();
+
+        result.Success.Should().BeTrue();
+        session.ActiveSheet.FrozenRows.Should().Be(4u);
+        session.ActiveSheet.FrozenCols.Should().Be(2u);
+    }
+
+    [Fact]
+    public void SelectAnchoredRange_ScrollsToTheCursorNotTheAnchor()
+    {
+        // The viewport must follow the moving cursor end of the gesture, not the (stationary) anchor:
+        // Shift-extending far downward from B2 has to reveal the cursor even though the active cell
+        // stays at B2. (The 240x320 test viewport shows only a handful of rows/columns.)
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var anchor = new CellAddress(sheet.Id, 2, 2);      // B2
+        var cursor = new CellAddress(sheet.Id, 120, 2);    // B120 -- far below the fold
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectAnchoredRange(anchor, cursor);
+
+        session.ActiveCell.Should().Be(anchor);
+        session.ActiveSheet.ViewTopRow.Should().NotBeNull();
+        session.ActiveSheet.ViewTopRow!.Value.Should().BeGreaterThan(1u,
+            "the viewport must scroll down to keep the moving cursor (B120) visible");
+    }
+
+    [Fact]
     public void GoToReference_SelectsRangeAcrossSheetsWithoutDirtyingWorkbook()
     {
         var workbook = CreateWorkbook();

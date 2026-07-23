@@ -1766,7 +1766,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private bool IsSelectedRow(uint row)");
         source.Should().Contain("private bool IsSelectedCell(CellAddress address)");
         source.Should().Contain("args.KeyModifiers.HasFlag(KeyModifiers.Shift)");
-        source.Should().Contain("_session.SelectRange(new GridRange(_session.ActiveCell, address));");
+        source.Should().Contain("_session.SelectAnchoredRange(anchor, address);");
         source.Should().Contain("private static string FormatRangeReference(GridRange range)");
         source.Should().Contain("private void SelectCurrentRegionOrAll()");
         source.Should().Contain("var range = _session.SelectCurrentRegionOrAll();");
@@ -4991,7 +4991,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_selectionStatsText,");
         source.Should().Contain("_statusText.Text = status;");
         source.Should().Contain("_selectionStatsText.Text = _session.SelectionStatsText;");
-        source.Should().Contain("_session.SelectRange(new GridRange(_session.ActiveCell, address));");
+        source.Should().Contain("_session.SelectAnchoredRange(anchor, address);");
         source.Should().Contain("RefreshShell(\"Ready\");");
     }
 
