@@ -309,7 +309,9 @@ public sealed class R75_ClipboardMarqueeOverlayTests
         return source[braceOpenIndex..(index + 1)];
     }
 
-    private static string MainWindowSource() => File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+    private static string MainWindowSource() =>
+        File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
 
     private static string RepoFile(params string[] parts)
     {
