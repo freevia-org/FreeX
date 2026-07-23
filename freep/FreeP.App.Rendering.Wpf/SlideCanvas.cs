@@ -29,7 +29,6 @@ public sealed class SlideCanvas : FrameworkElement
     private const double ImportedAptosWpfRasterScale = 0.95;
     private const double ImportedAptosBodyWpfRasterScale = 0.957;
     private const double ImportedAptosDisplayWpfRasterScaleY = 0.86;
-    private const double ImportedAptosBodyOriginOffsetY = 6.0;
     private const double ImportedRadarAgilityLabelOffsetX = 35.0;
     private const double ImportedRadarStaminaLabelOffsetX = -51.0;
     private const double ImportedRadarLowerLabelOffsetY = -2.0;
@@ -2135,19 +2134,17 @@ public sealed class SlideCanvas : FrameworkElement
         var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);
         bool useImportedAptosRasterScale = UsesImportedAptosFont(renderText);
         bool useImportedAptosBodyRasterScale = UsesImportedAptosBodyFont(renderText);
+        double importedAptosBodyOriginOffsetY =
+            TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY(renderText);
         foreach (var placement in plan.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
-            double placementY = placement.Y;
-            bool useImportedAptosBodyOrigin = UsesImportedAptosBodyOrigin(renderText);
-            if (useImportedAptosBodyOrigin)
-                placementY -= ImportedAptosBodyOriginOffsetY;
+            double placementY = placement.Y - importedAptosBodyOriginOffsetY;
 
             if (placement.Bullet is { } bullet)
             {
-                if (useImportedAptosBodyOrigin)
-                    bullet = bullet with { Y = bullet.Y - ImportedAptosBodyOriginOffsetY };
+                bullet = bullet with { Y = bullet.Y - importedAptosBodyOriginOffsetY };
                 DrawBulletPlacementWpf(dc, bullet);
             }
 
@@ -2214,17 +2211,6 @@ public sealed class SlideCanvas : FrameworkElement
             && !paragraph.Runs[0].Bold
             && !paragraph.Runs[0].Italic
             && paragraph.BulletKind == BulletKind.None);
-
-    private static bool UsesImportedAptosBodyOrigin(ResolvedTextLayout text) =>
-        text.AutoFitKind == TextAutoFitKind.Shape &&
-        text.Paragraphs.Count == 6 &&
-        text.Paragraphs.All(paragraph =>
-            paragraph.Runs.Count == 1 &&
-            string.Equals(paragraph.Runs[0].FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase) &&
-            Math.Abs(paragraph.Runs[0].FontSizePt - 18.0) < 0.01 &&
-            !paragraph.Runs[0].Bold &&
-            !paragraph.Runs[0].Italic &&
-            paragraph.BulletKind != BulletKind.None);
 
     private static bool UsesImportedAptosDisplayFont(ResolvedParagraph paragraph) =>
         paragraph.Runs.Any(run =>

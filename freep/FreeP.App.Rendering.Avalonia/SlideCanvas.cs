@@ -31,7 +31,6 @@ namespace FreeP.App.Rendering.Avalonia;
 /// </summary>
 public sealed class SlideCanvas : Control
 {
-    private const double ImportedAptosBodyOriginOffsetY = 6.0;
     private const double PowerPointDefaultLineSpacingFactor = 1.18;
     private const double PowerPointFixedTextLineSpacingFactor = 1.20;
 
@@ -2151,19 +2150,17 @@ public sealed class SlideCanvas : Control
         }
 
         var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);
-        bool useImportedAptosBodyOrigin = UsesImportedAptosBodyOrigin(renderText);
+        double importedAptosBodyOriginOffsetY =
+            TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY(renderText);
         foreach (var placement in plan.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
-            double placementY = placement.Y;
-            if (useImportedAptosBodyOrigin)
-                placementY -= ImportedAptosBodyOriginOffsetY;
+            double placementY = placement.Y - importedAptosBodyOriginOffsetY;
 
             if (placement.Bullet is { } bullet)
             {
-                if (useImportedAptosBodyOrigin)
-                    bullet = bullet with { Y = bullet.Y - ImportedAptosBodyOriginOffsetY };
+                bullet = bullet with { Y = bullet.Y - importedAptosBodyOriginOffsetY };
                 DrawBulletPlacementAvalonia(dc, bullet);
             }
 
@@ -2189,17 +2186,6 @@ public sealed class SlideCanvas : Control
             }
         }
     }
-
-    internal static bool UsesImportedAptosBodyOrigin(ResolvedTextLayout text) =>
-        text.AutoFitKind == TextAutoFitKind.Shape &&
-        text.Paragraphs.Count == 6 &&
-        text.Paragraphs.All(paragraph =>
-            paragraph.Runs.Count == 1 &&
-            string.Equals(paragraph.Runs[0].FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase) &&
-            Math.Abs(paragraph.Runs[0].FontSizePt - 18.0) < 0.01 &&
-            !paragraph.Runs[0].Bold &&
-            !paragraph.Runs[0].Italic &&
-            paragraph.BulletKind != BulletKind.None);
 
     /// <summary>
     /// Wave 19A: draws a bullet glyph or number string at the given position.

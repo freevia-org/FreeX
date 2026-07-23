@@ -64,49 +64,4 @@ public sealed class SlideCanvasLineSpacingTests
             .Should().BeApproximately(expected, 0.000001);
     }
 
-    [Fact]
-    public void UsesImportedAptosBodyOrigin_RecognizesOnlyTheGuardedBulletBodySignature()
-    {
-        var paragraphs = Enumerable.Range(0, 6)
-            .Select(_ => new ResolvedParagraph
-            {
-                Runs = new[]
-                {
-                    new ResolvedRun { Text = "Bullet", FontFamily = "Aptos", FontSizePt = 18.0 }
-                },
-                BulletKind = BulletKind.Char
-            })
-            .ToArray();
-
-        SlideCanvas.UsesImportedAptosBodyOrigin(new ResolvedTextLayout
-        {
-            AutoFitKind = TextAutoFitKind.Shape,
-            Paragraphs = paragraphs
-        }).Should().BeTrue();
-
-        SlideCanvas.UsesImportedAptosBodyOrigin(new ResolvedTextLayout
-        {
-            AutoFitKind = TextAutoFitKind.Shape,
-            Paragraphs = paragraphs.Take(5).ToArray()
-        }).Should().BeFalse();
-
-        SlideCanvas.UsesImportedAptosBodyOrigin(new ResolvedTextLayout
-        {
-            AutoFitKind = TextAutoFitKind.None,
-            Paragraphs = paragraphs
-        }).Should().BeFalse();
-
-        SlideCanvas.UsesImportedAptosBodyOrigin(new ResolvedTextLayout
-        {
-            AutoFitKind = TextAutoFitKind.Shape,
-            Paragraphs = paragraphs.Skip(1).Append(new ResolvedParagraph
-            {
-                Runs = new[]
-                {
-                    new ResolvedRun { Text = "Bullet", FontFamily = "Calibri", FontSizePt = 18.0 }
-                },
-                BulletKind = BulletKind.Char
-            }).ToArray()
-        }).Should().BeFalse();
-    }
 }
