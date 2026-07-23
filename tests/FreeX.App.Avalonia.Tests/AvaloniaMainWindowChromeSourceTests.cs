@@ -858,6 +858,38 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void PageSetupFooterActions_ValidateApplyAndRouteEachWpfFollowUp()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("await ApplyPageSetupFieldsAsync(");
+        source.Should().Contain("dialogResult.Value.RequestedAction");
+        source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, requestedAction)");
+        source.Should().Contain("result = (fields, submission.Submission!.RequestedAction);");
+        source.Should().Contain("printButton.Click += (_, _) => Accept(PageSetupDialogAction.Print);");
+        source.Should().Contain("printPreviewButton.Click += (_, _) => Accept(PageSetupDialogAction.PrintPreview);");
+        source.Should().Contain("optionsButton.Click += (_, _) => Accept(PageSetupDialogAction.Options);");
+        source.Should().NotContain("printButton.IsEnabled = false;");
+        source.Should().NotContain("printPreviewButton.IsEnabled = false;");
+        source.Should().NotContain("optionsButton.IsEnabled = false;");
+
+        var submissionIndex = source.IndexOf(
+            "var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields, requestedAction)",
+            StringComparison.Ordinal);
+        var refreshIndex = source.IndexOf("RefreshShell(status);", StringComparison.Ordinal);
+        var followUpIndex = source.IndexOf(
+            "case PageSetupDialogFollowUpAction.ShowPrinterOptions:",
+            StringComparison.Ordinal);
+        submissionIndex.Should().BeGreaterThanOrEqualTo(0);
+        refreshIndex.Should().BeGreaterThan(submissionIndex);
+        followUpIndex.Should().BeGreaterThan(refreshIndex);
+        source.Should().Contain("await ShowPrintPreviewDialogAsync();");
+        source.Should().Contain("await ShowPrintDialogAsync();");
+        source.Should().Contain("case PageSetupDialogFollowUpAction.ShowPrinterOptions:");
+        source.Should().Contain("if (requestedAction == PageSetupDialogAction.PrintPreview)");
+    }
+
+    [Fact]
     public void PageBreakActions_DelegateMenuPolicyToSharedPlanner()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageBreakActions.cs"));

@@ -2650,7 +2650,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Width = PageSetupDialogPlanner.WindowWidth");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, PageSetupDialogPlanner.DialogAutomationId)");
         source.Should().Contain("PageSetupDialogPlanner.PlanSurface(sheet)");
-        source.Should().Contain("private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(");
+        source.Should().Contain("private async Task<(PageSetupDialogFields Fields, PageSetupDialogAction RequestedAction)?> ShowPageSetupDialogCoreAsync(");
+        source.Should().Contain("dialogResult.Value.Fields,");
+        source.Should().Contain("dialogResult.Value.RequestedAction);");
         source.Should().Contain("PageSetupDialogSurfacePlan surface,");
         source.Should().Contain("var orientationChoices = PageSetupDialogPlanner.OrientationChoices");
         source.Should().Contain("ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(orientationChoices, UiText.Get)");

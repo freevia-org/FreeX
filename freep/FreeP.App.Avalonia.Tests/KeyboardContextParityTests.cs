@@ -73,9 +73,39 @@ public sealed class KeyboardContextParityTests
 
                 Press(window, Key.RightAlt);
                 Press(window, Key.N).Handled.Should().BeTrue();
-                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+                window.RibbonKeyTipsVisibleForTests.Should().BeTrue();
                 var tabs = window.RibbonControlForTests.Should().BeOfType<TabControl>().Subject;
                 ((TabItem)tabs.SelectedItem!).Tag.Should().Be("insert");
+
+                Press(window, Key.Escape).Handled.Should().BeTrue();
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AvaloniaAltKeyTipsContinueThroughGroupAndExecuteRibbonCommand()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var before = window.Editor.CurrentSlide!.Shapes.Count;
+
+                Press(window, Key.LeftAlt).Handled.Should().BeTrue();
+                Press(window, Key.N).Handled.Should().BeTrue(); // Insert tab
+                Press(window, Key.T).Handled.Should().BeTrue(); // Text group
+                Press(window, Key.X).Handled.Should().BeTrue(); // Text Box
+
+                window.RibbonKeyTipsVisibleForTests.Should().BeFalse();
+                window.Editor.CurrentSlide.Shapes.Should().HaveCount(before + 1);
+                window.Editor.CurrentSlide.Shapes.Last().Kind.Should().Be(SlideShapeKind.AutoShape);
+                window.Editor.CurrentSlide.Shapes.Last().TextBody.Should().NotBeNull();
             }
             finally
             {

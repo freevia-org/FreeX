@@ -55,22 +55,28 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
 
         var sheet = _session.ActiveSheet;
-        var fields = await ShowPageSetupDialogCoreAsync(
+        var dialogResult = await ShowPageSetupDialogCoreAsync(
             PageSetupDialogPlanner.PlanSurface(sheet),
             PageSetupDialogPlanner.PlanOpen(source),
             openHeaderFooterTab);
-        if (fields is null)
+        if (dialogResult is null)
             return;
 
-        ApplyPageSetupFields(sheet, fields);
+        await ApplyPageSetupFieldsAsync(
+            sheet,
+            dialogResult.Value.Fields,
+            dialogResult.Value.RequestedAction);
     }
 
     private Task ShowHeaderFooterDialogAsync() =>
         ShowPageSetupDialogAsync(openHeaderFooterTab: true);
 
-    private void ApplyPageSetupFields(Sheet sheet, PageSetupDialogFields fields)
+    private async Task ApplyPageSetupFieldsAsync(
+        Sheet sheet,
+        PageSetupDialogFields fields,
+        PageSetupDialogAction requestedAction)
     {
-        var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields);
+        var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields, requestedAction);
         if (!submission.Success)
         {
             ShowEditIssue(PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(submission.Validation!, UiText.Get));
@@ -97,6 +103,25 @@ public sealed partial class MainWindow
         }
 
         RefreshShell(status);
+
+        switch (submission.Submission.FollowUpAction)
+        {
+            case PageSetupDialogFollowUpAction.ShowPrinterOptions:
+                // Avalonia has no separate printer-properties API. Its print dialog is the
+                // portable equivalent of WPF's printer-options surface and exposes the
+                // available printer, copies, collation, and page-range choices.
+                await ShowPrintDialogAsync();
+                break;
+            case PageSetupDialogFollowUpAction.Print:
+                // WPF's Page Setup Print and Print Preview buttons both continue through the
+                // host print flow. Avalonia's print flow is split into the matching preview and
+                // printer surfaces, so preserve the requested route here.
+                if (requestedAction == PageSetupDialogAction.PrintPreview)
+                    await ShowPrintPreviewDialogAsync();
+                else
+                    await ShowPrintDialogAsync();
+                break;
+        }
     }
 
     private void TogglePageBreakPreview()
@@ -295,12 +320,12 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, PageLayoutDialogChromeStyle);
     }
 
-    private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(
+    private async Task<(PageSetupDialogFields Fields, PageSetupDialogAction RequestedAction)?> ShowPageSetupDialogCoreAsync(
         PageSetupDialogSurfacePlan surface,
         PageSetupDialogOpenPlan openPlan,
         bool openHeaderFooterTab = false)
     {
-        PageSetupDialogFields? result = null;
+        (PageSetupDialogFields Fields, PageSetupDialogAction RequestedAction)? result = null;
         var initial = surface.Fields;
         var headerPictures = initial.HeaderPictures;
         var footerPictures = initial.FooterPictures;
@@ -646,11 +671,6 @@ public sealed partial class MainWindow
         var optionsButton = new Button { Content = UiText.Get("PageSetup_OptionsButton"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
         ApplyPageLayoutButtonChrome(optionsButton, PageSetupDialogPlanner.FooterButtonMinWidth);
         AutomationProperties.SetAutomationId(optionsButton, PageSetupDialogPlanner.OptionsButtonAutomationId);
-        // These are stub buttons (print/preview not yet wired in Avalonia shell)
-        printButton.IsEnabled = false;
-        printPreviewButton.IsEnabled = false;
-        optionsButton.IsEnabled = false;
-
         PageSetupDialogFields ReadFields() => PageSetupDialogPlanner.BuildFields(initial, new PageSetupDialogSurfaceInput
         {
             OrientationIndex = orientationBox.SelectedIndex,
@@ -944,10 +964,10 @@ public sealed partial class MainWindow
                         : PageSetupScalingMode.AdjustToPercent));
         }
 
-        void Accept()
+        void Accept(PageSetupDialogAction requestedAction)
         {
             var fields = ReadFields();
-            var submission = PageSetupSubmissionPlanner.TryBuild(_session.ActiveSheet, fields);
+            var submission = PageSetupSubmissionPlanner.TryBuild(_session.ActiveSheet, fields, requestedAction);
             if (!submission.Success)
             {
                 var validation = submission.Validation!;
@@ -960,12 +980,15 @@ public sealed partial class MainWindow
                 return;
             }
 
-            result = fields;
+            result = (fields, submission.Submission!.RequestedAction);
             dialog.Close();
         }
 
-        okButton.Click += (_, _) => Accept();
+        okButton.Click += (_, _) => Accept(PageSetupDialogAction.Ok);
         cancelButton.Click += (_, _) => dialog.Close();
+        printButton.Click += (_, _) => Accept(PageSetupDialogAction.Print);
+        printPreviewButton.Click += (_, _) => Accept(PageSetupDialogAction.PrintPreview);
+        optionsButton.Click += (_, _) => Accept(PageSetupDialogAction.Options);
 
         DockPanel.SetDock(buttonRow, AvaloniaDock.Bottom);
         DockPanel.SetDock(validationText, AvaloniaDock.Bottom);
