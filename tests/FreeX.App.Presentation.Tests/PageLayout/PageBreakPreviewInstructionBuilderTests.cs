@@ -54,6 +54,49 @@ public sealed class PageBreakPreviewInstructionBuilderTests
     }
 
     [Fact]
+    public void TryResolvePrintRanges_ReturnsEveryConfiguredPrintArea()
+    {
+        // R79-services-pagesetup-print-5-3: a sheet with two non-adjacent print areas (as Excel stores
+        // via a comma-separated _xlnm.Print_Area) must expose BOTH ranges to the page-break preview, not
+        // only the first (that is what TryResolvePrintRange, the single-range convenience accessor, is
+        // for). Otherwise the preview dims the second area as if it were non-printing even though it
+        // really prints (see WorkbookExportPrintPlanner.ResolveSheetPrintRanges).
+        var sheet = CreateSheet();
+        var area1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 10, 3));
+        var area2 = new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 10, 7));
+        sheet.SetPrintAreas([area1, area2]);
+
+        PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out var ranges).Should().BeTrue();
+
+        ranges.Should().HaveCount(2);
+        ranges[0].Should().Be(area1);
+        ranges[1].Should().Be(area2);
+    }
+
+    [Fact]
+    public void TryResolvePrintRanges_FallsBackToUsedRangeAsSingleRange()
+    {
+        var sheet = CreateSheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 4), new NumberValue(2));
+
+        PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out var ranges).Should().BeTrue();
+
+        var range = ranges.Should().ContainSingle().Which;
+        range.Start.Row.Should().Be(1u);
+        range.End.Col.Should().Be(4u);
+    }
+
+    [Fact]
+    public void TryResolvePrintRanges_EmptySheetReturnsFalse()
+    {
+        var sheet = CreateSheet();
+
+        PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out var ranges).Should().BeFalse();
+        ranges.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ProjectToDisplaySpace_AppliesZoomAndMinimumsWithCumulativeOffsets()
     {
         var viewport = new ViewportModel(

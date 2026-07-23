@@ -7,7 +7,10 @@ namespace FreeX.App.UI;
 
 public partial class GridView
 {
-    private static void DrawConditionalDataBar(
+    // Public (rather than private) so the WPF print/PDF path (PrintRenderer.GridCells.cs, a
+    // different assembly) can draw the exact same data bar the interactive grid draws instead of
+    // reimplementing the layout/gradient/axis logic a second time.
+    public static void DrawConditionalDataBar(
         DrawingContext dc,
         ConditionalFormatDataBar dataBar,
         Rect cellRect,

@@ -111,10 +111,14 @@ public sealed class XlsxSparklineCrossSheetTests
         var wsXml = ReadWorksheetXml(saved, "xl/worksheets/sheet1.xml");
 
         var group = SparklineGroups(wsXml).Single();
-        var dateAxisElement = group.Elements()
-            .Single(e => string.Equals(e.Name.LocalName, "dateAxis", StringComparison.OrdinalIgnoreCase));
 
-        FormulaOf(dateAxisElement).Should().Be("Source!A2:C2",
+        // Per the real CT_SparklineGroup schema there is no wrapper element -- the date-axis range
+        // is a bare <xm:f> direct child of the group, gated by the group's own dateAxis="1" attribute.
+        group.Attribute("dateAxis")?.Value.Should().Be("1");
+        var dateAxisFormula = group.Elements()
+            .Single(e => string.Equals(e.Name.LocalName, "f", StringComparison.OrdinalIgnoreCase)).Value;
+
+        dateAxisFormula.Should().Be("Source!A2:C2",
             "the date-axis formula must qualify with its own referenced sheet (Source), not the host sheet (Data)");
     }
 

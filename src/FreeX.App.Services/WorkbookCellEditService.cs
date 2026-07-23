@@ -219,9 +219,34 @@ public sealed class WorkbookCellEditService
 
         var affectedCells = outcome.AffectedCells ?? [];
         UpdateFormulaDependencies(workbook, affectedCells);
-        var recalcReport = RecalculateIfAutomatic(workbook, affectedCells);
+        var recalcReport = RecalculateIfAutomatic(workbook, affectedCells)
+            ?? RecalculateFreshlyEnteredFormulasOnce(workbook, affectedCells);
 
         return new WorkbookCellEditResult(true, null, affectedCells, recalcReport);
+    }
+
+    /// <summary>
+    /// Manual-calculation-mode counterpart to <see cref="RecalculateIfAutomatic"/> (which is a
+    /// no-op outside Automatic/AutomaticExceptDataTables). Excel always computes a formula the
+    /// instant it is entered or edited, no matter the calculation mode -- only recalculation
+    /// triggered by a later edit to one of that formula's PRECEDENTS is what "Manual" mode defers
+    /// until the next F9 (see <see cref="RecalculateAll"/>). This restricts the recalculation to
+    /// the cells among <paramref name="affectedCells"/> that are themselves formulas (i.e. the
+    /// ones the user just typed/edited), so a precedent-only edit -- e.g. committing a plain value
+    /// into a cell some other, untouched formula depends on -- correctly leaves that other formula
+    /// stale instead of rippling through it. Returns null (matching RecalculateIfAutomatic's
+    /// "nothing to do" contract) when none of the affected cells hold a formula.
+    /// </summary>
+    private RecalcReport? RecalculateFreshlyEnteredFormulasOnce(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
+    {
+        List<CellAddress>? enteredFormulaCells = null;
+        foreach (var address in affectedCells)
+        {
+            if (workbook.GetSheet(address.Sheet)?.GetCell(address)?.HasFormula == true)
+                (enteredFormulaCells ??= []).Add(address);
+        }
+
+        return enteredFormulaCells is null ? null : _recalcEngine.Recalculate(workbook, enteredFormulaCells);
     }
 
     private static bool TryValidateGoalSeekRequest(

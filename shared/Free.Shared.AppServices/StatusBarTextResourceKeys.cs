@@ -4,6 +4,14 @@ public static class StatusBarTextResourceKeys
 {
     public const string ReadyText = "MainWindow_Text_Ready";
 
+    /// <summary>
+    /// Excel's persistent "Calculate" cell-mode indicator: shown in place of <see cref="ReadyText"/>
+    /// when the workbook is in Manual calculation mode and has a formula recalculation pending
+    /// (i.e. an edit changed a precedent since the last F9 / Calculate Now), warning the user that
+    /// displayed values may be stale.
+    /// </summary>
+    public const string CalculateText = "StatusBar_CalculateText";
+
     public const string AverageFormat = "StatusBar_AverageFormat";
     public const string CountFormat = "StatusBar_CountFormat";
     public const string NumericalCountFormat = "StatusBar_NumericalCountFormat";
@@ -27,6 +35,7 @@ public static class StatusBarTextResourceKeys
     public static IReadOnlyList<string> RequiredKeys { get; } =
     [
         ReadyText,
+        CalculateText,
         AverageFormat,
         CountFormat,
         NumericalCountFormat,
@@ -70,4 +79,15 @@ public static class StatusBarTextResourceKeys
             StatusBarReadoutKind.Maximum => Maximum,
             _ => Count
         };
+
+    /// <summary>
+    /// Resolves the resource key for the status bar's left cell-mode readout, matching real
+    /// Excel: the "Calculate" indicator replaces "Ready" only while the workbook is in Manual
+    /// calculation mode (<paramref name="isManualCalculationMode"/>) and a recalculation is
+    /// pending (<paramref name="hasPendingRecalculation"/>) -- Automatic and
+    /// AutomaticExceptDataTables modes never show it because there is nothing left un-recalculated
+    /// for the user to be warned about.
+    /// </summary>
+    public static string CellModeResourceKey(bool isManualCalculationMode, bool hasPendingRecalculation) =>
+        isManualCalculationMode && hasPendingRecalculation ? CalculateText : ReadyText;
 }

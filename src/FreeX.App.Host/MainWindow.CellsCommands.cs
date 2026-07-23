@@ -900,9 +900,20 @@ public partial class MainWindow
             .ToList();
     }
 
-    private void OnAutofillRequested(GridRange sourceRange, GridRange fillRange)
+    private void OnAutofillRequested(GridRange sourceRange, GridRange fillRange) =>
+        ExecuteAutofill(sourceRange, fillRange, _autofillCtrlHeld);
+
+    /// <summary>
+    /// Executes an autofill for the given source/fill ranges with an explicit Ctrl-flip state.
+    /// Shared by the dragged fill-handle path (<see cref="OnAutofillRequested"/>, which uses the
+    /// live Ctrl state captured via <c>AutofillModifiersResolved</c>) and the double-click fill
+    /// path (<see cref="OnAutofillHandleDoubleClicked"/>, which never has a paired
+    /// <c>AutofillModifiersResolved</c> event and so must not read the possibly-stale
+    /// <see cref="_autofillCtrlHeld"/> field).
+    /// </summary>
+    private void ExecuteAutofill(GridRange sourceRange, GridRange fillRange, bool ctrlHeld)
     {
-        var cmd = new AutofillCommand(_currentSheetId, sourceRange, fillRange, _autofillCtrlHeld);
+        var cmd = new AutofillCommand(_currentSheetId, sourceRange, fillRange, ctrlHeld);
         if (!TryExecuteCommand(cmd, "Autofill", out var outcome))
             return;
 

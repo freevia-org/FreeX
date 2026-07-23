@@ -378,6 +378,108 @@ public sealed class RemoveDuplicateRowsCommandTests
         sheet.GetValue(3, 2).Should().Be(new TextValue("Third"));
     }
 
+    // ── Phonetic guide (furigana) carried through compaction/undo (R79-commands-undo-redo-5-2) ──
+
+    [Fact]
+    public void RemoveDuplicateRowsCommand_PhoneticGuideMovesWithSurvivingRowAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var addr11 = new CellAddress(sheet.Id, 1, 1);
+        var addr21 = new CellAddress(sheet.Id, 2, 1);
+        var addr31 = new CellAddress(sheet.Id, 3, 1);
+
+        var guideRow1 = new CellPhoneticGuide(["<rPh sb=\"0\" eb=\"1\"><t>たなか</t></rPh>"], null);
+        var guideRow2 = new CellPhoneticGuide(["<rPh sb=\"0\" eb=\"1\"><t>duplicate-guide</t></rPh>"], null);
+        var guideRow3 = new CellPhoneticGuide(["<rPh sb=\"0\" eb=\"1\"><t>すずき</t></rPh>"], null);
+
+        sheet.SetCell(addr11, new TextValue("田中"));
+        sheet.CellPhoneticGuides[addr11] = guideRow1;
+
+        sheet.SetCell(addr21, new TextValue("田中")); // duplicate of row 1, will be removed
+        sheet.CellPhoneticGuides[addr21] = guideRow2;
+
+        sheet.SetCell(addr31, new TextValue("鈴木")); // survivor, compacted to row 2
+        sheet.CellPhoneticGuides[addr31] = guideRow3;
+
+        var range = new GridRange(addr11, addr31);
+        var command = new RemoveDuplicateRowsCommand(sheet.Id, range);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        command.RemovedRowCount.Should().Be(1);
+
+        // Row 1 kept in place: its own guide survives.
+        sheet.CellPhoneticGuides.Should().ContainKey(addr11).WhoseValue.Should().BeSameAs(guideRow1);
+
+        // Row 3 ("鈴木") compacted to row 2: its guide must travel with it, not the stale
+        // duplicate-row guide that used to sit at row 2.
+        var addr21After = new CellAddress(sheet.Id, 2, 1);
+        sheet.GetValue(2, 1).Should().Be(new TextValue("鈴木"));
+        sheet.CellPhoneticGuides.Should().ContainKey(addr21After).WhoseValue.Should().BeSameAs(guideRow3);
+
+        // Old row 3 (vacated) must be cleared of its guide.
+        sheet.CellPhoneticGuides.Should().NotContainKey(addr31);
+
+        // Undo
+        command.Revert(ctx);
+
+        sheet.GetValue(1, 1).Should().Be(new TextValue("田中"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("田中"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("鈴木"));
+        sheet.CellPhoneticGuides.Should().ContainKey(addr11).WhoseValue.Should().BeSameAs(guideRow1);
+        sheet.CellPhoneticGuides.Should().ContainKey(addr21).WhoseValue.Should().BeSameAs(guideRow2);
+        sheet.CellPhoneticGuides.Should().ContainKey(addr31).WhoseValue.Should().BeSameAs(guideRow3);
+    }
+
+    [Fact]
+    public void RemoveDuplicateRowsCommand_NoPhoneticGuideOnSurvivorClearsStaleTargetGuideAndUndoRestores()
+    {
+        // No-regression sibling: the surviving row that compacts into a target address has NO
+        // guide of its own, but that target address previously held a different row's guide
+        // (which is being cleared as part of the in-range clear). The target must end up with no
+        // guide at all — not the leftover from whatever used to occupy that address — and Undo
+        // must restore the original guide back at its original address.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var addr11 = new CellAddress(sheet.Id, 1, 1);
+        var addr21 = new CellAddress(sheet.Id, 2, 1);
+        var addr31 = new CellAddress(sheet.Id, 3, 1);
+
+        var guideRow2 = new CellPhoneticGuide(["<rPh sb=\"0\" eb=\"1\"><t>guide-at-row2</t></rPh>"], null);
+
+        sheet.SetCell(addr11, new TextValue("Dup"));
+        sheet.SetCell(addr21, new TextValue("Dup")); // duplicate of row 1, will be removed
+        sheet.CellPhoneticGuides[addr21] = guideRow2;
+
+        sheet.SetCell(addr31, new TextValue("Unique")); // survivor, compacted to row 2, no guide of its own
+        // No guide set on row 3.
+
+        var range = new GridRange(addr11, addr31);
+        var command = new RemoveDuplicateRowsCommand(sheet.Id, range);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        command.RemovedRowCount.Should().Be(1);
+
+        // Row 2 (compacted from row 3) must have NO phonetic guide — not the stale one that used
+        // to live at row 2 before the clear.
+        var addr21After = new CellAddress(sheet.Id, 2, 1);
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Unique"));
+        sheet.CellPhoneticGuides.Should().NotContainKey(addr21After);
+
+        command.Revert(ctx);
+
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Dup"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Dup"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Unique"));
+        sheet.CellPhoneticGuides.Should().ContainKey(addr21).WhoseValue.Should().BeSameAs(guideRow2);
+        sheet.CellPhoneticGuides.Should().NotContainKey(addr11);
+        sheet.CellPhoneticGuides.Should().NotContainKey(addr31);
+    }
+
     private static void SeedDuplicateRows(Sheet sheet, params string[] values)
     {
         for (var index = 0; index < values.Length; index++)

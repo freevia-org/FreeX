@@ -82,7 +82,7 @@ public sealed class GridViewEditingCellTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.ConditionalIcons.cs");
         var buildOccupied = source[
             source.IndexOf("public static HashSet<(uint Row, uint Col)> BuildOccupiedCellSet", StringComparison.Ordinal)..
-            source.IndexOf("private static void DrawConditionalIcon", StringComparison.Ordinal)];
+            source.IndexOf("public static void DrawConditionalIcon", StringComparison.Ordinal)];
 
         buildOccupied.Should().Contain("foreach (var cell in cells)");
         buildOccupied.Should().Contain("occupied.Add((cell.Row, cell.Col))");

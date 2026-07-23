@@ -66,6 +66,53 @@ public sealed class WorkbookCellEditServiceTests
             .Which.Value.Should().Be(2);
     }
 
+    // ── R79-calc-volatile-recalc-5-2: a brand-new/freshly edited formula must still compute once
+    // on entry even in Manual calculation mode -- only recalculation triggered by a later edit to
+    // one of that formula's PRECEDENTS is deferred until the next F9 (see the sibling test below).
+
+    [Fact]
+    public void CommitCellText_ManualCalculationMode_ComputesNewlyEnteredFormulaOnce()
+    {
+        var (workbook, sheet, _, service, _) = CreateEditService();
+        workbook.CalculationMode = WorkbookCalculationMode.Manual;
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+
+        var result = service.CommitCellText(workbook, sheet.Id, c1, "=1+1");
+
+        result.Success.Should().BeTrue();
+        result.RecalcReport.Should().NotBeNull(
+            "Excel always computes a brand-new formula once on entry, even in Manual calculation mode");
+        sheet.GetCell(c1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(2);
+    }
+
+    // Sibling no-regression: once the freshly entered formula has computed, a later edit to one of
+    // its PRECEDENTS (not the formula cell itself) must not cascade into a recompute -- it stays
+    // stale until the user explicitly recalculates (F9), exactly like a pre-existing formula does.
+    [Fact]
+    public void CommitCellText_ManualCalculationMode_LaterPrecedentEditDoesNotRecomputeFreshlyEnteredFormula()
+    {
+        var (workbook, sheet, _, service, _) = CreateEditService();
+        workbook.CalculationMode = WorkbookCalculationMode.Manual;
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new NumberValue(5));
+
+        var enterResult = service.CommitCellText(workbook, sheet.Id, c1, "=A1+1");
+
+        enterResult.Success.Should().BeTrue();
+        sheet.GetCell(c1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(6, "the freshly entered formula computes once immediately, using A1's current value");
+
+        var precedentEditResult = service.CommitCellText(workbook, sheet.Id, a1, "100");
+
+        precedentEditResult.Success.Should().BeTrue();
+        precedentEditResult.RecalcReport.Should().BeNull(
+            "editing a precedent (a1 has no formula of its own) must not trigger any recalculation in Manual mode");
+        sheet.GetCell(c1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(6, "C1 must stay stale at its previously computed result until the user recalculates (F9)");
+    }
+
     [Fact]
     public void CommitCellText_ReturnsCommandFailureForProtectedSheet()
     {

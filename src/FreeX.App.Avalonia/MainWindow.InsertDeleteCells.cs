@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Avalonia;
@@ -14,14 +15,38 @@ public sealed partial class MainWindow
     // Home ▸ Cells ▸ Insert Cells / Delete Cells (parity gap: the ribbon buttons were no-ops). A small
     // shift-direction dialog mirrors Excel's prompt; the structural edit runs through the generic
     // review-command executor (undo/redo). Kept in the Avalonia shell to avoid WorkbookSession churn.
+    //
+    // R79-commands-insert-delete-shift-5-2: a whole-row/whole-column selection must route to
+    // InsertRowsCommand/InsertColumnsCommand (and their Delete- counterparts) exactly as the WPF
+    // host's KeyboardInsertDeletePlanner does — never through the band-scoped InsertCellsCommand/
+    // DeleteCellsCommand, which builds its shift band from the selection's row/col span and would
+    // treat a whole-column selection's full row span (1..MaxRow) as a near-sheet-height band. That
+    // both spuriously trips the table/AutoFilter overlap guard for unrelated tables elsewhere in the
+    // column and skips the whole-column-only state (AutoFilter.Reference, FilterHiddenRows, form
+    // controls, pivot tables, sparklines, watched cells) that only the Rows/Columns commands shift.
 
     private async Task ShowInsertCellsDialogAsync()
     {
+        var range = _session.SelectedRange;
+        if (SelectionRangeService.IsWholeRowSelection(range))
+        {
+            var rowResult = _session.ExecuteReviewCommand(
+                new InsertRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
+            RefreshShell(rowResult.Success ? "Inserted rows" : rowResult.ErrorMessage ?? "Could not insert rows.");
+            return;
+        }
+        if (SelectionRangeService.IsWholeColumnSelection(range))
+        {
+            var colResult = _session.ExecuteReviewCommand(
+                new InsertColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
+            RefreshShell(colResult.Success ? "Inserted columns" : colResult.ErrorMessage ?? "Could not insert columns.");
+            return;
+        }
+
         var choice = await ShowShiftDirectionAsync("Insert Cells", "Shift cells right", "Shift cells down");
         if (choice is null)
             return;
         var direction = choice == 0 ? InsertCellsShiftDirection.Right : InsertCellsShiftDirection.Down;
-        var range = _session.SelectedRange;
         var result = _session.ExecuteReviewCommand(new InsertCellsCommand(_session.ActiveSheet.Id, range, direction));
         RefreshShell(result.Success
             ? $"Inserted cells ({(direction == InsertCellsShiftDirection.Right ? "shift right" : "shift down")})"
@@ -30,11 +55,26 @@ public sealed partial class MainWindow
 
     private async Task ShowDeleteCellsDialogAsync()
     {
+        var range = _session.SelectedRange;
+        if (SelectionRangeService.IsWholeRowSelection(range))
+        {
+            var rowResult = _session.ExecuteReviewCommand(
+                new DeleteRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
+            RefreshShell(rowResult.Success ? "Deleted rows" : rowResult.ErrorMessage ?? "Could not delete rows.");
+            return;
+        }
+        if (SelectionRangeService.IsWholeColumnSelection(range))
+        {
+            var colResult = _session.ExecuteReviewCommand(
+                new DeleteColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
+            RefreshShell(colResult.Success ? "Deleted columns" : colResult.ErrorMessage ?? "Could not delete columns.");
+            return;
+        }
+
         var choice = await ShowShiftDirectionAsync("Delete Cells", "Shift cells left", "Shift cells up");
         if (choice is null)
             return;
         var direction = choice == 0 ? DeleteCellsShiftDirection.Left : DeleteCellsShiftDirection.Up;
-        var range = _session.SelectedRange;
         var result = _session.ExecuteReviewCommand(new DeleteCellsCommand(_session.ActiveSheet.Id, range, direction));
         RefreshShell(result.Success
             ? $"Deleted cells ({(direction == DeleteCellsShiftDirection.Left ? "shift left" : "shift up")})"

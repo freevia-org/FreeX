@@ -14,7 +14,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XElement? sourceHyperlinks,
         XElement targetRoot,
         XNamespace workbookNs,
-        XNamespace relNs)
+        XNamespace relNs,
+        Sheet? sheet)
     {
         if (sourceHyperlinks is null)
             return false;
@@ -74,12 +75,70 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     continue;
                 }
 
+                // R79-io-hyperlink-name-5-1: "location" and "tooltip" are the two hyperlink
+                // attributes ClosedXML cannot always regenerate on a full save (it has no API to
+                // carry a sub-address alongside an external r:id, and it omits "tooltip" entirely
+                // when the current ScreenTip is blank) -- but they are also the two attributes the
+                // MODEL tracks per-cell (Sheet.HyperlinkMetadata.Bookmark/ScreenTip). Copying them
+                // verbatim from this pristine pre-edit source snapshot would silently resurrect a
+                // stale value the user has since edited or cleared. Source verbatim only for
+                // any other native-only attribute; for these two, defer to the live model instead.
+                if (IsHyperlinkModelBackedAttribute(attribute))
+                {
+                    if (!TryGetCurrentHyperlinkAttributeValue(sheet, reference, attribute.Name.LocalName, out var currentValue))
+                        continue;
+
+                    targetHyperlink.SetAttributeValue(attribute.Name, currentValue);
+                    changed = true;
+                    continue;
+                }
+
                 targetHyperlink.SetAttributeValue(attribute.Name, attribute.Value);
                 changed = true;
             }
         }
 
         return changed;
+    }
+
+    private static bool IsHyperlinkModelBackedAttribute(XAttribute attribute) =>
+        attribute.Name.Namespace == XNamespace.None &&
+        (attribute.Name.LocalName == "location" || attribute.Name.LocalName == "tooltip");
+
+    // Resolves the live model's current value for a hyperlink's "location" (HyperlinkMetadata.Bookmark)
+    // or "tooltip" (HyperlinkMetadata.ScreenTip) at the cell the ref anchors -- a ranged hyperlink's ref
+    // (e.g. "A1:B2") is keyed in the model by its top-left cell only, mirroring how XlsxFileAdapter's
+    // loader keys Sheet.Hyperlinks/HyperlinkMetadata off the anchor cell. Returns false (skip: no
+    // attribute is written) whenever the model has nothing to say -- no sheet, unparsable ref, no
+    // tracked metadata for that cell, or the current value is blank -- so a user-cleared location/
+    // tooltip stays cleared instead of being backfilled from stale source XML.
+    private static bool TryGetCurrentHyperlinkAttributeValue(
+        Sheet? sheet,
+        string reference,
+        string attributeLocalName,
+        out string value)
+    {
+        value = string.Empty;
+        if (sheet is null)
+            return false;
+
+        var anchorReference = reference.Contains(':', StringComparison.Ordinal)
+            ? reference[..reference.IndexOf(':')]
+            : reference;
+        if (!CellAddress.TryParse(anchorReference, sheet.Id, out var address) ||
+            !sheet.HyperlinkMetadata.TryGetValue(address, out var metadata))
+        {
+            return false;
+        }
+
+        value = attributeLocalName switch
+        {
+            "location" => metadata.Bookmark,
+            "tooltip" => metadata.ScreenTip,
+            _ => string.Empty
+        };
+
+        return !string.IsNullOrWhiteSpace(value);
     }
 
     // Mirrors XlsxWorksheetHyperlinkNormalizer's load-time strip criteria (whole-column/row refs, and

@@ -110,7 +110,7 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderSplitPaneCell(", StringComparison.Ordinal)..
             source.IndexOf("private readonly struct SplitPaneCellRenderConsumer", StringComparison.Ordinal)];
 
-        source.Should().Contain("private static void DrawConditionalDataBar");
+        source.Should().Contain("public static void DrawConditionalDataBar");
         source.Should().Contain("cell.ConditionalDataBar is not null");
         renderCells.IndexOf("DrawConditionalDataBar(dc, dataBar, rect, _brushCache)", StringComparison.Ordinal)
             .Should()

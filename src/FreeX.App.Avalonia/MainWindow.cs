@@ -10414,7 +10414,13 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        content.Children.Add(textBlock);
+        // "Show Icon Only" (ShowValue=false) hides the cell text entirely so just the icon glyph
+        // renders — mirroring WPF's GridView.ConditionalIcons.cs ShouldDrawText=false /
+        // GridView.Rendering.cs skip-draw-text behavior (R79-render-cf-icon-showonly-5-2). Without
+        // this, the text still rendered on top of the icon gutter area since only the gutter
+        // spacing (not the text itself) was conditioned on ShowValue.
+        if (conditionalIcon is not { ShowValue: false })
+            content.Children.Add(textBlock);
 
         if (conditionalIcon is { } iconGlyph)
             content.Children.Add(CreateConditionalIconLayer(iconGlyph, zoomFactor, isRightToLeft));

@@ -550,7 +550,10 @@ public partial class MainWindow
     }
     private void ZoomSelectionBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
+        if (SheetGrid.SelectedRange is not { } activeRange) return;
+        // R79-render-namebar-statusbar-5-4: fit the bounding box of the WHOLE multi-area selection
+        // (Ctrl+click-added disjoint ranges), not just the last-clicked active range.
+        var range = ZoomSelectionPlanner.ResolveFitRange(activeRange, SheetGrid.SelectedRanges);
         var (selectedColumnWidths, selectedRowHeights) = GetSelectionPixelMetrics(range);
         var fitPct = ZoomSelectionPlanner.CalculateFitPercent(
             SheetGrid.ActualWidth,
@@ -558,6 +561,10 @@ public partial class MainWindow
             selectedColumnWidths,
             selectedRowHeights);
         ZoomSlider.Value = StatusZoomSliderValueForPercent(fitPct);
+        // R79-render-namebar-statusbar-5-1: changing the zoom % alone never moves the scrollbars --
+        // scroll the (now-correctly-sized) selection into view the same way every other
+        // selection-driven navigation command does.
+        EnsureCellVisible(range.Start);
     }
 
     /// <summary>

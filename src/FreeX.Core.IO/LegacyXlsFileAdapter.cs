@@ -6,6 +6,7 @@ using ExcelDataReader;
 using Free.Shared.Opc;
 using NPOI.HSSF.Model;
 using NPOI.HSSF.Record;
+using NPOI.HSSF.Record.Common;
 using NPOI.HSSF.Record.PivotTable;
 using FreeX.Core.Model;
 using NPOI.HSSF.UserModel;
@@ -618,6 +619,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         LoadPageLayout(sourceSheet, sheet);
         LoadSheetView(sourceSheet, sheet, palette);
         LoadSheetProtection(sourceSheet, sheet);
+        LoadAllowEditRanges(sourceSheet, sheet);
         sheet.FullCalculationOnLoad = sourceSheet.ForceFormulaRecalculation;
 
         if (sourceSheet.DefaultColumnWidth > 0)
@@ -674,6 +676,16 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         if (sourceSheet is HSSFSheet { Password: not 0 } protectedSheet)
             sheet.ProtectionPassword = ((ushort)protectedSheet.Password).ToString("X4", CultureInfo.InvariantCulture);
 
+        // Mirror XlsxSheetProtectionPermissionMapper.Read's polarity: "objects"/"scenarios" TRUE
+        // means the action is denied while protected, so it's only added to Permissions (meaning
+        // "allowed") when the source sheet did NOT protect it. Without this, a .xls whose Protect
+        // Sheet dialog left Objects/Scenarios editable would always re-save as .xlsx with them
+        // denied (Sheet.ProtectionPermissions defaults to just the two Select* entries).
+        if (!isObjectProtected)
+            sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+        if (!isScenarioProtected)
+            sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditScenarios);
+
         var nativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal);
         if (isObjectProtected)
             nativeAttributes["objects"] = "1";
@@ -686,6 +698,44 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             var metadata = new NativeXmlPreserveBag();
             metadata.Set("sheetProtection", serializedMetadata);
             sheet.ProtectionMetadata = metadata;
+        }
+    }
+
+    /// <summary>
+    /// Reads Excel's binary "Allow Users to Edit Ranges" feature (a <c>FeatHdrRecord</c> +
+    /// per-range <c>FeatRecord</c>s of shared-feature type <c>SHAREDFEATURES_ISFPROTECTION</c>,
+    /// each carrying a <see cref="NPOI.HSSF.Record.Common.FeatProtection"/> payload with the
+    /// range's own password verifier) into <see cref="Sheet.AllowEditRanges"/>/
+    /// <see cref="Sheet.AllowEditRangePasswords"/>, mirroring how <c>XlsxAllowEditRangeMapper.Read</c>
+    /// models the equivalent OOXML <c>&lt;protectedRanges&gt;</c> element. Without this, every
+    /// range a .xls sheet left editable under protection would silently become fully locked the
+    /// moment FreeX opens and re-saves it as .xlsx.
+    /// </summary>
+    private static void LoadAllowEditRanges(ISheet sourceSheet, Sheet sheet)
+    {
+        if (sourceSheet is not HSSFSheet hssfSheet)
+            return;
+
+        foreach (var featRecord in hssfSheet.Sheet.Records.OfType<FeatRecord>())
+        {
+            if (featRecord.Isf_sharedFeatureType != FeatHdrRecord.SHAREDFEATURES_ISFPROTECTION)
+                continue;
+
+            string? rangePassword = null;
+            if (featRecord.SharedFeature is FeatProtection featProtection)
+            {
+                var verifier = featProtection.GetPasswordVerifier();
+                if (verifier != 0)
+                    rangePassword = ((ushort)verifier).ToString("X4", CultureInfo.InvariantCulture);
+            }
+
+            foreach (var cellRef in featRecord.CellRefs ?? [])
+            {
+                var range = ToGridRange(cellRef, sheet.Id);
+                sheet.AllowEditRanges.Add(range);
+                if (rangePassword is not null)
+                    sheet.AllowEditRangePasswords[range] = rangePassword;
+            }
         }
     }
 

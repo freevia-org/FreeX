@@ -88,6 +88,8 @@ public partial class MainWindow
     {
         if (sender is FrameworkElement element && element.ContextMenu is null)
             element.ContextMenu = BuildStatusBarCustomizeContextMenu();
+
+        RefreshKeyLockIndicators();
     }
 
     private ContextMenu BuildStatusBarCustomizeContextMenu()

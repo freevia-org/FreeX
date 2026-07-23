@@ -17,6 +17,8 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
     private bool _hadOldMetadata;
     private bool _hadOldRichTextRuns;
     private IReadOnlyList<CellTextRun>? _oldRichTextRuns;
+    private bool _hadOldPhoneticGuide;
+    private CellPhoneticGuide? _oldPhoneticGuide;
 
     public string Label => "Insert Hyperlink";
 
@@ -44,6 +46,7 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
         _hadOldTarget = sheet.Hyperlinks.TryGetValue(_address, out _oldTarget);
         _hadOldMetadata = sheet.HyperlinkMetadata.TryGetValue(_address, out _oldMetadata);
         _hadOldRichTextRuns = sheet.RichTextRuns.TryGetValue(_address, out _oldRichTextRuns);
+        _hadOldPhoneticGuide = sheet.CellPhoneticGuides.TryGetValue(_address, out _oldPhoneticGuide);
 
         var newCell = Cell.FromValue(new TextValue(_displayText));
         if (_oldCell is not null)
@@ -56,10 +59,12 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
         sheet.Hyperlinks[_address] = _target;
         sheet.HyperlinkMetadata[_address] = _metadata;
 
-        // The display text is being replaced wholesale, so any rich-text runs that belonged to the
-        // old content are stale (their character offsets no longer line up with the new text) and
-        // must not carry over onto the hyperlink text (matching GroupedEditCellsCommand's handling).
+        // The display text is being replaced wholesale, so any rich-text runs and phonetic guide
+        // that belonged to the old content are stale (their character offsets/reading no longer
+        // line up with the new text) and must not carry over onto the hyperlink text (matching
+        // GroupedEditCellsCommand's handling).
         sheet.RichTextRuns.Remove(_address);
+        sheet.CellPhoneticGuides.Remove(_address);
         return new CommandOutcome(true, AffectedCells: [_address]);
     }
 
@@ -83,6 +88,10 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
             sheet.RichTextRuns[_address] = _oldRichTextRuns;
         else
             sheet.RichTextRuns.Remove(_address);
+        if (_hadOldPhoneticGuide && _oldPhoneticGuide is not null)
+            sheet.CellPhoneticGuides[_address] = _oldPhoneticGuide;
+        else
+            sheet.CellPhoneticGuides.Remove(_address);
     }
 }
 

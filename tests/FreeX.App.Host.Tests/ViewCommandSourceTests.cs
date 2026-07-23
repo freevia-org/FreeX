@@ -27,6 +27,20 @@ public sealed class ViewCommandSourceTests
         source.Should().NotContain("ZoomLevelMapper.ZoomPercentToSlider(fitPct)");
     }
 
+    // R79-render-namebar-statusbar-5-1 / -5-4: Zoom-to-Selection must (a) scroll the fitted
+    // selection into view -- not just change the zoom % while leaving the scrollbars untouched --
+    // and (b) fit the bounding box of the WHOLE multi-area selection (SelectedRanges), not just the
+    // last-clicked active range.
+    [Fact]
+    public void ZoomSelectionBtn_Click_ResolvesMultiAreaFitRangeAndScrollsSelectionIntoView()
+    {
+        var source = ReadHostSourceFile("MainWindow.ViewCommands.cs");
+
+        var method = SourceMethodExtractor.ExtractMethodSource(source, "private void ZoomSelectionBtn_Click(");
+        method.Should().Contain("ZoomSelectionPlanner.ResolveFitRange(activeRange, SheetGrid.SelectedRanges)");
+        method.Should().Contain("EnsureCellVisible(range.Start)");
+    }
+
     [Fact]
     public void ViewWindowHandlers_RouteThroughExpectedPlannersAndCommands()
     {

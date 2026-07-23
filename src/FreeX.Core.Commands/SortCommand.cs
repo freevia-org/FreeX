@@ -31,7 +31,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     private readonly SortOptions _options;
 
     // Snapshot for undo: list of rows, each row is a list of cell+style+hyperlink+richtext tuples
-    private List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata, IReadOnlyList<CellTextRun>? RichTextRuns)>>? _snapshot;
+    private List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata, IReadOnlyList<CellTextRun>? RichTextRuns, CellPhoneticGuide? PhoneticGuide)>>? _snapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
     // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
     // author + pinned/"Show Comment" state) and must travel with a sorted row's comment, or a
@@ -56,7 +56,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
     private sealed record SortPayloadCapture(
         SortCellPayload[][] Rows,
-        List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata, IReadOnlyList<CellTextRun>? RichTextRuns)>> CellSnapshot,
+        List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata, IReadOnlyList<CellTextRun>? RichTextRuns, CellPhoneticGuide? PhoneticGuide)>> CellSnapshot,
         Dictionary<CellAddress, string> CommentSnapshot,
         Dictionary<CellAddress, string> CommentAuthorsSnapshot,
         HashSet<CellAddress> ShownCommentsSnapshot,
@@ -64,7 +64,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
     private readonly struct SortCellPayload
     {
-        public SortCellPayload(Cell? cell, StyleId? styleOnly, string? comment, string? commentAuthor, bool commentShown, ThreadedComment? threadedComment, string? hyperlink, HyperlinkMetadata? hyperlinkMetadata, IReadOnlyList<CellTextRun>? richTextRuns = null)
+        public SortCellPayload(Cell? cell, StyleId? styleOnly, string? comment, string? commentAuthor, bool commentShown, ThreadedComment? threadedComment, string? hyperlink, HyperlinkMetadata? hyperlinkMetadata, IReadOnlyList<CellTextRun>? richTextRuns = null, CellPhoneticGuide? phoneticGuide = null)
         {
             Cell = cell;
             StyleOnly = styleOnly;
@@ -75,6 +75,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             Hyperlink = hyperlink;
             HyperlinkMetadata = hyperlinkMetadata;
             RichTextRuns = richTextRuns;
+            PhoneticGuide = phoneticGuide;
         }
 
         public Cell? Cell { get; }
@@ -86,6 +87,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         public string? Hyperlink { get; }
         public HyperlinkMetadata? HyperlinkMetadata { get; }
         public IReadOnlyList<CellTextRun>? RichTextRuns { get; }
+        public CellPhoneticGuide? PhoneticGuide { get; }
     }
 
     public string Label => _sortKeys.Count == 1
@@ -625,7 +627,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         int colCount)
     {
         var rows = new SortCellPayload[rowCount][];
-        var cellSnapshot = new List<List<(CellAddress, Cell?, StyleId?, string?, HyperlinkMetadata?, IReadOnlyList<CellTextRun>?)>>(rowCount);
+        var cellSnapshot = new List<List<(CellAddress, Cell?, StyleId?, string?, HyperlinkMetadata?, IReadOnlyList<CellTextRun>?, CellPhoneticGuide?)>>(rowCount);
         var commentSnapshot = new Dictionary<CellAddress, string>();
         var commentAuthorsSnapshot = new Dictionary<CellAddress, string>();
         var shownCommentsSnapshot = new HashSet<CellAddress>();
@@ -635,15 +637,15 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         {
             uint row = startRow + (uint)ri;
             var payloadRow = new SortCellPayload[colCount];
-            var snapRow = new List<(CellAddress, Cell?, StyleId?, string?, HyperlinkMetadata?, IReadOnlyList<CellTextRun>?)>(colCount);
+            var snapRow = new List<(CellAddress, Cell?, StyleId?, string?, HyperlinkMetadata?, IReadOnlyList<CellTextRun>?, CellPhoneticGuide?)>(colCount);
 
             for (int ci = 0; ci < colCount; ci++)
             {
                 uint col = startCol + (uint)ci;
                 var addr = new CellAddress(sheetId, row, col);
-                var payload = CaptureCellPayload(sheet, addr, out var snapshotCell, out var snapshotStyleOnly, out var snapshotHyperlink, out var snapshotHyperlinkMetadata, out var snapshotRichTextRuns);
+                var payload = CaptureCellPayload(sheet, addr, out var snapshotCell, out var snapshotStyleOnly, out var snapshotHyperlink, out var snapshotHyperlinkMetadata, out var snapshotRichTextRuns, out var snapshotPhoneticGuide);
                 payloadRow[ci] = payload;
-                snapRow.Add((addr, snapshotCell, snapshotStyleOnly, snapshotHyperlink, snapshotHyperlinkMetadata, snapshotRichTextRuns));
+                snapRow.Add((addr, snapshotCell, snapshotStyleOnly, snapshotHyperlink, snapshotHyperlinkMetadata, snapshotRichTextRuns, snapshotPhoneticGuide));
                 if (payload.Comment is not null)
                     commentSnapshot[addr] = payload.Comment;
                 if (payload.CommentAuthor is not null)
@@ -744,7 +746,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         out StyleId? snapshotStyleOnly,
         out string? snapshotHyperlink,
         out HyperlinkMetadata? snapshotHyperlinkMetadata,
-        out IReadOnlyList<CellTextRun>? snapshotRichTextRuns)
+        out IReadOnlyList<CellTextRun>? snapshotRichTextRuns,
+        out CellPhoneticGuide? snapshotPhoneticGuide)
     {
         var cell = sheet.GetCell(address);
         sheet.Comments.TryGetValue(address, out var comment);
@@ -754,6 +757,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         sheet.Hyperlinks.TryGetValue(address, out var hyperlink);
         sheet.HyperlinkMetadata.TryGetValue(address, out var hyperlinkMetadata);
         sheet.RichTextRuns.TryGetValue(address, out var richTextRuns);
+        sheet.CellPhoneticGuides.TryGetValue(address, out var phoneticGuide);
         var styleOnly = cell is null ? sheet.GetStyleOnly(address.Row, address.Col) : null;
 
         // The sortable payload and undo snapshot must not share mutable cell instances.
@@ -762,7 +766,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         snapshotHyperlink = hyperlink;
         snapshotHyperlinkMetadata = hyperlinkMetadata;
         snapshotRichTextRuns = richTextRuns;
-        return new SortCellPayload(cell?.Clone(), styleOnly, comment, commentAuthor, commentShown, threadedComment, hyperlink, hyperlinkMetadata, richTextRuns);
+        snapshotPhoneticGuide = phoneticGuide;
+        return new SortCellPayload(cell?.Clone(), styleOnly, comment, commentAuthor, commentShown, threadedComment, hyperlink, hyperlinkMetadata, richTextRuns, phoneticGuide);
     }
 
     private static SortCellPayload[] CopyColumnPayloads(SortCellPayload[][] rows, int columnIndex, int rowCount)
@@ -807,6 +812,10 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         sheet.RichTextRuns.Remove(address);
         if (payload.RichTextRuns is not null)
             sheet.RichTextRuns[address] = payload.RichTextRuns;
+
+        sheet.CellPhoneticGuides.Remove(address);
+        if (payload.PhoneticGuide is not null)
+            sheet.CellPhoneticGuides[address] = payload.PhoneticGuide;
     }
 
     private static void WriteCellClone(
@@ -840,11 +849,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         }
     }
 
-    private static void RestoreCellSnapshot(Sheet sheet, List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata, IReadOnlyList<CellTextRun>? RichTextRuns)>> snapshot)
+    private static void RestoreCellSnapshot(Sheet sheet, List<List<(CellAddress Address, Cell? Cell, StyleId? StyleOnly, string? Hyperlink, HyperlinkMetadata? HyperlinkMetadata, IReadOnlyList<CellTextRun>? RichTextRuns, CellPhoneticGuide? PhoneticGuide)>> snapshot)
     {
         foreach (var snapRow in snapshot)
         {
-            foreach (var (addr, cell, styleOnly, hyperlink, hyperlinkMetadata, richTextRuns) in snapRow)
+            foreach (var (addr, cell, styleOnly, hyperlink, hyperlinkMetadata, richTextRuns, phoneticGuide) in snapRow)
             {
                 WriteCellClone(sheet, addr, cell, styleOnly);
 
@@ -859,6 +868,10 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                 sheet.RichTextRuns.Remove(addr);
                 if (richTextRuns is not null)
                     sheet.RichTextRuns[addr] = richTextRuns;
+
+                sheet.CellPhoneticGuides.Remove(addr);
+                if (phoneticGuide is not null)
+                    sheet.CellPhoneticGuides[addr] = phoneticGuide;
             }
         }
     }

@@ -352,14 +352,22 @@ public static partial class BuiltInFunctions
         double yieldPerPeriod = yld / frequency;
 
         double price = couponAmt * firstCouponPeriods / Math.Pow(1 + yieldPerPeriod, periodsToFirstCoupon);
-        int k = 1;
-        for (DateTime d = firstCoupon.AddMonths(months); d <= maturity; d = d.AddMonths(months))
+        // Anchor each remaining coupon-period candidate off the ORIGINAL maturity, not off the
+        // shrinking loop date, to avoid compounding .NET's day-of-month clamp for month-end
+        // maturities whose schedule crosses a shorter month (same fix as Coupnum/Duration in
+        // BuiltInFunctions.Financial.Coupons.cs / BuiltInFunctions.Financial.Bonds.cs). Without
+        // this, the last generated date can drift away from `maturity` and never compare equal
+        // to it, silently dropping the redemption below.
+        int periodCount = 0;
+        DateTime probe = maturity;
+        while (probe > firstCoupon) { periodCount++; probe = maturity.AddMonths(-periodCount * months); }
+        for (int k = 1; k <= periodCount; k++)
         {
+            DateTime d = maturity.AddMonths(-(periodCount - k) * months);
             double cash = couponAmt;
             if (d == maturity)
                 cash += redemption;
             price += cash / Math.Pow(1 + yieldPerPeriod, k + periodsToFirstCoupon);
-            k++;
         }
         return price - couponAmt * accrued;
     }

@@ -148,6 +148,162 @@ public static class PageBreakPreviewLayoutPlanner
     }
 
     /// <summary>
+    /// Multi-area overload: computes the same page-break-preview geometry as the single-<c>GridRange</c>
+    /// <c>Calculate</c> above, but across every configured print area rather than only the first (see
+    /// <see cref="PageBreakPreviewInstructionBuilder.TryResolvePrintRanges"/>). Excel supports a multi-area print
+    /// range (comma-separated <c>_xlnm.Print_Area</c>); each area paginates independently — its own page grid, own
+    /// automatic break lines — with page numbers continuing across areas in the order given, and the dimmed mask
+    /// covers only what falls outside every area (mirrors <c>WorkbookExportPrintPlanner.ResolveSheetPrintRanges</c>,
+    /// which likewise emits one paginated range per configured area).
+    /// </summary>
+    public static PageBreakPreviewLayout Calculate(
+        ViewportModel viewport,
+        IReadOnlyList<GridRange>? printAreas,
+        IReadOnlyCollection<uint>? rowPageBreaks,
+        IReadOnlyCollection<uint>? columnPageBreaks,
+        WorksheetPageOrder pageOrder,
+        WorksheetScaleToFit scaleToFit,
+        WorksheetRepeatRange? printTitleRows,
+        WorksheetRepeatRange? printTitleColumns,
+        WorksheetPaperSize paperSize,
+        WorksheetPageOrientation orientation,
+        WorksheetPageMargins margins,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double actualWidth,
+        double actualHeight,
+        IReadOnlyDictionary<uint, double>? rowHeights = null,
+        double defaultRowHeight = PagePaginationPlanner.NominalRowHeight,
+        IReadOnlyDictionary<uint, double>? columnWidths = null,
+        double defaultColumnWidth = 0.0,
+        double headerMarginInches = 0.0,
+        double footerMarginInches = 0.0,
+        Func<uint, bool>? isRowHidden = null,
+        Func<uint, bool>? isColumnHidden = null)
+    {
+        if (printAreas is not { Count: > 0 } areas ||
+            viewport.RowMetrics.Count == 0 ||
+            viewport.ColMetrics.Count == 0)
+        {
+            return new PageBreakPreviewLayout([], [], []);
+        }
+
+        if (areas.Count == 1)
+        {
+            return Calculate(
+                viewport,
+                areas[0],
+                rowPageBreaks,
+                columnPageBreaks,
+                pageOrder,
+                scaleToFit,
+                printTitleRows,
+                printTitleColumns,
+                paperSize,
+                orientation,
+                margins,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                actualWidth,
+                actualHeight,
+                rowHeights,
+                defaultRowHeight,
+                columnWidths,
+                defaultColumnWidth,
+                headerMarginInches,
+                footerMarginInches,
+                isRowHidden,
+                isColumnHidden);
+        }
+
+        var gridBounds = LayoutRect.FromCorners(
+            rowHeaderWidth,
+            columnHeaderHeight,
+            Math.Max(rowHeaderWidth, actualWidth),
+            Math.Max(columnHeaderHeight, actualHeight));
+        if (gridBounds.Width <= 0 || gridBounds.Height <= 0)
+            return new PageBreakPreviewLayout([], [], []);
+
+        var effectiveRowHeights = rowHeights ?? new Dictionary<uint, double>();
+        var effectiveColumnWidths = columnWidths ?? new Dictionary<uint, double>();
+        var effectiveDefaultColumnWidth = defaultColumnWidth > 0
+            ? defaultColumnWidth
+            : ColumnWidthPixelMapper.PixelsToColumnWidth(PagePaginationPlanner.MinimumPrintColumnWidth);
+
+        var outsideMasks = new List<LayoutRect> { gridBounds };
+        var pages = new List<PageBreakPreviewPageLayout>();
+        var automaticBreaks = new List<PageBreakPreviewBreakLine>();
+        var pageNumberOffset = 0;
+        var anyAreaVisible = false;
+
+        foreach (var range in areas)
+        {
+            if (!TryCalculateVisibleRangeBounds(
+                    viewport,
+                    range,
+                    rowHeaderWidth,
+                    columnHeaderHeight,
+                    actualWidth,
+                    actualHeight,
+                    out var printBounds,
+                    out _))
+            {
+                continue;
+            }
+
+            anyAreaVisible = true;
+            outsideMasks = SubtractRegion(outsideMasks, printBounds);
+
+            var pagination = PagePaginationPlanner.Paginate(
+                range,
+                scaleToFit,
+                printTitleRows,
+                printTitleColumns,
+                paperSize,
+                orientation,
+                margins,
+                effectiveRowHeights,
+                defaultRowHeight,
+                effectiveColumnWidths,
+                effectiveDefaultColumnWidth,
+                headerMarginInches,
+                footerMarginInches,
+                rowPageBreaks,
+                columnPageBreaks,
+                isRowHidden,
+                isColumnHidden);
+
+            pages.AddRange(BuildVisiblePages(
+                viewport,
+                range,
+                pagination.RowSegments,
+                pagination.ColumnSegments,
+                pageOrder,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                actualWidth,
+                actualHeight,
+                pageNumberOffset));
+            pageNumberOffset += pagination.RowSegments.Count * pagination.ColumnSegments.Count;
+
+            automaticBreaks.AddRange(BuildAutomaticBreakLines(
+                viewport,
+                pagination.RowSegments,
+                pagination.ColumnSegments,
+                rowPageBreaks,
+                columnPageBreaks,
+                printBounds,
+                rowHeaderWidth,
+                columnHeaderHeight));
+        }
+
+        if (!anyAreaVisible)
+            return new PageBreakPreviewLayout([], [], []);
+
+        return new PageBreakPreviewLayout(outsideMasks, pages, automaticBreaks);
+    }
+
+    /// <summary>
     /// The font size for the "Page N" watermark drawn behind each preview page: a fraction of the
     /// page's shorter side, clamped to a legible range.
     /// </summary>
@@ -166,7 +322,8 @@ public static class PageBreakPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight,
         double actualWidth,
-        double actualHeight)
+        double actualHeight,
+        int pageNumberOffset = 0)
     {
         var pages = new List<PageBreakPreviewPageLayout>(rowSegments.Count * columnSegments.Count);
         foreach (var page in PrintPageGridPlanner.BuildVisualIndexes(rowSegments.Count, columnSegments.Count, pageOrder))
@@ -190,7 +347,7 @@ public static class PageBreakPreviewLayoutPlanner
                 continue;
             }
 
-            pages.Add(new PageBreakPreviewPageLayout(page.SheetPageNumber, pageBounds, visibleEdges));
+            pages.Add(new PageBreakPreviewPageLayout(page.SheetPageNumber + pageNumberOffset, pageBounds, visibleEdges));
         }
 
         return pages;
@@ -204,6 +361,39 @@ public static class PageBreakPreviewLayoutPlanner
         AddMask(masks, new LayoutRect(gridBounds.Left, printBounds.Top, printBounds.Left - gridBounds.Left, printBounds.Height));
         AddMask(masks, new LayoutRect(printBounds.Right, printBounds.Top, gridBounds.Right - printBounds.Right, printBounds.Height));
         return masks;
+    }
+
+    /// <summary>
+    /// Removes <paramref name="hole"/> from every rectangle in <paramref name="regions"/>, splitting each
+    /// intersected region into up to four leftover rectangles (top/bottom full-width strips plus left/right
+    /// strips banding the hole's row), the same decomposition <see cref="BuildOutsideMasks"/> uses for a single
+    /// print area. Applying this once per print area — each pass carving that area's bounds out of what
+    /// remains — turns the single-area subtraction into the region outside the union of every area, so a
+    /// second (or later) print area is not left dimmed as if it were non-printing. Regions the hole does not
+    /// intersect pass through unchanged.
+    /// </summary>
+    private static List<LayoutRect> SubtractRegion(List<LayoutRect> regions, LayoutRect hole)
+    {
+        var result = new List<LayoutRect>(regions.Count + 3);
+        foreach (var region in regions)
+        {
+            var left = Math.Max(region.Left, hole.Left);
+            var top = Math.Max(region.Top, hole.Top);
+            var right = Math.Min(region.Right, hole.Right);
+            var bottom = Math.Min(region.Bottom, hole.Bottom);
+            if (left >= right || top >= bottom)
+            {
+                result.Add(region);
+                continue;
+            }
+
+            AddMask(result, new LayoutRect(region.Left, region.Top, region.Width, top - region.Top));
+            AddMask(result, new LayoutRect(region.Left, bottom, region.Width, region.Bottom - bottom));
+            AddMask(result, new LayoutRect(region.Left, top, left - region.Left, bottom - top));
+            AddMask(result, new LayoutRect(right, top, region.Right - right, bottom - top));
+        }
+
+        return result;
     }
 
     private static IReadOnlyList<PageBreakPreviewBreakLine> BuildAutomaticBreakLines(

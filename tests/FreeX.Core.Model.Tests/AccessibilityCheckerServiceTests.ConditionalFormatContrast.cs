@@ -5448,8 +5448,10 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialOddCouponFunctions()
     {
-        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1)>99", "B1", "B4", "B8");
-        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFYIELD($A1,$C1,$D1,$E1,$F1,$H1,$I1,$J1,$K1)>0.08", "B4");
+        // R79: ODDFPRICE/ODDFYIELD now include the redemption principal (Excel-correct), so B2's value newly triggers the low-contrast CF
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1)>99", "B1", "B2", "B4", "B8");
+        // R79: ODDFYIELD now includes the redemption principal (Excel-correct) via OddFirstPrice, so B2's value newly triggers the low-contrast CF
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDFYIELD($A1,$C1,$D1,$E1,$F1,$H1,$I1,$J1,$K1)>0.08", "B2", "B4");
         AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1)>100", "B2", "B4");
         AssertFormulaFinancialOddCouponFunctionContrastLocations("ODDLYIELD($A1,$L1,$D1,$F1,$H1,$I1,$J1,$K1)>0.09", "B2", "B4");
     }
@@ -5457,8 +5459,10 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialOddCouponWrappersDefaultsAndOptionalArguments()
     {
-        AssertFormulaFinancialOddCouponFunctionContrastLocations("IF(ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1)>99,TRUE,FALSE)", "B1", "B4", "B8");
-        AssertFormulaFinancialOddCouponFunctionContrastLocations("SUM(ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1),ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1))>200", "B4");
+        // R79: ODDFPRICE now includes the redemption principal (Excel-correct), so B2's value newly triggers the low-contrast CF
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("IF(ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1)>99,TRUE,FALSE)", "B1", "B2", "B4", "B8");
+        // R79: ODDFPRICE now includes the redemption principal (Excel-correct), pushing this SUM over 200 for B2 too
+        AssertFormulaFinancialOddCouponFunctionContrastLocations("SUM(ODDFPRICE($A1,$C1,$D1,$E1,$F1,$G1,$I1,$J1,$K1),ODDLPRICE($A1,$L1,$D1,$F1,$G1,$I1,$J1,$K1))>200", "B2", "B4");
         AssertFormulaFinancialOddCouponFunctionContrastLocations("AND($M1,ODDLYIELD($A1,$L1,$D1,$F1,$H1,$I1,$J1)>0.09)", "B4");
     }
 

@@ -227,7 +227,14 @@ public static partial class BuiltInFunctions
 
         double result = 0;
         for (int i = 0; i < values!.Count; i++)
-            result += values[i] / Math.Pow(1 + rate, i + 1);
+        {
+            double denom = Math.Pow(1 + rate, i + 1);
+            // rate == -1 makes every discount factor exactly zero: Excel surfaces this as a plain
+            // #DIV/0! (its standard x/0 propagation rule), distinct from XNPV/XIRR's rate<=-1
+            // boundary, which those functions document/return as #NUM! instead.
+            if (denom == 0) return ErrorValue.DivByZero;
+            result += values[i] / denom;
+        }
         return NumberResult(result);
     }
 

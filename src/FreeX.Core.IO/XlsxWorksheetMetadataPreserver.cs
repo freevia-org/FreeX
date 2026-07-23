@@ -193,7 +193,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs, workbook.GetSheet(sheetName)))
                 changed = true;
-            if (MergeWorksheetHyperlinkMetadata(sourceHyperlinks, targetRoot, workbookNs, relNs))
+            if (MergeWorksheetHyperlinkMetadata(sourceHyperlinks, targetRoot, workbookNs, relNs, workbook.GetSheet(sheetName)))
                 changed = true;
             foreach (var sourceBlock in sourceBlocks)
             {
@@ -539,7 +539,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs, workbook.GetSheet(sheetName)))
                 changed = true;
-            if (MergeWorksheetHyperlinkMetadata(sourceHyperlinks, targetRoot, workbookNs, relNs))
+            if (MergeWorksheetHyperlinkMetadata(sourceHyperlinks, targetRoot, workbookNs, relNs, workbook.GetSheet(sheetName)))
                 changed = true;
             foreach (var sourceBlock in sourceBlocks)
             {

@@ -47,15 +47,17 @@ public sealed class R17_sparkline_load_Tests
         new XlsxFileAdapter().Save(workbook, saved);
         saved.Position = 0;
 
-        // The initial save must actually emit <x14:dateAxis> so the round trip is meaningful.
+        // The initial save must actually emit the dateAxis="1" attribute plus a bare <xm:f> child
+        // (the real CT_SparklineGroup shape) so the round trip is meaningful.
         using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
         {
             var entry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
             using var entryStream = entry.Open();
             var wsXml = XDocument.Load(entryStream);
             var grp = SparklineGroups(wsXml).Single();
+            grp.Attribute("dateAxis")?.Value.Should().Be("1");
             grp.Elements().Should().Contain(e =>
-                string.Equals(e.Name.LocalName, "dateAxis", StringComparison.OrdinalIgnoreCase));
+                string.Equals(e.Name.LocalName, "f", StringComparison.OrdinalIgnoreCase));
         }
 
         saved.Position = 0;
@@ -74,7 +76,7 @@ public sealed class R17_sparkline_load_Tests
         reloadedSparkline.DateAxisRange!.Value.Start.Sheet.Should().Be(reloadedSheet.Id,
             "the copied range must be remapped onto the reloaded sheet's id, not the parser's temporary sheet id");
 
-        // Resaving the reloaded workbook must re-emit <x14:dateAxis> too.
+        // Resaving the reloaded workbook must re-emit the dateAxis="1" attribute and <xm:f> too.
         using var resaved = new MemoryStream();
         new XlsxFileAdapter().Save(reloaded, resaved);
         resaved.Position = 0;
@@ -84,9 +86,11 @@ public sealed class R17_sparkline_load_Tests
             using var entryStream = entry.Open();
             var wsXml = XDocument.Load(entryStream);
             var grp = SparklineGroups(wsXml).Single();
-            grp.Elements().Should().Contain(e =>
-                string.Equals(e.Name.LocalName, "dateAxis", StringComparison.OrdinalIgnoreCase),
+            grp.Attribute("dateAxis")?.Value.Should().Be("1",
                 "resaving a reloaded workbook must not silently drop the date-axis setting");
+            grp.Elements().Should().Contain(e =>
+                string.Equals(e.Name.LocalName, "f", StringComparison.OrdinalIgnoreCase),
+                "resaving a reloaded workbook must not silently drop the date-axis range formula");
         }
     }
 }

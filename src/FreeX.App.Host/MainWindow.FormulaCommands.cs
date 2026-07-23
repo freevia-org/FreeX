@@ -547,6 +547,15 @@ public partial class MainWindow
 
     private void CalcNowBtn_Click(object sender, RoutedEventArgs e)
     {
+        // Ribbon "Calculate Now" and plain F9 share Excel's cheapest recalc scope: only dirty
+        // (volatile + affected) cells via the existing dependency graph. See
+        // RecalculateDirtyCells for why this must not rebuild the graph or evaluate every
+        // formula cell -- that full-workbook scope is reserved for Ctrl+Alt+F9 (CalcFullBtn_Click).
+        RecalculateDirtyCells();
+        UpdateViewport();
+    }
+    private void CalcFullBtn_Click(object sender, RoutedEventArgs e)
+    {
         RecalculateWorkbook();
         UpdateViewport();
     }

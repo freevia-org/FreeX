@@ -15,6 +15,10 @@ public static partial class PrintRenderer
     // overflow-into-blank-neighbor text the same way the interactive grid (GridView.Rendering.cs)
     // does, reading DisplayCell.Style — which the viewport already merges conditional formatting
     // into — so CF highlight/colorscale fills and dxf font colors print exactly as displayed.
+    // Data Bars and Icon Sets are separate DisplayCell fields (ConditionalDataBar/ConditionalIcon,
+    // not part of the merged Style), so they're drawn via the interactive grid's own
+    // GridView.DrawConditionalDataBar/DrawConditionalIcon helpers (made public for exactly this
+    // cross-assembly reuse) rather than being reimplemented here.
     // Page Setup > Sheet > "Black and white" (Sheet.PrintBlackAndWhite) is threaded in here the
     // same way RenderPageVisual (PrintRenderer.HeaderFooter.cs) already threads it to
     // DrawDisplayedComments: fills are suppressed (no color/pattern paint), and borders/gridlines
@@ -192,6 +196,28 @@ public static partial class PrintRenderer
                         rowHeight));
                 }
 
+                // Mirror GridView.Rendering.cs's own CF pass: data bars and icon sets are separate
+                // DisplayCell fields (ConditionalDataBar/ConditionalIcon) from the style-merged fill
+                // this method already prints via HasVisiblePrintedFill/DrawPrintedCellFill above, so
+                // they need their own draw calls here or Print/Print Preview silently omits them.
+                var textRect = cellRect;
+                if (cell.ConditionalDataBar is { } dataBar)
+                {
+                    GridView.DrawConditionalDataBar(dc, dataBar, cellRect);
+                }
+
+                if (cell.ConditionalIcon is { } icon)
+                {
+                    // Reading-order/RTL mirroring is not threaded here for the same reason noted on
+                    // DrawPrintedCellText below: PrintRenderer.HeaderFooter.cs doesn't pass the
+                    // sheet's IsRightToLeft flag down to this method.
+                    var iconLayout = GridView.CalculateConditionalIconCellLayout(cellRect, icon, isRightToLeft: false);
+                    GridView.DrawConditionalIcon(dc, icon, iconLayout.IconRect);
+                    if (!iconLayout.ShouldDrawText || string.IsNullOrEmpty(cell.DisplayText))
+                        continue;
+                    textRect = iconLayout.TextRect;
+                }
+
                 if (string.IsNullOrEmpty(cell.DisplayText))
                 {
                     continue;
@@ -207,7 +233,7 @@ public static partial class PrintRenderer
                     cell,
                     style,
                     displayText,
-                    cellRect,
+                    textRect,
                     measurement,
                     pageColumns,
                     colIndex,

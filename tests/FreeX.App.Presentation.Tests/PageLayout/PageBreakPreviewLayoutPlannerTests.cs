@@ -175,6 +175,107 @@ public sealed class PageBreakPreviewLayoutPlannerTests
     }
 
     [Fact]
+    public void Calculate_MultiArea_DoesNotMaskSecondPrintArea()
+    {
+        // R79-services-pagesetup-print-5-3: two non-adjacent print areas (A1:C5 and E1:G5, Excel's
+        // comma-separated _xlnm.Print_Area) must both render as live, printable regions. Only column D
+        // (the true gap between them) should be dimmed - area 2 (columns 5-7, x in [190, 310)) must never
+        // be covered by an "outside print area" mask, even though the single-GridRange overload (fed only
+        // the first area) would have dimmed it entirely.
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 5).Select(row => new RowMetric((uint)row, 20, (row - 1) * 20.0)).ToList(),
+            Enumerable.Range(1, 7).Select(col => new ColMetric((uint)col, 40, (col - 1) * 40.0)).ToList(),
+            null,
+            []);
+        var area1 = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 3));
+        var area2 = new GridRange(new CellAddress(sheetId, 1, 5), new CellAddress(sheetId, 5, 7));
+
+        var layout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            printAreas: [area1, area2],
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 310,
+            actualHeight: 118);
+
+        // Column D (x in [150, 190)) is the only region outside both print areas - no mask may extend
+        // into area 2's band (x >= 190).
+        layout.OutsidePrintAreaMasks.Should().NotBeEmpty();
+        layout.OutsidePrintAreaMasks.Should().OnlyContain(mask => mask.Right <= 190.0001);
+
+        // Both areas produced visible pages, with numbers continuing across areas (area 1 first).
+        layout.Pages.Should().HaveCountGreaterThan(1);
+        layout.Pages.Select(page => page.PageNumber).Should().BeInAscendingOrder();
+        layout.Pages.Select(page => page.PageNumber).Should().OnlyHaveUniqueItems();
+        layout.Pages.First().PageNumber.Should().Be(1);
+    }
+
+    [Fact]
+    public void Calculate_MultiArea_SingleElementListMatchesSingleAreaOverload()
+    {
+        // No-regression sibling: the multi-area overload's single-area fast path must produce identical
+        // geometry to the original single-GridRange Calculate (same call as
+        // Calculate_BuildsPagesAndAutomaticBreakLinesForPreviewRange above).
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 70).Select(row => new RowMetric((uint)row, (row - 1) * 20, 20)).ToList(),
+            Enumerable.Range(1, 20).Select(col => new ColMetric((uint)col, (col - 1) * 40, 40)).ToList(),
+            null,
+            []);
+        var previewRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 70, 20));
+
+        var singleAreaLayout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            previewRange,
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 900,
+            actualHeight: 1500);
+
+        var multiAreaLayout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            printAreas: [previewRange],
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 900,
+            actualHeight: 1500);
+
+        multiAreaLayout.Should().BeEquivalentTo(singleAreaLayout);
+    }
+
+    [Fact]
     public void CalculateWatermarkFontSize_ClampsToLegibleRange()
     {
         PageBreakPreviewLayoutPlanner.CalculateWatermarkFontSize(new LayoutRect(0, 0, 50, 50))

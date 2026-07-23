@@ -4878,6 +4878,12 @@ Use Show Calculation Steps to trace the formula, Ignore Error to suppress this i
   <data name="StatusBar_Average" xml:space="preserve">
     <value>Average</value>
   </data>
+  <data name="StatusBar_CalculateText" xml:space="preserve">
+    <value>Calculate</value>
+  </data>
+  <data name="StatusBar_CapsLock" xml:space="preserve">
+    <value>CAPS LOCK</value>
+  </data>
   <data name="StatusBar_CellMode" xml:space="preserve">
     <value>Cell Mode</value>
   </data>
@@ -4913,6 +4919,9 @@ Use Show Calculation Steps to trace the formula, Ignore Error to suppress this i
   </data>
   <data name="StatusBar_NumericalCount" xml:space="preserve">
     <value>Numerical Count</value>
+  </data>
+  <data name="StatusBar_NumLock" xml:space="preserve">
+    <value>NUM LOCK</value>
   </data>
   <data name="StatusBar_PageNumber" xml:space="preserve">
     <value>Page Number</value>

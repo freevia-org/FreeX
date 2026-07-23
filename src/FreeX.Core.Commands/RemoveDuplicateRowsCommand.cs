@@ -25,6 +25,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
+    private Dictionary<CellAddress, CellPhoneticGuide>? _phoneticGuideSnapshot;
     private HashSet<uint>? _filterHiddenRowsSnapshot;
     private HashSet<uint>? _valueFilterHiddenRowsSnapshot;
     // Snapshot of sheet.MergedRegions before Apply, used by Revert. A merge entirely contained
@@ -95,6 +96,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
             _hyperlinkSnapshot = [];
             _hyperlinkMetadataSnapshot = [];
             _richTextRunsSnapshot = [];
+            _phoneticGuideSnapshot = [];
             _filterHiddenRowsSnapshot = [];
             _valueFilterHiddenRowsSnapshot = [];
             // Nothing was moved/cleared, so no merge snapshot is taken — Revert must leave every
@@ -115,6 +117,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         _hyperlinkSnapshot = CaptureDictionary(sheet.Hyperlinks, allInRangeAddresses);
         _hyperlinkMetadataSnapshot = CaptureDictionary(sheet.HyperlinkMetadata, allInRangeAddresses);
         _richTextRunsSnapshot = CaptureDictionary(sheet.RichTextRuns, allInRangeAddresses);
+        _phoneticGuideSnapshot = CaptureDictionary(sheet.CellPhoneticGuides, allInRangeAddresses);
         _filterHiddenRowsSnapshot = CaptureHiddenRowSet(sheet.FilterHiddenRows, _range.Start.Row, _range.End.Row);
         _valueFilterHiddenRowsSnapshot = CaptureHiddenRowSet(sheet.ValueFilterHiddenRows, _range.Start.Row, _range.End.Row);
 
@@ -185,6 +188,10 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
                 // Rich text runs
                 if (_richTextRunsSnapshot.TryGetValue(source, out var richRuns))
                     sheet.RichTextRuns[target] = richRuns;
+
+                // Phonetic guide (furigana)
+                if (_phoneticGuideSnapshot.TryGetValue(source, out var phoneticGuide))
+                    sheet.CellPhoneticGuides[target] = phoneticGuide;
             }
 
             targetRow++;
@@ -293,6 +300,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, allInRangeAddresses);
         RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, allInRangeAddresses);
         RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot, allInRangeAddresses);
+        RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot, allInRangeAddresses);
 
         // Restore FilterHiddenRows/ValueFilterHiddenRows to their pre-Apply state (undoing the
         // lockstep permutation performed in Apply).
@@ -443,6 +451,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         sheet.Hyperlinks.Remove(address);
         sheet.HyperlinkMetadata.Remove(address);
         sheet.RichTextRuns.Remove(address);
+        sheet.CellPhoneticGuides.Remove(address);
     }
 
     private static void RestoreCellSnapshot(Sheet sheet, CellSnapshot snapshot)
