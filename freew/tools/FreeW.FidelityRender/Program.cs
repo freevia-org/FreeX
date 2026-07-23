@@ -1764,10 +1764,14 @@ static RenderTargetBitmap? RenderNoteRegion(
             });
         }
 
+        // Word uses the plan's short separator instead of a printable-width rule; its top lead is
+        // measured from the endnote fixture's body-to-note transition.
         panel.Children.Add(new System.Windows.Controls.Border
         {
-            Height  = 1,
-            Margin  = new System.Windows.Thickness(marginLeft, 2, marginRight, 2),
+            Height = 1,
+            Width = notePlan.SeparatorWidthDip,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            Margin = new System.Windows.Thickness(marginLeft, 7, marginRight, 2),
             Background = System.Windows.Media.Brushes.Black
         });
 
