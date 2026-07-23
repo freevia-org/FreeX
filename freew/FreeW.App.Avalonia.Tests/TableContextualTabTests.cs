@@ -138,6 +138,19 @@ public sealed class TableContextualTabTests
     }
 
     [Fact]
+    public void Table_shading_command_routes_to_the_shell_color_picker()
+    {
+        var opened = false;
+        var registry = FreeWAvaloniaRibbonCommands.Build(
+            new DocumentView(),
+            NoopCallbacks() with { OpenCellShadingDialog = () => opened = true });
+
+        Execute(registry, "freew.table-shading");
+
+        opened.Should().BeTrue("Table Design > Shading must open the color picker instead of applying a hidden default fill");
+    }
+
+    [Fact]
     public void Every_contextual_table_ribbon_command_is_registered()
     {
         // Verify that the existing registry-completeness guard passes with the new contextual tabs.
@@ -551,6 +564,59 @@ public sealed class TableContextualTabTests
 
         if (!ran) return;
         shadingAfter.Should().Be("#AABBCC", "SetCellShading must apply the hex color to the caret cell");
+    }
+
+    [Fact]
+    public async Task CellShadingDialog_apply_result_applies_the_chosen_palette_color()
+    {
+        string? shadingAfter = null;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var (view, idx, tbl) = MakeTableView();
+                view.PlaceCaretInCell(idx, row: 0, col: 0, paraIdx: 0, offset: 0);
+                var result = CellShadingDialogPlanner.SelectPaletteColor(2);
+
+                CellShadingDialog.ApplyResult(view, result);
+
+                shadingAfter = tbl.Rows[0].Cells[0].ShadingColorHex;
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        shadingAfter.Should().Be("#00B0F0", "the selected WPF palette color must be applied to the caret cell");
+    }
+
+    [Fact]
+    public async Task CellShadingDialog_cancel_is_a_no_op()
+    {
+        string? shadingAfter = null;
+        var canUndoAfter = true;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var (view, idx, tbl) = MakeTableView();
+                tbl.Rows[0].Cells[0].ShadingColorHex = "#123456";
+                view.PlaceCaretInCell(idx, row: 0, col: 0, paraIdx: 0, offset: 0);
+
+                CellShadingDialog.ApplyResult(view, CellShadingDialogPlanner.Cancel());
+
+                shadingAfter = tbl.Rows[0].Cells[0].ShadingColorHex;
+                canUndoAfter = view.CanUndo;
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        shadingAfter.Should().Be("#123456", "cancelling the picker must leave the existing fill untouched");
+        canUndoAfter.Should().BeFalse("cancelling the picker must not add an undo step");
     }
 
     [Fact]
