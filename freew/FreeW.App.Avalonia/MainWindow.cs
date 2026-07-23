@@ -445,6 +445,9 @@ public sealed class MainWindow : Window
     private Task OpenBordersAndShadingDialogAsync() =>
         BordersAndShadingDialog.ShowAndApplyAsync(this, _editor);
 
+    private Task OpenCellShadingDialogAsync() =>
+        CellShadingDialog.ShowAndApplyAsync(this, _editor);
+
     private Task OpenSortDialogAsync() =>
         SortDialog.ShowAndApplyAsync(this, _editor);
 
@@ -1527,6 +1530,7 @@ public sealed class MainWindow : Window
             },
             OpenTabsDialog: () => _ = OpenTabsDialogAsync(),
             OpenBordersAndShadingDialog: () => _ = OpenBordersAndShadingDialogAsync(),
+            OpenCellShadingDialog: () => _ = OpenCellShadingDialogAsync(),
             OpenSortDialog: () => _ = OpenSortDialogAsync(),
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
             OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
