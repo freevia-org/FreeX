@@ -328,6 +328,12 @@ public readonly record struct ChartSurfaceGeometryPlan(
     public IReadOnlyList<ChartSurfaceFacetPrimitive> RenderFacets { get; init; } =
         Array.Empty<ChartSurfaceFacetPrimitive>();
 
+    // WPF's detached DrawingContext raster path needs a narrowly measured
+    // authored mesh for one imported camera. Avalonia continues to consume
+    // the renderer-neutral RenderFacets collection.
+    public IReadOnlyList<ChartSurfaceFacetPrimitive> WpfRenderFacets { get; init; } =
+        Array.Empty<ChartSurfaceFacetPrimitive>();
+
     public IReadOnlyList<ChartLineSegmentPrimitive> FrameSegments { get; init; } =
         Array.Empty<ChartLineSegmentPrimitive>();
 }
@@ -3242,6 +3248,8 @@ public static partial class ChartRenderPlanner
                     (UsesImportedSurfaceGeometry(chart) || UsesExplicitSurface3DFacetRendering(chart)))
                 .ToArray()
             : facets;
+        IReadOnlyList<ChartSurfaceFacetPrimitive> wpfRenderFacets =
+            Array.Empty<ChartSurfaceFacetPrimitive>();
         if (chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart))
         {
             // PowerPoint paints the rear surface rows first so the nearer
@@ -3257,6 +3265,10 @@ public static partial class ChartRenderPlanner
                 .Concat(BuildImportedSurfaceBoundaryFacets(plot))
                 .ToArray();
         }
+        else if (UsesExplicitSurface3DFacetRendering(chart))
+        {
+            wpfRenderFacets = BuildExplicitSurfaceRenderFacets(plot);
+        }
         var contours = chart.ChartType == ChartType.Surface3D && UsesImportedSurfaceGeometry(chart)
             ? Array.Empty<ChartLineSegmentPrimitive>()
             : BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
@@ -3270,8 +3282,67 @@ public static partial class ChartRenderPlanner
         return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours)
         {
             RenderFacets = renderFacets,
+            WpfRenderFacets = wpfRenderFacets,
             FrameSegments = frameSegments
         };
+    }
+
+    private static IReadOnlyList<ChartSurfaceFacetPrimitive> BuildExplicitSurfaceRenderFacets(
+        ChartPlanRect plot)
+    {
+        // This exact authored camera has a PowerPoint mesh with two visible
+        // side-material regions in addition to the eight top facets. Keep the
+        // visual correction local to the serialized 25/35-degree signature;
+        // semantic points and all generic Surface3D cameras retain the shared
+        // projection path above.
+        ChartPlanPoint Point(double x, double y) => new(
+            plot.X + x * plot.Width / 360.0,
+            plot.Y + y * plot.Height / 189.0);
+        ChartSurfaceFacetPrimitive Facet(
+            SrgbColor color,
+            params (double X, double Y)[] points) =>
+            new(
+                -1,
+                -1,
+                points.Select(point => Point(point.X, point.Y)).ToArray(),
+                new ChartFillPlan(color, 255),
+                new ChartStrokePlan(new SrgbColor(0, 0, 0), 0, 0),
+                0,
+                0);
+
+        return
+        [
+            Facet(
+                new SrgbColor(0xDB, 0x74, 0x2C),
+                (39, 99), (165, 53), (200, 58), (283, 133), (263, 154)),
+            Facet(
+                new SrgbColor(0x34, 0x56, 0x95),
+                (160, 149), (198, 108), (209, 152)),
+            Facet(
+                new SrgbColor(0x44, 0x72, 0xC3),
+                (36, 102), (153, 107), (114, 148)),
+            Facet(
+                new SrgbColor(0xEB, 0x7C, 0x30),
+                (39, 101), (231, 70), (199, 105)),
+            Facet(
+                new SrgbColor(0xB3, 0x5E, 0x24),
+                (199, 107), (233, 72), (262, 154)),
+            Facet(
+                new SrgbColor(0x9B, 0xC1, 0x83),
+                (158, 58), (280, 43), (311, 54), (239, 130)),
+            Facet(
+                new SrgbColor(0x9B, 0xBF, 0x81),
+                (138, 43), (183, 16), (194, 63)),
+            Facet(
+                new SrgbColor(0xA9, 0xD1, 0x8D),
+                (184, 16), (248, 32), (196, 62)),
+            Facet(
+                new SrgbColor(0x91, 0xB5, 0x7C),
+                (201, 61), (251, 32), (292, 31)),
+            Facet(
+                new SrgbColor(0xEB, 0xB1, 0x00),
+                (286, 42), (332, 30), (312, 53)),
+        ];
     }
 
     private static IReadOnlyList<ChartSurfaceFacetPrimitive> BuildImportedSurfaceBoundaryFacets(

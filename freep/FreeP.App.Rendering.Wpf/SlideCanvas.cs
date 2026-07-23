@@ -1444,7 +1444,9 @@ public sealed class SlideCanvas : FrameworkElement
         if (scene.Surface is not { } plan)
             return;
 
-        var renderFacets = plan.RenderFacets.Count > 0 ? plan.RenderFacets : plan.Facets;
+        var renderFacets = plan.WpfRenderFacets.Count > 0
+            ? plan.WpfRenderFacets
+            : plan.RenderFacets.Count > 0 ? plan.RenderFacets : plan.Facets;
         foreach (var segment in plan.FrameSegments)
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
         foreach (var segment in plan.WireframeSegments)
