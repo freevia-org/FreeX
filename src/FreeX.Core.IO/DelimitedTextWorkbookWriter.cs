@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -28,8 +29,9 @@ internal static class DelimitedTextWorkbookWriter
     };
 
     /// <summary>
-    /// UTF-8 without a byte-order mark — the default delimited-text encoding (matches Excel's plain
-    /// "CSV (Comma delimited)" / "Text (Tab delimited)" output, which carry no BOM).
+    /// UTF-8 without a byte-order mark. Kept for callers that explicitly want UTF-8-no-BOM output;
+    /// the plain-text Save-As default is <see cref="ResolveAnsiEncoding"/> below (Excel's actual
+    /// plain "CSV (Comma delimited)" / "Text (Tab delimited)" encoding).
     /// </summary>
     public static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
@@ -40,7 +42,29 @@ internal static class DelimitedTextWorkbookWriter
     public static readonly Encoding Utf16LeBom = new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
 
     public static void Save(Workbook workbook, Stream stream, char delimiter) =>
-        Save(workbook, stream, delimiter, Utf8NoBom);
+        Save(workbook, stream, delimiter, ResolveAnsiEncoding());
+
+    /// <summary>
+    /// Resolves the OS ANSI code page (e.g. Windows-1252 on an English system, Shift-JIS/932 on a
+    /// Japanese one), no byte-order mark. Real Excel's plain "CSV (Comma delimited)" / "Text (Tab
+    /// delimited)" Save-As types predate Unicode and still write this legacy ANSI encoding, not
+    /// UTF-8 — that's precisely why Excel ships a separate "CSV UTF-8" menu entry (<see cref="Utf8Bom"/>)
+    /// for the modern Unicode-safe alternative. Writing UTF-8 here instead would mojibake non-ASCII
+    /// text when the file is later reopened by real Excel, which assumes ANSI for a BOM-less plain
+    /// CSV/TXT file rather than sniffing UTF-8.
+    /// </summary>
+    private static Encoding ResolveAnsiEncoding()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        try
+        {
+            return Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return Encoding.GetEncoding(1252);
+        }
+    }
 
     public static void Save(Workbook workbook, Stream stream, char delimiter, Encoding encoding)
     {
@@ -93,7 +117,7 @@ internal static class DelimitedTextWorkbookWriter
                 nextRow++;
             }
 
-            WriteRow(writer, delimiter, row.Cells, endCol);
+            WriteRow(writer, delimiter, row.Cells, endCol, workbook);
             nextRow = row.Row + 1;
         }
 
@@ -134,13 +158,13 @@ internal static class DelimitedTextWorkbookWriter
         public List<(uint Col, Cell Cell)> Cells { get; } = new(cellCapacity);
     }
 
-    private static void WriteRow(TextWriter writer, char delimiter, List<(uint Col, Cell Cell)> cells, uint endCol)
+    private static void WriteRow(TextWriter writer, char delimiter, List<(uint Col, Cell Cell)> cells, uint endCol, Workbook workbook)
     {
         var previousCol = 0u;
         foreach (var (col, cell) in cells)
         {
             WriteDelimiters(writer, delimiter, previousCol == 0 ? col - 1 : col - previousCol);
-            WriteCellField(writer, delimiter, cell);
+            WriteCellField(writer, delimiter, cell, workbook);
             previousCol = col;
         }
 
@@ -222,7 +246,7 @@ internal static class DelimitedTextWorkbookWriter
         writer.Write('"');
     }
 
-    private static void WriteCellField(TextWriter writer, char delimiter, Cell cell)
+    private static void WriteCellField(TextWriter writer, char delimiter, Cell cell, Workbook workbook)
     {
         // CSV has no formula syntax: real Excel's "CSV (Comma delimited)" / "CSV UTF-8" Save-As
         // always writes a formula cell's calculated result (Cell.Value), never the formula source
@@ -232,10 +256,10 @@ internal static class DelimitedTextWorkbookWriter
         switch (cell.Value)
         {
             case NumberValue number:
-                WriteNumberValue(writer, number.Value);
+                WriteNumberValue(writer, delimiter, cell, number.Value, workbook);
                 return;
             case DateTimeValue dateTime:
-                WriteDateTimeValue(writer, delimiter, dateTime);
+                WriteDateTimeValue(writer, delimiter, cell, dateTime, workbook);
                 return;
             case BoolValue boolean:
                 writer.Write(boolean.Value ? "TRUE" : "FALSE");
@@ -249,8 +273,29 @@ internal static class DelimitedTextWorkbookWriter
         }
     }
 
-    private static void WriteNumberValue(TextWriter writer, double value)
+    // Real Excel's plain-text Save-As types (CSV/TSV/TXT/PRN) write the cell's DISPLAYED text, not
+    // its raw stored value: a cell formatted "0%"/"$#,##0.00"/a custom date pattern exports "15%",
+    // "$1,234.50", "Wednesday, July 22, 2026", etc. — matching what the grid shows and what the PDF
+    // export path already does via NumberFormatter.FormatWithColor (see WorkbookPdfContentBuilder).
+    // A cell left at the default "General" format has no explicit numeric/date shape to honor, so
+    // it keeps the existing raw-value rendering below (round-trip invariant numbers, ISO dates).
+    private static bool TryGetAppliedNumberFormat(Cell cell, Workbook workbook, out string numberFormat)
     {
+        numberFormat = workbook.GetStyle(cell.StyleId).NumberFormat;
+        return !string.IsNullOrEmpty(numberFormat) &&
+               !string.Equals(numberFormat, "General", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void WriteNumberValue(TextWriter writer, char delimiter, Cell cell, double value, Workbook workbook)
+    {
+        if (TryGetAppliedNumberFormat(cell, workbook, out var numberFormat))
+        {
+            var formatted = NumberFormatter.FormatWithColor(
+                cell.Value, numberFormat, workbook.IndexedColors, workbook.Theme, workbook.Uses1904DateSystem).Text;
+            WriteField(writer, delimiter, formatted, isTextValue: false);
+            return;
+        }
+
         Span<char> buffer = stackalloc char[32];
         if (value.TryFormat(buffer, out var charsWritten, provider: CultureInfo.InvariantCulture))
         {
@@ -261,11 +306,19 @@ internal static class DelimitedTextWorkbookWriter
         writer.Write(value.ToString(CultureInfo.InvariantCulture));
     }
 
-    private static void WriteDateTimeValue(TextWriter writer, char delimiter, DateTimeValue value)
+    private static void WriteDateTimeValue(TextWriter writer, char delimiter, Cell cell, DateTimeValue value, Workbook workbook)
     {
-        if (TryFormatDateTimeValue(value, out var formatted))
+        if (TryGetAppliedNumberFormat(cell, workbook, out var numberFormat))
         {
+            var formatted = NumberFormatter.FormatWithColor(
+                cell.Value, numberFormat, workbook.IndexedColors, workbook.Theme, workbook.Uses1904DateSystem).Text;
             WriteField(writer, delimiter, formatted, isTextValue: false);
+            return;
+        }
+
+        if (TryFormatDateTimeValue(value, out var isoFormatted))
+        {
+            WriteField(writer, delimiter, isoFormatted, isTextValue: false);
             return;
         }
 

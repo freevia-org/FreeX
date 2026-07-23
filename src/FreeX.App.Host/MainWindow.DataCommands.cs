@@ -735,7 +735,7 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new SubtotalDialog(SubtotalDialog.BuildColumnChoices(sheet, sourceRange)) { Owner = this };
+        var dialog = new SubtotalDialog(SubtotalDialog.BuildColumnChoices(sheet, sourceRange), sheet.OutlineSummaryBelow ?? true) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         if (dialog.Result.Action == SubtotalDialogAction.RemoveAll)

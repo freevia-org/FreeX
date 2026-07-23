@@ -383,6 +383,14 @@ public partial class MainWindow
             PivotTableAnalyzeTab.Visibility = visibility;
         if (PivotTableDesignTab is not null)
             PivotTableDesignTab.Visibility = visibility;
+
+        if (!visible &&
+            RibbonTabs is not null &&
+            (ReferenceEquals(RibbonTabs.SelectedItem, PivotTableAnalyzeTab) ||
+             ReferenceEquals(RibbonTabs.SelectedItem, PivotTableDesignTab)))
+        {
+            RibbonTabs.SelectedIndex = 1;
+        }
     }
 
     private void PivotFieldListBtn_Click(object sender, RoutedEventArgs e)

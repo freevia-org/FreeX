@@ -222,6 +222,15 @@ public partial class GridView
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         TrimRenderCachesIfOversized();
         var gridPen = ShowGridLines ? GridPen : null;
+        // Shared-edge border precedence (finding 1): resolve every split-pane cell's borders
+        // against its actual neighbor's opposing edge -- built across ALL split quadrants at
+        // once (they share one combined cell list, so a top-right cell can resolve against its
+        // top-left neighbor at the vertical divider, etc.) -- instead of each quadrant painting
+        // its own 4 edges unconditionally and whichever DisplayCell is visited last by
+        // SplitPaneCellLayoutPlanner.VisitLayouts silently winning, matching the main pass
+        // (RenderCells) and Avalonia's split rendering (which funnels every quadrant through the
+        // same ResolveCellBorderNeighborEdges-backed CreateCell path).
+        var splitBorderStyleLookup = BuildBorderStyleLookup(Viewport!.SplitPanes!.Cells);
         var consumer = new SplitPaneCellRenderConsumer(
             this,
             dc,
@@ -230,7 +239,8 @@ public partial class GridView
             bottomLeftClip,
             bottomRightClip,
             pixelsPerDip,
-            gridPen);
+            gridPen,
+            splitBorderStyleLookup);
         SplitPaneCellLayoutPlanner.VisitLayouts(Viewport, MergedRegions, EditingCell, ref consumer);
     }
 
@@ -238,7 +248,8 @@ public partial class GridView
         DrawingContext dc,
         SplitPaneCellLayout layout,
         Pen? gridPen,
-        double pixelsPerDip)
+        double pixelsPerDip,
+        Dictionary<(uint Row, uint Col), CellStyle>? borderStyleLookup)
     {
         var cell = layout.Cell;
         var rect = layout.Rect;
@@ -265,10 +276,40 @@ public partial class GridView
 
         if (style is not null && HasVisibleCellBorder(style))
         {
-            DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), _brushCache, _borderPenCache);
-            DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
-            DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), _brushCache, _borderPenCache);
-            DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
+            // Shared-edge precedence (finding 1): resolve each edge against the ACTUAL
+            // neighboring cell's opposing border via the same heaviest-wins rule the main pass
+            // uses (RenderCells' borderStyleLookup + ResolveBorderEdgeWinner), instead of always
+            // painting this cell's own border last-drawn-wins-over -- otherwise
+            // SplitPaneCellLayoutPlanner's iteration order (later cell overwrites the earlier
+            // one) would silently downgrade e.g. a Double edge to a neighbor's plain Thin.
+            var neighborBottom = borderStyleLookup is not null &&
+                borderStyleLookup.TryGetValue((cell.Row - 1, cell.Col), out var splitAboveStyle)
+                ? splitAboveStyle.BorderBottom
+                : default;
+            var topWinner = ResolveBorderEdgeWinner(style.BorderTop, neighborBottom);
+            DrawBorderEdge(dc, topWinner, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), _brushCache, _borderPenCache);
+
+            var neighborTop = borderStyleLookup is not null &&
+                borderStyleLookup.TryGetValue((cell.Row + 1, cell.Col), out var splitBelowStyle)
+                ? splitBelowStyle.BorderTop
+                : default;
+            var bottomWinner = ResolveBorderEdgeWinner(style.BorderBottom, neighborTop);
+            DrawBorderEdge(dc, bottomWinner, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
+
+            var neighborRight = borderStyleLookup is not null &&
+                borderStyleLookup.TryGetValue((cell.Row, cell.Col - 1), out var splitLeftStyle)
+                ? splitLeftStyle.BorderRight
+                : default;
+            var leftWinner = ResolveBorderEdgeWinner(style.BorderLeft, neighborRight);
+            DrawBorderEdge(dc, leftWinner, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), _brushCache, _borderPenCache);
+
+            var neighborLeft = borderStyleLookup is not null &&
+                borderStyleLookup.TryGetValue((cell.Row, cell.Col + 1), out var splitRightStyle)
+                ? splitRightStyle.BorderLeft
+                : default;
+            var rightWinner = ResolveBorderEdgeWinner(style.BorderRight, neighborLeft);
+            DrawBorderEdge(dc, rightWinner, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
+
             // Diagonal borders: drawn across cell interior (not edge-aligned), so no pen cache — these are rare
             if (style.BorderDiagonalDown.Style != BorderStyle.None)
                 DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache);
@@ -432,7 +473,8 @@ public partial class GridView
         RectangleGeometry bottomLeftClip,
         RectangleGeometry bottomRightClip,
         double pixelsPerDip,
-        Pen? gridPen) : ISplitPaneCellLayoutConsumer
+        Pen? gridPen,
+        Dictionary<(uint Row, uint Col), CellStyle>? borderStyleLookup) : ISplitPaneCellLayoutConsumer
     {
         public void AcceptLayout(SplitPaneCellLayout layout)
         {
@@ -446,7 +488,7 @@ public partial class GridView
                 return;
 
             dc.PushClip(clipGeometry);
-            grid.RenderSplitPaneCell(dc, layout, gridPen, pixelsPerDip);
+            grid.RenderSplitPaneCell(dc, layout, gridPen, pixelsPerDip, borderStyleLookup);
             dc.Pop();
         }
     }
@@ -590,13 +632,7 @@ public partial class GridView
         // Build a lookup (by row/col) of every cell that carries a visible border, so that
         // adjacent-edge conflicts (finding 2-4) and merge-membership (finding 2-3) can be
         // resolved from the actual neighboring style rather than from draw order.
-        Dictionary<(uint Row, uint Col), CellStyle>? borderStyleLookup = null;
-        foreach (var borderCell in viewport.Cells)
-        {
-            if (borderCell.Style is not { } borderCellStyle || !HasVisibleCellBorder(borderCellStyle)) continue;
-            borderStyleLookup ??= new Dictionary<(uint Row, uint Col), CellStyle>();
-            borderStyleLookup[(borderCell.Row, borderCell.Col)] = borderCellStyle;
-        }
+        var borderStyleLookup = BuildBorderStyleLookup(viewport.Cells);
 
         foreach (var cell in viewport.Cells)
         {
@@ -682,6 +718,56 @@ public partial class GridView
                         DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(x, y), new Point(x + diagonalW, y + diagonalH), _brushCache);
                     if (style.BorderDiagonalUp.Style != BorderStyle.None)
                         DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(x, y + diagonalH), new Point(x + diagonalW, y), _brushCache);
+                }
+            }
+        }
+
+        // Pass 2c: viewport-boundary shared edges whose authoring cell has scrolled just off the
+        // visible grid (finding 2). The edge is still physically on-screen (it sits exactly on
+        // the boundary row/column's own top/bottom/left/right pixel edge), so it must render
+        // identically regardless of scroll position, matching Avalonia's
+        // ResolveCellBorderNeighborEdges (which resolves directly against the sheet, never a
+        // scrolled viewport window). ViewportService.GetViewport contributes these off-screen
+        // authors via BorderFringe purely for this resolution; resolve each fringe edge against
+        // whatever the boundary cell itself authors (if anything) with the same heaviest-wins
+        // rule as Pass 2 above, so a heavier off-screen border is never silently downgraded.
+        if (viewport.BorderFringe is { Count: > 0 } borderFringe)
+        {
+            foreach (var (fringeKey, edges) in borderFringe)
+            {
+                var (fringeRow, fringeCol) = fringeKey;
+                if (!rowLookupAll.TryGetValue(fringeRow, out var fringeRowMetric)) continue;
+                if (!colLookupAll.TryGetValue(fringeCol, out var fringeColMetric)) continue;
+
+                double fx = fringeColMetric.LeftOffset + rowHeaderWidth;
+                double fy = fringeRowMetric.TopOffset + columnHeaderHeight;
+                double fw = fringeColMetric.Width;
+                double fh = fringeRowMetric.Height;
+                if (!IntersectsVisibleGrid(new Rect(fx, fy, fw, fh), visibleLeft, visibleTop, visibleRight, visibleBottom))
+                    continue;
+
+                var ownStyle = borderStyleLookup is not null && borderStyleLookup.TryGetValue(fringeKey, out var s) ? s : null;
+                var fringeMerge = hasMergedSurfaces ? FindMerge(fringeRow, fringeCol) : null;
+
+                if (edges.Top is { } topEdge && (fringeMerge is not { } mTop || fringeRow == mTop.Start.Row))
+                {
+                    var winner = ResolveBorderEdgeWinner(ownStyle?.BorderTop ?? default, topEdge);
+                    DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx + fw, fy), _brushCache, _borderPenCache);
+                }
+                if (edges.Bottom is { } bottomEdge && (fringeMerge is not { } mBottom || fringeRow == mBottom.End.Row))
+                {
+                    var winner = ResolveBorderEdgeWinner(ownStyle?.BorderBottom ?? default, bottomEdge);
+                    DrawBorderEdge(dc, winner, new Point(fx, fy + fh), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache);
+                }
+                if (edges.Left is { } leftEdge && (fringeMerge is not { } mLeft || fringeCol == mLeft.Start.Col))
+                {
+                    var winner = ResolveBorderEdgeWinner(ownStyle?.BorderLeft ?? default, leftEdge);
+                    DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx, fy + fh), _brushCache, _borderPenCache);
+                }
+                if (edges.Right is { } rightEdge && (fringeMerge is not { } mRight || fringeCol == mRight.End.Col))
+                {
+                    var winner = ResolveBorderEdgeWinner(ownStyle?.BorderRight ?? default, rightEdge);
+                    DrawBorderEdge(dc, winner, new Point(fx + fw, fy), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache);
                 }
             }
         }
@@ -1162,6 +1248,27 @@ public partial class GridView
         }
 
         return lookup ?? EmptyRenderCellStyleLookup;
+    }
+
+    /// <summary>
+    /// Lookup (by row/col) of every cell in <paramref name="cells"/> that carries a visible
+    /// border, so adjacent-edge conflicts and merge-membership can be resolved from the actual
+    /// neighboring style rather than from draw order. Shared by the main pass (<see
+    /// cref="RenderCells"/>, over <c>viewport.Cells</c>) and the split-pane pass (<see
+    /// cref="RenderSplitPaneCells"/>, over <c>viewport.SplitPanes.Cells</c>) so both resolve
+    /// shared edges identically instead of the split quadrants painting unconditionally.
+    /// </summary>
+    private static Dictionary<(uint Row, uint Col), CellStyle>? BuildBorderStyleLookup(IReadOnlyList<DisplayCell> cells)
+    {
+        Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;
+        foreach (var cell in cells)
+        {
+            if (cell.Style is not { } style || !HasVisibleCellBorder(style)) continue;
+            lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>();
+            lookup[(cell.Row, cell.Col)] = style;
+        }
+
+        return lookup;
     }
 
     private RenderCellLookupCache GetRenderCellLookups(ViewportModel viewport)

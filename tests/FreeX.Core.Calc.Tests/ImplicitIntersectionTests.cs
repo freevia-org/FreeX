@@ -1,4 +1,5 @@
 using FreeX.Core.Calc;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FluentAssertions;
 
@@ -57,5 +58,47 @@ public class ImplicitIntersectionTests
         ImplicitIntersection.Resolve(range, 4, 2).Should().Be(new NumberValue(20)); // cells[2,0]
         ImplicitIntersection.Resolve(range, 5, 3).Should().Be(ErrorValue.Value);    // row off-axis
         ImplicitIntersection.Resolve(range, 3, 5).Should().Be(ErrorValue.Value);    // col off-axis
+    }
+
+    // R80-formula-array-cse-5-1: the AST-aware Resolve(FormulaNode, ...) overload used by RecalcEngine for
+    // a legacy (non-CSE) Implicit-mode formula. A computed/constant array with no reference operand
+    // anywhere in the formula -- e.g. "={1,2,3}" -- has no worksheet position to intersect against: its
+    // RangeValue defaults StartRow=1/StartCol=1 (see ScalarValue.cs / EvaluateArrayConstant), which can
+    // coincidentally collide with the formula cell's own row/col. Excel always shows the top-left element
+    // regardless of the formula cell's position.
+    [Fact]
+    public void ArrayConstantFormula_ResolvesToTopLeft_RegardlessOfFormulaCellPosition()
+    {
+        var cells = new ScalarValue[1, 3] { { new NumberValue(1), new NumberValue(2), new NumberValue(3) } };
+        var range = new RangeValue(cells, 1, 1); // IsSheetReference left false (default)
+        var arrayConstantFormula = new ArrayConstantNode(new[] { new FormulaNode[] { new NumberNode(1), new NumberNode(2), new NumberNode(3) } });
+
+        // Formula cell C1 (row 1, col 3): coincidentally collides with cells[0,2] == 3 under naive
+        // coordinate intersection, but Excel (and now FreeX) shows the top-left element, 1.
+        ImplicitIntersection.Resolve(arrayConstantFormula, range, 1, 3).Should().Be(new NumberValue(1));
+
+        // Formula cell D1 (row 1, col 4): naive coordinate intersection would be out of range (#VALUE!),
+        // but Excel still shows the top-left element, 1, regardless of the formula's position.
+        ImplicitIntersection.Resolve(arrayConstantFormula, range, 1, 4).Should().Be(new NumberValue(1));
+    }
+
+    // No-regression sibling: when the formula's AST DOES contain a genuine reference (even nested inside
+    // arithmetic, e.g. "=A7:J7*B15"), the resulting computed RangeValue's coordinate frame is inherited
+    // from that real reference, so positional row/col intersection must still apply -- matching classic
+    // Excel's automatic implicit intersection (and ImplicitIntersectionEvalTests's equivalent end-to-end
+    // coverage). This must not regress to top-left-always just because the final RangeValue is a
+    // synthesized/computed result (IsSheetReference == false after arithmetic broadcast).
+    [Fact]
+    public void FormulaContainingReference_StillUsesPositionalIntersection_NotTopLeft()
+    {
+        var range = RowRange(1, 1, 1, 2, 3); // e.g. the computed result of "=A1:C1*1", positioned at A1:C1
+        var referenceContainingFormula = new BinaryOpNode(
+            new RangeRefNode(new CellRefNode("A", 1), new CellRefNode("C", 1)),
+            BinaryOperator.Multiply,
+            new NumberNode(1));
+
+        ImplicitIntersection.Resolve(referenceContainingFormula, range, 1, 3).Should().Be(new NumberValue(3)); // col C -> third element
+        ImplicitIntersection.Resolve(referenceContainingFormula, range, 1, 1).Should().Be(new NumberValue(1)); // col A -> first element
+        ImplicitIntersection.Resolve(referenceContainingFormula, range, 1, 4).Should().Be(ErrorValue.Value);   // off-axis -> #VALUE!
     }
 }

@@ -294,14 +294,43 @@ public sealed class RecalcEngine
                         spillTargetsMayHaveChanged = true;
                         CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
                     }
-                    cell.Value = ImplicitIntersection.Resolve(implicitRange, addr.Row, addr.Col);
+                    cell.Value = ImplicitIntersection.Resolve(cachedAst, implicitRange, addr.Row, addr.Col);
                     _spillBlockedAnchors.Remove(addr);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
                 else if (result is RangeValue rv)
                 {
                     sheet.ClearSpillRange(addr);
-                    if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
+                    if (cell.LegacyArrayRows > 0)
+                    {
+                        // Legacy multi-cell CSE array formula (Ctrl+Shift+Enter; <f t="array" ref="...">):
+                        // confined to its originally declared ref extent. Unlike a modern dynamic-array
+                        // formula it never negotiates with neighboring cells -- no #SPILL!, and it never
+                        // touches a cell outside the declared box. A natural result larger than the
+                        // declared extent has its extra values silently dropped; a natural result smaller
+                        // than the declared extent leaves the uncovered declared cells as #N/A. See
+                        // R80-formula-array-cse-5-2.
+                        var declaredRows = (int)cell.LegacyArrayRows;
+                        var declaredCols = (int)cell.LegacyArrayCols;
+                        if (declaredRows != rv.RowCount || declaredCols != rv.ColCount)
+                        {
+                            var confinedCells = new ScalarValue[declaredRows, declaredCols];
+                            for (var r = 0; r < declaredRows; r++)
+                                for (var c = 0; c < declaredCols; c++)
+                                    confinedCells[r, c] = r < rv.RowCount && c < rv.ColCount
+                                        ? rv.Cells[r, c]
+                                        : ErrorValue.NA;
+                            rv = new RangeValue(confinedCells);
+                        }
+                        cell.Value = rv.Cells[0, 0];
+                        sheet.SetSpillRange(addr, rv);
+                        spillTargetsMayHaveChanged = true;
+                        if (hadSpill)
+                            CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, rv.RowCount, rv.ColCount, ref vacatedSpillCells);
+                        _spillBlockedAnchors.Remove(addr);
+                        AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
+                    }
+                    else if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
                     {
                         cell.Value = ErrorValue.Spill;
                         if (hadSpill)

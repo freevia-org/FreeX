@@ -99,7 +99,26 @@ public sealed record ViewportModel(
     IReadOnlyList<ChartDataCell> ChartDataCells = null!,
     IReadOnlyList<DrawingObjectBounds> DrawingObjects = null!,
     IReadOnlyList<OutlineGroupRange> RowOutlineGroups = null!,
-    IReadOnlyList<OutlineGroupRange> ColumnOutlineGroups = null!);
+    IReadOnlyList<OutlineGroupRange> ColumnOutlineGroups = null!,
+    IReadOnlyDictionary<(uint Row, uint Col), BorderFringeEdges>? BorderFringe = null);
+
+/// <summary>
+/// Borders authored on a cell that has scrolled just off one edge of the rendered viewport
+/// window (<see cref="ViewportModel.RowMetrics"/>/<see cref="ViewportModel.ColMetrics"/>),
+/// keyed by the still-visible boundary cell whose physical edge it shares. Real Excel renders a
+/// shared-edge border identically regardless of scroll position; without this, the renderer's
+/// own neighbor-precedence lookup (which is built only from the currently windowed
+/// <see cref="ViewportModel.Cells"/>) can never see that off-screen neighbor's border, so the
+/// line silently disappears the instant its authoring cell scrolls out of view. Populated only
+/// for the four true viewport edges (never for an interior scroll boundary, which always has
+/// both neighboring cells loaded), and only when the off-screen neighbor actually carries a
+/// border on the facing edge -- so this is null/empty in the overwhelmingly common case.
+/// </summary>
+public sealed record BorderFringeEdges(
+    CellBorder? Top = null,
+    CellBorder? Bottom = null,
+    CellBorder? Left = null,
+    CellBorder? Right = null);
 
 public sealed record OutlineGroupRange(
     int Level,

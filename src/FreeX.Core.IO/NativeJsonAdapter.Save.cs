@@ -299,6 +299,7 @@ public sealed partial class NativeJsonAdapter
                     .Select(pair => ToHyperlinkDto(s, pair))
                     .ToList(),
                 RichTextRuns = ToRichTextRunDtos(s),
+                CellPhoneticGuides = ToPhoneticGuideDtos(s),
                 AllowEditRanges = s.AllowEditRanges
                     .Where(range => IsValidRangeOnSheet(range, s.Id))
                     .Select(range => range.ToString())

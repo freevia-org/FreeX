@@ -1025,7 +1025,8 @@ public sealed class Parser
             throw new FormulaParseException(
                 $"Expected number after array constant sign at position {Current.Position}");
 
-        var value = double.Parse(Advance().Value, System.Globalization.CultureInfo.InvariantCulture);
+        var value = CapLiteralToExcel15SigDigits(
+            double.Parse(Advance().Value, System.Globalization.CultureInfo.InvariantCulture));
         return new NumberNode(negative ? -value : value);
     }
 

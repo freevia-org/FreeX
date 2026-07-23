@@ -14,6 +14,8 @@ public sealed partial class NativeJsonAdapter
             var chart = new ChartModel
             {
                 Name = chartDto.Name,
+                AltTextTitle = chartDto.AltTextTitle,
+                AltTextDescription = chartDto.AltTextDescription,
                 Type = chartDto.Type,
                 DataRange = GridRange.Parse(chartDto.DataRange, sheetId),
                 IsVisible = chartDto.IsVisible,

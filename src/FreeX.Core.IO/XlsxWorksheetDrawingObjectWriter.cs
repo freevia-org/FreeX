@@ -329,13 +329,38 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XAttribute("Id", imageRelId),
                 new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
                 new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, mediaPath))));
+
+            // R80-io-drawing-image-5-3: re-emit the vector .svg part alongside the PNG fallback (with
+            // the asvg:svgBlip extension pointing at it) so a picture inserted via Excel's Insert >
+            // Icons/SVG keeps its vector editability instead of permanently downgrading to a flat
+            // raster the moment it is edited (crop/rotate/recolor/resize all clear IsSourceLoaded and
+            // route the picture through this fresh-emission path).
+            string? svgRelId = null;
+            if (picture.SvgImageBytes is { Length: > 0 })
+            {
+                var svgMediaPath = $"xl/media/freexPictureSvg{currentPictureIndex}.svg";
+                archive.GetEntry(svgMediaPath)?.Delete();
+                var svgMediaEntry = archive.CreateEntry(svgMediaPath);
+                using (var svgMediaStream = svgMediaEntry.Open())
+                    svgMediaStream.Write(picture.SvgImageBytes);
+                XlsxPackageXmlEditor.EnsureDefaultContentType(archive, "svg", "image/svg+xml");
+
+                svgRelId = $"rIdFreeXPictureSvg{currentPictureIndex}";
+                drawingRelsXml.Root!.Add(new XElement(
+                    packageRelNs + "Relationship",
+                    new XAttribute("Id", svgRelId),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                    new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, svgMediaPath))));
+            }
+
             anchors.Add(ToOneCellPictureAnchor(
                 picture,
                 currentPictureIndex,
                 imageRelId,
                 spreadsheetDrawingNs,
                 drawingNs,
-                relNs));
+                relNs,
+                svgRelId));
         }
 
         void AddTextBoxAnchor(TextBoxModel textBox)
@@ -396,7 +421,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         string imageRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
-        XNamespace relNs) =>
+        XNamespace relNs,
+        string? svgRelId = null) =>
         new(spreadsheetDrawingNs + "oneCellAnchor",
             new XElement(spreadsheetDrawingNs + "from",
                 new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)picture.Anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
@@ -415,7 +441,19 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText)),
                     new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                 new XElement(spreadsheetDrawingNs + "blipFill",
-                    new XElement(drawingNs + "blip", new XAttribute(relNs + "embed", imageRelId)),
+                    new XElement(drawingNs + "blip",
+                        new XAttribute(relNs + "embed", imageRelId),
+                        // R80-io-drawing-image-5-3: the Microsoft SVG extension -- keeps the picture
+                        // editable as a vector (recolor, "Convert to Shape") in Excel instead of only
+                        // ever carrying the PNG fallback embedded above.
+                        svgRelId is null
+                            ? null
+                            : new XElement(drawingNs + "extLst",
+                                new XElement(drawingNs + "ext",
+                                    new XAttribute("uri", "{96DAC541-7B7A-43D3-8B79-37D633B846F1}"),
+                                    new XElement(XNamespace.Get("http://schemas.microsoft.com/office/drawing/2016/SVG/main") + "svgBlip",
+                                        new XAttribute(XNamespace.Xmlns + "asvg", "http://schemas.microsoft.com/office/drawing/2016/SVG/main"),
+                                        new XAttribute(relNs + "embed", svgRelId))))),
                     HasPictureCrop(picture)
                         ? new XElement(drawingNs + "srcRect",
                             new XAttribute("l", ToSourceRectanglePercent(picture.CropLeft)),
@@ -638,10 +676,13 @@ internal static class XlsxWorksheetDrawingObjectWriter
     }
 
     private static bool HasPictureCrop(PictureModel picture) =>
-        picture.CropLeft > 0 ||
-        picture.CropTop > 0 ||
-        picture.CropRight > 0 ||
-        picture.CropBottom > 0;
+        // R80-io-drawing-image-5-2: a NEGATIVE crop inset (Excel's "crop past the image edge"
+        // outward padding) is also a real crop that must be written -- checking only "> 0" treated a
+        // negative-only crop as "no crop" and silently dropped the whole srcRect on save.
+        picture.CropLeft != 0 ||
+        picture.CropTop != 0 ||
+        picture.CropRight != 0 ||
+        picture.CropBottom != 0;
 
     private static Dictionary<Guid, T> CreateObjectMap<T>(
         IReadOnlyList<T> items,
@@ -655,7 +696,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
     }
 
     private static string ToSourceRectanglePercent(double ratio) =>
-        ((int)Math.Round(Math.Clamp(ratio, 0, 1) * 100000d)).ToString(CultureInfo.InvariantCulture);
+        // R80-io-drawing-image-5-2: preserve negative (outward-crop/padding) ratios -- only clamp the
+        // magnitude to Excel's ±100% bound, matching ReadSourceRectangleRatio's [-1, 1] range.
+        ((int)Math.Round(Math.Clamp(ratio, -1, 1) * 100000d)).ToString(CultureInfo.InvariantCulture);
 
     private static XElement ToOneCellTextBoxAnchor(
         TextBoxModel textBox,

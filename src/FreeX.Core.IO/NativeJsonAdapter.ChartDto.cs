@@ -7,6 +7,12 @@ public sealed partial class NativeJsonAdapter
     private class ChartDto
     {
         public string? Name { get; set; }
+
+        /// <summary>R80-app-accessibility-a11y-5-1: see <see cref="ChartModel.AltTextTitle"/>.</summary>
+        public string? AltTextTitle { get; set; }
+
+        /// <summary>R80-app-accessibility-a11y-5-1: see <see cref="ChartModel.AltTextDescription"/>.</summary>
+        public string? AltTextDescription { get; set; }
         public ChartType Type { get; set; } = ChartType.Column;
         public string? DataRange { get; set; }
 

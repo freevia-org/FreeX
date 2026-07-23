@@ -463,6 +463,8 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock _detailText = new();
     private readonly TextBlock _statusText = new();
     private readonly TextBlock _selectionStatsText = new();
+    private readonly TextBlock _statusCapsLockText = new();
+    private readonly TextBlock _statusNumLockText = new();
     private readonly TextBlock _zoomText = new();
     private readonly ToggleButton _statusNormalViewButton = new();
     private readonly ToggleButton _statusPageLayoutViewButton = new();
@@ -1633,6 +1635,15 @@ public sealed partial class MainWindow : Window
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling toggle states.
                     ["View Side by Side"] = GetSideBySideRibbonState,
                     ["Synchronous Scrolling"] = GetSynchronousScrollingRibbonState,
+                    // Table Design ▸ Style Options toggle checked-state (mirrors the WPF host's
+                    // _ribbonState.SetChecked calls in RefreshTableContextualTab): each toggle reports
+                    // whether the active cell's table currently has that flag on.
+                    ["tableDesign.totalRow"] = () => GetTableStyleOptionRibbonState(t => t.TotalsRowShown),
+                    ["tableDesign.firstColumn"] = () => GetTableStyleOptionRibbonState(t => t.ShowFirstColumn),
+                    ["tableDesign.lastColumn"] = () => GetTableStyleOptionRibbonState(t => t.ShowLastColumn),
+                    ["tableDesign.bandedRows"] = () => GetTableStyleOptionRibbonState(t => t.ShowRowStripes),
+                    ["tableDesign.bandedColumns"] = () => GetTableStyleOptionRibbonState(t => t.ShowColumnStripes),
+                    ["tableDesign.filterButton"] = () => GetTableStyleOptionRibbonState(t => t.HasAutoFilter),
                 },
             };
 
@@ -2979,6 +2990,26 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
         AutomationProperties.SetHelpText(_selectionStatsText, "Shows statistics for the current selection.");
 
+        // CAPS LOCK / NUM LOCK warning indicators (parity with the WPF host's StatusCapsLockText /
+        // StatusNumLockText): hidden until RefreshKeyLockIndicators finds the corresponding key toggled on.
+        _statusCapsLockText.FontSize = 12;
+        _statusCapsLockText.Foreground = StatusBarForeground;
+        _statusCapsLockText.Text = UiText.Get("StatusBar_CapsLock");
+        _statusCapsLockText.Margin = new Thickness(0, 0, 10, 0);
+        _statusCapsLockText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _statusCapsLockText.IsVisible = false;
+        AutomationProperties.SetAutomationId(_statusCapsLockText, "StatusCapsLockText");
+        AutomationProperties.SetName(_statusCapsLockText, UiText.Get("StatusBar_CapsLock"));
+
+        _statusNumLockText.FontSize = 12;
+        _statusNumLockText.Foreground = StatusBarForeground;
+        _statusNumLockText.Text = UiText.Get("StatusBar_NumLock");
+        _statusNumLockText.Margin = new Thickness(0, 0, 10, 0);
+        _statusNumLockText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _statusNumLockText.IsVisible = false;
+        AutomationProperties.SetAutomationId(_statusNumLockText, "StatusNumLockText");
+        AutomationProperties.SetName(_statusNumLockText, UiText.Get("StatusBar_NumLock"));
+
         _zoomText.FontSize = 12;
         _zoomText.FontWeight = FontWeight.SemiBold;
         _zoomText.Foreground = StatusBarForeground;
@@ -3574,6 +3605,8 @@ public sealed partial class MainWindow : Window
         var statusBarCustomizeMenu = BuildStatusBarCustomizeContextMenu();
         _statusText.ContextMenu = statusBarCustomizeMenu;
         _selectionStatsText.ContextMenu = statusBarCustomizeMenu;
+        _statusCapsLockText.ContextMenu = statusBarCustomizeMenu;
+        _statusNumLockText.ContextMenu = statusBarCustomizeMenu;
         _zoomText.ContextMenu = statusBarCustomizeMenu;
         _statusZoomSliderHost.ContextMenu = statusBarCustomizeMenu;
         _statusZoomSlider.ContextMenu = statusBarCustomizeMenu;
@@ -3618,6 +3651,10 @@ public sealed partial class MainWindow : Window
         _statusText.Foreground = StatusBarForeground;
         _selectionStatsText.FontSize = statusBarTextFontSize;
         _selectionStatsText.Foreground = StatusBarForeground;
+        _statusCapsLockText.FontSize = statusBarTextFontSize;
+        _statusCapsLockText.Foreground = StatusBarForeground;
+        _statusNumLockText.FontSize = statusBarTextFontSize;
+        _statusNumLockText.Foreground = StatusBarForeground;
         _zoomText.FontSize = statusBarTextFontSize;
         _zoomText.Foreground = StatusBarForeground;
 
@@ -3686,6 +3723,10 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
+        // CAPS LOCK / NUM LOCK indicators sit left of the view/zoom controls, matching the WPF host's
+        // StatusInteractiveControls layout (StatusCapsLockText / StatusNumLockText before the view buttons).
+        rightPanel.Children.Add(_statusCapsLockText);
+        rightPanel.Children.Add(_statusNumLockText);
         rightPanel.Children.Add(viewButtons);
         rightPanel.Children.Add(zoomPanel);
 
@@ -3990,6 +4031,7 @@ public sealed partial class MainWindow : Window
         // Render the footer from the shared neutral StatusBarViewModel (see ApplyStatusBarModel). These
         // direct assignments are the unfiltered baseline drawn from the same WorkbookSession data the
         // shared model is built from; ApplyStatusBarModel then refines them with the customize toggles.
+        RefreshKeyLockIndicators();
         _statusText.Text = status;
         _selectionStatsText.Text = _session.SelectionStatsText;
         _zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);
@@ -24300,6 +24342,12 @@ public sealed partial class MainWindow : Window
 
     private async Task MainWindow_KeyDownAsync(KeyEventArgs e)
     {
+        if (e.Key is Key.CapsLock or Key.NumLock)
+        {
+            UpdateKeyLockToggleState(e.Key);
+            RefreshKeyLockIndicators();
+        }
+
         if (TryHandleLegacyDataFilterSequence(e))
             return;
 

@@ -818,15 +818,13 @@ public sealed partial class FormulaEvaluator
         out int matchIndex)
     {
         matchIndex = -1;
-        var pattern = BuiltInFunctions.ToText(lookupValue);
         for (var index = start; index != end; index += step)
         {
             var candidate = reader.GetValue(index);
             if (candidate is ErrorValue error)
                 return error;
 
-            if (candidate is TextValue text &&
-                BuiltInFunctions.WildcardMatch(text.Value, pattern, ignoreCase: true))
+            if (BuiltInFunctions.MatchExactValue(candidate, lookupValue))
             {
                 matchIndex = index;
                 return null;

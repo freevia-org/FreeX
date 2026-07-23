@@ -104,10 +104,10 @@ internal static class XlsxCellBorderStyleReader
         if (style == BorderStyle.None)
             return default;
 
-        var color = XlsxColorReader.TryReadCellColor(edge.Element(workbookNs + "color"), theme, indexedColors, out var parsedColor)
-            ? parsedColor
-            : CellColor.Black;
-        return new CellBorder(style, color);
+        var hasColor = XlsxColorReader.TryReadCellColorWithThemeReference(
+            edge.Element(workbookNs + "color"), theme, indexedColors, out var parsedColor, out var themeColorReference);
+        var color = hasColor ? parsedColor : CellColor.Black;
+        return new CellBorder(style, color, themeColorReference);
     }
 }
 

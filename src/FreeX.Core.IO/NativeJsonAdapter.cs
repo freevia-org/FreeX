@@ -331,6 +331,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 }
             }
             LoadRichTextRuns(sDto.RichTextRuns, sheet);
+            LoadPhoneticGuides(sDto.CellPhoneticGuides, sheet);
             foreach (var allowEditRange in sDto.AllowEditRanges ?? [])
             {
                 if (string.IsNullOrWhiteSpace(allowEditRange))

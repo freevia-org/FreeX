@@ -45,12 +45,27 @@ public static partial class BuiltInFunctions
                 : !TryParseR1C1Ref(refText, ctx.CurrentCellAddress, out row, out col))
             return ErrorValue.Ref;
 
+        if (sheetName is not null && IsExternalSheetReference(sheetName, ctx))
+            return ErrorValue.Ref;
+
         return unwrapSingleCell
             ? sheetName is not null
                 ? ctx.GetCellValue(sheetName, row, col)
                 : ctx.GetCellValue(row, col)
             : BuildIndirectRange(ctx, sheetName, row, col, row, col);
     }
+
+    // Excel's INDIRECT (unlike a direct cell/range formula reference) requires the referenced
+    // external workbook to actually be open in the same session -- it never falls back to an
+    // externalLink's cached values the way e.g. ='[Data File.xlsx]Sheet1'!A1 does (see
+    // ExternalSheetReferenceResolver's own doc comment). FreeX has no notion of "still open" for
+    // another workbook; any sheetName that ExternalSheetReferenceResolver can actually resolve here
+    // represents exactly Excel's "closed" case, so every INDIRECT resolution path (scalar,
+    // materialized range, and the fast-aggregate/array-ref paths that consume
+    // TryResolveIndirectRangeReference directly) must surface #REF! instead of silently returning
+    // the cached value.
+    private static bool IsExternalSheetReference(string sheetName, IEvalContext ctx) =>
+        ctx.CurrentWorkbook is { } workbook && ExternalSheetReferenceResolver.TryResolve(workbook, sheetName) is not null;
 
     internal static bool TryResolveIndirectRangeReference(
         IReadOnlyList<ScalarValue> args,
@@ -232,7 +247,7 @@ public static partial class BuiltInFunctions
     {
         range = default;
         error = null;
-        if (sheetName is not null && !ctx.SheetExists(sheetName))
+        if (sheetName is not null && (!ctx.SheetExists(sheetName) || IsExternalSheetReference(sheetName, ctx)))
         {
             error = ErrorValue.Ref;
             return false;
@@ -342,7 +357,7 @@ public static partial class BuiltInFunctions
         bool isFullColumnRange = false,
         bool isFullRowRange = false)
     {
-        if (sheetName is not null && !ctx.SheetExists(sheetName)) return ErrorValue.Ref;
+        if (sheetName is not null && (!ctx.SheetExists(sheetName) || IsExternalSheetReference(sheetName, ctx))) return ErrorValue.Ref;
 
         uint r0 = Math.Min(startRow, endRow);
         uint r1 = Math.Max(startRow, endRow);

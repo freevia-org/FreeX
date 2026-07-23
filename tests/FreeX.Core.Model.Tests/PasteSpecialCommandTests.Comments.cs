@@ -104,6 +104,80 @@ public sealed partial class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteCommentsCommand_PastedThreadedCommentGetsFreshIdsNotSourceDuplicate()
+    {
+        // R80-io-comments-threaded-5-1: pasting a threaded comment (root Id + reply Id already
+        // set, e.g. loaded from a saved XLSX) onto a new destination cell must mint a brand-new
+        // thread, not carry the source's stable Id onto the destination. Otherwise both cells
+        // serialize with the identical <threadedComment id="..."> and reply lookup on reload
+        // (grouped globally by parentId) leaks/duplicates replies across the two unrelated cells.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 3, 2);
+        sheet.ThreadedComments[source] = new ThreadedComment("copy me", "Quinn")
+        {
+            Id = "{ROOT-GUID}",
+            Replies = [new CommentReply("first", "User") { Id = "{REPLY-GUID}" }],
+        };
+
+        var command = new PasteCommentsCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            destination,
+            transpose: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var pasted = sheet.ThreadedComments[destination];
+        pasted.Id.Should().BeNull();
+        pasted.Replies.Should().ContainSingle().Which.Id.Should().BeNull();
+
+        // The source thread must be left completely untouched.
+        var untouchedSource = sheet.ThreadedComments[source];
+        untouchedSource.Id.Should().Be("{ROOT-GUID}");
+        untouchedSource.Replies.Should().ContainSingle().Which.Id.Should().Be("{REPLY-GUID}");
+    }
+
+    [Fact]
+    public void PasteCommentsCommand_UndoRestoresDestinationThreadedCommentIdAfterIdClearingPaste()
+    {
+        // No-regression sibling: clearing the PASTED thread's Id (fixed above) must not affect
+        // undo -- Revert still restores the destination's own pre-existing thread, Id included,
+        // exactly as it was before the paste overwrote it.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 3, 2);
+        sheet.ThreadedComments[source] = new ThreadedComment("copy me", "Quinn")
+        {
+            Id = "{ROOT-GUID}",
+            Replies = [new CommentReply("first", "User") { Id = "{REPLY-GUID}" }],
+        };
+        sheet.ThreadedComments[destination] = new ThreadedComment("old", "Codex")
+        {
+            Id = "{DEST-GUID}",
+        };
+
+        var command = new PasteCommentsCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            destination,
+            transpose: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.ThreadedComments[destination].Id.Should().BeNull();
+
+        command.Revert(ctx);
+
+        var restored = sheet.ThreadedComments[destination];
+        restored.Text.Should().Be("old");
+        restored.Id.Should().Be("{DEST-GUID}");
+    }
+
+    [Fact]
     public void PasteCommentsCommand_CopiesCommentsAcrossSheets()
     {
         var wb = new Workbook("test");

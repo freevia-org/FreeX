@@ -8,6 +8,8 @@ public sealed partial class NativeJsonAdapter
     {
         Type = chart.Type,
         Name = chart.Name,
+        AltTextTitle = chart.AltTextTitle,
+        AltTextDescription = chart.AltTextDescription,
         DataRange = chart.DataRange.ToString(),
         DataRangeSheetName = ResolveChartDataRangeSheetName(workbook, hostSheetId, chart),
         IsVisible = chart.IsVisible,

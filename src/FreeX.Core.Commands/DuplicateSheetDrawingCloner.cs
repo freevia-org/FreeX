@@ -183,6 +183,7 @@ internal static class DuplicateSheetDrawingCloner
             FlipVertical = shape.FlipVertical,
             IsVisible = shape.IsVisible,
             HasFill = shape.HasFill,
+            Locked = shape.Locked,
             Title = shape.Title,
             AltText = shape.AltText,
             FillColor = shape.FillColor,
@@ -289,6 +290,8 @@ internal static class DuplicateSheetDrawingCloner
         new()
         {
             Name = chart.Name,
+            AltTextTitle = chart.AltTextTitle,
+            AltTextDescription = chart.AltTextDescription,
             Type = chart.Type,
             Uses1904DateSystem = chart.Uses1904DateSystem,
             Language = chart.Language,

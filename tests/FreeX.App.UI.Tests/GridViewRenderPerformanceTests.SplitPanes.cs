@@ -330,7 +330,7 @@ public sealed partial class GridViewRenderPerformanceTests
         renderConsumer.IndexOf("if (clipGeometry.Rect.Width <= 0 || clipGeometry.Rect.Height <= 0)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(renderConsumer.IndexOf("dc.PushClip(clipGeometry);", StringComparison.Ordinal));
-        renderConsumer.Should().Contain("grid.RenderSplitPaneCell(dc, layout, gridPen, pixelsPerDip);");
+        renderConsumer.Should().Contain("grid.RenderSplitPaneCell(dc, layout, gridPen, pixelsPerDip, borderStyleLookup);");
         renderConsumer.Should().NotContain("new RectangleGeometry(clipRect)");
         renderConsumer.Should().NotContain("GetSplitPaneClipRectForCell");
         splitPanes.Should().NotContain("GetSplitPaneClipRectForCell");
@@ -348,7 +348,10 @@ public sealed partial class GridViewRenderPerformanceTests
 
         renderSplitPaneCells.Should().Contain("var gridPen = ShowGridLines ? GridPen : null;");
         renderSplitPaneCells.Should().Contain("dc.DrawRectangle(fill, gridPen, rect);");
-        renderSplitPaneCells.Should().Contain("DrawBorderEdge(dc, style.BorderTop");
+        // R80 fix: split-pane borders now resolve shared-edge precedence (ResolveBorderEdgeWinner)
+        // against the actual neighbor instead of drawing style.BorderTop/etc. unconditionally.
+        renderSplitPaneCells.Should().Contain("var topWinner = ResolveBorderEdgeWinner(style.BorderTop, neighborBottom);");
+        renderSplitPaneCells.Should().Contain("DrawBorderEdge(dc, topWinner");
         renderSplitPaneCells.Should().NotContain("dc.DrawRectangle(fill, GridPen, rect);");
     }
 
