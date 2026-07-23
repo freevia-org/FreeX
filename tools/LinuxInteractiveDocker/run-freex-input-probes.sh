@@ -1002,13 +1002,21 @@ fi
 # key-down event. A broad visual assertion is sufficient because exact routing is covered in-process.
 select_cell 0 0 A1 || true
 capture "alt-before.png"
-focus_app
-xdotool keydown --clearmodifiers --window "$window_id" Alt_L
-sleep 0.18
-xdotool keyup --window "$window_id" Alt_L
-sleep "$settle_seconds"
-capture "alt-after.png"
-if screen_changed "$output/alt-before.png" "$output/alt-after.png" 500; then
+alt_changed=false
+for _ in $(seq 1 3); do
+    focus_app
+    xdotool keydown --clearmodifiers --window "$window_id" Alt_L
+    sleep 0.18
+    xdotool keyup --window "$window_id" Alt_L
+    sleep "$settle_seconds"
+    capture "alt-after.png"
+    if screen_changed "$output/alt-before.png" "$output/alt-after.png" 500; then
+        alt_changed=true
+        break
+    fi
+    send_key Escape
+done
+if $alt_changed; then
     record "keytips-alt" "passed" "alt-before.png -> alt-after.png"
 else
     record "keytips-alt" "failed" "alt-before.png -> alt-after.png" "Paced Alt press/release produced no visible keytip change."
@@ -1028,9 +1036,19 @@ dismiss_overlays
 # Keyboard and pointer context entry target the same calibrated B2 cell.
 if select_cell 1 1 B2; then
     capture "context-keyboard-before.png"
-    send_key shift+F10
-    capture "context-keyboard-after.png"
-    if screen_changed "$output/context-keyboard-before.png" "$output/context-keyboard-after.png" 1000; then
+    context_keyboard_changed=false
+    for _ in $(seq 1 3); do
+        focus_app
+        select_cell 1 1 B2 || true
+        send_key shift+F10
+        capture "context-keyboard-after.png"
+        if screen_changed "$output/context-keyboard-before.png" "$output/context-keyboard-after.png" 1000; then
+            context_keyboard_changed=true
+            break
+        fi
+        dismiss_overlays
+    done
+    if $context_keyboard_changed; then
         record "worksheet-context-shift-f10" "passed" "selection-B2.png; context-keyboard-after.png"
     else
         record "worksheet-context-shift-f10" "failed" "selection-B2.png; context-keyboard-after.png" "Shift+F10 produced no visible context menu for calibrated B2."

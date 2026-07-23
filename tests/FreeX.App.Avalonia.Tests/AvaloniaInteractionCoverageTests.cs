@@ -195,6 +195,9 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("seed_cell_text 6 15 G16 \"$copy_value\"", probe, StringComparison.Ordinal);
         Assert.Contains("seed_cell_text 6 16 G17 \"$cut_value\"", probe, StringComparison.Ordinal);
         Assert.Contains("xdotool mousemove --window \"$window_id\" 520 420 click 1", probe, StringComparison.Ordinal);
+        Assert.Contains("alt_changed=false", probe, StringComparison.Ordinal);
+        Assert.Contains("context_keyboard_changed=false", probe, StringComparison.Ordinal);
+        Assert.Contains("for _ in $(seq 1 3); do", probe, StringComparison.Ordinal);
         Assert.Contains("send_active_key Home Return", probe, StringComparison.Ordinal);
         Assert.Contains("Physical X11 manifest does not satisfy schema v2", runner, StringComparison.Ordinal);
         Assert.Contains("geometry calibration did not pass", runner, StringComparison.Ordinal);
