@@ -2554,8 +2554,20 @@ public static class DocxReader
             return;
         }
 
-        // A run wrapping a w:object (VML v:shape + o:OLEObject) is an embedded OLE object. imageRelationships
-        // is the all-parts map (id → part path), so both the .bin payload and the icon media part resolve.
+        // Header/footer/comment/note OLE objects resolve through their owning story part, while the modelled OLE
+        // writer only owns document-level relationships. Preserve both its binary payload and optional VML icon
+        // before the generic document-level reader claims it.
+        if (preservedDrawingTarget is not null
+            && preservedDrawingRelationshipTargets is not null
+            && CapturePartLocalEmbeddedObject(r, archive, preservedDrawingTarget, preservedDrawingRelationshipTargets) is { } localEmbeddedObject)
+        {
+            var objectRun = new Run(string.Empty) { PreservedDrawing = localEmbeddedObject, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(objectRun);
+            paragraph.Runs.Add(objectRun);
+            return;
+        }
+
+        // A body run wrapping a w:object (VML v:shape + o:OLEObject) becomes a modelled embedded OLE object.
         var embedded = ReadEmbeddedObject(r, archive, imageRelationships);
         if (embedded is not null)
         {
@@ -4067,6 +4079,48 @@ public static class DocxReader
         return references.Count == 0
             ? null
             : new PreservedDrawing(drawing.ToString(SaveOptions.DisableFormatting), references);
+    }
+
+    /// <summary>
+    /// Captures a VML <c>w:object</c> from a non-document story part. Its embedded OLE binary and optional
+    /// presentation icon are both relationship-owned by that part, so treating the object as a document-level
+    /// modelled run would leave the re-emitted header/footer/comment/note with dangling references.
+    /// </summary>
+    private static PreservedDrawing? CapturePartLocalEmbeddedObject(
+        XElement run,
+        ZipArchive archive,
+        TextDocument document,
+        IReadOnlyDictionary<string, string> partRelationshipTargets)
+    {
+        var obj = run.Element(W + "object");
+        var oleRelationshipId = obj?.Element(O + "OLEObject")?.Attribute(R + "id")?.Value;
+        if (obj is null || oleRelationshipId is null)
+            return null;
+
+        var contentTypeOverrides = ReadContentTypeOverrides(archive);
+        var contentTypeDefaults = ReadContentTypeDefaults(archive);
+        var references = new List<PreservedDrawingReference>();
+
+        void CaptureLocalRelationship(string relationshipId, string relationshipType)
+        {
+            if (!partRelationshipTargets.TryGetValue(relationshipId, out var localPartPath))
+                return;
+            var partName = "/" + localPartPath.TrimStart('/');
+            if (!CapturePreservedPart(archive, document, partName, contentTypeOverrides, contentTypeDefaults, relationshipType: null))
+                return;
+            CaptureReferencedParts(archive, document, partName, contentTypeOverrides, contentTypeDefaults);
+            references.Add(new PreservedDrawingReference(relationshipId, partName, relationshipType));
+        }
+
+        CaptureLocalRelationship(oleRelationshipId, OleObjectRelType);
+        var imageRelationshipId = obj.Descendants(V + "imagedata").Select(image => image.Attribute(R + "id")?.Value)
+            .FirstOrDefault(relationshipId => relationshipId is not null);
+        if (imageRelationshipId is not null)
+            CaptureLocalRelationship(imageRelationshipId, ImageRelType);
+
+        return references.Count == 0
+            ? null
+            : new PreservedDrawing(obj.ToString(SaveOptions.DisableFormatting), references);
     }
 
     /// <summary>

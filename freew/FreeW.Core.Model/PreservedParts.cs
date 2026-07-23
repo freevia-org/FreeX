@@ -39,7 +39,15 @@ public sealed record PreservedPart(
 /// </summary>
 /// <param name="OriginalRelId">The relationship id used inside the preserved drawing XML on read.</param>
 /// <param name="PreservedPartName">The absolute part name of the <see cref="PreservedPart"/> it referenced.</param>
-public readonly record struct PreservedDrawingReference(string OriginalRelId, string PreservedPartName);
+/// <param name="RelationshipType">
+/// The relationship type required by a story-local preserved drawing. Null lets the writer derive the type from
+/// the part content type (the normal chart/SmartArt path); explicit types cover relationships such as OLE icon
+/// media, whose OPC content type is supplied through a Default rather than an Override.
+/// </param>
+public readonly record struct PreservedDrawingReference(
+    string OriginalRelId,
+    string PreservedPartName,
+    string? RelationshipType = null);
 
 /// <summary>
 /// A verbatim-preserved inline <c>w:drawing</c> FreeW does not model — e.g. a <c>w:drawing</c> that references
