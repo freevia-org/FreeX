@@ -5509,7 +5509,7 @@ public sealed class DocumentView : RichTextBox
     {
         var wordArt = plan.WordArt!;
         var fillBrush = BuildDrawingFillBrush(wordArt.Fill);
-        var foreground = BuildDrawingWordArtTextBrush(wordArt.Fill);
+        var foreground = BuildDrawingWordArtTextBrush(wordArt);
         var wpfEffect = BuildWordArtEffect(plan.Effects, DocumentEffectSet.FromTheme(_model.Theme));
         if (wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
         {
@@ -5698,8 +5698,12 @@ public sealed class DocumentView : RichTextBox
         return canvas;
     }
 
-    private static System.Windows.Media.Brush BuildDrawingWordArtTextBrush(DrawingObjectFillPlan fill)
+    private static System.Windows.Media.Brush BuildDrawingWordArtTextBrush(DrawingObjectWordArtPlan wordArt)
     {
+        if (wordArt.Style == WordArtStyle.GlowGold)
+            return new SolidColorBrush(Color.FromRgb(0xD8, 0xBA, 0x66));
+
+        var fill = wordArt.Fill;
         var backgroundHex = fill.ColorHex
             ?? fill.GradientStops.FirstOrDefault()?.ColorHex
             ?? fill.PatternBackgroundColorHex
@@ -11529,7 +11533,7 @@ public sealed class DocumentView : RichTextBox
         FrameworkElement element;
         if (wordArtPlan.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
         {
-            var warpForeground = BuildDrawingWordArtTextBrush(wordArtPlan.Fill);
+            var warpForeground = BuildDrawingWordArtTextBrush(wordArtPlan);
             var canvas = (Canvas)BuildWarpedDrawingWordArtVisual(
                 wordArtPlan,
                 foreground,
