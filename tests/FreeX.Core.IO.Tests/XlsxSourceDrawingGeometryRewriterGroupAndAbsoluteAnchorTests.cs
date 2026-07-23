@@ -101,7 +101,7 @@ public sealed class XlsxSourceDrawingGeometryRewriterGroupAndAbsoluteAnchorTests
         reloadedSheet.Pictures.Should().HaveCount(3);
         reloadedSheet.Pictures.Should().OnlyContain(picture => picture.IsSourceLoaded);
 
-        var originalGroupAnchorXml = ReadDrawingXml(initialSave).Descendants(Xdr + "twoCellAnchor").Single().ToString(SaveOptions.DisableFormatting);
+        var originalGroupAnchorXml = SharedGroupMarkersXml(ReadDrawingXml(initialSave).Descendants(Xdr + "twoCellAnchor").Single());
 
         var groupChildA = reloadedSheet.Pictures.Single(picture => picture.Name == "GroupChildA");
         groupChildA.Width = 500;
@@ -118,9 +118,22 @@ public sealed class XlsxSourceDrawingGeometryRewriterGroupAndAbsoluteAnchorTests
 
         // The finding's core assertion: the group's SHARED anchor (from/to markers, and the group's own
         // xfrm/off/ext/chOff/chExt) must be completely untouched by GroupChildA's resize -- not shifted,
-        // not resized, not overwritten by a subsequently-processed sibling's geometry either.
-        savedGroupAnchor.ToString(SaveOptions.DisableFormatting).Should().Be(originalGroupAnchorXml,
+        // not resized, not overwritten by a subsequently-processed sibling's geometry either. This
+        // compares only those shared markers (not the whole subtree): R78-io-drawing-grpsp-move made
+        // GroupChildA's own local <a:off>/<a:ext> (a descendant of this same twoCellAnchor) legitimately
+        // change to reflect its resize -- that is the fix, not a regression.
+        SharedGroupMarkersXml(savedGroupAnchor).Should().Be(originalGroupAnchorXml,
             "a grouped child's own model edit must never be written into the group's shared twoCellAnchor");
+
+        // R78-io-drawing-grpsp-move: GroupChildA's own local off/ext (inside the group's chOff/chExt
+        // child space, scale 1 in this fixture since ext == chExt) must now reflect the resize instead
+        // of silently reverting to the original 96x64 on save+reload.
+        var savedGroupChildA = savedDrawingXml.Descendants(Xdr + "pic")
+            .Single(pic => pic.Descendants(Xdr + "cNvPr").Any(c => c.Attribute("name")?.Value == "GroupChildA"));
+        var groupChildAExt = savedGroupChildA.Element(Xdr + "spPr")!.Element(A + "xfrm")!.Element(A + "ext")!;
+        groupChildAExt.Attribute("cx")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(500).ToString(),
+            "a grouped picture's resize must be written into its own local xfrm ext, not silently dropped");
+        groupChildAExt.Attribute("cy")!.Value.Should().Be(DrawingMlUnits.PixelsToEmu(400).ToString());
 
         // No-regression: the sibling ungrouped picture's own oneCellAnchor must still be rewritten from
         // its model as before.
@@ -212,6 +225,22 @@ public sealed class XlsxSourceDrawingGeometryRewriterGroupAndAbsoluteAnchorTests
         finalAbsPic.Height.Should().BeApproximately(250, 0.01);
         finalAbsPic.AnchorOffsetX.Should().BeApproximately(800, 0.01);
         finalAbsPic.AnchorOffsetY.Should().BeApproximately(400, 0.01);
+    }
+
+    /// <summary>
+    /// R78-io-drawing-grpsp-move: serializes only the group's SHARED markers -- the enclosing
+    /// twoCellAnchor's from/to cell markers and the grpSp's own grpSpPr/xfrm (off/ext/chOff/chExt) --
+    /// rather than the whole subtree. A grouped child's own local off/ext (nested inside the same
+    /// twoCellAnchor as a descendant pic/sp) is now legitimately rewritten by the fix, so comparing
+    /// full subtree bytes would flag that intentional change as if it were group corruption.
+    /// </summary>
+    private static string SharedGroupMarkersXml(XElement twoCellAnchor)
+    {
+        var grpSp = twoCellAnchor.Element(Xdr + "grpSp")!;
+        return new XElement("shared",
+            new XElement(twoCellAnchor.Element(Xdr + "from")!),
+            new XElement(twoCellAnchor.Element(Xdr + "to")!),
+            new XElement(grpSp.Element(Xdr + "grpSpPr")!)).ToString(SaveOptions.DisableFormatting);
     }
 
     private static void AddPicture(Sheet sheet, string name, uint row) =>

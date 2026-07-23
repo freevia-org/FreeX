@@ -19,13 +19,21 @@ public static class FormulaInlineEditorLayoutPlanner
         double cellWidth,
         double cellHeight,
         double desiredTextWidth = 0,
-        double availableRight = double.PositiveInfinity)
+        double availableRight = double.PositiveInfinity,
+        int lineCount = 1)
     {
+        // R78-render-inplace-editor-5-3: Alt+Enter-inserted line breaks (and any pre-existing
+        // multi-line cell text) must grow the editor box downward the same way long single-line
+        // text already grows it sideways -- otherwise line 2+ is typed/shown "blind", clipped
+        // below the fixed single-row height. One cell-row height per line is the same unit Excel's
+        // own auto-height uses for wrapped/broken text, so growth lands on whole-row boundaries.
+        var effectiveHeight = cellHeight * Math.Max(1, lineCount);
+
         var editorRect = new FormulaEditorRect(
             cellLeft,
             cellTop,
             cellWidth,
-            cellHeight);
+            effectiveHeight);
 
         var textLeft = editorRect.Left + 4;
         var textWidth = Math.Max(

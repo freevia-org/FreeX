@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml.Linq;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -1356,6 +1357,16 @@ internal static partial class RowColumnShiftHelpers
         foreach (var existing in table.Columns)
             nextId = Math.Max(nextId, existing.Id + 1);
 
+        // The column shift itself (not just row position) can also relocate the cell references
+        // INSIDE a surviving column's own CalculatedColumnFormula/TotalsRowFormula anchor text --
+        // e.g. inserting a column before "Price" leaves a Total column's calculated-column formula
+        // "A2*B2" referencing the now-blank inserted column instead of the real (shifted) Price
+        // column. Rewrite that anchor text with the same column op RewriteAllFormulas already
+        // applies to ordinary live sheet-cell formulas, so the metadata stays in lockstep.
+        RewriteOperation columnFormulaOp = shift.Kind == AddressShiftKind.Insert
+            ? new InsertColsOp(shift.SheetName, shift.Start, shift.Count)
+            : new DeleteColsOp(shift.SheetName, shift.Start, shift.Count);
+
         var reconciled = new List<StructuredTableColumnModel>((int)newRange.ColCount);
         for (var col = newRange.Start.Col; col <= newRange.End.Col; col++)
         {
@@ -1369,7 +1380,8 @@ internal static partial class RowColumnShiftHelpers
                 var oldIndex = (int)(sourceCol - oldRange.Start.Col);
                 if (oldIndex < table.Columns.Count)
                 {
-                    reconciled.Add(table.Columns[oldIndex]);
+                    reconciled.Add(RewriteSurvivingTableColumnFormulas(
+                        table.Columns[oldIndex], columnFormulaOp, shift.SheetName));
                     continue;
                 }
             }
@@ -1386,6 +1398,31 @@ internal static partial class RowColumnShiftHelpers
 
         return reconciled;
     }
+
+    // Rewrites a surviving column's anchored CalculatedColumnFormula/TotalsRowFormula text for the
+    // column insert/delete that just happened, mirroring RewriteAllFormulas' treatment of ordinary
+    // live sheet-cell formulas (RowColumnShiftHelpers.Formulas.cs). Rewrite returns null when the
+    // formula has no reference to the shifted band, in which case the original text is kept as-is.
+    private static StructuredTableColumnModel RewriteSurvivingTableColumnFormulas(
+        StructuredTableColumnModel column, RewriteOperation op, string hostSheetName)
+    {
+        var calculatedColumnFormula = RewriteTableColumnFormula(column.CalculatedColumnFormula, op, hostSheetName);
+        var totalsRowFormula = RewriteTableColumnFormula(column.TotalsRowFormula, op, hostSheetName);
+        if (ReferenceEquals(calculatedColumnFormula, column.CalculatedColumnFormula) &&
+            ReferenceEquals(totalsRowFormula, column.TotalsRowFormula))
+        {
+            return column;
+        }
+
+        return column with
+        {
+            CalculatedColumnFormula = calculatedColumnFormula,
+            TotalsRowFormula = totalsRowFormula
+        };
+    }
+
+    private static string? RewriteTableColumnFormula(string? formulaText, RewriteOperation op, string hostSheetName) =>
+        string.IsNullOrWhiteSpace(formulaText) ? formulaText : FormulaRewriter.Rewrite(formulaText, op, hostSheetName) ?? formulaText;
 
     private static List<StructuredTableFilterColumnModel> ReconcileStructuredTableFilterColumns(
         StructuredTableModel table,

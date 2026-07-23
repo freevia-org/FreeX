@@ -38,8 +38,21 @@ public static class FormulaEditInteractionPlanner
     public static bool IsRangeEntryActive(string? text, bool pointMode) =>
         pointMode && IsFormulaText(text);
 
-    public static bool ShouldCommitInlineArrows(string? text, bool pointMode) =>
-        !IsFormulaText(text) && !IsRangeEntryActive(text, pointMode);
+    /// <summary>
+    /// Whether plain (unmodified) arrow keys should commit the inline editor's text and move the
+    /// active cell, vs. leaving the arrow key to move the caret within the text.
+    /// </summary>
+    /// <param name="enteredViaEditKey">
+    /// True when this inline-edit session was opened via F2 or a double-click -- real Excel's
+    /// "Edit" mode, where the caret lands in existing content and arrow keys reposition it without
+    /// committing. False (the default) covers "Enter" mode, opened by typing a fresh character over
+    /// the current selection, where arrow keys commit the freshly-typed, non-formula content and
+    /// move on (R78-render-inplace-editor-5-1: before this parameter existed, F2 on a non-formula
+    /// cell was indistinguishable from typing a fresh character, so arrows always committed and the
+    /// user could never reposition the caret to fix existing text).
+    /// </param>
+    public static bool ShouldCommitInlineArrows(string? text, bool pointMode, bool enteredViaEditKey = false) =>
+        !enteredViaEditKey && !IsFormulaText(text) && !IsRangeEntryActive(text, pointMode);
 
     public static bool TogglePointMode(string? text, bool pointMode) =>
         IsFormulaText(text) ? !pointMode : pointMode;

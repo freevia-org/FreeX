@@ -132,7 +132,9 @@ internal sealed record XlsxShapePackagePart(
     /// <summary>Text outline color from &lt;a:rPr&gt;&lt;a:ln&gt;; null = no text outline.</summary>
     CellColor? ShapeTextOutlineColor,
     WorkbookThemeColorReference? ShapeTextOutlineThemeColor,
-    double ShapeTextOutlineWidthPoints);
+    double ShapeTextOutlineWidthPoints,
+    /// <summary>Adjust-handle values from &lt;a:avLst&gt;&lt;a:gd .../&gt;; null/empty = geometry defaults.</summary>
+    IReadOnlyList<DrawingShapeAdjustValue>? AdjustValues = null);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -434,21 +436,28 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
-        foreach (var shapeElement in drawingXml.Descendants(spreadsheetDrawingNs + "sp"))
+        // R78-io-shape-geometry-5-2: walk <xdr:sp> and <xdr:cxnSp> together in a single
+        // document-order pass (rather than one full pass per element name) so a drawing part that
+        // mixes plain shapes and connectors preserves their authored/original relative order in
+        // the resulting shapes list -- two separate full passes would group all <xdr:sp> results
+        // before all <xdr:cxnSp> results regardless of where each one actually sits in the XML.
+        foreach (var element in drawingXml.Descendants())
         {
-            if (shapeElement.Ancestors(markupCompatNs + "Fallback").Any())
-                continue;
+            if (element.Name == spreadsheetDrawingNs + "sp")
+            {
+                if (element.Ancestors(markupCompatNs + "Fallback").Any())
+                    continue;
 
-            ReadSpElement(shapeElement, spreadsheetDrawingNs, drawingNs, textBoxes, shapes);
-        }
+                ReadSpElement(element, spreadsheetDrawingNs, drawingNs, textBoxes, shapes);
+            }
+            else if (element.Name == spreadsheetDrawingNs + "cxnSp")
+            {
+                // Connectors (<xdr:cxnSp>) use the same spPr/prstGeom structure as sp.
+                if (element.Ancestors(markupCompatNs + "Fallback").Any())
+                    continue;
 
-        // Also read connectors (<xdr:cxnSp>) — they use the same spPr/prstGeom structure as sp.
-        foreach (var cxnSpElement in drawingXml.Descendants(spreadsheetDrawingNs + "cxnSp"))
-        {
-            if (cxnSpElement.Ancestors(markupCompatNs + "Fallback").Any())
-                continue;
-
-            ReadCxnSpElement(cxnSpElement, spreadsheetDrawingNs, drawingNs, shapes);
+                ReadCxnSpElement(element, spreadsheetDrawingNs, drawingNs, shapes);
+            }
         }
 
         return (textBoxes, shapes);
@@ -612,7 +621,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             textGradAngle,
             textOutlineColor,
             textOutlineThemeColor,
-            textOutlineWidthPt));
+            textOutlineWidthPt,
+            ReadShapeAdjustValues(spPr, drawingNs)));
     }
 
     /// <summary>
@@ -896,7 +906,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             ShapeTextGradientAngle: 5400000,
             ShapeTextOutlineColor: null,
             ShapeTextOutlineThemeColor: null,
-            ShapeTextOutlineWidthPoints: 0));
+            ShapeTextOutlineWidthPoints: 0,
+            AdjustValues: ReadShapeAdjustValues(spPr, drawingNs)));
     }
 
     private static bool ReadUsesThemeEffectStyle(
@@ -1067,7 +1078,11 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// <c>ScaleX</c>/<c>ScaleY</c>, so existing (non-rotated) callers are unaffected.
     /// </para>
     /// </summary>
-    private readonly record struct DrawingGroupTransform(
+    // R78-io-drawing-grpsp-move: internal (not private) so XlsxSourceDrawingGeometryRewriter can
+    // reuse the exact same composed transform on the WRITE side -- inverting it to translate an
+    // edited grouped shape's absolute anchor-space position back into its own local <a:off> inside
+    // the group's chOff/chExt child space, instead of silently dropping the edit.
+    internal readonly record struct DrawingGroupTransform(
         double OffsetXEmu, double OffsetYEmu, double ScaleX, double ScaleY,
         double MatrixA, double MatrixB, double MatrixC, double MatrixD,
         double OrientationA = 1, double OrientationB = 0, double OrientationC = 0, double OrientationD = 1)
@@ -1095,7 +1110,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// Returns <see cref="DrawingGroupTransform.Identity"/> when the element has no enclosing
     /// group or any ancestor group lacks a usable <c>chOff</c>/<c>chExt</c>.
     /// </summary>
-    private static DrawingGroupTransform ComputeGroupTransform(XElement element, XNamespace spreadsheetDrawingNs, XNamespace drawingNs)
+    internal static DrawingGroupTransform ComputeGroupTransform(XElement element, XNamespace spreadsheetDrawingNs, XNamespace drawingNs)
     {
         double scaleX = 1, scaleY = 1;
         double matrixA = 1, matrixB = 0, matrixC = 0, matrixD = 1, translateX = 0, translateY = 0;
@@ -1636,6 +1651,30 @@ internal static partial class XlsxWorksheetDrawingPartReader
             _ => DrawingArrowheadSize.Medium
         };
         return new DrawingArrowhead(type, w, len);
+    }
+
+    /// <summary>
+    /// Reads a preset geometry's adjust-handle values from <c>&lt;a:prstGeom&gt;&lt;a:avLst&gt;&lt;a:gd .../&gt;</c>
+    /// (R78-io-shape-geometry-5-3). Returns <see langword="null"/> when there is no <c>prstGeom</c>/<c>avLst</c>
+    /// or it carries no <c>gd</c> children (the common case — geometry defaults apply), so the
+    /// customized handle only round-trips when Excel actually authored one.
+    /// </summary>
+    private static IReadOnlyList<DrawingShapeAdjustValue>? ReadShapeAdjustValues(XElement? spPr, XNamespace drawingNs)
+    {
+        var avLst = spPr?.Element(drawingNs + "prstGeom")?.Element(drawingNs + "avLst");
+        if (avLst is null)
+            return null;
+
+        var values = new List<DrawingShapeAdjustValue>();
+        foreach (var gd in avLst.Elements(drawingNs + "gd"))
+        {
+            var name = gd.Attribute("name")?.Value;
+            var formula = gd.Attribute("fmla")?.Value;
+            if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(formula))
+                values.Add(new DrawingShapeAdjustValue(name, formula));
+        }
+
+        return values.Count > 0 ? values : null;
     }
 
 }

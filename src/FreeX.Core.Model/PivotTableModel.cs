@@ -71,7 +71,15 @@ public sealed record PivotCacheFieldModel(
     /// (R36-io-pivot-cache-2-2).
     /// </summary>
     string? GroupStartDate = null,
-    string? GroupEndDate = null);
+    string? GroupEndDate = null,
+    /// <summary>
+    /// The group's own label list from a native CT_GroupItems (ECMA-376 18.10.1.36), e.g. "Jan".."Dec"
+    /// for a month-grouped date field, or the numeric-range bucket labels for a number-range grouping.
+    /// The pivotTable definition's pivotField/items index into this list to render the grouped field's
+    /// headers, so dropping it on save leaves those indexes pointing at nothing (R78-io-pivotcache-5-2).
+    /// Null means the field carries no group (or the group's labels were never captured).
+    /// </summary>
+    IReadOnlyList<string>? GroupItems = null);
 
 public sealed class PivotTableModel
 {
@@ -198,6 +206,11 @@ public sealed record PivotFieldModel(
     /// </summary>
     string? GroupStartDate = null,
     string? GroupEndDate = null,
+    /// <summary>
+    /// See <see cref="PivotCacheFieldModel.GroupItems"/>. Carried on this intermediate model only when
+    /// used as the return value of a cache-field-group parse (R78-io-pivotcache-5-2).
+    /// </summary>
+    IReadOnlyList<string>? GroupItems = null,
     /// <summary>
     /// R75-io-pivottable-layout-4-2: this field's own CT_PivotField "defaultSubtotal" setting (whether
     /// subtotals show for this specific row/column field), independent of any other axis field. Null means

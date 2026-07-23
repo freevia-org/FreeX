@@ -306,6 +306,19 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
+    /// <summary>
+    /// R78-commands-sort-multikey-5-1: the AutoFilter dropdown's Sort A-Z / Z-A / Sort-by-Color
+    /// entries receive a `range` that always starts at the header row (it comes from the
+    /// worksheet's &lt;autoFilter&gt; reference or a StructuredTable's Range -- both header-inclusive
+    /// by construction, see AutoFilterRangeResolver/AutoFilterDropdownMenuPlanner.HasActiveFilter),
+    /// unlike SortCustomButton_Click and the quick ribbon Sort Asc/Desc buttons, which each strip
+    /// the header row before building their SortCommand. Without this, sorting from the dropdown
+    /// pulled the header text into the data and promoted a data row to row 1. Since the range is
+    /// always header-inclusive here, always exclude its first row (no heuristic detection needed).
+    /// </summary>
+    private static GridRange ExcludeHeaderRowForAutoFilterSort(GridRange range) =>
+        SortDialog.ExcludeHeaderRow(range, hasHeaders: true);
+
     private bool ApplyAutoFilterDialogResult(GridRange range, uint filterColOffset, AutoFilterDialogResult result, string title)
     {
         if (result.Action == AutoFilterDialogAction.ClearFilter)
@@ -326,7 +339,7 @@ public partial class MainWindow
             if (!TryExecuteAutoFilterSortCommand(
                     "Sort",
                     range,
-                    currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, result.SortDirection == AutoFilterSortDirection.Ascending)))
+                    currentRange => new SortCommand(_currentSheetId, ExcludeHeaderRowForAutoFilterSort(currentRange), filterColOffset, result.SortDirection == AutoFilterSortDirection.Ascending)))
                 return false;
             RestoreAutoFilterRangeSelection(range);
             return true;
@@ -342,7 +355,7 @@ public partial class MainWindow
                     range,
                     currentRange => AutoFilterDropdownMenuPlanner.CreateSortByColorCommand(
                         _currentSheetId,
-                        currentRange,
+                        ExcludeHeaderRowForAutoFilterSort(currentRange),
                         filterColOffset,
                         new AutoFilterColorOption(string.Empty, sortByColorFilter.Kind, sortByColor))))
                 return false;

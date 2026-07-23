@@ -102,7 +102,8 @@ internal static class XlsxPivotCacheReader
                     fieldGroup.GroupEnd,
                     fieldGroup.GroupInterval,
                     fieldGroup.GroupStartDate,
-                    fieldGroup.GroupEndDate));
+                    fieldGroup.GroupEndDate,
+                    fieldGroup.GroupItems));
             }
 
             result.Add(cache);
@@ -152,9 +153,8 @@ internal static class XlsxPivotCacheReader
 
     private static PivotFieldModel ReadPivotCacheFieldGroup(XElement cacheField, XNamespace workbookNs)
     {
-        var rangePr = cacheField
-            .Element(workbookNs + "fieldGroup")?
-            .Element(workbookNs + "rangePr");
+        var fieldGroup = cacheField.Element(workbookNs + "fieldGroup");
+        var rangePr = fieldGroup?.Element(workbookNs + "rangePr");
         if (rangePr is null)
             return new PivotFieldModel(-1);
 
@@ -175,7 +175,32 @@ internal static class XlsxPivotCacheReader
             // ECMA-376 18.10.1.60); real Excel omits startNum/endNum entirely in that case, so this was
             // previously silently dropped on load (R36-io-pivot-cache-2-2).
             GroupStartDate: rangePr.Attribute("startDate")?.Value,
-            GroupEndDate: rangePr.Attribute("endDate")?.Value);
+            GroupEndDate: rangePr.Attribute("endDate")?.Value,
+            // The group's own label list (CT_GroupItems, ECMA-376 18.10.1.36) that the pivotTable
+            // definition's pivotField/items index into; previously never read (R78-io-pivotcache-5-2).
+            GroupItems: ReadGroupItemValues(fieldGroup?.Element(workbookNs + "groupItems"), workbookNs));
+    }
+
+    // Reads a CT_GroupItems element's child item values (typically all <s v="..."/> label text, but the
+    // schema allows the same choice group as sharedItems). Returns null when absent/empty so a field with
+    // no group carries no allocation, mirroring ReadSharedItemValues/ReadSharedItemKinds above.
+    private static IReadOnlyList<string>? ReadGroupItemValues(XElement? groupItems, XNamespace workbookNs)
+    {
+        if (groupItems is null)
+            return null;
+
+        var values = groupItems
+            .Elements()
+            .Where(element => element.Name == workbookNs + "s" ||
+                              element.Name == workbookNs + "n" ||
+                              element.Name == workbookNs + "d" ||
+                              element.Name == workbookNs + "b")
+            .Select(element => element.Attribute("v")?.Value)
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .ToList();
+
+        return values.Count > 0 ? values : null;
     }
 
     private static PivotCacheSourceType GetSourceType(XElement? cacheSource, XElement? worksheetSource)

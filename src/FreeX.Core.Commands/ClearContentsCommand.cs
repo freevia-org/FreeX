@@ -18,6 +18,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
+    private Dictionary<CellAddress, CellPhoneticGuide>? _phoneticGuideSnapshot;
     private List<GridRange>? _mergedRegionsSnapshot;
 
     public string Label => "Clear Contents";
@@ -70,6 +71,9 @@ public sealed class ClearContentsCommand : IWorkbookCommand
         _richTextRunsSnapshot = sheet.RichTextRuns
             .Where(pair => _range.Contains(pair.Key))
             .ToDictionary(pair => pair.Key, pair => pair.Value);
+        _phoneticGuideSnapshot = sheet.CellPhoneticGuides
+            .Where(pair => _range.Contains(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
 
         if (_isCutSource)
         {
@@ -93,11 +97,13 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             var hasHyperlink = sheet.Hyperlinks.ContainsKey(address);
             var hasHyperlinkMetadata = sheet.HyperlinkMetadata.ContainsKey(address);
             var hasRichTextRuns = sheet.RichTextRuns.ContainsKey(address);
+            var hasPhoneticGuide = sheet.CellPhoneticGuides.ContainsKey(address);
             if (oldCell is null &&
                 !oldStyleOnly.HasValue &&
                 !hasHyperlink &&
                 !hasHyperlinkMetadata &&
-                !hasRichTextRuns)
+                !hasRichTextRuns &&
+                !hasPhoneticGuide)
             {
                 continue;
             }
@@ -121,6 +127,12 @@ public sealed class ClearContentsCommand : IWorkbookCommand
                 sheet.HyperlinkMetadata.Remove(address);
             }
             sheet.RichTextRuns.Remove(address);
+            // R78-selfreg-twin-sweep-4: a phonetic guide (furigana) belongs to the content being
+            // cleared -- like RichTextRuns above, it must not survive the clear or a later
+            // run-formatting-only edit on brand-new content typed into this cell would re-emit the
+            // OLD guide's <rPh> offsets against textually-unrelated text (see SourcePackageSnapshot
+            // patch computation).
+            sheet.CellPhoneticGuides.Remove(address);
             affected.Add(address);
         }
 
@@ -154,6 +166,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             sheet.Hyperlinks.Remove(address);
             sheet.HyperlinkMetadata.Remove(address);
             sheet.RichTextRuns.Remove(address);
+            sheet.CellPhoneticGuides.Remove(address);
         }
         if (_hyperlinkSnapshot is not null)
         {
@@ -169,6 +182,11 @@ public sealed class ClearContentsCommand : IWorkbookCommand
         {
             foreach (var (address, runs) in _richTextRunsSnapshot)
                 sheet.RichTextRuns[address] = runs;
+        }
+        if (_phoneticGuideSnapshot is not null)
+        {
+            foreach (var (address, guide) in _phoneticGuideSnapshot)
+                sheet.CellPhoneticGuides[address] = guide;
         }
     }
 

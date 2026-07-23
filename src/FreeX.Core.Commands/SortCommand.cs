@@ -8,10 +8,14 @@ public enum SortOn
 {
     CellValues,
     CellColor,
-    FontColor
+    FontColor,
+    // R78-commands-sort-multikey-5-2: Excel's Sort dialog "Sort On" also offers Cell Icon,
+    // ordering rows by the conditional-format icon-set bucket a cell falls into (e.g. put every
+    // green-up-arrow row on top). See SortKey.TargetIcon / GetEffectiveIcon / CompareTargetIcon.
+    CellIcon
 }
 
-public sealed record SortKey(uint ColumnOffset, bool Ascending, SortOn SortOn = SortOn.CellValues, CellColor? TargetColor = null, CustomSortOrder? CustomOrder = null);
+public sealed record SortKey(uint ColumnOffset, bool Ascending, SortOn SortOn = SortOn.CellValues, CellColor? TargetColor = null, CustomSortOrder? CustomOrder = null, CfIconOverride? TargetIcon = null);
 
 public sealed record SortOptions(bool CaseSensitive = false, bool LeftToRight = false);
 
@@ -204,7 +208,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         if (_sortKeys.Any(key => key.ColumnOffset >= keyLimit))
             return new CommandOutcome(false, "Sort key offset is outside the sort range.");
         var keyColIndexes = _sortKeys
-            .Select(key => ((int)key.ColumnOffset, key.Ascending, key.SortOn, key.TargetColor, key.CustomOrder))
+            .Select(key => ((int)key.ColumnOffset, key.Ascending, key.SortOn, key.TargetColor, key.CustomOrder, key.TargetIcon))
             .ToList();
 
         int rowCount = (int)(endRow - startRow + 1);
@@ -274,7 +278,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
         sortable.Sort((a, b) =>
         {
-            foreach (var (index, ascending, sortOn, targetColor, customOrder) in keyColIndexes)
+            foreach (var (index, ascending, sortOn, targetColor, customOrder, targetIcon) in keyColIndexes)
             {
                 // Excel always places blank (and error) cells last regardless of sort direction.
                 // Guard this BEFORE the ascending/descending negation so the blank-last ordering
@@ -321,10 +325,28 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                     if (aNoFill) // both no-fill — equal on this key, try next
                         continue;
                 }
+                else if (sortOn == SortOn.CellIcon && targetIcon is null)
+                {
+                    // R78-commands-sort-multikey-5-2: mirrors the no-target-color guard above —
+                    // with no specific icon chosen, a cell with no matching icon-set rule (no
+                    // icon at all) always sorts last, direction-independent; two DIFFERENT icons
+                    // with no target chosen fall through to CompareKey below as a no-op (0),
+                    // same rationale as R65-commands-sort-6-2 for color.
+                    var addrA = new CellAddress(_sheetId, startRow + (uint)a.OriginalIndex, startCol + (uint)index);
+                    var addrB = new CellAddress(_sheetId, startRow + (uint)b.OriginalIndex, startCol + (uint)index);
+                    var aIcon = GetEffectiveIcon(ctx.Workbook, sheet, addrA, a.Payloads[index].Cell);
+                    var bIcon = GetEffectiveIcon(ctx.Workbook, sheet, addrB, b.Payloads[index].Cell);
+                    bool aNoIcon = aIcon is null;
+                    bool bNoIcon = bIcon is null;
+                    if (aNoIcon != bNoIcon)
+                        return aNoIcon ? 1 : -1; // no icon always goes last
+                    if (aNoIcon) // both no-icon — equal on this key, try next
+                        continue;
+                }
 
                 var keyAddrA = new CellAddress(_sheetId, startRow + (uint)a.OriginalIndex, startCol + (uint)index);
                 var keyAddrB = new CellAddress(_sheetId, startRow + (uint)b.OriginalIndex, startCol + (uint)index);
-                var cmp = CompareKey(ctx.Workbook, sheet, keyAddrA, a.Payloads[index].Cell, keyAddrB, b.Payloads[index].Cell, sortOn, targetColor, customOrder, _options.CaseSensitive);
+                var cmp = CompareKey(ctx.Workbook, sheet, keyAddrA, a.Payloads[index].Cell, keyAddrB, b.Payloads[index].Cell, sortOn, targetColor, targetIcon, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -406,7 +428,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         uint endRow,
         uint startCol,
         uint endCol,
-        IReadOnlyList<(int RowIndex, bool Ascending, SortOn SortOn, CellColor? TargetColor, CustomSortOrder? CustomOrder)> keyRowIndexes,
+        IReadOnlyList<(int RowIndex, bool Ascending, SortOn SortOn, CellColor? TargetColor, CustomSortOrder? CustomOrder, CfIconOverride? TargetIcon)> keyRowIndexes,
         int rowCount,
         int colCount)
     {
@@ -431,7 +453,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
         columns.Sort((a, b) =>
         {
-            foreach (var (index, ascending, sortOn, targetColor, customOrder) in keyRowIndexes)
+            foreach (var (index, ascending, sortOn, targetColor, customOrder, targetIcon) in keyRowIndexes)
             {
                 // Excel always places blank (and error) cells last regardless of sort direction.
                 // Guard this BEFORE the ascending/descending negation so the blank-last ordering
@@ -472,10 +494,25 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                     if (aNoFill) // both no-fill — equal on this key, try next
                         continue;
                 }
+                else if (sortOn == SortOn.CellIcon && targetIcon is null)
+                {
+                    // R78-commands-sort-multikey-5-2: mirrors the no-target-color guard above,
+                    // and the top-to-bottom no-target-icon guard in Apply's comparator.
+                    var addrA = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)a.OriginalIndex);
+                    var addrB = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)b.OriginalIndex);
+                    var aIcon = GetEffectiveIcon(workbook, sheet, addrA, a.Payloads[index].Cell);
+                    var bIcon = GetEffectiveIcon(workbook, sheet, addrB, b.Payloads[index].Cell);
+                    bool aNoIcon = aIcon is null;
+                    bool bNoIcon = bIcon is null;
+                    if (aNoIcon != bNoIcon)
+                        return aNoIcon ? 1 : -1; // no icon always goes last
+                    if (aNoIcon) // both no-icon — equal on this key, try next
+                        continue;
+                }
 
                 var keyAddrA = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)a.OriginalIndex);
                 var keyAddrB = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)b.OriginalIndex);
-                var cmp = CompareKey(workbook, sheet, keyAddrA, a.Payloads[index].Cell, keyAddrB, b.Payloads[index].Cell, sortOn, targetColor, customOrder, _options.CaseSensitive);
+                var cmp = CompareKey(workbook, sheet, keyAddrA, a.Payloads[index].Cell, keyAddrB, b.Payloads[index].Cell, sortOn, targetColor, targetIcon, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -514,7 +551,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     /// </summary>
     private WorksheetSortStateModel BuildSortState(
         GridRange range,
-        IReadOnlyList<(int Index, bool Ascending, SortOn SortOn, CellColor? TargetColor, CustomSortOrder? CustomOrder)> keys,
+        IReadOnlyList<(int Index, bool Ascending, SortOn SortOn, CellColor? TargetColor, CustomSortOrder? CustomOrder, CfIconOverride? TargetIcon)> keys,
         bool leftToRight)
     {
         var model = new WorksheetSortStateModel
@@ -524,7 +561,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             CaseSensitive = _options.CaseSensitive ? true : null
         };
 
-        foreach (var (index, ascending, sortOn, _, customOrder) in keys)
+        foreach (var (index, ascending, sortOn, _, customOrder, _) in keys)
         {
             // Top-to-bottom: each key is a column, and its condition ref spans the full sorted
             // row range within that single column. Left-to-right: each key is a row, and its
@@ -540,11 +577,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             // R34-commands-sort-custom-deep-3: a custom-list ("First key sort order") key must
             // round-trip its list through the persisted customList attribute, or reopening the
             // saved file shows "Normal" instead of the custom order that was actually applied.
-            // Note: TargetColor (cellColor/fontColor sorts) has no corresponding fix here — a
-            // real dxfId must reference an entry in the workbook's <dxfs> differential-format
-            // list, and Workbook/Sheet have no such registry to allocate one from; stamping an
-            // arbitrary dxfId would point Excel at an unrelated (or out-of-range) format, which
-            // is worse than omitting the attribute.
+            // Note: TargetColor/TargetIcon (cellColor/fontColor/icon sorts) have no corresponding
+            // fix here — a real dxfId must reference an entry in the workbook's <dxfs>
+            // differential-format list, and Workbook/Sheet have no such registry to allocate one
+            // from; stamping an arbitrary dxfId would point Excel at an unrelated (or
+            // out-of-range) format, which is worse than omitting the attribute.
             model.Conditions.Add(new WorksheetSortConditionModel
             {
                 Reference = conditionRange.ToString(),
@@ -553,6 +590,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                 {
                     SortOn.CellColor => "cellColor",
                     SortOn.FontColor => "fontColor",
+                    SortOn.CellIcon => "icon",
                     _ => null
                 },
                 CustomList = customOrder is not null ? string.Join(",", customOrder.Tokens) : null
@@ -934,13 +972,23 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         }
     }
 
-    private static int CompareKey(Workbook workbook, Sheet sheet, CellAddress addressA, Cell? a, CellAddress addressB, Cell? b, SortOn sortOn, CellColor? targetColor, CustomSortOrder? customOrder, bool caseSensitive)
+    private static int CompareKey(Workbook workbook, Sheet sheet, CellAddress addressA, Cell? a, CellAddress addressB, Cell? b, SortOn sortOn, CellColor? targetColor, CfIconOverride? targetIcon, CustomSortOrder? customOrder, bool caseSensitive)
     {
         if (targetColor is not null && sortOn is SortOn.CellColor or SortOn.FontColor)
         {
             var aColor = GetEffectiveColor(workbook, sheet, addressA, a, wantFill: sortOn == SortOn.CellColor);
             var bColor = GetEffectiveColor(workbook, sheet, addressB, b, wantFill: sortOn == SortOn.CellColor);
             return CompareTargetColor(aColor, bColor, targetColor.Value);
+        }
+
+        // R78-commands-sort-multikey-5-2: mirrors the CellColor/FontColor target-match branch
+        // above for Sort On: Cell Icon — a chosen target icon pulls matching cells to the front
+        // (or back, via the caller's ascending/descending negation), same as a target color.
+        if (targetIcon is not null && sortOn == SortOn.CellIcon)
+        {
+            var aIcon = GetEffectiveIcon(workbook, sheet, addressA, a);
+            var bIcon = GetEffectiveIcon(workbook, sheet, addressB, b);
+            return CompareTargetIcon(aIcon, bIcon, targetIcon);
         }
 
         return sortOn switch
@@ -952,7 +1000,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             // by the caller, before CompareKey is ever reached for this key). Previously this fell
             // through to CompareNullableColor, which fabricated an R/G/B byte-value ordering Excel
             // never produces.
-            SortOn.CellColor or SortOn.FontColor => 0,
+            // R78-commands-sort-multikey-5-2: same reasoning applies to Cell Icon with no target
+            // icon chosen — two different icons have no inherent ordering without a pinned icon.
+            SortOn.CellColor or SortOn.FontColor or SortOn.CellIcon => 0,
             _ => CompareScalar(a?.Value ?? BlankValue.Instance, b?.Value ?? BlankValue.Instance, customOrder, caseSensitive)
         };
     }
@@ -1024,6 +1074,159 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         }
 
         return effective;
+    }
+
+    /// <summary>
+    /// R78-commands-sort-multikey-5-2: resolves the icon-set icon (icon-set style name + bucket
+    /// index, lowest to highest) Excel would display for a cell, mirroring
+    /// <see cref="GetEffectiveColor"/> above but for Sort On: Cell Icon. Only iconSet rules whose
+    /// thresholds are the common Number/Percent/Percentile shapes are resolved here — Formula and
+    /// the data-bar-only Auto* threshold types are left unresolved (treated as "no icon"), the
+    /// same narrowed scope <see cref="GetEffectiveColor"/> documents for aggregate-requiring CF
+    /// rule types: a full evaluator already exists in FreeX.Core.Calc.
+    /// ViewportConditionalFormatEvaluator, but that project is not referenced by
+    /// FreeX.Core.Commands.
+    /// </summary>
+    public static CfIconOverride? GetEffectiveIcon(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell)
+    {
+        if (sheet.ConditionalFormats.Count == 0)
+            return null;
+
+        var value = cell?.Value ?? BlankValue.Instance;
+        if (!TryGetNumber(value, out var cellNumber))
+            return null;
+
+        foreach (var rule in sheet.ConditionalFormats.OrderBy(r => r.Priority))
+        {
+            if (rule.RuleType != CfRuleType.IconSet)
+                continue;
+
+            var applies = false;
+            foreach (var range in rule.AllRanges)
+            {
+                if (range.Contains(address))
+                {
+                    applies = true;
+                    break;
+                }
+            }
+            if (!applies)
+                continue;
+
+            if (!TryResolveIconSetBucket(sheet, rule, cellNumber, out var bucket, out var iconCount))
+            {
+                if (rule.StopIfTrue)
+                    break;
+                continue;
+            }
+
+            var displayIndex = rule.IconSetReverse ? iconCount - 1 - bucket : bucket;
+            if (rule.IconOverrides.Count == iconCount)
+                return rule.IconOverrides[displayIndex];
+
+            return new CfIconOverride(rule.IconSetStyle ?? "3TrafficLights1", displayIndex);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Determines which icon-set bucket (0 = lowest icon) a cell's numeric value falls into for
+    /// an IconSet rule, evaluating its thresholds in ascending order. Percent/Percentile
+    /// thresholds are normalized against the rule's own applied range. Returns false if the
+    /// threshold shapes aren't fully resolvable (Formula/Min/Max/AutoMin/AutoMax, or malformed
+    /// threshold data) — see <see cref="GetEffectiveIcon"/> for the rationale.
+    /// </summary>
+    private static bool TryResolveIconSetBucket(Sheet sheet, ConditionalFormat rule, double cellValue, out int bucket, out int iconCount)
+    {
+        bucket = 0;
+        iconCount = GetIconSetCount(rule.IconSetStyle);
+        var thresholdCount = iconCount - 1;
+        var thresholdStartIndex = rule.IconSetThresholds.Count >= iconCount ? 1 : 0;
+        if (rule.IconSetThresholds.Count - thresholdStartIndex < thresholdCount)
+            return false;
+
+        List<double>? rangeValues = null;
+        for (var i = 0; i < thresholdCount; i++)
+        {
+            var threshold = rule.IconSetThresholds[thresholdStartIndex + i];
+            double thresholdValue;
+            switch (threshold.Type)
+            {
+                case CfThresholdType.Number:
+                    if (!double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out thresholdValue))
+                        return false;
+                    break;
+                case CfThresholdType.Percent:
+                {
+                    rangeValues ??= CollectIconSetRangeNumbers(sheet, rule);
+                    if (rangeValues.Count == 0 || !double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pct))
+                        return false;
+                    var min = rangeValues.Min();
+                    var max = rangeValues.Max();
+                    thresholdValue = min + (max - min) * (pct / 100.0);
+                    break;
+                }
+                case CfThresholdType.Percentile:
+                {
+                    rangeValues ??= CollectIconSetRangeNumbers(sheet, rule);
+                    if (rangeValues.Count == 0 || !double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pctile))
+                        return false;
+                    thresholdValue = Percentile(rangeValues, pctile / 100.0);
+                    break;
+                }
+                default:
+                    // Formula/Min/Max/AutoMin/AutoMax: not resolvable from the cell's value alone.
+                    return false;
+            }
+
+            var greaterThanOrEqual = threshold.GreaterThanOrEqual ?? true;
+            var matches = greaterThanOrEqual ? cellValue >= thresholdValue : cellValue > thresholdValue;
+            if (matches)
+                bucket = i + 1;
+            else
+                break; // thresholds are ascending — once one fails, every higher one fails too
+        }
+
+        return true;
+    }
+
+    /// <summary>Icon count for an icon-set style name, mirroring ViewportConditionalFormatEvaluator.GetIconSetCount (duplicated here since FreeX.Core.Commands does not reference FreeX.Core.Calc).</summary>
+    private static int GetIconSetCount(string? style) =>
+        !string.IsNullOrWhiteSpace(style) && char.IsDigit(style[0])
+            ? Math.Clamp(style[0] - '0', 3, 5)
+            : 3;
+
+    private static List<double> CollectIconSetRangeNumbers(Sheet sheet, ConditionalFormat rule)
+    {
+        var values = new List<double>();
+        foreach (var range in rule.AllRanges)
+        {
+            for (var row = range.Start.Row; row <= range.End.Row; row++)
+            {
+                for (var col = range.Start.Col; col <= range.End.Col; col++)
+                {
+                    if (TryGetNumber(sheet.GetValue(row, col), out var num))
+                        values.Add(num);
+                }
+            }
+        }
+        return values;
+    }
+
+    private static double Percentile(List<double> values, double p)
+    {
+        var sorted = values.OrderBy(v => v).ToList();
+        if (sorted.Count == 1)
+            return sorted[0];
+
+        var rank = p * (sorted.Count - 1);
+        var lo = (int)Math.Floor(rank);
+        var hi = (int)Math.Ceiling(rank);
+        if (lo == hi)
+            return sorted[lo];
+
+        return sorted[lo] + (sorted[hi] - sorted[lo]) * (rank - lo);
     }
 
     /// <summary>
@@ -1178,6 +1381,16 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     {
         var aMatches = a == targetColor;
         var bMatches = b == targetColor;
+        if (aMatches == bMatches)
+            return 0;
+
+        return aMatches ? -1 : 1;
+    }
+
+    private static int CompareTargetIcon(CfIconOverride? a, CfIconOverride? b, CfIconOverride targetIcon)
+    {
+        var aMatches = a == targetIcon;
+        var bMatches = b == targetIcon;
         if (aMatches == bMatches)
             return 0;
 

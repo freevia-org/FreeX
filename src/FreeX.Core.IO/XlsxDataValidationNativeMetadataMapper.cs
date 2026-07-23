@@ -270,10 +270,10 @@ internal static class XlsxDataValidationNativeMetadataMapper
             validationElement.SetAttributeValue(ShowDropDownAttributeName, "1");
         if (validation.AlertStyle != DvAlertStyle.Stop)
             validationElement.SetAttributeValue(ErrorStyleAttributeName, ToDataValidationAlertStyle(validation.AlertStyle));
-        if (!validation.ShowInputMessage)
-            validationElement.SetAttributeValue(ShowInputMessageAttributeName, "0");
-        if (!validation.ShowErrorMessage)
-            validationElement.SetAttributeValue(ShowErrorMessageAttributeName, "0");
+        if (validation.ShowInputMessage)
+            validationElement.SetAttributeValue(ShowInputMessageAttributeName, "1");
+        if (validation.ShowErrorMessage)
+            validationElement.SetAttributeValue(ShowErrorMessageAttributeName, "1");
         if (!string.IsNullOrEmpty(validation.ErrorTitle))
             validationElement.SetAttributeValue(ErrorTitleAttributeName, validation.ErrorTitle);
         if (!string.IsNullOrEmpty(validation.ErrorMessage))

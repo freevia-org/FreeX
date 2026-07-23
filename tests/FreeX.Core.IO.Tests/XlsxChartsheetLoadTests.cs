@@ -86,6 +86,68 @@ public class XlsxChartsheetLoadTests
         reloaded.Sheets.Should().ContainSingle().Which.Name.Should().Be("Sheet1");
     }
 
+    // R78-meta-2: the rename-reattachment queue used to be populated from ANY renamed target
+    // sheet with no relationship-type/chartsheet check, so deleting a chartsheet while
+    // independently renaming an unrelated normal worksheet in the same save let the renamed
+    // worksheet's <sheet> entry get dequeued as if it were the deleted chartsheet's placeholder --
+    // rewiring the renamed worksheet onto the chartsheet part and losing its real worksheet
+    // content.
+    [Fact]
+    public void Save_AfterDeletingChartsheetAndRenamingAnotherWorksheet_DoesNotMisattachChartToRenamedWorksheet()
+    {
+        var adapter = new XlsxFileAdapter();
+        using var source = File.OpenRead(ChartsheetCorpusPath());
+        var workbook = adapter.Load(source);
+        var chart = workbook.GetSheet("Chart1")!;
+        workbook.RemoveSheet(chart.Id);
+        var sheet1 = workbook.GetSheet("Sheet1")!;
+        sheet1.Name = "Renamed1";
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+
+        reloaded.Sheets.Select(s => s.Name).Should().NotContain("Chart1",
+            "the deleted chartsheet must not be resurrected under the renamed worksheet's identity");
+        var renamed = reloaded.GetSheet("Renamed1");
+        renamed.Should().NotBeNull();
+        renamed!.IsChartsheet.Should().BeFalse(
+            "the renamed sheet is an ordinary worksheet, not a reattached chartsheet placeholder");
+        renamed.GetCell(new CellAddress(renamed.Id, 2, 1))?.Value.Should().Be(new NumberValue(1),
+            "the renamed worksheet's own real content must survive, not be replaced by the deleted chart");
+    }
+
+    // No-regression sibling: the genuine chartsheet-rename reattachment path (an actual chartsheet
+    // renamed, not deleted) must still work correctly even when an unrelated normal worksheet is
+    // ALSO renamed in the same save -- the new chartsheet-only filter on the queue must not
+    // exclude a real chartsheet rename just because another rename is also present.
+    [Fact]
+    public void Save_AfterRenamingBothChartsheetAndAnotherWorksheet_BothRenamesApplyCorrectly()
+    {
+        var adapter = new XlsxFileAdapter();
+        using var source = File.OpenRead(ChartsheetCorpusPath());
+        var workbook = adapter.Load(source);
+        workbook.GetSheet("Chart1")!.Name = "RenamedChart";
+        workbook.GetSheet("Sheet1")!.Name = "Renamed1";
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+
+        reloaded.Sheets.Should().HaveCount(2,
+            "renaming two sheets must not leave a stray placeholder or lose a sheet");
+        var renamedChart = reloaded.GetSheet("RenamedChart");
+        renamedChart.Should().NotBeNull();
+        renamedChart!.IsChartsheet.Should().BeTrue("the renamed chartsheet must still be recognized as a chartsheet");
+        var renamedWorksheet = reloaded.GetSheet("Renamed1");
+        renamedWorksheet.Should().NotBeNull();
+        renamedWorksheet!.IsChartsheet.Should().BeFalse();
+        renamedWorksheet.GetCell(new CellAddress(renamedWorksheet.Id, 2, 1))?.Value.Should().Be(new NumberValue(1),
+            "the renamed worksheet's own content must survive alongside the renamed chartsheet");
+    }
+
     // Sibling no-regression: deleting a normal worksheet (never touched by this reclaim loop at
     // all, since it only processes non-worksheet relationship types) must leave an untouched
     // chartsheet elsewhere in the workbook completely unaffected. Inspect the saved package

@@ -370,12 +370,24 @@ public static partial class BuiltInFunctions
 
     private static double MroundWithExcelDigits(double number, double multiple)
     {
-        if (!TryToExcelDecimal(number, out var n) || !TryToExcelDecimal(multiple, out var m) || m == 0m)
-            return Math.Round(number / multiple, MidpointRounding.AwayFromZero) * multiple;
+        if (TryToExcelDecimal(number, out var n) && TryToExcelDecimal(multiple, out var m) && m != 0m)
+        {
+            try
+            {
+                var quotient = n / m;
+                var roundedQuotient = Math.Round(quotient, 0, MidpointRounding.AwayFromZero);
+                return (double)(roundedQuotient * m);
+            }
+            catch (OverflowException)
+            {
+                // Magnitude gap between number and multiple exceeds decimal's ~7.9e28
+                // range (e.g. 1e15 vs 1e-15) even though each individually fits —
+                // fall back to double math, same as CeilingToMultiple/FloorToMultiple/
+                // TruncateToMultiple above.
+            }
+        }
 
-        var quotient = n / m;
-        var roundedQuotient = Math.Round(quotient, 0, MidpointRounding.AwayFromZero);
-        return (double)(roundedQuotient * m);
+        return Math.Round(number / multiple, MidpointRounding.AwayFromZero) * multiple;
     }
 
     private static bool TryToExcelDecimal(double value, out decimal result)

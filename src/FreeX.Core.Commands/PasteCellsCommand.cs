@@ -12,7 +12,8 @@ public sealed class PasteCellsCommand : IWorkbookCommand
     private readonly IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRuns;
     private readonly IReadOnlyDictionary<CellAddress, string>? _hyperlinks;
     private readonly IReadOnlyDictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadata;
-    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata)>? _snapshot;
+    private readonly IReadOnlyDictionary<CellAddress, CellPhoneticGuide>? _phoneticGuides;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata, bool HadPhoneticGuide, CellPhoneticGuide? OldPhoneticGuide)>? _snapshot;
 
     public string Label => _cells.Count == 1 ? "Paste Cell" : $"Paste {_cells.Count} Cells";
 
@@ -21,13 +22,15 @@ public sealed class PasteCellsCommand : IWorkbookCommand
         IReadOnlyList<(CellAddress Address, Cell Cell)> cells,
         IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns = null,
         IReadOnlyDictionary<CellAddress, string>? hyperlinks = null,
-        IReadOnlyDictionary<CellAddress, HyperlinkMetadata>? hyperlinkMetadata = null)
+        IReadOnlyDictionary<CellAddress, HyperlinkMetadata>? hyperlinkMetadata = null,
+        IReadOnlyDictionary<CellAddress, CellPhoneticGuide>? phoneticGuides = null)
     {
         _sheetId = sheetId;
         _cells = cells;
         _richTextRuns = richTextRuns;
         _hyperlinks = hyperlinks;
         _hyperlinkMetadata = hyperlinkMetadata;
+        _phoneticGuides = phoneticGuides;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -64,6 +67,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand
             var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(addr, out var oldRuns);
             var hadHyperlink = sheet.Hyperlinks.TryGetValue(addr, out var oldHyperlink);
             var hadHyperlinkMetadata = sheet.HyperlinkMetadata.TryGetValue(addr, out var oldHyperlinkMetadata);
+            var hadPhoneticGuide = sheet.CellPhoneticGuides.TryGetValue(addr, out var oldPhoneticGuide);
             _snapshot.Add((
                 addr,
                 sheet.GetCell(addr)?.Clone(),
@@ -73,7 +77,9 @@ public sealed class PasteCellsCommand : IWorkbookCommand
                 hadHyperlink,
                 oldHyperlink,
                 hadHyperlinkMetadata,
-                oldHyperlinkMetadata));
+                oldHyperlinkMetadata,
+                hadPhoneticGuide,
+                oldPhoneticGuide));
 
             // A destination cell that is a non-anchor (hidden/covered) member of an existing merged
             // region must stay empty, matching Excel: only the merge's top-left anchor cell ever
@@ -101,6 +107,13 @@ public sealed class PasteCellsCommand : IWorkbookCommand
             else
                 sheet.HyperlinkMetadata.Remove(addr);
 
+            // R78-selfreg-twin-sweep-5: carry the phonetic guide (furigana) alongside its
+            // RichTextRuns companion at the pasted target, matching that dictionary's handling.
+            if (_phoneticGuides is not null && _phoneticGuides.TryGetValue(addr, out var newPhoneticGuide))
+                sheet.CellPhoneticGuides[addr] = newPhoneticGuide;
+            else
+                sheet.CellPhoneticGuides.Remove(addr);
+
             affected.Add(addr);
         }
 
@@ -113,7 +126,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (addr, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata) in _snapshot)
+        foreach (var (addr, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata, hadPhoneticGuide, oldPhoneticGuide) in _snapshot)
         {
             if (oldCell is null)
             {
@@ -139,6 +152,11 @@ public sealed class PasteCellsCommand : IWorkbookCommand
                 sheet.HyperlinkMetadata[addr] = oldHyperlinkMetadata;
             else
                 sheet.HyperlinkMetadata.Remove(addr);
+
+            if (hadPhoneticGuide && oldPhoneticGuide is not null)
+                sheet.CellPhoneticGuides[addr] = oldPhoneticGuide;
+            else
+                sheet.CellPhoneticGuides.Remove(addr);
         }
     }
 

@@ -9,6 +9,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
     private readonly CellAddress _destination;
     private readonly GridRange? _destinationRange;
     private readonly bool _transpose;
+    private readonly IReadOnlyList<GridRange>? _sourceAreas;
     private Dictionary<CellAddress, string?>? _previous;
     private Dictionary<CellAddress, ThreadedComment?>? _previousThreaded;
     // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
@@ -19,12 +20,19 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
 
     public string Label => "Paste Comments";
 
-    public PasteCommentsCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination, bool transpose)
+    // R78-commands-paste-special-5-3: `sourceAreas`, when supplied with more than one area,
+    // records every individually Ctrl+clicked area of a multi-area source selection (mirroring
+    // InternalClipboard.SourceAreas in MainWindow.ClipboardCommands.cs). `sourceRange` remains
+    // only the BOUNDING BOX of those areas, so without this, a comment sitting in the gap between
+    // disjoint areas (never part of the selection) would still be treated as "copied" and leaked
+    // onto the destination.
+    public PasteCommentsCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination, bool transpose, IReadOnlyList<GridRange>? sourceAreas = null)
     {
         _sheetId = sheetId;
         _sourceRange = sourceRange;
         _destination = destination;
         _transpose = transpose;
+        _sourceAreas = sourceAreas is { Count: > 1 } ? sourceAreas : null;
     }
 
     // R34-commands-paste-special-3-2: when the caller knows the full destination selection (not
@@ -33,8 +41,8 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
     // PasteCommandFactory.CreateInternalPasteCommand tiles Values/Formulas/Formats/All onto a
     // destination selection that is a whole multiple of the copied range, instead of only ever
     // filling the selection's first (top-left) cell.
-    public PasteCommentsCommand(SheetId sheetId, GridRange sourceRange, GridRange destinationRange, bool transpose)
-        : this(sheetId, sourceRange, destinationRange.Start, transpose)
+    public PasteCommentsCommand(SheetId sheetId, GridRange sourceRange, GridRange destinationRange, bool transpose, IReadOnlyList<GridRange>? sourceAreas = null)
+        : this(sheetId, sourceRange, destinationRange.Start, transpose, sourceAreas)
     {
         _destinationRange = destinationRange;
     }
@@ -54,7 +62,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
         // source/destination range, reading sourceSheet.CommentAuthors/ShownComments LIVE inside
         // the loop would observe values already overwritten by an earlier iteration instead of
         // each note's own original author/pinned state.
-        var sourceComments = _sourceRange.AllCells()
+        var sourceComments = EnumerateSourceCells()
             .Where(sourceSheet.Comments.ContainsKey)
             .Select(address => (
                 Address: address,
@@ -62,7 +70,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
                 Author: sourceSheet.CommentAuthors.TryGetValue(address, out var author) ? author : null,
                 Shown: sourceSheet.ShownComments.Contains(address)))
             .ToList();
-        var sourceThreadedComments = _sourceRange.AllCells()
+        var sourceThreadedComments = EnumerateSourceCells()
             .Where(sourceSheet.ThreadedComments.ContainsKey)
             .Select(address => (Address: address, Comment: sourceSheet.ThreadedComments[address]))
             .ToList();
@@ -159,6 +167,15 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
 
     private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
         comment with { Replies = comment.Replies.ToList() };
+
+    // R78-commands-paste-special-5-3: when _sourceAreas records a multi-area (Ctrl+click) source,
+    // only cells that fall inside one of the ACTUAL copied areas count as "copied" -- a comment
+    // living in the gap between disjoint areas must never be picked up. With no (or a single) area
+    // recorded, this is unchanged from iterating the whole bounding box.
+    private IEnumerable<CellAddress> EnumerateSourceCells() =>
+        _sourceAreas is { } areas
+            ? areas.SelectMany(area => area.AllCells()).Distinct()
+            : _sourceRange.AllCells();
 
     // R34-commands-paste-special-3-2: when the constructor was given the full destination
     // selection (not just its top-left anchor) and that selection is larger than the copied

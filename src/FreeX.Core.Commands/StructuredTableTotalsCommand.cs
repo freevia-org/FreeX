@@ -303,8 +303,29 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
         if (cell.Value is TextValue text)
             return column with { TotalsRowLabel = text.Value, TotalsRowFunction = null, TotalsRowFormula = null };
 
+        // R78-io-table-listobject-5-2: a literal, non-text scalar (a plain number, boolean, date
+        // serial, or error) typed directly into the totals cell has no OOXML totals-row slot of its
+        // own -- totalsRowLabel is string-only (ECMA-376 18.3.1.90) and totalsRowFunction only covers
+        // the built-in SUBTOTAL aggregates plus "custom" for an explicit formula. Round it through the
+        // same custom-formula slot the non-SUBTOTAL formula branch above uses, storing the literal's
+        // own text as a trivial constant formula, so ResolveTotalsCell's Cell.FromFormula(...)
+        // reconstructs the identical value on re-show instead of silently discarding it via the
+        // all-null fallback below (previously the only outcome for every scalar but text).
+        if (cell.Value is not BlankValue && FormatLiteralTotalsFormula(cell.Value) is { } literalFormula)
+            return column with { TotalsRowFormula = literalFormula, TotalsRowFunction = "custom", TotalsRowLabel = null };
+
         return column with { TotalsRowLabel = null, TotalsRowFunction = null, TotalsRowFormula = null };
     }
+
+    private static string? FormatLiteralTotalsFormula(ScalarValue value) =>
+        value switch
+        {
+            NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            ErrorValue error => error.Code,
+            _ => null
+        };
 
     private static IEnumerable<StructuredTableModel> BuildTablesAfterInsert(
         IReadOnlyList<StructuredTableModel> tables,

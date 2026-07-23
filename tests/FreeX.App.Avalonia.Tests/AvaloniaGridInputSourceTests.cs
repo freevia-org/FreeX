@@ -99,7 +99,10 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("AddFormulaReferenceHighlightOverlay(overlay, viewport, showHeadings, zoomFactor);");
         source.Should().Contain("TryGetDisplayedRangeBounds(");
         source.Should().Contain("IsHitTestVisible = false");
-        source.Should().Contain("_formulaBox.Foreground = Brushes.Transparent;");
+        // R78-render-inplace-editor-5-2: the reference-coloring overlay logic was generalized to an
+        // (editor, overlay) pair so the in-cell editor gets the same colored runs as the formula bar
+        // -- it no longer hardcodes `_formulaBox` here.
+        source.Should().Contain("editor.Foreground = Brushes.Transparent;");
         source.Should().Contain("new Run(text) { Foreground = brush }");
         source.Should().Contain("RefreshShell(\"Ready\");");
     }
@@ -236,7 +239,10 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("Stopwatch.GetElapsedTime(_lastCellPointerPressTimestamp, now).TotalMilliseconds");
         source.Should().Contain("CalculateInlineCellCaretIndex(");
         source.Should().Contain("BeginInlineCellEdit(address, editText, caretIndex);");
-        source.Should().Contain("private TextBox CreateInlineCellEditor(");
+        // R78-render-inplace-editor-5-2: CreateInlineCellEditor now returns the editor wrapped
+        // together with its own reference-highlight overlay in a container Control (mirroring the
+        // formula bar's overlay host), instead of returning the bare TextBox directly.
+        source.Should().Contain("private Control CreateInlineCellEditor(");
         source.Should().Contain("AutomationProperties.SetAutomationId(editor, \"WorksheetInlineCellEditor\");");
         source.Should().Contain("editor.Focus();");
         source.Should().Contain("editor.CaretIndex = caret;");

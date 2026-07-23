@@ -313,6 +313,18 @@ public sealed partial class XlsxFileAdapter
             XlsxLegacyCommentVisibilityNormalizer.NormalizePackage(packageStream, workbook);
         }
 
+        // R78-selfreg-twin-sweep-1: no source package exists at all, so there is no
+        // XlsxSharedStringMetadataPreserver.PreserveRichTextAndPhonetics pass (called from inside
+        // PreserveSourcePackageParts, further down -- unreachable on this fresh-workbook path) to
+        // fall back on; this is the only chance to re-emit a cell's phonetic guide before the
+        // package is final. Must run before the early-return path below, like the legacy-comment
+        // normalizer immediately above.
+        if (!hasSourcePackage && featurePlan.HasCellPhoneticGuides)
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetCellPhoneticGuideWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (!hasSourcePackage)
         {
             SaveSourcePackageIndependentPostProcessingMetadata();
@@ -324,6 +336,22 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         var sourceParts = PreserveSourcePackageParts(workbook, packageStream, preserveVbaProject);
+
+        // R78-selfreg-twin-sweep-1: run AFTER source-part preservation (specifically after
+        // XlsxSharedStringMetadataPreserver.PreserveRichTextAndPhonetics, called from inside
+        // PreserveSourcePackageParts above) so that mechanism -- which restores a guide that came
+        // verbatim from the SOURCE package by patching the shared-string entry in place, keeping an
+        // untouched cell's t="s" encoding byte-stable -- gets first chance to fix an already-correct
+        // cell. This writer's own already-has-markup checks then see that fix and skip it, only
+        // converting a cell that STILL has no phonetic guide -- e.g. one whose guide only exists in
+        // the CURRENT in-memory model (a brand-new cell, copy/pasted, that never had ANY content at
+        // this address in the source, so PreserveRichTextAndPhonetics has nothing to cross-check it
+        // against).
+        if (featurePlan.HasCellPhoneticGuides)
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetCellPhoneticGuideWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
 
         // Re-apply x14 data validations after source-part preservation. The source package
         // restores the original worksheet XML (which may carry an x14 DV extLst block); we
@@ -1527,6 +1555,14 @@ public sealed partial class XlsxFileAdapter
         public bool HasFullCalculationOnLoad;
         public bool HasModeledPrinterAttributes;
         public bool HasPhoneticProperties;
+        /// <summary>
+        /// True when any sheet has at least one cell with a preserved phonetic guide (furigana).
+        /// Gates <see cref="XlsxWorksheetCellPhoneticGuideWriter"/> (R78-selfreg-twin-sweep-1),
+        /// which re-emits a cell's <c>&lt;rPh&gt;</c>/<c>&lt;phoneticPr&gt;</c> markup after the
+        /// full-save (ClosedXML) rich-text write above -- ApplyRichTextRuns' IXLRichText API has
+        /// no way to express a phonetic guide, so it would otherwise be silently dropped.
+        /// </summary>
+        public bool HasCellPhoneticGuides;
         public bool HasAllowEditRanges;
         public bool HasAdvancedConditionalFormats;
         public bool HasX14DataValidations;
@@ -1599,6 +1635,7 @@ public sealed partial class XlsxFileAdapter
             HasFullCalculationOnLoad |= sheet.FullCalculationOnLoad;
             HasModeledPrinterAttributes |= XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes(sheet);
             HasPhoneticProperties |= sheet.PhoneticProperties is not null;
+            HasCellPhoneticGuides |= sheet.CellPhoneticGuides.Count > 0;
             HasAllowEditRanges |= sheet.AllowEditRanges.Count > 0;
             HasAdvancedConditionalFormats |= XlsxAdvancedConditionalFormatWriter.HasAdvancedConditionalFormats(sheet);
             HasX14DataValidations |= XlsxX14DataValidationWriter.HasX14DataValidations(sheet);

@@ -9,16 +9,24 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
     private readonly CellAddress _destination;
     private readonly GridRange? _destinationRange;
     private readonly bool _transpose;
+    private readonly IReadOnlyList<GridRange>? _sourceAreas;
     private List<DataValidation>? _previous;
 
     public string Label => "Paste Data Validation";
 
-    public PasteDataValidationCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination, bool transpose)
+    // R78-commands-paste-special-5-4: `sourceAreas`, when supplied with more than one area,
+    // records every individually Ctrl+clicked area of a multi-area source selection (mirroring
+    // InternalClipboard.SourceAreas in MainWindow.ClipboardCommands.cs). `sourceRange` remains
+    // only the BOUNDING BOX of those areas, so without this, a rule that only overlaps the gap
+    // between disjoint areas (never part of the selection) would still be treated as "copied" and
+    // cloned onto the destination.
+    public PasteDataValidationCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination, bool transpose, IReadOnlyList<GridRange>? sourceAreas = null)
     {
         _sheetId = sheetId;
         _sourceRange = sourceRange;
         _destination = destination;
         _transpose = transpose;
+        _sourceAreas = sourceAreas is { Count: > 1 } ? sourceAreas : null;
     }
 
     // R34-commands-paste-special-3-2: when the caller knows the full destination selection (not
@@ -27,8 +35,8 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
     // PasteCommandFactory.CreateInternalPasteCommand tiles Values/Formulas/Formats/All onto a
     // destination selection that is a whole multiple of the copied range, instead of only ever
     // filling the selection's first (top-left) cell.
-    public PasteDataValidationCommand(SheetId sheetId, GridRange sourceRange, GridRange destinationRange, bool transpose)
-        : this(sheetId, sourceRange, destinationRange.Start, transpose)
+    public PasteDataValidationCommand(SheetId sheetId, GridRange sourceRange, GridRange destinationRange, bool transpose, IReadOnlyList<GridRange>? sourceAreas = null)
+        : this(sheetId, sourceRange, destinationRange.Start, transpose, sourceAreas)
     {
         _destinationRange = destinationRange;
     }
@@ -67,20 +75,19 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
                 // (matching FormatPainterDataValidationCommand's includeAdditionalRanges:false).
                 foreach (var sourceRuleRange in EnumerateRuleRanges(rule))
                 {
-                    var intersection = Intersect(sourceRuleRange, _sourceRange);
-                    if (intersection is null)
-                        continue;
-
-                    var mappedRange = MapRange(intersection.Value, _sourceRange, tileAnchor, _transpose);
-                    var rowDelta = (int)mappedRange.Start.Row - (int)intersection.Value.Start.Row;
-                    var colDelta = (int)mappedRange.Start.Col - (int)intersection.Value.Start.Col;
-                    targetSheet.DataValidations.Add(DataValidationCopySupport.CloneValidation(
-                        rule,
-                        mappedRange,
-                        targetSheet.Name,
-                        rowDelta,
-                        colDelta,
-                        includeAdditionalRanges: false));
+                    foreach (var intersection in IntersectWithSource(sourceRuleRange))
+                    {
+                        var mappedRange = MapRange(intersection, _sourceRange, tileAnchor, _transpose);
+                        var rowDelta = (int)mappedRange.Start.Row - (int)intersection.Start.Row;
+                        var colDelta = (int)mappedRange.Start.Col - (int)intersection.Start.Col;
+                        targetSheet.DataValidations.Add(DataValidationCopySupport.CloneValidation(
+                            rule,
+                            mappedRange,
+                            targetSheet.Name,
+                            rowDelta,
+                            colDelta,
+                            includeAdditionalRanges: false));
+                    }
                 }
             }
         }
@@ -150,6 +157,27 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
 
     private static GridRange? Intersect(GridRange first, GridRange second) =>
         GridRange.TryIntersect(first, second, out var intersection) ? intersection : null;
+
+    // R78-commands-paste-special-5-4: when _sourceAreas records a multi-area (Ctrl+click) source,
+    // a rule's range is only "copied" over the portion(s) that overlap an ACTUAL copied area --
+    // intersecting against the whole _sourceRange bounding box would also pick up a rule that only
+    // touches the gap between disjoint areas, which was never part of the selection. With no (or a
+    // single) area recorded, this is unchanged from intersecting against the whole bounding box.
+    private IEnumerable<GridRange> IntersectWithSource(GridRange sourceRuleRange)
+    {
+        if (_sourceAreas is not { } areas)
+        {
+            if (Intersect(sourceRuleRange, _sourceRange) is { } intersection)
+                yield return intersection;
+            yield break;
+        }
+
+        foreach (var area in areas)
+        {
+            if (Intersect(sourceRuleRange, area) is { } intersection)
+                yield return intersection;
+        }
+    }
 
     // R52-commands-data-validation-apply-3-1/-3-2: mirrors ClearDataValidationCommand.Apply's
     // subtract-and-replace loop (SetDataValidationCommand.cs) -- checking AppliesTo AND

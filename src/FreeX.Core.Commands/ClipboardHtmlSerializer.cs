@@ -194,7 +194,10 @@ public static class ClipboardHtmlSerializer
     private static string EscapeHtml(string text) =>
         text.Replace("&", "&amp;", StringComparison.Ordinal)
             .Replace("<", "&lt;", StringComparison.Ordinal)
-            .Replace(">", "&gt;", StringComparison.Ordinal);
+            .Replace(">", "&gt;", StringComparison.Ordinal)
+            .Replace("\r\n", "<br>", StringComparison.Ordinal)
+            .Replace("\n", "<br>", StringComparison.Ordinal)
+            .Replace("\r", "<br>", StringComparison.Ordinal);
 
     private static int Utf8Length(string text) => Encoding.UTF8.GetByteCount(text);
 }

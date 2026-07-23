@@ -474,6 +474,25 @@ public sealed class WorkbookSession
         EnsureCellVisible(cursor);
     }
 
+    /// <summary>
+    /// Moves the active cell to <paramref name="address"/> WITHOUT touching <see cref="SelectedRange"/>
+    /// or <see cref="SelectedRanges"/> -- unlike <see cref="SelectCell"/>, which always collapses the
+    /// selection down to a single cell. Used by Enter/Tab active-cell-cycling-within-a-selection
+    /// (R78-render-selection-namebox-5-2): when a multi-cell range is already selected, Excel moves
+    /// the active cell within it (wrapping at the range's edges) while keeping the whole range
+    /// highlighted, mirroring the WPF host's MoveActiveCellWithinSelection (MainWindow.Selection.cs).
+    /// </summary>
+    public void MoveActiveCellWithinSelection(CellAddress address)
+    {
+        if (!IsValidAddress(address))
+            throw new ArgumentOutOfRangeException(nameof(address), "Active cell must be inside the worksheet bounds.");
+
+        ActiveCell = address;
+        ActiveSheet.ActiveRow = address.Row;
+        ActiveSheet.ActiveCol = address.Col;
+        EnsureActiveCellVisible();
+    }
+
     private void ValidateSelectionRange(GridRange range, string paramName)
     {
         if (!range.Start.Sheet.Equals(ActiveSheet.Id))

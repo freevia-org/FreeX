@@ -2,6 +2,8 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
+using FreeX.Core.Model;
+
 namespace FreeX.Core.IO;
 
 internal static class XlsxUnsupportedSheetReferencePreserver
@@ -9,7 +11,8 @@ internal static class XlsxUnsupportedSheetReferencePreserver
     public static void Preserve(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
-        XlsxSourcePackagePreservationContext? context)
+        XlsxSourcePackagePreservationContext? context,
+        Workbook? workbook = null)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -68,6 +71,13 @@ internal static class XlsxUnsupportedSheetReferencePreserver
         // the queue is correctly empty for it). Pairing is by relative order among these "orphaned"
         // names only, so unrelated sheets that kept their name (or were added/removed elsewhere)
         // never shift the match, unlike pairing by raw absolute position would.
+        //
+        // R78-meta-2: an ordinary worksheet that got renamed in the SAME save is *also* an
+        // "orphaned" target name by that definition (its new name isn't any source sheet's name
+        // either), so it must not be allowed to satisfy this queue -- otherwise it can be
+        // misattributed as a chartsheet's renamed placeholder if a chartsheet was deleted (not
+        // renamed) in the same save. The live model is consulted (by current/new name, which is
+        // what the target sheet carries) to keep only names that are genuinely still a chartsheet.
         var sourceSheetNamesAll = sourceSheets
             .Elements(workbookNs + "sheet")
             .Select(sheet => sheet.Attribute("name")?.Value)
@@ -78,7 +88,9 @@ internal static class XlsxUnsupportedSheetReferencePreserver
                 .Where(sheet =>
                 {
                     var targetName = sheet.Attribute("name")?.Value;
-                    return !string.IsNullOrWhiteSpace(targetName) && !sourceSheetNamesAll.Contains(targetName);
+                    return !string.IsNullOrWhiteSpace(targetName) &&
+                        !sourceSheetNamesAll.Contains(targetName) &&
+                        (workbook is null || (workbook.GetSheet(targetName)?.IsChartsheet ?? false));
                 }));
 
         var usedSheetIds = targetSheets

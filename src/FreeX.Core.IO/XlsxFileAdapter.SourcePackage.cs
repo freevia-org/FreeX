@@ -85,7 +85,7 @@ public sealed partial class XlsxFileAdapter
         if (sourceParts.HasExternalLinks)
             XlsxExternalLinkReferencePreserver.Preserve(sourceArchive, generatedArchive);
         if (sourceParts.HasUnsupportedSheetParts)
-            XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
+            XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
         if (sourceParts.HasDrawings)
         {
             var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, generatedArchive, context, workbook);

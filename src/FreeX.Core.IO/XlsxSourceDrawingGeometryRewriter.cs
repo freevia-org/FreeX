@@ -119,16 +119,26 @@ internal static class XlsxSourceDrawingGeometryRewriter
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
         var sourcePictures = sheet.Pictures.Where(picture => picture.IsSourceLoaded).ToList();
-        var pictureElements = drawingRoot.Descendants(SpreadsheetDrawingNs + "pic")
-            .Where(element => !IsWithinGroupShape(element))
-            .ToList();
+        // R78-io-drawing-grpsp-move: group children stay in the candidate pool now (matched by
+        // identity in MatchPictureElementsToModels, same as any other picture) -- they are routed to
+        // RewriteGroupChildGeometry below instead of being excluded outright, so a moved/resized
+        // grouped picture's edit is no longer silently dropped on save.
+        var pictureElements = drawingRoot.Descendants(SpreadsheetDrawingNs + "pic").ToList();
         foreach (var (pictureElement, picture) in MatchPictureElementsToModels(pictureElements, sourcePictures))
         {
-            var anchor = FindNearestAnchorElement(pictureElement);
-            if (anchor is not null &&
-                RewriteAnchorGeometry(anchor, sheet, picture.Width, picture.Height, picture.AnchorOffsetX, picture.AnchorOffsetY))
+            if (IsWithinGroupShape(pictureElement))
             {
-                changed = true;
+                if (RewriteGroupChildGeometry(pictureElement, picture.Width, picture.Height, picture.AnchorOffsetX, picture.AnchorOffsetY, drawingNs))
+                    changed = true;
+            }
+            else
+            {
+                var anchor = FindNearestAnchorElement(pictureElement);
+                if (anchor is not null &&
+                    RewriteAnchorGeometry(anchor, sheet, picture.Width, picture.Height, picture.AnchorOffsetX, picture.AnchorOffsetY))
+                {
+                    changed = true;
+                }
             }
 
             if (RewritePictureVisualProperties(pictureElement, picture, drawingNs))
@@ -145,12 +155,11 @@ internal static class XlsxSourceDrawingGeometryRewriter
             if (shapeElement.Ancestors(MarkupCompatNs + "Fallback").Any())
                 continue;
 
-            // R72-io-drawing-anchors-4-1: a shape nested inside an xdr:grpSp is positioned relative to
-            // the group's own xdr:xfrm, not by its own top-level anchor -- it must never be matched
-            // against (and have its geometry rewritten into) the group's shared anchor.
-            if (IsWithinGroupShape(shapeElement))
-                continue;
-
+            // R72-io-drawing-anchors-4-1/R78-io-drawing-grpsp-move: a shape nested inside an xdr:grpSp
+            // is positioned relative to the group's own xdr:xfrm, not by its own top-level anchor -- it
+            // stays in this candidate list (for positional Zip alignment against sourceShapes below,
+            // which includes group children too) but is routed to RewriteGroupChildGeometry rather than
+            // ever being matched against the group's shared anchor.
             var isTextBox = shapeElement
                 .Element(SpreadsheetDrawingNs + "nvSpPr")?
                 .Element(SpreadsheetDrawingNs + "cNvSpPr")?
@@ -180,21 +189,25 @@ internal static class XlsxSourceDrawingGeometryRewriter
             if (connectorElement.Ancestors(MarkupCompatNs + "Fallback").Any())
                 continue;
 
-            // R72-io-drawing-anchors-4-1: same group-boundary check as the xdr:sp loop above.
-            if (IsWithinGroupShape(connectorElement))
-                continue;
-
             shapeElements.Add(connectorElement);
         }
 
         var textBoxAnchors = textBoxElements.Skip(Math.Max(0, textBoxElements.Count - sourceTextBoxes.Count));
         foreach (var (textBoxElement, textBox) in textBoxAnchors.Zip(sourceTextBoxes))
         {
-            var anchor = FindNearestAnchorElement(textBoxElement);
-            if (anchor is not null &&
-                RewriteAnchorGeometry(anchor, sheet, textBox.Width, textBox.Height, textBox.AnchorOffsetX, textBox.AnchorOffsetY))
+            if (IsWithinGroupShape(textBoxElement))
             {
-                changed = true;
+                if (RewriteGroupChildGeometry(textBoxElement, textBox.Width, textBox.Height, textBox.AnchorOffsetX, textBox.AnchorOffsetY, drawingNs))
+                    changed = true;
+            }
+            else
+            {
+                var anchor = FindNearestAnchorElement(textBoxElement);
+                if (anchor is not null &&
+                    RewriteAnchorGeometry(anchor, sheet, textBox.Width, textBox.Height, textBox.AnchorOffsetX, textBox.AnchorOffsetY))
+                {
+                    changed = true;
+                }
             }
 
             if (RewriteTextBoxVisualProperties(textBoxElement, textBox, drawingNs))
@@ -204,17 +217,25 @@ internal static class XlsxSourceDrawingGeometryRewriter
         var shapeAnchors = shapeElements.Skip(Math.Max(0, shapeElements.Count - sourceShapes.Count));
         foreach (var (shapeElement, shape) in shapeAnchors.Zip(sourceShapes))
         {
-            var anchor = FindNearestAnchorElement(shapeElement);
-            if (anchor is not null &&
-                RewriteAnchorGeometry(anchor, sheet, shape.Width, shape.Height, shape.AnchorOffsetX, shape.AnchorOffsetY))
+            if (IsWithinGroupShape(shapeElement))
             {
-                changed = true;
+                if (RewriteGroupChildGeometry(shapeElement, shape.Width, shape.Height, shape.AnchorOffsetX, shape.AnchorOffsetY, drawingNs))
+                    changed = true;
+            }
+            else
+            {
+                var anchor = FindNearestAnchorElement(shapeElement);
+                if (anchor is not null &&
+                    RewriteAnchorGeometry(anchor, sheet, shape.Width, shape.Height, shape.AnchorOffsetX, shape.AnchorOffsetY))
+                {
+                    changed = true;
+                }
+
+                if (RewriteShapeXfrmExtent(shapeElement, shape, drawingNs))
+                    changed = true;
             }
 
             if (RewriteShapeAltTextAndTitle(shapeElement, shape.AltText, shape.Title))
-                changed = true;
-
-            if (RewriteShapeXfrmExtent(shapeElement, shape, drawingNs))
                 changed = true;
         }
 
@@ -518,10 +539,145 @@ internal static class XlsxSourceDrawingGeometryRewriter
     /// group to the shared anchor (as <see cref="FindNearestAnchorElement"/> does with no boundary
     /// check) and rewriting that anchor from a single child's model geometry would silently move/resize
     /// the WHOLE group from one child's edit, and the next matched child would then overwrite it again.
-    /// Elements nested in a group must be skipped entirely rather than matched against the group anchor.
+    /// Elements nested in a group must never be matched against the group's shared anchor -- see
+    /// <see cref="RewriteGroupChildGeometry"/> (R78-io-drawing-grpsp-move) for the path that instead
+    /// rewrites the element's OWN local off/ext.
     /// </summary>
     private static bool IsWithinGroupShape(XElement element) =>
         element.Ancestors(SpreadsheetDrawingNs + "grpSp").Any();
+
+    /// <summary>
+    /// R78-io-drawing-grpsp-move fix: a pic/sp/cxnSp nested inside one or more <c>xdr:grpSp</c> groups
+    /// has no anchor of its own -- its position/size are its own local <c>&lt;a:xfrm&gt;&lt;a:off&gt;</c>/
+    /// <c>&lt;a:ext&gt;</c>, expressed in the immediately enclosing group's <c>chOff</c>/<c>chExt</c>
+    /// child coordinate space. The reader (<see cref="XlsxWorksheetDrawingPartReader.ComputeGroupTransform"/>)
+    /// composes that space, across every nesting level, into the absolute worksheet position/size this
+    /// method is handed as <paramref name="widthPixels"/>/<paramref name="heightPixels"/>/
+    /// <paramref name="offsetXPixels"/>/<paramref name="offsetYPixels"/> (the model's current, possibly
+    /// user-edited, geometry). R72-io-drawing-anchors-4-1 made the rewriter skip such elements entirely
+    /// to avoid corrupting the group's SHARED anchor -- correct, but it traded "group corruption" for
+    /// "silently discarding the edit on every save" (the bug this fixes). This inverts the exact same
+    /// composed transform to translate the edited absolute position/size back into the element's own
+    /// local off/ext, and rewrites ONLY that local element -- the group's own shared anchor/xfrm is
+    /// never touched.
+    /// <para>
+    /// Returns false (no rewrite -- the previous silent no-op) when the group's transform can't be
+    /// inverted (a degenerate/malformed group xfrm, e.g. a zero chExt) or the element carries no local
+    /// <c>&lt;a:xfrm&gt;&lt;a:off&gt;</c>/<c>&lt;a:ext&gt;</c> to rewrite, rather than guessing.
+    /// </para>
+    /// </summary>
+    private static bool RewriteGroupChildGeometry(
+        XElement element,
+        double widthPixels,
+        double heightPixels,
+        double offsetXPixels,
+        double offsetYPixels,
+        XNamespace drawingNs)
+    {
+        var groupTransform = XlsxWorksheetDrawingPartReader.ComputeGroupTransform(element, SpreadsheetDrawingNs, drawingNs);
+        var determinant = groupTransform.MatrixA * groupTransform.MatrixD - groupTransform.MatrixB * groupTransform.MatrixC;
+        if (determinant == 0 || groupTransform.ScaleX == 0 || groupTransform.ScaleY == 0)
+            return false;
+
+        if (!TryReadAnchorBaseOffset(FindNearestAnchorElement(element), out var baseXEmu, out var baseYEmu))
+            return false;
+
+        var worldDeltaXEmu = DrawingMlCoordinateUnits.PixelsToEmuSigned(offsetXPixels) - baseXEmu;
+        var worldDeltaYEmu = DrawingMlCoordinateUnits.PixelsToEmuSigned(offsetYPixels) - baseYEmu;
+
+        // Invert the composed 2x2 affine (matrixA..D) the reader used to map this element's own local
+        // <a:off> (in its innermost group's child space) all the way out to the worksheet anchor space
+        // -- this recovers exactly the local (x, y) that maps forward to the edited absolute position.
+        var localOffXEmu = (groupTransform.MatrixD * worldDeltaXEmu - groupTransform.MatrixB * worldDeltaYEmu) / determinant;
+        var localOffYEmu = (-groupTransform.MatrixC * worldDeltaXEmu + groupTransform.MatrixA * worldDeltaYEmu) / determinant;
+
+        var xfrm = element.Element(SpreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm");
+        var off = xfrm?.Element(drawingNs + "off");
+        var ext = xfrm?.Element(drawingNs + "ext");
+
+        var changed = false;
+        if (off is not null)
+        {
+            changed |= SetSignedEmuAttribute(off, "x", localOffXEmu);
+            changed |= SetSignedEmuAttribute(off, "y", localOffYEmu);
+        }
+
+        if (ext is not null)
+        {
+            // ScaleX/ScaleY are the plain magnitude-only chOff/chExt-to-off/ext scale product (see
+            // DrawingGroupTransform) -- exactly what ReadDrawingXfrmExtent multiplied by to produce the
+            // model's Width/Height, so dividing by it here recovers the element's own pre-scale local size.
+            var localCxEmu = DrawingMlUnits.PixelsToEmu(widthPixels) / groupTransform.ScaleX;
+            var localCyEmu = DrawingMlUnits.PixelsToEmu(heightPixels) / groupTransform.ScaleY;
+            changed |= SetExtentAttribute(ext, "cx", DrawingMlUnits.EmuToPixels(localCxEmu));
+            changed |= SetExtentAttribute(ext, "cy", DrawingMlUnits.EmuToPixels(localCyEmu));
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// Reads the group's SHARED worksheet anchor's base position in EMU -- the <c>xdr:from</c> cell's
+    /// <c>colOff</c>/<c>rowOff</c> for a one/twoCellAnchor, or <c>xdr:pos</c> x/y for an absoluteAnchor
+    /// -- which <see cref="RewriteGroupChildGeometry"/> subtracts from the model's edited absolute
+    /// offset to recover the world-space DELTA that the composed group transform maps to/from. This
+    /// anchor is read-only here: it is never rewritten for a grouped element (see
+    /// <see cref="IsWithinGroupShape"/>).
+    /// </summary>
+    private static bool TryReadAnchorBaseOffset(XElement? anchor, out double baseXEmu, out double baseYEmu)
+    {
+        baseXEmu = 0;
+        baseYEmu = 0;
+        if (anchor is null)
+            return false;
+
+        if (anchor.Name == SpreadsheetDrawingNs + "absoluteAnchor")
+        {
+            var pos = anchor.Element(SpreadsheetDrawingNs + "pos");
+            return pos is not null &&
+                   TryParseEmuAttribute(pos, "x", out baseXEmu) &&
+                   TryParseEmuAttribute(pos, "y", out baseYEmu);
+        }
+
+        var from = anchor.Element(SpreadsheetDrawingNs + "from");
+        if (from is null)
+            return false;
+
+        var colOffOk = TryParseEmuElementValue(from.Element(SpreadsheetDrawingNs + "colOff"), out baseXEmu);
+        var rowOffOk = TryParseEmuElementValue(from.Element(SpreadsheetDrawingNs + "rowOff"), out baseYEmu);
+        return colOffOk && rowOffOk;
+    }
+
+    private static bool TryParseEmuAttribute(XElement element, string attributeName, out double value) =>
+        double.TryParse(element.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+
+    private static bool TryParseEmuElementValue(XElement? element, out double value)
+    {
+        value = 0;
+        return element is not null &&
+               double.TryParse(element.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    }
+
+    /// <summary>
+    /// Like <see cref="SetOffsetElement"/> but writes a raw (already-computed) EMU value directly to an
+    /// ATTRIBUTE rather than converting pixels to EMU -- used for a group child's own local
+    /// <c>&lt;a:off&gt;</c> x/y, which are genuinely signed (a child can legitimately sit left of/above
+    /// its group's <c>chOff</c> origin) and are computed once via matrix inversion rather than per-axis
+    /// clamping. Returns true when the XML was modified.
+    /// </summary>
+    private static bool SetSignedEmuAttribute(XElement element, string attributeName, double emuValue)
+    {
+        var attribute = element.Attribute(attributeName);
+        if (attribute is null)
+            return false;
+
+        var rounded = ((long)Math.Round(emuValue)).ToString(CultureInfo.InvariantCulture);
+        if (string.Equals(attribute.Value, rounded, StringComparison.Ordinal))
+            return false;
+
+        attribute.Value = rounded;
+        return true;
+    }
 
     /// <summary>
     /// Rewrites one anchor's <c>from</c> sub-cell offset and size (<c>ext</c> for oneCell/absolute anchors,

@@ -554,6 +554,12 @@ public partial class FunctionLibraryTests
     [Fact] public void Address_SheetTextEscapesApostrophes() =>
         _eval.Evaluate("=ADDRESS(2,3,1,TRUE,\"O'Brien\")", MakeSheet()).Should().Be(new TextValue("'O''Brien'!$C$2"));
 
+    [Fact] public void Address_ExternalWorkbookBracketSheetText_DoesNotAddQuotes() =>
+        _eval.Evaluate("=ADDRESS(2,3,1,FALSE,\"[Book1]Sheet1\")", MakeSheet()).Should().Be(new TextValue("[Book1]Sheet1!R2C3"));
+
+    [Fact] public void Address_ExternalWorkbookBracketSheetTextNeedingQuotes_QuotesWholeText() =>
+        _eval.Evaluate("=ADDRESS(2,3,1,FALSE,\"[Book1]Sheet 1\")", MakeSheet()).Should().Be(new TextValue("'[Book1]Sheet 1'!R2C3"));
+
     [Fact] public void Address_InvalidAbsNum_ReturnsValueError() =>
         _eval.Evaluate("=ADDRESS(2,3,5)", MakeSheet()).Should().Be(ErrorValue.Value);
 

@@ -166,7 +166,15 @@ public static partial class BuiltInFunctions
             return Math.Round(number, digits, MidpointRounding.AwayFromZero);
 
         double factor = Math.Pow(10, -digits);
-        if (!double.IsFinite(factor)) return 0.0;
+        // A very-negative digits underflows factor to a *finite* 0.0 (e.g. when the
+        // caller's raw digits value itself overflowed int and saturated to
+        // int.MinValue, whose negation also overflows back to int.MinValue), which
+        // would otherwise turn the final division into Infinity/0 = NaN -> #NUM!.
+        // Excel treats an extreme negative num_digits as simply zeroing out the
+        // number's magnitude, matching ROUNDUP/ROUNDDOWN's behavior for the same
+        // inputs (see TruncateWithExcelDigits/RoundupWithExcelDigits), so guard on
+        // factor == 0 too and return 0 directly.
+        if (!double.IsFinite(factor) || factor == 0) return 0.0;
         return Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor;
     }
 
