@@ -3424,7 +3424,9 @@ public static partial class ChartRenderPlanner
                 (36, 102), (153, 107), (114, 148)),
             Facet(
                 new SrgbColor(0xEB, 0x7C, 0x30),
-                (39, 101), (231, 70), (199, 105)),
+                (34, 100), (104, 84), (155, 72), (168, 69), (196, 72),
+                (173, 84), (157, 101), (154, 106), (131, 106), (83, 104),
+                (60, 103)),
             Facet(
                 new SrgbColor(0xB3, 0x5E, 0x24),
                 // PowerPoint keeps this dark-brown side face on the near-left
