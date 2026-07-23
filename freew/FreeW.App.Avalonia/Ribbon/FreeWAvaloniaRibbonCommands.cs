@@ -297,8 +297,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.table-last-column", new ActionRibbonCommand(editor.ToggleTableLastColumn));
         r.Register("freew.table-banded-cols", new ActionRibbonCommand(editor.ToggleTableBandedColumns));
 
-        // Table shading: apply a quick neutral fill. Full color picker is deferred.
-        r.Register("freew.table-shading", new ActionRibbonCommand(() => editor.SetCellShading("#D9D9D9")));
+        // Table shading: open the WPF-parity palette; the shell applies the chosen result only after
+        // the user accepts a swatch or No Color. Closing the picker is a no-op.
+        r.Register("freew.table-shading", new ActionRibbonCommand(callbacks.OpenCellShadingDialog ?? (() => { })));
         r.Register("freew.table-styles", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
         {

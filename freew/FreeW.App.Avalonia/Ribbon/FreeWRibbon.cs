@@ -88,6 +88,8 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenTabsDialog = null,
     /// <summary>Home &gt; Paragraph &gt; Borders and Shading. Optional; registry no-ops when null.</summary>
     Action? OpenBordersAndShadingDialog = null,
+    /// <summary>Table Design &gt; Shading. Optional; registry no-ops when null.</summary>
+    Action? OpenCellShadingDialog = null,
     /// <summary>Home/Table Layout &gt; Sort. Optional; registry applies a default text ascending sort when null.</summary>
     Action? OpenSortDialog = null,
     /// <summary>AV-VIEW: Opens the Zoom dialog (modal); applies the chosen preset/custom zoom on OK.</summary>
