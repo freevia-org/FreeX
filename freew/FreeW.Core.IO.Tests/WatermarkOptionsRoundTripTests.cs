@@ -205,7 +205,7 @@ public class WatermarkOptionsRoundTripTests
             textPath.SetAttributeValue("fitpath", "t");
             textPath.SetAttributeValue("trim", "t");
             textPath.SetAttributeValue("xscale", "f");
-            textPath.SetAttributeValue("style", "font-family:Arial;font-size:72pt;v-text-kern:t");
+            textPath.SetAttributeValue("style", "font:italic 72pt Arial;font-family:Arial;font-size:72pt;v-text-kern:t");
             entry.Delete();
             var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
             using var writer = new StreamWriter(replacement.Open());
@@ -490,6 +490,7 @@ public class WatermarkOptionsRoundTripTests
         rewritten.Attribute("style")!.Value.Should().Contain("v-text-kern:t");
         rewritten.Attribute("style")!.Value.Should().Contain("font-family:Calibri");
         rewritten.Attribute("style")!.Value.Should().Contain("font-size:1pt");
+        rewritten.Attribute("style")!.Value.Should().NotContain("font:italic");
     }
 
     [Fact]

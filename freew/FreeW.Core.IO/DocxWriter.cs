@@ -1445,7 +1445,8 @@ public static class DocxWriter
         var properties = (style ?? string.Empty)
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(property => !property.StartsWith("font-family:", StringComparison.OrdinalIgnoreCase)
-                && !property.StartsWith("font-size:", StringComparison.OrdinalIgnoreCase))
+                && !property.StartsWith("font-size:", StringComparison.OrdinalIgnoreCase)
+                && !property.StartsWith("font:", StringComparison.OrdinalIgnoreCase))
             .ToList();
         properties.Insert(0, $"font-size:1pt");
         properties.Insert(0, $"font-family:{fontFamily}");
