@@ -8015,12 +8015,8 @@ public sealed class DocumentView : RichTextBox
                     {
                         VerticalAlignment = wpfVAlign
                     };
-                    var cellParas = modelCell.Paragraphs.Count > 0
-                        ? modelCell.Paragraphs
-                        : (IEnumerable<ModelParagraph>)[new ModelParagraph()];
-                    foreach (var cellParagraph in cellParas)
+                    foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document))
                     {
-                        var paraBlock = BuildParagraph(cellParagraph, document, inTableCell: true);
                         var nestedRtb = new System.Windows.Controls.RichTextBox
                         {
                             Document = new System.Windows.Documents.FlowDocument(paraBlock),
@@ -8039,14 +8035,10 @@ public sealed class DocumentView : RichTextBox
                     grid.Children.Add(contentStack);
                     wpfCell.Blocks.Add(new BlockUIContainer(grid));
                 }
-                else if (modelCell.Paragraphs.Count == 0)
-                {
-                    wpfCell.Blocks.Add(BuildParagraph(new ModelParagraph(), document, inTableCell: true));
-                }
                 else
                 {
-                    foreach (var cellParagraph in modelCell.Paragraphs)
-                        wpfCell.Blocks.Add(BuildParagraph(cellParagraph, document, inTableCell: true));
+                    foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document))
+                        wpfCell.Blocks.Add(paraBlock);
                 }
                 wpfRow.Cells.Add(wpfCell);
                 gridColumn += span;
@@ -8070,6 +8062,45 @@ public sealed class DocumentView : RichTextBox
         }
         wpf.RowGroups.Add(group);
         return wpf;
+    }
+
+    // Word suppresses the shared before/after spacing only for adjacent paragraphs in the same
+    // cell that resolve to the same contextual style. Keep this sequence local to the cell: table
+    // boundaries and the rotated TextBlock path have different layout ownership.
+    private static IReadOnlyList<WpfParagraph> BuildTableCellParagraphs(ModelTableCell cell, TextDocument document)
+    {
+        var modelParagraphs = cell.Paragraphs.Count > 0
+            ? cell.Paragraphs
+            : [new ModelParagraph()];
+        var paragraphs = new List<WpfParagraph>(modelParagraphs.Count);
+        ModelParagraph? previousModelParagraph = null;
+        WpfParagraph? previousWpfParagraph = null;
+
+        foreach (var modelParagraph in modelParagraphs)
+        {
+            var wpfParagraph = BuildParagraph(modelParagraph, document, inTableCell: true);
+            if (previousModelParagraph is not null
+                && previousWpfParagraph is not null
+                && SuppressesContextualSpacing(previousModelParagraph, modelParagraph, document))
+            {
+                previousWpfParagraph.Margin = new Thickness(
+                    previousWpfParagraph.Margin.Left,
+                    previousWpfParagraph.Margin.Top,
+                    previousWpfParagraph.Margin.Right,
+                    0);
+                wpfParagraph.Margin = new Thickness(
+                    wpfParagraph.Margin.Left,
+                    0,
+                    wpfParagraph.Margin.Right,
+                    wpfParagraph.Margin.Bottom);
+            }
+
+            paragraphs.Add(wpfParagraph);
+            previousModelParagraph = modelParagraph;
+            previousWpfParagraph = wpfParagraph;
+        }
+
+        return paragraphs;
     }
 
     private static Thickness ResolveTableBlockMargin(ModelTable table, TextDocument document)
@@ -8145,9 +8176,8 @@ public sealed class DocumentView : RichTextBox
         }
         else
         {
-            foreach (var cellParagraph in paragraphs)
+            foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document))
             {
-                var paraBlock = BuildParagraph(cellParagraph, document, inTableCell: true);
                 stack.Children.Add(new System.Windows.Controls.RichTextBox
                 {
                     Document = new System.Windows.Documents.FlowDocument(paraBlock),
