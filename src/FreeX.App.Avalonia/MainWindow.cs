@@ -12469,30 +12469,65 @@ public sealed partial class MainWindow : Window
             syncing = false;
         };
 
+        var findFormatButton = CreateFindReplaceFormatButton("FindReplaceFindFormatButton", Fr("FindReplace_Format", "Format..."));
+        var findFormatClearButton = CreateFindReplaceFormatButton("FindReplaceFindClearFormatButton", Fr("FindReplace_Clear", "Clear"));
+        var findChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceFindChooseFormatFromCellButton", Fr("FindReplace_ChooseFromCell", "Choose From Cell..."));
+
         var findTabGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnDefinitions = new ColumnDefinitions("88,*,Auto,Auto,Auto"),
             Margin = new Thickness(10),
         };
         var findLabel = new TextBlock { Text = Fr("FindReplace_FindWhat", "Find what:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(findLabel, 0);
         Grid.SetColumn(findBox, 1);
+        Grid.SetColumn(findFormatButton, 2);
+        Grid.SetColumn(findFormatClearButton, 3);
+        Grid.SetColumn(findChooseFormatButton, 4);
         findTabGrid.Children.Add(findLabel);
         findTabGrid.Children.Add(findBox);
+        findTabGrid.Children.Add(findFormatButton);
+        findTabGrid.Children.Add(findFormatClearButton);
+        findTabGrid.Children.Add(findChooseFormatButton);
 
-        var replaceTabPanel = new StackPanel { Spacing = 8, Margin = new Thickness(10) };
-        var replaceFindRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var replaceFindFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceFindFormatButton", Fr("FindReplace_Format", "Format..."));
+        var replaceFindFormatClearButton = CreateFindReplaceFormatButton("FindReplaceReplaceFindClearFormatButton", Fr("FindReplace_Clear", "Clear"));
+        var replaceFindChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceFindChooseFormatFromCellButton", Fr("FindReplace_ChooseFromCell", "Choose From Cell..."));
+        var replaceWithFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithFormatButton", Fr("FindReplace_Format", "Format..."));
+        var replaceWithFormatClearButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithClearFormatButton", Fr("FindReplace_Clear", "Clear"));
+        var replaceWithChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithChooseFormatFromCellButton", Fr("FindReplace_ChooseFromCell", "Choose From Cell..."));
+
+        var replaceTabPanel = new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,Auto"),
+            Margin = new Thickness(10),
+        };
+        var replaceFindRow = new Grid { ColumnDefinitions = new ColumnDefinitions("88,*,Auto,Auto,Auto") };
         var replaceFindLabel = new TextBlock { Text = Fr("FindReplace_FindWhat", "Find what:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(replaceFindLabel, 0);
         Grid.SetColumn(replaceFindBox, 1);
+        Grid.SetColumn(replaceFindFormatButton, 2);
+        Grid.SetColumn(replaceFindFormatClearButton, 3);
+        Grid.SetColumn(replaceFindChooseFormatButton, 4);
         replaceFindRow.Children.Add(replaceFindLabel);
         replaceFindRow.Children.Add(replaceFindBox);
-        var replaceWithRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        replaceFindRow.Children.Add(replaceFindFormatButton);
+        replaceFindRow.Children.Add(replaceFindFormatClearButton);
+        replaceFindRow.Children.Add(replaceFindChooseFormatButton);
+        var replaceWithRow = new Grid { ColumnDefinitions = new ColumnDefinitions("88,*,Auto,Auto,Auto") };
         var replaceWithLabel = new TextBlock { Text = Fr("FindReplace_ReplaceWith", "Replace with:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(replaceWithLabel, 0);
         Grid.SetColumn(replaceWithBox, 1);
+        Grid.SetColumn(replaceWithFormatButton, 2);
+        Grid.SetColumn(replaceWithFormatClearButton, 3);
+        Grid.SetColumn(replaceWithChooseFormatButton, 4);
         replaceWithRow.Children.Add(replaceWithLabel);
         replaceWithRow.Children.Add(replaceWithBox);
+        replaceWithRow.Children.Add(replaceWithFormatButton);
+        replaceWithRow.Children.Add(replaceWithFormatClearButton);
+        replaceWithRow.Children.Add(replaceWithChooseFormatButton);
+        Grid.SetRow(replaceFindRow, 0);
+        Grid.SetRow(replaceWithRow, 1);
         replaceTabPanel.Children.Add(replaceFindRow);
         replaceTabPanel.Children.Add(replaceWithRow);
 
@@ -12510,42 +12545,99 @@ public sealed partial class MainWindow : Window
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
 
         // ── Shared options ──────────────────────────────────────────────────────
-        var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
         StyleDiff? findFormat = null;
         StyleDiff? replacementFormat = null;
-        var chooseFindFormatButton = CreateFindReplaceFormatButton("FindReplaceFindChooseFormatFromCellButton", "Choose From Cell");
-        var clearFindFormatButton = CreateFindReplaceFormatButton("FindReplaceFindClearFormatButton", "Clear Format");
-        var chooseReplacementFormatButton = CreateFindReplaceFormatButton("FindReplaceReplacementChooseFormatFromCellButton", "Choose From Cell");
-        var clearReplacementFormatButton = CreateFindReplaceFormatButton("FindReplaceReplacementClearFormatButton", "Clear Format");
-        UpdateFindReplaceFormatState(findFormat, chooseFindFormatButton, clearFindFormatButton);
-        UpdateFindReplaceFormatState(replacementFormat, chooseReplacementFormatButton, clearReplacementFormatButton);
-        chooseFindFormatButton.Click += (_, _) =>
+        var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
+        var statusLabel = new TextBlock { Foreground = Brush(85, 85, 85), FontSize = 11, MinHeight = 18 };
+        AutomationProperties.SetAutomationId(statusLabel, "FindReplaceStatusLabel");
+        void UpdateFormatButtons(
+            StyleDiff? format,
+            Button formatButton,
+            Button clearButton)
         {
-            findFormat = _session.CreateFormatDiffFromActiveCell();
-            UpdateFindReplaceFormatState(findFormat, chooseFindFormatButton, clearFindFormatButton);
+            UpdateFindReplaceFormatButtonState(
+                format,
+                formatButton,
+                clearButton,
+                Fr("FindReplace_Format", "Format..."),
+                Fr("FindReplace_FormatSetButton", "Format Set"));
+        }
+
+        UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
+        UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
+        UpdateFormatButtons(replacementFormat, replaceWithFormatButton, replaceWithFormatClearButton);
+        findFormatButton.Click += async (_, _) =>
+        {
+            var selectedFormat = await PickFindReplaceFormatAsync(findFormat);
+            if (selectedFormat is not null)
+            {
+                findFormat = selectedFormat;
+                UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
+            }
         };
-        clearFindFormatButton.Click += (_, _) =>
+        findFormatClearButton.Click += (_, _) =>
         {
             findFormat = null;
-            UpdateFindReplaceFormatState(findFormat, chooseFindFormatButton, clearFindFormatButton);
+            UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
         };
-        chooseReplacementFormatButton.Click += (_, _) =>
+        findChooseFormatButton.Click += (_, _) =>
         {
-            replacementFormat = _session.CreateFormatDiffFromActiveCell();
-            UpdateFindReplaceFormatState(replacementFormat, chooseReplacementFormatButton, clearReplacementFormatButton);
+            findFormat = _session.CreateFormatDiffFromActiveCell();
+            UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
         };
-        clearReplacementFormatButton.Click += (_, _) =>
+        replaceFindFormatButton.Click += async (_, _) =>
+        {
+            var selectedFormat = await PickFindReplaceFormatAsync(findFormat);
+            if (selectedFormat is not null)
+            {
+                findFormat = selectedFormat;
+                UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
+            }
+        };
+        replaceFindFormatClearButton.Click += (_, _) =>
+        {
+            findFormat = null;
+            UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
+        };
+        replaceFindChooseFormatButton.Click += (_, _) =>
+        {
+            findFormat = _session.CreateFormatDiffFromActiveCell();
+            UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
+        };
+        replaceWithFormatButton.Click += async (_, _) =>
+        {
+            var selectedFormat = await PickFindReplaceFormatAsync(replacementFormat);
+            if (selectedFormat is not null)
+            {
+                replacementFormat = selectedFormat;
+                UpdateFormatButtons(replacementFormat, replaceWithFormatButton, replaceWithFormatClearButton);
+            }
+        };
+        replaceWithFormatClearButton.Click += (_, _) =>
         {
             replacementFormat = null;
-            UpdateFindReplaceFormatState(replacementFormat, chooseReplacementFormatButton, clearReplacementFormatButton);
+            UpdateFormatButtons(replacementFormat, replaceWithFormatButton, replaceWithFormatClearButton);
         };
-        var findFormatRow = CreateFindReplaceFormatRow("Find format", chooseFindFormatButton, clearFindFormatButton);
-        var replacementFormatRow = CreateFindReplaceFormatRow("Replace format", chooseReplacementFormatButton, clearReplacementFormatButton);
-        var formatPanel = new StackPanel
+        replaceWithChooseFormatButton.Click += (_, _) =>
         {
-            Spacing = 4,
-            Children = { findFormatRow, replacementFormatRow },
+            replacementFormat = _session.CreateFormatDiffFromActiveCell();
+            UpdateFormatButtons(replacementFormat, replaceWithFormatButton, replaceWithFormatClearButton);
         };
+
+        async Task<StyleDiff?> PickFindReplaceFormatAsync(StyleDiff? existingFormat)
+        {
+            var selection = await ShowFormatCellsInputDialogAsync(initialTabIndex: 2);
+            if (selection is null)
+                return existingFormat;
+
+            if (!FormatCellsCompactPlanner.TryPlan(selection.Request, out var diff, out var errorMessage))
+            {
+                statusLabel.Text = errorMessage ?? UiText.Get("MainLoc_FormatCellsFailed");
+                return existingFormat;
+            }
+
+            return diff;
+        }
 
         // ── Results list ────────────────────────────────────────────────────────
         var resultsList = new ListBox { MinHeight = 120 };
@@ -12556,34 +12648,60 @@ public sealed partial class MainWindow : Window
             if (resultsList.SelectedItem is WorkbookFindAllMatch match)
                 NavigateToFindAllMatch(match);
         };
+        resultsList.ItemTemplate = new FuncDataTemplate<WorkbookFindAllMatch>(
+            (match, _) =>
+            {
+                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("110,100,90,70,*,*") };
+                AddFindReplaceResultCell(row, match.Book, 0);
+                AddFindReplaceResultCell(row, match.Sheet, 1);
+                AddFindReplaceResultCell(row, match.Name, 2);
+                AddFindReplaceResultCell(row, match.Cell, 3);
+                AddFindReplaceResultCell(row, match.Value, 4);
+                AddFindReplaceResultCell(row, match.Formula, 5);
+                return row;
+            },
+            supportsRecycling: true);
+        var resultsHeader = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("110,100,90,70,*,*"),
+            Background = Brush(245, 245, 245),
+        };
+        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Book", "Book"), 0);
+        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Sheet", "Sheet"), 1);
+        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Name", "Name"), 2);
+        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Cell", "Cell"), 3);
+        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Value", "Value"), 4);
+        AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Formula", "Formula"), 5);
+        var resultsPanel = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        Grid.SetRow(resultsHeader, 0);
+        Grid.SetRow(resultsList, 1);
+        resultsPanel.Children.Add(resultsHeader);
+        resultsPanel.Children.Add(resultsList);
         var resultsBorder = new Border
         {
             BorderBrush = FormulaBarControlBorder,
             BorderThickness = new Thickness(1),
-            Child = resultsList,
+            Child = resultsPanel,
         };
 
-        var statusLabel = new TextBlock { Foreground = Brush(85, 85, 85), FontSize = 11, MinHeight = 18 };
-        AutomationProperties.SetAutomationId(statusLabel, "FindReplaceStatusLabel");
-
         // ── Buttons ─────────────────────────────────────────────────────────────
-        var findAllButton = new Button { Content = Fr("FindReplace_FindAll", "Find All"), MinWidth = 84, Padding = new Thickness(10, 4) };
+        var findAllButton = new Button { Content = Fr("FindReplace_FindAll", "Find All"), Width = 76, MinWidth = 76, Padding = new Thickness(4, 1) };
         AutomationProperties.SetAutomationId(findAllButton, "FindReplaceFindAllButton");
         ApplyDialogButtonChrome(findAllButton);
 
-        var findNextButton = new Button { Content = Fr("FindReplace_FindNext", "Find Next"), MinWidth = 84, Padding = new Thickness(10, 4) };
+        var findNextButton = new Button { Content = Fr("FindReplace_FindNext", "Find Next"), Width = 80, MinWidth = 80, Padding = new Thickness(4, 1) };
         AutomationProperties.SetAutomationId(findNextButton, "FindReplaceFindNextButton");
         ApplyDialogButtonChrome(findNextButton, isDefault: true);
 
-        var replaceButton = new Button { Content = Fr("FindReplace_Replace", "Replace"), MinWidth = 84, Padding = new Thickness(10, 4), IsVisible = false };
+        var replaceButton = new Button { Content = Fr("FindReplace_Replace", "Replace"), Width = 76, MinWidth = 76, Padding = new Thickness(4, 1), IsVisible = false };
         AutomationProperties.SetAutomationId(replaceButton, "FindReplaceReplaceButton");
         ApplyDialogButtonChrome(replaceButton);
 
-        var replaceAllButton = new Button { Content = Fr("FindReplace_ReplaceAll", "Replace All"), MinWidth = 96, Padding = new Thickness(10, 4), IsVisible = false };
+        var replaceAllButton = new Button { Content = Fr("FindReplace_ReplaceAll", "Replace All"), Width = 88, MinWidth = 88, Padding = new Thickness(4, 1), IsVisible = false };
         AutomationProperties.SetAutomationId(replaceAllButton, "FindReplaceReplaceAllButton");
         ApplyDialogButtonChrome(replaceAllButton);
 
-        var closeButton = new Button { Content = Fr("FindReplace_Close", "Close"), MinWidth = 84, Padding = new Thickness(10, 4), IsCancel = true };
+        var closeButton = new Button { Content = Fr("FindReplace_Close", "Close"), Width = 60, MinWidth = 60, Padding = new Thickness(4, 1), IsCancel = true };
         AutomationProperties.SetAutomationId(closeButton, "FindReplaceCloseButton");
         ApplyDialogButtonChrome(closeButton);
 
@@ -12602,7 +12720,7 @@ public sealed partial class MainWindow : Window
             var isReplaceMode = OnReplaceTab();
             replaceButton.IsVisible = isReplaceMode;
             replaceAllButton.IsVisible = isReplaceMode;
-            replacementFormatRow.IsVisible = isReplaceMode;
+            replaceWithRow.IsVisible = isReplaceMode;
         }
         tabs.SelectionChanged += (_, _) =>
         {
@@ -12709,26 +12827,51 @@ public sealed partial class MainWindow : Window
             Children = { findAllButton, findNextButton, replaceButton, replaceAllButton, closeButton },
         };
 
-        var root = new DockPanel { Margin = new Thickness(12) };
+        var optionsExpander = new Expander
+        {
+            Header = Fr("FindReplace_Options", "Options >>"),
+            IsExpanded = false,
+            Content = optionsControls.Panel,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+        };
+        AutomationProperties.SetAutomationId(optionsExpander, "FindReplaceOptionsExpander");
+        optionsExpander.PropertyChanged += (_, args) =>
+        {
+            if (args.Property != Expander.IsExpandedProperty)
+                return;
+
+            optionsExpander.Height = optionsExpander.IsExpanded ? double.NaN : 24;
+            optionsExpander.MaxHeight = optionsExpander.IsExpanded ? double.PositiveInfinity : 24;
+        };
+
+        var root = new Grid
+        {
+            Margin = new Thickness(12, 12, 28, 48),
+            RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto"),
+        };
         ConfigureDialogTabCycle(dialog, root);
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
-        DockPanel.SetDock(statusLabel, Dock.Bottom);
-        DockPanel.SetDock(tabs, Dock.Top);
-        DockPanel.SetDock(options.Panel, Dock.Top);
-        DockPanel.SetDock(formatPanel, Dock.Top);
 
         tabs.Margin = new Thickness(0, 0, 0, 10);
-        options.Panel.Margin = new Thickness(0, 0, 0, 10);
-        formatPanel.Margin = new Thickness(0, 0, 0, 10);
-        statusLabel.Margin = new Thickness(0, 8, 0, 8);
-        buttonRow.Margin = new Thickness(0, 8, 0, 0);
+        optionsExpander.Margin = new Thickness(0, 0, 0, 10);
+        resultsBorder.MinHeight = 120;
+        resultsBorder.Margin = new Thickness(0, 0, 0, 8);
+        statusLabel.Margin = new Thickness(0, 0, 0, 8);
+        buttonRow.Margin = new Thickness(0);
 
+        Grid.SetRow(tabs, 0);
+        Grid.SetRow(optionsExpander, 1);
+        Grid.SetRow(resultsBorder, 2);
+        Grid.SetRow(statusLabel, 3);
+        Grid.SetRow(buttonRow, 4);
         root.Children.Add(tabs);
-        root.Children.Add(options.Panel);
-        root.Children.Add(formatPanel);
-        root.Children.Add(buttonRow);
+        root.Children.Add(optionsExpander);
+        root.Children.Add(resultsBorder);
         root.Children.Add(statusLabel);
-        root.Children.Add(resultsBorder); // fills remaining space
+        root.Children.Add(buttonRow);
 
         dialog.Content = root;
         _findReplaceDialog = dialog;
@@ -16624,20 +16767,30 @@ public sealed partial class MainWindow : Window
             },
         };
 
-        var panel = new StackPanel
+        var panel = new Grid
         {
-            Spacing = 6,
-            Children =
-            {
-                new TextBlock { Text = "Within" },
-                withinBox,
-                new TextBlock { Text = "Search" },
-                searchBox,
-                new TextBlock { Text = "Look in" },
-                lookInBox,
-                matchRow,
-            },
+            ColumnDefinitions = new ColumnDefinitions("88,150,80,150"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
+            Margin = new Thickness(0, 8, 0, 0),
         };
+        var withinLabel = new TextBlock { Text = "Within", VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        var searchLabel = new TextBlock { Text = "Search", VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        var lookInLabel = new TextBlock { Text = "Look in", VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        Grid.SetColumn(withinLabel, 0);
+        Grid.SetColumn(withinBox, 1);
+        Grid.SetColumn(searchLabel, 2);
+        Grid.SetColumn(searchBox, 3);
+        Grid.SetRow(lookInLabel, 1);
+        Grid.SetRow(lookInBox, 1);
+        Grid.SetRow(matchRow, 2);
+        Grid.SetColumnSpan(matchRow, 4);
+        panel.Children.Add(withinLabel);
+        panel.Children.Add(withinBox);
+        panel.Children.Add(searchLabel);
+        panel.Children.Add(searchBox);
+        panel.Children.Add(lookInLabel);
+        panel.Children.Add(lookInBox);
+        panel.Children.Add(matchRow);
         AutomationProperties.SetAutomationId(panel, $"{automationPrefix}OptionsPanel");
 
         return new FindOptionsControls(
@@ -16659,23 +16812,59 @@ public sealed partial class MainWindow : Window
         {
             ItemsSource = values,
             SelectedIndex = selectedIndex,
-            MinWidth = 160,
+            Width = 150,
+            MinWidth = 150,
         };
         AutomationProperties.SetName(comboBox, automationName);
         AutomationProperties.SetAutomationId(comboBox, automationId);
+        ApplyDialogComboBoxChrome(comboBox);
         return comboBox;
     }
 
     private static Button CreateFindReplaceFormatButton(string automationId, string content)
     {
+        var width = content.Contains("Choose", StringComparison.OrdinalIgnoreCase)
+            ? 136
+            : content.Contains("Clear", StringComparison.OrdinalIgnoreCase) ? 52 : 84;
         var button = new Button
         {
             Content = content,
-            MinWidth = 112,
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(button, automationId);
+        ApplyDialogButtonChrome(button, width);
         return button;
+    }
+
+    private static void UpdateFindReplaceFormatButtonState(
+        StyleDiff? format,
+        Button formatButton,
+        Button clearButton,
+        string formatLabel,
+        string formatSetLabel)
+    {
+        formatButton.Content = format is null ? formatLabel : formatSetLabel;
+        clearButton.IsVisible = format is not null;
+    }
+
+    private static void AddFindReplaceResultCell(Grid row, string? text, int column, bool bold = false)
+    {
+        var label = new TextBlock
+        {
+            Text = text ?? string.Empty,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            FontWeight = bold ? FontWeight.Bold : FontWeight.Normal,
+        };
+        var cell = new Border
+        {
+            Padding = new Thickness(4, 0),
+            BorderBrush = Brush(224, 224, 224),
+            BorderThickness = new Thickness(0, 0, 1, 1),
+            Child = label,
+        };
+        Grid.SetColumn(cell, column);
+        row.Children.Add(cell);
     }
 
     private static StackPanel CreateFindReplaceFormatRow(string label, Button chooseButton, Button clearButton) =>
