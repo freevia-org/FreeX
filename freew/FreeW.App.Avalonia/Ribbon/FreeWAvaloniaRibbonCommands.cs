@@ -1856,7 +1856,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.smartart-layout-process",   new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
         r.Register("freew.smartart-layout-cycle",     new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
         r.Register("freew.smartart-layout-hierarchy", new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Hierarchy)));
-        RegisterSmartArtLayoutPreset(r, editor, "freew.smartart-layout-continuous-block-process", "continuousBlockProcess");
+        foreach (var preset in SmartArtLayoutPreset.Catalog)
+            RegisterSmartArtLayoutPreset(r, editor, $"freew.smartart-layout-{preset.Id}", preset.Id);
 
         // Change Colors — reuse the chart colour-scheme catalog ids.
         r.Register("freew.smartart-colors", new ActionRibbonCommand(() => { /* dropdown opener */ }));
