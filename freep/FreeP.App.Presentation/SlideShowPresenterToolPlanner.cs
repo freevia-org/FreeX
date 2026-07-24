@@ -128,9 +128,10 @@ public static class SlideShowPresenterToolPlanner
         SlideShowPresenterPointerMode pointerMode = SlideShowPresenterPointerMode.Arrow,
         string? inkColorHex = null,
         double inkThicknessDip = 0,
-        SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk)
+        SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk,
+        SlideShowRecordingCaptureAdapterReadiness? captureReadiness = null)
     {
-        var recording = PlanRecordingTiming(timingIntent, mediaIntent);
+        var recording = PlanRecordingTiming(timingIntent, mediaIntent, captureReadiness);
         var pointerInk = PlanPointerInk(pointerMode, inkColorHex, inkThicknessDip, inkRetentionDecision);
 
         return new(
@@ -142,7 +143,8 @@ public static class SlideShowPresenterToolPlanner
 
     public static SlideShowRecordingTimingPlan PlanRecordingTiming(
         SlideShowTimingIntent timingIntent,
-        SlideShowRecordingMediaIntent mediaIntent)
+        SlideShowRecordingMediaIntent mediaIntent,
+        SlideShowRecordingCaptureAdapterReadiness? captureReadiness = null)
     {
         var requestedNarration = mediaIntent is SlideShowRecordingMediaIntent.Narration
             or SlideShowRecordingMediaIntent.NarrationAndMedia;
@@ -157,13 +159,50 @@ public static class SlideShowPresenterToolPlanner
             ShouldPersistTimings: timingIntent == SlideShowTimingIntent.RecordTimings,
             IsNarrationRequested: requestedNarration,
             IsMediaCaptureRequested: requestedMedia,
-            NarrationCapture: requestedNarration
-                ? SlideShowDeferredCapability.Deferred("Narration capture", DeferredCaptureReason)
-                : SlideShowDeferredCapability.Available("Narration not requested"),
-            MediaCapture: requestedMedia
-                ? SlideShowDeferredCapability.Deferred("Camera and media capture", DeferredCaptureReason)
-                : SlideShowDeferredCapability.Available("Camera and media capture not requested"),
+            NarrationCapture: PlanCaptureCapability(
+                "Narration capture",
+                requestedNarration,
+                captureReadiness?.CanCaptureNarration,
+                captureReadiness),
+            MediaCapture: PlanCaptureCapability(
+                "Camera and media capture",
+                requestedMedia,
+                captureReadiness?.CanCaptureCamera,
+                captureReadiness),
             StatusText: FormatRecordingStatus(timingIntent, mediaIntent));
+    }
+
+    private static SlideShowDeferredCapability PlanCaptureCapability(
+        string name,
+        bool requested,
+        bool? hostReportsAvailable,
+        SlideShowRecordingCaptureAdapterReadiness? captureReadiness)
+    {
+        if (!requested)
+        {
+            return SlideShowDeferredCapability.Available($"{name} not requested");
+        }
+
+        if (captureReadiness is null)
+        {
+            return SlideShowDeferredCapability.Deferred(name, DeferredCaptureReason);
+        }
+
+        if (hostReportsAvailable == true)
+        {
+            return SlideShowDeferredCapability.Available(
+                $"{name} available via {captureReadiness.AdapterName}");
+        }
+
+        var reason = string.IsNullOrWhiteSpace(captureReadiness.UnavailableReason)
+            ? $"{name} is unavailable on {captureReadiness.HostName}."
+            : captureReadiness.UnavailableReason;
+        if (captureReadiness.RequiresUserPermission)
+        {
+            reason = $"{reason} Permission may be required.";
+        }
+
+        return SlideShowDeferredCapability.Deferred(name, reason);
     }
 
     public static SlideShowPointerInkPlan PlanPointerInk(

@@ -518,10 +518,14 @@ public sealed class SlideShowWindowHeadlessTests
             var window = new SlideShowWindow(pres, startIndex: 0, backend);
             readinessHost = window.RecordingCaptureAdapterReadiness.HostName;
 
-            window.ApplyPresenterToolIntent(
+            var plan = window.ApplyPresenterToolIntent(
                 SlideShowTimingIntent.RecordTimings,
                 SlideShowRecordingMediaIntent.NarrationAndMedia,
                 nowUtc: started);
+            plan.Recording.NarrationCapture.IsAvailable.Should().BeTrue();
+            plan.Recording.MediaCapture.IsAvailable.Should().BeTrue();
+            plan.Recording.NarrationCapture.IsDeferred.Should().BeFalse();
+            plan.Recording.MediaCapture.IsDeferred.Should().BeFalse();
             window.ExecuteAdvance(started.AddMilliseconds(1800));
 
             review = window.RecordingReviewPlan;

@@ -31,6 +31,64 @@ public sealed class SlideShowPresenterToolPlannerTests
         record.MediaCapture.Reason.Should().Contain("deferred");
     }
 
+    [Fact]
+    public void PlanRecordingTiming_UsesHostReadinessForAvailableCaptureStreams()
+    {
+        var readiness = SlideShowRecordingCaptureAdapterReadiness.FromDevices(
+            "Windows slideshow",
+            "Windows Runtime capture",
+            new[]
+            {
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Microphone,
+                    "mic-1",
+                    "Microphone",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "audio/mp4"),
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Camera,
+                    "camera-1",
+                    "Camera",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "video/mp4"),
+            });
+
+        var plan = SlideShowPresenterToolPlanner.PlanRecordingTiming(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia,
+            readiness);
+
+        plan.NarrationCapture.IsAvailable.Should().BeTrue();
+        plan.NarrationCapture.IsDeferred.Should().BeFalse();
+        plan.MediaCapture.IsAvailable.Should().BeTrue();
+        plan.MediaCapture.IsDeferred.Should().BeFalse();
+        plan.NarrationCapture.Reason.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void PlanRecordingTiming_ReportsHostPermissionFailureInsteadOfGenericDeferral()
+    {
+        var readiness = SlideShowRecordingCaptureAdapterReadiness.FromDevices(
+            "Avalonia slideshow",
+            "Windows Runtime capture",
+            Array.Empty<SlideShowRecordingCaptureDeviceDescriptor>(),
+            requiresUserPermission: true,
+            unavailableReason: "Camera permission was denied by the operating system.");
+
+        var plan = SlideShowPresenterToolPlanner.PlanRecordingTiming(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia,
+            readiness);
+
+        plan.NarrationCapture.IsDeferred.Should().BeTrue();
+        plan.MediaCapture.IsDeferred.Should().BeTrue();
+        plan.NarrationCapture.Reason.Should().Contain("Camera permission was denied");
+        plan.NarrationCapture.Reason.Should().Contain("Permission may be required");
+        plan.MediaCapture.Reason.Should().Be(plan.NarrationCapture.Reason);
+    }
+
     [Theory]
     [InlineData(SlideShowPresenterPointerMode.Arrow, false, false, false)]
     [InlineData(SlideShowPresenterPointerMode.LaserPointer, false, true, false)]

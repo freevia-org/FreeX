@@ -24,7 +24,8 @@ public sealed class SlideShowSessionController
         ArgumentNullException.ThrowIfNull(captureBackend);
 
         StartedAtUtc = startedAtUtc;
-        ToolPlan = initialToolPlan ?? SlideShowPresenterToolPlanner.BuildPlan();
+        ToolPlan = initialToolPlan ?? SlideShowPresenterToolPlanner.BuildPlan(
+            captureReadiness: captureBackend.AdapterReadiness);
 
         _currentRouteSlideIndex = _playbackRoute.StartIndex;
         var sourceSlideIndex = CurrentPresentationSlideIndex;
@@ -83,7 +84,8 @@ public sealed class SlideShowSessionController
             pointerMode,
             inkColorHex,
             inkThicknessDip,
-            inkRetentionDecision);
+            inkRetentionDecision,
+            RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness);
         RecordingExecutionState = SlideShowRecordingExecutionPlanner.ApplyToolPlan(
             RecordingExecutionState,
             ToolPlan,
