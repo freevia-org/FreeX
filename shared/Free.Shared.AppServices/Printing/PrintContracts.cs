@@ -113,6 +113,27 @@ public sealed record PrintSubmissionResult(
     public bool Succeeded => Status == PrintSubmissionStatus.Submitted;
 }
 
+/// <summary>
+/// Platform boundary for printer discovery and submission used by the non-WPF shell adapters. The
+/// print-selection model is shared with the WPF authority, while WPF continues to own its native
+/// <c>PrintDialog</c>/<c>PrintQueue</c> path. Only the OS-specific queue bridge implements this contract.
+/// Implementations must translate cancellation into <see cref="PrinterDiscoveryStatus.Cancelled"/> or
+/// <see cref="PrintSubmissionStatus.Cancelled"/> when the operation can return a result, and must not
+/// leave a child process running after cancellation.
+/// </summary>
+public interface IPlatformPrintService
+{
+    /// <summary>Whether this adapter can attempt native printer operations on the current host.</summary>
+    bool IsSupported { get; }
+
+    Task<PrinterDiscoveryResult> DiscoverAsync(CancellationToken cancellationToken = default);
+
+    Task<PrintSubmissionResult> SubmitAsync(
+        string pdfPath,
+        PrintSelection selection,
+        CancellationToken cancellationToken = default);
+}
+
 public enum PrintCapabilityStatus
 {
     Ready,

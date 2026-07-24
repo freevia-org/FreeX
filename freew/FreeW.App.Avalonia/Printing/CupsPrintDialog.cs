@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Printing;
@@ -80,11 +81,18 @@ internal sealed class CupsPrintDialog : FreeWDialogWindow
     public static async Task<PrintSelection?> ShowAsync(
         Window owner,
         PrinterDiscoveryResult discovery,
-        PrintSelection? requested = null)
+        PrintSelection? requested = null,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(discovery);
+
         var plan = PrintSelectionPlanner.Build(discovery, requested);
         var dialog = new CupsPrintDialog(plan);
+        using var cancellationRegistration = cancellationToken.Register(() =>
+            Dispatcher.UIThread.Post(dialog.Close));
         await dialog.ShowDialog(owner);
+        cancellationToken.ThrowIfCancellationRequested();
         return dialog.Result;
     }
 

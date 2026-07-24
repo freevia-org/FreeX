@@ -6,13 +6,21 @@ namespace FreeW.App.Avalonia.Tests.Printing;
 public sealed class CupsPrintServiceTests
 {
     [Fact]
+    public void CupsPrintService_ImplementsSharedPlatformBoundary()
+    {
+        IPlatformPrintService service = new CupsPrintService(new FakeProcessRunner());
+
+        service.IsSupported.Should().Be(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
+    }
+
+    [Fact]
     public async Task DiscoverAsync_ParsesPrintersAndDefault()
     {
         var runner = new FakeProcessRunner(
             new ProcessResult(0, "printer Office is idle.\nprinter PDF is idle.\n", ""),
             new ProcessResult(0, "system default destination: Office\n", ""));
 
-        var result = await new CupsPrintService(runner).DiscoverAsync();
+        var result = await new CupsPrintService(runner, isSupportedOverride: true).DiscoverAsync();
 
         result.Status.Should().Be(PrinterDiscoveryStatus.Available);
         result.DefaultPrinter.Should().Be("Office");
@@ -32,7 +40,7 @@ public sealed class CupsPrintServiceTests
                 new ProcessResult(0, "printer Office is idle.\n", ""),
                 new ProcessResult(0, "system default destination: Office\n", ""),
                 new ProcessResult(0, "request id is Office-17 (1 file(s))\n", ""));
-            var result = await new CupsPrintService(runner).SubmitAsync(
+            var result = await new CupsPrintService(runner, isSupportedOverride: true).SubmitAsync(
                 pdfPath,
                 new PrintSelection(Copies: 2, PageRange: PrintPageRange.Between(2, 4), Orientation: PrintOrientation.Landscape));
 
@@ -55,7 +63,7 @@ public sealed class CupsPrintServiceTests
         try
         {
             var runner = new FakeProcessRunner(new ProcessResult(0, "", ""));
-            var result = await new CupsPrintService(runner).SubmitAsync(pdfPath, new PrintSelection());
+            var result = await new CupsPrintService(runner, isSupportedOverride: true).SubmitAsync(pdfPath, new PrintSelection());
 
             result.Status.Should().Be(PrintSubmissionStatus.NoPrinters);
             runner.Invocations.Should().ContainSingle();
@@ -70,12 +78,35 @@ public sealed class CupsPrintServiceTests
     [Fact]
     public async Task DiscoverAsync_CancellationIsReported()
     {
-        var runner = new FakeProcessRunner(cancellation: true);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
 
-        var result = await new CupsPrintService(runner).DiscoverAsync();
+        var result = await new CupsPrintService(new FakeProcessRunner(), isSupportedOverride: true)
+            .DiscoverAsync(cancellation.Token);
 
         result.Status.Should().Be(PrinterDiscoveryStatus.Cancelled);
         result.Message.Should().Contain("cancelled");
+    }
+
+    [Fact]
+    public async Task SubmitAsync_CancellationIsReportedBeforeSpooling()
+    {
+        var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-print-{Guid.NewGuid():N}.pdf");
+        await File.WriteAllBytesAsync(pdfPath, [0x25, 0x50, 0x44, 0x46]);
+        try
+        {
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            var result = await new CupsPrintService(new FakeProcessRunner())
+                .SubmitAsync(pdfPath, new PrintSelection(), cancellation.Token);
+
+            result.Status.Should().Be(PrintSubmissionStatus.Cancelled);
+            result.Message.Should().Contain("cancelled");
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
     }
 
     private sealed class FakeProcessRunner : IProcessRunner

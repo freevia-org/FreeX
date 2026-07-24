@@ -449,11 +449,15 @@ public class BackstageViewTests
         callbacks.GetCurrentOptions().Should().NotBeNull();
         callbacks.GetDataFolder().Should().NotBeNullOrWhiteSpace();
         callbacks.DirectPrintCapability.Should().NotBeNull();
-        callbacks.DirectPrintCapability!.IsAvailable.Should().BeTrue();
-        callbacks.Print.Should().NotBeNull();
+        callbacks.DirectPrintCapability!.IsAvailable.Should().Be(
+            OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+            callbacks.Print.Should().NotBeNull();
+        else
+            callbacks.Print.Should().BeNull();
         callbacks.GetDocument().Should().NotBeNull();
         callbacks.PrintPreview.Should().NotBeNull();
-        callbacks.ExportXps.Should().NotBeNull();
+        callbacks.ExportXps.Should().BeNull("XPS remains WPF-only");
         callbacks.EditProperties.Should().NotBeNull();
         callbacks.Save.Should().NotBeNull();
         callbacks.SaveCopy.Should().NotBeNull();

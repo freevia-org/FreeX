@@ -95,7 +95,7 @@ static string BuildReport()
     builder.AppendLine();
     builder.AppendLine("| Capability | WPF | Avalonia |");
     builder.AppendLine("| --- | --- | --- |");
-    builder.AppendLine("| Print pane | Native `PrintDialog` plus print preview | Print preview available; direct native print explicitly deferred |");
+    builder.AppendLine("| Print pane | Native `PrintDialog` plus print preview | Capability-gated CUPS printer discovery/submission plus print preview fallback |");
     builder.AppendLine("| PDF export | Host-backed | Host-backed |");
     builder.AppendLine("| XPS export | Native WPF XPS writer | Not exposed; no false XPS action is rendered |");
     builder.AppendLine("| Import PDF text | Direct current-authority command | Host-backed direct command |");
@@ -106,11 +106,12 @@ static string BuildReport()
     builder.AppendLine("- WPF `SisterBackstageEntryBuilderTests` locks exact order, entry kind, and docking.");
     builder.AppendLine("- WPF `FileLifecycleTests` locks Save a Copy path/dirty preservation and the close dirty gate.");
     builder.AppendLine("- Avalonia `BackstageViewTests` locks the realized rail, pane/direct state, Back/Escape, callbacks, Properties, and platform capability truthfulness.");
+    builder.AppendLine("- Avalonia `CupsPrintServiceTests` and `PrintLifecycleTests` lock the existing CUPS route's capability gate, cancellation results, command routing, and owner-focus restoration.");
     builder.AppendLine();
     builder.AppendLine("## Remaining Platform Gaps");
     builder.AppendLine();
-    builder.AppendLine("- Avalonia has no native printer-selection service in the current target; direct print remains deferred while preview and PDF are available.");
-    builder.AppendLine("- Avalonia has no XPS writer; XPS remains WPF-only and is omitted from the Avalonia Export pane.");
+    builder.AppendLine("- On Linux/macOS hosts without a supported CUPS service, direct print remains deferred while preview and PDF remain available.");
+    builder.AppendLine("- Avalonia has no user-facing XPS export route; XPS remains WPF-only at the application surface and the portable writer remains internal/shared code.");
     builder.AppendLine("- Foreground OS validation of printer dialogs, file pickers, modal focus restoration, and accessibility announcement order remains platform-runner evidence, not headless proof.");
     builder.AppendLine("- Cloud places, account-backed sharing, and online template/search services remain outside this local Backstage slice.");
     return builder.ToString();

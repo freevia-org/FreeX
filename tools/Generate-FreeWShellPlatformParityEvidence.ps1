@@ -20,6 +20,7 @@ $sourceFiles = @(
     'freew/FreeW.App.Avalonia/Printing/CupsPrintService.cs',
     'freew/FreeW.App.Avalonia/Editing/DocumentView.cs',
     'freew/FreeW.App.Avalonia.Tests/Printing/CupsPrintServiceTests.cs',
+    'freew/FreeW.App.Avalonia.Tests/Printing/PrintLifecycleTests.cs',
     'freew/FreeW.App.Avalonia.Tests/Printing/PortableXpsWriterTests.cs',
     'freew/FreeW.App.Presentation/Printing/PrintSelectionPlanner.cs',
     'freew/FreeW.App.Presentation.Tests/Printing/PrintSelectionPlannerTests.cs',
@@ -44,8 +45,8 @@ $surfaces = @(
     [ordered]@{ name = 'WPF native XPS'; status = 'implemented'; authority = 'FreeW.App.Host.XpsExport uses System.Windows.Xps.Packaging.XpsDocument and XpsDocumentWriter on the WPF paginator.'; implementation = 'Preserved unchanged; it writes a real FixedDocumentSequence OPC package on STA.'; tests = 'Existing FreeW.App.Host.Tests.XpsExportTests cover package/page output.' },
     [ordered]@{ name = 'Linux/macOS printer discovery'; status = 'implemented'; authority = 'CUPS lpstat -p and lpstat -d contract.'; implementation = 'CupsPrintService with injected IProcessRunner and explicit no-printer/unavailable/failed/cancelled results.'; tests = 'CupsPrintServiceTests parse printers/default and cancellation.' },
     [ordered]@{ name = 'Linux/macOS PDF submission'; status = 'implemented'; authority = 'CUPS lp accepts -d, -n, -P, orientation-requested, and a generated PDF path.'; implementation = 'CupsPrintCommandPlanner plus CupsPrintService; arguments use ProcessStartInfo.ArgumentList, never a shell command string.'; tests = 'CupsPrintServiceTests assert exact lp arguments and no-printer short circuit.' },
-    [ordered]@{ name = 'Later Avalonia print dialog contract'; status = 'implemented'; authority = 'WPF dialog exposes printer, copies, page range, and page orientation decisions.'; implementation = 'CupsPrintDialog applies PrintSelectionPlanner output and submits the generated PDF through CupsPrintService.'; tests = 'PrintSelectionPlannerTests and CupsPrintServiceTests cover selection, no printers, validation, and submission.' },
-    [ordered]@{ name = 'Cross-platform XPS'; status = 'implemented-raster-fallback'; authority = 'XPS FixedPage supports vector Path content and Glyphs only with packaged font resources.'; implementation = 'PortableXpsWriter writes vector XPS when possible; otherwise Skia renders each laid-out page to PNG and PortableXpsWriter embeds those images in a real OPC XPS package. PDF bytes are never relabeled.'; tests = 'PortableXpsWriterTests validate package parts and unsupported vector text; Avalonia export exercises the raster fallback.' }
+    [ordered]@{ name = 'Avalonia native print lifecycle'; status = 'implemented'; authority = 'WPF native printing remains the semantic authority; the existing Avalonia CUPS route is capability-gated and must preserve cancellation and owner focus.'; implementation = 'IPlatformPrintService is the non-WPF platform boundary. MainWindow routes supported Backstage print commands through injected discovery/dialog/submission services, cancels in-flight work on close, and restores prior focus.'; tests = 'PrintLifecycleTests cover capability gating, command routing, cancellation, and focus restoration; CupsPrintServiceTests cover CUPS cancellation and injected process behavior.' },
+    [ordered]@{ name = 'Avalonia XPS export route'; status = 'not-exposed-platform-limitation'; authority = 'XPS is a WPF-only user-facing capability through System.Windows.Xps.Packaging and XpsDocumentWriter.'; implementation = 'Backstage ExportXps is omitted from Avalonia. The portable writer remains available as shared/internal code and is not presented as an Avalonia platform capability.'; tests = 'BackstageViewTests assert the Avalonia XPS callback is absent; WPF XpsExportTests remain the authority for XPS output.' }
 )
 
 $uiGaps = @()
@@ -56,11 +57,11 @@ $evidence = [ordered]@{
     generatedInputs = $sourceFiles
     sourceSha256 = $hashes
     ownershipBoundary = @(
-        'MainWindow, ribbon registry/definition, Backstage callback, and shared print/XPS adapter routes are included in the integration.'
+        'MainWindow, ribbon registry/definition, Backstage callback, and the shared print-selection/platform boundary are included in the integration.'
     )
     surfaces = $surfaces
     uiWiringGaps = $uiGaps
-    xpsLimitation = 'Normal documents use a standards-compliant raster-page fallback when XPS glyph/font resources are unavailable. The fallback is fixed-layout XPS with embedded PNG page images; the vector writer still preserves embedded-font/glyph output when an XpsFontResource is supplied.'
+    xpsLimitation = 'XPS remains WPF-only at the application surface. Avalonia does not expose an XPS export action because the native XPS stack is Windows/WPF-specific; the portable writer is retained as shared/internal code and is not a claim of Avalonia parity.'
     freshnessCheck = 'Run tools/Generate-FreeWShellPlatformParityEvidence.ps1 -Check; nonzero means generated JSON/Markdown no longer match current source hashes.'
 }
 
@@ -71,11 +72,11 @@ $markdownText = "# FreeW Shell Platform Parity`n`n" +
     "Generated from WPF authority, Avalonia adapters, shared contracts, and focused-test source hashes. Run ``tools/Generate-FreeWShellPlatformParityEvidence.ps1 -Check`` to verify freshness.`n`n" +
     "- Schema: ``$($evidence.schema)```n" +
     "- Authority: $($evidence.authority)`n" +
-    "- Owned shell/UI wiring is complete; only external printer availability remains host-dependent.`n`n" +
+    "- Owned shell/UI wiring is complete; only external printer availability and the WPF-only XPS boundary remain platform-dependent.`n`n" +
     "## Capability Matrix`n`n| Surface | Status | Implementation | Focused evidence |`n|---|---|---|---|`n$surfaceLines`n`n" +
     "## Exact UI Wiring Gaps`n`n| File | Gap for integration pass |`n|---|---|`n$gapLines`n`n" +
     "## XPS Boundary`n`n$($evidence.xpsLimitation)`n`n" +
-    "The shared writer emits a real OPC package with ``FixedDocSeq.fdseq``, ``FixedDocument.fdoc``, and ``.fpage`` parts for representable vector content. It does not write PDF bytes with an XPS extension.`n`n" +
+    "The shared writer can emit a real OPC package with ``FixedDocSeq.fdseq``, ``FixedDocument.fdoc``, and ``.fpage`` parts for representable vector content, but this does not make XPS an Avalonia application capability. It does not write PDF bytes with an XPS extension.`n`n" +
     "## Freshness`n`nThe JSON records SHA-256 hashes for every authority, implementation, shared contract, and focused-test input. ``-Check`` regenerates both artifacts in memory and fails if either committed artifact differs.`n"
 
 if ($Check) {

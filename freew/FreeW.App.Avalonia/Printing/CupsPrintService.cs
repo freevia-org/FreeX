@@ -7,20 +7,42 @@ namespace FreeW.App.Avalonia.Printing;
 /// Linux/macOS printer adapter using the CUPS-compatible <c>lpstat</c> and <c>lp</c> commands.
 /// Process execution is injected so discovery/submission tests never depend on a host printer.
 /// </summary>
-public sealed class CupsPrintService
+public sealed class CupsPrintService : IPlatformPrintService
 {
     private static readonly Regex PrinterLine = new(
         "^printer\\s+(?<name>\\S+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private readonly IProcessRunner _processRunner;
+    private readonly bool? _isSupportedOverride;
 
-    public CupsPrintService(IProcessRunner? processRunner = null)
+    public CupsPrintService(IProcessRunner? processRunner = null, bool? isSupportedOverride = null)
     {
         _processRunner = processRunner ?? new SystemProcessRunner();
+        _isSupportedOverride = isSupportedOverride;
     }
+
+    public bool IsSupported => _isSupportedOverride ?? (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
 
     public async Task<PrinterDiscoveryResult> DiscoverAsync(CancellationToken cancellationToken = default)
     {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return new PrinterDiscoveryResult(
+                PrinterDiscoveryStatus.Cancelled,
+                [],
+                null,
+                "Printer discovery was cancelled.");
+        }
+
+        if (!IsSupported)
+        {
+            return new PrinterDiscoveryResult(
+                PrinterDiscoveryStatus.Unavailable,
+                [],
+                null,
+                "CUPS printing is available only on Linux and macOS hosts.");
+        }
+
         try
         {
             var printersResult = await _processRunner.RunAsync(
@@ -90,6 +112,22 @@ public sealed class CupsPrintService
         ArgumentException.ThrowIfNullOrWhiteSpace(pdfPath);
         ArgumentNullException.ThrowIfNull(selection);
         selection.Validate();
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return new PrintSubmissionResult(
+                PrintSubmissionStatus.Cancelled,
+                selection.PrinterName,
+                Message: "Print submission was cancelled.");
+        }
+
+        if (!IsSupported)
+        {
+            return new PrintSubmissionResult(
+                PrintSubmissionStatus.Unavailable,
+                selection.PrinterName,
+                Message: "CUPS printing is available only on Linux and macOS hosts.");
+        }
 
         if (!File.Exists(pdfPath))
         {

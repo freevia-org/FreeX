@@ -10,8 +10,10 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using System.Globalization;
 using Free.Shared.AppServices;
+using Free.Shared.AppServices.Printing;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
@@ -47,18 +49,10 @@ public sealed partial class MainWindow : Window
             ["*.pdf"],
             ["application/pdf"]);
 
-    private static readonly FilePickerFileType XpsFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            "XPS document",
-            ["*.xps"],
-            ["application/oxps", "application/vnd.ms-xpsdocument"]);
-
-    private static readonly BackstageDirectPrintCapability AvaloniaDirectPrintCapability =
-        BackstageDirectPrintCapability.NativeDialogAvailable(
-            "CUPS printer discovery and submission are available on this Avalonia host.");
-
     private readonly DocumentPersistenceWorkflow _documentPersistence = new();
-    private readonly CupsPrintService _cupsPrintService = new();
+    private readonly IPlatformPrintService _printService;
+    private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
+    private readonly Action<IInputElement?> _restorePrintOwnerFocus;
     private readonly IScreenClipService _screenClipService;
     private readonly DocumentView _editor = new();
     private readonly QuickPartLibrary _quickParts = QuickPartLibrary.Load();
@@ -124,6 +118,7 @@ public sealed partial class MainWindow : Window
     private Thickness _editorMarginBeforeReadMode;
     private bool _suppressEditorDirty;
     private bool _closingConfirmed;
+    private CancellationTokenSource? _printCancellation;
 
     public MainWindow()
         : this(Array.Empty<string>())
@@ -142,10 +137,18 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<string> startupArguments,
         FreeWOptions? options,
         ApplicationOptionsStore<FreeWOptions> optionsStore,
-        IScreenClipService? screenClipService = null)
+        IScreenClipService? screenClipService = null,
+        IPlatformPrintService? printService = null,
+        Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>>? showPrintSelectionDialog = null,
+        Action<IInputElement?>? restorePrintOwnerFocus = null)
     {
         _optionsStore = optionsStore;
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
+        _printService = printService ?? new CupsPrintService();
+        _showPrintSelectionDialog = showPrintSelectionDialog ??
+            ((owner, discovery, cancellationToken) =>
+                CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
+        _restorePrintOwnerFocus = restorePrintOwnerFocus ?? RestorePrintOwnerFocus;
         _options = options ?? _optionsStore.Load();
         _options.Normalize();
 
@@ -1042,7 +1045,7 @@ public sealed partial class MainWindow : Window
                 snapshot,
                 _fileWorkflow.DisplayName,
                 ExportPdfAsync,
-                AvaloniaDirectPrintCapability,
+                DirectPrintCapability,
                 PrintAsync).ShowDialog(this);
         }
         catch (Exception ex)
@@ -2485,6 +2488,8 @@ public sealed partial class MainWindow : Window
 
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
+        _printCancellation?.Cancel();
+
         // If we already ran the async gate and decided it's OK to close, let it through.
         if (_closingConfirmed)
         {
@@ -2845,36 +2850,17 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task ExportXpsAsync()
+    internal async Task PrintAsync()
     {
-        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromFileTypes(
-                "Export XPS",
-                [XpsFileType],
-                _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName) + ".xps",
-                "xps"));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
-
+        var priorFocus = FocusManager?.GetFocusedElement();
+        using var cancellation = new CancellationTokenSource();
+        _printCancellation = cancellation;
         try
         {
-            FreeWAvaloniaXpsExport.Save(_editor, path);
-            _status.Text = $"Exported XPS: {Path.GetFileName(path)}";
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("XPS export", ex.Message);
-        }
-    }
-
-    private async Task PrintAsync()
-    {
-        try
-        {
-            var discovery = await _cupsPrintService.DiscoverAsync();
-            var selection = await CupsPrintDialog.ShowAsync(this, discovery);
+            var discovery = await _printService.DiscoverAsync(cancellation.Token);
+            if (discovery.Status == PrinterDiscoveryStatus.Cancelled)
+                throw new OperationCanceledException(cancellation.Token);
+            var selection = await _showPrintSelectionDialog(this, discovery, cancellation.Token);
             if (selection is null)
                 return;
 
@@ -2882,20 +2868,52 @@ public sealed partial class MainWindow : Window
             try
             {
                 FreeWAvaloniaPdfExport.Save(_editor, tempPath);
-                var submission = await _cupsPrintService.SubmitAsync(tempPath, selection);
-                _status.Text = submission.Succeeded
-                    ? $"Sent to printer {submission.PrinterName}."
-                    : submission.Message ?? "Print submission failed.";
+                var submission = await _printService.SubmitAsync(tempPath, selection, cancellation.Token);
+                _status.Text = submission.Status switch
+                {
+                    PrintSubmissionStatus.Submitted => $"Sent to printer {submission.PrinterName}.",
+                    PrintSubmissionStatus.Cancelled => "Print canceled.",
+                    _ => submission.Message ?? "Print submission failed."
+                };
             }
             finally
             {
                 try { File.Delete(tempPath); } catch { }
             }
         }
+        catch (OperationCanceledException)
+        {
+            _status.Text = "Print canceled.";
+        }
         catch (Exception ex)
         {
             _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Print", ex.Message);
         }
+        finally
+        {
+            if (ReferenceEquals(_printCancellation, cancellation))
+                _printCancellation = null;
+            _restorePrintOwnerFocus(priorFocus);
+        }
+    }
+
+    private BackstageDirectPrintCapability DirectPrintCapability =>
+        _printService.IsSupported
+            ? BackstageDirectPrintCapability.NativeDialogAvailable(
+                "CUPS printer discovery and submission are available on this Avalonia host.")
+            : BackstageDirectPrintCapability.Deferred(
+                "This Avalonia host has no supported native printer service; use Print Preview or Create PDF.");
+
+    private void RestorePrintOwnerFocus(IInputElement? priorFocus)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            Activate();
+            if (priorFocus is InputElement input && input.Focusable && input.IsEffectivelyEnabled)
+                input.Focus();
+            else
+                _editor.Focus();
+        }, DispatcherPriority.Input);
     }
 
     private static readonly FilePickerFileType ImageFileType =
@@ -3389,7 +3407,7 @@ public sealed partial class MainWindow : Window
                     OpenFolderInShell(folder);
             },
             ExportPdf: () => _ = ExportPdfAsync(),
-            ExportXps: () => _ = ExportXpsAsync(),
+            ExportXps: null,
             EditProperties: () => _ = OpenPropertiesAsync(),
             MarkAsFinal: ToggleMarkAsFinal,
             RestrictEditing: () => _ = OpenRestrictEditingAsync(),
@@ -3397,8 +3415,8 @@ public sealed partial class MainWindow : Window
             CheckAccessibility: () => _ = CheckAccessibilityAsync(),
             OpenOptions: () => _ = OpenOptionsAsync(),
             CloseDocument: Close,
-            DirectPrintCapability: AvaloniaDirectPrintCapability,
-            Print: () => _ = PrintAsync(),
+            DirectPrintCapability: DirectPrintCapability,
+            Print: _printService.IsSupported ? () => _ = PrintAsync() : null,
             PrintPreview: () => _ = OpenPrintPreviewAsync());
 
     private async Task SaveCopyAsync()
