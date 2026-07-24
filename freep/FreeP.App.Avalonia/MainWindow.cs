@@ -2219,6 +2219,16 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Moderate)));
         r.Register(SmartArtAuthoringPlanner.IntenseQuickStyleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Intense)));
+        r.Register(SmartArtAuthoringPlanner.SubtleQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Subtle)));
+        r.Register(SmartArtAuthoringPlanner.SoftEdgeQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.SoftEdge)));
+        r.Register(SmartArtAuthoringPlanner.InsertQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Insert)));
+        r.Register(SmartArtAuthoringPlanner.CartoonQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Cartoon)));
+        r.Register(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Powder)));
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));

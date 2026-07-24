@@ -241,6 +241,16 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Moderate)));
         registry.Register(SmartArtAuthoringPlanner.IntenseQuickStyleCommandId,
             new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Intense)));
+        registry.Register(SmartArtAuthoringPlanner.SubtleQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Subtle)));
+        registry.Register(SmartArtAuthoringPlanner.SoftEdgeQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.SoftEdge)));
+        registry.Register(SmartArtAuthoringPlanner.InsertQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Insert)));
+        registry.Register(SmartArtAuthoringPlanner.CartoonQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Cartoon)));
+        registry.Register(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Powder)));
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
         //

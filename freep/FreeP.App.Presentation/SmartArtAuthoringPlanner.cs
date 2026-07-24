@@ -68,6 +68,11 @@ public enum SmartArtQuickStylePreset
     Simple,
     Moderate,
     Intense,
+    Subtle,
+    SoftEdge,
+    Insert,
+    Cartoon,
+    Powder,
 }
 
 public sealed record SmartArtColorApplyResult(
@@ -147,6 +152,11 @@ public static class SmartArtAuthoringPlanner
     public const string SimpleQuickStyleCommandId = "freep.smartart.style.simple";
     public const string ModerateQuickStyleCommandId = "freep.smartart.style.moderate";
     public const string IntenseQuickStyleCommandId = "freep.smartart.style.intense";
+    public const string SubtleQuickStyleCommandId = "freep.smartart.style.subtle";
+    public const string SoftEdgeQuickStyleCommandId = "freep.smartart.style.soft-edge";
+    public const string InsertQuickStyleCommandId = "freep.smartart.style.insert";
+    public const string CartoonQuickStyleCommandId = "freep.smartart.style.cartoon";
+    public const string PowderQuickStyleCommandId = "freep.smartart.style.powder";
 
     public static SmartArtQuickStyleApplyResult ApplyQuickStylePreset(
         SmartArtShape? smartArt,
@@ -163,6 +173,16 @@ public static class SmartArtAuthoringPlanner
                 "urn:microsoft.com/office/officeart/2005/8/quickstyle/moderate1",
             SmartArtQuickStylePreset.Intense =>
                 "urn:microsoft.com/office/officeart/2005/8/quickstyle/intense1",
+            SmartArtQuickStylePreset.Subtle =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/subtle1",
+            SmartArtQuickStylePreset.SoftEdge =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/subtle2",
+            SmartArtQuickStylePreset.Insert =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/intense2",
+            SmartArtQuickStylePreset.Cartoon =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/3d1",
+            SmartArtQuickStylePreset.Powder =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/3d2",
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
         };
 
@@ -206,6 +226,11 @@ public static class SmartArtAuthoringPlanner
             SmartArtQuickStylePreset.Simple => "Simple",
             SmartArtQuickStylePreset.Moderate => "Moderate",
             SmartArtQuickStylePreset.Intense => "Intense",
+            SmartArtQuickStylePreset.Subtle => "Subtle",
+            SmartArtQuickStylePreset.SoftEdge => "Soft Edge",
+            SmartArtQuickStylePreset.Insert => "Insert",
+            SmartArtQuickStylePreset.Cartoon => "Cartoon",
+            SmartArtQuickStylePreset.Powder => "Powder",
             _ => preset.ToString(),
         };
         var titleElement = styleDefinition.Elements(Diagram + "title").FirstOrDefault();

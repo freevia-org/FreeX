@@ -1024,6 +1024,36 @@
   <data name="Ribbon_Command_SmartArtIntenseStyle_KeyTip" xml:space="preserve">
     <value>I</value>
   </data>
+  <data name="Ribbon_Command_SmartArtSubtleStyle_Label" xml:space="preserve">
+    <value>Subtle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSubtleStyle_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSoftEdgeStyle_Label" xml:space="preserve">
+    <value>Soft Edge</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSoftEdgeStyle_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtInsertStyle_Label" xml:space="preserve">
+    <value>Insert</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtInsertStyle_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtCartoonStyle_Label" xml:space="preserve">
+    <value>Cartoon</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtCartoonStyle_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPowderStyle_Label" xml:space="preserve">
+    <value>Powder</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPowderStyle_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
   <data name="Ribbon_Command_SlideSizeWidescreen_Label" xml:space="preserve">
     <value>Widescreen (16:9)</value>
   </data>

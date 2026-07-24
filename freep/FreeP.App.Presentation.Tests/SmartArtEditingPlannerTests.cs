@@ -121,6 +121,11 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtQuickStylePreset.Simple, "simple1", "Simple")]
     [InlineData(SmartArtQuickStylePreset.Moderate, "moderate1", "Moderate")]
     [InlineData(SmartArtQuickStylePreset.Intense, "intense1", "Intense")]
+    [InlineData(SmartArtQuickStylePreset.Subtle, "subtle1", "Subtle")]
+    [InlineData(SmartArtQuickStylePreset.SoftEdge, "subtle2", "Soft Edge")]
+    [InlineData(SmartArtQuickStylePreset.Insert, "intense2", "Insert")]
+    [InlineData(SmartArtQuickStylePreset.Cartoon, "3d1", "Cartoon")]
+    [InlineData(SmartArtQuickStylePreset.Powder, "3d2", "Powder")]
     public void ApplyQuickStylePreset_UpdatesMetadataAndNativeStylePart(
         SmartArtQuickStylePreset preset,
         string expectedId,

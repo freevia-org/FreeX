@@ -533,6 +533,21 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.IntenseQuickStyleCommandId,
                 FreePRibbonText.SmartArtIntenseStyleCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtIntenseStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.SubtleQuickStyleCommandId,
+                FreePRibbonText.SmartArtSubtleStyleCommand.Label, RibbonCommandIconKind.Rectangle,
+                FreePRibbonText.SmartArtSubtleStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.SoftEdgeQuickStyleCommandId,
+                FreePRibbonText.SmartArtSoftEdgeStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtSoftEdgeStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.InsertQuickStyleCommandId,
+                FreePRibbonText.SmartArtInsertStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtInsertStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.CartoonQuickStyleCommandId,
+                FreePRibbonText.SmartArtCartoonStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtCartoonStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
+                FreePRibbonText.SmartArtPowderStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtPowderStyleCommand.KeyTip);
         });
     }
 

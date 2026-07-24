@@ -723,6 +723,11 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtQuickStylePreset.Simple, "simple1")]
     [InlineData(SmartArtQuickStylePreset.Moderate, "moderate1")]
     [InlineData(SmartArtQuickStylePreset.Intense, "intense1")]
+    [InlineData(SmartArtQuickStylePreset.Subtle, "subtle1")]
+    [InlineData(SmartArtQuickStylePreset.SoftEdge, "subtle2")]
+    [InlineData(SmartArtQuickStylePreset.Insert, "intense2")]
+    [InlineData(SmartArtQuickStylePreset.Cartoon, "3d1")]
+    [InlineData(SmartArtQuickStylePreset.Powder, "3d2")]
     public void SmartArtQuickStylePreset_PersistsNativeStyleAndRereads(
         SmartArtQuickStylePreset preset,
         string expectedStyle)
@@ -745,7 +750,12 @@ public sealed class SmartArtTests : IDisposable
             .SmartArt!;
         reread.QuickStyle.Should().NotBeNull();
         reread.QuickStyle!.UniqueId.Should().Be(result.StyleUniqueId);
-        reread.QuickStyle.Title.Should().Be(preset.ToString());
+        reread.QuickStyle.Title.Should().Be(
+            preset switch
+            {
+                SmartArtQuickStylePreset.SoftEdge => "Soft Edge",
+                _ => preset.ToString(),
+            });
     }
 
     // ── Compositor ───────────────────────────────────────────────────────────────
