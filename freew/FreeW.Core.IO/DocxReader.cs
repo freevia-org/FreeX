@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.IO.Compression;
+using System.Text;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
 using Free.Shared.Opc;
@@ -1559,11 +1560,22 @@ public static class DocxReader
             var relationshipId = element.Attribute(R + "id")?.Value;
             if (relationshipId is not null && altChunkRelationships.TryGetValue(relationshipId, out var partName))
             {
-                var altChunk = new AltChunkBlock(partName)
+                if (TryMaterializeHtmlAltChunk(archive, partName, out var importedBlocks))
                 {
-                    BlockContentControl = inheritedBlockContentControl
-                };
-                document.Blocks.Add(altChunk);
+                    foreach (var importedBlock in importedBlocks)
+                    {
+                        importedBlock.BlockContentControl = inheritedBlockContentControl;
+                        document.Blocks.Add(importedBlock);
+                    }
+                }
+                else
+                {
+                    var altChunk = new AltChunkBlock(partName)
+                    {
+                        BlockContentControl = inheritedBlockContentControl
+                    };
+                    document.Blocks.Add(altChunk);
+                }
             }
             prevPara = null;
             prevAfterAuto = false;
@@ -1587,6 +1599,64 @@ public static class DocxReader
                     inheritedControl,
                     blockControl);
             }
+        }
+    }
+
+    /// <summary>
+    /// Word resolves a body-level HTML altChunk into ordinary editable blocks when the document opens.
+    /// Materialize only package-local <c>text/html</c> payloads; RTF, nested Word packages, malformed HTML,
+    /// and unknown chunk types remain represented by <see cref="AltChunkBlock"/> so their payload graph is
+    /// retained verbatim on save.
+    /// </summary>
+    private static bool TryMaterializeHtmlAltChunk(
+        ZipArchive archive,
+        string partName,
+        out IReadOnlyList<Block> blocks)
+    {
+        blocks = [];
+        var partPath = partName.TrimStart('/');
+        var extension = Path.GetExtension(partPath).TrimStart('.').ToLowerInvariant();
+        var overrides = ReadContentTypeOverrides(archive);
+        var defaults = ReadContentTypeDefaults(archive);
+        var contentType = overrides.GetValueOrDefault(partName)
+            ?? defaults.GetValueOrDefault(extension);
+        if (!string.Equals(contentType, "text/html", StringComparison.OrdinalIgnoreCase)
+            || LoadMedia(archive, partPath) is not { } bytes)
+            return false;
+
+        try
+        {
+            using var stream = new MemoryStream(bytes, writable: false);
+            using var reader = new StreamReader(
+                stream,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: true,
+                bufferSize: 4096,
+                leaveOpen: false);
+
+            var partDirectory = OpcPathHelper.GetDirectoryName(partPath);
+            var imagesByRelationshipId = ReadPartImageRelationships(archive, partPath);
+            InlineImage? ResolveImage(string source)
+            {
+                if (imagesByRelationshipId.TryGetValue(source, out var relatedPath))
+                    return CreateImage(relatedPath);
+
+                if (Uri.TryCreate(source, UriKind.Absolute, out _))
+                    return null;
+
+                return CreateImage(OpcPathHelper.ResolveRelativeZipPath(partDirectory, source));
+            }
+
+            InlineImage? CreateImage(string path) => LoadMedia(archive, path) is { } imageBytes
+                ? new InlineImage(imageBytes, 72, 72, ResolveImageFormat(path, imageBytes))
+                : null;
+
+            blocks = HtmlFileAdapter.LoadHtml(reader.ReadToEnd(), ResolveImage).Blocks.ToList();
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
+        {
+            return false;
         }
     }
 

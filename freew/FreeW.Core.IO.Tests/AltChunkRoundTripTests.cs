@@ -6,53 +6,58 @@ namespace FreeW.Core.IO.Tests;
 
 public class AltChunkRoundTripTests
 {
-    private static readonly string[] PreservedEntries =
-    [
-        "word/afchunk.html",
-        "word/_rels/afchunk.html.rels",
-        "word/media/altchunk.png"
-    ];
-
     [Fact]
-    public void AltChunk_PayloadRelationshipGraphAndBodyPlacement_SurviveRoundTrip()
+    public void HtmlAltChunk_MaterializesEditableBlocksAndChunkLocalImages()
     {
         var sourceBytes = AuthorPackageWithAltChunk();
-        var source = DocxPackageInventory.Read(sourceBytes);
-
         var document = ReadDocument(sourceBytes);
 
         document.Blocks.Should().HaveCount(3);
         document.Blocks[0].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Before");
-        document.Blocks[1].Should().BeOfType<AltChunkBlock>().Which.PreservedPartName.Should().Be("/word/afchunk.html");
+        var imported = document.Blocks[1].Should().BeOfType<Paragraph>().Which;
+        imported.PlainText.Should().Be("Materialized altChunk HTML");
+        imported.Runs.Where(run => run.Image is not null).Should().ContainSingle();
+        imported.Runs.Single(run => run.Image is not null).Image!.Bytes.Should()
+            .Equal(Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6XZDxsAAAAASUVORK5CYII="));
         document.Blocks[2].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("After");
-        document.Preserved.Parts.Select(part => part.PartName).Should().Contain(PreservedEntries.Select(path => "/" + path));
+        document.Preserved.Parts.Should().NotContain(part => part.PartName == "/word/afchunk.html");
 
         var rewrittenBytes = WriteDocument(document);
         var rewritten = DocxPackageInventory.Read(rewrittenBytes);
 
-        rewritten.ShouldPreserveVerbatim(source, PreservedEntries);
-        rewritten.ShouldDeclareDefault("html", "text/html");
-        rewritten.ShouldDeclareDefault("png", "image/png");
-        rewritten.ShouldContainRelationship(
-            "word/_rels/document.xml.rels",
-            Ooxml.AltChunkRelType,
-            "afchunk.html");
-        rewritten.ShouldContainRelationship(
-            "word/_rels/afchunk.html.rels",
-            Ooxml.ImageRelType,
-            "media/altchunk.png");
-
         using var zip = new ZipArchive(new MemoryStream(rewrittenBytes), ZipArchiveMode.Read);
         using var entry = zip.GetEntry("word/document.xml")!.Open();
         var body = XDocument.Load(entry).Root!.Element(Ooxml.W + "body")!;
-        body.Elements().Take(3).Select(element => element.Name).Should().Equal(
-            Ooxml.W + "p",
-            Ooxml.W + "altChunk",
-            Ooxml.W + "p");
-        body.Element(Ooxml.W + "altChunk")!.Attribute(Ooxml.R + "id")!.Value.Should().StartWith("rIdPreserved");
+        body.Element(Ooxml.W + "altChunk").Should().BeNull();
+        zip.GetEntry("word/afchunk.html").Should().BeNull();
+        rewritten.ShouldDeclareDefault("png", "image/png");
 
         var reopened = ReadDocument(rewrittenBytes);
-        reopened.Blocks[1].Should().BeOfType<AltChunkBlock>().Which.PreservedPartName.Should().Be("/word/afchunk.html");
+        reopened.Blocks[1].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Materialized altChunk HTML");
+        reopened.Blocks[1].Should().BeOfType<Paragraph>().Which.Runs
+            .Where(run => run.Image is not null).Should().ContainSingle();
+    }
+
+    [Fact]
+    public void NonHtmlAltChunk_RetainsItsPayloadAndBodyMarker()
+    {
+        var sourceBytes = AuthorPackageWithAltChunk(
+            chunkPartName: "afchunk.rtf",
+            chunkContentType: "application/rtf",
+            chunkPayload: @"{\rtf1\ansi Preserved RTF}");
+        var source = DocxPackageInventory.Read(sourceBytes);
+        var document = ReadDocument(sourceBytes);
+
+        document.Blocks[1].Should().BeOfType<AltChunkBlock>().Which.PreservedPartName.Should().Be("/word/afchunk.rtf");
+
+        var rewrittenBytes = WriteDocument(document);
+        var rewritten = DocxPackageInventory.Read(rewrittenBytes);
+
+        rewritten.ShouldPreserveVerbatim(source, ["word/afchunk.rtf", "word/_rels/afchunk.rtf.rels", "word/media/altchunk.png"]);
+        using var zip = new ZipArchive(new MemoryStream(rewrittenBytes), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/document.xml")!.Open();
+        var body = XDocument.Load(entry).Root!.Element(Ooxml.W + "body")!;
+        body.Element(Ooxml.W + "altChunk").Should().NotBeNull();
     }
 
     private static TextDocument ReadDocument(byte[] bytes)
@@ -68,8 +73,12 @@ public class AltChunkRoundTripTests
         return stream.ToArray();
     }
 
-    private static byte[] AuthorPackageWithAltChunk()
+    private static byte[] AuthorPackageWithAltChunk(
+        string chunkPartName = "afchunk.html",
+        string chunkContentType = "text/html",
+        string? chunkPayload = null)
     {
+        chunkPayload ??= "<html><body><p>Materialized altChunk HTML<img src=\"media/altchunk.png\"/></p></body></html>";
         using var stream = new MemoryStream();
         using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
@@ -89,12 +98,12 @@ public class AltChunkRoundTripTests
             }
 
             Add("[Content_Types].xml",
-                """
+                $"""
                 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
                   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
                   <Default Extension="xml" ContentType="application/xml"/>
-                  <Default Extension="html" ContentType="text/html"/>
+                  <Default Extension="{Path.GetExtension(chunkPartName).TrimStart('.')}" ContentType="{chunkContentType}"/>
                   <Default Extension="png" ContentType="image/png"/>
                   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
                 </Types>
@@ -110,7 +119,7 @@ public class AltChunkRoundTripTests
                 $"""
                 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-                  <Relationship Id="rIdAltChunk" Type="{Ooxml.AltChunkRelType}" Target="afchunk.html"/>
+                  <Relationship Id="rIdAltChunk" Type="{Ooxml.AltChunkRelType}" Target="{chunkPartName}"/>
                 </Relationships>
                 """);
             Add("word/document.xml",
@@ -125,8 +134,8 @@ public class AltChunkRoundTripTests
                   </w:body>
                 </w:document>
                 """);
-            Add("word/afchunk.html", "<html><body><p>Preserved altChunk HTML</p><img src=\"media/altchunk.png\"/></body></html>");
-            Add("word/_rels/afchunk.html.rels",
+            Add("word/" + chunkPartName, chunkPayload);
+            Add("word/_rels/" + chunkPartName + ".rels",
                 $"""
                 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
