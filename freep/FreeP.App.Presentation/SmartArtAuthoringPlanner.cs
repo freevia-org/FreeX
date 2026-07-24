@@ -18,6 +18,7 @@ public enum SmartArtColorPreset
 public enum SmartArtLayoutPreset
 {
     BasicProcess,
+    ContinuousBlockProcess,
     AlternatingProcess,
     ArrowRibbon,
     CircleProcess,
@@ -83,6 +84,7 @@ public static class SmartArtAuthoringPlanner
     public const string SingleAccentCommandId = "freep.smartart.colors.single-accent";
     public const string GrayscaleCommandId = "freep.smartart.colors.grayscale";
     public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
+    public const string ContinuousBlockProcessLayoutCommandId = "freep.smartart.layout.continuous-block-process";
     public const string AlternatingProcessLayoutCommandId = "freep.smartart.layout.alternating-process";
     public const string ArrowRibbonLayoutCommandId = "freep.smartart.layout.arrow-ribbon";
     public const string CircleProcessLayoutCommandId = "freep.smartart.layout.circle-process";
@@ -211,6 +213,8 @@ public static class SmartArtAuthoringPlanner
         {
             SmartArtLayoutPreset.BasicProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.ContinuousBlockProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.AlternatingProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.ArrowRibbon =>

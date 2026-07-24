@@ -5073,6 +5073,7 @@ public sealed class MainWindowHeadlessTests
             foreach (var commandId in new[]
             {
                 SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
+                SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
                 SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,

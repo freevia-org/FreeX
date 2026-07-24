@@ -14,6 +14,7 @@ public sealed class SmartArtEditingPlannerTests
 
     [Theory]
     [InlineData(SmartArtLayoutPreset.BasicProcess, "basicProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.ContinuousBlockProcess, "continuousBlockProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.AlternatingProcess, "alternatingProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.ArrowRibbon, "arrowRibbon", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleProcess, "circleProcess", SmartArtFamily.Process)]
