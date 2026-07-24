@@ -216,6 +216,7 @@ public sealed partial class MainWindow : Window
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
+    internal PresentationPrintBackstagePlan? LastFilePrintBackstagePlanForTests => _file.LastPrintBackstagePlan;
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
@@ -3800,6 +3801,17 @@ public sealed partial class MainWindow : Window
     // ── Backstage ─────────────────────────────────────────────────────────────────
 
     private void ShowBackstage() => _backstage.Show();
+
+    internal void ShowBackstageForTests() => ShowBackstage();
+
+    internal bool ActivateBackstageEntryForTests(string label)
+    {
+        _backstage.Show(label);
+        return _backstage.CurrentPaneContent is not null;
+    }
+
+    internal bool ApplyBackstagePrintCustomRangeForTests(string rangeText) =>
+        _backstage.ApplyCustomPrintRangeForTests(rangeText);
 
     private PresentationSlideRangeRequest BuildCurrentSlideImageExportRange() =>
         new(

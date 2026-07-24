@@ -2370,6 +2370,61 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Print_options_pane_custom_range_input_rebuilds_plan()
+    {
+        PresentationPrintBackstagePlan? printPlan = null;
+        var applied = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+
+            window.ShowPrintOptionsPane();
+            applied = window.ApplyPrintCustomRangeForTests("2,4");
+            printPlan = window.LastPrintBackstagePlan;
+        });
+
+        if (!ran) return;
+        applied.Should().BeTrue();
+        printPlan.Should().NotBeNull();
+        printPlan!.SelectedRange.Kind.Should().Be(PresentationSlideRangeKind.CustomRange);
+        printPlan.SelectedRange.Request!.CustomRangeText.Should().Be("2,4");
+        printPlan.PageCount.Should().Be(2);
+        printPlan.CanBuildPackage.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Backstage_print_custom_range_input_rebuilds_shared_plan()
+    {
+        PresentationPrintBackstagePlan? printPlan = null;
+        var applied = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+
+            window.ShowBackstageForTests();
+            window.ActivateBackstageEntryForTests("Print").Should().BeTrue();
+            applied = window.ApplyBackstageCustomPrintRangeForTests("2,4");
+            printPlan = window.LastPrintBackstagePlan;
+        });
+
+        if (!ran) return;
+        applied.Should().BeTrue();
+        printPlan.Should().NotBeNull();
+        printPlan!.SelectedRange.Kind.Should().Be(PresentationSlideRangeKind.CustomRange);
+        printPlan.SelectedRange.Request!.CustomRangeText.Should().Be("2,4");
+        printPlan.PageCount.Should().Be(2);
+        printPlan.CanBuildPackage.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Notes_page_pdf_refresh_uses_shared_render_plan()
     {
         PresentationNotesPagePdfRenderPlan? notesPdfPlan = null;

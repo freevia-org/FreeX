@@ -1,6 +1,8 @@
 using System;
+using System.Windows.Automation;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
@@ -36,6 +38,9 @@ internal sealed class BackstageView : UserControl
     private readonly BackstageActions _actions;
     private readonly SisterBackstageHostController _backstage;
     private string? _evidencePaneLabel;
+    private PresentationPrintRequest? _printRequest;
+    private TextBox? _customRangeInput;
+    private Button? _customRangeApplyButton;
 
     public BackstageView(Func<Presentation> getModel, FileCommands file, BackstageActions actions)
     {
@@ -64,6 +69,16 @@ internal sealed class BackstageView : UserControl
 
     internal string? EvidencePaneLabel => _evidencePaneLabel;
 
+    internal bool ApplyCustomPrintRangeForTests(string rangeText)
+    {
+        if (_customRangeInput is null || _customRangeApplyButton is null)
+            return false;
+
+        _customRangeInput.Text = rangeText;
+        _customRangeApplyButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        return true;
+    }
+
     internal UIElement? CurrentPaneContent => _backstage.Frame.CurrentPaneContent;
 
     public void Hide() => _backstage.Hide();
@@ -89,7 +104,7 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildPrintPane()
     {
-        var plan = _file.BuildPrintBackstagePlan();
+        var plan = _file.BuildPrintBackstagePlan(_printRequest);
         var panel = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Kit.HeadingText(plan.Heading));
         panel.Children.Add(new TextBlock
@@ -139,6 +154,45 @@ internal sealed class BackstageView : UserControl
                 choice.Kind == plan.SelectedRange.Kind,
                 choice.IsAvailable));
 
+        panel.Children.Add(Kit.SubHeading("Custom Range"));
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Enter slide numbers and ranges, for example 2,4-6.",
+            Foreground = Kit.Muted,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 4),
+        });
+        _customRangeInput = new TextBox
+        {
+            Text = _printRequest?.SlideRange?.CustomRangeText ?? string.Empty,
+            MinWidth = 240,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        AutomationProperties.SetAutomationId(_customRangeInput, "FreePPrintCustomRangeInput");
+        _customRangeApplyButton = new Button
+        {
+            Content = "Apply range",
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(12, 6, 12, 6),
+            ToolTip = "Apply the custom slide range to the print preview and output.",
+        };
+        AutomationProperties.SetAutomationId(_customRangeApplyButton, "FreePPrintCustomRangeApply");
+        _customRangeApplyButton.Click += (_, _) =>
+        {
+            var text = _customRangeInput.Text.Trim();
+            _printRequest = string.IsNullOrWhiteSpace(text)
+                ? null
+                : new PresentationPrintRequest(
+                    PresentationPrintLayoutKind.FullPageSlides,
+                    new PresentationSlideRangeRequest(
+                        PresentationSlideRangeKind.CustomRange,
+                        CustomRangeText: text));
+            _backstage.Show("Print");
+        };
+        panel.Children.Add(_customRangeInput);
+        panel.Children.Add(_customRangeApplyButton);
+
         panel.Children.Add(new TextBlock
         {
             Text = plan.DisabledReason ?? plan.NativePrintHandoff.Reason,
@@ -153,6 +207,7 @@ internal sealed class BackstageView : UserControl
         {
             var printRequest = new PresentationPrintRequest(
                 choice.Layout.Layout,
+                plan.SelectedRange.Request,
                 HandoutSlidesPerPage: choice.Layout.SlidesPerPage);
             var printButton = new Button
             {
