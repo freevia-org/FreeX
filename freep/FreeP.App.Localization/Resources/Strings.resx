@@ -682,6 +682,24 @@
   <data name="Ribbon_Command_SmartArtChevronProcess_KeyTip" xml:space="preserve">
     <value>V</value>
   </data>
+  <data name="Ribbon_Command_SmartArtBasicChevronProcess_Label" xml:space="preserve">
+    <value>Basic Chevron Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicChevronProcess_KeyTip" xml:space="preserve">
+    <value>BC</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtClosedChevronProcess_Label" xml:space="preserve">
+    <value>Closed Chevron Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtClosedChevronProcess_KeyTip" xml:space="preserve">
+    <value>CC</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBendingProcess_Label" xml:space="preserve">
+    <value>Bending Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBendingProcess_KeyTip" xml:space="preserve">
+    <value>BP</value>
+  </data>
   <data name="Ribbon_Command_SmartArtAlternatingProcess_Label" xml:space="preserve">
     <value>Alternating Process</value>
   </data>
@@ -735,6 +753,18 @@
   </data>
   <data name="Ribbon_Command_SmartArtTextCycle_KeyTip" xml:space="preserve">
     <value>T</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBlockCycle_Label" xml:space="preserve">
+    <value>Block Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBlockCycle_KeyTip" xml:space="preserve">
+    <value>BC</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtNonDirectionalCycle_Label" xml:space="preserve">
+    <value>Non-Directional Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtNonDirectionalCycle_KeyTip" xml:space="preserve">
+    <value>ND</value>
   </data>
   <data name="Ribbon_Command_SmartArtBasicBlockList_Label" xml:space="preserve">
     <value>Basic Block List</value>

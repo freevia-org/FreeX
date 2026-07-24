@@ -383,6 +383,15 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId,
                 FreePRibbonText.SmartArtChevronProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
                 FreePRibbonText.SmartArtChevronProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicChevronProcessLayoutCommandId,
+                FreePRibbonText.SmartArtBasicChevronProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtBasicChevronProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.ClosedChevronProcessLayoutCommandId,
+                FreePRibbonText.SmartArtClosedChevronProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtClosedChevronProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BendingProcessLayoutCommandId,
+                FreePRibbonText.SmartArtBendingProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtBendingProcessCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
                 FreePRibbonText.SmartArtAlternatingProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
                 FreePRibbonText.SmartArtAlternatingProcessCommand.KeyTip);
@@ -410,6 +419,12 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.TextCycleLayoutCommandId,
                 FreePRibbonText.SmartArtTextCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtTextCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BlockCycleLayoutCommandId,
+                FreePRibbonText.SmartArtBlockCycleCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtBlockCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId,
+                FreePRibbonText.SmartArtNonDirectionalCycleCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtNonDirectionalCycleCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
                 FreePRibbonText.SmartArtBasicBlockListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtBasicBlockListCommand.KeyTip);
