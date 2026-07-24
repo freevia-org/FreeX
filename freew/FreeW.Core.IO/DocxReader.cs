@@ -5928,6 +5928,15 @@ public static class DocxReader
             group.FlipV = groupXfrm.Attribute("flipV")?.Value is "1" or "true";
         }
 
+        // Child offsets/extents use the group xfrm's child-coordinate space. Flatten that space into
+        // the rendered group bounds so the model's child offsets remain directly renderable.
+        var childOriginX = EmuToPoints(groupXfrm?.Element(A + "chOff")?.Attribute("x")?.Value ?? "0");
+        var childOriginY = EmuToPoints(groupXfrm?.Element(A + "chOff")?.Attribute("y")?.Value ?? "0");
+        var childExtentX = EmuToPoints(groupXfrm?.Element(A + "chExt")?.Attribute("cx")?.Value ?? "0");
+        var childExtentY = EmuToPoints(groupXfrm?.Element(A + "chExt")?.Attribute("cy")?.Value ?? "0");
+        var childScaleX = childExtentX > 0 ? group.WidthPt / childExtentX : 1;
+        var childScaleY = childExtentY > 0 ? group.HeightPt / childExtentY : 1;
+
         // wpg:wgp permits shape, picture, and graphic-frame children. The latter two retain their real
         // relationship-bearing payload instead of the old marker-only wps:wsp placeholders.
         foreach (var groupChild in wgp.Elements().Where(element =>
@@ -5951,10 +5960,10 @@ public static class DocxReader
                     : groupChild.Element(Wpg + "xfrm") ?? groupChild.Element(A + "xfrm");
             var off = xfrm?.Element(A + "off");
             var ext = xfrm?.Element(A + "ext");
-            var ox = EmuToPoints(off?.Attribute("x")?.Value ?? "0");
-            var oy = EmuToPoints(off?.Attribute("y")?.Value ?? "0");
-            var cw = EmuToPoints(ext?.Attribute("cx")?.Value ?? "36");
-            var ch = EmuToPoints(ext?.Attribute("cy")?.Value ?? "36");
+            var ox = (EmuToPoints(off?.Attribute("x")?.Value ?? "0") - childOriginX) * childScaleX;
+            var oy = (EmuToPoints(off?.Attribute("y")?.Value ?? "0") - childOriginY) * childScaleY;
+            var cw = EmuToPoints(ext?.Attribute("cx")?.Value ?? "36") * childScaleX;
+            var ch = EmuToPoints(ext?.Attribute("cy")?.Value ?? "36") * childScaleY;
 
             var fakeRun = BuildGroupChildRun(groupChild, childDocPr, cw, ch);
             object? child = isPicture

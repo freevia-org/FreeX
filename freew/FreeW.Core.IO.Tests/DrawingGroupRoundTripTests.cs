@@ -51,6 +51,37 @@ public sealed class DrawingGroupRoundTripTests
         return stream.ToArray();
     }
 
+    private static byte[] RewriteDocumentXml(byte[] docx, Action<XDocument> mutate)
+    {
+        using var sourceStream = new MemoryStream(docx);
+        using var source = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+        var documentEntry = source.GetEntry("word/document.xml")!;
+        XDocument document;
+        using (var documentStream = documentEntry.Open())
+            document = XDocument.Load(documentStream);
+        mutate(document);
+
+        using var output = new MemoryStream();
+        using (var destination = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var sourceEntry in source.Entries)
+            {
+                var destinationEntry = destination.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+                using var destinationStream = destinationEntry.Open();
+                if (sourceEntry.FullName == "word/document.xml")
+                {
+                    document.Save(destinationStream);
+                    continue;
+                }
+
+                using var sourceEntryStream = sourceEntry.Open();
+                sourceEntryStream.CopyTo(destinationStream);
+            }
+        }
+
+        return output.ToArray();
+    }
+
     private static XDocument EntryXml(byte[] docx, string entryPath)
     {
         using var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read);
@@ -462,6 +493,35 @@ public sealed class DrawingGroupRoundTripTests
         read.RotationAngle.Should().BeApproximately(45, 0.001);
         read.FlipH.Should().BeTrue();
         read.FlipV.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DrawingGroup_ChildCoordinateSpace_IsMappedIntoRenderedGroupBounds()
+    {
+        var bytes = RewriteDocumentXml(WriteBytes(DocumentWith(TwoMemberGroup())), document =>
+        {
+            var groupXfrm = document.Descendants(Wpg + "grpSpPr").Single().Element(A + "xfrm")!;
+            var childOrigin = groupXfrm.Element(A + "chOff")!;
+            childOrigin.SetAttributeValue("x", 36 * 12700);
+            childOrigin.SetAttributeValue("y", 18 * 12700);
+            var childExtent = groupXfrm.Element(A + "chExt")!;
+            childExtent.SetAttributeValue("cx", 360 * 12700);
+            childExtent.SetAttributeValue("cy", 180 * 12700);
+        });
+
+        var recovered = DocxReader.Read(new MemoryStream(bytes));
+        var group = ((Paragraph)recovered.Blocks[0]).Runs.Single().DrawingGroup!;
+        var image = group.Children[0].Should().BeOfType<InlineImage>().Subject;
+        var shape = group.Children[1].Should().BeOfType<Shape>().Subject;
+
+        group.ChildOffsets[0].X.Should().BeApproximately(-18, 0.01);
+        group.ChildOffsets[0].Y.Should().BeApproximately(-9, 0.01);
+        image.WidthPt.Should().BeApproximately(30, 0.01);
+        image.HeightPt.Should().BeApproximately(30, 0.01);
+        group.ChildOffsets[1].X.Should().BeApproximately(27, 0.01);
+        group.ChildOffsets[1].Y.Should().BeApproximately(6, 0.01);
+        shape.WidthPt.Should().BeApproximately(36, 0.01);
+        shape.HeightPt.Should().BeApproximately(18, 0.01);
     }
 
     // ── Three-member round-trip ──────────────────────────────────────────────────────────────────
