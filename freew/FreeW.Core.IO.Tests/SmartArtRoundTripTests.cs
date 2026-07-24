@@ -236,6 +236,24 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
+    public void MixedChartsAndDiagrams_UseOneDocumentWideDocPrIdSpace()
+    {
+        var document = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(Chart.Create(ChartKind.Column, ["Q1"], [1.0])));
+        paragraph.Runs.Add(Run.FromSmartArt(SmartArt.Create(SmartArtKind.List, ["Plan", "Build"])));
+        document.Blocks.Add(paragraph);
+
+        var documentXml = EntryXml(WriteBytes(document), "word/document.xml");
+        var drawingIds = documentXml.Descendants(Wp + "docPr")
+            .Select(docPr => docPr.Attribute("id")!.Value)
+            .ToList();
+
+        drawingIds.Should().Equal("1", "2");
+        drawingIds.Should().OnlyHaveUniqueItems("Word ignores drawings that reuse a document wp:docPr identity");
+    }
+
+    [Fact]
     public void HeaderDiagram_PreservesItsStoryLocalGraphInsteadOfBecomingBodySmartArt()
     {
         var source = AuthorHeaderDiagramPackage();
