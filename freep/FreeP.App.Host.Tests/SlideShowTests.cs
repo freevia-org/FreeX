@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
+using FreeP.App.Recording;
 using Xunit;
 using FluentAssertions;
 using FreeP.Core.Model;
@@ -522,7 +523,7 @@ public sealed class SlideShowWindowTests
             startIndex: 0);
         var started = new DateTimeOffset(2026, 7, 4, 11, 0, 0, TimeSpan.Zero);
 
-        var window = new SlideShowWindow(pres, route);
+        var window = new SlideShowWindow(pres, route, CreateDeferredWpfCaptureBackend());
         try
         {
             window.ApplyPresenterToolIntent(
@@ -904,7 +905,7 @@ public sealed class SlideShowWindowTests
         var started = new DateTimeOffset(2026, 7, 4, 9, 0, 0, TimeSpan.Zero);
         var pres = Presentation.CreateEmpty();
         pres.Slides.Add(new Slide { Title = "Second" });
-        var window = new SlideShowWindow(pres, 0);
+        var window = new SlideShowWindow(pres, 0, CreateDeferredWpfCaptureBackend());
         try
         {
             window.ApplyPresenterToolIntent(
@@ -1188,6 +1189,31 @@ public sealed class SlideShowWindowTests
         }
 
         return presentation;
+    }
+
+    private static ISlideShowRecordingCaptureBackend CreateDeferredWpfCaptureBackend() =>
+        new WindowsRecordingCaptureBackend(
+            new WindowsRecordingHostMetadata(
+                "WPF slideshow",
+                "WPF Windows recording capture adapter",
+                "ppt/media/freep-recordings/wpf"),
+            new EmptyWindowsRecordingDeviceCatalog(),
+            new DeferredWindowsRecordingCaptureEngine());
+
+    private sealed class EmptyWindowsRecordingDeviceCatalog : IWindowsRecordingDeviceCatalog
+    {
+        public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() =>
+            Array.Empty<SlideShowRecordingCaptureDeviceDescriptor>();
+    }
+
+    private sealed class DeferredWindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngine
+    {
+        public void BeginCapture(WindowsRecordingCaptureStartRequest request)
+        {
+        }
+
+        public WindowsRecordingCaptureResult CompleteCapture(WindowsRecordingCaptureRequest request) =>
+            WindowsRecordingCaptureResult.Deferred("test capture is intentionally deferred");
     }
 }
 

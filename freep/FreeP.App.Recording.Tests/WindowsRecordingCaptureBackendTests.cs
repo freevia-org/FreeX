@@ -353,7 +353,7 @@ public sealed class WindowsRecordingCaptureBackendTests
     }
 
     [Fact]
-    public void PlatformComposition_UsesSharedBackendAndHasNoHostLocalCopies()
+    public void PlatformComposition_UsesSharedBackendWithWpfNativeCameraAndAvaloniaLocalAudio()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var wpfSource = Read(root, "freep", "FreeP.App.Host", "SlideShowWindow.cs");
@@ -371,12 +371,14 @@ public sealed class WindowsRecordingCaptureBackendTests
         avaloniaSource.Should().Contain("new LinuxNarrationCaptureBackend(");
         avaloniaSource.Should().Contain("new LinuxRecordingHostMetadata(");
         wpfSource.Should().NotContain("LinuxNarrationCaptureBackend");
+        wpfSource.Should().Contain("new WindowsHostRecordingCaptureEngine(");
 
         Read(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj")
             .Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
         Read(root, "freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj")
             .Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
-        AssertNoHostLocalRecordingSources(root, "FreeP.App.Host");
+        Read(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj")
+            .Should().Contain("FrameworkReference Include=\"Microsoft.Windows.SDK.NET.Ref\"");
         AssertNoHostLocalRecordingSources(root, "FreeP.App.Avalonia");
     }
 
