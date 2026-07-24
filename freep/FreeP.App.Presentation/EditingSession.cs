@@ -449,6 +449,13 @@ public sealed class EditingSession
         Bus.Execute(new ResizeShapeCommand(_currentSlideIndex, shapeId, newOffsetX, newOffsetY, newCx, newCy));
     }
 
+    /// <summary>Sets or removes one authored DrawingML preset-geometry adjustment.</summary>
+    public void SetShapeGeometryAdjustment(uint shapeId, string name, double? value)
+    {
+        if (CurrentSlide is null) return;
+        Bus.Execute(new SetShapeGeometryAdjustmentCommand(_currentSlideIndex, shapeId, name, value));
+    }
+
     /// <summary>Sets the rotation (degrees, clockwise) of a single shape.</summary>
     public void RotateShape(uint shapeId, double newRotationDeg)
     {

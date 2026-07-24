@@ -632,6 +632,57 @@ public sealed class ResizeShapeCommand : IPresentationCommand
 }
 
 /// <summary>
+/// Sets one DrawingML preset-geometry adjustment on a shape.
+/// A missing value removes the authored adjustment and restores the preset default.
+/// </summary>
+public sealed class SetShapeGeometryAdjustmentCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly string _name;
+    private readonly double? _newValue;
+    private bool _hadOldValue;
+    private double _oldValue;
+
+    public SetShapeGeometryAdjustmentCommand(int slideIndex, uint shapeId, string name, double? value)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _name = string.IsNullOrWhiteSpace(name)
+            ? throw new ArgumentException("An adjustment name is required.", nameof(name))
+            : name;
+        _newValue = value;
+    }
+
+    public string Label => "Edit Shape Geometry";
+
+    public void Apply(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null)
+            return;
+
+        _hadOldValue = shape.PresetGeometryAdjustments.TryGetValue(_name, out _oldValue);
+        if (_newValue is { } value)
+            shape.PresetGeometryAdjustments[_name] = value;
+        else
+            shape.PresetGeometryAdjustments.Remove(_name);
+    }
+
+    public void Revert(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null)
+            return;
+
+        if (_hadOldValue)
+            shape.PresetGeometryAdjustments[_name] = _oldValue;
+        else
+            shape.PresetGeometryAdjustments.Remove(_name);
+    }
+}
+
+/// <summary>
 /// Sets the rotation of a shape; captures old rotation for undo.
 /// Also re-routes any connectors whose start/end is attached to the rotated shape (Wave 23).
 /// </summary>
