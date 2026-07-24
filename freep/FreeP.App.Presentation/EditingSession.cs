@@ -2125,6 +2125,19 @@ public sealed class EditingSession
             options));
     }
 
+    /// <summary>Applies chart camera and Surface3D wireframe options as one undo step.</summary>
+    public void ApplyChart3DViewOptions(Chart3DViewOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return;
+
+        Bus.Execute(new SetChart3DViewOptionsCommand(
+            _currentSlideIndex,
+            _selectedShapeIds[0],
+            options));
+    }
+
     /// <summary>
     /// Non-nullable overload for callers that already work with <c>double</c> sequences (no gaps).
     /// </summary>

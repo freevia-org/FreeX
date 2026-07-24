@@ -205,6 +205,29 @@ public sealed class ChartDataDialogTests : IDisposable
         options.FontSizePt.Should().BeNull();
     }
 
+    [StaFact]
+    public void Chart3DViewOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.View3D = new Chart3DView
+        {
+            RotationX = 25,
+            RotationY = 35,
+            Perspective = 54,
+            HeightPercent = 100,
+            DepthPercent = 125,
+            RightAngleAxes = true,
+        };
+        sess.SelectedChart.Wireframe = true;
+        sess.SelectedChart.WireframeSpecified = true;
+
+        var dialog = new Chart3DViewOptionsDialog(sess);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.Should().Be(new Chart3DViewOptions(25, 35, 54, 100, 125, true, true));
+    }
+
     [Fact]
     public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {
@@ -271,6 +294,17 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().Contain("_planner.SetBackgroundColor");
         source.Should().Contain("_planner.SetFontSize");
         source.Should().NotContain("new SetChartDataTableOptionsCommand");
+    }
+
+    [Fact]
+    public void Chart3DViewOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "Chart3DViewOptionsDialog.cs");
+
+        source.Should().Contain("Chart3DViewOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChart3DViewOptions");
+        source.Should().NotContain("new SetChart3DViewOptionsCommand");
     }
 
     [Fact]

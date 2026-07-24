@@ -5952,6 +5952,26 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Chart3DViewOptionsDialog_constructs_and_commits_shared_options()
+    {
+        Chart3DViewOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.Surface3D);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new Chart3DViewOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(25, 35, 54, 100, 125, true, false);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().Be(new Chart3DViewOptions(25, 35, 54, 100, 125, true, false));
+    }
+
+    [Fact]
     public async Task ChartAxisOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartAxisOptions? options = null;
