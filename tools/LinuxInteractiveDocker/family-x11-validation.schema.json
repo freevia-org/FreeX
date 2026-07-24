@@ -106,11 +106,11 @@
   "allOf": [
     {
       "if": { "properties": { "app": { "const": "FreeP" } } },
-      "then": { "properties": { "results": { "minItems": 15, "maxItems": 15 } } }
+      "then": { "properties": { "results": { "minItems": 22, "maxItems": 22 } } }
     },
     {
       "if": { "properties": { "app": { "const": "FreeW" } } },
-      "then": { "properties": { "results": { "minItems": 15 } } }
+      "then": { "properties": { "results": { "minItems": 15, "maxItems": 15 } } }
     }
   ]
 }

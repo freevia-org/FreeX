@@ -252,6 +252,7 @@ public sealed partial class MainWindow : Window
 
     private bool _notesRefreshing;
     private bool _slidePaneRefreshing;
+    private bool _restoreSlidePaneFocusAfterRefresh;
     private sealed record SlidePaneSectionHeaderTag(string SectionId, int SectionIndex);
 
     // ── Smoke surface ──────────────────────────────────────────────────────────
@@ -300,6 +301,7 @@ public sealed partial class MainWindow : Window
     internal string? SlidePaneNewSlideButtonAutomationName => AutomationProperties.GetName(_slidePaneNewSlideButton);
     internal Button SlidePaneNewSlideButtonForTests => _slidePaneNewSlideButton;
     internal bool IsShellShortcutTargetForTests(Control? focused) => IsShellShortcutTarget(focused);
+    internal ListBoxItem? SelectedSlidePaneItemForTests => GetCurrentSlidePaneItem();
     internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans => _slidePaneRenderedThumbnailPlans;
     internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans => _slidePaneRenderedSectionHeaderPlans;
 
@@ -6497,6 +6499,9 @@ public sealed partial class MainWindow : Window
 
     private void RefreshSlidePane()
     {
+        if (IsSlidePaneListTarget(FocusManager?.GetFocusedElement() as Control))
+            _restoreSlidePaneFocusAfterRefresh = true;
+        var restoreSlidePaneFocus = _restoreSlidePaneFocusAfterRefresh;
         _slidePaneRefreshing = true;
         try
         {
@@ -6600,6 +6605,11 @@ public sealed partial class MainWindow : Window
             }
 
             SelectSlidePaneItem(Editor.CurrentSlideIndex);
+            if (restoreSlidePaneFocus)
+            {
+                GetCurrentSlidePaneItem()?.Focus();
+                Dispatcher.UIThread.Post(RestoreSlidePaneFocusAfterRefresh);
+            }
         }
         finally
         {
@@ -7224,6 +7234,21 @@ public sealed partial class MainWindow : Window
         _slidePaneList.SelectedIndex = -1;
     }
 
+    private ListBoxItem? GetCurrentSlidePaneItem() =>
+        _slidePaneList.Items
+            .OfType<ListBoxItem>()
+            .FirstOrDefault(item => item.Tag is int slideIndex &&
+                slideIndex == Editor.CurrentSlideIndex);
+
+    private void RestoreSlidePaneFocusAfterRefresh()
+    {
+        if (!_restoreSlidePaneFocusAfterRefresh)
+            return;
+
+        _restoreSlidePaneFocusAfterRefresh = false;
+        GetCurrentSlidePaneItem()?.Focus();
+    }
+
     private void UpdateSlidePaneItemChrome()
     {
         foreach (var item in _slidePaneList.Items.OfType<ListBoxItem>())
@@ -7399,11 +7424,27 @@ public sealed partial class MainWindow : Window
         if (ReferenceEquals(focused, _slidePaneNewSlideButton))
             return true;
 
+        if (IsSlidePaneListTarget(focused))
+            return true;
+
         for (var current = focused; current is not null; current = current.Parent as Control)
         {
             if (current is TextBox)
                 return false;
-            if (ReferenceEquals(current, _slidePaneList) || ReferenceEquals(current, _ribbonControl))
+            if (ReferenceEquals(current, _ribbonControl))
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool IsSlidePaneListTarget(Control? focused)
+    {
+        for (var current = focused; current is not null; current = current.Parent as Control)
+        {
+            if (current is TextBox)
+                return false;
+            if (ReferenceEquals(current, _slidePaneList))
                 return true;
         }
 

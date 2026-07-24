@@ -34,6 +34,15 @@ public sealed class LinuxFamilyInteractionToolTests
         probe.Should().Contain("slide-pane-new-slide-redo");
         probe.Should().Contain("slide-pane-keyboard-context-open");
         probe.Should().Contain("slide-pane-pointer-context-open");
+        probe.Should().Contain("slide-pane-pointer-select-second");
+        probe.Should().Contain("slide-pane-keyboard-up-first");
+        probe.Should().Contain("slide-pane-duplicate-create");
+        probe.Should().Contain("slide-pane-duplicate-undo");
+        probe.Should().Contain("slide-pane-duplicate-redo");
+        probe.Should().Contain("slide-pane-delete-selected");
+        probe.Should().Contain("slide-pane-delete-undo");
+        probe.Should().Contain("status-geometry=");
+        probe.Should().Contain("navigation_start_gate");
         probe.Should().Contain("capture_region");
         probe.Should().Contain("slide-pane-calibration.txt");
         probe.Should().Contain("redo-gated-on-create-and-undo");
@@ -85,7 +94,8 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("Length -le 0");
         runner.Should().Contain("exhaustive -ne $false");
         runner.Should().Contain("Run-FreeXLinuxInteractionValidation.ps1");
-        runner.Should().Contain("family baseline must contain exactly fifteen result rows");
+        runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 22 } else { 15 }");
+        runner.Should().Contain("slide-pane-delete-undo");
         runner.Should().Contain("editor-keyboard-context-dismissal");
         runner.Should().Contain("durable failure manifest");
         runner.Should().Contain("probe-runner-failure.txt");
@@ -110,8 +120,11 @@ public sealed class LinuxFamilyInteractionToolTests
         root.GetProperty("properties").GetProperty("results").GetProperty("minItems").GetInt32()
             .Should().BeGreaterThanOrEqualTo(8);
         var freePContract = root.GetProperty("allOf")[0].GetProperty("then").GetProperty("properties").GetProperty("results");
-        freePContract.GetProperty("minItems").GetInt32().Should().Be(15);
-        freePContract.GetProperty("maxItems").GetInt32().Should().Be(15);
+        freePContract.GetProperty("minItems").GetInt32().Should().Be(22);
+        freePContract.GetProperty("maxItems").GetInt32().Should().Be(22);
+        var freeWContract = root.GetProperty("allOf")[1].GetProperty("then").GetProperty("properties").GetProperty("results");
+        freeWContract.GetProperty("minItems").GetInt32().Should().Be(15);
+        freeWContract.GetProperty("maxItems").GetInt32().Should().Be(15);
         root.GetProperty("allOf").GetArrayLength().Should().Be(2);
     }
 
@@ -128,8 +141,9 @@ public sealed class LinuxFamilyInteractionToolTests
         doc.Should().Contain("FreePBackstageOverlay");
         doc.Should().Contain("contractValidation");
         doc.Should().Contain("Run-FamilyLinuxInteractionValidation.ps1");
-        doc.Should().Contain("exact fifteen-row contract");
+        doc.Should().Contain("exact twenty-two-row contract");
         doc.Should().Contain("slide-pane-new-slide-create");
+        doc.Should().Contain("slide-pane-delete-undo");
         doc.Should().Contain("Ctrl+Z").And.Contain("Shift+F10");
     }
 
