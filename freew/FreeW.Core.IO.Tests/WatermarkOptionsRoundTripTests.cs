@@ -40,6 +40,15 @@ public class WatermarkOptionsRoundTripTests
         return XDocument.Load(reader);
     }
 
+    private static bool HasDefaultHeader(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        return zip.GetEntry("word/header1.xml") is not null;
+    }
+
     private static string ReadHeaderRelsXml(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -460,8 +469,8 @@ public class WatermarkOptionsRoundTripTests
         watermark!.Text.Should().Be("CONFIDENTIAL");
         watermark.FontFamily.Should().Be("Arial");
         watermark.NativeVmlTextPathEnabled.Should().BeFalse();
-        ReadHeaderXml(loaded).Descendants(XNamespace.Get("urn:schemas-microsoft-com:vml") + "textpath")
-            .Last().Attribute("on")!.Value.Should().Be("f");
+        HasDefaultHeader(loaded).Should().BeFalse(
+            "custom metadata without a source VML watermark must remain absent after save");
     }
 
     [Fact]
