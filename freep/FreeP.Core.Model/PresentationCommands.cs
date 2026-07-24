@@ -758,6 +758,133 @@ public sealed class SetCustomGeometryPointCommand : IPresentationCommand
         };
 }
 
+/// <summary>Inserts a straight custom-geometry vertex after a selected endpoint.</summary>
+public sealed class InsertCustomGeometryPointCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _pathIndex;
+    private readonly int _segmentIndex;
+    private readonly double _x;
+    private readonly double _y;
+    private int _insertedSegmentIndex = -1;
+
+    public InsertCustomGeometryPointCommand(
+        int slideIndex,
+        uint shapeId,
+        int pathIndex,
+        int segmentIndex,
+        double x,
+        double y)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _pathIndex = pathIndex;
+        _segmentIndex = segmentIndex;
+        _x = x;
+        _y = y;
+    }
+
+    public string Label => "Add Shape Point";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        return shape is not null &&
+            _pathIndex >= 0 && _pathIndex < shape.CustomGeometry.Count &&
+            _segmentIndex >= 0 && _segmentIndex < shape.CustomGeometry[_pathIndex].Segments.Count &&
+            shape.CustomGeometry[_pathIndex].Segments[_segmentIndex].Kind is CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo;
+    }
+
+    public void Apply(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null || _pathIndex < 0 || _pathIndex >= shape.CustomGeometry.Count)
+            return;
+
+        var path = shape.CustomGeometry[_pathIndex];
+        if (_segmentIndex < 0 || _segmentIndex >= path.Segments.Count ||
+            path.Segments[_segmentIndex].Kind is not (CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo))
+            return;
+
+        _insertedSegmentIndex = _segmentIndex + 1;
+        path.Segments.Insert(_insertedSegmentIndex, new CustomSegment(
+            CustomSegmentKind.LineTo, X: _x, Y: _y));
+    }
+
+    public void Revert(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null || _pathIndex < 0 || _pathIndex >= shape.CustomGeometry.Count)
+            return;
+
+        var path = shape.CustomGeometry[_pathIndex];
+        if (_insertedSegmentIndex >= 0 && _insertedSegmentIndex < path.Segments.Count &&
+            path.Segments[_insertedSegmentIndex].Kind == CustomSegmentKind.LineTo)
+            path.Segments.RemoveAt(_insertedSegmentIndex);
+    }
+}
+
+/// <summary>Deletes a selected straight custom-geometry vertex while preserving path structure.</summary>
+public sealed class DeleteCustomGeometryPointCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _pathIndex;
+    private readonly int _segmentIndex;
+    private CustomSegment? _removedSegment;
+
+    public DeleteCustomGeometryPointCommand(
+        int slideIndex,
+        uint shapeId,
+        int pathIndex,
+        int segmentIndex)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _pathIndex = pathIndex;
+        _segmentIndex = segmentIndex;
+    }
+
+    public string Label => "Delete Shape Point";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape is null || _pathIndex < 0 || _pathIndex >= shape.CustomGeometry.Count)
+            return false;
+
+        var path = shape.CustomGeometry[_pathIndex];
+        if (_segmentIndex < 0 || _segmentIndex >= path.Segments.Count ||
+            path.Segments[_segmentIndex].Kind != CustomSegmentKind.LineTo)
+            return false;
+
+        return path.Segments.Count(segment =>
+            segment.Kind is CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo) > 2;
+    }
+
+    public void Apply(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (!HasEffect(p) || shape is null)
+            return;
+
+        var path = shape.CustomGeometry[_pathIndex];
+        _removedSegment = path.Segments[_segmentIndex];
+        path.Segments.RemoveAt(_segmentIndex);
+    }
+
+    public void Revert(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null || _removedSegment is null ||
+            _pathIndex < 0 || _pathIndex >= shape.CustomGeometry.Count)
+            return;
+
+        shape.CustomGeometry[_pathIndex].Segments.Insert(_segmentIndex, _removedSegment);
+    }
+}
+
 /// <summary>
 /// Sets the rotation of a shape; captures old rotation for undo.
 /// Also re-routes any connectors whose start/end is attached to the rotated shape (Wave 23).

@@ -177,6 +177,23 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
+    public void CustomGeometryVertexCommands_ResolveInsertionMidpointAndDeleteGuard()
+    {
+        var shape = MakeCustomTriangle();
+
+        ShapeGeometryAdjustmentPlanner.TryBuildCustomVertexInsertion(
+                shape, "custom:0:1", out var pathIndex, out var segmentIndex, out var x, out var y)
+            .Should().BeTrue();
+        (pathIndex, segmentIndex).Should().Be((0, 1));
+        x.Should().BeApproximately(70, 0.001);
+        y.Should().BeApproximately(55, 0.001);
+        ShapeGeometryAdjustmentPlanner.CanDeleteCustomVertex(shape, "custom:0:1")
+            .Should().BeTrue();
+        ShapeGeometryAdjustmentPlanner.CanDeleteCustomVertex(shape, "custom:0:0")
+            .Should().BeFalse();
+    }
+
+    [Fact]
     public void Build_NonChordPreset_ReportsUnsupportedWithoutInventingHandles()
     {
         var shape = new SlideShape

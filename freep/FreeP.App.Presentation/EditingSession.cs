@@ -470,6 +470,39 @@ public sealed class EditingSession
             _currentSlideIndex, shapeId, pathIndex, segmentIndex, x, y, slot));
     }
 
+    /// <summary>Adds a straight custom-geometry vertex after the selected endpoint.</summary>
+    public bool TryInsertCustomGeometryPoint(uint shapeId, string handleName)
+    {
+        if (CurrentSlide is null)
+            return false;
+
+        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        if (shape is null || !ShapeGeometryAdjustmentPlanner.TryBuildCustomVertexInsertion(
+                shape, handleName, out var pathIndex, out var segmentIndex, out var x, out var y))
+            return false;
+
+        Bus.Execute(new InsertCustomGeometryPointCommand(
+            _currentSlideIndex, shapeId, pathIndex, segmentIndex, x, y));
+        return true;
+    }
+
+    /// <summary>Deletes the selected straight custom-geometry vertex when path structure permits it.</summary>
+    public bool TryDeleteCustomGeometryPoint(uint shapeId, string handleName)
+    {
+        if (CurrentSlide is null)
+            return false;
+
+        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        if (shape is null || !ShapeGeometryAdjustmentPlanner.CanDeleteCustomVertex(shape, handleName) ||
+            !ShapeGeometryAdjustmentPlanner.TryGetCustomVertexTarget(
+                shape, handleName, out var pathIndex, out var segmentIndex))
+            return false;
+
+        Bus.Execute(new DeleteCustomGeometryPointCommand(
+            _currentSlideIndex, shapeId, pathIndex, segmentIndex));
+        return true;
+    }
+
     /// <summary>Sets the rotation (degrees, clockwise) of a single shape.</summary>
     public void RotateShape(uint shapeId, double newRotationDeg)
     {

@@ -168,6 +168,90 @@ public static class ShapeGeometryAdjustmentPlanner
             null);
     }
 
+    /// <summary>Resolves a selected custom-geometry endpoint that can be deleted or extended.</summary>
+    public static bool TryGetCustomVertexTarget(
+        SlideShape shape,
+        string handleName,
+        out int pathIndex,
+        out int segmentIndex)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+        pathIndex = -1;
+        segmentIndex = -1;
+        if (!TryParseCustomHandle(handleName, out pathIndex, out segmentIndex, out var slot) ||
+            slot != CustomGeometryPointSlot.Endpoint ||
+            pathIndex < 0 || pathIndex >= shape.CustomGeometry.Count)
+            return false;
+
+        var path = shape.CustomGeometry[pathIndex];
+        return segmentIndex >= 0 && segmentIndex < path.Segments.Count &&
+            path.Segments[segmentIndex].Kind is CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo;
+    }
+
+    /// <summary>
+    /// Computes the midpoint used by PowerPoint-style Add Point for a selected custom vertex.
+    /// The new point is inserted on the following line, or on the closing line back to MoveTo.
+    /// </summary>
+    public static bool TryBuildCustomVertexInsertion(
+        SlideShape shape,
+        string handleName,
+        out int pathIndex,
+        out int segmentIndex,
+        out double x,
+        out double y)
+    {
+        x = 0;
+        y = 0;
+        if (!TryGetCustomVertexTarget(shape, handleName, out pathIndex, out segmentIndex))
+            return false;
+
+        var path = shape.CustomGeometry[pathIndex];
+        var current = path.Segments[segmentIndex];
+        if (!TryGetSegmentPoint(current, CustomGeometryPointSlot.Endpoint, out var currentX, out var currentY))
+            return false;
+
+        CustomSegment? next = null;
+        for (var index = segmentIndex + 1; index < path.Segments.Count; index++)
+        {
+            if (path.Segments[index].Kind is CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo)
+            {
+                next = path.Segments[index];
+                break;
+            }
+
+            if (path.Segments[index].Kind == CustomSegmentKind.Close)
+                break;
+        }
+
+        if (next is null)
+        {
+            next = path.Segments.FirstOrDefault(segment =>
+                segment.Kind == CustomSegmentKind.MoveTo);
+        }
+
+        if (next is null || !TryGetSegmentPoint(next, CustomGeometryPointSlot.Endpoint, out var nextX, out var nextY))
+            return false;
+
+        x = (currentX + nextX) / 2;
+        y = (currentY + nextY) / 2;
+        return true;
+    }
+
+    /// <summary>Returns whether removing the selected line vertex leaves a valid path skeleton.</summary>
+    public static bool CanDeleteCustomVertex(SlideShape shape, string handleName)
+    {
+        if (!TryGetCustomVertexTarget(shape, handleName, out var pathIndex, out var segmentIndex))
+            return false;
+
+        var path = shape.CustomGeometry[pathIndex];
+        if (path.Segments[segmentIndex].Kind != CustomSegmentKind.LineTo)
+            return false;
+
+        var endpointCount = path.Segments.Count(segment =>
+            segment.Kind is CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo);
+        return endpointCount > 2;
+    }
+
     private static ShapeGeometryAdjustmentHandlePlan BuildHandle(
         string name,
         string label,

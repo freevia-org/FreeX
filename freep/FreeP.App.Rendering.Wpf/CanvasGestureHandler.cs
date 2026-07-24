@@ -637,6 +637,12 @@ public sealed class CanvasGestureHandler
 
         if (_editor.SelectedShapeIds.Count == 0) return;
 
+        if (TryHandleCustomGeometryKey(e.Key))
+        {
+            e.Handled = true;
+            return;
+        }
+
         bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         long step  = shift ? LargeNudgeEmu : SmallNudgeEmu;
 
@@ -664,6 +670,26 @@ public sealed class CanvasGestureHandler
                 e.Handled = true;
                 break;
         }
+    }
+
+    private bool TryHandleCustomGeometryKey(Key key)
+    {
+        if (!EditPointsEnabled || _geometryHandleName is null || _editor.SelectedShapeIds.Count != 1)
+            return false;
+
+        var shapeId = _editor.SelectedShapeIds[0];
+        if (_geometryShapeId != shapeId)
+            return false;
+
+        var handled = key switch
+        {
+            Key.Insert => _editor.TryInsertCustomGeometryPoint(shapeId, _geometryHandleName),
+            Key.Delete or Key.Back => _editor.TryDeleteCustomGeometryPoint(shapeId, _geometryHandleName),
+            _ => false,
+        };
+        if (handled)
+            _geometryHandleName = null;
+        return handled;
     }
 
     // ── Cursor feedback ───────────────────────────────────────────────────────────────────────
