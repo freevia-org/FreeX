@@ -20,6 +20,13 @@ public enum SmartArtLayoutPreset
     BasicProcess,
     VerticalBoxList,
     BasicCycle,
+    BasicBlockList,
+    StackedList,
+    BasicPyramid,
+    RadialCycle,
+    BasicMatrix,
+    BasicVenn,
+    BasicHierarchy,
 }
 
 /// <summary>Bounded PowerPoint SmartArt Quick Style choices.</summary>
@@ -64,6 +71,13 @@ public static class SmartArtAuthoringPlanner
     public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
     public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
+    public const string BasicBlockListLayoutCommandId = "freep.smartart.layout.basic-block-list";
+    public const string StackedListLayoutCommandId = "freep.smartart.layout.stacked-list";
+    public const string BasicPyramidLayoutCommandId = "freep.smartart.layout.basic-pyramid";
+    public const string RadialCycleLayoutCommandId = "freep.smartart.layout.radial-cycle";
+    public const string BasicMatrixLayoutCommandId = "freep.smartart.layout.basic-matrix";
+    public const string BasicVennLayoutCommandId = "freep.smartart.layout.basic-venn";
+    public const string BasicHierarchyLayoutCommandId = "freep.smartart.layout.basic-hierarchy";
     public const string SimpleQuickStyleCommandId = "freep.smartart.style.simple";
     public const string ModerateQuickStyleCommandId = "freep.smartart.style.moderate";
     public const string IntenseQuickStyleCommandId = "freep.smartart.style.intense";
@@ -167,6 +181,20 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.BasicBlockList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicBlockList", SmartArtFamily.List),
+            SmartArtLayoutPreset.StackedList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/stackedList", SmartArtFamily.List),
+            SmartArtLayoutPreset.BasicPyramid =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid", SmartArtFamily.List),
+            SmartArtLayoutPreset.RadialCycle =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/radialCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.BasicMatrix =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix", SmartArtFamily.Matrix),
+            SmartArtLayoutPreset.BasicVenn =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicVenn", SmartArtFamily.Relationship),
+            SmartArtLayoutPreset.BasicHierarchy =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy", SmartArtFamily.Hierarchy),
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
         };
 

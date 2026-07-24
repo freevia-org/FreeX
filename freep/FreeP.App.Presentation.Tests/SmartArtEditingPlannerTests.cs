@@ -16,6 +16,13 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.BasicProcess, "basicProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, "verticalBoxList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, "basicCycle", SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.BasicBlockList, "basicBlockList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.StackedList, "stackedList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.BasicPyramid, "basicPyramid", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.RadialCycle, "radialCycle", SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.BasicMatrix, "basicMatrix", SmartArtFamily.Matrix)]
+    [InlineData(SmartArtLayoutPreset.BasicVenn, "basicVenn", SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.BasicHierarchy, "basicHierarchy", SmartArtFamily.Hierarchy)]
     public void ApplyLayoutPreset_UpdatesLiveModelAndNativeLayoutPart(
         SmartArtLayoutPreset preset,
         string expectedId,

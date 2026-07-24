@@ -338,6 +338,27 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
                 FreePRibbonText.SmartArtBasicCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtBasicCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
+                FreePRibbonText.SmartArtBasicBlockListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtBasicBlockListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
+                FreePRibbonText.SmartArtStackedListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtStackedListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
+                FreePRibbonText.SmartArtBasicPyramidCommand.Label, RibbonCommandIconKind.Rectangle,
+                FreePRibbonText.SmartArtBasicPyramidCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
+                FreePRibbonText.SmartArtRadialCycleCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtRadialCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
+                FreePRibbonText.SmartArtBasicMatrixCommand.Label, RibbonCommandIconKind.Grid,
+                FreePRibbonText.SmartArtBasicMatrixCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
+                FreePRibbonText.SmartArtBasicVennCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtBasicVennCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
+                FreePRibbonText.SmartArtBasicHierarchyCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtBasicHierarchyCommand.KeyTip);
         });
         tab.Group("smartart-styles", FreePRibbonText.SmartArtStylesGroup.Label, FreePRibbonText.SmartArtStylesGroup.KeyTip, 80, group =>
         {

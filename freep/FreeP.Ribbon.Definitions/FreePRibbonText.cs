@@ -178,6 +178,13 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtBasicProcessCommand { get; } = new("Ribbon_Command_SmartArtBasicProcess_Label", "Ribbon_Command_SmartArtBasicProcess_KeyTip");
     public static RibbonText SmartArtVerticalBoxListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBoxList_Label", "Ribbon_Command_SmartArtVerticalBoxList_KeyTip");
     public static RibbonText SmartArtBasicCycleCommand { get; } = new("Ribbon_Command_SmartArtBasicCycle_Label", "Ribbon_Command_SmartArtBasicCycle_KeyTip");
+    public static RibbonText SmartArtBasicBlockListCommand { get; } = new("Ribbon_Command_SmartArtBasicBlockList_Label", "Ribbon_Command_SmartArtBasicBlockList_KeyTip");
+    public static RibbonText SmartArtStackedListCommand { get; } = new("Ribbon_Command_SmartArtStackedList_Label", "Ribbon_Command_SmartArtStackedList_KeyTip");
+    public static RibbonText SmartArtBasicPyramidCommand { get; } = new("Ribbon_Command_SmartArtBasicPyramid_Label", "Ribbon_Command_SmartArtBasicPyramid_KeyTip");
+    public static RibbonText SmartArtRadialCycleCommand { get; } = new("Ribbon_Command_SmartArtRadialCycle_Label", "Ribbon_Command_SmartArtRadialCycle_KeyTip");
+    public static RibbonText SmartArtBasicMatrixCommand { get; } = new("Ribbon_Command_SmartArtBasicMatrix_Label", "Ribbon_Command_SmartArtBasicMatrix_KeyTip");
+    public static RibbonText SmartArtBasicVennCommand { get; } = new("Ribbon_Command_SmartArtBasicVenn_Label", "Ribbon_Command_SmartArtBasicVenn_KeyTip");
+    public static RibbonText SmartArtBasicHierarchyCommand { get; } = new("Ribbon_Command_SmartArtBasicHierarchy_Label", "Ribbon_Command_SmartArtBasicHierarchy_KeyTip");
     public static RibbonText SmartArtStylesGroup { get; } = new("Ribbon_Group_SmartArtStyles_Label", "Ribbon_Group_SmartArtStyles_KeyTip");
     public static RibbonText SmartArtSimpleStyleCommand { get; } = new("Ribbon_Command_SmartArtSimpleStyle_Label", "Ribbon_Command_SmartArtSimpleStyle_KeyTip");
     public static RibbonText SmartArtModerateStyleCommand { get; } = new("Ribbon_Command_SmartArtModerateStyle_Label", "Ribbon_Command_SmartArtModerateStyle_KeyTip");
