@@ -5012,6 +5012,32 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_layout_gallery_registers_extended_native_presets()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+
+            foreach (var commandId in new[]
+            {
+                SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
+                SmartArtAuthoringPlanner.StackedListLayoutCommandId,
+                SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
+                SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
+                SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
+                SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
+                SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
+            })
+            {
+                registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be registered");
+            }
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
     public async Task SmartArt_quick_style_routes_through_command_and_undo_bus()
     {
         SmartArtShape? smartArt = null;

@@ -2084,6 +2084,20 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBoxList)));
         r.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicCycle)));
+        r.Register(SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicBlockList)));
+        r.Register(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StackedList)));
+        r.Register(SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicPyramid)));
+        r.Register(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialCycle)));
+        r.Register(SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicMatrix)));
+        r.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicVenn)));
+        r.Register(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicHierarchy)));
         r.Register(SmartArtAuthoringPlanner.SimpleQuickStyleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Simple)));
         r.Register(SmartArtAuthoringPlanner.ModerateQuickStyleCommandId,
