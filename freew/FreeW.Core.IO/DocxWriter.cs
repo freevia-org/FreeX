@@ -70,14 +70,16 @@ public static class DocxWriter
         var images = CollectImages(document, usedPartNames);
         // Assign a relationship + part name to every inline chart the same way (charts are a separate XML
         // part referenced from the run drawing by r:id, mirroring how images add a media part + r:embed).
-        var charts = CollectCharts(document, usedPartNames);
         // Assign a relationship + binary part name to every inline embedded OLE object the same way. Each
         // object's presentation icon is collected as an extra ImagePart appended to `images`, so the icon
         // media part + relationship + png content-type flow through the existing image plumbing untouched.
         var embeddedObjects = CollectEmbeddedObjects(document, images, usedPartNames);
+        // Charts and SmartArt share the document-wide wp:docPr id space with ordinary images and shapes.
+        // Collect embedded-object icons first so every subsequent drawing family can reserve a disjoint range.
+        var charts = CollectCharts(document, usedPartNames, drawingIdSeed: images.Count);
         // Assign four relationship ids + four part names to every inline SmartArt diagram the same way
         // (a diagram is four separate XML parts referenced from the run drawing by dgm:relIds).
-        var smartArts = CollectSmartArts(document);
+        var smartArts = CollectSmartArts(document, drawingIdSeed: images.Count + charts.Count);
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
         // Emit a numbering part only when at least one paragraph is decorated as a list.
@@ -351,7 +353,10 @@ public static class DocxWriter
     /// </summary>
     private sealed record ChartPart(Chart Chart, string RelationshipId, string FileName, uint DrawingId, string EmbeddingFileName, string ExternalDataRelId);
 
-    private static List<ChartPart> CollectCharts(TextDocument document, HashSet<string> usedPartNames)
+    private static List<ChartPart> CollectCharts(
+        TextDocument document,
+        HashSet<string> usedPartNames,
+        int drawingIdSeed = 0)
     {
         var charts = new List<ChartPart>();
         foreach (var paragraph in EnumerateParagraphs(document))
@@ -375,7 +380,13 @@ public static class DocxWriter
                 "xlsx");
             // The external-data rId is part-LOCAL (it lives in word/charts/_rels/chartN.xml.rels), so a
             // fixed "rId1" per chart is fine and never collides with the document-level ids above.
-            charts.Add(new ChartPart(chart, $"rIdChart{index}", chartFileName, (uint)index, embeddingFileName, "rId1"));
+            charts.Add(new ChartPart(
+                chart,
+                $"rIdChart{index}",
+                chartFileName,
+                checked((uint)(drawingIdSeed + index)),
+                embeddingFileName,
+                "rId1"));
         }
         return charts;
     }
@@ -456,7 +467,7 @@ public static class DocxWriter
         string DrawingFileName,
         uint DrawingId);
 
-    private static List<SmartArtPart> CollectSmartArts(TextDocument document)
+    private static List<SmartArtPart> CollectSmartArts(TextDocument document, int drawingIdSeed = 0)
     {
         var smartArts = new List<SmartArtPart>();
         foreach (var paragraph in EnumerateParagraphs(document))
@@ -486,7 +497,7 @@ public static class DocxWriter
                 // set, matching the native package.
                 $"rIdDgmDrawing{index}",
                 $"drawing{index}.xml",
-                (uint)index));
+                checked((uint)(drawingIdSeed + index))));
         }
         return smartArts;
     }
@@ -1262,11 +1273,11 @@ public static class DocxWriter
             .ToDictionary(g => g.Key, g => (IReadOnlyList<HeaderFooterPart>)g.ToList());
 
         // Per-write id state, local to this BuildDocument invocation so concurrent writes never race.
-        // Bookmark + revision ids start at 1; the shape docPr counter is seeded just above the image
-        // drawing ids (1..imageCount) so the two id spaces never overlap. Each shape BuildRun emits takes
-        // the next id.
+        // Bookmark + revision ids start at 1; the shape docPr counter is seeded just above every
+        // pre-assigned image, chart, and SmartArt drawing id so document-level drawing identities never
+        // overlap. Each shape BuildRun emits takes the next id.
         var ids = new IdAllocator(
-            shapeDrawingSeed: images.Count,
+            shapeDrawingSeed: images.Count + charts.Count + smartArts.Count,
             reservedRevisionIds: EnumerateStoryParagraphs(document)
                 .SelectMany(paragraph => paragraph.Runs)
                 .Where(run => run.MoveRevisionId is not null)
