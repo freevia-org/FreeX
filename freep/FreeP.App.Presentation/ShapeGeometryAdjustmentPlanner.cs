@@ -24,7 +24,8 @@ public sealed record ShapeGeometryCustomPointMutationPlan(
     int PathIndex,
     int SegmentIndex,
     double X,
-    double Y);
+    double Y,
+    CustomGeometryPointSlot Slot = CustomGeometryPointSlot.Endpoint);
 
 /// <summary>Result of reducing a pointer position to one preset guide value.</summary>
 public sealed record ShapeGeometryAdjustmentMutationPlan(
@@ -113,7 +114,7 @@ public static class ShapeGeometryAdjustmentPlanner
 
         if (shape.CustomGeometry.Count > 0)
         {
-            if (!TryParseCustomHandle(handleName, out var pathIndex, out var segmentIndex) ||
+            if (!TryParseCustomHandle(handleName, out var pathIndex, out var segmentIndex, out var slot) ||
                 pathIndex < 0 || pathIndex >= shape.CustomGeometry.Count)
             {
                 return new(false, null, null, InvalidHandleMessage);
@@ -121,7 +122,7 @@ public static class ShapeGeometryAdjustmentPlanner
 
             var path = shape.CustomGeometry[pathIndex];
             if (segmentIndex < 0 || segmentIndex >= path.Segments.Count ||
-                path.Segments[segmentIndex].Kind is not (CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo))
+                !TryGetSegmentPoint(path.Segments[segmentIndex], slot, out _, out _))
             {
                 return new(false, null, null, InvalidHandleMessage);
             }
@@ -135,7 +136,7 @@ public static class ShapeGeometryAdjustmentPlanner
                 handleName,
                 null,
                 null,
-                new ShapeGeometryCustomPointMutationPlan(pathIndex, segmentIndex, x, y));
+                new ShapeGeometryCustomPointMutationPlan(pathIndex, segmentIndex, x, y, slot));
         }
 
         if (shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
@@ -205,18 +206,18 @@ public static class ShapeGeometryAdjustmentPlanner
             for (var segmentIndex = 0; segmentIndex < path.Segments.Count; segmentIndex++)
             {
                 var segment = path.Segments[segmentIndex];
-                if (segment.Kind is not (CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo))
-                    continue;
-
-                handles.Add(new ShapeGeometryAdjustmentHandlePlan(
-                    CustomHandleName(pathIndex, segmentIndex),
-                    "Vertex",
-                    new LayoutPoint(
-                        boundsDip.Left + segment.X / pathWidth * boundsDip.Width,
-                        boundsDip.Top + segment.Y / pathHeight * boundsDip.Height),
-                    segment.X,
-                    0,
-                    pathWidth));
+                foreach (var (slot, label, x, y, suffix) in SegmentPoints(segment))
+                {
+                    handles.Add(new ShapeGeometryAdjustmentHandlePlan(
+                        CustomHandleName(pathIndex, segmentIndex, suffix),
+                        label,
+                        new LayoutPoint(
+                            boundsDip.Left + x / pathWidth * boundsDip.Width,
+                            boundsDip.Top + y / pathHeight * boundsDip.Height),
+                        x,
+                        0,
+                        pathWidth));
+                }
             }
         }
 
@@ -228,21 +229,87 @@ public static class ShapeGeometryAdjustmentPlanner
             handles);
     }
 
-    private static string CustomHandleName(int pathIndex, int segmentIndex) =>
-        $"custom:{pathIndex}:{segmentIndex}";
+    private static string CustomHandleName(int pathIndex, int segmentIndex, string? suffix = null) =>
+        string.IsNullOrEmpty(suffix) ? $"custom:{pathIndex}:{segmentIndex}" : $"custom:{pathIndex}:{segmentIndex}:{suffix}";
 
     private static bool TryParseCustomHandle(
         string handleName,
         out int pathIndex,
-        out int segmentIndex)
+        out int segmentIndex,
+        out CustomGeometryPointSlot slot)
     {
         pathIndex = -1;
         segmentIndex = -1;
+        slot = CustomGeometryPointSlot.Endpoint;
         var parts = handleName.Split(':');
-        return parts.Length == 3 &&
-               parts[0] == "custom" &&
-               int.TryParse(parts[1], out pathIndex) &&
-               int.TryParse(parts[2], out segmentIndex);
+        if (parts.Length is not (3 or 4) || parts[0] != "custom" ||
+            !int.TryParse(parts[1], out pathIndex) || !int.TryParse(parts[2], out segmentIndex))
+            return false;
+
+        if (parts.Length == 3)
+            return true;
+
+        slot = parts[3] switch
+        {
+            "c1" => CustomGeometryPointSlot.Control1,
+            "c2" => CustomGeometryPointSlot.Control2,
+            "end" => CustomGeometryPointSlot.Endpoint,
+            _ => (CustomGeometryPointSlot)(-1),
+        };
+        return (int)slot >= 0;
+    }
+
+    private static IEnumerable<(CustomGeometryPointSlot Slot, string Label, double X, double Y, string Suffix)> SegmentPoints(CustomSegment segment)
+    {
+        switch (segment.Kind)
+        {
+            case CustomSegmentKind.MoveTo:
+            case CustomSegmentKind.LineTo:
+                yield return (CustomGeometryPointSlot.Endpoint, "Vertex", segment.X, segment.Y, "");
+                break;
+            case CustomSegmentKind.CubicBezTo:
+                yield return (CustomGeometryPointSlot.Control1, "Curve control 1", segment.X, segment.Y, "c1");
+                yield return (CustomGeometryPointSlot.Control2, "Curve control 2", segment.X1, segment.Y1, "c2");
+                yield return (CustomGeometryPointSlot.Endpoint, "Vertex", segment.X2, segment.Y2, "end");
+                break;
+            case CustomSegmentKind.QuadBezTo:
+                yield return (CustomGeometryPointSlot.Control1, "Curve control", segment.X, segment.Y, "c1");
+                yield return (CustomGeometryPointSlot.Endpoint, "Vertex", segment.X1, segment.Y1, "end");
+                break;
+        }
+    }
+
+    private static bool TryGetSegmentPoint(
+        CustomSegment segment,
+        CustomGeometryPointSlot slot,
+        out double x,
+        out double y)
+    {
+        x = 0;
+        y = 0;
+        switch (segment.Kind, slot)
+        {
+            case (CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo, CustomGeometryPointSlot.Endpoint):
+            case (CustomSegmentKind.QuadBezTo, CustomGeometryPointSlot.Control1):
+            case (CustomSegmentKind.CubicBezTo, CustomGeometryPointSlot.Control1):
+                x = segment.X;
+                y = segment.Y;
+                return true;
+            case (CustomSegmentKind.QuadBezTo, CustomGeometryPointSlot.Endpoint):
+                x = segment.X1;
+                y = segment.Y1;
+                return true;
+            case (CustomSegmentKind.CubicBezTo, CustomGeometryPointSlot.Control2):
+                x = segment.X1;
+                y = segment.Y1;
+                return true;
+            case (CustomSegmentKind.CubicBezTo, CustomGeometryPointSlot.Endpoint):
+                x = segment.X2;
+                y = segment.Y2;
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static double PathWidth(CustomGeometryPath path, LayoutRect boundsDip) =>

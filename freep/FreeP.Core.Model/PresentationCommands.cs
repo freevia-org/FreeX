@@ -682,7 +682,7 @@ public sealed class SetShapeGeometryAdjustmentCommand : IPresentationCommand
     }
 }
 
-/// <summary>Moves one line/move vertex in an imported custom geometry path.</summary>
+/// <summary>Moves one vertex or curve control point in an imported custom geometry path.</summary>
 public sealed class SetCustomGeometryPointCommand : IPresentationCommand
 {
     private readonly int _slideIndex;
@@ -691,6 +691,7 @@ public sealed class SetCustomGeometryPointCommand : IPresentationCommand
     private readonly int _segmentIndex;
     private readonly double _newX;
     private readonly double _newY;
+    private readonly CustomGeometryPointSlot _slot;
     private CustomSegment? _oldSegment;
 
     public SetCustomGeometryPointCommand(
@@ -699,7 +700,8 @@ public sealed class SetCustomGeometryPointCommand : IPresentationCommand
         int pathIndex,
         int segmentIndex,
         double x,
-        double y)
+        double y,
+        CustomGeometryPointSlot slot = CustomGeometryPointSlot.Endpoint)
     {
         _slideIndex = slideIndex;
         _shapeId = shapeId;
@@ -707,9 +709,10 @@ public sealed class SetCustomGeometryPointCommand : IPresentationCommand
         _segmentIndex = segmentIndex;
         _newX = x;
         _newY = y;
+        _slot = slot;
     }
 
-    public string Label => "Edit Shape Vertex";
+    public string Label => _slot == CustomGeometryPointSlot.Endpoint ? "Edit Shape Vertex" : "Edit Curve Control Point";
 
     public void Apply(Presentation p)
     {
@@ -722,11 +725,11 @@ public sealed class SetCustomGeometryPointCommand : IPresentationCommand
             return;
 
         var segment = path.Segments[_segmentIndex];
-        if (segment.Kind is not (CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo))
+        if (!CanMove(segment.Kind, _slot))
             return;
 
         _oldSegment = segment;
-        path.Segments[_segmentIndex] = segment with { X = _newX, Y = _newY };
+        path.Segments[_segmentIndex] = ApplyPoint(segment, _slot, _newX, _newY);
     }
 
     public void Revert(Presentation p)
@@ -739,6 +742,20 @@ public sealed class SetCustomGeometryPointCommand : IPresentationCommand
         if (_segmentIndex >= 0 && _segmentIndex < path.Segments.Count)
             path.Segments[_segmentIndex] = _oldSegment;
     }
+
+    private static bool CanMove(CustomSegmentKind kind, CustomGeometryPointSlot slot) =>
+        ((kind is CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo) && slot == CustomGeometryPointSlot.Endpoint) ||
+        (kind == CustomSegmentKind.QuadBezTo && (slot is CustomGeometryPointSlot.Control1 or CustomGeometryPointSlot.Endpoint)) ||
+        (kind == CustomSegmentKind.CubicBezTo && (slot is CustomGeometryPointSlot.Control1 or CustomGeometryPointSlot.Control2 or CustomGeometryPointSlot.Endpoint));
+
+    private static CustomSegment ApplyPoint(CustomSegment segment, CustomGeometryPointSlot slot, double x, double y) =>
+        slot switch
+        {
+            CustomGeometryPointSlot.Control1 => segment with { X = x, Y = y },
+            CustomGeometryPointSlot.Control2 => segment with { X1 = x, Y1 = y },
+            _ when segment.Kind is CustomSegmentKind.QuadBezTo => segment with { X1 = x, Y1 = y },
+            _ => segment with { X = x, Y = y },
+        };
 }
 
 /// <summary>

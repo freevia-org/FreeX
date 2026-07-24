@@ -276,4 +276,47 @@ public sealed class CustomGeomEffectsTests
         path2.Segments[1].Y.Should().Be(0);
         path2.Segments[4].Kind.Should().Be(CustomSegmentKind.Close);
     }
+
+    [Fact]
+    public void CustGeom_RoundTrip_PreservesCurveControlCoordinates()
+    {
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 50));
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.CubicBezTo,
+            X: 20, Y: 0, X1: 80, Y1: 0, X2: 100, Y2: 50));
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.QuadBezTo,
+            X: 50, Y: 100, X1: 0, Y1: 50));
+
+        var shape = new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        };
+        shape.CustomGeometry.Add(path);
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(shape);
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var roundTripped = FreeP.Core.IO.PptxPackageReader.Read(ms).Slides[0].Shapes[0];
+        var result = roundTripped.CustomGeometry[0].Segments;
+
+        result[1].Kind.Should().Be(CustomSegmentKind.CubicBezTo);
+        result[1].X.Should().Be(20);
+        result[1].Y.Should().Be(0);
+        result[1].X1.Should().Be(80);
+        result[1].Y1.Should().Be(0);
+        result[1].X2.Should().Be(100);
+        result[1].Y2.Should().Be(50);
+        result[2].Kind.Should().Be(CustomSegmentKind.QuadBezTo);
+        result[2].X.Should().Be(50);
+        result[2].Y.Should().Be(100);
+        result[2].X1.Should().Be(0);
+        result[2].Y1.Should().Be(50);
+    }
 }

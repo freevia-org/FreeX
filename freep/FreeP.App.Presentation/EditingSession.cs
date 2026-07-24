@@ -456,17 +456,18 @@ public sealed class EditingSession
         Bus.Execute(new SetShapeGeometryAdjustmentCommand(_currentSlideIndex, shapeId, name, value));
     }
 
-    /// <summary>Moves one line/move vertex in an imported custom geometry path.</summary>
+    /// <summary>Moves one vertex or curve control point in an imported custom geometry path.</summary>
     public void SetCustomGeometryPoint(
         uint shapeId,
         int pathIndex,
         int segmentIndex,
         double x,
-        double y)
+        double y,
+        CustomGeometryPointSlot slot = CustomGeometryPointSlot.Endpoint)
     {
         if (CurrentSlide is null) return;
         Bus.Execute(new SetCustomGeometryPointCommand(
-            _currentSlideIndex, shapeId, pathIndex, segmentIndex, x, y));
+            _currentSlideIndex, shapeId, pathIndex, segmentIndex, x, y, slot));
     }
 
     /// <summary>Sets the rotation (degrees, clockwise) of a single shape.</summary>
