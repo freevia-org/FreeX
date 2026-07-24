@@ -544,6 +544,9 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.slide-size-16x9",
             "freep.slide-size-4x3",
             "freep.slide-size-custom",
+            SmartArtAuthoringPlanner.ThemeAccentsCommandId,
+            SmartArtAuthoringPlanner.SingleAccentCommandId,
+            SmartArtAuthoringPlanner.GrayscaleCommandId,
         };
 
         avaloniaIds.Should().Contain(designIds);

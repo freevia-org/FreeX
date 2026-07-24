@@ -544,6 +544,30 @@
   <data name="Ribbon_Group_Customize_KeyTip" xml:space="preserve">
     <value>Z</value>
   </data>
+  <data name="Ribbon_Group_SmartArtColors_Label" xml:space="preserve">
+    <value>SmartArt Colors</value>
+  </data>
+  <data name="Ribbon_Group_SmartArtColors_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtThemeAccents_Label" xml:space="preserve">
+    <value>Theme Accents</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtThemeAccents_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSingleAccent_Label" xml:space="preserve">
+    <value>Single Accent</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSingleAccent_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtGrayscale_Label" xml:space="preserve">
+    <value>Grayscale</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtGrayscale_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
   <data name="Ribbon_Command_SlideSizeWidescreen_Label" xml:space="preserve">
     <value>Widescreen (16:9)</value>
   </data>
