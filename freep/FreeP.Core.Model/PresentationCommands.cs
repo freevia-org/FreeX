@@ -1,4 +1,5 @@
 using Free.Shared.Commands;
+using Free.Shared.Drawing;
 
 namespace FreeP.Core.Model;
 
@@ -68,6 +69,50 @@ public sealed class PresentationCommandBus
         entry.Command.Apply(_presentation);
         _stack.PushWithoutClearingRedo(entry);
         Changed?.Invoke();
+    }
+}
+
+/// <summary>
+/// Applies a prepared SmartArt state as one undoable operation. Hosts prepare the state through
+/// the shared SmartArt planner (including data-part and drawing-cache regeneration), then this
+/// command owns the model transition so Undo/Redo restores the complete payload together.
+/// </summary>
+public sealed class ReplaceSmartArtCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly SmartArtShape _before;
+    private readonly SmartArtShape _after;
+
+    public ReplaceSmartArtCommand(
+        int slideIndex,
+        uint shapeId,
+        SmartArtShape before,
+        SmartArtShape after)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _before = SlideCloner.CloneSmartArt(before);
+        _after = SlideCloner.CloneSmartArt(after);
+    }
+
+    public string Label => "Edit SmartArt";
+
+    public void Apply(Presentation presentation) => CopyState(presentation, _after);
+
+    public void Revert(Presentation presentation) => CopyState(presentation, _before);
+
+    private void CopyState(Presentation presentation, SmartArtShape state)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return;
+
+        var shape = presentation.Slides[_slideIndex].Shapes.FirstOrDefault(candidate =>
+            candidate.Id == _shapeId &&
+            candidate.Kind == SlideShapeKind.SmartArt &&
+            candidate.SmartArt is not null);
+        if (shape?.SmartArt is not null)
+            SlideCloner.CopySmartArt(shape.SmartArt, state);
     }
 }
 

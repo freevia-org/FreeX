@@ -329,7 +329,8 @@ public static class SlideCloner
         Delete            = a.Delete,
     };
 
-    private static SmartArtShape CloneSmartArt(SmartArtShape source)
+    /// <summary>Returns a fully independent deep copy of a SmartArt payload.</summary>
+    public static SmartArtShape CloneSmartArt(SmartArtShape source)
     {
         var copy = new SmartArtShape
         {
@@ -359,6 +360,36 @@ public static class SlideCloner
             copy.PartRels[kv.Key] = kv.Value;
 
         return copy;
+    }
+
+    /// <summary>
+    /// Replaces the mutable contents of <paramref name="target"/> with a deep copy of
+    /// <paramref name="source"/> while preserving the target object identity. This matters to
+    /// host controls that keep a reference to the selected SmartArt payload while an undoable
+    /// edit is applied.
+    /// </summary>
+    public static void CopySmartArt(SmartArtShape target, SmartArtShape source)
+    {
+        var copy = CloneSmartArt(source);
+        target.Data = copy.Data;
+        target.QuickStyle = copy.QuickStyle;
+        target.Colors = copy.Colors;
+        target.DrawingPartPath = copy.DrawingPartPath;
+
+        target.FallbackShapes.Clear();
+        target.FallbackShapes.AddRange(copy.FallbackShapes);
+
+        target.DiagramRelIds.Clear();
+        foreach (var pair in copy.DiagramRelIds)
+            target.DiagramRelIds[pair.Key] = pair.Value;
+
+        target.Parts.Clear();
+        foreach (var pair in copy.Parts)
+            target.Parts[pair.Key] = pair.Value;
+
+        target.PartRels.Clear();
+        foreach (var pair in copy.PartRels)
+            target.PartRels[pair.Key] = pair.Value;
     }
 
     private static SmartArtData CloneSmartArtData(SmartArtData source)

@@ -2196,14 +2196,34 @@ public sealed partial class MainWindow : Window
                 : new SmartArtTextPaneOutlineRow(box.Text, 0))
             .ToArray();
 
-        LastSmartArtTextPaneApplyResult = SmartArtEditingPlanner.ApplyTextPaneOutline(
-            smartArtShape?.SmartArt?.Data,
-            rows);
-        if (LastSmartArtTextPaneApplyResult.Applied && smartArtShape is not null)
-            CommitSmartArtTextPaneMutation(smartArtShape);
+        if (smartArtShape is null)
+        {
+            LastSmartArtTextPaneApplyResult = SmartArtEditingPlanner.ApplyTextPaneOutline(null, rows);
+        }
+        else
+        {
+            Editor.EditSmartArt(smartArtShape.Id, smartArt =>
+            {
+                LastSmartArtTextPaneApplyResult = SmartArtEditingPlanner.ApplyTextPaneOutline(
+                    smartArt.Data,
+                    rows);
+                if (LastSmartArtTextPaneApplyResult is not { Applied: true })
+                    return false;
+
+                CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
+                return true;
+            });
+        }
+
+        if (LastSmartArtTextPaneApplyResult is { Applied: true })
+        {
+            _file.MarkDirty();
+            RefreshCanvas();
+            UpdateTitle();
+        }
 
         RefreshSmartArtTextPane();
-        return LastSmartArtTextPaneApplyResult;
+        return LastSmartArtTextPaneApplyResult!;
     }
 
     internal SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRouteForTests(
@@ -2307,33 +2327,48 @@ public sealed partial class MainWindow : Window
             return null;
 
         var smartArtShape = GetSelectedSmartArtShape();
-        LastSmartArtTextPaneEditResult = SmartArtEditingPlanner.Apply(
-            smartArtShape?.SmartArt?.Data,
-            route.Intent);
-        if (LastSmartArtTextPaneEditResult.Applied && smartArtShape is not null)
+        if (smartArtShape is null)
         {
-            _selectedSmartArtTextPaneModelId = LastSmartArtTextPaneEditResult.SelectedModelId;
-            CommitSmartArtTextPaneMutation(smartArtShape);
+            LastSmartArtTextPaneEditResult = SmartArtEditingPlanner.Apply(null, route.Intent);
+        }
+        else
+        {
+            Editor.EditSmartArt(smartArtShape.Id, smartArt =>
+            {
+                LastSmartArtTextPaneEditResult = SmartArtEditingPlanner.Apply(
+                    smartArt.Data,
+                    route.Intent);
+                if (LastSmartArtTextPaneEditResult is not { Applied: true })
+                    return false;
+
+                _selectedSmartArtTextPaneModelId = LastSmartArtTextPaneEditResult.SelectedModelId;
+                CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
+                return true;
+            });
+        }
+
+        if (LastSmartArtTextPaneEditResult is { Applied: true })
+        {
+            _file.MarkDirty();
+            RefreshCanvas();
+            UpdateTitle();
         }
 
         RefreshSmartArtTextPane();
         return LastSmartArtTextPaneEditResult;
     }
 
-    private void CommitSmartArtTextPaneMutation(SlideShape smartArtShape)
+    private void CommitSmartArtTextPaneMutation(SmartArtShape smartArt, SlideShape smartArtShape)
     {
-        LastSmartArtDataPartRewriteResult = SmartArtEditingPlanner.RewriteDataPart(smartArtShape.SmartArt);
+        LastSmartArtDataPartRewriteResult = SmartArtEditingPlanner.RewriteDataPart(smartArt);
         LastSmartArtDrawingCacheRegenerationResult = SmartArtEditingPlanner.RegenerateDrawingCache(
-            smartArtShape.SmartArt,
+            smartArt,
             smartArtShape.OffsetXEmu,
             smartArtShape.OffsetYEmu,
             smartArtShape.ExtentCxEmu,
             smartArtShape.ExtentCyEmu,
             ResolveCurrentSlideTheme(),
             Editor.CurrentSlide?.ColorMapOverride);
-        _file.MarkDirty();
-        RefreshCanvas();
-        UpdateTitle();
     }
 
     private SlideShape? GetSelectedSmartArtShape()
