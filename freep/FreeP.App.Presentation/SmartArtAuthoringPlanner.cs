@@ -30,6 +30,7 @@ public enum SmartArtLayoutPreset
     FunnelProcess,
     VerticalProcess,
     VerticalBoxList,
+    VerticalBulletList,
     BasicCycle,
     GearCycle,
     TextCycle,
@@ -41,6 +42,7 @@ public enum SmartArtLayoutPreset
     BasicPyramid,
     RadialCycle,
     BasicMatrix,
+    TitledMatrix,
     BasicVenn,
     RadialVenn,
     TargetList,
@@ -105,6 +107,7 @@ public static class SmartArtAuthoringPlanner
     public const string FunnelProcessLayoutCommandId = "freep.smartart.layout.funnel-process";
     public const string VerticalProcessLayoutCommandId = "freep.smartart.layout.vertical-process";
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
+    public const string VerticalBulletListLayoutCommandId = "freep.smartart.layout.vertical-bullet-list";
     public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
     public const string GearCycleLayoutCommandId = "freep.smartart.layout.gear-cycle";
     public const string TextCycleLayoutCommandId = "freep.smartart.layout.text-cycle";
@@ -116,6 +119,7 @@ public static class SmartArtAuthoringPlanner
     public const string BasicPyramidLayoutCommandId = "freep.smartart.layout.basic-pyramid";
     public const string RadialCycleLayoutCommandId = "freep.smartart.layout.radial-cycle";
     public const string BasicMatrixLayoutCommandId = "freep.smartart.layout.basic-matrix";
+    public const string TitledMatrixLayoutCommandId = "freep.smartart.layout.titled-matrix";
     public const string BasicVennLayoutCommandId = "freep.smartart.layout.basic-venn";
     public const string RadialVennLayoutCommandId = "freep.smartart.layout.radial-venn";
     public const string TargetListLayoutCommandId = "freep.smartart.layout.target-list";
@@ -255,6 +259,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalBoxList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
+            SmartArtLayoutPreset.VerticalBulletList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.BasicCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.GearCycle =>
@@ -277,6 +283,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radialCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicMatrix =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix", SmartArtFamily.Matrix),
+            SmartArtLayoutPreset.TitledMatrix =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix", SmartArtFamily.Matrix),
             SmartArtLayoutPreset.BasicVenn =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.RadialVenn =>

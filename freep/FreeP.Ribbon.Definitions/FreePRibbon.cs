@@ -410,6 +410,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.VerticalBoxListLayoutCommandId,
                 FreePRibbonText.SmartArtVerticalBoxListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtVerticalBoxListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
+                FreePRibbonText.SmartArtVerticalBulletListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtVerticalBulletListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
                 FreePRibbonText.SmartArtBasicCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtBasicCycleCommand.KeyTip);
@@ -443,6 +446,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
                 FreePRibbonText.SmartArtBasicMatrixCommand.Label, RibbonCommandIconKind.Grid,
                 FreePRibbonText.SmartArtBasicMatrixCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.TitledMatrixLayoutCommandId,
+                FreePRibbonText.SmartArtTitledMatrixCommand.Label, RibbonCommandIconKind.Grid,
+                FreePRibbonText.SmartArtTitledMatrixCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 FreePRibbonText.SmartArtBasicVennCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtBasicVennCommand.KeyTip);
