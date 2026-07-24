@@ -790,6 +790,18 @@
   <data name="Ribbon_Command_SmartArtPictureCaptionList_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_SmartArtLabeledHierarchy_Label" xml:space="preserve">
+    <value>Labeled Hierarchy</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtLabeledHierarchy_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtTableHierarchy_Label" xml:space="preserve">
+    <value>Table Hierarchy</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtTableHierarchy_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
   <data name="Ribbon_Group_SmartArtStyles_Label" xml:space="preserve">
     <value>SmartArt Styles</value>
   </data>

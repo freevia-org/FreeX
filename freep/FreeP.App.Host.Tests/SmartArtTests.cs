@@ -676,6 +676,8 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.OrgChart, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.PictureCaptionList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.LabeledHierarchy, SmartArtFamily.Hierarchy)]
+    [InlineData(SmartArtLayoutPreset.TableHierarchy, SmartArtFamily.Hierarchy)]
     public void SmartArtLayoutPreset_PersistsNativeLayoutAndRereads(
         SmartArtLayoutPreset preset,
         SmartArtFamily expectedFamily)

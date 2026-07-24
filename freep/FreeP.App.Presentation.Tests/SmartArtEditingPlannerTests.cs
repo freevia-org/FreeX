@@ -35,6 +35,8 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, "horizontalHierarchy", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.OrgChart, "orgChart", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.PictureCaptionList, "pictureCaptionList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.LabeledHierarchy, "labeledHierarchy", SmartArtFamily.Hierarchy)]
+    [InlineData(SmartArtLayoutPreset.TableHierarchy, "tableHierarchy", SmartArtFamily.Hierarchy)]
     public void ApplyLayoutPreset_UpdatesLiveModelAndNativeLayoutPart(
         SmartArtLayoutPreset preset,
         string expectedId,
