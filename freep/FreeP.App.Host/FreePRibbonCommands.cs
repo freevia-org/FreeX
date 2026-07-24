@@ -99,7 +99,8 @@ internal static class FreePRibbonCommands
         Func<PresentationViewZoomState>? getViewZoomState = null,
         Action<PresentationViewZoomState>? applyViewZoomState = null,
         Action?             onCustomShows     = null,
-        Func<PresentationPictureBulletPayload?>? pickPictureBulletPayload = null)
+        Func<PresentationPictureBulletPayload?>? pickPictureBulletPayload = null,
+        Action<SmartArtColorPreset>? onSmartArtColorPreset = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -118,6 +119,12 @@ internal static class FreePRibbonCommands
 
         RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true, onTablePicker);
         RegisterHeaderFooterCommands(registry, editor, onHeaderFooter);
+        registry.Register(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
+            new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.ThemeAccents)));
+        registry.Register(SmartArtAuthoringPlanner.SingleAccentCommandId,
+            new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.SingleAccent)));
+        registry.Register(SmartArtAuthoringPlanner.GrayscaleCommandId,
+            new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.Grayscale)));
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
         //

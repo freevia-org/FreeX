@@ -4818,6 +4818,41 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_color_preset_uses_native_part_and_undo_bus()
+    {
+        byte[]? before = null;
+        SmartArtColorApplyResult? result = null;
+        SmartArtShape? smartArt = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape();
+            var art = shape.SmartArt!;
+            smartArt = art;
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+            before = art.Parts["ppt/diagrams/colors1.xml"].Bytes.ToArray();
+
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(SmartArtAuthoringPlanner.SingleAccentCommandId, out var command).Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+            result = window.LastSmartArtColorApplyResult;
+            result!.Applied.Should().BeTrue();
+            art.Parts["ppt/diagrams/colors1.xml"].Bytes.Should().NotEqual(before);
+            art.Colors!.Palette.Should().HaveCount(2);
+            window.Editor.Undo();
+            art.Parts["ppt/diagrams/colors1.xml"].Bytes.Should().Equal(before);
+            window.Editor.Redo();
+            art.Parts["ppt/diagrams/colors1.xml"].Bytes.Should().NotEqual(before);
+        });
+
+        if (!ran) return;
+        result.Should().NotBeNull();
+        result!.Applied.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task SmartArt_bending_process_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];
@@ -5732,6 +5767,12 @@ public sealed class MainWindowHeadlessTests
             PartPath = "ppt/diagrams/drawing1.xml",
             ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
             Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+        smartArt.Parts["ppt/diagrams/colors1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/colors1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:colorsDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><dgm:styleLbl name=\"node0\"><dgm:fillClrLst><a:schemeClr val=\"accent1\"/><a:schemeClr val=\"accent2\"/></dgm:fillClrLst></dgm:styleLbl></dgm:colorsDef>")
         };
 
         return new SlideShape
