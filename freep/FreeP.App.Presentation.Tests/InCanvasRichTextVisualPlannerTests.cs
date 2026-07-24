@@ -6,6 +6,30 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class InCanvasRichTextVisualPlannerTests
 {
     [Fact]
+    public void EditorDefaults_UseWpfFallbackAndFirstExplicitSize()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run { Text = "Inherited" },
+                new Run { Text = "Explicit", FontSizePt = 18 },
+            },
+        });
+
+        InCanvasRichTextEditorDefaults.FallbackFontFamily.Should().Be("Calibri");
+        InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
+                body,
+                InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt)
+            .Should().Be(18);
+        InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
+                new TextBody(),
+                InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt)
+            .Should().Be(13);
+    }
+
+    [Fact]
     public void Create_MapsMixedRunsAndParagraphOffsetsWithoutFlattening()
     {
         var body = new TextBody();

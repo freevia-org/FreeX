@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
+using FreeP.App.Compositor;
 using FreeP.Core.Model;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun       = System.Windows.Documents.Run;
@@ -24,9 +25,6 @@ namespace FreeP.App.Rendering.Wpf;
 /// </summary>
 internal static class TextBodyFlowDocumentConverter
 {
-    // Default fallback font when a run carries no explicit family.
-    private const string FallbackFont = "Calibri";
-
     // WPF uses DIPs; PowerPoint font size is in points. 1pt = 96/72 DIPs.
     private const double PtToDip = 96.0 / 72.0;
     private const double DipToPt = 72.0 / 96.0;
@@ -42,7 +40,9 @@ internal static class TextBodyFlowDocumentConverter
     ///
     /// If <paramref name="body"/> is null or empty an empty single-paragraph document is returned.
     /// </summary>
-    public static FlowDocument ToFlowDocument(TextBody? body, double fallbackFontSizePt = 14)
+    public static FlowDocument ToFlowDocument(
+        TextBody? body,
+        double fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt)
     {
         // 100000 DIPs (~1041 feet) is large enough that the FlowDocument never paginates
         // inside a RichTextBox, while staying within WPF's accepted finite range.
@@ -53,7 +53,7 @@ internal static class TextBodyFlowDocumentConverter
             // Disable pagination — we render in a RichTextBox / scroll viewer.
             PageWidth   = VeryLargeWidth,
             ColumnWidth = VeryLargeWidth,
-            FontFamily  = new FontFamily(FallbackFont),
+            FontFamily  = new FontFamily(InCanvasRichTextEditorDefaults.FallbackFontFamily),
             FontSize    = fallbackFontSizePt * PtToDip,
         };
 

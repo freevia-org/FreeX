@@ -390,6 +390,8 @@ public sealed class SlideCanvasAvaloniaTests
         InCanvasTableCellRichTextEditPlan? selectedPlan = null;
         var projectedFontFamily = string.Empty;
         var projectedFontSize = 0.0;
+        var projectedFallbackFontFamily = string.Empty;
+        var projectedFallbackFontSize = 0.0;
         var projectedBold = false;
         var richClass = false;
         var mixedClass = false;
@@ -418,10 +420,13 @@ public sealed class SlideCanvasAvaloniaTests
             var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
             textEditor.Activate(shape!.Id);
-            var box = RichInput(overlay);
+            var editorControl = RichEditor(overlay);
+            var box = editorControl.InputBox;
             startPlan = box.Tag.Should().BeOfType<InCanvasTableCellRichTextEditPlan>().Subject;
             projectedFontFamily = box.FontFamily.ToString();
             projectedFontSize = box.FontSize;
+            projectedFallbackFontFamily = editorControl.RichTextView.FallbackFontFamily;
+            projectedFallbackFontSize = editorControl.RichTextView.FallbackFontSizePt;
             projectedBold = box.FontWeight == FontWeight.Bold;
             richClass = box.Classes.Contains("freep-shape-rich-editor");
             mixedClass = box.Classes.Contains("freep-shape-mixed-formatting");
@@ -443,6 +448,8 @@ public sealed class SlideCanvasAvaloniaTests
         startPlan.HasMixedFormatting.Should().BeTrue();
         projectedFontFamily.Should().Contain("Aptos");
         projectedFontSize.Should().BeApproximately(24, 0.01, "18pt is 24 device-independent pixels");
+        projectedFallbackFontFamily.Should().Be(InCanvasRichTextEditorDefaults.FallbackFontFamily);
+        projectedFallbackFontSize.Should().BeApproximately(18, 0.01);
         projectedBold.Should().BeFalse("the Avalonia shape editor starts from the first rich run's shared style");
         richClass.Should().BeTrue();
         mixedClass.Should().BeTrue();

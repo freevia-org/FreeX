@@ -17,6 +17,43 @@ public sealed class AvaloniaRichTextEditorTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
 
     [Fact]
+    public async Task InheritedRuns_UseSharedWpfFallbackInsteadOfNativeTextBoxTheme()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "Inherited" },
+                    new Run { Text = "Explicit", FontFamily = "Aptos", FontSizePt = 18 },
+                },
+            });
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.RichTextView.FallbackFontFamily.Should().Be("Calibri");
+                editor.RichTextView.FallbackFontSizePt.Should().Be(14);
+                var inheritedRun = editor.RichTextView.VisualPlan.Paragraphs
+                    .SelectMany(paragraph => paragraph.Runs)
+                    .First();
+                inheritedRun.FontFamily.Should().BeNull();
+                inheritedRun.FontSizePt.Should().BeNull();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task NativeInputIsTopmostHitTarget_WhileCustomSurfaceOwnsVisibleCaretAndSelection()
     {
         await Session.Dispatch(async () =>

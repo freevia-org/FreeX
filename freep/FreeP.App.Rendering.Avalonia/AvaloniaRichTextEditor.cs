@@ -17,12 +17,24 @@ internal sealed class AvaloniaRichTextEditor : Grid
 {
     private readonly InCanvasRichTextEditBuffer _buffer;
     private readonly AvaloniaRichTextEditingSurface _richTextView;
+    private readonly string _fallbackFontFamily;
+    private readonly double _fallbackFontSizePt;
     private bool _synchronizing;
     private int _pointerSelectionAnchor;
 
-    internal AvaloniaRichTextEditor(TextBody? body, byte backgroundAlpha)
+    internal AvaloniaRichTextEditor(
+        TextBody? body,
+        byte backgroundAlpha,
+        string fallbackFontFamily = InCanvasRichTextEditorDefaults.FallbackFontFamily,
+        double fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fallbackFontFamily);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(fallbackFontSizePt);
+
         _buffer = new InCanvasRichTextEditBuffer(body);
+        _fallbackFontFamily = fallbackFontFamily;
+        _fallbackFontSizePt = fallbackFontSizePt;
+        _richTextView = new AvaloniaRichTextEditingSurface();
         ClipToBounds = true;
         Background = new SolidColorBrush(Color.FromArgb(backgroundAlpha, 0xFF, 0xFF, 0xFF));
 
@@ -43,7 +55,6 @@ internal sealed class AvaloniaRichTextEditor : Grid
         };
         AutomationProperties.SetAutomationId(InputBox, "FreePRichTextEditorInput");
 
-        _richTextView = new AvaloniaRichTextEditingSurface();
         AutomationProperties.SetAccessibilityView(_richTextView, AccessibilityView.Raw);
 
         Children.Add(_richTextView);
@@ -215,8 +226,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
             var body = _buffer.Body;
             _richTextView.UpdateBody(
                 body,
-                InputBox.FontFamily.Name,
-                InputBox.FontSize * (72.0 / 96.0));
+                _fallbackFontFamily,
+                _fallbackFontSizePt);
             UpdateSurfaceSelection();
         }
         finally

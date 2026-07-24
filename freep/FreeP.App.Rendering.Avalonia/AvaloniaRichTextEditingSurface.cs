@@ -24,8 +24,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
     private readonly List<ParagraphLayout> _layouts = [];
     private InCanvasRichTextVisualPlan _plan = InCanvasRichTextVisualPlanner.Create(null);
-    private string _fallbackFontFamily = "Arial";
-    private double _fallbackFontSizePt = 14;
+    private string _fallbackFontFamily = InCanvasRichTextEditorDefaults.FallbackFontFamily;
+    private double _fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt;
     private double _layoutWidth = double.NaN;
     private int _selectionStart;
     private int _selectionEnd;
@@ -38,6 +38,10 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     }
 
     internal InCanvasRichTextVisualPlan VisualPlan => _plan;
+
+    internal string FallbackFontFamily => _fallbackFontFamily;
+
+    internal double FallbackFontSizePt => _fallbackFontSizePt;
 
     internal IReadOnlyList<Rect> SelectionRects
     {

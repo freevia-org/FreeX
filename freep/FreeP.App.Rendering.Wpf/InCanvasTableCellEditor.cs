@@ -102,9 +102,9 @@ public sealed class InCanvasTableCellEditor
         var placement = editStart.Placement.Value;
 
         // Determine a fallback font size from the cell's first run.
-        double fallbackPt = cell.TextBody?.Paragraphs
-            .SelectMany(p => p.Runs)
-            .FirstOrDefault(r => r.FontSizePt.HasValue)?.FontSizePt ?? 13.0;
+        double fallbackPt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
+            cell.TextBody,
+            InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt);
 
         var doc = TextBodyFlowDocumentConverter.ToFlowDocument(cell.TextBody, fallbackPt);
 

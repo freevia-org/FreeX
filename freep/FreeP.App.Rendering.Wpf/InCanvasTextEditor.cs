@@ -96,9 +96,9 @@ public sealed class InCanvasTextEditor
             minimumWidth: 40,
             minimumHeight: 20);
 
-        double fallbackPt = startPlan.OriginalBody.Paragraphs
-            .SelectMany(p => p.Runs)
-            .FirstOrDefault(r => r.FontSizePt.HasValue)?.FontSizePt ?? 14.0;
+        double fallbackPt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
+            startPlan.OriginalBody,
+            InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt);
 
         var doc = TextBodyFlowDocumentConverter.ToFlowDocument(startPlan.OriginalBody, fallbackPt);
 

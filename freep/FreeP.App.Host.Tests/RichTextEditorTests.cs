@@ -28,6 +28,19 @@ namespace FreeP.App.Host.Tests;
 public sealed class RichTextEditorTests
 {
     [StaFact]
+    public void WpfAuthority_UsesSharedRichEditorFallbackTypography()
+    {
+        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(
+            new TextBody(),
+            InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt);
+
+        doc.FontFamily.Source.Should().Be(InCanvasRichTextEditorDefaults.FallbackFontFamily);
+        doc.FontSize.Should().BeApproximately(
+            InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt * 96.0 / 72.0,
+            0.01);
+    }
+
+    [StaFact]
     public void WpfAuthority_RendersAlignmentAndMixedRuns_ButKeepsBulletMetadataNonvisual()
     {
         var body = MakeVisualEvidenceBody();

@@ -277,7 +277,13 @@ public sealed class AvaloniaInCanvasTextEditor
             minimumWidth: 40,
             minimumHeight: 20);
 
-        _textBox = new AvaloniaRichTextEditor(startPlan.OriginalBody, backgroundAlpha: 0xCC)
+        var shapeFallbackFontSizePt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
+            startPlan.OriginalBody,
+            InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt);
+        _textBox = new AvaloniaRichTextEditor(
+            startPlan.OriginalBody,
+            backgroundAlpha: 0xCC,
+            fallbackFontSizePt: shapeFallbackFontSizePt)
         {
             MinWidth = placement.Width,
             MinHeight = placement.Height,
@@ -333,7 +339,13 @@ public sealed class AvaloniaInCanvasTextEditor
         _editor.Select(shapeId);
         _editor.SetActiveTableCell(startPlan.Row, startPlan.Col);
 
-        _cellTextBox = new AvaloniaRichTextEditor(startPlan.OriginalBody, backgroundAlpha: 0xEE)
+        var cellFallbackFontSizePt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
+            startPlan.OriginalBody,
+            InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt);
+        _cellTextBox = new AvaloniaRichTextEditor(
+            startPlan.OriginalBody,
+            backgroundAlpha: 0xEE,
+            fallbackFontSizePt: cellFallbackFontSizePt)
         {
             MinWidth = placement.Width,
             MinHeight = placement.Height,
