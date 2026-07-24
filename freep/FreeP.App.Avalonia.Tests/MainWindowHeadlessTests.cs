@@ -5785,6 +5785,7 @@ public sealed class MainWindowHeadlessTests
             categoryRows = dialog.RenderedCategoryRowCount;
             valueCells = dialog.RenderedValueCellCount;
             dialog.SwitchRowsAndColumnsForTests();
+            dialog.SetChartTypeForTests(ChartType.LineMarkers);
             commit = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -5800,6 +5801,7 @@ public sealed class MainWindowHeadlessTests
         commit.Values[0].Should().Equal(new double?[] { 4.3, 2.4 });
         commit.Values[1].Should().Equal(new double?[] { 2.5, 4.4 });
         commit.Values[2].Should().Equal(new double?[] { 3.5, 1.8 });
+        commit.ChartType.Should().Be(ChartType.LineMarkers);
     }
 
     [Fact]

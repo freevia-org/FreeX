@@ -48,6 +48,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly Button   _addCatBtn;
     private readonly Button   _removeCatBtn;
     private readonly Button   _switchRowsAndColumnsBtn;
+    private readonly ComboBox _chartTypeCombo;
     private readonly TextBlock _validationText = new();
 
     // ── Construction ──────────────────────────────────────────────────────────────
@@ -81,6 +82,20 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _addCatBtn       = MakeToolbarButton("+ Category",  OnAddCategory);
         _removeCatBtn    = MakeToolbarButton("- Category",  OnRemoveCategory);
         _switchRowsAndColumnsBtn = MakeToolbarButton("Switch Row/Column", OnSwitchRowsAndColumns);
+        _chartTypeCombo = new ComboBox
+        {
+            ItemsSource = ChartDataDialogPlanner.ChartTypeOptions,
+            DisplayMemberPath = nameof(ChartDataDialogChartTypeOption.Label),
+            SelectedValuePath = nameof(ChartDataDialogChartTypeOption.Value),
+            SelectedValue = _planner.SelectedChartType,
+            Width = 170,
+            Margin = new Thickness(8, 0, 4, 0),
+        };
+        _chartTypeCombo.SelectionChanged += (_, _) =>
+        {
+            if (_chartTypeCombo.SelectedValue is ChartType chartType)
+                _planner.SetChartType(chartType);
+        };
 
         var toolbar = new WrapPanel { Margin = new Thickness(4, 4, 4, 2) };
         toolbar.Children.Add(_addSeriesBtn);
@@ -89,6 +104,13 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         toolbar.Children.Add(_addCatBtn);
         toolbar.Children.Add(_removeCatBtn);
         toolbar.Children.Add(_switchRowsAndColumnsBtn);
+        toolbar.Children.Add(new TextBlock
+        {
+            Text = ChartDataDialogPlanner.ChartTypeLabel,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 2, 0),
+        });
+        toolbar.Children.Add(_chartTypeCombo);
 
         // ── DataGrid ──────────────────────────────────────────────────────────────
         _grid = new DataGrid
@@ -272,7 +294,8 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _editor.ReplaceChartData(
             commit.Categories,
             commit.SeriesNames,
-            commit.ValuesForCommand());
+            commit.ValuesForCommand(),
+            commit.ChartType);
 
         DialogResult = true;
         Close();

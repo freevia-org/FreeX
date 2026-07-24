@@ -1899,6 +1899,21 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Replaces chart data and changes its type in one undoable batch.
+    /// </summary>
+    public void ReplaceChartData(
+        IEnumerable<string>               categories,
+        IEnumerable<string>               seriesNames,
+        IEnumerable<IEnumerable<double?>> values,
+        ChartType                          chartType)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new ReplaceChartDataCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            categories, seriesNames, values, chartType));
+    }
+
+    /// <summary>
     /// Non-nullable overload for callers that already work with <c>double</c> sequences (no gaps).
     /// </summary>
     public void ReplaceChartData(
