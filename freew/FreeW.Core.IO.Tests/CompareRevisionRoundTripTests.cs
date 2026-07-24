@@ -280,6 +280,30 @@ public class CompareRevisionRoundTripTests
     }
 
     [Fact]
+    public void Compare_UniqueParagraphMove_RoundTrips_AsPairedMoveWrappers()
+    {
+        var original = DocWith("Alpha", "Bravo", "Charlie");
+        var revised = DocWith("Bravo", "Alpha", "Charlie");
+
+        var compared = DocumentCompare.Compare(original, revised, Author, DateXml);
+        var xdoc = DocumentXDoc(compared);
+        var moveFrom = xdoc.Descendants(W + "moveFrom").Should().ContainSingle().Subject;
+        var moveTo = xdoc.Descendants(W + "moveTo").Should().ContainSingle().Subject;
+        moveFrom.Attribute(W + "id")!.Value.Should().Be(moveTo.Attribute(W + "id")!.Value);
+        moveFrom.Attribute(W + "author")!.Value.Should().Be(Author);
+        moveTo.Attribute(W + "date")!.Value.Should().Be(DateXml);
+
+        var reloaded = RoundTrip(compared);
+        var moved = reloaded.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.MoveRevisionId != null)
+            .ToList();
+        moved.Should().HaveCount(2);
+        moved.Select(run => run.MoveRevisionId).Distinct().Should().ContainSingle();
+        moved.Should().ContainSingle(run => run.Text == "Alpha" && run.Revision == RevisionKind.Deleted);
+        moved.Should().ContainSingle(run => run.Text == "Alpha" && run.Revision == RevisionKind.Inserted);
+    }
+
+    [Fact]
     public void Compare_RevisionList_After_RoundTrip_EnumeratesAllEntries()
     {
         // "hello world" → "hello earth": one deletion ("world") and one insertion ("earth").

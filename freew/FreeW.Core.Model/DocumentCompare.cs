@@ -29,9 +29,9 @@ public enum CompareShowChangesIn
 /// <see cref="Insertions"/>, <see cref="Deletions"/>, <see cref="CaseChanges"/>,
 /// <see cref="Whitespace"/>, and <see cref="Formatting"/> affect FreeW's current comparison engine.
 /// Formatting revisions are emitted when a paragraph's text and run boundaries are unchanged, so each
-/// revised run can retain a precise previous-format snapshot. The remaining flags
-/// (<see cref="Moves"/>, <see cref="Comments"/>) are stored so the dialog can persist them and are
-/// passed through to any future engine extension.
+/// revised run can retain a precise previous-format snapshot. Unique unchanged paragraphs moved to a new
+/// position receive paired move revisions. The remaining flag (<see cref="Comments"/>) is stored so the
+/// dialog can persist it and pass it through to a future engine extension.
 /// </para>
 /// </summary>
 public sealed class CompareSettings
@@ -42,7 +42,10 @@ public sealed class CompareSettings
     /// <summary>Track deleted text. Default: <c>true</c>.</summary>
     public bool Deletions { get; init; } = true;
 
-    /// <summary>Track moved/reordered paragraphs (not yet implemented in FreeW's engine). Default: <c>true</c>.</summary>
+    /// <summary>
+    /// Track unique unchanged paragraphs that moved to a new position. Ambiguous or edited paragraphs
+    /// remain ordinary deletion/insertion pairs. Default: <c>true</c>.
+    /// </summary>
     public bool Moves { get; init; } = true;
 
     /// <summary>Track comment changes (not yet implemented). Default: <c>true</c>.</summary>
@@ -103,7 +106,9 @@ public static class DocumentCompare
     /// <see cref="CompareSettings.CaseChanges"/> and/or <see cref="CompareSettings.Whitespace"/> ignores only
     /// those differences while preserving revised text in the result. When <see cref="CompareSettings.Formatting"/>
     /// is enabled, format-only changes in text-identical paragraphs become native run-format revisions.
-    /// The remaining settings are stored for round-trip but do not yet affect the word-level diff engine.
+    /// When <see cref="CompareSettings.Moves"/> is enabled, unique unchanged paragraphs moved to a new
+    /// position receive paired Word move revisions. The remaining settings are stored for round-trip but
+    /// do not yet affect the word-level diff engine.
     /// </summary>
     public static TextDocument Compare(
         TextDocument original,
@@ -136,12 +141,14 @@ public static class DocumentCompare
         foreach (var (originalIndex, revisedIndex) in matches)
             revisedAnchorToOriginal[revisedIndex] = originalIndex;
 
+        var moveIds = FindWholeParagraphMoves(originalParagraphs, revisedParagraphs, matches, settings);
+
         // Drive the walk off the revised block order so non-paragraph blocks keep their place. Each revised
         // paragraph is either an anchor (identical to some original) or part of a "gap" since the previous
         // anchor; we buffer gap paragraphs and resolve them against the original gap when we hit the next
         // anchor (or the end). prevOriginalAnchor tracks how far into the original list we have consumed.
         var prevOriginalAnchor = -1; // index in originalParagraphs of the last consumed anchor
-        var gapRevised = new List<Paragraph>();
+        var gapRevised = new List<(Paragraph Paragraph, int Index)>();
         var revisedParagraphOrdinal = 0;
 
         foreach (var block in revisedBlocks)
@@ -171,7 +178,7 @@ public static class DocumentCompare
             }
             else
             {
-                gapRevised.Add(revisedParagraph);
+                gapRevised.Add((revisedParagraph, revisedIndex));
             }
         }
 
@@ -187,27 +194,67 @@ public static class DocumentCompare
         // When settings.Insertions is false, surplus revised paragraphs are copied through unmarked.
         void ResolveGap(int originalLimit)
         {
-            var gapOriginal = new List<Paragraph>();
+            var gapOriginal = new List<(Paragraph Paragraph, int Index)>();
             for (var i = prevOriginalAnchor + 1; i < originalLimit && i < originalParagraphs.Count; i++)
-                gapOriginal.Add(originalParagraphs[i]);
+                gapOriginal.Add((originalParagraphs[i], i));
 
             var pairCount = Math.Min(gapOriginal.Count, gapRevised.Count);
             for (var i = 0; i < pairCount; i++)
-                result.Blocks.Add(DiffParagraph(gapOriginal[i], gapRevised[i], author, dateXml, settings));
+            {
+                var originalEntry = gapOriginal[i];
+                var revisedEntry = gapRevised[i];
+                var originalMoveId = moveIds.GetOriginalId(originalEntry.Index);
+                var revisedMoveId = moveIds.GetRevisedId(revisedEntry.Index);
+                if (originalMoveId is null && revisedMoveId is null)
+                {
+                    result.Blocks.Add(DiffParagraph(
+                        originalEntry.Paragraph,
+                        revisedEntry.Paragraph,
+                        author,
+                        dateXml,
+                        settings));
+                    continue;
+                }
+
+                if (settings.Deletions)
+                    result.Blocks.Add(MarkWholeParagraph(
+                        originalEntry.Paragraph,
+                        RevisionKind.Deleted,
+                        author,
+                        dateXml,
+                        originalMoveId));
+                if (settings.Insertions)
+                    result.Blocks.Add(MarkWholeParagraph(
+                        revisedEntry.Paragraph,
+                        RevisionKind.Inserted,
+                        author,
+                        dateXml,
+                        revisedMoveId));
+            }
 
             for (var i = pairCount; i < gapOriginal.Count; i++)
             {
                 if (settings.Deletions)
-                    result.Blocks.Add(MarkWholeParagraph(gapOriginal[i], RevisionKind.Deleted, author, dateXml));
+                    result.Blocks.Add(MarkWholeParagraph(
+                        gapOriginal[i].Paragraph,
+                        RevisionKind.Deleted,
+                        author,
+                        dateXml,
+                        moveIds.GetOriginalId(gapOriginal[i].Index)));
                 // When deletions are suppressed, the original-only paragraph is simply dropped.
             }
 
             for (var i = pairCount; i < gapRevised.Count; i++)
             {
                 if (settings.Insertions)
-                    result.Blocks.Add(MarkWholeParagraph(gapRevised[i], RevisionKind.Inserted, author, dateXml));
+                    result.Blocks.Add(MarkWholeParagraph(
+                        gapRevised[i].Paragraph,
+                        RevisionKind.Inserted,
+                        author,
+                        dateXml,
+                        moveIds.GetRevisedId(gapRevised[i].Index)));
                 else
-                    result.Blocks.Add(ClonePlain(gapRevised[i])); // carry through unmarked
+                    result.Blocks.Add(ClonePlain(gapRevised[i].Paragraph)); // carry through unmarked
             }
 
             prevOriginalAnchor = originalLimit - 1;
@@ -316,7 +363,12 @@ public static class DocumentCompare
 
     // Produce a copy of a paragraph with every run marked with one revision kind (whole-paragraph
     // insertion or deletion). Run text/formatting is preserved; the revision metadata is stamped on.
-    private static Paragraph MarkWholeParagraph(Paragraph source, RevisionKind kind, string author, string? dateXml)
+    private static Paragraph MarkWholeParagraph(
+        Paragraph source,
+        RevisionKind kind,
+        string author,
+        string? dateXml,
+        int? moveRevisionId = null)
     {
         var clone = new Paragraph
         {
@@ -334,9 +386,71 @@ public static class DocumentCompare
             copy.Revision = kind;
             copy.RevisionAuthor = author;
             copy.RevisionDateXml = dateXml;
+            copy.MoveRevisionId = moveRevisionId;
             clone.Runs.Add(copy);
         }
         return clone;
+    }
+
+    // Word can recognize complex edits as moves. This bounded pass intentionally marks only exact,
+    // unique paragraph content outside the LCS anchors; duplicates and edited paragraphs retain the
+    // ordinary insertion/deletion behavior rather than risking false move attribution.
+    private static WholeParagraphMoveIds FindWholeParagraphMoves(
+        IReadOnlyList<Paragraph> original,
+        IReadOnlyList<Paragraph> revised,
+        IReadOnlyList<(int OriginalIndex, int RevisedIndex)> anchors,
+        CompareSettings settings)
+    {
+        var result = new WholeParagraphMoveIds();
+        if (!settings.Moves || !settings.Insertions || !settings.Deletions)
+            return result;
+
+        var anchoredOriginal = anchors.Select(anchor => anchor.OriginalIndex).ToHashSet();
+        var anchoredRevised = anchors.Select(anchor => anchor.RevisedIndex).ToHashSet();
+        var originalByText = original
+            .Select((paragraph, index) => (Text: paragraph.PlainText, Index: index))
+            .GroupBy(entry => entry.Text, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Select(entry => entry.Index).ToList(), StringComparer.Ordinal);
+        var revisedByText = revised
+            .Select((paragraph, index) => (Text: paragraph.PlainText, Index: index))
+            .GroupBy(entry => entry.Text, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Select(entry => entry.Index).ToList(), StringComparer.Ordinal);
+
+        var nextMoveId = 1;
+        for (var originalIndex = 0; originalIndex < original.Count; originalIndex++)
+        {
+            if (anchoredOriginal.Contains(originalIndex))
+                continue;
+
+            var text = original[originalIndex].PlainText;
+            if (text.Length == 0
+                || !originalByText.TryGetValue(text, out var originalMatches)
+                || originalMatches.Count != 1
+                || !revisedByText.TryGetValue(text, out var revisedMatches)
+                || revisedMatches.Count != 1
+                || anchoredRevised.Contains(revisedMatches[0]))
+                continue;
+
+            result.Add(originalIndex, revisedMatches[0], nextMoveId++);
+        }
+
+        return result;
+    }
+
+    private sealed class WholeParagraphMoveIds
+    {
+        private readonly Dictionary<int, int> _original = [];
+        private readonly Dictionary<int, int> _revised = [];
+
+        public void Add(int originalIndex, int revisedIndex, int moveId)
+        {
+            _original[originalIndex] = moveId;
+            _revised[revisedIndex] = moveId;
+        }
+
+        public int? GetOriginalId(int index) => _original.TryGetValue(index, out var id) ? id : null;
+
+        public int? GetRevisedId(int index) => _revised.TryGetValue(index, out var id) ? id : null;
     }
 
     // Split text into tokens that each keep their trailing whitespace, so concatenating the tokens
