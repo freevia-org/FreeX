@@ -125,10 +125,24 @@ function Assert-ManifestContract {
         "file-surface-open",
         "file-surface-dismissal"
     )
+    if ($App -eq "FreeW") {
+        $requiredIds += @(
+            "editor-sentinel-copy",
+            "editor-undo-restores-clipboard",
+            "editor-redo-restores-clipboard",
+            "editor-keyboard-context-open",
+            "editor-keyboard-context-dismissal",
+            "editor-pointer-context-open",
+            "editor-pointer-context-dismissal"
+        )
+    }
     $results = @($manifest.results)
     $ids = @($results | ForEach-Object { [string]$_.id })
     if ($ids.Count -ne ($ids | Select-Object -Unique).Count) {
         throw "Manifest contains duplicate result IDs."
+    }
+    if ($App -eq "FreeP" -and $results.Count -ne 8) {
+        throw "FreeP family baseline must retain exactly eight result rows."
     }
     foreach ($requiredId in $requiredIds) {
         if ($ids -notcontains $requiredId) {
@@ -243,7 +257,95 @@ try {
 
     $manifestPath = Join-Path $sessionDirectory "family-validation/family-x11-results.json"
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-        throw "Family probe did not write a manifest: $manifestPath"
+        $failureEvidenceName = "probe-runner-failure.txt"
+        $failureEvidencePath = Join-Path (Split-Path -Parent $manifestPath) $failureEvidenceName
+        @(
+            "The family probe exited without writing its manifest.",
+            "docker-exit-code=$probeExitCode",
+            "probe-log=$probeLog",
+            "probe-output=$([string]::Join([Environment]::NewLine, $probeOutput))"
+        ) | Set-Content -LiteralPath $failureEvidencePath -Encoding utf8
+
+        $failureIds = @(
+            "visible-window-discovery",
+            "alt-keytips-appearance",
+            "alt-keytips-dismissal",
+            "f10-keytips-appearance",
+            "f10-keytips-dismissal",
+            "ribbon-tab-keytip-switch",
+            "file-surface-open",
+            "file-surface-dismissal"
+        )
+        if ($App -eq "FreeW") {
+            $failureIds += @(
+                "editor-sentinel-copy",
+                "editor-undo-restores-clipboard",
+                "editor-redo-restores-clipboard",
+                "editor-keyboard-context-open",
+                "editor-keyboard-context-dismissal",
+                "editor-pointer-context-open",
+                "editor-pointer-context-dismissal"
+            )
+        }
+        $failureResults = @($failureIds | ForEach-Object {
+            [ordered]@{
+                id = $_
+                category = "physical-x11-smoke"
+                status = "failed"
+                evidenceLevel = "physical-x11-input"
+                evidence = @($failureEvidenceName)
+                note = "Probe runner exited before producing row-specific evidence."
+            }
+        })
+        $failureScreenshotName = $null
+        $initialScreenshotPath = Join-Path $sessionDirectory "screenshots/initial.png"
+        if (Test-Path -LiteralPath $initialScreenshotPath -PathType Leaf) {
+            $failureScreenshotName = "probe-runner-failure.png"
+            Copy-Item -LiteralPath $initialScreenshotPath -Destination (Join-Path (Split-Path -Parent $manifestPath) $failureScreenshotName) -Force
+        }
+        $failureScreenshots = @()
+        if ($null -ne $failureScreenshotName) {
+            $failureScreenshots = @([ordered]@{ name = $failureScreenshotName; kind = "screenshot" })
+        }
+        $failureManifest = [ordered]@{
+            schemaVersion = 1
+            suite = "family-linux-physical-baseline"
+            platform = "linux"
+            shell = "avalonia"
+            app = $App
+            baseline = $true
+            appSurface = $probeParameters.FileSurface
+            window = [ordered]@{
+                id = [string]$session.windowId
+                title = [string]$session.windowTitle
+                pattern = $probeParameters.WindowPattern
+                visible = $true
+            }
+            parameters = [ordered]@{
+                ribbonTabKey = $probeParameters.RibbonTabKey
+                fileKey = $probeParameters.FileKey
+                fileSurface = $probeParameters.FileSurface
+            }
+            coverage = [ordered]@{
+                scope = "deterministic physical X11 smoke baseline"
+                exhaustive = $false
+                exhaustiveFreeXRunner = "tools/Run-FreeXLinuxInteractionValidation.ps1"
+            }
+            contractValidation = [ordered]@{
+                status = "pending"
+                validator = "tools/Run-FamilyLinuxInteractionValidation.ps1"
+                contractReference = "tools/LinuxInteractiveDocker/family-x11-validation.schema.json"
+            }
+            screenshots = $failureScreenshots
+            summary = [ordered]@{
+                passed = 0
+                failed = $failureResults.Count
+                total = $failureResults.Count
+            }
+            results = $failureResults
+        }
+        $failureManifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+        Write-Warning "Family probe did not write a manifest; durable failure manifest was created at $manifestPath"
     }
     $manifest = Assert-ManifestContract -ManifestPath $manifestPath -EvidenceDirectory (Split-Path -Parent $manifestPath)
     Write-Host "Manifest contract validation: $($manifest.contractValidation.status)"

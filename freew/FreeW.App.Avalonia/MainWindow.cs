@@ -2728,8 +2728,8 @@ public sealed partial class MainWindow : Window
         if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
             return;
         var text = await clipboard.TryGetTextAsync();
-        if (!string.IsNullOrEmpty(text))
-            _editor.InsertText(text.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' '));
+        if (!_editor.PastePlainText(text))
+            _status.Text = "Clipboard does not contain text.";
     }
 
     private async Task PastePlainTextAsync()

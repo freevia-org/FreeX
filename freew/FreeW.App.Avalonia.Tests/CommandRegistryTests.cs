@@ -651,6 +651,57 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Paste_plain_text_replacement_is_one_undoable_edit()
+    {
+        const string original = "Original document";
+        const string pasted = "FreeW-physical-editor-sentinel-r2";
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc(original));
+        view.SelectAll();
+
+        view.PastePlainText(pasted).Should().BeTrue();
+        view.Document.Blocks.OfType<Paragraph>().Single().PlainText.Should().Be(pasted);
+
+        view.Undo();
+        view.Document.Blocks.OfType<Paragraph>().Single().PlainText.Should().Be(original);
+
+        view.Redo();
+        view.Document.Blocks.OfType<Paragraph>().Single().PlainText.Should().Be(pasted);
+    }
+
+    [Fact]
+    public void Default_paste_routes_through_grouped_plain_text_paste()
+    {
+        var sourcePath = FindRepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs");
+        var source = File.ReadAllText(sourcePath);
+        const string methodStartMarker = "private async Task PasteAsync()";
+        const string methodEndMarker = "private async Task PastePlainTextAsync()";
+        var methodStart = source.IndexOf(methodStartMarker, StringComparison.Ordinal);
+        var methodEnd = source.IndexOf(methodEndMarker, methodStart, StringComparison.Ordinal);
+
+        methodStart.Should().BeGreaterThanOrEqualTo(0);
+        methodEnd.Should().BeGreaterThan(methodStart);
+        var method = source[methodStart..methodEnd];
+
+        method.Should().Contain("_editor.PastePlainText(text)");
+        method.Should().NotContain("_editor.InsertText(");
+    }
+
+    private static string FindRepositoryFile(params string[] parts)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new FileNotFoundException($"Could not find repository file from {AppContext.BaseDirectory}.");
+    }
+
+    [Fact]
     public void Paste_keep_source_formatting_parses_rtf_runs_and_paragraphs()
     {
         const string rtf = @"{\rtf1\ansi\b Bold\b0  plain\par\i Second\i0}";

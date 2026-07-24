@@ -102,5 +102,15 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "app": { "const": "FreeP" } } },
+      "then": { "properties": { "results": { "maxItems": 8 } } }
+    },
+    {
+      "if": { "properties": { "app": { "const": "FreeW" } } },
+      "then": { "properties": { "results": { "minItems": 15 } } }
+    }
+  ]
 }

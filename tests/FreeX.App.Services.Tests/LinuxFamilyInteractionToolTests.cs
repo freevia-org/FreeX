@@ -21,6 +21,23 @@ public sealed class LinuxFamilyInteractionToolTests
         probe.Should().Contain("${id_prefix}-appearance");
         probe.Should().Contain("ribbon-tab-keytip-switch");
         probe.Should().Contain("file-surface-open");
+        probe.Should().Contain("editor-sentinel-copy");
+        probe.Should().Contain("editor-undo-restores-clipboard");
+        probe.Should().Contain("editor-redo-restores-clipboard");
+        probe.Should().Contain("editor-keyboard-context-open");
+        probe.Should().Contain("editor-pointer-context-open");
+        probe.Should().Contain("FAMILY_X11_POINTER_TIMEOUT_SECONDS");
+        probe.Should().Contain("FAMILY_X11_CLIPBOARD_TIMEOUT_SECONDS");
+        probe.Should().Contain("timeout --foreground --kill-after=1s");
+        probe.Should().Contain("xclip -selection clipboard -o");
+        probe.Should().Contain("xclip -silent -selection clipboard -in");
+        probe.Should().Contain("stop_clipboard_owner");
+        probe.Should().Contain("screen_matches");
+        probe.Should().Contain("trap on_exit EXIT");
+        probe.Should().Contain("required_ids=(");
+        probe.Should().Contain("has_result");
+        probe.Should().Contain("Probe exited before collecting this required row");
+        probe.Should().Contain("probe-failure.png");
         probe.Should().Contain("family-x11-results.json");
         probe.Should().NotContain("FreeX-specific");
         probe.Should().NotContain("run-freex-input-probes.sh");
@@ -41,6 +58,13 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("Length -le 0");
         runner.Should().Contain("exhaustive -ne $false");
         runner.Should().Contain("Run-FreeXLinuxInteractionValidation.ps1");
+        runner.Should().Contain("FreeP family baseline must retain exactly eight result rows");
+        runner.Should().Contain("editor-keyboard-context-dismissal");
+        runner.Should().Contain("durable failure manifest");
+        runner.Should().Contain("probe-runner-failure.txt");
+        runner.Should().Contain("screenshots/initial.png");
+        runner.Should().Contain("probe-runner-failure.png");
+        runner.Should().NotContain("name = \"baseline.png\"; kind = \"screenshot\"");
     }
 
     [Fact]
@@ -58,6 +82,7 @@ public sealed class LinuxFamilyInteractionToolTests
             .GetProperty("exhaustive").GetProperty("const").GetBoolean().Should().BeFalse();
         root.GetProperty("properties").GetProperty("results").GetProperty("minItems").GetInt32()
             .Should().BeGreaterThanOrEqualTo(8);
+        root.GetProperty("allOf").GetArrayLength().Should().Be(2);
     }
 
     [Fact]
@@ -73,6 +98,8 @@ public sealed class LinuxFamilyInteractionToolTests
         doc.Should().Contain("FreePBackstageOverlay");
         doc.Should().Contain("contractValidation");
         doc.Should().Contain("Run-FamilyLinuxInteractionValidation.ps1");
+        doc.Should().Contain("exact eight-row contract");
+        doc.Should().Contain("Ctrl+Z").And.Contain("Shift+F10");
     }
 
     [Fact]
