@@ -14,6 +14,10 @@ using FreeP.App.Recording;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
 
+#if FREEP_WINDOWS_CAPTURE
+using FreeP.App.Recording.Windows;
+#endif
+
 namespace FreeP.App.Avalonia;
 
 /// <summary>
@@ -383,11 +387,18 @@ public sealed class SlideShowWindow : Window
                     "ppt/media/freep-recordings/avalonia"));
         }
 
+        var metadata = new WindowsRecordingHostMetadata(
+            "Avalonia slideshow",
+            "Avalonia Windows recording capture adapter",
+            "ppt/media/freep-recordings/avalonia");
+#if FREEP_WINDOWS_CAPTURE
         return new WindowsRecordingCaptureBackend(
-            new WindowsRecordingHostMetadata(
-                "Avalonia slideshow",
-                "Avalonia Windows recording capture adapter",
-                "ppt/media/freep-recordings/avalonia"));
+            metadata,
+            new WindowsRecordingDeviceCatalog(),
+            new WindowsNativeRecordingCaptureEngine(metadata.AdapterName));
+#else
+        return new WindowsRecordingCaptureBackend(metadata);
+#endif
     }
 
     /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>

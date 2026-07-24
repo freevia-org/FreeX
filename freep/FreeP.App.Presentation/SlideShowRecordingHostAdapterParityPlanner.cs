@@ -192,7 +192,7 @@ public sealed record SlideShowRecordingCameraEncodingReadinessEvidence(
         };
 
     public string RemainingWork =>
-        "Actual local default no-COM real camera video encoding, PowerPoint COM recording baselines, and broader real-deck media/caption baselines remain deferred.";
+        "PowerPoint COM recording baselines, default-camera permission/error evidence, and broader real-deck media/caption baselines remain deferred.";
 
     private static bool IsWpf(string hostName) =>
         hostName.Contains("WPF", StringComparison.OrdinalIgnoreCase);

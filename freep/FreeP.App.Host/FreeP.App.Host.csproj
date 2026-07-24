@@ -34,6 +34,7 @@
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
+    <ProjectReference Include="..\FreeP.App.Recording.Windows\FreeP.App.Recording.Windows.csproj" />
     <!-- SlideShowController was relocated to FreeP.App.Presentation for cross-platform reuse. -->
     <ProjectReference Include="..\FreeP.App.Rendering.Wpf\FreeP.App.Rendering.Wpf.csproj" />
   </ItemGroup>

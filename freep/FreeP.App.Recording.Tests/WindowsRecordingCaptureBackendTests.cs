@@ -370,6 +370,7 @@ public sealed class WindowsRecordingCaptureBackendTests
         avaloniaSource.Should().Contain("OperatingSystem.IsLinux()");
         avaloniaSource.Should().Contain("new LinuxNarrationCaptureBackend(");
         avaloniaSource.Should().Contain("new LinuxRecordingHostMetadata(");
+        avaloniaSource.Should().Contain("new WindowsNativeRecordingCaptureEngine(");
         wpfSource.Should().NotContain("LinuxNarrationCaptureBackend");
         wpfSource.Should().Contain("new WindowsHostRecordingCaptureEngine(");
 
@@ -378,6 +379,10 @@ public sealed class WindowsRecordingCaptureBackendTests
         Read(root, "freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj")
             .Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
         Read(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj")
+            .Should().Contain("FrameworkReference Include=\"Microsoft.Windows.SDK.NET.Ref\"");
+        Read(root, "freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj")
+            .Should().Contain("FreeP.App.Recording.Windows\\FreeP.App.Recording.Windows.csproj");
+        Read(root, "freep", "FreeP.App.Recording.Windows", "FreeP.App.Recording.Windows.csproj")
             .Should().Contain("FrameworkReference Include=\"Microsoft.Windows.SDK.NET.Ref\"");
         AssertNoHostLocalRecordingSources(root, "FreeP.App.Avalonia");
     }
