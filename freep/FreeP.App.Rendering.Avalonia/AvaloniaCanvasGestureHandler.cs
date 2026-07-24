@@ -610,6 +610,15 @@ public sealed class AvaloniaCanvasGestureHandler
                 customPoint.Y,
                 customPoint.Slot);
         }
+        else if (mutation.ShouldApply && mutation.ArcPoint is { } arcPoint)
+        {
+            _editor.SetCustomGeometryArcPoint(
+                _geometryShapeId,
+                arcPoint.PathIndex,
+                arcPoint.SegmentIndex,
+                arcPoint.Value,
+                arcPoint.Slot);
+        }
         else if (mutation.ShouldApply && mutation.Name is not null && mutation.Value is { } value)
             _editor.SetShapeGeometryAdjustment(_geometryShapeId, mutation.Name, value);
     }

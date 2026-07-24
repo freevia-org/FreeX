@@ -758,6 +758,103 @@ public sealed class SetCustomGeometryPointCommand : IPresentationCommand
         };
 }
 
+/// <summary>Sets one authored ArcTo angle or radius in a custom geometry path.</summary>
+public sealed class SetCustomGeometryArcPointCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _pathIndex;
+    private readonly int _segmentIndex;
+    private readonly double _newValue;
+    private readonly CustomGeometryArcPointSlot _slot;
+    private double _oldValue;
+
+    public SetCustomGeometryArcPointCommand(
+        int slideIndex,
+        uint shapeId,
+        int pathIndex,
+        int segmentIndex,
+        double value,
+        CustomGeometryArcPointSlot slot)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _pathIndex = pathIndex;
+        _segmentIndex = segmentIndex;
+        _newValue = value;
+        _slot = slot;
+    }
+
+    public string Label => _slot switch
+    {
+        CustomGeometryArcPointSlot.RadiusX or CustomGeometryArcPointSlot.RadiusY => "Edit Arc Radius",
+        _ => "Edit Arc Angle",
+    };
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var segment = FindSegment(presentation);
+        return segment is { Kind: CustomSegmentKind.ArcTo };
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var segment = FindSegment(presentation);
+        if (segment is not { Kind: CustomSegmentKind.ArcTo })
+            return;
+
+        _oldValue = ReadValue(segment);
+        ReplaceSegment(presentation, WriteValue(segment, _newValue));
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        if (FindSegment(presentation) is { Kind: CustomSegmentKind.ArcTo })
+            ReplaceSegment(presentation, WriteValue(FindSegment(presentation)!, _oldValue));
+    }
+
+    private CustomSegment? FindSegment(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape is null || _pathIndex < 0 || _pathIndex >= shape.CustomGeometry.Count)
+            return null;
+
+        var path = shape.CustomGeometry[_pathIndex];
+        return _segmentIndex >= 0 && _segmentIndex < path.Segments.Count
+            ? path.Segments[_segmentIndex]
+            : null;
+    }
+
+    private void ReplaceSegment(Presentation presentation, CustomSegment replacement)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape is null || _pathIndex < 0 || _pathIndex >= shape.CustomGeometry.Count)
+            return;
+
+        var path = shape.CustomGeometry[_pathIndex];
+        if (_segmentIndex >= 0 && _segmentIndex < path.Segments.Count)
+            path.Segments[_segmentIndex] = replacement;
+    }
+
+    private double ReadValue(CustomSegment segment) => _slot switch
+    {
+        CustomGeometryArcPointSlot.StartAngle => segment.StAng,
+        CustomGeometryArcPointSlot.EndAngle => segment.StAng + segment.SwAng,
+        CustomGeometryArcPointSlot.RadiusX => segment.WR,
+        CustomGeometryArcPointSlot.RadiusY => segment.HR,
+        _ => 0,
+    };
+
+    private CustomSegment WriteValue(CustomSegment segment, double value) => _slot switch
+    {
+        CustomGeometryArcPointSlot.StartAngle => segment with { StAng = value },
+        CustomGeometryArcPointSlot.EndAngle => segment with { SwAng = value - segment.StAng },
+        CustomGeometryArcPointSlot.RadiusX => segment with { WR = Math.Max(1, value) },
+        CustomGeometryArcPointSlot.RadiusY => segment with { HR = Math.Max(1, value) },
+        _ => segment,
+    };
+}
+
 /// <summary>Inserts a straight custom-geometry vertex after a selected endpoint.</summary>
 public sealed class InsertCustomGeometryPointCommand : IPresentationCommand
 {

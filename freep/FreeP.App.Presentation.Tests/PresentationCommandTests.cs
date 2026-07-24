@@ -350,6 +350,35 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SetCustomGeometryArcPointCommand_ApplyUndoAndRedoPreservesArcFields()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 40, Y: 0));
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.ArcTo, WR: 40, HR: 30, StAng: 0, SwAng: 90));
+        shape.CustomGeometry.Add(path);
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetCustomGeometryArcPointCommand(
+            0, 1, 0, 1, 180, CustomGeometryArcPointSlot.EndAngle));
+        path.Segments[1].SwAng.Should().Be(180);
+
+        bus.Undo();
+        path.Segments[1].SwAng.Should().Be(90);
+
+        bus.Redo();
+        path.Segments[1].SwAng.Should().Be(180);
+
+        bus.Execute(new SetCustomGeometryArcPointCommand(
+            0, 1, 0, 1, 25, CustomGeometryArcPointSlot.RadiusX));
+        path.Segments[1].WR.Should().Be(25);
+        bus.Undo();
+        path.Segments[1].WR.Should().Be(40);
+    }
+
+    [Fact]
     public void CustomGeometryPointCommands_ApplyUndoAndRedoInsertAndDelete()
     {
         var (p, bus) = Make();

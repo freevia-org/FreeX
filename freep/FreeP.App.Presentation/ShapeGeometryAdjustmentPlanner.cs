@@ -27,13 +27,21 @@ public sealed record ShapeGeometryCustomPointMutationPlan(
     double Y,
     CustomGeometryPointSlot Slot = CustomGeometryPointSlot.Endpoint);
 
+/// <summary>Raw ArcTo parameter mutation produced by a custom-geometry edit point.</summary>
+public sealed record ShapeGeometryArcPointMutationPlan(
+    int PathIndex,
+    int SegmentIndex,
+    double Value,
+    CustomGeometryArcPointSlot Slot);
+
 /// <summary>Result of reducing a pointer position to one preset guide value.</summary>
 public sealed record ShapeGeometryAdjustmentMutationPlan(
     bool ShouldApply,
     string? Name,
     double? Value,
     string? DisabledReason,
-    ShapeGeometryCustomPointMutationPlan? CustomPoint = null);
+    ShapeGeometryCustomPointMutationPlan? CustomPoint = null,
+    ShapeGeometryArcPointMutationPlan? ArcPoint = null);
 
 /// <summary>
 /// Shared planning for PowerPoint-style preset-shape edit points.
@@ -114,6 +122,41 @@ public static class ShapeGeometryAdjustmentPlanner
 
         if (shape.CustomGeometry.Count > 0)
         {
+            if (TryParseArcHandle(handleName, out var arcPathIndex, out var arcSegmentIndex, out var arcSlot) &&
+                arcPathIndex >= 0 && arcPathIndex < shape.CustomGeometry.Count)
+            {
+                var arcPath = shape.CustomGeometry[arcPathIndex];
+                if (arcSegmentIndex < 0 || arcSegmentIndex >= arcPath.Segments.Count ||
+                    arcPath.Segments[arcSegmentIndex].Kind != CustomSegmentKind.ArcTo ||
+                    !TryGetArcGeometry(arcPath, arcSegmentIndex, out var arcCenterX, out var arcCenterY,
+                        out _, out _, out _, out _))
+                {
+                    return new(false, null, null, InvalidHandleMessage);
+                }
+
+                var arcWidth = PathWidth(arcPath, boundsDip);
+                var arcHeight = PathHeight(arcPath, boundsDip);
+                var rawX = Math.Clamp((pointerDip.X - boundsDip.Left) / boundsDip.Width * arcWidth, 0, arcWidth);
+                var rawY = Math.Clamp((pointerDip.Y - boundsDip.Top) / boundsDip.Height * arcHeight, 0, arcHeight);
+                var segment = arcPath.Segments[arcSegmentIndex];
+                var value = arcSlot switch
+                {
+                    CustomGeometryArcPointSlot.StartAngle => AngleFromPoint(rawX - arcCenterX, rawY - arcCenterY),
+                    CustomGeometryArcPointSlot.EndAngle => NearestEquivalentAngle(
+                        AngleFromPoint(rawX - arcCenterX, rawY - arcCenterY), segment.StAng + segment.SwAng),
+                    CustomGeometryArcPointSlot.RadiusX => Math.Max(1, Math.Abs(rawX - arcCenterX)),
+                    CustomGeometryArcPointSlot.RadiusY => Math.Max(1, Math.Abs(rawY - arcCenterY)),
+                    _ => 0,
+                };
+                return new(
+                    true,
+                    handleName,
+                    null,
+                    null,
+                    ArcPoint: new ShapeGeometryArcPointMutationPlan(
+                        arcPathIndex, arcSegmentIndex, value, arcSlot));
+            }
+
             if (!TryParseCustomHandle(handleName, out var pathIndex, out var segmentIndex, out var slot) ||
                 pathIndex < 0 || pathIndex >= shape.CustomGeometry.Count)
             {
@@ -302,6 +345,28 @@ public static class ShapeGeometryAdjustmentPlanner
                         0,
                         pathWidth));
                 }
+
+                if (segment.Kind == CustomSegmentKind.ArcTo &&
+                    TryGetArcGeometry(path, segmentIndex, out var centerX, out var centerY,
+                        out var startX, out var startY, out var endX, out var endY))
+                {
+                    handles.Add(BuildCustomHandle(
+                        CustomArcHandleName(pathIndex, segmentIndex, "start"),
+                        "Arc start",
+                        startX, startY, segment.StAng, 0, 360, pathWidth, pathHeight, boundsDip));
+                    handles.Add(BuildCustomHandle(
+                        CustomArcHandleName(pathIndex, segmentIndex, "end"),
+                        "Arc end",
+                        endX, endY, segment.StAng + segment.SwAng, 0, 360, pathWidth, pathHeight, boundsDip));
+                    handles.Add(BuildCustomHandle(
+                        CustomArcHandleName(pathIndex, segmentIndex, "radius-x"),
+                        "Arc horizontal radius",
+                        centerX + Math.Abs(segment.WR), centerY, segment.WR, 1, pathWidth, pathWidth, pathHeight, boundsDip));
+                    handles.Add(BuildCustomHandle(
+                        CustomArcHandleName(pathIndex, segmentIndex, "radius-y"),
+                        "Arc vertical radius",
+                        centerX, centerY + Math.Abs(segment.HR), segment.HR, 1, pathHeight, pathWidth, pathHeight, boundsDip));
+                }
             }
         }
 
@@ -315,6 +380,55 @@ public static class ShapeGeometryAdjustmentPlanner
 
     private static string CustomHandleName(int pathIndex, int segmentIndex, string? suffix = null) =>
         string.IsNullOrEmpty(suffix) ? $"custom:{pathIndex}:{segmentIndex}" : $"custom:{pathIndex}:{segmentIndex}:{suffix}";
+
+    private static string CustomArcHandleName(int pathIndex, int segmentIndex, string slot) =>
+        $"arc:{pathIndex}:{segmentIndex}:{slot}";
+
+    private static ShapeGeometryAdjustmentHandlePlan BuildCustomHandle(
+        string name,
+        string label,
+        double x,
+        double y,
+        double value,
+        double minimum,
+        double maximum,
+        double pathWidth,
+        double pathHeight,
+        LayoutRect boundsDip) =>
+        new(
+            name,
+            label,
+            new LayoutPoint(
+                boundsDip.Left + x / pathWidth * boundsDip.Width,
+                boundsDip.Top + y / pathHeight * boundsDip.Height),
+            value,
+            minimum,
+            maximum);
+
+    private static bool TryParseArcHandle(
+        string handleName,
+        out int pathIndex,
+        out int segmentIndex,
+        out CustomGeometryArcPointSlot slot)
+    {
+        pathIndex = -1;
+        segmentIndex = -1;
+        slot = CustomGeometryArcPointSlot.StartAngle;
+        var parts = handleName.Split(':');
+        if (parts.Length != 4 || parts[0] != "arc" ||
+            !int.TryParse(parts[1], out pathIndex) || !int.TryParse(parts[2], out segmentIndex))
+            return false;
+
+        slot = parts[3] switch
+        {
+            "start" => CustomGeometryArcPointSlot.StartAngle,
+            "end" => CustomGeometryArcPointSlot.EndAngle,
+            "radius-x" => CustomGeometryArcPointSlot.RadiusX,
+            "radius-y" => CustomGeometryArcPointSlot.RadiusY,
+            _ => (CustomGeometryArcPointSlot)(-1),
+        };
+        return (int)slot >= 0;
+    }
 
     private static bool TryParseCustomHandle(
         string handleName,
@@ -361,6 +475,100 @@ public static class ShapeGeometryAdjustmentPlanner
                 yield return (CustomGeometryPointSlot.Endpoint, "Vertex", segment.X1, segment.Y1, "end");
                 break;
         }
+    }
+
+    private static bool TryGetArcGeometry(
+        CustomGeometryPath path,
+        int segmentIndex,
+        out double centerX,
+        out double centerY,
+        out double startX,
+        out double startY,
+        out double endX,
+        out double endY)
+    {
+        centerX = centerY = startX = startY = endX = endY = 0;
+        if (segmentIndex < 0 || segmentIndex >= path.Segments.Count ||
+            path.Segments[segmentIndex].Kind != CustomSegmentKind.ArcTo)
+            return false;
+
+        var currentX = 0.0;
+        var currentY = 0.0;
+        var figureStartX = 0.0;
+        var figureStartY = 0.0;
+        for (var index = 0; index <= segmentIndex; index++)
+        {
+            var segment = path.Segments[index];
+            switch (segment.Kind)
+            {
+                case CustomSegmentKind.MoveTo:
+                case CustomSegmentKind.LineTo:
+                    currentX = segment.X;
+                    currentY = segment.Y;
+                    if (segment.Kind == CustomSegmentKind.MoveTo)
+                    {
+                        figureStartX = currentX;
+                        figureStartY = currentY;
+                    }
+                    break;
+                case CustomSegmentKind.CubicBezTo:
+                    currentX = segment.X2;
+                    currentY = segment.Y2;
+                    break;
+                case CustomSegmentKind.QuadBezTo:
+                    currentX = segment.X1;
+                    currentY = segment.Y1;
+                    break;
+                case CustomSegmentKind.ArcTo:
+                {
+                    var startAngle = segment.StAng * Math.PI / 180.0;
+                    var endAngle = (segment.StAng + segment.SwAng) * Math.PI / 180.0;
+                    var wR = segment.WR;
+                    var hR = segment.HR;
+                    var cx = currentX - wR * Math.Cos(startAngle);
+                    var cy = currentY - hR * Math.Sin(startAngle);
+                    var arcStartX = currentX;
+                    var arcStartY = currentY;
+                    var arcEndX = cx + wR * Math.Cos(endAngle);
+                    var arcEndY = cy + hR * Math.Sin(endAngle);
+                    if (index == segmentIndex)
+                    {
+                        centerX = cx;
+                        centerY = cy;
+                        startX = arcStartX;
+                        startY = arcStartY;
+                        endX = arcEndX;
+                        endY = arcEndY;
+                        return true;
+                    }
+
+                    currentX = arcEndX;
+                    currentY = arcEndY;
+                    break;
+                }
+                case CustomSegmentKind.Close:
+                    currentX = figureStartX;
+                    currentY = figureStartY;
+                    break;
+            }
+        }
+
+        return false;
+    }
+
+    private static double AngleFromPoint(double x, double y)
+    {
+        var degrees = Math.Atan2(y, x) * 180 / Math.PI;
+        return degrees < 0 ? degrees + 360 : degrees;
+    }
+
+    private static double NearestEquivalentAngle(double angle, double reference)
+    {
+        while (angle - reference > 180)
+            angle -= 360;
+        while (angle - reference < -180)
+            angle += 360;
+        return angle;
     }
 
     private static bool TryGetSegmentPoint(

@@ -177,6 +177,47 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
+    public void Build_CustomGeometry_ExposesArcAngleAndRadiusHandles()
+    {
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 90, Y: 0));
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.ArcTo, WR: 40, HR: 30, StAng: 0, SwAng: 90));
+        var shape = MakeCustomShape(path);
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.Handles.Select(handle => handle.Name).Should().Equal(
+            "custom:0:0",
+            "arc:0:1:start", "arc:0:1:end", "arc:0:1:radius-x", "arc:0:1:radius-y");
+        plan.Handles[2].Label.Should().Be("Arc end");
+        plan.Handles[2].PositionDip.Should().Be(new LayoutPoint(110, 50));
+        plan.Handles[3].Value.Should().Be(40);
+        plan.Handles[4].Value.Should().Be(30);
+    }
+
+    [Fact]
+    public void BuildMutationPlan_CustomArc_MapsEndAngleAndRadiusToAuthoredValues()
+    {
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 90, Y: 0));
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.ArcTo, WR: 40, HR: 30, StAng: 0, SwAng: 90));
+        var shape = MakeCustomShape(path);
+
+        var end = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape, Bounds, "arc:0:1:end", new LayoutPoint(30, 20));
+        end.ShouldApply.Should().BeTrue();
+        end.ArcPoint!.Slot.Should().Be(CustomGeometryArcPointSlot.EndAngle);
+        end.ArcPoint.Value.Should().BeApproximately(180, 0.001);
+
+        var radius = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape, Bounds, "arc:0:1:radius-x", new LayoutPoint(170, 20));
+        radius.ArcPoint!.Slot.Should().Be(CustomGeometryArcPointSlot.RadiusX);
+        radius.ArcPoint.Value.Should().BeApproximately(30, 0.001);
+    }
+
+    [Fact]
     public void CustomGeometryVertexCommands_ResolveInsertionMidpointAndDeleteGuard()
     {
         var shape = MakeCustomTriangle();

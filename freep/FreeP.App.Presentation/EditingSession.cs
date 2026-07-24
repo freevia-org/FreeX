@@ -470,6 +470,19 @@ public sealed class EditingSession
             _currentSlideIndex, shapeId, pathIndex, segmentIndex, x, y, slot));
     }
 
+    /// <summary>Sets one authored ArcTo angle or radius in an imported custom geometry path.</summary>
+    public void SetCustomGeometryArcPoint(
+        uint shapeId,
+        int pathIndex,
+        int segmentIndex,
+        double value,
+        CustomGeometryArcPointSlot slot)
+    {
+        if (CurrentSlide is null) return;
+        Bus.Execute(new SetCustomGeometryArcPointCommand(
+            _currentSlideIndex, shapeId, pathIndex, segmentIndex, value, slot));
+    }
+
     /// <summary>Adds a straight custom-geometry vertex after the selected endpoint.</summary>
     public bool TryInsertCustomGeometryPoint(uint shapeId, string handleName)
     {

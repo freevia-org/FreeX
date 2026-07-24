@@ -33,6 +33,9 @@ public enum CustomSegmentKind { MoveTo, LineTo, CubicBezTo, QuadBezTo, ArcTo, Cl
 /// <summary>Which authored point within a custom-geometry segment an Edit Points handle moves.</summary>
 public enum CustomGeometryPointSlot { Endpoint, Control1, Control2 }
 
+/// <summary>Which authored ArcTo parameter an Edit Points handle changes.</summary>
+public enum CustomGeometryArcPointSlot { StartAngle, EndAngle, RadiusX, RadiusY }
+
 public sealed record CustomSegment(
     CustomSegmentKind Kind,
     double X = 0, double Y = 0,
