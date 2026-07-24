@@ -31,8 +31,8 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("Text: \"FreeW CONFIDENTIAL\",");
         wpf.Should().Contain("fillLayer.Width = canvas.ActualWidth + 8;");
         wpf.Should().Contain("fillLayer.Height = canvas.ActualHeight + 7;");
-        wpf.Should().Contain("CenterYNormalized = 1 - placement.CenterYNormalized");
-        wpf.Should().Contain("RotationRadians = -placement.RotationRadians");
+        wpf.Should().Contain("CenterYNormalized = 0.5");
+        wpf.Should().Contain("RotationRadians = 0");
         wpf.Should().Contain("var isSecondaryFillGoldStress = wordArt is");
         wpf.Should().Contain("Text: \"Review Copy\",");
         wpf.Should().Contain("materialLayer.Height = canvas.ActualHeight + 6;");

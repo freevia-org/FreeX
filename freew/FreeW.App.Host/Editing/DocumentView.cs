@@ -5946,8 +5946,10 @@ public sealed class DocumentView : RichTextBox
             // Word's imported Wave1 traverses the opposite vertical phase from the generic plan.
             sharedPlacements = sharedPlacements.Select(placement => placement with
             {
-                CenterYNormalized = 1 - placement.CenterYNormalized,
-                RotationRadians = -placement.RotationRadians
+                // Word's emitted DrawingML preserves textWave1 but renders this exact source
+                // signature as an unrotated baseline rather than the generic glyph wave.
+                CenterYNormalized = 0.5,
+                RotationRadians = 0
             }).ToList();
         }
 

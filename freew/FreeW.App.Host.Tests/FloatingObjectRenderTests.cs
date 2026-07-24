@@ -466,7 +466,12 @@ public sealed class FloatingObjectRenderTests
         glowRing.Height.Should().BeApproximately(76.2667, 0.01);
         root.Children.OfType<Border>().Single(border => border.Effect is not null)
             .Effect.Should().BeOfType<DropShadowEffect>();
-        root.Children.OfType<TextBlock>().Should().HaveCount(wordArt.Text.Length);
+        var glyphs = root.Children.OfType<TextBlock>().ToList();
+        glyphs.Should().HaveCount(wordArt.Text.Length);
+        glyphs.Select(glyph => ((TransformGroup)glyph.RenderTransform).Children
+                .OfType<RotateTransform>().Single().Angle)
+            .Should().OnlyContain(angle => Math.Abs(angle) < 0.01,
+                "Word renders this exact imported Wave1 signature on an unrotated baseline");
     }
 
     [StaFact]
