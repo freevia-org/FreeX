@@ -41,10 +41,20 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
         var dialog = new FindReplaceDialog(null!, new FreeW.App.Host.Editing.DocumentView(), FindReplaceDialogOpenMode.Find);
         try
         {
-            dialog.ActivateFor(FindReplaceDialogOpenMode.Replace);
-            dialog.OpenModeForTest.Should().Be(FindReplaceDialogOpenMode.Replace);
-
+            dialog.Show();
+            dialog.Activate();
             dialog.ActivateFor(FindReplaceDialogOpenMode.Find);
+            dialog.FocusedFieldForTest.Should().Be(FindReplaceDialogOpenMode.Find);
+
+            dialog.Show();
+            dialog.Activate();
+            dialog.ActivateFor(FindReplaceDialogOpenMode.Replace);
+            dialog.FocusedFieldForTest.Should().Be(FindReplaceDialogOpenMode.Replace);
+
+            dialog.Show();
+            dialog.Activate();
+            dialog.ActivateFor(FindReplaceDialogOpenMode.Find);
+            dialog.FocusedFieldForTest.Should().Be(FindReplaceDialogOpenMode.Find);
             dialog.OpenModeForTest.Should().Be(FindReplaceDialogOpenMode.Find);
         }
         finally

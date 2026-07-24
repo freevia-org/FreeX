@@ -3089,12 +3089,9 @@ public sealed class MainWindow : Window
             _findDialog = new FindReplaceDialog(this, _editor, openMode);
             _findDialog.Closed += (_, _) => _findDialog = null;
         }
-        else
-        {
-            _findDialog.ActivateFor(openMode);
-        }
         _findDialog.Show();
         _findDialog.Activate();
+        _findDialog.ActivateFor(openMode);
     }
 
     private void OpenProperties()

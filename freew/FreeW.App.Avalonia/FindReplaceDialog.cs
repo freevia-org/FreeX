@@ -192,6 +192,10 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
     internal FindReplaceDialogOpenMode OpenModeForTest => _openMode;
 
+    internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
+        _findBox.IsFocused ? FindReplaceDialogOpenMode.Find :
+        _replaceBox.IsFocused ? FindReplaceDialogOpenMode.Replace : null;
+
     private Button BuildSpecialButton()
     {
         var button = MakeButton("Special \u25be", (_, _) => { });

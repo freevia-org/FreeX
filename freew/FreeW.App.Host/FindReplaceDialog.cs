@@ -106,6 +106,10 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     internal FindReplaceDialogOpenMode OpenModeForTest => _openMode;
 
+    internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
+        _findBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Find :
+        _replaceBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Replace : null;
+
     // Track which text field was focused last so Special inserts into the right box.
     private TextBox _lastFocusedBox = null!;
 

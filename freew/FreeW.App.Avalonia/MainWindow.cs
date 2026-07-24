@@ -456,8 +456,8 @@ public sealed partial class MainWindow : Window
     {
         if (_findReplaceDialog is not null)
         {
-            _findReplaceDialog.ActivateFor(openMode);
             _findReplaceDialog.Activate();
+            _findReplaceDialog.ActivateFor(openMode);
             return;
         }
 
@@ -467,6 +467,8 @@ public sealed partial class MainWindow : Window
         };
         _findReplaceDialog.Closed += (_, _) => _findReplaceDialog = null;
         _findReplaceDialog.Show(this);
+        _findReplaceDialog.Activate();
+        _findReplaceDialog.ActivateFor(openMode);
     }
 
     /// <summary>

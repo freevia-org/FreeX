@@ -209,20 +209,36 @@ public sealed class RevealFormattingAndFindReplaceTests
     [Fact]
     public async Task FindReplaceDialog_reuse_updates_open_mode_for_both_shortcuts()
     {
+        FindReplaceDialogOpenMode? initialFocus = null;
         FindReplaceDialogOpenMode? afterReplace = null;
         FindReplaceDialogOpenMode? afterFind = null;
         var ran = await OnUiThread(() =>
         {
             var dialog = new FindReplaceDialog(new DocumentView(), FindReplaceDialogOpenMode.Find);
-            dialog.ActivateFor(FindReplaceDialogOpenMode.Replace);
-            afterReplace = dialog.OpenModeForTest;
-            dialog.ActivateFor(FindReplaceDialogOpenMode.Find);
-            afterFind = dialog.OpenModeForTest;
+            try
+            {
+                dialog.Show();
+                dialog.Activate();
+                initialFocus = dialog.FocusedFieldForTest;
+
+                dialog.Activate();
+                dialog.ActivateFor(FindReplaceDialogOpenMode.Replace);
+                afterReplace = dialog.FocusedFieldForTest;
+
+                dialog.Activate();
+                dialog.ActivateFor(FindReplaceDialogOpenMode.Find);
+                afterFind = dialog.FocusedFieldForTest;
+            }
+            finally
+            {
+                dialog.Close();
+            }
         });
 
         if (!ran)
             return;
 
+        initialFocus.Should().Be(FindReplaceDialogOpenMode.Find);
         afterReplace.Should().Be(FindReplaceDialogOpenMode.Replace);
         afterFind.Should().Be(FindReplaceDialogOpenMode.Find);
     }
