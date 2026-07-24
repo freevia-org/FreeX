@@ -487,4 +487,70 @@ public class DocumentCompareTests
         comment.Content[0].Runs[0].Text = "Mutated source";
         result.Comments[5].PlainText.Should().Be("Please verify");
     }
+
+    [Fact]
+    public void Compare_DeletedCommentedParagraph_CarriesOriginalCommentThread()
+    {
+        var original = DocWith("Keep this", "Doomed paragraph", "Tail");
+        var doomed = original.Paragraphs.ElementAt(1);
+        doomed.Runs[0].CommentId = 5;
+        doomed.Runs.Add(Run.CommentReference(5));
+        var comment = new Comment(5, "Remove this note", "Alice", "A") { Resolved = true };
+        comment.AddReply(6, "Acknowledged", "Bob", "B");
+        original.Comments[5] = comment;
+
+        var result = DocumentCompare.Compare(original, DocWith("Keep this", "Tail"), Author, DateXml);
+        var deletedRuns = result.Paragraphs.ElementAt(1).Runs;
+
+        deletedRuns.Should().Contain(run => run.CommentId == 5 && !run.IsCommentReference);
+        deletedRuns.Should().Contain(run => run.CommentId == 5 && run.IsCommentReference);
+        result.Comments.Should().ContainKey(5);
+        result.Comments[5].PlainText.Should().Be("Remove this note");
+        result.Comments[5].Resolved.Should().BeTrue();
+        result.Comments[5].Replies.Should().ContainSingle(reply => reply.Id == 6 && reply.PlainText == "Acknowledged");
+    }
+
+    [Fact]
+    public void Compare_DeletedCommentCollision_RemapsOnlyDeletedAnchorThread()
+    {
+        var original = DocWith("Keep this", "Doomed paragraph", "Tail");
+        var doomed = original.Paragraphs.ElementAt(1);
+        doomed.Runs[0].CommentId = 5;
+        doomed.Runs.Add(Run.CommentReference(5));
+        original.Comments[5] = new Comment(5, "Original note", "Alice", "A");
+
+        var revised = DocWith("Keep this", "Tail", "Current note");
+        var current = revised.Paragraphs.ElementAt(2);
+        current.Runs[0].CommentId = 5;
+        current.Runs.Add(Run.CommentReference(5));
+        revised.Comments[5] = new Comment(5, "Revised note", "Bob", "B");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+        var deletedId = result.Paragraphs.ElementAt(1).Runs.First(run => !run.IsCommentReference).CommentId;
+
+        deletedId.Should().NotBe(5);
+        result.Comments[5].PlainText.Should().Be("Revised note");
+        result.Comments[deletedId!.Value].PlainText.Should().Be("Original note");
+        result.Paragraphs.Last().Runs.Should().Contain(run => run.CommentId == 5 && run.IsCommentReference);
+    }
+
+    [Fact]
+    public void Compare_CommentsDisabled_RemovesDeletedSideAnchors()
+    {
+        var original = DocWith("Keep this", "Doomed paragraph", "Tail");
+        var doomed = original.Paragraphs.ElementAt(1);
+        doomed.Runs[0].CommentId = 5;
+        doomed.Runs.Add(Run.CommentReference(5));
+        original.Comments[5] = new Comment(5, "Remove this note", "Alice", "A");
+
+        var result = DocumentCompare.Compare(
+            original,
+            DocWith("Keep this", "Tail"),
+            Author,
+            DateXml,
+            new CompareSettings { Comments = false });
+
+        result.Paragraphs.ElementAt(1).Runs.Should().NotContain(run => run.CommentId != null);
+        result.Comments.Should().BeEmpty();
+    }
 }

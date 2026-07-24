@@ -30,8 +30,9 @@ public enum CompareShowChangesIn
 /// <see cref="Whitespace"/>, and <see cref="Formatting"/> affect FreeW's current comparison engine.
 /// Formatting revisions are emitted when a paragraph's text and run boundaries are unchanged, so each
 /// revised run can retain a precise previous-format snapshot. Unique unchanged paragraphs moved to a new
-/// position receive paired move revisions. The remaining flag (<see cref="Comments"/>) is stored so the
-/// dialog can persist it and pass it through to a future engine extension.
+/// position receive paired move revisions. <see cref="Comments"/> preserves the original threads that
+/// remain anchored in deleted whole-paragraph content, while allowing that deleted-side markup to be
+/// omitted when comment comparison is disabled.
 /// </para>
 /// </summary>
 public sealed class CompareSettings
@@ -48,7 +49,11 @@ public sealed class CompareSettings
     /// </summary>
     public bool Moves { get; init; } = true;
 
-    /// <summary>Track comment changes (not yet implemented). Default: <c>true</c>.</summary>
+    /// <summary>
+    /// Preserve review-comment threads anchored in deleted original paragraphs. When disabled, removes
+    /// only those deleted-side anchors; revised comments remain part of the comparison result. Default:
+    /// <c>true</c>.
+    /// </summary>
     public bool Comments { get; init; } = true;
 
     /// <summary>
@@ -107,8 +112,9 @@ public static class DocumentCompare
     /// those differences while preserving revised text in the result. When <see cref="CompareSettings.Formatting"/>
     /// is enabled, format-only changes in text-identical paragraphs become native run-format revisions.
     /// When <see cref="CompareSettings.Moves"/> is enabled, unique unchanged paragraphs moved to a new
-    /// position receive paired Word move revisions. The remaining settings are stored for round-trip but
-    /// do not yet affect the word-level diff engine.
+    /// position receive paired Word move revisions. When <see cref="CompareSettings.Comments"/> is enabled,
+    /// comment threads anchored in deleted whole-paragraph content are retained; disabling it removes only
+    /// those deleted-side anchors while retaining the revised document's comments.
     /// </summary>
     public static TextDocument Compare(
         TextDocument original,
@@ -184,6 +190,12 @@ public static class DocumentCompare
 
         // Resolve the trailing gap (everything after the last anchor) against the remaining originals.
         ResolveGap(originalParagraphs.Count);
+
+        // Whole-paragraph deletions retain the original runs verbatim, including comment anchors. Carry
+        // the matching original comment threads so those anchors remain valid when the comparison is saved.
+        // If comment comparison is disabled, drop only the deleted-side markers; revised comments continue
+        // to describe the resulting document.
+        ReconcileDeletedCommentAnchors(original, result, settings.Comments);
         return result;
 
         // Resolve the currently-buffered revised gap paragraphs against the original paragraphs in
@@ -596,8 +608,11 @@ public static class DocumentCompare
     // Compared body runs retain their comment ids. Carry the revised document's comment graph as owned
     // model objects as well, otherwise a saved compare result would emit orphaned comment anchors.
     private static Comment CloneComment(Comment source)
+        => CloneComment(source, static id => id);
+
+    private static Comment CloneComment(Comment source, Func<int, int> mapId)
     {
-        var clone = new Comment(source.Id)
+        var clone = new Comment(mapId(source.Id))
         {
             Author = source.Author,
             Initials = source.Initials,
@@ -607,8 +622,110 @@ public static class DocumentCompare
         foreach (var paragraph in source.Content)
             clone.Content.Add(ClonePlain(paragraph));
         foreach (var reply in source.Replies)
-            clone.Replies.Add(CloneComment(reply));
+            clone.Replies.Add(CloneComment(reply, mapId));
         return clone;
+    }
+
+    private static void ReconcileDeletedCommentAnchors(
+        TextDocument original,
+        TextDocument result,
+        bool includeDeletedComments)
+    {
+        var deletedCommentIds = EnumerateParagraphs(result.Blocks)
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.Revision == RevisionKind.Deleted && run.CommentId is not null)
+            .Select(run => run.CommentId!.Value)
+            .Distinct()
+            .ToList();
+
+        if (!includeDeletedComments)
+        {
+            foreach (var commentId in deletedCommentIds)
+                RemoveDeletedCommentMarkers(result, commentId);
+            return;
+        }
+
+        var usedIds = result.Comments.Values
+            .SelectMany(comment => comment.ThreadInOrder())
+            .Select(comment => comment.Id)
+            .ToHashSet();
+
+        foreach (var originalId in deletedCommentIds)
+        {
+            if (!original.Comments.TryGetValue(originalId, out var originalComment))
+            {
+                // Do not leave an invalid anchor behind when the source document itself lacks its thread.
+                RemoveDeletedCommentMarkers(result, originalId);
+                continue;
+            }
+
+            var idMap = new Dictionary<int, int>();
+            foreach (var comment in originalComment.ThreadInOrder())
+            {
+                var id = comment.Id;
+                if (!usedIds.Add(id))
+                    id = NextUnusedCommentId(usedIds);
+                idMap[comment.Id] = id;
+            }
+
+            var copiedId = idMap[originalId];
+            result.Comments[copiedId] = CloneComment(originalComment, id => idMap[id]);
+            if (copiedId != originalId)
+                RemapDeletedCommentMarkers(result, originalId, copiedId);
+        }
+    }
+
+    private static int NextUnusedCommentId(HashSet<int> usedIds)
+    {
+        var id = usedIds.Count == 0 ? 0 : usedIds.Max() + 1;
+        while (!usedIds.Add(id))
+            id++;
+        return id;
+    }
+
+    private static void RemapDeletedCommentMarkers(TextDocument document, int oldId, int newId)
+    {
+        foreach (var paragraph in EnumerateParagraphs(document.Blocks))
+        foreach (var run in paragraph.Runs)
+            if (run.Revision == RevisionKind.Deleted && run.CommentId == oldId)
+                run.CommentId = newId;
+    }
+
+    private static void RemoveDeletedCommentMarkers(TextDocument document, int commentId)
+    {
+        foreach (var paragraph in EnumerateParagraphs(document.Blocks))
+        {
+            for (var index = paragraph.Runs.Count - 1; index >= 0; index--)
+            {
+                var run = paragraph.Runs[index];
+                if (run.Revision != RevisionKind.Deleted || run.CommentId != commentId)
+                    continue;
+
+                if (run.IsCommentReference)
+                    paragraph.Runs.RemoveAt(index);
+                else
+                    run.CommentId = null;
+            }
+        }
+    }
+
+    private static IEnumerable<Paragraph> EnumerateParagraphs(IEnumerable<Block> blocks)
+    {
+        foreach (var block in blocks)
+        {
+            if (block is Paragraph paragraph)
+            {
+                yield return paragraph;
+                continue;
+            }
+
+            if (block is not Table table)
+                continue;
+
+            foreach (var cell in table.Rows.SelectMany(row => row.Cells))
+            foreach (var cellParagraph in cell.Paragraphs)
+                yield return cellParagraph;
+        }
     }
 
     // Clone a paragraph with its runs verbatim and no revision marks (used for unchanged paragraphs).

@@ -1726,7 +1726,17 @@ public static class DocxReader
             // A run carrying a w:commentReference is the textless comment anchor; recover it.
             var commentRef = child.Element(W + "commentReference");
             if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
-                paragraph.Runs.Add(Run.CommentReference(refId));
+            {
+                var referenceRun = Run.CommentReference(refId);
+                if (revision.Kind != RevisionKind.None)
+                {
+                    referenceRun.Revision = revision.Kind;
+                    referenceRun.RevisionAuthor = revision.Author;
+                    referenceRun.RevisionDateXml = revision.DateXml;
+                    referenceRun.MoveRevisionId = revision.MoveId;
+                }
+                paragraph.Runs.Add(referenceRun);
+            }
             else
                 AddRun(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }

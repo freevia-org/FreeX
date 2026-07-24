@@ -328,6 +328,28 @@ public class CompareRevisionRoundTripTests
     }
 
     [Fact]
+    public void Compare_DeletedCommentAnchor_RoundTripsWithOriginalThread()
+    {
+        var original = DocWith("Keep", "Doomed", "Tail");
+        var doomed = original.Paragraphs.ElementAt(1);
+        doomed.Runs[0].CommentId = 5;
+        doomed.Runs.Add(Run.CommentReference(5));
+        var comment = new Comment(5, "Remove this note", "Alice", "A") { Resolved = true };
+        comment.AddReply(6, "Acknowledged", "Bob", "B");
+        original.Comments[5] = comment;
+
+        var compared = DocumentCompare.Compare(original, DocWith("Keep", "Tail"), Author, DateXml);
+        var xdoc = DocumentXDoc(compared);
+        var reloaded = RoundTrip(compared);
+
+        xdoc.Descendants(W + "commentRangeStart").Should().ContainSingle(marker => marker.Attribute(W + "id")!.Value == "5");
+        reloaded.Paragraphs.ElementAt(1).Runs.Should().Contain(run =>
+            run.Revision == RevisionKind.Deleted && run.CommentId == 5 && run.IsCommentReference);
+        reloaded.Comments[5].PlainText.Should().Be("Remove this note");
+        reloaded.Comments[5].Replies.Should().ContainSingle(reply => reply.Id == 6 && reply.PlainText == "Acknowledged");
+    }
+
+    [Fact]
     public void Compare_RevisionList_After_RoundTrip_EnumeratesAllEntries()
     {
         // "hello world" → "hello earth": one deletion ("world") and one insertion ("earth").
