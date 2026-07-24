@@ -163,6 +163,21 @@ public sealed class WorkbookSession
     /// </summary>
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
     private readonly Dictionary<SheetId, (uint TopRow, uint LeftCol)> _viewViewportOrigins = [];
+    /// <summary>
+    /// This view's own zoom-percent snapshot per sheet (R85: view-window independence). Excel
+    /// treats zoom as a per-window setting (each open window on a workbook can show the same sheet
+    /// at a different zoom level), but <see cref="Sheet.ZoomPercent"/> lives on the shared
+    /// <see cref="Sheet"/> model so it can round-trip through file save/load. Without this cache,
+    /// <see cref="ZoomPercent"/> would read that shared field directly, so zooming one
+    /// <see cref="CreateSiblingView"/> window would instantly "leak" into every other open window on
+    /// the same sheet. Entries are lazily seeded from <see cref="Sheet.ZoomPercent"/> on first read
+    /// (see <see cref="ZoomPercent"/>) and invalidated in <see cref="ApplySuccessfulWorkbookMetadataResult"/>
+    /// (covering both this view's own <see cref="SetZoomPercent"/> and shared Undo/Redo of it) so a
+    /// stale value is never returned; <see cref="SetZoomPercent"/> immediately reseeds its own entry
+    /// with the value it just applied so a sibling view's later zoom change can't retroactively
+    /// change what this view reports.
+    /// </summary>
+    private readonly Dictionary<SheetId, int> _viewZoomOverrides = [];
     private ulong _selectionStatsRevision;
     private string? _lastFindText;
     private FindOptions? _lastFindOptions;
@@ -352,7 +367,18 @@ public sealed class WorkbookSession
 
     public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
 
-    public int ZoomPercent => ActiveSheet.ZoomPercent;
+    public int ZoomPercent
+    {
+        get
+        {
+            if (_viewZoomOverrides.TryGetValue(ActiveSheet.Id, out var zoom))
+                return zoom;
+
+            zoom = ActiveSheet.ZoomPercent;
+            _viewZoomOverrides[ActiveSheet.Id] = zoom;
+            return zoom;
+        }
+    }
 
     public bool IsFormatPainterActive =>
         _formatPainterSourceSheetId is not null &&
@@ -1867,7 +1893,7 @@ public sealed class WorkbookSession
             zoomPercent,
             SetWorksheetZoomCommand.MinZoomPercent,
             SetWorksheetZoomCommand.MaxZoomPercent);
-        if (ActiveSheet.ZoomPercent == zoomPercent)
+        if (ZoomPercent == zoomPercent)
         {
             return new WorkbookCellEditResult(
                 true,
@@ -1883,6 +1909,11 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        // Reseed this view's own cache with the value it just applied -- ApplySuccessfulWorkbookMetadataResult
+        // already invalidated any stale entry, but without this a sibling view that changes zoom on
+        // the same sheet before this view's next read would otherwise be able to overwrite it (see
+        // _viewZoomOverrides remarks).
+        _viewZoomOverrides[ActiveSheet.Id] = zoomPercent;
         return result;
     }
 
@@ -5100,6 +5131,13 @@ public sealed class WorkbookSession
         _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();
+        // This method is the single choke point for every sheet-metadata command's forward apply
+        // (SetZoomPercent, SetShowGridlines, ...) AND for Undo/Redo of any of them (via
+        // ApplySuccessfulHistoryResult), so it is also the right place to drop this view's cached
+        // zoom for the affected sheet -- forcing the next ZoomPercent read to re-seed from the
+        // (possibly just-reverted) shared Sheet.ZoomPercent instead of returning a stale value.
+        // SetZoomPercent immediately reseeds its own entry afterward for the forward-apply case.
+        _viewZoomOverrides.Remove(ActiveSheet.Id);
     }
 
     private void MarkDirty()
