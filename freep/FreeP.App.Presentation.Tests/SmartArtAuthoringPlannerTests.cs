@@ -40,4 +40,31 @@ public sealed class SmartArtAuthoringPlannerTests
             .Select(element => element.Attribute("val")?.Value)
             .Should().Equal(Enumerable.Repeat("accent1", 6));
     }
+
+    [Theory]
+    [InlineData(SmartArtColorPreset.MonochromaticAccent2, "accent2")]
+    [InlineData(SmartArtColorPreset.MonochromaticAccent3, "accent3")]
+    [InlineData(SmartArtColorPreset.MonochromaticAccent4, "accent4")]
+    [InlineData(SmartArtColorPreset.MonochromaticAccent5, "accent5")]
+    [InlineData(SmartArtColorPreset.MonochromaticAccent6, "accent6")]
+    public void ApplyColorPreset_MonochromaticAccentUsesTheRequestedThemeSlot(
+        SmartArtColorPreset preset,
+        string expectedRole)
+    {
+        var smartArt = new SmartArtShape();
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            PartPath = "ppt/diagrams/data1.xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyColorPreset(
+            smartArt, preset, Presentation.CreateEmpty().Theme!);
+
+        result.Applied.Should().BeTrue();
+        smartArt.Colors!.Palette.Should().HaveCount(6);
+        smartArt.Colors.Palette.Select(color => color.SchemeColor!.RoleName)
+            .Should().Equal(Enumerable.Repeat(expectedRole, 6));
+    }
 }

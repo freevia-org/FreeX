@@ -682,6 +682,36 @@
   <data name="Ribbon_Command_SmartArtSingleAccent_KeyTip" xml:space="preserve">
     <value>S</value>
   </data>
+  <data name="Ribbon_Command_SmartArtMonochromaticAccent2_Label" xml:space="preserve">
+    <value>Monochromatic Accent 2</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMonochromaticAccent2_KeyTip" xml:space="preserve">
+    <value>2</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMonochromaticAccent3_Label" xml:space="preserve">
+    <value>Monochromatic Accent 3</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMonochromaticAccent3_KeyTip" xml:space="preserve">
+    <value>3</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMonochromaticAccent4_Label" xml:space="preserve">
+    <value>Monochromatic Accent 4</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMonochromaticAccent4_KeyTip" xml:space="preserve">
+    <value>4</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMonochromaticAccent5_Label" xml:space="preserve">
+    <value>Monochromatic Accent 5</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMonochromaticAccent5_KeyTip" xml:space="preserve">
+    <value>5</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMonochromaticAccent6_Label" xml:space="preserve">
+    <value>Monochromatic Accent 6</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMonochromaticAccent6_KeyTip" xml:space="preserve">
+    <value>6</value>
+  </data>
   <data name="Ribbon_Command_SmartArtGrayscale_Label" xml:space="preserve">
     <value>Grayscale</value>
   </data>

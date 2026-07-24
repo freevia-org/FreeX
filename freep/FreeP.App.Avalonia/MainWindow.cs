@@ -2089,6 +2089,16 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.ThemeAccents)));
         r.Register(SmartArtAuthoringPlanner.SingleAccentCommandId,
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.SingleAccent)));
+        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent2CommandId,
+            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent2)));
+        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent3CommandId,
+            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent3)));
+        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent4CommandId,
+            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent4)));
+        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent5CommandId,
+            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent5)));
+        r.Register(SmartArtAuthoringPlanner.MonochromaticAccent6CommandId,
+            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.MonochromaticAccent6)));
         r.Register(SmartArtAuthoringPlanner.GrayscaleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.Grayscale)));
         r.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,

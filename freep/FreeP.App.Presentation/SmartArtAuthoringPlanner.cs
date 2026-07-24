@@ -11,6 +11,11 @@ public enum SmartArtColorPreset
 {
     ThemeAccents,
     SingleAccent,
+    MonochromaticAccent2,
+    MonochromaticAccent3,
+    MonochromaticAccent4,
+    MonochromaticAccent5,
+    MonochromaticAccent6,
     Grayscale,
 }
 
@@ -93,6 +98,11 @@ public static class SmartArtAuthoringPlanner
 
     public const string ThemeAccentsCommandId = "freep.smartart.colors.theme-accents";
     public const string SingleAccentCommandId = "freep.smartart.colors.single-accent";
+    public const string MonochromaticAccent2CommandId = "freep.smartart.colors.monochromatic-accent-2";
+    public const string MonochromaticAccent3CommandId = "freep.smartart.colors.monochromatic-accent-3";
+    public const string MonochromaticAccent4CommandId = "freep.smartart.colors.monochromatic-accent-4";
+    public const string MonochromaticAccent5CommandId = "freep.smartart.colors.monochromatic-accent-5";
+    public const string MonochromaticAccent6CommandId = "freep.smartart.colors.monochromatic-accent-6";
     public const string GrayscaleCommandId = "freep.smartart.colors.grayscale";
     public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
     public const string ContinuousBlockProcessLayoutCommandId = "freep.smartart.layout.continuous-block-process";
@@ -523,8 +533,17 @@ public static class SmartArtAuthoringPlanner
                 .ToArray();
         }
 
-        var slot = accents[0];
-        if (preset == SmartArtColorPreset.SingleAccent)
+        var monochromaticSlot = preset switch
+        {
+            SmartArtColorPreset.SingleAccent => accents[0],
+            SmartArtColorPreset.MonochromaticAccent2 => accents[1],
+            SmartArtColorPreset.MonochromaticAccent3 => accents[2],
+            SmartArtColorPreset.MonochromaticAccent4 => accents[3],
+            SmartArtColorPreset.MonochromaticAccent5 => accents[4],
+            SmartArtColorPreset.MonochromaticAccent6 => accents[5],
+            _ => (ThemeColorSlot?)null,
+        };
+        if (monochromaticSlot is { } slot)
         {
             var single = CreateSchemeColor(slot, theme, effectiveClrMap);
             return Enumerable.Repeat(single, count).ToArray();

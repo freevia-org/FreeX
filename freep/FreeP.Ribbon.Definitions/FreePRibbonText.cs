@@ -213,6 +213,11 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtColorsGroup { get; } = new("Ribbon_Group_SmartArtColors_Label", "Ribbon_Group_SmartArtColors_KeyTip");
     public static RibbonText SmartArtThemeAccentsCommand { get; } = new("Ribbon_Command_SmartArtThemeAccents_Label", "Ribbon_Command_SmartArtThemeAccents_KeyTip");
     public static RibbonText SmartArtSingleAccentCommand { get; } = new("Ribbon_Command_SmartArtSingleAccent_Label", "Ribbon_Command_SmartArtSingleAccent_KeyTip");
+    public static RibbonText SmartArtMonochromaticAccent2Command { get; } = new("Ribbon_Command_SmartArtMonochromaticAccent2_Label", "Ribbon_Command_SmartArtMonochromaticAccent2_KeyTip");
+    public static RibbonText SmartArtMonochromaticAccent3Command { get; } = new("Ribbon_Command_SmartArtMonochromaticAccent3_Label", "Ribbon_Command_SmartArtMonochromaticAccent3_KeyTip");
+    public static RibbonText SmartArtMonochromaticAccent4Command { get; } = new("Ribbon_Command_SmartArtMonochromaticAccent4_Label", "Ribbon_Command_SmartArtMonochromaticAccent4_KeyTip");
+    public static RibbonText SmartArtMonochromaticAccent5Command { get; } = new("Ribbon_Command_SmartArtMonochromaticAccent5_Label", "Ribbon_Command_SmartArtMonochromaticAccent5_KeyTip");
+    public static RibbonText SmartArtMonochromaticAccent6Command { get; } = new("Ribbon_Command_SmartArtMonochromaticAccent6_Label", "Ribbon_Command_SmartArtMonochromaticAccent6_KeyTip");
     public static RibbonText SmartArtGrayscaleCommand { get; } = new("Ribbon_Command_SmartArtGrayscale_Label", "Ribbon_Command_SmartArtGrayscale_KeyTip");
     public static RibbonText SmartArtLayoutsGroup { get; } = new("Ribbon_Group_SmartArtLayouts_Label", "Ribbon_Group_SmartArtLayouts_KeyTip");
     public static RibbonText SmartArtBasicProcessCommand { get; } = new("Ribbon_Command_SmartArtBasicProcess_Label", "Ribbon_Command_SmartArtBasicProcess_KeyTip");

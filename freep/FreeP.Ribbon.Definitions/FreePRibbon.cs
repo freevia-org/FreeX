@@ -371,6 +371,21 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.SingleAccentCommandId,
                 FreePRibbonText.SmartArtSingleAccentCommand.Label, RibbonCommandIconKind.Fill,
                 FreePRibbonText.SmartArtSingleAccentCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.MonochromaticAccent2CommandId,
+                FreePRibbonText.SmartArtMonochromaticAccent2Command.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.SmartArtMonochromaticAccent2Command.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.MonochromaticAccent3CommandId,
+                FreePRibbonText.SmartArtMonochromaticAccent3Command.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.SmartArtMonochromaticAccent3Command.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.MonochromaticAccent4CommandId,
+                FreePRibbonText.SmartArtMonochromaticAccent4Command.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.SmartArtMonochromaticAccent4Command.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.MonochromaticAccent5CommandId,
+                FreePRibbonText.SmartArtMonochromaticAccent5Command.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.SmartArtMonochromaticAccent5Command.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.MonochromaticAccent6CommandId,
+                FreePRibbonText.SmartArtMonochromaticAccent6Command.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.SmartArtMonochromaticAccent6Command.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.GrayscaleCommandId,
                 FreePRibbonText.SmartArtGrayscaleCommand.Label, RibbonCommandIconKind.Clear,
                 FreePRibbonText.SmartArtGrayscaleCommand.KeyTip);
