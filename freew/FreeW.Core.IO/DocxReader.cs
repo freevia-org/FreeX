@@ -1560,7 +1560,7 @@ public static class DocxReader
             var relationshipId = element.Attribute(R + "id")?.Value;
             if (relationshipId is not null && altChunkRelationships.TryGetValue(relationshipId, out var partName))
             {
-                if (TryMaterializeHtmlAltChunk(archive, partName, out var importedBlocks))
+                if (TryMaterializeAltChunk(archive, partName, out var importedBlocks))
                 {
                     foreach (var importedBlock in importedBlocks)
                     {
@@ -1603,12 +1603,12 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Word resolves a body-level HTML altChunk into ordinary editable blocks when the document opens.
-    /// Materialize only package-local <c>text/html</c> payloads; RTF, nested Word packages, malformed HTML,
+    /// Word resolves supported body-level altChunks into ordinary editable blocks when the document opens.
+    /// Materialize package-local HTML and MHTML payloads; RTF, nested Word packages, malformed content,
     /// and unknown chunk types remain represented by <see cref="AltChunkBlock"/> so their payload graph is
     /// retained verbatim on save.
     /// </summary>
-    private static bool TryMaterializeHtmlAltChunk(
+    private static bool TryMaterializeAltChunk(
         ZipArchive archive,
         string partName,
         out IReadOnlyList<Block> blocks)
@@ -1620,12 +1620,21 @@ public static class DocxReader
         var defaults = ReadContentTypeDefaults(archive);
         var contentType = overrides.GetValueOrDefault(partName)
             ?? defaults.GetValueOrDefault(extension);
-        if (!string.Equals(contentType, "text/html", StringComparison.OrdinalIgnoreCase)
-            || LoadMedia(archive, partPath) is not { } bytes)
+        if (LoadMedia(archive, partPath) is not { } bytes)
             return false;
 
         try
         {
+            if (string.Equals(contentType, "message/rfc822", StringComparison.OrdinalIgnoreCase))
+            {
+                using var mhtmlStream = new MemoryStream(bytes, writable: false);
+                blocks = new MhtmlFileAdapter().Load(mhtmlStream).Blocks.ToList();
+                return true;
+            }
+
+            if (!string.Equals(contentType, "text/html", StringComparison.OrdinalIgnoreCase))
+                return false;
+
             using var stream = new MemoryStream(bytes, writable: false);
             using var reader = new StreamReader(
                 stream,
@@ -1654,7 +1663,7 @@ public static class DocxReader
             blocks = HtmlFileAdapter.LoadHtml(reader.ReadToEnd(), ResolveImage).Blocks.ToList();
             return true;
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or FormatException or MimeKit.ParseException)
         {
             return false;
         }

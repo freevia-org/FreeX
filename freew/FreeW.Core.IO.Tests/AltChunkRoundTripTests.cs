@@ -39,6 +39,57 @@ public class AltChunkRoundTripTests
     }
 
     [Fact]
+    public void MhtmlAltChunk_MaterializesEditableBlocksAndEmbeddedImages()
+    {
+        var imageBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6XZDxsAAAAASUVORK5CYII=");
+        var mhtml = $$"""
+            MIME-Version: 1.0
+            Content-Type: multipart/related; boundary="freew-boundary"; type="text/html"
+
+            --freew-boundary
+            Content-Type: text/html; charset=utf-8
+
+            <!doctype html><html><body><p>Materialized MHTML altChunk<img src="cid:altchunk-image" alt="MHTML embedded image"/></p></body></html>
+            --freew-boundary
+            Content-Type: image/png
+            Content-ID: <altchunk-image>
+            Content-Transfer-Encoding: base64
+
+            {{Convert.ToBase64String(imageBytes)}}
+            --freew-boundary--
+            """;
+        var sourceBytes = AuthorPackageWithAltChunk(
+            chunkPartName: "afchunk.mht",
+            chunkContentType: "message/rfc822",
+            chunkPayload: mhtml.ReplaceLineEndings("\r\n"),
+            includeChunkLocalImage: false);
+
+        var document = ReadDocument(sourceBytes);
+
+        document.Blocks.Should().HaveCount(3);
+        var imported = document.Blocks[1].Should().BeOfType<Paragraph>().Which;
+        imported.PlainText.Should().Be("Materialized MHTML altChunk");
+        var importedImage = imported.Runs.Single(run => run.Image is not null).Image!;
+        importedImage.Bytes.Should().Equal(imageBytes);
+        importedImage.AltText.Should().Be("MHTML embedded image");
+        document.Preserved.Parts.Should().NotContain(part => part.PartName == "/word/afchunk.mht");
+
+        var rewrittenBytes = WriteDocument(document);
+        using var zip = new ZipArchive(new MemoryStream(rewrittenBytes), ZipArchiveMode.Read);
+        zip.GetEntry("word/afchunk.mht").Should().BeNull();
+        zip.GetEntry("word/_rels/afchunk.mht.rels").Should().BeNull();
+        zip.GetEntry("word/media/altchunk.png").Should().BeNull();
+        using var entry = zip.GetEntry("word/document.xml")!.Open();
+        var body = XDocument.Load(entry).Root!.Element(Ooxml.W + "body")!;
+        body.Element(Ooxml.W + "altChunk").Should().BeNull();
+
+        var reopened = ReadDocument(rewrittenBytes);
+        reopened.Blocks[1].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Materialized MHTML altChunk");
+        reopened.Blocks[1].Should().BeOfType<Paragraph>().Which.Runs
+            .Where(run => run.Image is not null).Should().ContainSingle();
+    }
+
+    [Fact]
     public void NonHtmlAltChunk_RetainsItsPayloadAndBodyMarker()
     {
         var sourceBytes = AuthorPackageWithAltChunk(
@@ -76,7 +127,8 @@ public class AltChunkRoundTripTests
     private static byte[] AuthorPackageWithAltChunk(
         string chunkPartName = "afchunk.html",
         string chunkContentType = "text/html",
-        string? chunkPayload = null)
+        string? chunkPayload = null,
+        bool includeChunkLocalImage = true)
     {
         chunkPayload ??= "<html><body><p>Materialized altChunk HTML<img src=\"media/altchunk.png\"/></p></body></html>";
         using var stream = new MemoryStream();
@@ -135,16 +187,19 @@ public class AltChunkRoundTripTests
                 </w:document>
                 """);
             Add("word/" + chunkPartName, chunkPayload);
-            Add("word/_rels/" + chunkPartName + ".rels",
-                $"""
-                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-                  <Relationship Id="rIdImage" Type="{Ooxml.ImageRelType}" Target="media/altchunk.png"/>
-                </Relationships>
-                """);
-            AddBytes(
-                "word/media/altchunk.png",
-                Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6XZDxsAAAAASUVORK5CYII="));
+            if (includeChunkLocalImage)
+            {
+                Add("word/_rels/" + chunkPartName + ".rels",
+                    $"""
+                    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                    <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                      <Relationship Id="rIdImage" Type="{Ooxml.ImageRelType}" Target="media/altchunk.png"/>
+                    </Relationships>
+                    """);
+                AddBytes(
+                    "word/media/altchunk.png",
+                    Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6XZDxsAAAAASUVORK5CYII="));
+            }
         }
 
         return stream.ToArray();
