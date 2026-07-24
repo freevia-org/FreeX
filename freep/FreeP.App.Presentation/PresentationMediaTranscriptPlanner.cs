@@ -417,6 +417,22 @@ public static class PresentationMediaTranscriptPlanner
             tracks);
     }
 
+    /// <summary>
+    /// Resolves the caption visible at a media playback position.  Cues are already normalized
+    /// and validated by <see cref="BuildTranscriptPlan"/>, so the playback hosts can share the
+    /// same half-open interval semantics without parsing caption formats themselves.
+    /// </summary>
+    public static PresentationMediaTranscriptCueDescriptor? FindActiveCue(
+        PresentationMediaTranscriptTrackDescriptor? track,
+        TimeSpan position)
+    {
+        if (track is null || !track.HasTranscript || position < TimeSpan.Zero)
+            return null;
+
+        return track.Cues.FirstOrDefault(cue =>
+            position >= cue.StartTime && position < cue.EndTime);
+    }
+
     private static PresentationMediaCaptionAuthoringPanePlan EmptyCaptionAuthoringPanePlan(int slideIndex)
         => new(
             slideIndex,

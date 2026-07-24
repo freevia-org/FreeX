@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Free.Shared.Drawing;
 using FreeP.App.Avalonia;
 using FreeP.App.Media;
+using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia.Tests;
@@ -89,6 +90,54 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
         factory.Backend.Disposed.Should().BeTrue();
         overlay.Children.Should().BeEmpty();
         controller.Active.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Controller_RefreshesCaptionOverlayFromPlaybackPosition()
+    {
+        var factory = new FakeBackendFactory();
+        var overlay = new Canvas();
+        var controller = new AvaloniaSlideShowMediaController(overlay, factory);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = new byte[] { 1, 2, 3 },
+                ContentType = "video/mp4",
+            },
+        });
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 42,
+            ShapeName: "Video",
+            TrackIndex: 0,
+            Label: "English",
+            Language: "en-US",
+            Source: "captions.vtt",
+            ContentType: "text/vtt",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues: [new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Hello from the video")]);
+
+        controller.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        var session = factory.Backend.Sessions[0];
+        session.Seek(TimeSpan.FromMilliseconds(500));
+        controller.RefreshCaptionsForTest();
+        controller.CaptionTextForTest(42).Should().Be("Hello from the video");
+        overlay.Children.OfType<Border>().Should().Contain(border => border.IsVisible);
+
+        session.Seek(TimeSpan.FromSeconds(2));
+        controller.RefreshCaptionsForTest();
+        controller.CaptionTextForTest(42).Should().BeEmpty();
+        overlay.Children.OfType<Border>().Should().NotContain(border => border.IsVisible);
+
+        controller.Teardown();
     }
 
     private sealed class FakeBackendFactory : IMediaPlaybackBackendFactory

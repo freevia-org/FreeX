@@ -180,7 +180,8 @@ internal static class FreePCommandInventory
             [
                 "docs/parity/freep-media-caption-native-media-sidecar-depth-2026-07-14.md",
                 "docs/parity/freep-media-caption-relid-collision-2026-07-14.md",
-                "docs/parity/freep-media-caption-ttml-sidecar-retention-2026-07-14.md"
+                "docs/parity/freep-media-caption-ttml-sidecar-retention-2026-07-14.md",
+                "docs/parity/freep-media-caption-playback-2026-07-24.md"
             ],
             Verification:
             [
@@ -188,9 +189,11 @@ internal static class FreePCommandInventory
                 "freep/FreeP.Core.IO/PptxPackageReader.cs",
                 "freep/FreeP.Core.IO/PptxPackageWriter.cs",
                 "freep/FreeP.App.Host.Tests/MediaFieldsTests.cs",
-                "freep/FreeP.App.Presentation.Tests/PresentationMediaTranscriptPlannerTests.cs"
+                "freep/FreeP.App.Presentation.Tests/PresentationMediaTranscriptPlannerTests.cs",
+                "freep/FreeP.App.Avalonia/AvaloniaSlideShowMediaController.cs",
+                "freep/FreeP.App.Avalonia.Tests/AvaloniaMediaPlaybackAdapterTests.cs"
             ],
-            RemainingWork: "Imported embedded media now retains original ppt/media package paths, matching package-snapshot bytes save back to the authored media path, nested caption sidecars keep package entries plus relationship targets after semantic slide edits, colliding native caption relationship ids remap away from writer-owned poster/media ids while retargeting p20media:caption metadata, and basic TTML/DFXP caption sidecars retain package bytes/content-type overrides while the shared planner parses paragraph cues with clock or unit timing. Broader real-deck PowerPoint-native media/caption baselines, PowerPoint COM baselines, TTML visual rendering/playback, advanced timing/style semantics, and real microphone/camera/playback/capture-device behavior remain deferred."),
+            RemainingWork: "Imported embedded media now retains original ppt/media package paths, matching package-snapshot bytes save back to the authored media path, nested caption sidecars keep package entries plus relationship targets after semantic slide edits, colliding native caption relationship ids remap away from writer-owned poster/media ids while retargeting p20media:caption metadata, basic TTML/DFXP sidecars retain package bytes/content-type overrides while the shared planner parses paragraph cues with clock or unit timing, and Avalonia slideshow playback now surfaces available cues from the active media clock. Broader real-deck PowerPoint-native media/caption baselines, PowerPoint COM baselines, WPF playback surface coverage, advanced timing/style/accessibility semantics, and real microphone/camera/playback/capture-device behavior remain deferred."),
         new(
             EvidenceId: "freep.presenter.ink.execution",
             Area: "Presenter ink, laser, and persistence execution",

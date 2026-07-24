@@ -6,6 +6,32 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class PresentationMediaTranscriptPlannerTests
 {
     [Fact]
+    public void FindActiveCue_UsesHalfOpenTimeIntervals()
+    {
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 42,
+            ShapeName: "Video",
+            TrackIndex: 0,
+            Label: "English",
+            Language: "en-US",
+            Source: "captions.vtt",
+            ContentType: "text/vtt",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues:
+            [
+                new(TimeSpan.Zero, TimeSpan.FromSeconds(1), "First"),
+                new(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), "Second")
+            ]);
+
+        PresentationMediaTranscriptPlanner.FindActiveCue(track, TimeSpan.Zero)!.Text.Should().Be("First");
+        PresentationMediaTranscriptPlanner.FindActiveCue(track, TimeSpan.FromSeconds(1))!.Text.Should().Be("Second");
+        PresentationMediaTranscriptPlanner.FindActiveCue(track, TimeSpan.FromSeconds(2)).Should().BeNull();
+        PresentationMediaTranscriptPlanner.FindActiveCue(track, TimeSpan.FromMilliseconds(-1)).Should().BeNull();
+    }
+
+    [Fact]
     public void BuildTranscriptPlan_ParsesWebVttAndSrtCaptionBytes()
     {
         var presentation = Presentation.CreateEmpty();
