@@ -44,6 +44,7 @@ param(
     [string]$Image = "freex-linux-interactive:ubuntu24.04",
     [string]$DocumentPath = "",
     [string[]]$AppArgument = @(),
+    [switch]$CupsDryRun,
     [string]$SessionMetadataPath = "",
     [switch]$SkipPublish,
     [switch]$SkipImageBuild,
@@ -408,7 +409,7 @@ $appArgumentsBase64 = if ($AppArgument.Count -eq 0) {
 }
 
 Write-Host "Starting interactive Linux container '$containerName'..."
-$runResult = Invoke-Docker -Arguments @(
+$dockerRunArguments = @(
     "run",
     "--detach",
     "--rm",
@@ -431,6 +432,12 @@ $runResult = Invoke-Docker -Arguments @(
     "--mount", $documentsMount,
     $appImage
 )
+if ($CupsDryRun) {
+    $dockerRunArguments = @($dockerRunArguments[0..($dockerRunArguments.Count - 2)]) + @(
+        "--env", "FREEX_CUPS_DRY_RUN=1",
+        $dockerRunArguments[-1])
+}
+$runResult = Invoke-Docker -Arguments $dockerRunArguments
 Write-Host "Container id: $([string]$runResult.Output[0])"
 
 $readyPath = Join-Path $sessionDir "ready.json"

@@ -63,6 +63,42 @@ websockify \
 child_pids+=("$!")
 
 cd /opt/published
+
+# The foreground print probe uses the production CUPS adapter with an owned, container-local
+# dry-run queue. The shim has the same lpstat/lp process boundary but only copies the generated
+# PDF into the mounted session directory; it never reaches a host printer or device.
+if [[ "${FREEX_CUPS_DRY_RUN:-0}" == "1" ]]; then
+    cups_dry_run_bin="/tmp/freex-cups-dry-run"
+    cups_dry_run_output="/work/cups-dry-run"
+    mkdir -p "$cups_dry_run_bin" "$cups_dry_run_output"
+    cat > "$cups_dry_run_bin/lpstat" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case " $* " in
+    *" -p "*) printf 'printer FreeW-DryRun is idle.\n' ;;
+    *" -d "*) printf 'system default destination: FreeW-DryRun\n' ;;
+    *) printf 'FreeW dry-run lpstat received unsupported arguments: %s\n' "$*" >&2; exit 2 ;;
+esac
+SH
+    cat > "$cups_dry_run_bin/lp" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+pdf_path="${@: -1}"
+if [[ ! -f "$pdf_path" ]]; then
+    printf 'FreeW dry-run lp received no PDF path.\n' >&2
+    exit 2
+fi
+mkdir -p /work/cups-dry-run
+printf 'lp ' > /work/cups-dry-run/last-invocation.txt
+printf '%q ' "$@" >> /work/cups-dry-run/last-invocation.txt
+printf '\n' >> /work/cups-dry-run/last-invocation.txt
+cp -- "$pdf_path" /work/cups-dry-run/last-submitted.pdf
+printf 'request id is FreeW-DryRun-1 (1 file(s))\n'
+SH
+    chmod 0755 "$cups_dry_run_bin/lpstat" "$cups_dry_run_bin/lp"
+    export PATH="$cups_dry_run_bin:$PATH"
+fi
+
 declare -a app_arguments=()
 if [[ -n "$app_arguments_b64" ]]; then
     mapfile -t app_arguments < <(printf '%s' "$app_arguments_b64" | base64 -d)

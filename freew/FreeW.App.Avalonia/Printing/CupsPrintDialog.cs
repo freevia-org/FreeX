@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -48,6 +49,7 @@ internal sealed class CupsPrintDialog : FreeWDialogWindow
         _range.SelectionChanged += (_, _) => UpdateRangeVisibility();
         _ok.Click += (_, _) => Accept();
         var cancel = new Button { Content = "Cancel", IsCancel = true };
+        cancel.Click += (_, _) => Close();
         _status.Text = plan.Message ?? (plan.CanSubmit ? "Choose the printer and print settings." : "Printing is unavailable on this host.");
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(16) };
@@ -76,6 +78,15 @@ internal sealed class CupsPrintDialog : FreeWDialogWindow
         });
         Content = content;
         UpdateRangeVisibility();
+        Opened += (_, _) => _ok.Focus();
+        KeyDown += (_, args) =>
+        {
+            if (args.Key != Key.Escape)
+                return;
+
+            Close();
+            args.Handled = true;
+        };
     }
 
     public static async Task<PrintSelection?> ShowAsync(
