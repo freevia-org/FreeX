@@ -149,7 +149,8 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("calibrate_geometry()", probe, StringComparison.Ordinal);
         Assert.Contains("selection_box()", probe, StringComparison.Ordinal);
         Assert.Contains("cellWidth", probe, StringComparison.Ordinal);
-        Assert.Contains("xclip -selection clipboard -in >/dev/null 2>&1", probe, StringComparison.Ordinal);
+        Assert.Contains("set_clipboard_sentinel", probe, StringComparison.Ordinal);
+        Assert.Contains("xclip -selection clipboard -out", probe, StringComparison.Ordinal);
         Assert.Contains("X11 clipboard formula='=B2'", probe, StringComparison.Ordinal);
 
         string[] requiredPhysicalRows =
@@ -174,6 +175,10 @@ public sealed class AvaloniaInteractionCoverageTests
             "native-save-as-f12-cancel",
             "native-open-ctrl-f12-cancel",
             "print-preview-ctrl-shift-f12-cancel",
+            "sheet-tab-overflow-create-physical",
+            "sheet-tab-overflow-navigation-physical",
+            "sheet-tab-overflow-activate-dialog-physical",
+            "sheet-tab-drag-reorder-physical",
         ];
         foreach (var id in requiredPhysicalRows)
         {
@@ -210,6 +215,17 @@ public sealed class AvaloniaInteractionCoverageTests
             StringComparison.Ordinal);
         Assert.DoesNotContain("--window \"$dialog_id\" Escape", probe, StringComparison.Ordinal);
         Assert.Contains("FREEX_X11_DIALOG_SETTLE_SECONDS", probe, StringComparison.Ordinal);
+        Assert.Contains("FREEX_X11_PROBE_SELECTOR", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_selector\" == \"sheet-tabs\"", probe, StringComparison.Ordinal);
+        Assert.Contains("xdotool_mousemove_sync", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_sheet_tabs", probe, StringComparison.Ordinal);
+        Assert.Contains("sheet-tab-overflow-create-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("sheet-tab-overflow-navigation-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("sheet-tab-overflow-activate-dialog-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("sheet-tab-drag-reorder-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("set_cell_text_without_save", probe, StringComparison.Ordinal);
+        Assert.Contains("Sheet2Anchor", probe, StringComparison.Ordinal);
+        Assert.Contains("Sheet3Anchor", probe, StringComparison.Ordinal);
         Assert.Contains("harmless readiness sentinel", probe, StringComparison.Ordinal);
         Assert.True(
             probe.IndexOf("probe_cancelable_window \"print-preview-ctrl-shift-f12-cancel\"", StringComparison.Ordinal) <

@@ -1879,7 +1879,9 @@ public sealed partial class MainWindow : Window
         _sheetTabsContourLayer.IsHitTestVisible = false;
         _sheetTabsContourLayer.ClipToBounds = false;
         _sheetTabsContourLayer.VerticalAlignment = AvaloniaVerticalAlignment.Top;
-        _sheetTabsContourLayer.ZIndex = 20;
+        // Keep the contour behind the navigation buttons and the worksheet scrollbar. The
+        // active-tab contour is decorative chrome; it must not cover the controls that own input.
+        _sheetTabsContourLayer.ZIndex = 1;
         _sheetTabsContourLayer.SizeChanged += (_, _) => UpdateSheetTabsContourLayer();
 
         ConfigureSheetTabNavigationButton(_sheetTabLeftNavButton, "<", "Scroll Tabs Left", -1);
@@ -1890,12 +1892,14 @@ public sealed partial class MainWindow : Window
             Height = 27,
             Background = ChromeSurface,
             Child = _sheetTabLeftNavButton,
+            ZIndex = 4,
         };
         var tabCluster = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 0,
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            ZIndex = 4,
         };
         tabCluster.Children.Add(_sheetTabsScroller);
         tabCluster.Children.Add(_sheetTabRightNavButton);
@@ -1904,6 +1908,7 @@ public sealed partial class MainWindow : Window
         {
             LastChildFill = false,
             MinHeight = 27,
+            ZIndex = 3,
         };
         DockPanel.SetDock(leadingNavSlot, Dock.Left);
         chrome.Children.Add(leadingNavSlot);
@@ -1912,6 +1917,7 @@ public sealed partial class MainWindow : Window
         DockPanel.SetDock(_updateReadyIndicator, Dock.Right);
         chrome.Children.Add(_updateReadyIndicator);
         DockPanel.SetDock(_horizontalWorksheetScrollBar, Dock.Right);
+        _horizontalWorksheetScrollBar.ZIndex = 5;
         chrome.Children.Add(_horizontalWorksheetScrollBar);
 
         var shell = new AvaloniaGrid
@@ -1961,6 +1967,7 @@ public sealed partial class MainWindow : Window
                 Margin = new Thickness(0, -2, 0, 0),
             };
             presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
+            presenter.Bind(ContentPresenter.ForegroundProperty, new Binding(nameof(ContentControl.Foreground)) { Source = control });
 
             var border = new Border
             {
@@ -1983,7 +1990,11 @@ public sealed partial class MainWindow : Window
         var availableWidth = Bounds.Width > 0 ? Bounds.Width : InitialViewportWidth;
         var baseTabsViewportWidth = Math.Max(80, availableWidth - HeaderColumnWidth - _horizontalWorksheetScrollBar.Width);
         var contentWidth = _session.SheetTabs.Sum(tab => EstimateSheetTabWidth(tab.Name)) + _newSheetButton.Width;
-        var hasOverflow = contentWidth > baseTabsViewportWidth + 0.5;
+        // The right navigation button consumes part of the tab viewport as soon as overflow is
+        // shown. Reserve that slot when deciding whether overflow exists, otherwise a nearly-full
+        // strip clips its final tabs before the arrows become visible.
+        var overflowViewportWidth = Math.Max(80, baseTabsViewportWidth - _sheetTabRightNavButton.Width);
+        var hasOverflow = contentWidth > overflowViewportWidth + 0.5;
         var rightNavigationWidth = hasOverflow ? _sheetTabRightNavButton.Width : 0;
         var maxTabsViewportWidth = Math.Max(80, baseTabsViewportWidth - rightNavigationWidth);
         _sheetTabsScroller.Width = hasOverflow

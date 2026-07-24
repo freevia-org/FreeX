@@ -135,7 +135,19 @@ postconditions. Empty-cell cancellation uses exact calibrated cell-pixel
 restoration because copying an empty grid cell does not guarantee a new X11
 clipboard owner. The worksheet popup rows do not claim activation of platform
 native Avalonia `NativeMenuItem` menus; that boundary remains explicitly skipped
-where only an application-native menu can be tested.
+where only an application-native menu can be tested. The physical sheet-tab rows
+also click the real `+` button repeatedly until overflow, prove that the left and
+right sheet-tab arrows move the tab viewport without changing the active sheet,
+right-click an overflow arrow to open and Escape-close the real `Activate` sheet
+dialog, and drag `Sheet2` across `Sheet3`; the reorder assertion reads distinct
+values from the two visible positions through the real worksheet/formula path.
+
+For focused iteration, copy the probe into a running harness container and set
+`FREEX_X11_PROBE_SELECTOR=sheet-tabs`; this runs calibration plus only the four
+sheet-tab rows. The default selector remains `all`, preserving the complete
+physical lane. Synchronous pointer moves use
+`FREEX_X11_MOUSEMOVE_TIMEOUT_SECONDS` (five seconds by default) so clipped or
+rearranged coordinates produce bounded evidence instead of hanging the container.
 
 The New Window row is deliberately physical-shell scoped: it proves an
 additional workbook-shaped top-level window, valid Arrange All geometry, and

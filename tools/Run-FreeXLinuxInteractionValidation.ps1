@@ -760,7 +760,11 @@ try {
         "dialog-format-cells-keyboard",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
-        "print-preview-ctrl-shift-f12-cancel"
+        "print-preview-ctrl-shift-f12-cancel",
+        "sheet-tab-overflow-create-physical",
+        "sheet-tab-overflow-navigation-physical",
+        "sheet-tab-overflow-activate-dialog-physical",
+        "sheet-tab-drag-reorder-physical"
     )
     $physicalProbeResults = @($x11Manifest.results)
     $x11EvidenceDirectory = Split-Path -Parent $x11ManifestPath
@@ -781,7 +785,11 @@ try {
         "window-new-arrange-switch-physical",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
-        "print-preview-ctrl-shift-f12-cancel"
+        "print-preview-ctrl-shift-f12-cancel",
+        "sheet-tab-overflow-create-physical",
+        "sheet-tab-overflow-navigation-physical",
+        "sheet-tab-overflow-activate-dialog-physical",
+        "sheet-tab-drag-reorder-physical"
     )
     $missingPhysicalArtifactIds = @()
     $invalidPhysicalArtifactRows = @()

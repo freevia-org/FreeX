@@ -37,6 +37,9 @@ public sealed class SheetTabPointerMechanicsSourceTests
         source.Should().Contain("_sheetTabsScroller.ScrollChanged +=");
         source.Should().Contain("_sheetTabLeftNavButton.IsEnabled = hasOverflow;");
         source.Should().Contain("_sheetTabRightNavButton.IsEnabled = hasOverflow;");
+        source.Should().Contain("var overflowViewportWidth = Math.Max(80, baseTabsViewportWidth - _sheetTabRightNavButton.Width);");
+        source.Should().Contain("_sheetTabsContourLayer.ZIndex = 1;");
+        source.Should().Contain("ContentPresenter.ForegroundProperty");
     }
 
     private static string RepoFile(params string[] parts)

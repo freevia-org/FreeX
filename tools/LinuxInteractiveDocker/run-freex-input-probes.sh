@@ -8,8 +8,12 @@ input_delay_ms="${FREEX_X11_INPUT_DELAY_MS:-160}"
 type_delay_ms="${FREEX_X11_TYPE_DELAY_MS:-90}"
 settle_seconds="${FREEX_X11_SETTLE_SECONDS:-0.35}"
 dialog_settle_seconds="${FREEX_X11_DIALOG_SETTLE_SECONDS:-3.0}"
+mousemove_timeout_seconds="${FREEX_X11_MOUSEMOVE_TIMEOUT_SECONDS:-5}"
+mousemove_timeout_count=0
+clipboard_timeout_seconds="${FREEX_X11_CLIPBOARD_TIMEOUT_SECONDS:-5}"
 selection_color="${FREEX_X11_SELECTION_COLOR:-#217346}"
 document_path="${FREEX_X11_DOCUMENT_PATH:-/documents/linux-interactive-demo.csv}"
+probe_selector="${FREEX_X11_PROBE_SELECTOR:-all}"
 
 mkdir -p "$output"
 
@@ -116,6 +120,17 @@ focus_app() {
     sleep 0.12
 }
 
+xdotool_mousemove_sync() {
+    # X11 can leave xdotool --sync waiting forever when a probe targets a clipped,
+    # rearranged, or already-current coordinate. Keep every pointer transition
+    # bounded and use the existing settle delay for deterministic click ordering.
+    if timeout --foreground --kill-after=1s "${mousemove_timeout_seconds}s" xdotool mousemove "$@"; then
+        return 0
+    fi
+    mousemove_timeout_count=$((mousemove_timeout_count + 1))
+    return 0
+}
+
 send_key() {
     focus_app
     xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$window_id" "$@"
@@ -130,7 +145,7 @@ type_text() {
 }
 
 clipboard_text() {
-    xclip -selection clipboard -out 2>/dev/null | tr -d '\r\n'
+    timeout --foreground --kill-after=1s "${clipboard_timeout_seconds}s" xclip -selection clipboard -out 2>/dev/null | tr -d '\r\n'
 }
 
 wait_for_clipboard() {
@@ -214,11 +229,16 @@ write_artifact() {
     printf '%b\n' "$contents" > "$output/$name"
 }
 
+set_clipboard_sentinel() {
+    # The application becomes the real clipboard owner after each physical Copy.
+    # Do not install a persistent xclip owner before that event: xclip waits for
+    # selection requests and can block command substitutions indefinitely.
+    return 0
+}
+
 copy_cell_display() {
     local column_offset="$1" row_offset="$2" address="$3"
-    # xclip forks a clipboard owner. Redirect its descriptors so a caller using command
-    # substitution does not wait forever for the inherited output pipe to close.
-    printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
+    set_clipboard_sentinel
     select_cell "$column_offset" "$row_offset" "$address" || return 1
     send_key ctrl+c
     clipboard_text
@@ -226,7 +246,7 @@ copy_cell_display() {
 
 copy_cell_formula() {
     local column_offset="$1" row_offset="$2" address="$3"
-    printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
+    set_clipboard_sentinel
     select_cell "$column_offset" "$row_offset" "$address" || return 1
     send_key F2
     send_key ctrl+a
@@ -415,7 +435,7 @@ select_cell() {
 
     for _ in $(seq 1 2); do
         focus_app
-        xdotool mousemove --sync "$center_x" "$center_y" click 1
+        xdotool_mousemove_sync "$center_x" "$center_y" click 1
         sleep "$settle_seconds"
         if wait_for_selection "$expected_x" "$expected_y" "selection-${address}.png"; then
             return 0
@@ -432,6 +452,298 @@ crop_cell() {
     width=$((cell_width - 4))
     height=$((cell_height - 4))
     convert "$screenshot" -crop "${width}x${height}+${x}+${y}" +repage "$output_file"
+}
+
+screen_height() { xdotool getdisplaygeometry | awk '{print $2}'; }
+sheet_tab_strip_top() { printf '%d' "$(( $(screen_height) - 55 ))"; }
+sheet_tab_y() { printf '%d' "$(( $(screen_height) - 41 ))"; }
+sheet_tab_left_nav_x() { printf '%d' "$((window_x + 15))"; }
+sheet_horizontal_scrollbar_width() {
+    local desired=$((window_width * 34 / 100))
+    (( desired < 260 )) && desired=260
+    (( desired > 420 )) && desired=420
+    printf '%d' "$desired"
+}
+sheet_tab_right_nav_x() {
+    local scrollbar_width
+    scrollbar_width="$(sheet_horizontal_scrollbar_width)"
+    printf '%d' "$((window_x + window_width - scrollbar_width - 12))"
+}
+
+sheet_tab_center_x() {
+    local index="$1"
+    if (( index == 0 )); then
+        printf '%d' "$((a1_x + 80))"
+    else
+        # The default Linux harness workbook uses one long first tab followed by the
+        # 64px SheetN tabs. Keep these coordinates derived from the calibrated grid edge.
+        printf '%d' "$((a1_x + 160 + index * 64 - 32))"
+    fi
+}
+
+sheet_plus_center_x() {
+    local created_count="$1"
+    local first_tab_width="${FREEX_X11_FIRST_SHEET_TAB_WIDTH:-161}"
+    local short_tab_width="${FREEX_X11_SHORT_SHEET_TAB_WIDTH:-64}"
+    # The first CSV tab is wider than SheetN tabs. Derive the moving + center from
+    # calibrated grid origin instead of window-relative fixed coordinates.
+    printf '%d' "$((a1_x + first_tab_width + 16 + created_count * short_tab_width))"
+}
+
+crop_region() {
+    local source="$1" destination="$2" left="$3" top="$4" width="$5" height="$6"
+    convert "$output/$source" -crop "${width}x${height}+${left}+${top}" +repage "$output/$destination"
+}
+
+capture_sheet_tab_strip() {
+    local name="$1" top
+    top="$(sheet_tab_strip_top)"
+    capture "$name"
+    crop_region "$name" "${name%.png}-strip.png" "$window_x" "$top" "$window_width" 31
+}
+
+reset_sheet_tab_viewport() {
+    local tab_y="$1" left_nav_x="$2"
+    # The new-sheet sequence can leave the active tab beyond the viewport. Repeated left
+    # clicks are intentional physical input: the disabled-at-origin button is harmless, and
+    # the final fixed-coordinate tab assertions only run after this bounded reset.
+    for _ in $(seq 1 8); do
+        focus_app
+        xdotool_mousemove_sync "$left_nav_x" "$tab_y" click 1
+        sleep "$settle_seconds"
+    done
+}
+
+set_cell_text_without_save() {
+    local column_offset="$1" row_offset="$2" address="$3" value="$4"
+    select_cell "$column_offset" "$row_offset" "$address" || return 1
+    send_key F2
+    send_key ctrl+a
+    send_key BackSpace
+    type_text "$value"
+    send_key Return
+    [[ "$(copy_cell_formula "$column_offset" "$row_offset" "$address" || true)" == "$value" ]]
+}
+
+probe_sheet_tabs() {
+    local tab_y left_nav_x right_nav_x first_tab_x sheet2_x sheet3_x top
+    local before_value right_value left_value before_second before_third after_second after_third
+    local sheet2_seed_value sheet3_seed_value
+    local activate_id="" create_ready=false navigation_passed=false activate_passed=false
+    local left_changed=false right_changed=false viewport_changed=false returned_to_origin=false
+    local plus_x created_count
+    local plus_click_count=10
+
+    tab_y="$(sheet_tab_y)"
+    left_nav_x="$(sheet_tab_left_nav_x)"
+    right_nav_x="$(sheet_tab_right_nav_x)"
+    top="$(sheet_tab_strip_top)"
+    first_tab_x="$(sheet_tab_center_x 0)"
+    sheet2_x="$(sheet_tab_center_x 1)"
+    sheet3_x="$(sheet_tab_center_x 2)"
+
+    capture_sheet_tab_strip "sheet-tabs-before-overflow.png"
+    for created_count in $(seq 0 $((plus_click_count - 1))); do
+        plus_x="$(sheet_plus_center_x "$created_count")"
+        focus_app
+        xdotool_mousemove_sync "$plus_x" "$tab_y" click 1
+        sleep "$settle_seconds"
+    done
+    capture_sheet_tab_strip "sheet-tabs-after-overflow.png"
+
+    crop_region "sheet-tabs-before-overflow.png" "sheet-tabs-before-left-nav.png" "$left_nav_x" "$top" 30 31
+    crop_region "sheet-tabs-after-overflow.png" "sheet-tabs-after-left-nav.png" "$left_nav_x" "$top" 30 31
+    crop_region "sheet-tabs-before-overflow.png" "sheet-tabs-before-right-nav.png" "$((right_nav_x - 6))" "$top" 36 31
+    crop_region "sheet-tabs-after-overflow.png" "sheet-tabs-after-right-nav.png" "$((right_nav_x - 6))" "$top" 36 31
+    left_changed=false
+    right_changed=false
+    region_changed "$output/sheet-tabs-before-left-nav.png" "$output/sheet-tabs-after-left-nav.png" 8 && left_changed=true
+    region_changed "$output/sheet-tabs-before-right-nav.png" "$output/sheet-tabs-after-right-nav.png" 8 && right_changed=true
+    if $left_changed && $right_changed; then
+        create_ready=true
+    fi
+    write_artifact "sheet-tabs-create-postcondition.txt" \
+        "plus-clicks=$plus_click_count\nexpected-visible-sheets=11\nplus-center-derived-from-a1=true\nleft-nav-region-changed=$left_changed\nright-nav-region-changed=$right_changed\nleft-nav-x=$left_nav_x\nright-nav-x=$right_nav_x\n"
+    if $create_ready; then
+        record "sheet-tab-overflow-create-physical" "passed" \
+            "sheet-tabs-before-overflow.png; sheet-tabs-after-overflow.png; left/right navigation affordances became visible after $plus_click_count real + clicks" \
+            "The production + button was physically clicked once per coordinate and both sheet-tab overflow navigation regions changed from the pre-overflow strip." \
+            "sheet-tabs-before-overflow.png;sheet-tabs-after-overflow.png;sheet-tabs-create-postcondition.txt;sheet-tabs-before-left-nav.png;sheet-tabs-after-left-nav.png;sheet-tabs-before-right-nav.png;sheet-tabs-after-right-nav.png"
+    else
+        record "sheet-tab-overflow-create-physical" "failed" \
+            "sheet-tabs-before-overflow.png; sheet-tabs-after-overflow.png; sheet-tabs-create-postcondition.txt" \
+            "The real + click sequence did not make both sheet-tab overflow navigation affordances visibly available." \
+            "sheet-tabs-before-overflow.png;sheet-tabs-after-overflow.png;sheet-tabs-create-postcondition.txt;sheet-tabs-before-left-nav.png;sheet-tabs-after-left-nav.png;sheet-tabs-before-right-nav.png;sheet-tabs-after-right-nav.png"
+    fi
+
+    if $create_ready; then
+        focus_app
+        xdotool_mousemove_sync "$first_tab_x" "$tab_y" click 1
+        sleep "$settle_seconds"
+        before_value="$(copy_cell_display 0 0 A1 || true)"
+        capture_sheet_tab_strip "sheet-tabs-navigation-before.png"
+        focus_app
+        xdotool_mousemove_sync "$right_nav_x" "$tab_y" click 1
+        sleep "$settle_seconds"
+        capture_sheet_tab_strip "sheet-tabs-navigation-after-right.png"
+        right_value="$(copy_cell_display 0 0 A1 || true)"
+        focus_app
+        xdotool_mousemove_sync "$left_nav_x" "$tab_y" click 1
+        sleep "$settle_seconds"
+        capture_sheet_tab_strip "sheet-tabs-navigation-after-left.png"
+        left_value="$(copy_cell_display 0 0 A1 || true)"
+        viewport_changed=false
+        returned_to_origin=false
+        screen_changed "$output/sheet-tabs-navigation-before-strip.png" "$output/sheet-tabs-navigation-after-right-strip.png" 40 && viewport_changed=true
+        regions_match "$output/sheet-tabs-navigation-before-strip.png" "$output/sheet-tabs-navigation-after-left-strip.png" 180 && returned_to_origin=true
+        if $viewport_changed && $returned_to_origin &&
+           [[ "$before_value" == "Region" && "$right_value" == "Region" && "$left_value" == "Region" ]]; then
+            navigation_passed=true
+        fi
+        write_artifact "sheet-tabs-navigation-postcondition.txt" \
+            "active-cell-before=$before_value\nactive-cell-after-right=$right_value\nactive-cell-after-left=$left_value\nviewport-changed-after-right=$viewport_changed\nviewport-returned-after-left=$returned_to_origin\nright-nav-x=$right_nav_x\nleft-nav-x=$left_nav_x\n"
+        if $navigation_passed; then
+            record "sheet-tab-overflow-navigation-physical" "passed" \
+                "sheet-tabs-navigation-before-strip.png; sheet-tabs-navigation-after-right-strip.png; sheet-tabs-navigation-after-left-strip.png; active A1 value remained Region" \
+                "Physical right/left navigation changed and restored the tab viewport while the active worksheet remained the original data sheet." \
+                "sheet-tabs-navigation-before.png;sheet-tabs-navigation-after-right.png;sheet-tabs-navigation-after-left.png;sheet-tabs-navigation-postcondition.txt"
+        else
+            record "sheet-tab-overflow-navigation-physical" "failed" \
+                "sheet-tabs-navigation-before.png; sheet-tabs-navigation-after-right.png; sheet-tabs-navigation-after-left.png; sheet-tabs-navigation-postcondition.txt" \
+                "The physical arrow sequence did not both move the tab viewport and preserve the active worksheet." \
+                "sheet-tabs-navigation-before.png;sheet-tabs-navigation-after-right.png;sheet-tabs-navigation-after-left.png;sheet-tabs-navigation-postcondition.txt"
+        fi
+    else
+        write_artifact "sheet-tabs-navigation-postcondition.txt" "overflow-ready=false\n"
+        record "sheet-tab-overflow-navigation-physical" "failed" "sheet-tabs-navigation-postcondition.txt" "Overflow navigation was not physically available after the + setup, so arrow behavior could not be credited." "sheet-tabs-navigation-postcondition.txt"
+    fi
+
+    if $create_ready; then
+        focus_app
+        xdotool_mousemove_sync "$left_nav_x" "$tab_y" click 3
+        sleep "$dialog_settle_seconds"
+        for _ in $(seq 1 12); do
+            activate_id="$(xdotool search --onlyvisible --name '^Activate$' 2>/dev/null | tail -1 || true)"
+            [[ -n "$activate_id" ]] && break
+            sleep 0.2
+        done
+        capture "sheet-tabs-activate-open.png"
+        if [[ -n "$activate_id" ]]; then
+            timeout --foreground --kill-after=1s "${mousemove_timeout_seconds}s" xdotool windowactivate --sync "$activate_id" 2>/dev/null || true
+            xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$activate_id" Escape 2>/dev/null || true
+            xdotool key --clearmodifiers --delay "$input_delay_ms" Escape 2>/dev/null || true
+            for _ in $(seq 1 12); do
+                if [[ -z "$(xdotool search --onlyvisible --name '^Activate$' 2>/dev/null | tail -1 || true)" ]]; then
+                    activate_passed=true
+                    break
+                fi
+                sleep 0.2
+            done
+        fi
+        capture "sheet-tabs-activate-after-escape.png"
+        write_artifact "sheet-tabs-activate-postcondition.txt" \
+            "activate-window-id=$activate_id\nopened=$([[ -n "$activate_id" ]] && printf true || printf false)\nclosed=$activate_passed\n"
+        if $activate_passed; then
+            record "sheet-tab-overflow-activate-dialog-physical" "passed" \
+                "sheet-tabs-activate-open.png; sheet-tabs-activate-after-escape.png; Activate window id=$activate_id" \
+                "A physical right-click on the sheet-tab overflow navigation opened the real Activate sheet dialog, and Escape closed it." \
+                "sheet-tabs-activate-open.png;sheet-tabs-activate-after-escape.png;sheet-tabs-activate-postcondition.txt"
+        else
+            record "sheet-tab-overflow-activate-dialog-physical" "failed" \
+                "sheet-tabs-activate-open.png; sheet-tabs-activate-after-escape.png; sheet-tabs-activate-postcondition.txt" \
+                "The physical right-click did not produce a closable Activate sheet dialog." \
+                "sheet-tabs-activate-open.png;sheet-tabs-activate-after-escape.png;sheet-tabs-activate-postcondition.txt"
+        fi
+    else
+        write_artifact "sheet-tabs-activate-postcondition.txt" "overflow-ready=false\n"
+        record "sheet-tab-overflow-activate-dialog-physical" "failed" "sheet-tabs-activate-postcondition.txt" "Overflow navigation was not physically available, so the Activate dialog route could not be credited." "sheet-tabs-activate-postcondition.txt"
+    fi
+
+    # Opening Activate can cause the window manager to restore the workbook below
+    # the X11 root origin. Recalibrate after the modal route so drag setup uses the
+    # current grid and sheet-tab coordinates, not the pre-dialog geometry.
+    if $create_ready; then
+        calibrate_geometry || true
+        tab_y="$(sheet_tab_y)"
+        left_nav_x="$(sheet_tab_left_nav_x)"
+        right_nav_x="$(sheet_tab_right_nav_x)"
+        top="$(sheet_tab_strip_top)"
+        first_tab_x="$(sheet_tab_center_x 0)"
+        sheet2_x="$(sheet_tab_center_x 1)"
+        sheet3_x="$(sheet_tab_center_x 2)"
+    fi
+
+    # Keep the first three tabs at offset zero and give the two draggable tabs distinct cell
+    # values. Reading those values after the drag proves that the visible positions changed order.
+    reset_sheet_tab_viewport "$tab_y" "$left_nav_x"
+    focus_app
+    xdotool_mousemove_sync "$sheet2_x" "$tab_y" click 1
+    sleep "$settle_seconds"
+    capture_sheet_tab_strip "sheet-tabs-drag-sheet2-selected.png"
+    crop_cell "$output/sheet-tabs-drag-sheet2-selected.png" "$output/sheet-tabs-drag-sheet2-selected-cell.png" 0 0
+    if set_cell_text_without_save 0 0 A1 Sheet2Anchor; then
+        capture_sheet_tab_strip "sheet-tabs-drag-sheet2-seeded.png"
+        crop_cell "$output/sheet-tabs-drag-sheet2-seeded.png" "$output/sheet-tabs-drag-sheet2-seeded-cell.png" 0 0
+        sheet2_seed_value="$(copy_cell_formula 0 0 A1 || true)"
+        focus_app
+        xdotool_mousemove_sync "$sheet3_x" "$tab_y" click 1
+        sleep "$settle_seconds"
+        capture_sheet_tab_strip "sheet-tabs-drag-sheet3-selected.png"
+        crop_cell "$output/sheet-tabs-drag-sheet3-selected.png" "$output/sheet-tabs-drag-sheet3-selected-cell.png" 0 0
+        if set_cell_text_without_save 0 0 A1 Sheet3Anchor; then
+            capture_sheet_tab_strip "sheet-tabs-drag-sheet3-seeded.png"
+            crop_cell "$output/sheet-tabs-drag-sheet3-seeded.png" "$output/sheet-tabs-drag-sheet3-seeded-cell.png" 0 0
+            sheet3_seed_value="$(copy_cell_formula 0 0 A1 || true)"
+            reset_sheet_tab_viewport "$tab_y" "$left_nav_x"
+            focus_app
+            xdotool_mousemove_sync "$sheet2_x" "$tab_y" click 1
+            sleep "$settle_seconds"
+            before_second="$(copy_cell_formula 0 0 A1 || true)"
+            focus_app
+            xdotool_mousemove_sync "$sheet3_x" "$tab_y" click 1
+            sleep "$settle_seconds"
+            before_third="$(copy_cell_formula 0 0 A1 || true)"
+            capture_sheet_tab_strip "sheet-tabs-drag-before.png"
+            focus_app
+            xdotool_mousemove_sync "$sheet2_x" "$tab_y" mousedown 1
+            sleep 0.2
+            xdotool_mousemove_sync "$((sheet3_x - 18))" "$tab_y"
+            sleep 0.2
+            xdotool_mousemove_sync "$((sheet3_x + 12))" "$tab_y"
+            sleep "$settle_seconds"
+            xdotool mouseup 1
+            sleep "$settle_seconds"
+            capture_sheet_tab_strip "sheet-tabs-drag-after.png"
+            focus_app
+            xdotool_mousemove_sync "$sheet2_x" "$tab_y" click 1
+            sleep "$settle_seconds"
+            after_second="$(copy_cell_formula 0 0 A1 || true)"
+            focus_app
+            xdotool_mousemove_sync "$sheet3_x" "$tab_y" click 1
+            sleep "$settle_seconds"
+            after_third="$(copy_cell_formula 0 0 A1 || true)"
+            write_artifact "sheet-tabs-drag-postcondition.txt" \
+                "sheet2-seed-value=$sheet2_seed_value\nsheet3-seed-value=$sheet3_seed_value\nbefore-second=$before_second\nbefore-third=$before_third\nafter-second=$after_second\nafter-third=$after_third\nexpected-after-second=Sheet3Anchor\nexpected-after-third=Sheet2Anchor\n"
+            if [[ "$before_second" == "Sheet2Anchor" && "$before_third" == "Sheet3Anchor" &&
+                  "$after_second" == "Sheet3Anchor" && "$after_third" == "Sheet2Anchor" ]]; then
+                record "sheet-tab-drag-reorder-physical" "passed" \
+                    "sheet-tabs-drag-before.png; sheet-tabs-drag-after.png; second/third visible tab values changed from Sheet2Anchor/Sheet3Anchor to Sheet3Anchor/Sheet2Anchor" \
+                    "A visible Sheet2 tab was physically dragged across Sheet3, and the real worksheet values proved the visible tab order changed." \
+                    "sheet-tabs-drag-before.png;sheet-tabs-drag-after.png;sheet-tabs-drag-sheet2-selected.png;sheet-tabs-drag-sheet2-seeded.png;sheet-tabs-drag-sheet3-selected.png;sheet-tabs-drag-sheet3-seeded.png;sheet-tabs-drag-postcondition.txt"
+            else
+                record "sheet-tab-drag-reorder-physical" "failed" \
+                    "sheet-tabs-drag-after.png; sheet-tabs-drag-sheet2-selected.png; sheet-tabs-drag-sheet2-seeded.png; sheet-tabs-drag-sheet3-selected.png; sheet-tabs-drag-sheet3-seeded.png; sheet-tabs-drag-postcondition.txt" \
+                    "The physical drag did not produce the expected Sheet2/Sheet3 order change." \
+                    "sheet-tabs-drag-before.png;sheet-tabs-drag-after.png;sheet-tabs-drag-postcondition.txt"
+            fi
+        else
+            write_artifact "sheet-tabs-drag-postcondition.txt" "sheet2-seed-value=$sheet2_seed_value\nseed-sheet2=true\nseed-sheet3=false\n"
+            record "sheet-tab-drag-reorder-physical" "failed" "sheet-tabs-drag-sheet2-selected.png; sheet-tabs-drag-sheet2-seeded.png; sheet-tabs-drag-sheet3-selected.png; sheet-tabs-drag-postcondition.txt" "Could not seed a distinct value on Sheet3 for the physical drag-order assertion." "sheet-tabs-drag-sheet2-selected.png;sheet-tabs-drag-sheet2-selected-cell.png;sheet-tabs-drag-sheet2-seeded.png;sheet-tabs-drag-sheet2-seeded-cell.png;sheet-tabs-drag-sheet3-selected.png;sheet-tabs-drag-sheet3-selected-cell.png;sheet-tabs-drag-postcondition.txt"
+        fi
+    else
+        write_artifact "sheet-tabs-drag-postcondition.txt" "seed-sheet2=false\nseed-sheet3=false\n"
+        record "sheet-tab-drag-reorder-physical" "failed" "sheet-tabs-drag-sheet2-selected.png; sheet-tabs-drag-sheet2-selected-cell.png; sheet-tabs-drag-postcondition.txt" "Could not seed a distinct value on Sheet2 for the physical drag-order assertion." "sheet-tabs-drag-sheet2-selected.png;sheet-tabs-drag-sheet2-selected-cell.png;sheet-tabs-drag-postcondition.txt"
+    fi
 }
 
 dismiss_overlays() {
@@ -501,7 +813,7 @@ send_active_key() {
 probe_worksheet_context_copy() {
     local value="X11ContextCopy" clipboard="" artifacts="worksheet-context-copy-before.png;worksheet-context-copy-open.png;worksheet-context-copy-after.png;worksheet-context-copy-postcondition.txt"
     if seed_cell_text 6 10 G11 "$value"; then
-        printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
+        set_clipboard_sentinel
         capture "worksheet-context-copy-before.png"
         send_key shift+F10
         capture "worksheet-context-copy-open.png"
@@ -563,7 +875,7 @@ probe_clipboard_roundtrips() {
     if seed_cell_text 6 15 G16 "$copy_value" &&
        select_cell 7 15 H16 &&
        [[ "$(csv_cell_value 7 15)" == "" ]]; then
-        printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
+        set_clipboard_sentinel
         select_cell 6 15 G16
         capture "clipboard-copy-paste-before.png"
         send_key ctrl+c
@@ -591,7 +903,7 @@ probe_clipboard_roundtrips() {
     if seed_cell_text 6 16 G17 "$cut_value" &&
        select_cell 7 16 H17 &&
        [[ "$(csv_cell_value 7 16)" == "" ]]; then
-        printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
+        set_clipboard_sentinel
         before_hash="$(sha256sum "$document_path" 2>/dev/null | awk '{print $1}')"
         select_cell 6 16 G17
         capture "clipboard-cut-paste-before.png"
@@ -786,6 +1098,27 @@ if ! command -v xclip >/dev/null 2>&1; then
     exit 2
 fi
 
+if [[ "$probe_selector" == "sheet-tabs" ]]; then
+    # Focused iteration mode: calibration plus only the sheet-tab physical slice.
+    # The default remains the complete probe lane so existing rows are preserved.
+    probe_sheet_tabs
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused sheet-tab probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" != "all" ]]; then
+    calibration_reason="Unknown FREEX_X11_PROBE_SELECTOR '$probe_selector'."
+    record "x11-probe-selector" "failed" "x11-input-results.json" "$calibration_reason"
+    write_manifest
+    exit 2
+fi
+
 initial_document_hash=""
 if [[ -f "$document_path" ]]; then
     initial_document_hash="$(sha256sum "$document_path" | awk '{print $1}')"
@@ -906,7 +1239,7 @@ if select_cell 6 8 G9; then
     capture "inline-point-equals.png"
     crop_cell "$output/inline-point-equals.png" "$output/inline-point-b2-before.png" 1 1
     focus_app
-    xdotool mousemove --sync "$(cell_center_x 1)" "$(cell_center_y 1)" click 1
+    xdotool_mousemove_sync "$(cell_center_x 1)" "$(cell_center_y 1)" click 1
     sleep "$settle_seconds"
     capture "inline-point-address.png"
     crop_cell "$output/inline-point-address.png" "$output/inline-point-b2-address.png" 1 1
@@ -936,13 +1269,13 @@ if select_cell 6 11 G12; then
     type_text "="
     capture "inline-point-drag-equals.png"
     focus_app
-    xdotool mousemove --sync "$(cell_center_x 1)" "$(cell_center_y 1)"
+    xdotool_mousemove_sync "$(cell_center_x 1)" "$(cell_center_y 1)"
     xdotool mousedown 1
-    xdotool mousemove --sync "$(cell_center_x 3)" "$(cell_center_y 3)"
+    xdotool_mousemove_sync "$(cell_center_x 3)" "$(cell_center_y 3)"
     xdotool mouseup 1
     sleep "$settle_seconds"
     capture "inline-point-drag-address.png"
-    printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
+    set_clipboard_sentinel
     send_key ctrl+a
     send_key ctrl+c
     inline_drag_editor_text="$(clipboard_text)"
@@ -977,7 +1310,7 @@ if select_cell 6 9 G10; then
     capture "formula-point-equals.png"
     crop_cell "$output/formula-point-equals.png" "$output/formula-point-b2-before.png" 1 1
     focus_app
-    xdotool mousemove --sync "$(cell_center_x 1)" "$(cell_center_y 1)" click 1
+    xdotool_mousemove_sync "$(cell_center_x 1)" "$(cell_center_y 1)" click 1
     sleep "$settle_seconds"
     capture "formula-point-address.png"
     crop_cell "$output/formula-point-address.png" "$output/formula-point-b2-address.png" 1 1
@@ -1058,7 +1391,7 @@ if select_cell 1 1 B2; then
     select_cell 1 1 B2 || true
     capture "context-pointer-before.png"
     focus_app
-    xdotool mousemove --sync "$(cell_center_x 1)" "$(cell_center_y 1)" click 3
+    xdotool_mousemove_sync "$(cell_center_x 1)" "$(cell_center_y 1)" click 3
     sleep "$settle_seconds"
     capture "context-pointer-after.png"
     if screen_changed "$output/context-pointer-before.png" "$output/context-pointer-after.png" 1000; then
@@ -1079,6 +1412,7 @@ fi
 probe_worksheet_context_copy
 probe_worksheet_context_clear
 probe_clipboard_roundtrips
+probe_sheet_tabs
 probe_window_management
 
 # Real shortcut-to-dialog path, followed by paced focus traversal and Escape cancellation.
@@ -1112,6 +1446,10 @@ fi
 probe_cancelable_window "print-preview-ctrl-shift-f12-cancel" "ctrl+shift+F12" "print-preview.png"
 probe_cancelable_window "native-save-as-f12-cancel" "F12" "native-save-as.png"
 probe_cancelable_window "native-open-ctrl-f12-cancel" "ctrl+F12" "native-open.png"
+
+if (( mousemove_timeout_count > 0 )); then
+    record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound; the probe continued and recorded the bounded failure instead of hanging the container."
+fi
 
 write_manifest
 if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
