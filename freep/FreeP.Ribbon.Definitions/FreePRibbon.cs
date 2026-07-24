@@ -377,6 +377,12 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
                 FreePRibbonText.SmartArtContinuousBlockProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
                 FreePRibbonText.SmartArtContinuousBlockProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId,
+                FreePRibbonText.SmartArtSegmentedProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtSegmentedProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId,
+                FreePRibbonText.SmartArtChevronProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtChevronProcessCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
                 FreePRibbonText.SmartArtAlternatingProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
                 FreePRibbonText.SmartArtAlternatingProcessCommand.KeyTip);
@@ -398,6 +404,12 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
                 FreePRibbonText.SmartArtBasicCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtBasicCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
+                FreePRibbonText.SmartArtGearCycleCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtGearCycleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.TextCycleLayoutCommandId,
+                FreePRibbonText.SmartArtTextCycleCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtTextCycleCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
                 FreePRibbonText.SmartArtBasicBlockListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtBasicBlockListCommand.KeyTip);

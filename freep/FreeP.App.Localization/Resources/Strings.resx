@@ -670,6 +670,18 @@
   <data name="Ribbon_Command_SmartArtContinuousBlockProcess_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_SmartArtSegmentedProcess_Label" xml:space="preserve">
+    <value>Segmented Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSegmentedProcess_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtChevronProcess_Label" xml:space="preserve">
+    <value>Chevron Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtChevronProcess_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
   <data name="Ribbon_Command_SmartArtAlternatingProcess_Label" xml:space="preserve">
     <value>Alternating Process</value>
   </data>
@@ -711,6 +723,18 @@
   </data>
   <data name="Ribbon_Command_SmartArtBasicCycle_KeyTip" xml:space="preserve">
     <value>C</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtGearCycle_Label" xml:space="preserve">
+    <value>Gear Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtGearCycle_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtTextCycle_Label" xml:space="preserve">
+    <value>Text Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtTextCycle_KeyTip" xml:space="preserve">
+    <value>T</value>
   </data>
   <data name="Ribbon_Command_SmartArtBasicBlockList_Label" xml:space="preserve">
     <value>Basic Block List</value>

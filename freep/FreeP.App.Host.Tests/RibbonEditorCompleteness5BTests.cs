@@ -83,6 +83,31 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void SmartArtExtendedLayouts_AreDefinedAndRoutedByHost()
+    {
+        var definition = FreePRibbon.Build();
+        var layouts = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .Single(group => group.Id == "smartart-layouts");
+        var expected = new Dictionary<string, SmartArtLayoutPreset>
+        {
+            [SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId] = SmartArtLayoutPreset.SegmentedProcess,
+            [SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId] = SmartArtLayoutPreset.ChevronProcess,
+            [SmartArtAuthoringPlanner.GearCycleLayoutCommandId] = SmartArtLayoutPreset.GearCycle,
+            [SmartArtAuthoringPlanner.TextCycleLayoutCommandId] = SmartArtLayoutPreset.TextCycle,
+        };
+
+        foreach (var (commandId, preset) in expected)
+        {
+            Assert.Contains(layouts.Controls, control => control.CommandId.Value == commandId);
+            var (editor, _) = MakeSession();
+            SmartArtLayoutPreset? applied = null;
+            Exec(MakeSmartArtRegistry(editor, selected => applied = selected), commandId);
+            Assert.Equal(preset, applied);
+        }
+    }
+
+    [Fact]
     public void DesignTab_ContainsThemesGroup()
     {
         var def = FreePRibbon.Build();
