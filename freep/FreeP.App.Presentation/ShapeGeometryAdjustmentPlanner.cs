@@ -19,17 +19,26 @@ public sealed record ShapeGeometryAdjustmentPlan(
     string? DisabledReason,
     IReadOnlyList<ShapeGeometryAdjustmentHandlePlan> Handles);
 
+/// <summary>Raw path-space vertex mutation produced by a custom-geometry edit point.</summary>
+public sealed record ShapeGeometryCustomPointMutationPlan(
+    int PathIndex,
+    int SegmentIndex,
+    double X,
+    double Y);
+
 /// <summary>Result of reducing a pointer position to one preset guide value.</summary>
 public sealed record ShapeGeometryAdjustmentMutationPlan(
     bool ShouldApply,
     string? Name,
     double? Value,
-    string? DisabledReason);
+    string? DisabledReason,
+    ShapeGeometryCustomPointMutationPlan? CustomPoint = null);
 
 /// <summary>
 /// Shared planning for PowerPoint-style preset-shape edit points.
-/// Supported geometries are Chord (two explicit angle guides) and Rounded Rectangle (one
-/// explicit corner-radius guide). The compositor already consumes these adjustment dictionaries.
+/// Supported geometries are imported/custom line vertices, Chord (two explicit angle guides),
+/// and Rounded Rectangle (one explicit corner-radius guide). The compositor already consumes
+/// these geometry representations.
 /// </summary>
 public static class ShapeGeometryAdjustmentPlanner
 {
@@ -47,6 +56,9 @@ public static class ShapeGeometryAdjustmentPlanner
     public static ShapeGeometryAdjustmentPlan Build(SlideShape shape, LayoutRect boundsDip)
     {
         ArgumentNullException.ThrowIfNull(shape);
+
+        if (shape.CustomGeometry.Count > 0)
+            return BuildCustomGeometryPlan(shape, boundsDip);
 
         if (shape.Kind != SlideShapeKind.AutoShape ||
             shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle))
@@ -98,6 +110,33 @@ public static class ShapeGeometryAdjustmentPlanner
         var plan = Build(shape, boundsDip);
         if (!plan.CanEdit)
             return new(false, null, null, plan.DisabledReason);
+
+        if (shape.CustomGeometry.Count > 0)
+        {
+            if (!TryParseCustomHandle(handleName, out var pathIndex, out var segmentIndex) ||
+                pathIndex < 0 || pathIndex >= shape.CustomGeometry.Count)
+            {
+                return new(false, null, null, InvalidHandleMessage);
+            }
+
+            var path = shape.CustomGeometry[pathIndex];
+            if (segmentIndex < 0 || segmentIndex >= path.Segments.Count ||
+                path.Segments[segmentIndex].Kind is not (CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo))
+            {
+                return new(false, null, null, InvalidHandleMessage);
+            }
+
+            var pathWidth = PathWidth(path, boundsDip);
+            var pathHeight = PathHeight(path, boundsDip);
+            var x = Math.Clamp((pointerDip.X - boundsDip.Left) / boundsDip.Width * pathWidth, 0, pathWidth);
+            var y = Math.Clamp((pointerDip.Y - boundsDip.Top) / boundsDip.Height * pathHeight, 0, pathHeight);
+            return new(
+                true,
+                handleName,
+                null,
+                null,
+                new ShapeGeometryCustomPointMutationPlan(pathIndex, segmentIndex, x, y));
+        }
 
         if (shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
         {
@@ -152,4 +191,63 @@ public static class ShapeGeometryAdjustmentPlanner
         shape.PresetGeometryAdjustments.TryGetValue(name, out var value)
             ? Math.Clamp(value, 0, MaxCornerAdjustment)
             : fallback;
+
+    private static ShapeGeometryAdjustmentPlan BuildCustomGeometryPlan(
+        SlideShape shape,
+        LayoutRect boundsDip)
+    {
+        var handles = new List<ShapeGeometryAdjustmentHandlePlan>();
+        for (var pathIndex = 0; pathIndex < shape.CustomGeometry.Count; pathIndex++)
+        {
+            var path = shape.CustomGeometry[pathIndex];
+            var pathWidth = PathWidth(path, boundsDip);
+            var pathHeight = PathHeight(path, boundsDip);
+            for (var segmentIndex = 0; segmentIndex < path.Segments.Count; segmentIndex++)
+            {
+                var segment = path.Segments[segmentIndex];
+                if (segment.Kind is not (CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo))
+                    continue;
+
+                handles.Add(new ShapeGeometryAdjustmentHandlePlan(
+                    CustomHandleName(pathIndex, segmentIndex),
+                    "Vertex",
+                    new LayoutPoint(
+                        boundsDip.Left + segment.X / pathWidth * boundsDip.Width,
+                        boundsDip.Top + segment.Y / pathHeight * boundsDip.Height),
+                    segment.X,
+                    0,
+                    pathWidth));
+            }
+        }
+
+        var canEdit = boundsDip.Width > 0 && boundsDip.Height > 0 && handles.Count > 0;
+        return new ShapeGeometryAdjustmentPlan(
+            shape.Id,
+            canEdit,
+            canEdit ? null : UnsupportedShapeMessage,
+            handles);
+    }
+
+    private static string CustomHandleName(int pathIndex, int segmentIndex) =>
+        $"custom:{pathIndex}:{segmentIndex}";
+
+    private static bool TryParseCustomHandle(
+        string handleName,
+        out int pathIndex,
+        out int segmentIndex)
+    {
+        pathIndex = -1;
+        segmentIndex = -1;
+        var parts = handleName.Split(':');
+        return parts.Length == 3 &&
+               parts[0] == "custom" &&
+               int.TryParse(parts[1], out pathIndex) &&
+               int.TryParse(parts[2], out segmentIndex);
+    }
+
+    private static double PathWidth(CustomGeometryPath path, LayoutRect boundsDip) =>
+        path.PathW > 0 ? path.PathW : Math.Max(1, boundsDip.Width);
+
+    private static double PathHeight(CustomGeometryPath path, LayoutRect boundsDip) =>
+        path.PathH > 0 ? path.PathH : Math.Max(1, boundsDip.Height);
 }

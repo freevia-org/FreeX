@@ -456,6 +456,19 @@ public sealed class EditingSession
         Bus.Execute(new SetShapeGeometryAdjustmentCommand(_currentSlideIndex, shapeId, name, value));
     }
 
+    /// <summary>Moves one line/move vertex in an imported custom geometry path.</summary>
+    public void SetCustomGeometryPoint(
+        uint shapeId,
+        int pathIndex,
+        int segmentIndex,
+        double x,
+        double y)
+    {
+        if (CurrentSlide is null) return;
+        Bus.Execute(new SetCustomGeometryPointCommand(
+            _currentSlideIndex, shapeId, pathIndex, segmentIndex, x, y));
+    }
+
     /// <summary>Sets the rotation (degrees, clockwise) of a single shape.</summary>
     public void RotateShape(uint shapeId, double newRotationDeg)
     {

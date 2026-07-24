@@ -682,6 +682,65 @@ public sealed class SetShapeGeometryAdjustmentCommand : IPresentationCommand
     }
 }
 
+/// <summary>Moves one line/move vertex in an imported custom geometry path.</summary>
+public sealed class SetCustomGeometryPointCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _pathIndex;
+    private readonly int _segmentIndex;
+    private readonly double _newX;
+    private readonly double _newY;
+    private CustomSegment? _oldSegment;
+
+    public SetCustomGeometryPointCommand(
+        int slideIndex,
+        uint shapeId,
+        int pathIndex,
+        int segmentIndex,
+        double x,
+        double y)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _pathIndex = pathIndex;
+        _segmentIndex = segmentIndex;
+        _newX = x;
+        _newY = y;
+    }
+
+    public string Label => "Edit Shape Vertex";
+
+    public void Apply(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null || _pathIndex < 0 || _pathIndex >= shape.CustomGeometry.Count)
+            return;
+
+        var path = shape.CustomGeometry[_pathIndex];
+        if (_segmentIndex < 0 || _segmentIndex >= path.Segments.Count)
+            return;
+
+        var segment = path.Segments[_segmentIndex];
+        if (segment.Kind is not (CustomSegmentKind.MoveTo or CustomSegmentKind.LineTo))
+            return;
+
+        _oldSegment = segment;
+        path.Segments[_segmentIndex] = segment with { X = _newX, Y = _newY };
+    }
+
+    public void Revert(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null || _oldSegment is null || _pathIndex < 0 || _pathIndex >= shape.CustomGeometry.Count)
+            return;
+
+        var path = shape.CustomGeometry[_pathIndex];
+        if (_segmentIndex >= 0 && _segmentIndex < path.Segments.Count)
+            path.Segments[_segmentIndex] = _oldSegment;
+    }
+}
+
 /// <summary>
 /// Sets the rotation of a shape; captures old rotation for undo.
 /// Also re-routes any connectors whose start/end is attached to the rotated shape (Wave 23).

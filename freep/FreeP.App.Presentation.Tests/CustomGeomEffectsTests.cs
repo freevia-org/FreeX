@@ -270,6 +270,10 @@ public sealed class CustomGeomEffectsTests
         // MoveTo + 3 LineTo + Close = 5 segments
         path2.Segments.Should().HaveCount(5);
         path2.Segments[0].Kind.Should().Be(CustomSegmentKind.MoveTo);
+        path2.Segments[0].X.Should().Be(0);
+        path2.Segments[0].Y.Should().Be(0);
+        path2.Segments[1].X.Should().Be(200);
+        path2.Segments[1].Y.Should().Be(0);
         path2.Segments[4].Kind.Should().Be(CustomSegmentKind.Close);
     }
 }

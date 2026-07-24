@@ -559,7 +559,16 @@ public sealed class CanvasGestureHandler
             _geometryBoundsDip,
             _geometryHandleName,
             new LayoutPoint(pointerSlide.X, pointerSlide.Y));
-        if (mutation.ShouldApply && mutation.Name is not null && mutation.Value is { } value)
+        if (mutation.ShouldApply && mutation.CustomPoint is { } customPoint)
+        {
+            _editor.SetCustomGeometryPoint(
+                _geometryShapeId,
+                customPoint.PathIndex,
+                customPoint.SegmentIndex,
+                customPoint.X,
+                customPoint.Y);
+        }
+        else if (mutation.ShouldApply && mutation.Name is not null && mutation.Value is { } value)
             _editor.SetShapeGeometryAdjustment(_geometryShapeId, mutation.Name, value);
     }
 
