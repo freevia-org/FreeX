@@ -335,6 +335,33 @@ public static class PivotValueFieldPlanner
         };
     }
 
+    /// <summary>Builds the updated data field including the selected number-format state.</summary>
+    public static PivotDataFieldModel CreateResult(
+        PivotDataFieldModel initialField,
+        IReadOnlyList<string> sourceHeaders,
+        string? customName,
+        int summaryFunctionIndex,
+        int showValuesAsIndex,
+        int baseFieldSelectedIndex,
+        string? baseItemText,
+        int? numberFormatId,
+        string? numberFormatCode)
+    {
+        return CreateResult(
+                initialField,
+                sourceHeaders,
+                customName,
+                summaryFunctionIndex,
+                showValuesAsIndex,
+                baseFieldSelectedIndex,
+                baseItemText)
+            with
+        {
+            NumberFormatId = numberFormatId,
+            NumberFormatCode = numberFormatCode,
+        };
+    }
+
     /// <summary>
     /// Resolves the field's display name: a blank custom name (or one that still matches the
     /// auto-generated caption) regenerates the default "Sum of X" caption for the chosen function.

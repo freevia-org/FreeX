@@ -73,20 +73,16 @@ public static class PivotValueFieldSettingsDialogPlanner
         int? numberFormatId,
         string? numberFormatCode)
     {
-        var result = PivotValueFieldPlanner.CreateResult(
+        return PivotValueFieldPlanner.CreateResult(
             initialField,
             sourceHeaders ?? [],
             customName,
             summaryFunctionIndex,
             showValuesAsIndex,
             baseFieldSelectedIndex,
-            baseItemText);
-
-        return result with
-        {
-            NumberFormatId = numberFormatId,
-            NumberFormatCode = numberFormatCode
-        };
+            baseItemText,
+            numberFormatId,
+            numberFormatCode);
     }
 
     public static PivotDataFieldModel CreateResult(

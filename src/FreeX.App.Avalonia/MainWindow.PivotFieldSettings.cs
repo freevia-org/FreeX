@@ -71,6 +71,9 @@ public sealed partial class MainWindow
 
         var field = pivot.DataFields[dataFieldIndex.Value];
 
+        int? numberFormatId = field.NumberFormatId;
+        string? numberFormatCode = field.NumberFormatCode;
+
         var nameBox = new TextBox { MinWidth = 240, Text = field.Name };
         ApplyPivotTextBoxChrome(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "PivotValueFieldSettingsNameBox");
@@ -131,6 +134,21 @@ public sealed partial class MainWindow
         ApplyPivotButtonChrome(numberFormatButton, 128);
         AutomationProperties.SetAutomationId(numberFormatButton, "PivotValueNumberFormatButton");
         AutomationProperties.SetName(numberFormatButton, UiText.Get("PivotValueFieldSettings_NumberFormat2"));
+
+        var numberFormatPresetBox = new ComboBox { MinWidth = 240 };
+        foreach (var preset in PivotValueFieldPlanner.NumberFormatPresets)
+            numberFormatPresetBox.Items.Add(UiText.Get(preset.ResourceKey));
+        numberFormatPresetBox.SelectedIndex = PivotValueFieldPlanner.FindNumberFormatPresetIndex(field.NumberFormatId);
+        ApplyPivotComboBoxChrome(numberFormatPresetBox);
+        AutomationProperties.SetAutomationId(numberFormatPresetBox, "PivotValueNumberFormatPresetBox");
+        AutomationProperties.SetName(numberFormatPresetBox, UiText.Get("PivotValueFieldSettings_NumberFormatPreset"));
+        numberFormatPresetBox.SelectionChanged += (_, _) =>
+        {
+            var index = Math.Clamp(numberFormatPresetBox.SelectedIndex, 0, PivotValueFieldPlanner.NumberFormatPresets.Count - 1);
+            var preset = PivotValueFieldPlanner.NumberFormatPresets[index];
+            numberFormatId = preset.NumberFormatId;
+            numberFormatCode = null;
+        };
 
         var dialog = new Window
         {
@@ -206,6 +224,7 @@ public sealed partial class MainWindow
         // ── Tab 3: Number Format ───────────────────────────────────────────────
         var numberFormatPanel = new StackPanel { Spacing = 6, Margin = new Thickness(10) };
         numberFormatPanel.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("PivotValueFieldSettings_NumberFormat2")), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        numberFormatPanel.Children.Add(numberFormatPresetBox);
         numberFormatPanel.Children.Add(numberFormatButton);
 
         var tabs = new TabControl
@@ -262,7 +281,9 @@ public sealed partial class MainWindow
             summaryBox.SelectedIndex,
             showValuesAsBox.SelectedIndex,
             baseFieldBox.SelectedIndex,
-            baseItemBox.Text);
+            baseItemBox.Text,
+            numberFormatId,
+            numberFormatCode);
 
         var dataFields = pivot.DataFields.ToList();
         dataFields[dataFieldIndex.Value] = result;
