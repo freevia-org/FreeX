@@ -6252,6 +6252,18 @@ public static class DocxWriter
     private static XDocument BuildChartSpace(ChartPart part)
     {
         var chart = part.Chart;
+        var quickLayout = chart.QuickLayoutId > 0
+            ? ChartQuickLayout.FindById(chart.QuickLayoutId)
+            : null;
+        var style = chart.StyleId > 0
+            ? ChartStyle.FindById(chart.StyleId)
+            : ChartStyle.Default;
+        var showTitle = quickLayout?.ShowTitle ?? true;
+        var showLegend = quickLayout?.ShowLegend ?? chart.ShowLegend;
+        var showAxisTitles = quickLayout?.ShowAxisTitles ?? true;
+        var showGridlines = quickLayout?.ShowGridlines ?? style?.ShowGridlines ?? ChartStyle.Default.ShowGridlines;
+        var categoryAxisTitle = showAxisTitles ? chart.CategoryAxisTitle : null;
+        var valueAxisTitle = showAxisTitles ? chart.ValueAxisTitle : null;
         // Stable axis ids referenced by the plot's series-holding chart element (cartesian kinds only).
         const long catAxisId = 111111111L;
         const long valAxisId = 222222222L;
@@ -6273,15 +6285,15 @@ public static class DocxWriter
             // Scatter uses a value axis for x (so x-values plot numerically); the other cartesian kinds use a
             // category axis for x. The category-axis title doubles as the scatter x-axis title.
             plotArea.Add(chart.Kind == ChartKind.Scatter
-                ? BuildValueAxis(catAxisId, valAxisId, "b", chart.CategoryAxisTitle)
-                : BuildCategoryAxis(catAxisId, valAxisId, chart.CategoryAxisTitle));
-            plotArea.Add(BuildValueAxis(valAxisId, catAxisId, "l", chart.ValueAxisTitle));
+                ? BuildValueAxis(catAxisId, valAxisId, "b", categoryAxisTitle, showGridlines: false)
+                : BuildCategoryAxis(catAxisId, valAxisId, categoryAxisTitle));
+            plotArea.Add(BuildValueAxis(valAxisId, catAxisId, "l", valueAxisTitle, showGridlines));
         }
         if (ChartHasPlotAreaFill(chart))
             plotArea.Add(BuildChartPlotAreaProperties());
 
         var chartElement = new XElement(C + "chart");
-        if (chart.Title is { Length: > 0 } title)
+        if (showTitle && chart.Title is { Length: > 0 } title)
         {
             chartElement.Add(BuildChartTitle(title));
             chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute("val", "0")));
@@ -6291,7 +6303,7 @@ public static class DocxWriter
             chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute("val", "1")));
         }
         chartElement.Add(plotArea);
-        if (chart.ShowLegend)
+        if (showLegend)
             chartElement.Add(new XElement(C + "legend",
                 new XElement(C + "legendPos", new XAttribute("val", "b")),
                 new XElement(C + "overlay", new XAttribute("val", "0"))));
@@ -6731,13 +6743,20 @@ public static class DocxWriter
     /// cross-referencing <paramref name="crossAxisId"/>, with an optional axis <paramref name="title"/>. Reused
     /// for the scatter chart's numeric x-axis (position "b").
     /// </summary>
-    private static XElement BuildValueAxis(long axisId, long crossAxisId, string position, string? title)
+    private static XElement BuildValueAxis(
+        long axisId,
+        long crossAxisId,
+        string position,
+        string? title,
+        bool showGridlines = false)
     {
         var ax = new XElement(C + "valAx",
             new XElement(C + "axId", new XAttribute("val", axisId)),
             new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute("val", "minMax"))),
             new XElement(C + "delete", new XAttribute("val", "0")),
             new XElement(C + "axPos", new XAttribute("val", position)));
+        if (showGridlines)
+            ax.Add(new XElement(C + "majorGridlines"));
         if (title is { Length: > 0 } t)
             ax.Add(BuildChartTitle(t));
         ax.Add(new XElement(C + "crossAx", new XAttribute("val", crossAxisId)));
