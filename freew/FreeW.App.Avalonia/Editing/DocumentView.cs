@@ -733,7 +733,6 @@ public sealed class DocumentView : Control
         if (!IsHeadingBlock(blockIndex) || !_collapsedHeadings.Add(blockIndex))
             return;
         InvalidateLayoutAndVisual();
-        DocumentChanged?.Invoke();
     }
 
     public void ExpandHeading(int blockIndex)
@@ -741,7 +740,6 @@ public sealed class DocumentView : Control
         if (!_collapsedHeadings.Remove(blockIndex))
             return;
         InvalidateLayoutAndVisual();
-        DocumentChanged?.Invoke();
     }
 
     public bool IsHeadingCollapsed(int blockIndex) => _collapsedHeadings.Contains(blockIndex);

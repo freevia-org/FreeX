@@ -280,6 +280,11 @@ internal sealed class OutlineView : Border
     internal int? SelectedBlockIndex =>
         (_list.SelectedItem as OutlineRowItem)?.Row.BlockIndex;
 
+    internal string? RowDisplayTextForTests(int blockIndex) =>
+        _list.Items.OfType<OutlineRowItem>()
+            .FirstOrDefault(item => item.Row.BlockIndex == blockIndex)
+            ?.ToString();
+
     internal void SelectBlockIndex(int blockIndex) => SelectBlock(blockIndex);
 
     internal void SetShowLevel(int level)

@@ -77,6 +77,11 @@ public sealed class OutlineViewParityTests
         string plainTextAfter = string.Empty;
         int? selectedAfterMove = null;
         bool collapsed = false;
+        bool expanded = false;
+        string? expandedMarkerBefore = null;
+        string? collapsedMarker = null;
+        string? expandedMarkerAfter = null;
+        int collapseExpandDocumentChangedCount = -1;
 
         await OnUiThread(() =>
         {
@@ -99,9 +104,16 @@ public sealed class OutlineViewParityTests
             outline.MoveSelectedForTests(moveUp: true);
             selectedAfterMove = outline.SelectedBlockIndex;
             outline.SelectBlockIndex(2);
+            expandedMarkerBefore = outline.RowDisplayTextForTests(2);
+            var documentChangedCount = 0;
+            editor.DocumentChanged += () => documentChangedCount++;
             outline.CollapseSelectedForTests();
             collapsed = editor.IsHeadingCollapsed(2);
+            collapsedMarker = outline.RowDisplayTextForTests(2);
             outline.ExpandSelectedForTests();
+            expanded = !editor.IsHeadingCollapsed(2);
+            expandedMarkerAfter = outline.RowDisplayTextForTests(2);
+            collapseExpandDocumentChangedCount = documentChangedCount;
         });
 
         caret.Should().Be((4, 0));
@@ -109,6 +121,11 @@ public sealed class OutlineViewParityTests
         plainTextAfter.Should().Be(plainTextBefore);
         selectedAfterMove.Should().Be(4);
         collapsed.Should().BeTrue();
+        expanded.Should().BeTrue();
+        expandedMarkerBefore.Should().Contain("[-] Chapter One");
+        collapsedMarker.Should().Contain("[+] Chapter One");
+        expandedMarkerAfter.Should().Contain("[-] Chapter One");
+        collapseExpandDocumentChangedCount.Should().Be(0);
     }
 
     [Fact]
@@ -120,6 +137,7 @@ public sealed class OutlineViewParityTests
         bool workspaceIsLive = false;
         DocumentViewMode modeAfterDraft = DocumentViewMode.PrintLayout;
         bool pageEditRestoredAfterOutline = false;
+        bool outlineCheckedAfterDraft = true;
 
         await OnUiThread(() =>
         {
@@ -150,6 +168,7 @@ public sealed class OutlineViewParityTests
             draftCommand!.Execute(RibbonCommandContext.Empty);
             modeAfterDraft = window.Editor.ViewMode;
             workspaceIsLive = workspaceIsLive && window.IsWorkspaceShowingLiveEditor;
+            outlineCheckedAfterDraft = state.GetState().IsChecked;
         });
 
         activeAfterEnter.Should().BeTrue();
@@ -158,5 +177,50 @@ public sealed class OutlineViewParityTests
         workspaceIsLive.Should().BeTrue();
         modeAfterDraft.Should().Be(DocumentViewMode.Draft);
         pageEditRestoredAfterOutline.Should().BeTrue();
+        outlineCheckedAfterDraft.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Production_outline_collapse_and_expand_refresh_markers_without_dirtying_document()
+    {
+        bool dirtyBefore = true;
+        bool dirtyAfterCollapse = true;
+        bool dirtyAfterExpand = true;
+        bool collapsed = false;
+        bool expanded = false;
+        string? collapsedMarker = null;
+        string? expandedMarker = null;
+
+        await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var callbacks = window.BuildBackstageCallbacks();
+            var heading = OutlineViewModel.Build(
+                    window.Editor.Document,
+                    OutlineViewModel.ShowAllLevels,
+                    firstLineOnly: false)
+                .First(row => row.IsHeading);
+
+            dirtyBefore = callbacks.GetIsDirty();
+            window.ToggleOutlineViewForTests();
+            window.OutlineViewForTests.SelectBlockIndex(heading.BlockIndex);
+            window.OutlineViewForTests.CollapseSelectedForTests();
+            collapsed = window.Editor.IsHeadingCollapsed(heading.BlockIndex);
+            collapsedMarker = window.OutlineViewForTests.RowDisplayTextForTests(heading.BlockIndex);
+            dirtyAfterCollapse = callbacks.GetIsDirty();
+
+            window.OutlineViewForTests.ExpandSelectedForTests();
+            expanded = !window.Editor.IsHeadingCollapsed(heading.BlockIndex);
+            expandedMarker = window.OutlineViewForTests.RowDisplayTextForTests(heading.BlockIndex);
+            dirtyAfterExpand = callbacks.GetIsDirty();
+        });
+
+        dirtyBefore.Should().BeFalse();
+        collapsed.Should().BeTrue();
+        collapsedMarker.Should().Contain("[+]");
+        dirtyAfterCollapse.Should().BeFalse();
+        expanded.Should().BeTrue();
+        expandedMarker.Should().Contain("[-]");
+        dirtyAfterExpand.Should().BeFalse();
     }
 }
