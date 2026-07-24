@@ -22,6 +22,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("Style: FreeW.Core.Model.WordArtStyle.GlowBlue,");
         source.Should().Contain("Warp: FreeW.Core.Model.WordArtWarp.Wave1,");
         source.Should().Contain("FontSizePt: 32");
+        source.Should().Contain("wordArtCanvas.Children.OfType<Border>().FirstOrDefault");
+        source.Should().Contain("border.Effect is null && border.Opacity == 0.6");
         source.Should().Contain("localRect.Height + 3");
     }
 

@@ -476,6 +476,24 @@ static void RenderDocumentComposite(
                         FontSizePt: 32
                     })
                 {
+                    // Render the authored outer halo before the bounded canvas. This preserves the
+                    // halo that otherwise lies outside the Wave1 object's VisualBrush destination.
+                    if (fe is Canvas wordArtCanvas
+                        && wordArtCanvas.Children.OfType<Border>().FirstOrDefault(border =>
+                            border.Effect is null && border.Opacity == 0.6) is { } glowRing)
+                    {
+                        var ringLeft = Canvas.GetLeft(glowRing);
+                        var ringTop = Canvas.GetTop(glowRing);
+                        dc.DrawRectangle(
+                            new VisualBrush(glowRing) { Stretch = Stretch.None },
+                            null,
+                            new Rect(
+                                localRect.X + (double.IsNaN(ringLeft) ? 0 : ringLeft),
+                                localRect.Y + (double.IsNaN(ringTop) ? 0 : ringTop),
+                                glowRing.ActualWidth,
+                                glowRing.ActualHeight));
+                    }
+
                     // The VisualBrush fits this imported effect stack into the object frame, while
                     // Word retains a three-DIP taller Wave1 raster destination.
                     drawRect = new Rect(
