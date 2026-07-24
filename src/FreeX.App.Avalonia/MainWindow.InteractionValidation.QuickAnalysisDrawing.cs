@@ -236,8 +236,8 @@ public sealed partial class MainWindow
         Canvas.SetLeft(container, 80);
         Canvas.SetTop(container, 100);
         canvas.Children.Add(container);
-        container.Measure(new Avalonia.Size(900, 700));
-        container.Arrange(new Avalonia.Rect(0, 0, container.Width, container.Height));
+        container.Measure(new global::Avalonia.Size(900, 700));
+        container.Arrange(new global::Avalonia.Rect(0, 0, container.Width, container.Height));
         return (container, surface, adorner, canvas, renderPlan);
     }
 
