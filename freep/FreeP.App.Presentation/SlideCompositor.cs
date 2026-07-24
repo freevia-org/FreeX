@@ -1362,11 +1362,7 @@ public static class SlideCompositor
         double lnSpcReduc   = body.LnSpcReductionPPT.HasValue && body.LnSpcReductionPPT.Value > 0
             ? body.LnSpcReductionPPT.Value / 100000.0 : 0.0;
 
-        // Wave 19A: auto-number counters per level (0-based).
-        // Counters are incremented when we encounter an Auto bullet paragraph at that level,
-        // and reset when the level changes to a lower number (outer level).
-        var autoNumCounters = new int[9]; // 1-based, 0 = not yet started
-        int lastAutoNumLevel = -1;
+        var autoNumState = new PresentationListMarkerContinuationState();
 
         var resolvedParas = new List<ResolvedParagraph>(body.Paragraphs.Count);
 
@@ -1646,27 +1642,24 @@ public static class SlideCompositor
             {
                 case BulletKind.Char:
                     bulletText = effectiveBulletChar ?? "•";
+                    autoNumState.Break();
                     break;
 
                 case BulletKind.Auto:
                 {
-                    // BU3: clamp level to valid array range [0,8] as defense-in-depth.
-                    // The reader also clamps, but this guard catches programmatically-set
-                    // out-of-range values (e.g. Level=9 set directly on the model).
-                    int level = Math.Clamp(para.Level, 0, 8);
-                    // Reset inner levels when we move to an outer level.
-                    if (level < lastAutoNumLevel)
-                        for (int li = level + 1; li < 9; li++) autoNumCounters[li] = 0;
-                    // Also reset this level when we haven't seen it yet (counter == 0).
-                    // Use para.AutoNumStartAt if it's the first paragraph at this level.
-                    if (autoNumCounters[level] == 0)
-                        autoNumCounters[level] = para.AutoNumStartAt;
-                    else
-                        autoNumCounters[level]++;
-                    lastAutoNumLevel = level;
-                    bulletText = FormatAutoNum(effectiveAutoNumType, autoNumCounters[level]);
+                    bulletText = PresentationListMarkerPlanner.FormatAutoNumber(
+                        effectiveAutoNumType,
+                        autoNumState.Next(
+                            para.Level,
+                            effectiveAutoNumType,
+                            para.AutoNumStartAt,
+                            para.AutoNumStartAtSpecified));
                     break;
                 }
+
+                default:
+                    autoNumState.Break();
+                    break;
             }
 
             resolvedParas.Add(new ResolvedParagraph
@@ -1729,57 +1722,12 @@ public static class SlideCompositor
     /// Formats an auto-numbered bullet counter value according to the given type.
     /// <paramref name="n"/> is 1-based.
     /// </summary>
-    public static string FormatAutoNum(AutoNumType type, int n)
-    {
-        if (n < 1) n = 1;
-        return type switch
-        {
-            AutoNumType.ArabicPeriod     => $"{n}.",
-            AutoNumType.ArabicParenR     => $"{n})",
-            AutoNumType.ArabicParenBoth  => $"({n})",
-            AutoNumType.RomanUcPeriod    => $"{ToRoman(n, upper: true)}.",
-            AutoNumType.RomanLcPeriod    => $"{ToRoman(n, upper: false)}.",
-            AutoNumType.RomanUcParenR    => $"{ToRoman(n, upper: true)})",
-            AutoNumType.RomanLcParenR    => $"{ToRoman(n, upper: false)})",
-            AutoNumType.AlphaUcPeriod    => $"{ToAlpha(n, upper: true)}.",
-            AutoNumType.AlphaLcPeriod    => $"{ToAlpha(n, upper: false)}.",
-            AutoNumType.AlphaUcParenR    => $"{ToAlpha(n, upper: true)})",
-            AutoNumType.AlphaLcParenR    => $"{ToAlpha(n, upper: false)})",
-            AutoNumType.AlphaUcParenBoth => $"({ToAlpha(n, upper: true)})",
-            AutoNumType.AlphaLcParenBoth => $"({ToAlpha(n, upper: false)})",
-            _                            => $"{n}."
-        };
-    }
+    public static string FormatAutoNum(AutoNumType type, int n) =>
+        PresentationListMarkerPlanner.FormatAutoNumber(type, n);
 
     private static ResolvedRun? SelectBulletSeedRun(IReadOnlyList<ResolvedRun> runs) =>
         runs.FirstOrDefault(run => run.Text.Length > 0)
         ?? runs.FirstOrDefault();
-
-    private static string ToRoman(int n, bool upper)
-    {
-        if (n < 1 || n > 3999) return n.ToString();
-        var values = new[] { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
-        var syms   = upper
-            ? new[] { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" }
-            : new[] { "m", "cm", "d", "cd", "c", "xc", "l", "xl", "x", "ix", "v", "iv", "i" };
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < values.Length; i++)
-            while (n >= values[i]) { sb.Append(syms[i]); n -= values[i]; }
-        return sb.ToString();
-    }
-
-    private static string ToAlpha(int n, bool upper)
-    {
-        // 1→A, 26→Z, 27→AA, etc.
-        var sb = new System.Text.StringBuilder();
-        while (n > 0)
-        {
-            n--; // convert to 0-based
-            sb.Insert(0, (char)((upper ? 'A' : 'a') + (n % 26)));
-            n /= 26;
-        }
-        return sb.ToString();
-    }
 
     // ─── Unit helpers ────────────────────────────────────────────────────────────────────────
 

@@ -273,7 +273,11 @@ public sealed class InCanvasRichTextEditBuffer
 
 internal static class RichTextBodyMutationPlanner
 {
-    private sealed record Token(char? Character, Run? RunTemplate, Paragraph? NextParagraphTemplate)
+    private sealed record Token(
+        char? Character,
+        Run? RunTemplate,
+        Paragraph? NextParagraphTemplate,
+        bool IsInsertedBreak = false)
     {
         public bool IsBreak => Character is null;
     }
@@ -382,7 +386,7 @@ internal static class RichTextBodyMutationPlanner
         foreach (char character in insertedText)
         {
             yield return character == '\n'
-                ? new Token(null, null, paragraphTemplate)
+                ? new Token(null, null, paragraphTemplate, IsInsertedBreak: true)
                 : new Token(character, runTemplate, null);
         }
     }
@@ -408,19 +412,21 @@ internal static class RichTextBodyMutationPlanner
             activeText.Clear();
         }
 
-        void FlushParagraph(Paragraph? nextTemplate)
+        void FlushParagraph(Paragraph? nextTemplate, bool clearAutoNumStartAtSpecified)
         {
             FlushRun();
             EnsureRun(paragraph, activeTemplate ?? firstTemplate.Runs.FirstOrDefault());
             result.Paragraphs.Add(paragraph);
-            paragraph = CloneParagraphWithoutRuns(nextTemplate ?? firstTemplate);
+            paragraph = CloneParagraphWithoutRuns(
+                nextTemplate ?? firstTemplate,
+                clearAutoNumStartAtSpecified);
         }
 
         foreach (var token in tokens)
         {
             if (token.IsBreak)
             {
-                FlushParagraph(token.NextParagraphTemplate);
+                FlushParagraph(token.NextParagraphTemplate, token.IsInsertedBreak);
                 continue;
             }
 
@@ -439,9 +445,13 @@ internal static class RichTextBodyMutationPlanner
         return result;
     }
 
-    private static Paragraph CloneParagraphWithoutRuns(Paragraph source)
+    private static Paragraph CloneParagraphWithoutRuns(
+        Paragraph source,
+        bool clearAutoNumStartAtSpecified = false)
     {
-        var paragraph = TextBodyModelCloner.CloneParagraph(source);
+        var paragraph = InCanvasRichTextParagraphEditPlanner.CloneParagraphMetadata(
+            source,
+            clearAutoNumStartAtSpecified);
         paragraph.Runs.Clear();
         return paragraph;
     }

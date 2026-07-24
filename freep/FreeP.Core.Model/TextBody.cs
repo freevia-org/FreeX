@@ -395,6 +395,14 @@ public sealed class Paragraph
     public int AutoNumStartAt { get; set; } = 1;
 
     /// <summary>
+    /// True when the source explicitly authored the <c>startAt</c> attribute.
+    /// This is distinct from <see cref="AutoNumStartAt"/> being 1: an explicit
+    /// start at 1 restarts an active list, while an omitted value continues it.
+    /// Rich-editor split continuations clear this flag on the new paragraph.
+    /// </summary>
+    public bool AutoNumStartAtSpecified { get; set; }
+
+    /// <summary>
     /// Left margin (indent from shape inset) in EMU from <c>a:pPr marL=</c>.
     /// Null means inherit from layout/master/style.
     /// Positive = bullet + text indented from the left edge.

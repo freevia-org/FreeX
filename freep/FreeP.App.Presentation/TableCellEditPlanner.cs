@@ -196,7 +196,8 @@ public sealed record InCanvasEditorParagraphStyle(
     ImagePart? BulletImage,
     int Level,
     long? MarginLeftEmu,
-    long? IndentEmu)
+    long? IndentEmu,
+    bool AutoNumStartAtSpecified = false)
 {
     public bool HasListFormatting =>
         !BulletSuppressed && BulletKind != BulletKind.None;
@@ -214,7 +215,8 @@ public sealed record InCanvasEditorSelectedListState(
     string? BulletChar,
     AutoNumType? AutoNumType,
     int? AutoNumStartAt,
-    bool IsPictureBullet)
+    bool IsPictureBullet,
+    bool AutoNumStartAtSpecified = false)
 {
     public bool HasResolvedPreset => !string.IsNullOrWhiteSpace(PresetId);
 
@@ -1410,7 +1412,8 @@ public static class TableCellEditPlanner
                 paragraph.BulletKind == BulletKind.Image ? paragraph.BulletImage : null,
                 paragraph.Level,
                 paragraph.MarginLeftEmu,
-                paragraph.IndentEmu));
+                paragraph.IndentEmu,
+                paragraph.AutoNumStartAtSpecified));
             cursor = end + (pi < body.Paragraphs.Count - 1 ? 1 : 0);
         }
 
@@ -1536,7 +1539,8 @@ public static class TableCellEditPlanner
                 preset.BulletChar,
                 preset.AutoNumType,
                 first.AutoNumStartAt,
-                IsPictureBullet: false);
+                IsPictureBullet: false,
+                AutoNumStartAtSpecified: first.AutoNumStartAtSpecified);
         }
 
         return new InCanvasEditorSelectedListState(
@@ -1555,7 +1559,8 @@ public static class TableCellEditPlanner
             BulletChar: first.BulletChar,
             AutoNumType: first.AutoNumType,
             AutoNumStartAt: first.AutoNumStartAt,
-            IsPictureBullet: false);
+            IsPictureBullet: false,
+            AutoNumStartAtSpecified: first.AutoNumStartAtSpecified);
     }
 
     private static bool ListStateEquals(
@@ -1565,6 +1570,7 @@ public static class TableCellEditPlanner
         left.BulletChar == right.BulletChar &&
         left.AutoNumType == right.AutoNumType &&
         left.AutoNumStartAt == right.AutoNumStartAt &&
+        left.AutoNumStartAtSpecified == right.AutoNumStartAtSpecified &&
         left.BulletSuppressed == right.BulletSuppressed &&
         ImagePartsEqual(left.BulletImage, right.BulletImage);
 
@@ -1806,6 +1812,7 @@ public static class TableCellEditPlanner
                 paragraph.BulletImage = null;
                 paragraph.AutoNumType = AutoNumType.ArabicPeriod;
                 paragraph.AutoNumStartAt = 1;
+                paragraph.AutoNumStartAtSpecified = false;
                 paragraph.BulletSuppressed = false;
             }
             else
@@ -1848,6 +1855,7 @@ public static class TableCellEditPlanner
             paragraph.BulletImage = null;
             paragraph.AutoNumType = preset.AutoNumType ?? AutoNumType.ArabicPeriod;
             paragraph.AutoNumStartAt = Math.Max(1, preset.StartAt);
+            paragraph.AutoNumStartAtSpecified = preset.StartAt != 1;
             return;
         }
 

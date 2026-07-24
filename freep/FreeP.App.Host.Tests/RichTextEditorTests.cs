@@ -37,6 +37,7 @@ public sealed class RichTextEditorTests
             BulletKind = BulletKind.Auto,
             AutoNumType = AutoNumType.AlphaLcParenBoth,
             AutoNumStartAt = 3,
+            AutoNumStartAtSpecified = true,
             Runs = { new ModelRun { Text = "AlphaBeta" } },
         });
 
@@ -55,6 +56,37 @@ public sealed class RichTextEditorTests
             && paragraph.BulletKind == BulletKind.Auto
             && paragraph.AutoNumType == AutoNumType.AlphaLcParenBoth
             && paragraph.AutoNumStartAt == 3);
+        restored.Paragraphs[0].AutoNumStartAtSpecified.Should().BeTrue();
+        restored.Paragraphs[1].AutoNumStartAtSpecified.Should().BeFalse();
+        ComposeText(restored).Paragraphs.Select(paragraph => paragraph.BulletText)
+            .Should().Equal("(c)", "(d)");
+    }
+
+    [StaFact]
+    public void WpfExplicitRestartAfterNonList_UsesSharedMarkerContinuation()
+    {
+        var original = new TextBody();
+        var first = ModelParagraph("First", BulletKind.Auto, 0, 0, 0, null);
+        first.AutoNumType = AutoNumType.ArabicPeriod;
+        first.AutoNumStartAt = 4;
+        first.AutoNumStartAtSpecified = true;
+        original.Paragraphs.Add(first);
+        original.Paragraphs.Add(ModelParagraph("Plain", BulletKind.None, 0, 0, 0, null));
+        var restart = ModelParagraph("Restart", BulletKind.Auto, 0, 0, 0, null);
+        restart.AutoNumType = AutoNumType.ArabicPeriod;
+        restart.AutoNumStartAt = 7;
+        restart.AutoNumStartAtSpecified = true;
+        original.Paragraphs.Add(restart);
+        var after = ModelParagraph("After", BulletKind.Auto, 0, 0, 0, null);
+        after.AutoNumType = AutoNumType.ArabicPeriod;
+        original.Paragraphs.Add(after);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(
+            FlowDocumentFor("First", "Plain", "Restart", "After"),
+            original);
+
+        ComposeText(restored).Paragraphs.Select(paragraph => paragraph.BulletText)
+            .Should().Equal("4.", string.Empty, "7.", "8.");
     }
 
     [StaFact]
@@ -1241,6 +1273,28 @@ public sealed class RichTextEditorTests
     /// - Run 0: "Hello", Bold=true, Color=Red(#FF0000), FontSize=24pt
     /// - Run 1: " world", Bold=false, no color, FontSize=12pt
     /// </summary>
+    private static ResolvedTextLayout ComposeText(TextBody body)
+    {
+        var presentation = FreeP.Core.Model.Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 3000000,
+            TextBody = body,
+        });
+
+        return SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .Single()
+            .Text!;
+    }
+
     private static TextBody DistinctParagraphBody()
     {
         var body = new TextBody();

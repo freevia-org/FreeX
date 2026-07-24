@@ -148,15 +148,19 @@ internal static class TextBodyFlowDocumentConverter
             : InCanvasRichTextParagraphEditPlanner.ResolveSourceParagraphIndices(
                 originalBody.Paragraphs,
                 editedParagraphTexts);
+        var consumedSourceParagraphs = new HashSet<int>();
         int modelParaIndex = 0;
         foreach (var block in blocks)
         {
             int sourceParaIndex = originalBody is null
                 ? -1
                 : sourceParagraphIndices[modelParaIndex];
+            bool isSplitContinuation = sourceParaIndex >= 0
+                && !consumedSourceParagraphs.Add(sourceParaIndex);
             var mp = sourceParaIndex >= 0
                 ? InCanvasRichTextParagraphEditPlanner.CloneParagraphMetadata(
-                    originalBody!.Paragraphs[sourceParaIndex])
+                    originalBody!.Paragraphs[sourceParaIndex],
+                    clearAutoNumStartAtSpecified: isSplitContinuation)
                 : new ModelParagraph();
             mp.Runs.Clear();
 

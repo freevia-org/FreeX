@@ -7,10 +7,14 @@ namespace FreeP.App.Compositor;
 /// A WPF Enter operation can create more FlowDocument paragraphs than existed in
 /// the source model; PowerPoint carries the split paragraph's list metadata forward.
 /// A join keeps the leading paragraph's metadata.
+/// An authored AutoNumStartAt is retained only on the first lineage paragraph;
+/// split continuation paragraphs clear explicit restart intent.
 /// </summary>
 public static class InCanvasRichTextParagraphEditPlanner
 {
-    public static Paragraph CloneParagraphMetadata(Paragraph source)
+    public static Paragraph CloneParagraphMetadata(
+        Paragraph source,
+        bool clearAutoNumStartAtSpecified = false)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -24,6 +28,7 @@ public static class InCanvasRichTextParagraphEditPlanner
             BulletImage = source.BulletImage,
             AutoNumType = source.AutoNumType,
             AutoNumStartAt = source.AutoNumStartAt,
+            AutoNumStartAtSpecified = source.AutoNumStartAtSpecified && !clearAutoNumStartAtSpecified,
             MarginLeftEmu = source.MarginLeftEmu,
             IndentEmu = source.IndentEmu,
             BulletColor = source.BulletColor,

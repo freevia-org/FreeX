@@ -4015,7 +4015,10 @@ public static class PptxPackageReader
                 para.BulletKind = BulletKind.Auto;
                 para.AutoNumType = ParseAutoNumType(buAutoNum.Attribute("type")?.Value);
                 if (int.TryParse(buAutoNum.Attribute("startAt")?.Value, out var startAt) && startAt >= 1)
+                {
                     para.AutoNumStartAt = startAt;
+                    para.AutoNumStartAtSpecified = true;
+                }
             }
             else if (pPr.Element(A + "buBlip") is { } buBlip)
             {

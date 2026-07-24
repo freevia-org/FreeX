@@ -3887,7 +3887,8 @@ public static class PptxPackageWriter
                     _                           => "arabicPeriod"
                 };
                 var autoNumEl = new XElement(A + "buAutoNum", new XAttribute("type", autoNumTypeStr));
-                if (para.AutoNumStartAt != 1) autoNumEl.Add(new XAttribute("startAt", para.AutoNumStartAt));
+                if (para.AutoNumStartAtSpecified || para.AutoNumStartAt != 1)
+                    autoNumEl.Add(new XAttribute("startAt", Math.Max(1, para.AutoNumStartAt)));
                 pPr.Add(autoNumEl); hasPPr = true; break;
             case BulletKind.Image:
                 if (bulletImageRelIds is not null &&

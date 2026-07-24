@@ -201,6 +201,7 @@ internal static class PresentationModelCloneHelper
             BulletImage = CloneImagePart(source.BulletImage),
             AutoNumType = source.AutoNumType,
             AutoNumStartAt = source.AutoNumStartAt,
+            AutoNumStartAtSpecified = source.AutoNumStartAtSpecified,
             MarginLeftEmu = source.MarginLeftEmu,
             IndentEmu = source.IndentEmu,
             BulletColor = source.BulletColor,

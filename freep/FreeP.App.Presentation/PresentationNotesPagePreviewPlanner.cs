@@ -479,11 +479,11 @@ public static class PresentationNotesPagePreviewPlanner
         if (body is null || body.Paragraphs.Count == 0)
             return [];
 
-        var counters = new int[9];
+        var markerState = new PresentationListMarkerContinuationState();
         var result = new List<NoteParagraph>(body.Paragraphs.Count);
         foreach (var paragraph in body.Paragraphs)
         {
-            var prefix = BuildParagraphPrefix(paragraph, counters);
+            var prefix = BuildParagraphPrefix(paragraph, markerState);
             var textSegments = ExtractTextSegments(paragraph.Runs);
             var levelIndent = new string(' ', Math.Clamp(paragraph.Level, 0, 8) * 2);
             result.Add(new NoteParagraph(
@@ -516,80 +516,41 @@ public static class PresentationNotesPagePreviewPlanner
         return result;
     }
 
-    private static string BuildParagraphPrefix(Paragraph paragraph, int[] counters)
+    private static string BuildParagraphPrefix(
+        Paragraph paragraph,
+        PresentationListMarkerContinuationState markerState)
     {
-        var level = Math.Clamp(paragraph.Level, 0, counters.Length - 1);
-        for (var i = level + 1; i < counters.Length; i++)
-            counters[i] = 0;
-
         return paragraph.BulletKind switch
         {
-            BulletKind.Char => $"{(string.IsNullOrEmpty(paragraph.BulletChar) ? "\u2022" : paragraph.BulletChar)} ",
-            BulletKind.Auto => $"{BuildAutoNumberText(paragraph, counters, level)} ",
-            _ => string.Empty,
+            BulletKind.Char => BreakAndFormatCharMarker(paragraph, markerState),
+            BulletKind.Auto => $"{BuildAutoNumberText(paragraph, markerState)} ",
+            _ => BreakAndReturnEmpty(markerState),
         };
     }
 
-    private static string BuildAutoNumberText(Paragraph paragraph, int[] counters, int level)
-    {
-        if (counters[level] == 0)
-            counters[level] = Math.Max(1, paragraph.AutoNumStartAt);
-        else
-            counters[level]++;
+    private static string BuildAutoNumberText(
+        Paragraph paragraph,
+        PresentationListMarkerContinuationState markerState) =>
+        PresentationListMarkerPlanner.FormatAutoNumber(
+            paragraph.AutoNumType,
+            markerState.Next(
+                paragraph.Level,
+                paragraph.AutoNumType,
+                paragraph.AutoNumStartAt,
+                paragraph.AutoNumStartAtSpecified));
 
-        var value = counters[level];
-        return paragraph.AutoNumType switch
-        {
-            AutoNumType.ArabicParenR => $"{value})",
-            AutoNumType.ArabicParenBoth => $"({value})",
-            AutoNumType.RomanUcPeriod => $"{ToRoman(value).ToUpperInvariant()}.",
-            AutoNumType.RomanLcPeriod => $"{ToRoman(value).ToLowerInvariant()}.",
-            AutoNumType.RomanUcParenR => $"{ToRoman(value).ToUpperInvariant()})",
-            AutoNumType.RomanLcParenR => $"{ToRoman(value).ToLowerInvariant()})",
-            AutoNumType.AlphaUcPeriod => $"{ToAlpha(value).ToUpperInvariant()}.",
-            AutoNumType.AlphaLcPeriod => $"{ToAlpha(value).ToLowerInvariant()}.",
-            AutoNumType.AlphaUcParenR => $"{ToAlpha(value).ToUpperInvariant()})",
-            AutoNumType.AlphaLcParenR => $"{ToAlpha(value).ToLowerInvariant()})",
-            AutoNumType.AlphaUcParenBoth => $"({ToAlpha(value).ToUpperInvariant()})",
-            AutoNumType.AlphaLcParenBoth => $"({ToAlpha(value).ToLowerInvariant()})",
-            _ => $"{value}.",
-        };
+    private static string BreakAndFormatCharMarker(
+        Paragraph paragraph,
+        PresentationListMarkerContinuationState markerState)
+    {
+        markerState.Break();
+        return $"{(string.IsNullOrEmpty(paragraph.BulletChar) ? "\u2022" : paragraph.BulletChar)} ";
     }
 
-    private static string ToAlpha(int value)
+    private static string BreakAndReturnEmpty(PresentationListMarkerContinuationState markerState)
     {
-        value = Math.Max(1, value);
-        var chars = new Stack<char>();
-        while (value > 0)
-        {
-            value--;
-            chars.Push((char)('A' + (value % 26)));
-            value /= 26;
-        }
-
-        return new string(chars.ToArray());
-    }
-
-    private static string ToRoman(int value)
-    {
-        value = Math.Clamp(value, 1, 3999);
-        var map = new (int Value, string Text)[]
-        {
-            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
-            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
-            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
-        };
-        var result = new System.Text.StringBuilder();
-        foreach (var (number, text) in map)
-        {
-            while (value >= number)
-            {
-                result.Append(text);
-                value -= number;
-            }
-        }
-
-        return result.ToString();
+        markerState.Break();
+        return string.Empty;
     }
 
     /// <summary>

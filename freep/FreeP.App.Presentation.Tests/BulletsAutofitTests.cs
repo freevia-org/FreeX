@@ -136,6 +136,130 @@ public sealed class BulletsAutofitTests
         layout.Paragraphs[4].BulletText.Should().Be("3.");
     }
 
+    [Fact]
+    public void AutoNum_ExplicitStartAt_ContinuesUntilAnotherExplicitRestart()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(AutoParagraph("first", 4, specified: true));
+        body.Paragraphs.Add(AutoParagraph("second"));
+        body.Paragraphs.Add(AutoParagraph("restart", 1, specified: true));
+        body.Paragraphs.Add(AutoParagraph("after restart"));
+
+        var layout = ComposeText(body);
+
+        layout.Paragraphs.Select(paragraph => paragraph.BulletText)
+            .Should().Equal("4.", "5.", "1.", "2.");
+    }
+
+    [Fact]
+    public void AutoNum_NonListBoundary_RestartsAtFollowingExplicitStart()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(AutoParagraph("first", 4, specified: true));
+        body.Paragraphs.Add(AutoParagraph("second"));
+        body.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "plain" } } });
+        body.Paragraphs.Add(AutoParagraph("new list", 7, specified: true));
+        body.Paragraphs.Add(AutoParagraph("continues"));
+
+        var layout = ComposeText(body);
+
+        layout.Paragraphs.Select(paragraph => paragraph.BulletText)
+            .Should().Equal("4.", "5.", string.Empty, "7.", "8.");
+    }
+
+    [Fact]
+    public void AutoNum_CharacterListBoundary_RestartsAtFollowingExplicitStart()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(AutoParagraph("first", 4, specified: true));
+        body.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "*",
+            Runs = { new Run { Text = "bullet" } },
+        });
+        body.Paragraphs.Add(AutoParagraph("new list", 9, specified: true));
+
+        var layout = ComposeText(body);
+
+        layout.Paragraphs.Select(paragraph => paragraph.BulletText)
+            .Should().Equal("4.", "*", "9.");
+    }
+
+    [Fact]
+    public void AutoNum_SplitContinuation_ClearsExplicitStartOnDescendants()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumStartAt = 4,
+            AutoNumStartAtSpecified = true,
+            Runs = { new Run { Text = "AB" } },
+        });
+        var buffer = new InCanvasRichTextEditBuffer(source);
+
+        buffer.ReplacePlainText("A\nB\nC");
+
+        var edited = buffer.Body;
+        edited.Paragraphs.Should().HaveCount(3);
+        edited.Paragraphs[0].AutoNumStartAtSpecified.Should().BeTrue();
+        edited.Paragraphs.Skip(1).Should().OnlyContain(paragraph =>
+            !paragraph.AutoNumStartAtSpecified);
+        ComposeText(edited).Paragraphs.Select(paragraph => paragraph.BulletText)
+            .Should().Equal("4.", "5.", "6.");
+    }
+
+    [Fact]
+    public void ListJoin_UsesLeadingMetadataAndMarkerVisibility()
+    {
+        var listFirst = new Paragraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumStartAt = 4,
+            AutoNumStartAtSpecified = true,
+            Runs = { new Run { Text = "A" } },
+        };
+        var plainSecond = new Paragraph { Runs = { new Run { Text = "B" } } };
+        var source = new TextBody();
+        source.Paragraphs.Add(listFirst);
+        source.Paragraphs.Add(plainSecond);
+        var buffer = new InCanvasRichTextEditBuffer(source);
+
+        buffer.ReplacePlainText("AB");
+
+        var edited = buffer.Body;
+        edited.Paragraphs.Should().ContainSingle();
+        edited.Paragraphs[0].BulletKind.Should().Be(BulletKind.Auto);
+        ComposeText(edited).Paragraphs[0].BulletText.Should().Be("4.");
+
+        var plainFirst = new Paragraph { Runs = { new Run { Text = "A" } } };
+        var listSecond = AutoParagraph("B", 7, specified: true);
+        var reverseSource = new TextBody();
+        reverseSource.Paragraphs.Add(plainFirst);
+        reverseSource.Paragraphs.Add(listSecond);
+        var reverseBuffer = new InCanvasRichTextEditBuffer(reverseSource);
+
+        reverseBuffer.ReplacePlainText("AB");
+
+        var reverseEdited = reverseBuffer.Body;
+        reverseEdited.Paragraphs.Should().ContainSingle();
+        reverseEdited.Paragraphs[0].BulletKind.Should().Be(BulletKind.None);
+        ComposeText(reverseEdited).Paragraphs[0].BulletText.Should().BeEmpty();
+    }
+
+    private static Paragraph AutoParagraph(
+        string text,
+        int startAt = 1,
+        bool specified = false) =>
+        new()
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumStartAt = startAt,
+            AutoNumStartAtSpecified = specified,
+            Runs = { new Run { Text = text, FontSizePt = 18 } },
+        };
+
     private static void AddAutoNumPara(TextBody body, int level, AutoNumType type)
     {
         var para = new Paragraph { Level = level, BulletKind = BulletKind.Auto, AutoNumType = type };
@@ -544,6 +668,7 @@ public sealed class BulletsAutofitTests
             BulletKind   = BulletKind.Auto,
             AutoNumType  = AutoNumType.RomanUcPeriod,
             AutoNumStartAt = 1,
+            AutoNumStartAtSpecified = true,
         };
         para.Runs.Add(new Run { Text = "Roman I", FontSizePt = 18 });
         body.Paragraphs.Add(para);
@@ -560,6 +685,62 @@ public sealed class BulletsAutofitTests
         var rt = p2.Slides[0].Shapes[0].TextBody!.Paragraphs[0];
         rt.BulletKind.Should().Be(BulletKind.Auto);
         rt.AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
+        rt.AutoNumStartAt.Should().Be(1);
+        rt.AutoNumStartAtSpecified.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RoundTrip_AutoNumNonDefaultStartAt_PreservesExplicitPresence()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            AutoNumStartAt = 4,
+            AutoNumStartAtSpecified = true,
+            Runs = { new Run { Text = "Restart at four", FontSizePt = 18 } },
+        });
+
+        var presentation = MakePresentation();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var stream = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var roundTripped = FreeP.Core.IO.PptxPackageReader.Read(stream);
+        var paragraph = roundTripped.Slides[0].Shapes[0].TextBody!.Paragraphs[0];
+
+        paragraph.AutoNumStartAt.Should().Be(4);
+        paragraph.AutoNumStartAtSpecified.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RoundTrip_LegacyProgrammaticNonDefaultStartAt_RemainsSerialized()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumStartAt = 4,
+            // Older callers only set the value; the writer must keep emitting it.
+            AutoNumStartAtSpecified = false,
+            Runs = { new Run { Text = "Legacy start", FontSizePt = 18 } },
+        });
+
+        var presentation = MakePresentation();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var stream = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var roundTripped = FreeP.Core.IO.PptxPackageReader.Read(stream);
+        var paragraph = roundTripped.Slides[0].Shapes[0].TextBody!.Paragraphs[0];
+
+        paragraph.AutoNumStartAt.Should().Be(4);
+        paragraph.AutoNumStartAtSpecified.Should().BeTrue();
     }
 
     [Fact]
