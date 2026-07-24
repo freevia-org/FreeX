@@ -28,8 +28,8 @@ public sealed record ShapeGeometryAdjustmentMutationPlan(
 
 /// <summary>
 /// Shared planning for PowerPoint-style preset-shape edit points.
-/// The first supported geometry is Chord because its two DrawingML guides are explicit angles
-/// and the compositor already consumes both <c>adj1</c> and <c>adj2</c>.
+/// Supported geometries are Chord (two explicit angle guides) and Rounded Rectangle (one
+/// explicit corner-radius guide). The compositor already consumes these adjustment dictionaries.
 /// </summary>
 public static class ShapeGeometryAdjustmentPlanner
 {
@@ -37,6 +37,8 @@ public static class ShapeGeometryAdjustmentPlanner
     private const double FullCircle = 360.0 * AngleUnitsPerDegree;
     private const double DefaultStartAngle = 0;
     private const double DefaultEndAngle = 180 * AngleUnitsPerDegree;
+    private const double DefaultCornerAdjustment = 18000;
+    private const double MaxCornerAdjustment = 50000;
 
     public const string UnsupportedShapeMessage =
         "This preset shape does not expose shared edit points yet.";
@@ -46,13 +48,32 @@ public static class ShapeGeometryAdjustmentPlanner
     {
         ArgumentNullException.ThrowIfNull(shape);
 
-        if (shape.Kind != SlideShapeKind.AutoShape || shape.AutoShapeKind != DrawingShapeKind.Chord)
+        if (shape.Kind != SlideShapeKind.AutoShape ||
+            shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle))
         {
             return new ShapeGeometryAdjustmentPlan(
                 shape.Id,
                 CanEdit: false,
                 UnsupportedShapeMessage,
                 Array.Empty<ShapeGeometryAdjustmentHandlePlan>());
+        }
+
+        if (shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+        {
+            var adjustment = ReadAdjustment(shape, "adj", DefaultCornerAdjustment);
+            var minDimension = Math.Min(boundsDip.Width, boundsDip.Height);
+            var radius = minDimension * adjustment / 100000.0;
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [new ShapeGeometryAdjustmentHandlePlan(
+                    "adj",
+                    "Corner radius",
+                    new LayoutPoint(boundsDip.Left + radius, boundsDip.Top),
+                    adjustment,
+                    0,
+                    MaxCornerAdjustment)]);
         }
 
         var start = ReadAngle(shape, "adj1", DefaultStartAngle);
@@ -77,6 +98,16 @@ public static class ShapeGeometryAdjustmentPlanner
         var plan = Build(shape, boundsDip);
         if (!plan.CanEdit)
             return new(false, null, null, plan.DisabledReason);
+
+        if (shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+        {
+            if (handleName != "adj")
+                return new(false, null, null, InvalidHandleMessage);
+
+            var minDimension = Math.Min(boundsDip.Width, boundsDip.Height);
+            var adjustment = (pointerDip.X - boundsDip.Left) / minDimension * 100000.0;
+            return new(true, "adj", Math.Clamp(adjustment, 0, MaxCornerAdjustment), null);
+        }
 
         if (handleName is not ("adj1" or "adj2"))
             return new(false, null, null, InvalidHandleMessage);
@@ -115,5 +146,10 @@ public static class ShapeGeometryAdjustmentPlanner
     private static double ReadAngle(SlideShape shape, string name, double fallback) =>
         shape.PresetGeometryAdjustments.TryGetValue(name, out var value)
             ? Math.Clamp(value, 0, FullCircle)
+            : fallback;
+
+    private static double ReadAdjustment(SlideShape shape, string name, double fallback) =>
+        shape.PresetGeometryAdjustments.TryGetValue(name, out var value)
+            ? Math.Clamp(value, 0, MaxCornerAdjustment)
             : fallback;
 }
