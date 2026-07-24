@@ -237,6 +237,7 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-modern-comment-author-identity-2026-07-04.md",
                 "docs/parity/freep-comment-mention-detail-2026-07-04.md",
                 "docs/parity/freep-comment-mention-insertion-2026-07-06.md",
+                "docs/parity/freep-comment-mention-picker-2026-07-24.md",
                 "docs/parity/freep-comment-thread-filter-depth-2026-07-04.md",
                 "docs/parity/freep-comments-review-accessibility-evidence-inventory-2026-07-05.md"
             ],
@@ -247,7 +248,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SectionsCommentsTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared mention candidate planning and mention insertion now route through the WPF/Avalonia review planner and thin host adapters. PowerPoint-authoritative review-pane visual baselines, coauthor presence, and notification routing remain deferred."),
+            RemainingWork: "Shared mention candidate planning, selectable WPF/Avalonia mention pickers, and mention insertion now route through the WPF/Avalonia review planner and thin host adapters. PowerPoint-authoritative review-pane visual baselines, coauthor presence, and notification routing remain deferred."),
         new(
             EvidenceId: "freep.review.accessibility.proofing-depth",
             Area: "Accessibility checker remediation, reading order, and proofing action depth",

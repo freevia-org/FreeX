@@ -1255,6 +1255,40 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_MentionPicker_AllowsChoosingNonDefaultCandidate()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Alice Writer",
+                Initials = "AW",
+                Text = "Please ask @",
+                Idx = 1
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Nora Reviewer",
+                Initials = "NR",
+                Text = "Available for review.",
+                Idx = 2
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+
+            window.InvokeReviewCommentPaneMentionActionForTests("comment-mention:edit", "@Nora.Reviewer")
+                .Should().BeTrue();
+            window.LastCommentMentionInsertionPlan.Should().NotBeNull();
+            window.LastCommentMentionInsertionPlan!.Candidate!.DisplayName.Should().Be("Nora Reviewer");
+            window.Editor.CurrentSlide.Comments[0].Text.Should().Be("Please ask @Nora.Reviewer");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ReplyToModernComment_ReusesPowerPointAuthorIdentity()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

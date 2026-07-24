@@ -4604,6 +4604,43 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Review_comment_mention_picker_allows_choosing_non_default_candidate()
+    {
+        SlideComment? editedComment = null;
+        PresentationCommentMentionInsertionPlan? insertion = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Alice Writer",
+                Initials = "AW",
+                Text = "Please ask @",
+                Idx = 1
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Nora Reviewer",
+                Initials = "NR",
+                Text = "Available for review.",
+                Idx = 2
+            });
+            window.SetSelectedReviewCommentIndexForTests(0);
+            window.InvokeReviewCommentPaneMentionActionForTests("comment-mention:edit", "@Nora.Reviewer")
+                .Should().BeTrue();
+            insertion = window.LastCommentMentionInsertionPlan;
+            editedComment = window.Editor.CurrentSlide.Comments[0];
+        });
+
+        if (!ran) return;
+        insertion.Should().NotBeNull();
+        insertion!.Candidate!.DisplayName.Should().Be("Nora Reviewer");
+        editedComment.Should().NotBeNull();
+        editedComment!.Text.Should().Be("Please ask @Nora.Reviewer");
+    }
+
+    [Fact]
     public async Task Review_modern_comment_reply_reuses_powerpoint_author_identity()
     {
         SlideComment? repliedComment = null;

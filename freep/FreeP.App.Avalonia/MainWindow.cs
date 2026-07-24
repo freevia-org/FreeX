@@ -412,7 +412,7 @@ public sealed partial class MainWindow : Window
                 tag.StartsWith("comment-mention:", StringComparison.Ordinal))
             .Select(button => $"{button.Tag}|{button.Content}|{button.IsEnabled}")
             .ToArray();
-    internal bool InvokeReviewCommentPaneMentionActionForTests(string tag)
+    internal bool InvokeReviewCommentPaneMentionActionForTests(string tag, string? candidateLabel = null)
     {
         var button = EnumerateReviewPaneButtons(_reviewCommentsPanePanel)
             .FirstOrDefault(candidate => string.Equals(candidate.Tag as string, tag, StringComparison.Ordinal));
@@ -420,6 +420,13 @@ public sealed partial class MainWindow : Window
             return false;
 
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var item = button.ContextMenu?.Items.OfType<MenuItem>()
+            .FirstOrDefault(candidate => candidateLabel is null ||
+                string.Equals(candidate.Header as string, candidateLabel, StringComparison.Ordinal));
+        if (item is null)
+            return candidateLabel is null;
+
+        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         return true;
     }
     internal bool IsAltTextPaneVisible => _altTextPaneHost?.IsVisible == true;
@@ -4152,25 +4159,77 @@ public sealed partial class MainWindow : Window
         var candidate = mentionPicker.DefaultCandidate;
         var button = new Button
         {
-            Content = candidate?.Label ?? "@",
-            IsEnabled = candidate is not null,
+            Content = mentionPicker.Candidates.Count == 1 ? candidate?.Label : "@",
+            IsEnabled = mentionPicker.HasCandidates,
             Tag = tag,
             MinWidth = 72,
         };
         button.Click += (_, _) =>
         {
-            LastCommentMentionPickerPlan = BuildCommentMentionPickerPlanForCurrentInput(getText, getCaretIndex);
-            var selectedCandidate = LastCommentMentionPickerPlan.DefaultCandidate;
-            LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
-                getText(),
-                getCaretIndex(),
-                selectedCandidate);
-            if (LastCommentMentionInsertionPlan.ShouldApply)
+            var currentPlan = BuildCommentMentionPickerPlanForCurrentInput(getText, getCaretIndex);
+            if (currentPlan.Candidates.Count == 1)
             {
-                applyUpdatedText(LastCommentMentionInsertionPlan.UpdatedText);
+                ApplyCommentMentionCandidate(
+                    getText,
+                    getCaretIndex,
+                    currentPlan.DefaultCandidate,
+                    applyUpdatedText);
+                return;
+            }
+
+            if (currentPlan.HasCandidates)
+            {
+                var menu = BuildCommentMentionMenu(
+                    tag,
+                    getText,
+                    getCaretIndex,
+                    applyUpdatedText,
+                    currentPlan);
+                button.ContextMenu = menu;
+                menu.Open(button);
             }
         };
         return button;
+    }
+
+    private ContextMenu BuildCommentMentionMenu(
+        string tag,
+        Func<string?> getText,
+        Func<int> getCaretIndex,
+        Func<string, PresentationCommentMutationPlan> applyUpdatedText,
+        PresentationCommentMentionPickerPlan picker)
+    {
+        var menu = new ContextMenu();
+        foreach (var candidate in picker.Candidates)
+        {
+            var item = new MenuItem
+            {
+                Header = candidate.Label,
+                Tag = $"{tag}:{candidate.InsertToken}",
+            };
+            item.Click += (_, _) => ApplyCommentMentionCandidate(
+                getText,
+                getCaretIndex,
+                candidate,
+                applyUpdatedText);
+            menu.Items.Add(item);
+        }
+
+        return menu;
+    }
+
+    private void ApplyCommentMentionCandidate(
+        Func<string?> getText,
+        Func<int> getCaretIndex,
+        PresentationCommentMentionCandidate? candidate,
+        Func<string, PresentationCommentMutationPlan> applyUpdatedText)
+    {
+        LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
+            getText(),
+            getCaretIndex(),
+            candidate);
+        if (LastCommentMentionInsertionPlan.ShouldApply)
+            applyUpdatedText(LastCommentMentionInsertionPlan.UpdatedText);
     }
 
     private PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForCurrentInput(
