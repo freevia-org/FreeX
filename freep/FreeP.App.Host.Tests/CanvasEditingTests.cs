@@ -554,11 +554,16 @@ public sealed class CanvasEditingTests
     public void WpfEditPointsRoute_UsesSharedPlannerAndSingleCommandBoundary()
     {
         var gestures = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
+        var avaloniaGestures = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "AvaloniaCanvasGestureHandler.cs");
         var adorner = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SelectionAdorner.cs");
 
         gestures.Should().Contain("ShapeGeometryAdjustmentPlanner.BuildMutationPlan");
         gestures.Should().Contain("_editor.SetShapeGeometryAdjustment");
+        gestures.Should().Contain("PictureCropAuthoringPlanner.BuildMutationPlan");
+        gestures.Should().Contain("_editor.SetPictureCrop");
         gestures.Should().Contain("GestureKind.GeometryAdjustment");
+        avaloniaGestures.Should().Contain("PictureCropAuthoringPlanner.BuildMutationPlan");
+        avaloniaGestures.Should().Contain("_editor.SetPictureCrop");
         adorner.Should().Contain("UpdateGeometryHandles");
         adorner.Should().Contain("HitTestGeometryHandle");
     }

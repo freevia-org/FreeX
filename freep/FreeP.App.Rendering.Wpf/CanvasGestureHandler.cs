@@ -517,9 +517,18 @@ public sealed class CanvasGestureHandler
             return;
 
         var bounds = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation).ToLayoutRect();
-        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
-        if (!plan.CanEdit || plan.Handles.All(handle => handle.Name != handleName))
-            return;
+        if (shape.Kind == SlideShapeKind.Picture)
+        {
+            var cropPlan = PictureCropAuthoringPlanner.Build(shape, bounds);
+            if (!cropPlan.CanEdit || cropPlan.Handles.All(handle => handle.Name != handleName))
+                return;
+        }
+        else
+        {
+            var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
+            if (!plan.CanEdit || plan.Handles.All(handle => handle.Name != handleName))
+                return;
+        }
 
         _gesture = GestureKind.GeometryAdjustment;
         _geometryShapeId = shapeId;
@@ -535,6 +544,28 @@ public sealed class CanvasGestureHandler
             return;
 
         var pointerSlide = xf.ScreenToSlide(screenPt.X, screenPt.Y);
+        if (_editor.CurrentSlide is { } slide &&
+            slide.Shapes.FirstOrDefault(candidate => candidate.Id == _geometryShapeId) is { Kind: SlideShapeKind.Picture } picture)
+        {
+            var cropMutation = PictureCropAuthoringPlanner.BuildMutationPlan(
+                picture,
+                _geometryBoundsDip,
+                _geometryHandleName,
+                new LayoutPoint(pointerSlide.X, pointerSlide.Y));
+            if (cropMutation.Values is { } cropValues)
+            {
+                var cropPosition = PictureCropAuthoringPlanner.PositionFor(
+                    _geometryBoundsDip,
+                    cropValues,
+                    _geometryHandleName);
+                var cropScreen = xf.SlideToScreen(cropPosition.X, cropPosition.Y);
+                _adorner.UpdateGeometryPreview(
+                    _geometryHandleName,
+                    new Point(cropScreen.X, cropScreen.Y));
+            }
+            return;
+        }
+
         var previewScreen = xf.SlideToScreen(pointerSlide.X, pointerSlide.Y);
         _adorner.UpdateGeometryPreview(_geometryHandleName, previewScreen);
     }
@@ -554,6 +585,18 @@ public sealed class CanvasGestureHandler
             return;
 
         var pointerSlide = xf.ScreenToSlide(screenPt.X, screenPt.Y);
+        if (shape.Kind == SlideShapeKind.Picture)
+        {
+            var cropMutation = PictureCropAuthoringPlanner.BuildMutationPlan(
+                shape,
+                _geometryBoundsDip,
+                _geometryHandleName,
+                new LayoutPoint(pointerSlide.X, pointerSlide.Y));
+            if (cropMutation.ShouldApply && cropMutation.Values is { } cropValues)
+                _editor.SetPictureCrop(_geometryShapeId, cropValues);
+            return;
+        }
+
         var mutation = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
             shape,
             _geometryBoundsDip,
@@ -794,11 +837,29 @@ public sealed class CanvasGestureHandler
             if (shape is not null)
             {
                 var bounds = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation).ToLayoutRect();
-                var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
-                var handles = plan.CanEdit
-                    ? plan.Handles.Select(handle =>
-                        (handle.Name, xf.SlideToScreen(handle.PositionDip.X, handle.PositionDip.Y)))
+                IEnumerable<(string Name, Point Position)> handles;
+                if (shape.Kind == SlideShapeKind.Picture)
+                {
+                    var cropPlan = PictureCropAuthoringPlanner.Build(shape, bounds);
+                    handles = cropPlan.CanEdit
+                        ? cropPlan.Handles.Select(handle =>
+                        {
+                            var screen = xf.SlideToScreen(handle.PositionDip.X, handle.PositionDip.Y);
+                            return (handle.Name, new Point(screen.X, screen.Y));
+                        })
+                        : Enumerable.Empty<(string Name, Point Position)>();
+                }
+                else
+                {
+                    var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
+                    handles = plan.CanEdit
+                        ? plan.Handles.Select(handle =>
+                    {
+                        var screen = xf.SlideToScreen(handle.PositionDip.X, handle.PositionDip.Y);
+                        return (handle.Name, new Point(screen.X, screen.Y));
+                    })
                     : Enumerable.Empty<(string Name, Point Position)>();
+                }
                 _adorner.UpdateGeometryHandles(handles);
                 return;
             }
