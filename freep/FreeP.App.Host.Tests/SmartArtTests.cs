@@ -40,7 +40,8 @@ public sealed class SmartArtTests : IDisposable
     private string MakeSmartArtPptx(
         string[] nodeTexts,
         bool pictureCaptionList = false,
-        bool includeNodeImage = false)
+        bool includeNodeImage = false,
+        bool includeColors = true)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
 
@@ -205,7 +206,7 @@ public sealed class SmartArtTests : IDisposable
                                         new XAttribute(rNs + "dm", "rIdDm1"),
                                         new XAttribute(rNs + "lo", "rIdLo1"),
                                         new XAttribute(rNs + "qs", "rIdQs1"),
-                                        new XAttribute(rNs + "cs", "rIdCs1")))))))));
+                                        (includeColors ? new XAttribute(rNs + "cs", "rIdCs1") : null)))))))));
 
         using var zipStream = File.Create(path);
         using var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: false);
@@ -235,7 +236,9 @@ public sealed class SmartArtTests : IDisposable
                 new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/data1.xml"),      new XAttribute("ContentType", diagramDataCT)),
                 new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/layout1.xml"),    new XAttribute("ContentType", diagramLayoutCT)),
                 new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/quickStyle1.xml"), new XAttribute("ContentType", diagramQsCT)),
-                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/colors1.xml"),    new XAttribute("ContentType", diagramColorsCT)),
+                includeColors
+                    ? new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/colors1.xml"), new XAttribute("ContentType", diagramColorsCT))
+                    : null,
                 new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/drawing1.xml"),   new XAttribute("ContentType", diagramDrawingCT)))));
 
         // Root rels
@@ -328,19 +331,24 @@ public sealed class SmartArtTests : IDisposable
         // Slide
         WriteXml("ppt/slides/slide1.xml", slideXml);
 
-        // Slide rels: point to layout + 4 diagram parts
-        WriteEntry("ppt/slides/_rels/slide1.xml.rels", MakeRels(pkgNs,
+        // Slide rels: point to layout + the diagram parts present in the fixture.
+        var slideRels = new List<(string id, string type, string target)>
+        {
             ("rId1",   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout", "../slideLayouts/slideLayout1.xml"),
             ("rIdDm1", dmRelType, "../diagrams/data1.xml"),
             ("rIdLo1", loRelType, "../diagrams/layout1.xml"),
             ("rIdQs1", qsRelType, "../diagrams/quickStyle1.xml"),
-            ("rIdCs1", csRelType, "../diagrams/colors1.xml")));
+        };
+        if (includeColors)
+            slideRels.Add(("rIdCs1", csRelType, "../diagrams/colors1.xml"));
+        WriteEntry("ppt/slides/_rels/slide1.xml.rels", MakeRels(pkgNs, slideRels.ToArray()));
 
         // Diagram parts
         WriteXml("ppt/diagrams/data1.xml",       dataXml);
         WriteXml("ppt/diagrams/layout1.xml",     layoutXml);
         WriteXml("ppt/diagrams/quickStyle1.xml", qsXml);
-        WriteXml("ppt/diagrams/colors1.xml",     colorsXml);
+        if (includeColors)
+            WriteXml("ppt/diagrams/colors1.xml", colorsXml);
         WriteXml("ppt/diagrams/drawing1.xml",    dspDrawingXml);
         if (includeNodeImage)
         {
@@ -600,6 +608,49 @@ public sealed class SmartArtTests : IDisposable
             .SmartArt!;
 
         sa.FallbackShapes.Should().HaveCount(nodeTexts.Length);
+    }
+
+    [Fact]
+    public void SmartArtColorPreset_WithoutNativeColorsPart_CreatesAndRoundTripsColorsPart()
+    {
+        var pptxPath = MakeSmartArtPptx(["One", "Two"], includeColors: false);
+        var savedPath = Path.Combine(_tempDir, "smartart-created-colors.pptx");
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Parts.Values.Should().NotContain(part =>
+            part.ContentType.Contains("diagramColors", StringComparison.OrdinalIgnoreCase));
+
+        var result = SmartArtAuthoringPlanner.ApplyColorPreset(
+            smartArt,
+            SmartArtColorPreset.SingleAccent,
+            presentation.Theme!);
+
+        result.Applied.Should().BeTrue();
+        result.PartPath.Should().NotBeNull();
+        smartArt.DiagramRelIds.Should().ContainKey("cs");
+
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        using (var archive = ZipFile.OpenRead(savedPath))
+        {
+            var entry = archive.Entries.SingleOrDefault(candidate =>
+                candidate.FullName.Contains("colors-freep-", StringComparison.OrdinalIgnoreCase));
+            entry.Should().NotBeNull("a missing source colors part must be materialized on save");
+            using var reader = new StreamReader(entry!.Open(), Encoding.UTF8);
+            var document = XDocument.Parse(reader.ReadToEnd());
+            var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+            document.Descendants(dgm + "fillClrLst").Should().ContainSingle();
+        }
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reread.Colors.Should().NotBeNull();
+        reread.Colors!.Palette.Should().ContainSingle();
+        reread.DiagramRelIds.Should().ContainKey("cs");
     }
 
     // ── Compositor ───────────────────────────────────────────────────────────────
