@@ -60,6 +60,12 @@ public sealed class LinuxFamilyInteractionToolTests
 
         runner.Should().Contain("[ValidateSet(\"FreeW\", \"FreeP\")]");
         runner.Should().Contain("Assert-ManifestContract");
+        runner.Should().Contain("Wait-ForManifestEvidence");
+        runner.Should().Contain("Start-Sleep -Milliseconds $PollMilliseconds");
+        runner.Should().Contain("evidence-settle-timeout.txt");
+        runner.Should().Contain("Missing or empty references");
+        runner.Should().Contain("ConvertFrom-Json -ErrorAction Stop");
+        runner.Should().Contain("last-manifest-read-error:");
         runner.Should().Contain("family-x11-validation.schema.json");
         runner.Should().Contain("contractValidation");
         runner.Should().Contain("parameters.fileKey");

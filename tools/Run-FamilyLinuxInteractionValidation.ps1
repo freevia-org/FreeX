@@ -85,6 +85,74 @@ function Invoke-External {
     }
 }
 
+function Wait-ForManifestEvidence {
+    param(
+        [Parameter(Mandatory = $true)][string]$ManifestPath,
+        [Parameter(Mandatory = $true)][string]$EvidenceDirectory,
+        [int]$TimeoutSeconds = 15,
+        [int]$PollMilliseconds = 250
+    )
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    $lastMissing = @()
+    $lastReadError = $null
+    do {
+        try {
+            $manifest = Get-Content -LiteralPath $ManifestPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $lastReadError = $null
+        } catch {
+            $manifest = $null
+            $lastReadError = $_.Exception.ToString()
+            $lastMissing = @([IO.Path]::GetFileName($ManifestPath))
+        }
+
+        if ($null -eq $manifest) {
+            if ([DateTime]::UtcNow -ge $deadline) {
+                break
+            }
+            Start-Sleep -Milliseconds $PollMilliseconds
+            continue
+        }
+
+        $references = @(
+            @($manifest.results | ForEach-Object { $_.evidence }) |
+                ForEach-Object { [string]$_ }
+            @($manifest.screenshots | ForEach-Object { $_.name }) |
+                ForEach-Object { [string]$_ }
+        ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+        $lastMissing = @($references | Where-Object {
+                $path = Join-Path $EvidenceDirectory $_
+                -not (Test-Path -LiteralPath $path -PathType Leaf) -or
+                ((Get-Item -LiteralPath $path -ErrorAction SilentlyContinue).Length -le 0)
+            })
+        if ($lastMissing.Count -eq 0) {
+            return
+        }
+
+        if ([DateTime]::UtcNow -ge $deadline) {
+            break
+        }
+        Start-Sleep -Milliseconds $PollMilliseconds
+    } while ($true)
+
+    $diagnosticName = "evidence-settle-timeout.txt"
+    $diagnosticPath = Join-Path $EvidenceDirectory $diagnosticName
+    @(
+        "Manifest evidence did not become visible and non-empty before the bounded settle timeout.",
+        "manifest=$ManifestPath",
+        "evidence-directory=$EvidenceDirectory",
+        "timeout-seconds=$TimeoutSeconds",
+        "poll-milliseconds=$PollMilliseconds",
+        "missing-or-empty-count=$($lastMissing.Count)",
+        "missing-or-empty-paths:",
+        $lastMissing | ForEach-Object { Join-Path $EvidenceDirectory $_ },
+        "last-manifest-read-error:",
+        $(if ($null -eq $lastReadError) { "<none>" } else { $lastReadError })
+    ) | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
+    throw "Manifest evidence did not settle within $TimeoutSeconds seconds. Durable diagnostics: $diagnosticPath. Missing or empty references: $([string]::Join(', ', $lastMissing))"
+}
+
 function Assert-ManifestContract {
     param(
         [Parameter(Mandatory = $true)][string]$ManifestPath,
@@ -367,7 +435,9 @@ try {
         $failureManifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $manifestPath -Encoding utf8
         Write-Warning "Family probe did not write a manifest; durable failure manifest was created at $manifestPath"
     }
-    $manifest = Assert-ManifestContract -ManifestPath $manifestPath -EvidenceDirectory (Split-Path -Parent $manifestPath)
+    $evidenceDirectory = Split-Path -Parent $manifestPath
+    Wait-ForManifestEvidence -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory
+    $manifest = Assert-ManifestContract -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory
     Write-Host "Manifest contract validation: $($manifest.contractValidation.status)"
     Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"
     Write-Host "Manifest: $manifestPath"
