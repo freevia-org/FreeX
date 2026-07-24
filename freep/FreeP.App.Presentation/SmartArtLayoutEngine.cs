@@ -662,8 +662,9 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
-    /// Bounded two-by-two quadrant grid for PowerPoint matrix layouts.
-    /// More than four parsed nodes keep cached drawing fallback in control.
+    /// Two-column matrix grid for PowerPoint matrix layouts.
+    /// Four nodes retain the traditional quadrant geometry; larger node sets
+    /// continue into additional rows instead of dropping to cached drawing.
     /// </summary>
     private static IReadOnlyList<SlideShape>? LayoutMatrix(
         List<SmartArtNode> nodes,
@@ -671,11 +672,11 @@ public static class SmartArtLayoutEngine
         SmartArtStylePlan stylePlan)
     {
         int n = nodes.Count;
-        if (n is 0 or > 4)
+        if (n == 0)
             return null;
 
         int columns = n == 1 ? 1 : 2;
-        int rows = n <= 2 ? 1 : 2;
+        int rows = (n + columns - 1) / columns;
 
         long outerPadX = (long)(fcx * OuterPaddingFrac);
         long outerPadY = (long)(fcy * OuterPaddingFrac);
