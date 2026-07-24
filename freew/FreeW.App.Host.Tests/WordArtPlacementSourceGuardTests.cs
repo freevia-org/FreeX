@@ -31,6 +31,9 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("Canvas.SetTop(fillLayer, -6);");
         wpf.Should().Contain("var isPrimaryGlowBlueStress = wordArt is");
         wpf.Should().Contain("Text: \"FreeW CONFIDENTIAL\",");
+        wpf.Should().Contain("var horizontalGlowExtentDip = isPrimaryGlowBlueStress ? 6 : 4;");
+        wpf.Should().Contain("const double verticalGlowExtentDip = 4;");
+        wpf.Should().Contain("+ (isPrimaryGlowBlueStress ? 4 : 0);");
         wpf.Should().Contain("fillLayer.Width = canvas.ActualWidth + 8;");
         wpf.Should().Contain("fillLayer.Height = canvas.ActualHeight + 7;");
         wpf.Should().Contain("CenterYNormalized = 0.5 + (0.5 - placement.CenterYNormalized) * 1.35");

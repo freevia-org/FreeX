@@ -5983,11 +5983,13 @@ public sealed class DocumentView : RichTextBox
         {
             if (glowRingLayer is not null && glowLayer is not null && fillLayer is not null)
             {
-                const double glowExtentDip = 4;
-                glowRingLayer.Width = canvas.ActualWidth + glowExtentDip * 2;
-                glowRingLayer.Height = canvas.ActualHeight + glowExtentDip * 2;
-                Canvas.SetLeft(glowRingLayer, -glowExtentDip);
-                Canvas.SetTop(glowRingLayer, -glowExtentDip);
+                var horizontalGlowExtentDip = isPrimaryGlowBlueStress ? 6 : 4;
+                const double verticalGlowExtentDip = 4;
+                glowRingLayer.Width = canvas.ActualWidth + horizontalGlowExtentDip * 2;
+                glowRingLayer.Height = canvas.ActualHeight + verticalGlowExtentDip * 2
+                    + (isPrimaryGlowBlueStress ? 4 : 0);
+                Canvas.SetLeft(glowRingLayer, -horizontalGlowExtentDip);
+                Canvas.SetTop(glowRingLayer, -verticalGlowExtentDip);
                 glowLayer.Width = canvas.ActualWidth;
                 glowLayer.Height = canvas.ActualHeight;
                 if (isPrimaryGlowBlueStress)
