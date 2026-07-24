@@ -369,6 +369,74 @@ public class DocumentCompareTests
     }
 
     [Fact]
+    public void Compare_UniqueUnchangedParagraphMove_UsesPairedMoveRevisionId()
+    {
+        var original = DocWith("Alpha", "Bravo", "Charlie");
+        var revised = DocWith("Bravo", "Alpha", "Charlie");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+        var moved = result.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.MoveRevisionId != null)
+            .ToList();
+
+        moved.Should().HaveCount(2);
+        moved.Should().ContainSingle(run => run.Text == "Alpha" && run.Revision == RevisionKind.Deleted);
+        moved.Should().ContainSingle(run => run.Text == "Alpha" && run.Revision == RevisionKind.Inserted);
+        moved.Select(run => run.MoveRevisionId).Distinct().Should().ContainSingle().Which.Should().Be(1);
+        moved.Should().OnlyContain(run => run.RevisionAuthor == Author && run.RevisionDateXml == DateXml);
+
+        TrackChanges.AcceptAll(result);
+        result.Paragraphs.Where(paragraph => paragraph.PlainText.Length > 0)
+            .Select(paragraph => paragraph.PlainText).Should().Equal("Bravo", "Alpha", "Charlie");
+    }
+
+    [Fact]
+    public void Compare_UniqueUnchangedParagraphMove_CanBeRejectedToOriginalOrder()
+    {
+        var original = DocWith("Alpha", "Bravo", "Charlie");
+        var revised = DocWith("Bravo", "Alpha", "Charlie");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        TrackChanges.RejectAll(result);
+        result.Paragraphs.Where(paragraph => paragraph.PlainText.Length > 0)
+            .Select(paragraph => paragraph.PlainText).Should().Equal("Alpha", "Bravo", "Charlie");
+    }
+
+    [Fact]
+    public void Compare_MovesSuppressed_UsesOrdinaryInsertionAndDeletion()
+    {
+        var original = DocWith("Alpha", "Bravo", "Charlie");
+        var revised = DocWith("Bravo", "Alpha", "Charlie");
+
+        var result = DocumentCompare.Compare(
+            original,
+            revised,
+            Author,
+            DateXml,
+            new CompareSettings { Moves = false });
+
+        result.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().NotContain(run => run.MoveRevisionId != null);
+        result.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().Contain(run => run.Revision == RevisionKind.Deleted)
+            .And.Contain(run => run.Revision == RevisionKind.Inserted);
+    }
+
+    [Fact]
+    public void Compare_DuplicateParagraphMove_FallsBackToOrdinaryRevisionPairs()
+    {
+        var original = DocWith("Repeat", "Repeat", "Tail");
+        var revised = DocWith("Repeat", "Tail", "Repeat");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().NotContain(run => run.MoveRevisionId != null);
+    }
+
+    [Fact]
     public void Compare_CopiesRevisedPreservedPackageSafetyShell()
     {
         var original = DocWith("baseline review text");
