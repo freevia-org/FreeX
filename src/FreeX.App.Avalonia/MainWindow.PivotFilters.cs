@@ -87,6 +87,9 @@ public sealed partial class MainWindow
         var current = FindFieldSelection(pivot, target);
         // No explicit selection (or "(All)") means every item is shown.
         var currentSet = PivotFieldFilterPlanner.ResolveAllowedItems(current);
+        var hasItemFilter = currentSet is { Count: > 0 } && currentSet.Count < members.Count;
+        var labelFilter = pivot.LabelFilters.LastOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
+        var valueFilter = pivot.ValueFilters.LastOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
 
         var checkBoxes = new List<CheckBox>();
         var listPanel = new StackPanel();
@@ -101,6 +104,7 @@ public sealed partial class MainWindow
                 FontFamily = FormulaBarFontFamily,
                 MinHeight = 24,
             };
+            ApplyPivotCheckBoxChrome(box);
             checkBoxes.Add(box);
             listPanel.Children.Add(box);
         }
@@ -113,14 +117,37 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             MinHeight = 24,
             Margin = new Thickness(2, 0, 0, 6),
+            IsThreeState = true,
         };
+        ApplyPivotCheckBoxChrome(selectAll);
+        var updatingSelection = false;
+        void UpdateSelectAllState()
+        {
+            selectAll.IsChecked = PivotFieldFilterPlanner.ResolveSelectAllState(
+                checkBoxes
+                    .Where(box => box.IsVisible)
+                    .Select(box => box.IsChecked == true)
+                    .ToList());
+        }
         selectAll.IsCheckedChanged += (_, _) =>
         {
-            if (selectAll.IsChecked is { } value)
-                foreach (var box in checkBoxes)
-                    if (box.IsVisible)
-                        box.IsChecked = value;
+            if (updatingSelection || selectAll.IsChecked is not { } value)
+                return;
+
+            updatingSelection = true;
+            foreach (var box in checkBoxes)
+                if (box.IsVisible)
+                    box.IsChecked = value;
+            updatingSelection = false;
+            UpdateSelectAllState();
         };
+        foreach (var box in checkBoxes)
+            box.IsCheckedChanged += (_, _) =>
+            {
+                if (!updatingSelection)
+                    UpdateSelectAllState();
+            };
+        UpdateSelectAllState();
 
         // ── Search box filters the checkbox list (matches WPF Select Items tab) ──
         var searchBox = new TextBox
@@ -139,14 +166,14 @@ public sealed partial class MainWindow
             foreach (var box in checkBoxes)
             {
                 var label = (string)box.Tag!;
-                box.IsVisible = query.Length == 0 ||
-                    label.Contains(query, StringComparison.CurrentCultureIgnoreCase);
+                box.IsVisible = PivotFieldFilterPlanner.IsFilterItemVisible(label, query);
             }
+            UpdateSelectAllState();
         };
 
         var dialog = new Window
         {
-            Title = UiText.Get("PivotFieldFilter_Filter"),
+            Title = UiText.Format("MainWindowMessage_PivotFieldFilterTitle", caption),
             Width = 380,
             Height = 470,
             MinWidth = 320,
@@ -174,16 +201,11 @@ public sealed partial class MainWindow
             Content = UiText.Get("PivotFieldFilter_ClearItemFilter"),
             MinWidth = 120,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            IsEnabled = currentSet is not null,
+            IsEnabled = hasItemFilter,
         };
         ApplyPivotButtonChrome(clearItemFilterBtn, 120);
         AutomationProperties.SetAutomationId(clearItemFilterBtn, "PivotItemFilterClearItemFilterButton");
-        clearItemFilterBtn.Click += (_, _) =>
-        {
-            foreach (var box in checkBoxes)
-                box.IsChecked = true;
-            selectAll.IsChecked = true;
-        };
+        clearItemFilterBtn.Click += (_, _) => dialog.Close(4);
 
         // ── Select Items tab content ───────────────────────────────────────────
         var selectItemsPanel = new StackPanel { Spacing = 8, Margin = new Thickness(10) };
@@ -196,9 +218,7 @@ public sealed partial class MainWindow
         });
         selectItemsPanel.Children.Add(new TextBlock
         {
-            Text = currentSet is null
-                ? UiText.Get("PivotFieldFilter_NoItemFilter")
-                : UiText.Format("PivotFilter_ItemsHeading", caption),
+            Text = UiText.Get("PivotFieldFilter_NoItemFilter"),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             FontWeight = FontWeight.SemiBold,
@@ -251,7 +271,22 @@ public sealed partial class MainWindow
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         });
-        labelFiltersPanel.Children.Add(labelFilterBtn);
+        var removeLabelFilterBtn = new Button
+        {
+            Content = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_RemoveLabelFilter")),
+            MinWidth = 140,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            IsEnabled = labelFilter is not null,
+        };
+        ApplyPivotButtonChrome(removeLabelFilterBtn, 140);
+        AutomationProperties.SetAutomationId(removeLabelFilterBtn, "PivotItemFilterRemoveLabelFilterButton");
+        removeLabelFilterBtn.Click += (_, _) => dialog.Close(6);
+        labelFiltersPanel.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children = { labelFilterBtn, removeLabelFilterBtn },
+        });
 
         var valueFilterBtn = new Button
         {
@@ -282,7 +317,32 @@ public sealed partial class MainWindow
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         });
-        valueFiltersPanel.Children.Add(valueFilterBtn);
+        var valueFilterUnavailable = new TextBlock
+        {
+            Text = UiText.Get("PivotFieldFilter_AddAtLeastOnePivotTableValueFieldToUseValueFilters"),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.Wrap,
+            IsVisible = pivot.DataFields.Count == 0,
+        };
+        valueFiltersPanel.Children.Add(valueFilterUnavailable);
+        var removeValueFilterBtn = new Button
+        {
+            Content = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_RemoveValueFilter")),
+            MinWidth = 140,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            IsEnabled = pivot.DataFields.Count > 0 && valueFilter is not null,
+        };
+        ApplyPivotButtonChrome(removeValueFilterBtn, 140);
+        AutomationProperties.SetAutomationId(removeValueFilterBtn, "PivotItemFilterRemoveValueFilterButton");
+        removeValueFilterBtn.Click += (_, _) => dialog.Close(7);
+        valueFiltersPanel.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children = { valueFilterBtn, removeValueFilterBtn },
+        });
 
         var tabs = new TabControl
         {
@@ -303,10 +363,11 @@ public sealed partial class MainWindow
             Content = UiText.Get("PivotFieldFilter_ClearFiltersFromThisField"),
             MinWidth = 160,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            IsEnabled = hasItemFilter || labelFilter is not null || valueFilter is not null,
         };
         ApplyPivotButtonChrome(clearFiltersBtn, 160);
         AutomationProperties.SetAutomationId(clearFiltersBtn, "PivotItemFilterClearFiltersButton");
-        clearFiltersBtn.Click += (_, _) => dialog.Close(0);
+        clearFiltersBtn.Click += (_, _) => dialog.Close(5);
 
         var bottomGrid = new Grid
         {
@@ -351,6 +412,18 @@ public sealed partial class MainWindow
             case 3:
                 await OpenPivotValueFilterDialogAsync(pivot, target);
                 return;
+            case 4:
+                ApplyPivotItemFilter(pivot, target, null);
+                return;
+            case 5:
+                ClearPivotFieldFilters(pivot, target);
+                return;
+            case 6:
+                RemovePivotLabelFilter(pivot, target.SourceFieldIndex);
+                return;
+            case 7:
+                RemovePivotValueFilter(pivot, target.SourceFieldIndex);
+                return;
             case 1:
                 break;
             default:
@@ -374,6 +447,38 @@ public sealed partial class MainWindow
 
         ExecutePivotFilterCommand(pivot, rows, columns, pages, pivot.LabelFilters.ToList(), pivot.ValueFilters.ToList());
     }
+
+    private void ClearPivotFieldFilters(PivotTableModel pivot, PivotHeaderDropdownTargetModel target)
+    {
+        var rows = CloneFieldsWithSelection(pivot.RowFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Row, null);
+        var columns = CloneFieldsWithSelection(pivot.ColumnFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Column, null);
+        var pages = CloneFieldsWithSelection(pivot.PageFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Page, null);
+        ExecutePivotFilterCommand(
+            pivot,
+            rows,
+            columns,
+            pages,
+            pivot.LabelFilters.Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex).ToList(),
+            pivot.ValueFilters.Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex).ToList());
+    }
+
+    private void RemovePivotLabelFilter(PivotTableModel pivot, int sourceFieldIndex) =>
+        ExecutePivotFilterCommand(
+            pivot,
+            pivot.RowFields.ToList(),
+            pivot.ColumnFields.ToList(),
+            pivot.PageFields.ToList(),
+            pivot.LabelFilters.Where(filter => filter.SourceFieldIndex != sourceFieldIndex).ToList(),
+            pivot.ValueFilters.ToList());
+
+    private void RemovePivotValueFilter(PivotTableModel pivot, int sourceFieldIndex) =>
+        ExecutePivotFilterCommand(
+            pivot,
+            pivot.RowFields.ToList(),
+            pivot.ColumnFields.ToList(),
+            pivot.PageFields.ToList(),
+            pivot.LabelFilters.ToList(),
+            pivot.ValueFilters.Where(filter => filter.SourceFieldIndex != sourceFieldIndex).ToList());
 
     private static IReadOnlyList<PivotFieldModel> CloneFieldsWithSelection(
         IReadOnlyList<PivotFieldModel> fields,
@@ -757,4 +862,5 @@ public sealed partial class MainWindow
         ErrorValue error => error.Code,
         _ => "(blank)",
     };
+
 }

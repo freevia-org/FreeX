@@ -326,6 +326,21 @@ public sealed class PivotFieldFilterPlannerTests
     }
 
     [Fact]
+    public void ReplaceFieldValueFilter_RemovingAFieldPreservesUnboundFilters()
+    {
+        var unbound = new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 100);
+        var existing = new List<PivotValueFilterModel>
+        {
+            unbound,
+            new(0, PivotValueFilterKind.Top, Count: 3, SourceFieldIndex: 0),
+        };
+
+        var removed = PivotFieldFilterPlanner.ReplaceFieldValueFilter(existing, 0, null);
+
+        removed.Should().ContainSingle().Which.Should().Be(unbound);
+    }
+
+    [Fact]
     public void InitialDataFieldIndex_ClampsToRange()
     {
         PivotFieldFilterPlanner.InitialDataFieldIndex(null, 0).Should().Be(-1);
@@ -352,5 +367,29 @@ public sealed class PivotFieldFilterPlannerTests
     {
         PivotFieldFilterPlanner.ResolveItemSelection(["a", "b", "c"], 3).Should().BeNull();
         PivotFieldFilterPlanner.ResolveItemSelection(["a"], 3).Should().Equal("a");
+    }
+
+    [Fact]
+    public void ResolveItemSelection_EmptySelectionRepresentsItemOnlyClear()
+    {
+        PivotFieldFilterPlanner.ResolveItemSelection([], 3).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("east", true)]
+    [InlineData("west", false)]
+    public void FilterItemVisibility_MatchesSearchQuery(string query, bool expected)
+    {
+        PivotFieldFilterPlanner.IsFilterItemVisible("East", query).Should().Be(expected);
+    }
+
+    [Fact]
+    public void ResolveSelectAllState_ReportsAllNoneAndMixedVisibleItems()
+    {
+        PivotFieldFilterPlanner.ResolveSelectAllState([]).Should().BeFalse();
+        PivotFieldFilterPlanner.ResolveSelectAllState([true, true]).Should().BeTrue();
+        PivotFieldFilterPlanner.ResolveSelectAllState([false, false]).Should().BeFalse();
+        PivotFieldFilterPlanner.ResolveSelectAllState([true, false]).Should().BeNull();
     }
 }

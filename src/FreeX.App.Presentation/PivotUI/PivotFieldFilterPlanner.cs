@@ -461,6 +461,22 @@ public static class PivotFieldFilterPlanner
         return allowed.Count == 0 ? null : allowed;
     }
 
+    public static bool IsFilterItemVisible(string item, string? query) =>
+        string.IsNullOrWhiteSpace(query) ||
+        item.Contains(query.Trim(), StringComparison.CurrentCultureIgnoreCase);
+
+    public static bool? ResolveSelectAllState(IReadOnlyList<bool> visibleChecked)
+    {
+        ArgumentNullException.ThrowIfNull(visibleChecked);
+        return visibleChecked.Count switch
+        {
+            0 => false,
+            _ when visibleChecked.All(isChecked => isChecked) => true,
+            _ when visibleChecked.All(isChecked => !isChecked) => false,
+            _ => null,
+        };
+    }
+
     /// <summary>
     /// Maps the checklist's checked members back to a field selection: selecting every member is "no filter"
     /// (returns null so newly-arriving members stay visible); otherwise returns the checked members.
