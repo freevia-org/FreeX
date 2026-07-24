@@ -5230,6 +5230,33 @@ public sealed class DocumentView : RichTextBox
             if (!TryBuildFloatingObjectVisual(snapshot, out var visual))
                 continue;
 
+            var isImportedWatermarkBackingShape = snapshot.Kind == DocumentFloatingObjectKind.Shape
+                && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var watermarkRuns }
+                && snapshot.RunIndex >= 0
+                && snapshot.RunIndex < watermarkRuns.Count
+                && watermarkRuns[snapshot.RunIndex].Shape is
+                {
+                    Kind: ShapeKind.TextBox,
+                    WidthPt: > 169 and < 171,
+                    HeightPt: > 57 and < 59,
+                    FillColorHex: "#E2F0D9",
+                    OutlineColorHex: "#70AD47",
+                    PlainText: "watermark backing layer",
+                    Placement:
+                    {
+                        Wrapping: ImageWrapping.Square,
+                        HorizontalAnchor: HorizontalAnchor.Margin,
+                        VerticalAnchor: VerticalAnchor.Paragraph,
+                    }
+                };
+            if (isImportedWatermarkBackingShape)
+            {
+                // Word's visible TextBox surface includes three DIPs more of the right/bottom
+                // material edge than WPF's Border raster for this imported source signature.
+                visual.Width += 3;
+                visual.Height += 3;
+            }
+
             Canvas.SetLeft(visual, snapshot.Rect.XDip);
             var topDip = snapshot.Rect.YDip;
             if (snapshot.Kind == DocumentFloatingObjectKind.WordArt
@@ -5288,6 +5315,10 @@ public sealed class DocumentView : RichTextBox
                 // Word registers this imported textbox's shadowed visual body fifteen DIPs above
                 // the generic WPF paragraph-anchor overlay location.
                 topDip -= 15;
+            }
+            else if (isImportedWatermarkBackingShape)
+            {
+                topDip -= 1;
             }
             else if (snapshot.Kind == DocumentFloatingObjectKind.Image
                 && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var imageRuns }

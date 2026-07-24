@@ -52,6 +52,19 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void DocumentView_CalibratesTheExactImportedWatermarkBackingTextBoxFootprint()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("var isImportedWatermarkBackingShape = snapshot.Kind == DocumentFloatingObjectKind.Shape");
+        source.Should().Contain("FillColorHex: \"#E2F0D9\",");
+        source.Should().Contain("OutlineColorHex: \"#70AD47\",");
+        source.Should().Contain("visual.Width += 3;");
+        source.Should().Contain("visual.Height += 3;");
+        source.Should().Contain("topDip -= 1;");
+    }
+
+    [Fact]
     public void FidelityRender_EmitsSharedVisualEvidenceManifestAndTrustChecks()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
