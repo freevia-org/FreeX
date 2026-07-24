@@ -54,6 +54,49 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
+    public void Build_RoundedRectangle_ExposesCornerRadiusHandle()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+        };
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.CanEdit.Should().BeTrue();
+        plan.Handles.Should().ContainSingle();
+        plan.Handles[0].Name.Should().Be("adj");
+        plan.Handles[0].Value.Should().Be(18000);
+        plan.Handles[0].PositionDip.Should().Be(new LayoutPoint(28, 20));
+        plan.Handles[0].Minimum.Should().Be(0);
+        plan.Handles[0].Maximum.Should().Be(50000);
+    }
+
+    [Fact]
+    public void BuildMutationPlan_RoundedRectangle_MapsTopEdgePointerToAdjustment()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+        };
+
+        var plan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape,
+            Bounds,
+            "adj",
+            new LayoutPoint(40, Bounds.Top));
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Name.Should().Be("adj");
+        plan.Value.Should().BeApproximately(30000, 0.001);
+        plan.DisabledReason.Should().BeNull();
+    }
+
+    [Fact]
     public void Build_NonChordPreset_ReportsUnsupportedWithoutInventingHandles()
     {
         var shape = new SlideShape

@@ -187,6 +187,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(avalonia, "freep.arrange.group").KeyTip!,
                 RequiredControl(avalonia, "freep.arrange.ungroup").Label,
                 RequiredControl(avalonia, "freep.arrange.ungroup").KeyTip!,
+                RequiredControl(avalonia, "freep.arrange.edit-points").Label,
+                RequiredControl(avalonia, "freep.arrange.edit-points").KeyTip!,
                 RequiredControl(avalonia, "freep.arrange.bring-to-front").Label,
                 RequiredControl(avalonia, "freep.arrange.bring-to-front").KeyTip!,
                 RequiredControl(avalonia, "freep.arrange.bring-forward").Label,

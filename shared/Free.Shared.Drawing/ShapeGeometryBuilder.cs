@@ -58,7 +58,7 @@ public static class ShapeGeometryBuilder
 
         return kind switch
         {
-            DrawingShapeKind.RoundedRectangle => RoundedRectangle(rect, CornerRadius(rect)),
+            DrawingShapeKind.RoundedRectangle => RoundedRectangle(rect, CornerRadius(rect, adjustments)),
             DrawingShapeKind.Ellipse => Ellipse(rect),
             DrawingShapeKind.Line => LinePath(rect),
             DrawingShapeKind.ElbowConnector => ElbowPath(rect),
@@ -108,8 +108,17 @@ public static class ShapeGeometryBuilder
     private static LayoutRect Normalize(LayoutRect bounds) =>
         LayoutRect.FromCorners(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
 
-    private static double CornerRadius(LayoutRect rect) =>
-        Math.Clamp(Math.Min(rect.Width, rect.Height) * 0.18, 2, 18);
+    private static double CornerRadius(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments = null)
+    {
+        // Keep the established fallback for newly-created and legacy shapes. An authored
+        // DrawingML roundRect guide is a 0..50000 fraction of the smaller dimension.
+        if (adjustments is null || !adjustments.TryGetValue("adj", out var adjustment))
+            return Math.Clamp(Math.Min(rect.Width, rect.Height) * 0.18, 2, 18);
+
+        return Math.Min(rect.Width, rect.Height) * Math.Clamp(adjustment, 0, 50000) / 100000.0;
+    }
 
     private static LayoutPoint P(LayoutRect rect, double x, double y) =>
         new(rect.Left + (rect.Width * x), rect.Top + (rect.Height * y));
