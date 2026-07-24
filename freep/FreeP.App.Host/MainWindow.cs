@@ -420,6 +420,7 @@ public sealed partial class MainWindow : Window
             onStartFromStart:   () => StartSlideShow(true),
             onStartFromCurrent: () => StartSlideShow(false),
             onEditChartData:    () => OpenChartDataDialog(),
+            onEditChartOptions: () => OpenChartDisplayOptionsDialog(),
             getSlideCanvas:     () => SlideCanvas,
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
             onCustomSlideSize:  () => OpenSlideSizeDialog(),
@@ -3583,6 +3584,16 @@ public sealed partial class MainWindow : Window
             dialog.Owner = this;
         // dialog.ShowDialog() returns true when OK was clicked; the command is already
         // applied inside ChartDataDialog.OnOk() via EditingSession.ReplaceChartData().
+        dialog.ShowDialog();
+    }
+
+    internal void OpenChartDisplayOptionsDialog()
+    {
+        if (Editor.SelectedChart is null) return;
+
+        var dialog = new ChartDisplayOptionsDialog(Editor);
+        if (IsVisible)
+            dialog.Owner = this;
         dialog.ShowDialog();
     }
 

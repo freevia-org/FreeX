@@ -448,6 +448,12 @@
   <data name="Ribbon_Command_ChartEditData_KeyTip" xml:space="preserve">
     <value>E</value>
   </data>
+  <data name="Ribbon_Command_ChartDisplayOptions_Label" xml:space="preserve">
+    <value>Chart Options</value>
+  </data>
+  <data name="Ribbon_Command_ChartDisplayOptions_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
   <data name="Ribbon_Group_Links_Label" xml:space="preserve">
     <value>Links</value>
   </data>

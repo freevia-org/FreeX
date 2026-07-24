@@ -102,7 +102,8 @@ internal static class FreePRibbonCommands
         Func<PresentationPictureBulletPayload?>? pickPictureBulletPayload = null,
         Action<SmartArtColorPreset>? onSmartArtColorPreset = null,
         Action<SmartArtLayoutPreset>? onSmartArtLayoutPreset = null,
-        Action<SmartArtQuickStylePreset>? onSmartArtQuickStylePreset = null)
+        Action<SmartArtQuickStylePreset>? onSmartArtQuickStylePreset = null,
+        Action?             onEditChartOptions = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -394,6 +395,8 @@ internal static class FreePRibbonCommands
                 if (onEditChartData is not null)
                     onEditChartData();
             }));
+        registry.Register(ChartDisplayOptionsPlanner.CommandId,
+            new ActionRibbonCommand(() => onEditChartOptions?.Invoke()));
 
         // ── Wave 11A: Hyperlinks ──────────────────────────────────────────────────
 

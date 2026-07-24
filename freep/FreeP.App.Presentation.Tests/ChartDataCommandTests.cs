@@ -827,4 +827,64 @@ public sealed class ChartDataCommandTests
             .Should().Be("l",
             $"BV2: {chartType} Y value axis (axId=2) must have axPos=\"l\" (left)");
     }
+
+    [Fact]
+    public void SetChartDisplayOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.Title = "Old title";
+        chart.HasAutomaticTitle = true;
+        chart.Legend = LegendPosition.Right;
+        chart.DataLabels = new ChartDataLabels
+        {
+            ShowCategoryName = true,
+            ShowValue = false,
+            Position = DataLabelPosition.Center,
+            NumberFormat = "0.0",
+        };
+        chart.CategoryAxis.HasMajorGridlines = true;
+        chart.ValueAxis.HasMajorGridlines = false;
+
+        bus.Execute(new SetChartDisplayOptionsCommand(
+            0,
+            id,
+            new ChartDisplayOptions(
+                "Revenue",
+                LegendPosition.Bottom,
+                true,
+                DataLabelPosition.OutsideEnd,
+                false,
+                true)));
+
+        chart.Title.Should().Be("Revenue");
+        chart.HasAutomaticTitle.Should().BeFalse();
+        chart.Legend.Should().Be(LegendPosition.Bottom);
+        chart.DataLabels!.ShowCategoryName.Should().BeTrue("existing label components are preserved");
+        chart.DataLabels.ShowValue.Should().BeTrue();
+        chart.DataLabels.Position.Should().Be(DataLabelPosition.OutsideEnd);
+        chart.CategoryAxis.HasMajorGridlines.Should().BeFalse();
+        chart.ValueAxis.HasMajorGridlines.Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var reloaded = PptxPackageReader.Read(stream);
+        var roundTripped = reloaded.Slides[0].Shapes[0].Chart!;
+        roundTripped.Title.Should().Be("Revenue");
+        roundTripped.Legend.Should().Be(LegendPosition.Bottom);
+        roundTripped.DataLabels!.ShowValue.Should().BeTrue();
+        roundTripped.CategoryAxis.HasMajorGridlines.Should().BeFalse();
+        roundTripped.ValueAxis.HasMajorGridlines.Should().BeTrue();
+
+        bus.Undo();
+        chart.Title.Should().Be("Old title");
+        chart.HasAutomaticTitle.Should().BeTrue();
+        chart.Legend.Should().Be(LegendPosition.Right);
+        chart.DataLabels!.ShowValue.Should().BeFalse();
+        chart.DataLabels.ShowCategoryName.Should().BeTrue();
+        chart.DataLabels.Position.Should().Be(DataLabelPosition.Center);
+        chart.CategoryAxis.HasMajorGridlines.Should().BeTrue();
+        chart.ValueAxis.HasMajorGridlines.Should().BeFalse();
+    }
 }
