@@ -12476,6 +12476,7 @@ public sealed partial class MainWindow : Window
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog);
         AutomationProperties.SetAutomationId(dialog, "FindReplaceDialog");
 
         var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
@@ -12486,18 +12487,18 @@ public sealed partial class MainWindow : Window
                 .Replace("_", string.Empty, StringComparison.Ordinal);
 
         // ── Find tab: "Find what" box ───────────────────────────────────────────
-        var findBox = new TextBox { Text = _session.LastFindText, MinWidth = 300 };
+        var findBox = new TextBox { Text = _session.LastFindText, MinWidth = 260 };
         AutomationProperties.SetName(findBox, "Find what");
         AutomationProperties.SetAutomationId(findBox, "FindReplaceFindBox");
         ApplyDialogTextBoxChrome(findBox);
 
         // ── Replace tab: "Find what" + "Replace with" boxes ─────────────────────
-        var replaceFindBox = new TextBox { Text = _session.LastFindText, MinWidth = 300 };
+        var replaceFindBox = new TextBox { Text = _session.LastFindText, MinWidth = 260 };
         AutomationProperties.SetName(replaceFindBox, "Find what");
         AutomationProperties.SetAutomationId(replaceFindBox, "FindReplaceReplaceFindBox");
         ApplyDialogTextBoxChrome(replaceFindBox);
 
-        var replaceWithBox = new TextBox { Text = "", MinWidth = 300 };
+        var replaceWithBox = new TextBox { Text = "", MinWidth = 260 };
         AutomationProperties.SetName(replaceWithBox, "Replace with");
         AutomationProperties.SetAutomationId(replaceWithBox, "FindReplaceReplaceWithBox");
         ApplyDialogTextBoxChrome(replaceWithBox);
@@ -12522,6 +12523,9 @@ public sealed partial class MainWindow : Window
         var findFormatButton = CreateFindReplaceFormatButton("FindReplaceFindFormatButton", Fr("FindReplace_Format", "Format..."));
         var findFormatClearButton = CreateFindReplaceFormatButton("FindReplaceFindClearFormatButton", Fr("FindReplace_Clear", "Clear"));
         var findChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceFindChooseFormatFromCellButton", Fr("FindReplace_ChooseFromCell", "Choose From Cell..."));
+        findFormatButton.Margin = new Thickness(8, 0, 0, 0);
+        findFormatClearButton.Margin = new Thickness(6, 0, 0, 0);
+        findChooseFormatButton.Margin = new Thickness(6, 0, 0, 0);
 
         var findTabGrid = new Grid
         {
@@ -12546,6 +12550,12 @@ public sealed partial class MainWindow : Window
         var replaceWithFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithFormatButton", Fr("FindReplace_Format", "Format..."));
         var replaceWithFormatClearButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithClearFormatButton", Fr("FindReplace_Clear", "Clear"));
         var replaceWithChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithChooseFormatFromCellButton", Fr("FindReplace_ChooseFromCell", "Choose From Cell..."));
+        replaceFindFormatButton.Margin = new Thickness(8, 0, 0, 0);
+        replaceFindFormatClearButton.Margin = new Thickness(6, 0, 0, 0);
+        replaceFindChooseFormatButton.Margin = new Thickness(6, 0, 0, 0);
+        replaceWithFormatButton.Margin = new Thickness(8, 0, 0, 0);
+        replaceWithFormatClearButton.Margin = new Thickness(6, 0, 0, 0);
+        replaceWithChooseFormatButton.Margin = new Thickness(6, 0, 0, 0);
 
         var replaceTabPanel = new Grid
         {
@@ -12924,6 +12934,7 @@ public sealed partial class MainWindow : Window
         root.Children.Add(buttonRow);
 
         dialog.Content = root;
+        dialog.Opened += (_, _) => resultsList.Background = Brush(242, 242, 242);
         _findReplaceDialog = dialog;
         _switchFindReplaceMode = requestedReplaceMode =>
         {
@@ -13645,6 +13656,7 @@ public sealed partial class MainWindow : Window
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog);
 
         var choices = CreateGoToSpecialChoices();
         var kindButtons = new List<RadioButton>(choices.Length);
@@ -13690,6 +13702,10 @@ public sealed partial class MainWindow : Window
             textBox.IsEnabled = enabled;
             logicalsBox.IsEnabled = enabled;
             errorsBox.IsEnabled = enabled;
+            numbersBox.Opacity = enabled ? 1 : 0.7;
+            textBox.Opacity = enabled ? 1 : 0.7;
+            logicalsBox.Opacity = enabled ? 1 : 0.7;
+            errorsBox.Opacity = enabled ? 1 : 0.7;
         }
 
         GoToSpecialValueTypes GetValueTypes()
@@ -13742,7 +13758,7 @@ public sealed partial class MainWindow : Window
         {
             Orientation = Orientation.Horizontal,
             Spacing = 16,
-            Margin = new Thickness(8, 6, 8, 4),
+            Margin = new Thickness(8, 0, 8, 0),
             Children =
             {
                 numbersBox,
@@ -13765,7 +13781,7 @@ public sealed partial class MainWindow : Window
             },
         };
 
-        dialog.Content = new StackPanel
+        var content = new StackPanel
         {
             Margin = new Thickness(12),
             Children =
@@ -13774,25 +13790,29 @@ public sealed partial class MainWindow : Window
                 {
                     Text = "Select",
                     FontWeight = FontWeight.SemiBold,
-                    Margin = new Thickness(0, 0, 0, 6),
+                    Margin = new Thickness(0, 0, 0, 3),
                 },
                 new GroupBox
                 {
                     Header = "Go To Special",
-                    Margin = new Thickness(0, 0, 0, 10),
-                    Padding = new Thickness(8, 6, 8, 4),
+                    Margin = new Thickness(0, 0, 0, 16),
+                    Padding = new Thickness(8, 0, 8, 0),
                     Content = choiceGrid,
                 },
                 new GroupBox
                 {
                     Header = "Values for constants and formulas",
-                    Margin = new Thickness(0, 0, 0, 10),
+                    Margin = new Thickness(0),
                     Padding = new Thickness(0),
                     Content = valueTypeRow,
                 },
-                buttonRow,
             },
         };
+        var root = new DockPanel { Margin = new Thickness(0) };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        root.Children.Add(buttonRow);
+        root.Children.Add(content);
+        dialog.Content = root;
         dialog.Opened += (_, _) =>
         {
             RefreshValueTypeState();
@@ -13840,7 +13860,7 @@ public sealed partial class MainWindow : Window
                 Content = choice.Label,
                 Tag = choice,
                 GroupName = "GoToSpecialKind",
-                Margin = new Thickness(0, 0, 12, 6),
+                Margin = new Thickness(0, 0, 12, 1),
                 IsChecked = index == 0,
             };
             buttons.Add(button);
