@@ -106,6 +106,24 @@ public interface IAffectedCellsCommand
 }
 
 /// <summary>
+/// Marker for commands whose Apply/Revert can change which sheets fall inside a 3-D span
+/// reference (e.g. <c>=SUM(Sheet1:Sheet3!A1)</c>) purely by adding, removing, moving, or
+/// duplicating a sheet -- not by editing any cell of their own, so they report no
+/// <see cref="IAffectedCellsCommand.AffectedCells"/>. On the forward Execute path this gap is
+/// covered by explicit <c>RecalculateWorkbook()</c> calls in <c>WorkbookSession</c>
+/// (Add/Delete/Move/Duplicate/Rename Sheet), but <see cref="ICommandBus.Undo"/>/
+/// <see cref="ICommandBus.Redo"/> call straight into the command bus and never reach those
+/// wrapper methods. <see cref="CommandBus"/> uses this marker to flag
+/// <see cref="CommandOutcome.RequiresFullRecalc"/> on Undo/Redo so
+/// <c>WorkbookCellEditService.ApplyHistoryOutcome</c> can force a full recalculation instead of
+/// relying on the (empty) affected-cells list, which would otherwise leave 3-D span aggregates
+/// stale until the next F9.
+/// </summary>
+public interface IWholeWorkbookRecalcCommand
+{
+}
+
+/// <summary>
 /// Optional interface a command can implement to report its estimated
 /// in-memory snapshot size.  Used by <see cref="CommandBus"/> to enforce
 /// a byte-budget cap on the undo stack in addition to the count cap.
@@ -126,8 +144,15 @@ public interface ICommandContext
 }
 
 /// <summary>Result of executing a command.</summary>
+/// <param name="RequiresFullRecalc">
+/// Set by <see cref="CommandBus"/>'s Undo/Redo (never by a command's own Apply/Revert) when the
+/// undone/redone command implements <see cref="IWholeWorkbookRecalcCommand"/> -- see that
+/// interface for why Undo/Redo, unlike the forward Execute path, has no other way to trigger the
+/// full recalculation these structural sheet operations require.
+/// </param>
 public sealed record CommandOutcome(
     bool Success,
     string? ErrorMessage = null,
     IReadOnlyList<CellAddress>? AffectedCells = null,
-    bool IsNoOp = false);
+    bool IsNoOp = false,
+    bool RequiresFullRecalc = false);

@@ -171,7 +171,10 @@ public sealed partial class FormulaEvaluator
             }
         }
 
-        return double.IsFinite(total) ? NumberValueFor(total) : ErrorValue.Num;
+        // Match the 15-significant-digit rounding applied after every +,-,*,/,^ binary
+        // arithmetic result (FormulaEvaluator.Operators.cs / RoundTo15SignificantDigits) so this
+        // range-only SUM fast path stays consistent with the general BuiltInFunctions.Sum path.
+        return double.IsFinite(total) ? NumberValueFor(RoundTo15SignificantDigits(total)) : ErrorValue.Num;
     }
 
     private static ScalarValue EvaluateFastRangeOnlyAverage(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)

@@ -152,16 +152,41 @@ public static class FormulaSerializer
                 WriteCellRef(namedRangeEnd, sb);
                 break;
 
+            // ANCHORARRAY(rangeAnchor, end) where a structural rewrite invalidated only the END
+            // argument (e.g. deleting B5's own row) while the anchor cell itself was untouched.
+            // Unlike deleting the anchor (below), the spill anchor reference A1# is still a
+            // complete, perfectly valid reference on its own — B5 was merely extending it into a
+            // union range — so Excel keeps the surviving anchor and only replaces the invalidated
+            // endpoint, exactly like its ordinary two-endpoint range behavior (A1:C5 becomes
+            // "A1:#REF!" when only C5's row is deleted, not a bare "#REF!"). Must be checked
+            // before the broad "any error argument" case below, which would otherwise discard
+            // this still-valid anchor.
+            case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
+                                         f.Arguments is [CellRefNode survivingAnchorRef, ErrorNode endError]:
+                WriteCellRef(survivingAnchorRef, sb);
+                sb.Append("#:");
+                sb.Append(endError.Error.Code);
+                break;
+
+            case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
+                                         f.Arguments is [NamedRangeNode survivingAnchorName, ErrorNode namedEndError]:
+                WriteNamedRangeName(survivingAnchorName, sb);
+                sb.Append("#:");
+                sb.Append(namedEndError.Error.Code);
+                break;
+
             // A structural rewrite (delete row/col/cells-shift, delete sheet) that removes the
-            // anchor cell (or, for the A1#:B5 shape, its end cell) replaces the wrapped
-            // CellRefNode/NamedRangeNode with ErrorNode(#REF!) (see FormulaRewriter's
-            // RewriteCellRefDelete* helpers) — the spill reference itself is gone, not merely
-            // erroring. Excel collapses the whole A1# (or A1#:B5) reference down to the bare
-            // #REF! error in this case (never "#REF!#" or "ANCHORARRAY(A1,#REF!)"), so print just
-            // the error, dropping the ANCHORARRAY wrapper and any surviving sibling argument
-            // entirely; otherwise this would fall through to the generic function-call case below
-            // and print a meaningless string like 'ANCHORARRAY(#REF!)' — not a function Excel
-            // recognizes.
+            // anchor cell replaces the wrapped CellRefNode/NamedRangeNode with ErrorNode(#REF!)
+            // (see FormulaRewriter's RewriteCellRefDelete* helpers) — the spill reference itself
+            // is gone, not merely erroring. Unlike an errored END argument (handled above), there
+            // is no meaningful surviving piece here: A1# denotes the spill anchored at A1, so
+            // losing A1 invalidates the whole reference (and the same is true when both the
+            // anchor and end are errored). Excel collapses the whole A1# (or A1#:B5) reference
+            // down to the bare #REF! error in this case (never "#REF!#" or
+            // "ANCHORARRAY(A1,#REF!)"), so print just the error, dropping the ANCHORARRAY wrapper
+            // and any errored end entirely; otherwise this would fall through to the generic
+            // function-call case below and print a meaningless string like 'ANCHORARRAY(#REF!)'
+            // — not a function Excel recognizes.
             case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
                                          f.Arguments.Count is 1 or 2 &&
                                          f.Arguments.OfType<ErrorNode>().FirstOrDefault() is { } anchorError:

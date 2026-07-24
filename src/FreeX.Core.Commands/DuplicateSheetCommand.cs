@@ -3,7 +3,7 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Command to duplicate a worksheet immediately after the source sheet.</summary>
-public sealed class DuplicateSheetCommand : IWorkbookCommand
+public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand
 {
     private readonly SheetId _sourceSheetId;
     private readonly string? _requestedName;

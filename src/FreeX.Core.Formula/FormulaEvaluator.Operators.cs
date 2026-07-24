@@ -517,7 +517,7 @@ public sealed partial class FormulaEvaluator
     /// underflow double range (only reachable at ~1e295+ tiny magnitudes) is returned unrounded,
     /// since IEEE-754 double precision itself is already the limiting factor there.
     /// </summary>
-    private static double RoundTo15SignificantDigits(double value)
+    internal static double RoundTo15SignificantDigits(double value)
     {
         if (value == 0 || !double.IsFinite(value)) return value;
 

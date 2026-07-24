@@ -219,8 +219,20 @@ public sealed class WorkbookCellEditService
 
         var affectedCells = outcome.AffectedCells ?? [];
         UpdateFormulaDependencies(workbook, affectedCells);
-        var recalcReport = RecalculateIfAutomatic(workbook, affectedCells)
-            ?? RecalculateFreshlyEnteredFormulasOnce(workbook, affectedCells);
+
+        // R84-calc-crosssheet-3d-5-1: Undo/Redo of a structural sheet command (Add/Delete/Move/
+        // Duplicate Sheet) is flagged via RequiresFullRecalc (see IWholeWorkbookRecalcCommand)
+        // because it reports no AffectedCells of its own, even though it can change which sheets
+        // fall inside a 3-D span reference (e.g. =SUM(Sheet1:Sheet3!A1)). RecalculateIfAutomatic
+        // would short-circuit to an empty recalc for an empty cell list, leaving those span
+        // aggregates stale until the next F9 -- force a full recalculation instead, mirroring the
+        // explicit RecalculateWorkbook() compensation on the forward Execute path (WorkbookSession's
+        // DeleteActiveSheet/MoveActiveSheetTo/DuplicateActiveSheet) that Undo/Redo, which calls
+        // straight into the command bus, never reaches.
+        var recalcReport = outcome.RequiresFullRecalc
+            ? RecalculateAll(workbook)
+            : RecalculateIfAutomatic(workbook, affectedCells)
+                ?? RecalculateFreshlyEnteredFormulasOnce(workbook, affectedCells);
 
         return new WorkbookCellEditResult(true, null, affectedCells, recalcReport);
     }

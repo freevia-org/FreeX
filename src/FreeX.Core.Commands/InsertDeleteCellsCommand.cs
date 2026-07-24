@@ -93,7 +93,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             // AutoFilter.Reference here would corrupt rows/columns outside the shifted band. Excel's
             // own behavior is to refuse the operation outright when it would partially disrupt a
             // table/AutoFilter range, so mirror that instead of silently leaving stale state behind.
-            if (AutoFilterOverlapsBand(sheet, shiftRegion))
+            if (AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion))
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
@@ -212,7 +212,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
 
             // G3: see the Shift-Right branch above for why this band-scoped operation must refuse
             // rather than silently shift AutoFilter/table state it cannot safely relocate.
-            if (AutoFilterOverlapsBand(sheet, shiftRegion))
+            if (AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion))
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
@@ -1070,17 +1070,23 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     // ── AutoFilter / structured-table guard (finding G3) ───────────────────────
 
     /// <summary>
-    /// Returns true if the worksheet AutoFilter range, or any structured table's range, overlaps the
-    /// band-scoped Insert/Delete Cells shift region at all. Band-scoped cell shifts (unlike whole-row
-    /// or whole-column insert/delete, which call RowColumnShiftHelpers.CaptureAddressBearingState /
-    /// ShiftAddressBearingRows*Up/Down) cannot safely relocate axis-wide state such as
-    /// <c>Sheet.AutoFilter.Reference</c> or <c>Sheet.FilterHiddenRows</c> — either the whole
-    /// table/filter range would need to move (which this command has no way to express, since it only
-    /// shifts a bounded row/column band, not a whole row or column) or that state goes stale. Excel
-    /// itself refuses "Insert/Delete Cells" when it would disturb a table, so mirror that instead of
-    /// silently corrupting filter state.
+    /// Returns true if the worksheet AutoFilter range, any structured table's range, or any
+    /// workbook PivotTable's SourceRange overlaps the band-scoped Insert/Delete Cells shift region
+    /// at all. Band-scoped cell shifts (unlike whole-row or whole-column insert/delete, which call
+    /// RowColumnShiftHelpers.CaptureAddressBearingState / ShiftAddressBearingRows*Up/Down) cannot
+    /// safely relocate axis-wide state such as <c>Sheet.AutoFilter.Reference</c>,
+    /// <c>Sheet.FilterHiddenRows</c>, or a PivotTable's internal source layout — either the whole
+    /// table/filter/pivot range would need to move (which this command has no way to express, since
+    /// it only shifts a bounded row/column band, not a whole row or column) or that state goes stale.
+    /// Excel itself refuses "Insert/Delete Cells" when it would disturb a table or pivot, so mirror
+    /// that instead of silently corrupting filter/pivot state.
+    /// R84-commands-clear-delete-5-2: the PivotTable check is workbook-wide (not just
+    /// <paramref name="sheet"/>.PivotTables) because a pivot's SourceRange can reference a
+    /// *different* sheet than the one it is placed on (e.g. a pivot built from Sheet1!A1:D100 but
+    /// placed on Sheet2, Excel's default "New Worksheet" destination) — mirrors the same N33
+    /// workbook-wide rationale in RowColumnShiftHelpers.AddressState.cs's CapturePivotTables.
     /// </summary>
-    internal static bool AutoFilterOverlapsBand(Sheet sheet, CellShiftRegion band)
+    internal static bool AutoFilterOverlapsBand(Workbook workbook, Sheet sheet, CellShiftRegion band)
     {
         if (AutoFilterRangeResolver.TryGetWorksheetAutoFilterRange(sheet, out var autoFilterRange) &&
             RangeIntersectsBand(autoFilterRange, band))
@@ -1092,6 +1098,15 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         {
             if (RangeIntersectsBand(table.Range, band))
                 return true;
+        }
+
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            foreach (var pivotTable in hostSheet.PivotTables)
+            {
+                if (pivotTable.SourceRange.Start.Sheet == sheet.Id && RangeIntersectsBand(pivotTable.SourceRange, band))
+                    return true;
+            }
         }
 
         return false;
@@ -1318,6 +1333,200 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 new CellAddress(range.End.Sheet, newEndRow, range.End.Col)), metadata2, scopeSheet);
         }
     }
+
+    // ── Sparkline band-scoped shift/delete helpers (R84-commands-clear-delete-5-1) ───────────────
+    // Mirrors DeleteNamedRangesInBandLeft/Up above, but for sheet.Sparklines. Unlike whole-row/
+    // whole-column delete (which routes every sparkline through RowColumnShiftHelpers.AddressState.cs's
+    // CaptureSparklines/ShiftSparklines), this band-scoped Delete Cells path never touched
+    // sheet.Sparklines at all before this fix, so a sparkline's Location/DataRange (and optional
+    // DateAxisRange) went silently stale — plotting a range that no longer matches what the user saw
+    // before the delete, with no error and nothing to undo it except reverting the whole command.
+
+    internal readonly record struct SparklineBandSnapshot(
+        SparklineModel Sparkline, GridRange DataRange, CellAddress Location, GridRange? DateAxisRange);
+
+    internal static List<SparklineBandSnapshot> CaptureSparklines(Sheet sheet)
+    {
+        var snapshots = new List<SparklineBandSnapshot>(sheet.Sparklines.Count);
+        foreach (var sparkline in sheet.Sparklines)
+            snapshots.Add(new SparklineBandSnapshot(sparkline, sparkline.DataRange, sparkline.Location, sparkline.DateAxisRange));
+        return snapshots;
+    }
+
+    internal static void RestoreSparklines(Sheet sheet, List<SparklineBandSnapshot>? snapshot)
+    {
+        if (snapshot is null) return;
+        sheet.Sparklines.Clear();
+        foreach (var entry in snapshot)
+        {
+            entry.Sparkline.DataRange = entry.DataRange;
+            entry.Sparkline.Location = entry.Location;
+            entry.Sparkline.DateAxisRange = entry.DateAxisRange;
+            sheet.Sparklines.Add(entry.Sparkline);
+        }
+    }
+
+    private enum RangeBandOutcome { Unaffected, Removed, Translated }
+
+    /// <summary>
+    /// Delete Shift Left: a range (DataRange/DateAxisRange) whose rows are fully inside
+    /// [bandStartRow..bandEndRow] shrinks/shifts/is dropped exactly like a named range in
+    /// <see cref="DeleteNamedRangesInBandLeft"/>; a range whose rows straddle the band boundary is
+    /// left untouched (same "fully inside or no-op" scoping as every other band-scoped helper here).
+    /// </summary>
+    private static RangeBandOutcome ShrinkColRangeForBandLeft(
+        GridRange range,
+        uint bandStartRow, uint bandEndRow,
+        uint deletedStartCol, uint deletedEndCol, uint count,
+        out GridRange translated)
+    {
+        translated = range;
+        if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) return RangeBandOutcome.Unaffected;
+        if (range.End.Col < deletedStartCol) return RangeBandOutcome.Unaffected;
+        if (range.Start.Col >= deletedStartCol && range.End.Col <= deletedEndCol) return RangeBandOutcome.Removed;
+
+        if (range.Start.Col > deletedEndCol)
+        {
+            translated = new GridRange(
+                new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col - count),
+                new CellAddress(range.End.Sheet, range.End.Row, range.End.Col - count));
+            return RangeBandOutcome.Translated;
+        }
+
+        var newStartCol = range.Start.Col < deletedStartCol ? range.Start.Col : deletedStartCol;
+        var newEndCol = range.End.Col > deletedEndCol ? range.End.Col - count : deletedStartCol - 1;
+        translated = new GridRange(
+            new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
+            new CellAddress(range.End.Sheet, range.End.Row, newEndCol));
+        return RangeBandOutcome.Translated;
+    }
+
+    /// <summary>Delete Shift Up: analogous to <see cref="ShrinkColRangeForBandLeft"/> for rows/columns swapped.</summary>
+    private static RangeBandOutcome ShrinkRowRangeForBandUp(
+        GridRange range,
+        uint bandStartCol, uint bandEndCol,
+        uint deletedStartRow, uint deletedEndRow, uint count,
+        out GridRange translated)
+    {
+        translated = range;
+        if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) return RangeBandOutcome.Unaffected;
+        if (range.End.Row < deletedStartRow) return RangeBandOutcome.Unaffected;
+        if (range.Start.Row >= deletedStartRow && range.End.Row <= deletedEndRow) return RangeBandOutcome.Removed;
+
+        if (range.Start.Row > deletedEndRow)
+        {
+            translated = new GridRange(
+                new CellAddress(range.Start.Sheet, range.Start.Row - count, range.Start.Col),
+                new CellAddress(range.End.Sheet, range.End.Row - count, range.End.Col));
+            return RangeBandOutcome.Translated;
+        }
+
+        var newStartRow = range.Start.Row < deletedStartRow ? range.Start.Row : deletedStartRow;
+        var newEndRow = range.End.Row > deletedEndRow ? range.End.Row - count : deletedStartRow - 1;
+        translated = new GridRange(
+            new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
+            new CellAddress(range.End.Sheet, newEndRow, range.End.Col));
+        return RangeBandOutcome.Translated;
+    }
+
+    /// <summary>
+    /// Delete Shift Left: sparklines are adjusted like named ranges/CF-DV rules. A sparkline's
+    /// Location only moves when it falls inside the row band (like any other single-cell annotation —
+    /// see <see cref="DeleteAnnotationsInBandLeft{TValue}"/>); its DataRange/DateAxisRange only move
+    /// when fully inside the row band. Either the Location landing in the deleted columns, or the
+    /// DataRange being fully consumed by them, drops the sparkline outright — Excel has no way to
+    /// render a sparkline whose anchor cell or entire data range no longer exists (mirrors the
+    /// #REF!-vs-drop rationale in <see cref="DeleteNamedRangesInBandLeft"/>). Losing just the optional
+    /// DateAxisRange only clears that one setting, since a sparkline is still fully renderable without it.
+    /// </summary>
+    internal static void ShiftSparklinesInBandLeft(
+        Sheet sheet,
+        uint bandStartRow, uint bandEndRow,
+        uint deletedStartCol, uint deletedEndCol, uint count)
+    {
+        for (var i = sheet.Sparklines.Count - 1; i >= 0; i--)
+        {
+            var sparkline = sheet.Sparklines[i];
+            var removed = false;
+
+            var location = sparkline.Location;
+            if (location.Row >= bandStartRow && location.Row <= bandEndRow)
+            {
+                if (location.Col >= deletedStartCol && location.Col <= deletedEndCol)
+                    removed = true;
+                else if (location.Col > deletedEndCol)
+                    sparkline.Location = new CellAddress(location.Sheet, location.Row, location.Col - count);
+            }
+
+            if (!removed)
+            {
+                var outcome = ShrinkColRangeForBandLeft(sparkline.DataRange, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count, out var newDataRange);
+                if (outcome == RangeBandOutcome.Removed)
+                    removed = true;
+                else if (outcome == RangeBandOutcome.Translated)
+                    sparkline.DataRange = newDataRange;
+            }
+
+            if (!removed && sparkline.DateAxisRange is { } dateAxisRange)
+            {
+                var outcome = ShrinkColRangeForBandLeft(dateAxisRange, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count, out var newDateAxisRange);
+                sparkline.DateAxisRange = outcome switch
+                {
+                    RangeBandOutcome.Removed => null,
+                    RangeBandOutcome.Translated => newDateAxisRange,
+                    _ => dateAxisRange,
+                };
+            }
+
+            if (removed)
+                sheet.Sparklines.RemoveAt(i);
+        }
+    }
+
+    /// <summary>Delete Shift Up: analogous to <see cref="ShiftSparklinesInBandLeft"/> for rows/columns swapped.</summary>
+    internal static void ShiftSparklinesInBandUp(
+        Sheet sheet,
+        uint bandStartCol, uint bandEndCol,
+        uint deletedStartRow, uint deletedEndRow, uint count)
+    {
+        for (var i = sheet.Sparklines.Count - 1; i >= 0; i--)
+        {
+            var sparkline = sheet.Sparklines[i];
+            var removed = false;
+
+            var location = sparkline.Location;
+            if (location.Col >= bandStartCol && location.Col <= bandEndCol)
+            {
+                if (location.Row >= deletedStartRow && location.Row <= deletedEndRow)
+                    removed = true;
+                else if (location.Row > deletedEndRow)
+                    sparkline.Location = new CellAddress(location.Sheet, location.Row - count, location.Col);
+            }
+
+            if (!removed)
+            {
+                var outcome = ShrinkRowRangeForBandUp(sparkline.DataRange, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count, out var newDataRange);
+                if (outcome == RangeBandOutcome.Removed)
+                    removed = true;
+                else if (outcome == RangeBandOutcome.Translated)
+                    sparkline.DataRange = newDataRange;
+            }
+
+            if (!removed && sparkline.DateAxisRange is { } dateAxisRange)
+            {
+                var outcome = ShrinkRowRangeForBandUp(dateAxisRange, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count, out var newDateAxisRange);
+                sparkline.DateAxisRange = outcome switch
+                {
+                    RangeBandOutcome.Removed => null,
+                    RangeBandOutcome.Translated => newDateAxisRange,
+                    _ => dateAxisRange,
+                };
+            }
+
+            if (removed)
+                sheet.Sparklines.RemoveAt(i);
+        }
+    }
 }
 
 public sealed class DeleteCellsCommand : IWorkbookCommand
@@ -1350,6 +1559,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private List<CellAddress>? _movedDestinationCells;
     // R52-commands-clear-delete-3-1: see InsertCellsCommand's field of the same name.
     private List<(uint Row, uint Col, StyleId StyleId)>? _styleOnlySnapshot;
+    // R84-commands-clear-delete-5-1: see InsertCellsCommand.CaptureSparklines/RestoreSparklines.
+    private List<InsertCellsCommand.SparklineBandSnapshot>? _sparklineSnapshot;
 
     public string Label => "Delete Cells";
 
@@ -1389,7 +1600,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
 
             // G3: see InsertCellsCommand.AutoFilterOverlapsBand — this band-scoped shift cannot
             // safely relocate AutoFilter.Reference/FilterHiddenRows, so refuse rather than corrupt.
-            if (InsertCellsCommand.AutoFilterOverlapsBand(sheet, shiftRegion))
+            if (InsertCellsCommand.AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion))
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
@@ -1442,6 +1653,13 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
             InsertCellsCommand.DeleteNamedRangesInBandLeft(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
 
+            // R84-commands-clear-delete-5-1: a sparkline's Location/DataRange (and optional
+            // DateAxisRange) are address-bearing state just like named ranges/CF/DV rules, but this
+            // band-scoped shift never touched sheet.Sparklines at all — see
+            // InsertCellsCommand.ShiftSparklinesInBandLeft for the move/shrink/drop rationale.
+            _sparklineSnapshot = InsertCellsCommand.CaptureSparklines(sheet);
+            InsertCellsCommand.ShiftSparklinesInBandLeft(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+
             DeleteShiftLeft(sheet, capture.Cells);
             // R21-undo-redo-deep-1: record the shifted-to address of every surviving moved cell so a
             // moved dynamic-array anchor whose formula text is unchanged by the shift still gets
@@ -1488,7 +1706,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
 
             // G3: see InsertCellsCommand.AutoFilterOverlapsBand — this band-scoped shift cannot
             // safely relocate AutoFilter.Reference/FilterHiddenRows, so refuse rather than corrupt.
-            if (InsertCellsCommand.AutoFilterOverlapsBand(sheet, shiftRegion))
+            if (InsertCellsCommand.AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion))
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
@@ -1536,6 +1754,10 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
             _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
             InsertCellsCommand.DeleteNamedRangesInBandUp(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+
+            // R84-commands-clear-delete-5-1: see the Delete-Shift-Left branch above.
+            _sparklineSnapshot = InsertCellsCommand.CaptureSparklines(sheet);
+            InsertCellsCommand.ShiftSparklinesInBandUp(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
 
             DeleteShiftUp(sheet, capture.Cells);
             // R21-undo-redo-deep-1: see the Delete-Shift-Left branch above.
@@ -1606,6 +1828,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         InsertCellsCommand.RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
+        InsertCellsCommand.RestoreSparklines(sheet, _sparklineSnapshot);
     }
 
     private void DeleteShiftLeft(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)

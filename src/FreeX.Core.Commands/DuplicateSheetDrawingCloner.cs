@@ -123,7 +123,8 @@ internal static class DuplicateSheetDrawingCloner
             MaxAxisType = sparkline.MaxAxisType,
             ManualMin = sparkline.ManualMin,
             ManualMax = sparkline.ManualMax,
-            DisplayEmptyCellsAs = sparkline.DisplayEmptyCellsAs
+            DisplayEmptyCellsAs = sparkline.DisplayEmptyCellsAs,
+            DateAxisRange = RemapRange(sparkline.DateAxisRange, copyId)
         };
 
     private static TextBoxModel CloneTextBox(TextBoxModel textBox, SheetId copyId) =>

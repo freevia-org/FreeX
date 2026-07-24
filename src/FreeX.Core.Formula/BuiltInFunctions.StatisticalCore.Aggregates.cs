@@ -26,7 +26,11 @@ public static partial class BuiltInFunctions
             if (arg is BlankValue or TextValue) continue; // SUM ignores text and blanks in ranges
             total += ToNumber(arg);
         }
-        return NumberResult(total);
+        // Match the 15-significant-digit rounding applied after every +,-,*,/,^ binary
+        // arithmetic result (FormulaEvaluator.Operators.cs) so that SUM(range) stays
+        // interchangeable with the textually-expanded chain of + over the same cells,
+        // e.g. SUM(A1:A30) == A1+A2+...+A30 when every cell holds the same rounded value.
+        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(total));
     }
 
     private static ScalarValue PercentOf(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

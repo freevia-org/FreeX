@@ -295,6 +295,7 @@ public sealed class RecalcEngine
                         CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
                     }
                     cell.Value = ImplicitIntersection.Resolve(cachedAst, implicitRange, addr.Row, addr.Col);
+                    RoundPrecisionAsDisplayed(workbook, cell);
                     _spillBlockedAnchors.Remove(addr);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
@@ -323,6 +324,7 @@ public sealed class RecalcEngine
                             rv = new RangeValue(confinedCells);
                         }
                         cell.Value = rv.Cells[0, 0];
+                        RoundPrecisionAsDisplayed(workbook, cell);
                         sheet.SetSpillRange(addr, rv);
                         spillTargetsMayHaveChanged = true;
                         if (hadSpill)
@@ -347,6 +349,7 @@ public sealed class RecalcEngine
                     else
                     {
                         cell.Value = rv.Cells[0, 0];
+                        RoundPrecisionAsDisplayed(workbook, cell);
                         sheet.SetSpillRange(addr, rv);
                         spillTargetsMayHaveChanged = true;
                         // A shrinking respill (e.g. 5 rows -> 3 rows) vacates the rows/cols beyond
@@ -367,6 +370,7 @@ public sealed class RecalcEngine
                         CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, 0, 0, ref vacatedSpillCells);
                     }
                     cell.Value = result;
+                    RoundPrecisionAsDisplayed(workbook, cell);
                     _spillBlockedAnchors.Remove(addr);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
@@ -532,13 +536,13 @@ public sealed class RecalcEngine
 
         // Excel's "Precision as displayed" option (calcPr/@fullPrecision="0") permanently rounds
         // stored numeric values to the precision shown on screen once a workbook uses it, rather
-        // than retaining full internal (~15 significant digit) precision. Doing this faithfully
-        // requires resolving each cell's effective *displayed* decimal-place count from its number
-        // format (and column width / General-format significant-digit rules), which lives in the
-        // number-format rendering layer above Core.Calc — RecalcEngine has no such dependency and
-        // must not acquire a new cross-tier one just for this. Only apply the top-level (outermost,
-        // resolveSpillDependents == true) pass so recursive spill-dependent follow-ups do not redo
-        // the (currently minimal) rounding pass redundantly.
+        // than retaining full internal (~15 significant digit) precision. The main evaluation loop
+        // above already rounds each formula cell's own result in place via RoundPrecisionAsDisplayed
+        // right after it is assigned (so a dependent evaluated later in this same topological pass,
+        // e.g. B1=A1*3, reads A1's already-rounded value, matching Excel's same-pass propagation).
+        // This sweep is the catch-all for values set through the paths that loop doesn't cover
+        // (iterative/cyclic-calc convergence) -- gated to the top-level (outermost) pass only so
+        // recursive spill-dependent follow-ups do not redo it redundantly.
         if (resolveSpillDependents && !workbook.FullPrecision)
             ApplyPrecisionAsDisplayed(workbook, report.RecalculatedCells);
 
@@ -558,13 +562,9 @@ public sealed class RecalcEngine
 
     /// <summary>
     /// Honor <see cref="Workbook.FullPrecision"/> == false ("Precision as displayed") for the given
-    /// set of just-recalculated cells.
-    /// TODO(N30 follow-up, needs FreeX.Core.Presentation/number-format access which Core.Calc cannot
-    /// reference): this currently only clamps stored values to Excel's ~15 significant-digit display
-    /// ceiling, which is a no-op for ordinary double-precision results and does not yet round to each
-    /// cell's actual displayed decimal count (its number format, e.g. "0.00" -> 2 decimals). A full
-    /// fix needs to resolve each cell's effective displayed-decimal-place count (number format +
-    /// General-format significant-digit rules) and round to that instead.
+    /// set of just-recalculated cells. See <see cref="RoundPrecisionAsDisplayed"/> for the per-cell
+    /// rounding rule; this just sweeps every cell the report says was touched this pass, as a
+    /// catch-all for values set through a path that does not call it directly.
     /// </summary>
     private static void ApplyPrecisionAsDisplayed(Workbook workbook, IReadOnlyList<CellAddress> recalculatedCells)
     {
@@ -573,9 +573,70 @@ public sealed class RecalcEngine
             var addr = recalculatedCells[i];
             var sheet = workbook.GetSheet(addr.Sheet);
             var cell = sheet?.GetCell(addr);
-            if (cell?.Value is NumberValue { Value: var raw } && double.IsFinite(raw))
-                cell.Value = new NumberValue(RoundToSignificantDigits(raw, 15));
+            if (cell is not null)
+                RoundPrecisionAsDisplayed(workbook, cell);
         }
+    }
+
+    /// <summary>
+    /// Round a single cell's stored value to the decimal-place count its own number format
+    /// displays (e.g. "0.00" -> 2 decimals) when <see cref="Workbook.FullPrecision"/> is false
+    /// ("Precision as displayed"), matching Excel's permanent-rounding behavior for this option.
+    /// Called right after the main evaluation loop assigns a formula cell's fresh result, so a
+    /// dependent evaluated later in the same topological pass reads the already-rounded value
+    /// (e.g. B1=A1*3 sees A1's rounded 0.33, not its raw ~0.333333333333333). For formats this
+    /// simple decimal-placeholder scan can't confidently parse (General, percent, scientific,
+    /// fractions, text, or anything containing a date/time letter token or an [Red]-style section
+    /// qualifier), falls back to the pre-existing ~15 significant-digit display-ceiling clamp,
+    /// which is a safe no-op for ordinary values rather than a mis-rounding of a format we didn't
+    /// actually resolve.
+    /// </summary>
+    private static void RoundPrecisionAsDisplayed(Workbook workbook, Cell cell)
+    {
+        if (workbook.FullPrecision)
+            return;
+
+        if (cell.Value is not NumberValue { Value: var raw } || !double.IsFinite(raw))
+            return;
+
+        var numberFormat = workbook.GetStyle(cell.StyleId).NumberFormat;
+        cell.Value = new NumberValue(TryGetFixedDecimalPlaces(numberFormat, out var decimals)
+            ? Math.Round(raw, Math.Clamp(decimals, 0, 15), MidpointRounding.AwayFromZero)
+            : RoundToSignificantDigits(raw, 15));
+    }
+
+    /// <summary>
+    /// Resolve the decimal-place count a plain fixed-point number format displays (its first
+    /// section's run of '0'/'#'/'?' placeholders right after the decimal point, or 0 for an explicit
+    /// integer format with no decimal point at all). Deliberately narrow: bails out (returns false)
+    /// on "General"/blank, and on any format containing a letter (date/time tokens, [Red]-style
+    /// section color qualifiers, scientific 'E'), '%', '/', or '@' -- those need a full number-format
+    /// renderer to resolve correctly, which Core.Calc does not have, so they're left to the existing
+    /// significant-digit clamp instead of risking rounding a value to the wrong precision.
+    /// </summary>
+    private static bool TryGetFixedDecimalPlaces(string? numberFormat, out int decimals)
+    {
+        decimals = 0;
+        if (string.IsNullOrWhiteSpace(numberFormat) || string.Equals(numberFormat, "General", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        foreach (var c in numberFormat)
+        {
+            if (char.IsLetter(c) || c is '%' or '/' or '@')
+                return false;
+        }
+
+        var firstSection = numberFormat.Split(';')[0];
+        var dotIndex = firstSection.IndexOf('.');
+        if (dotIndex < 0)
+            return true; // Explicit integer format (e.g. "#,##0") -- round to a whole number.
+
+        var count = 0;
+        for (var i = dotIndex + 1; i < firstSection.Length && firstSection[i] is '0' or '#' or '?'; i++)
+            count++;
+
+        decimals = count;
+        return true;
     }
 
     /// <summary>Round <paramref name="value"/> to at most <paramref name="digits"/> significant decimal digits.</summary>

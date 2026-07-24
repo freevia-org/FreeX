@@ -35,7 +35,13 @@ public static partial class BuiltInFunctions
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
         double nper = nperValue;
         if (nper == 0) return ErrorValue.DivByZero;
-        if (Math.Abs(rate) < 1e-10)
+        // Excel only special-cases a rate that is exactly (bit-for-bit) 0.0 -- it has no
+        // epsilon-collapse for tiny-but-nonzero rates, however small, because rate*nper can
+        // still be far from negligible when nper is huge (e.g. rate=5e-11, nper=1e9 compounds
+        // to ~5%). Keying this on Math.Abs(rate) < epsilon regardless of nper wrongly routes
+        // such inputs through the zero-rate shortcut instead of the true closed-form annuity
+        // formula below.
+        if (rate == 0)
             return NumberResult(-(pv + fv) / nper);
         double rn  = Math.Pow(1 + rate, nper);
         double pmt = -(pv * rn + fv) * rate / ((1 + rate * type) * (rn - 1));
@@ -71,7 +77,8 @@ public static partial class BuiltInFunctions
         // singularity: when nper == 0, rn == (1+rate)^0 == 1 and the pmt term vanishes
         // ((rn - 1) == 0), so the closed form below correctly falls through to -fv
         // (matching Excel's PV(rate, 0, pmt, fv) == -fv) instead of #DIV/0!.
-        if (Math.Abs(rate) < 1e-10)
+        // See PmtScalar above: only an exact 0.0 rate takes the zero-rate shortcut.
+        if (rate == 0)
             return NumberResult(-pmt * nper - fv);
         double rn = Math.Pow(1 + rate, nper);
         double pv = (-pmt * (1 + rate * type) * (rn - 1) / rate - fv) / rn;
@@ -103,7 +110,8 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
         double nper = nperValue;
-        if (Math.Abs(rate) < 1e-10)
+        // See PmtScalar above: only an exact 0.0 rate takes the zero-rate shortcut.
+        if (rate == 0)
             return NumberResult(-pv - pmt * nper);
         double rn = Math.Pow(1 + rate, nper);
         return NumberResult(-pv * rn - pmt * (1 + rate * type) * (rn - 1) / rate);
@@ -133,7 +141,8 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
-        if (Math.Abs(rate) < 1e-10)
+        // See PmtScalar above: only an exact 0.0 rate takes the zero-rate shortcut.
+        if (rate == 0)
         {
             if (Math.Abs(pmt) < 1e-10) return ErrorValue.DivByZero;
             return NumberResult(-(pv + fv) / pmt);

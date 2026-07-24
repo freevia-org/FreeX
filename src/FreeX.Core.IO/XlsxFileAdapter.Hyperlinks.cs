@@ -161,7 +161,7 @@ public sealed partial class XlsxFileAdapter
             // UriKind.RelativeOrAbsolute accepts both forms; ClosedXML emits a proper relationship
             // entry for any non-null ExternalAddress, whether the Uri is absolute or relative.
             hyperlink.IsExternal = true;
-            hyperlink.ExternalAddress = new Uri(EscapeExternalHyperlinkTarget(linkTarget), UriKind.RelativeOrAbsolute);
+            hyperlink.ExternalAddress = new Uri(NormalizeExternalHyperlinkTarget(linkTarget), UriKind.RelativeOrAbsolute);
         }
 
         if (!string.IsNullOrWhiteSpace(metadata.ScreenTip))
@@ -172,8 +172,39 @@ public sealed partial class XlsxFileAdapter
 
     // RFC 3986 unreserved characters plus reserved (gen-delims + sub-delims) plus '%' itself, so
     // an already percent-encoded triplet (e.g. "%20") is left alone rather than re-escaped into
-    // "%2520".
-    private const string SafeExternalHyperlinkUriCharacters = "-._~:/?#[]@!$&'()*+,;=%";
+    // "%2520". Backslash ('\') is also included even though it is not a valid RFC 3986 URI
+    // character: it is the path separator in Windows local file paths (C:\Reports\Q1.xlsx) and
+    // UNC paths (\\server\share\Q1.xlsx), both valid "Insert Hyperlink > Existing File" targets
+    // in Excel. Percent-encoding it (as the rest of this escaping logic otherwise would) turns
+    // a drive-letter path into a string Uri can no longer recognise as a rooted local path
+    // ("A Dos path must be rooted" UriFormatException, silently dropping the hyperlink -- see
+    // R84-io-hyperlink-defined-name-5-1) and turns a UNC path into a bogus relative Uri holding
+    // literal "%5C%5C…" text instead of a working link. Leaving backslash unescaped lets Uri
+    // parse a drive-letter path correctly on its own; UNC paths still need the additional
+    // file://host/share rewrite in <see cref="NormalizeExternalHyperlinkTarget"/> below.
+    private const string SafeExternalHyperlinkUriCharacters = "-._~:/?#[]@!$&'()*+,;=%\\";
+
+    /// <summary>
+    /// R84-io-hyperlink-defined-name-5-1: rewrites a raw external hyperlink target that uses UNC
+    /// path syntax (\\server\share\file.xlsx) into the equivalent file://server/share/file.xlsx
+    /// URI form before it reaches <see cref="Uri"/>. A raw UNC path cannot be parsed by
+    /// <see cref="Uri"/> (even with <see cref="UriKind.Absolute"/>) on this runtime, and percent-
+    /// encoding its backslashes (the only alternative once backslash is excluded from escaping)
+    /// produces a Uri that parses successfully but as a bogus *relative* Uri holding the literal
+    /// percent-escaped text -- never resolving back to the intended UNC path. The file://host/share
+    /// form is the standard, working representation of a UNC path that both <see cref="Uri"/> and
+    /// Windows/Excel resolve back to \\host\share\path. Drive-letter paths (C:\Reports\Q1.xlsx)
+    /// need no such rewrite -- <see cref="Uri"/> parses them correctly as long as the backslash is
+    /// left un-escaped (see <see cref="SafeExternalHyperlinkUriCharacters"/>).
+    /// </summary>
+    private static string NormalizeExternalHyperlinkTarget(string target)
+    {
+        var escaped = EscapeExternalHyperlinkTarget(target);
+        if (escaped.Length > 2 && escaped[0] == '\\' && escaped[1] == '\\')
+            return "file:" + escaped.Replace('\\', '/');
+
+        return escaped;
+    }
 
     /// <summary>
     /// R38-io-hyperlink-2-3: percent-encode characters that are not valid literally inside a URI

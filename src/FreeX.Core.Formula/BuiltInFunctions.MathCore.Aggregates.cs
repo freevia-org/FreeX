@@ -43,7 +43,10 @@ public static partial class BuiltInFunctions
             total += product;
             if (!double.IsFinite(total)) return ErrorValue.Num;
         }
-        return NumberResult(total);
+        // Match the 15-significant-digit rounding applied after every +,-,*,/,^ binary
+        // arithmetic result (FormulaEvaluator.Operators.cs) for consistency with SUM and
+        // with the arithmetic-operator path.
+        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(total));
     }
 
     private static ScalarValue Product(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

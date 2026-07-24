@@ -12,29 +12,42 @@ public sealed class PrintPreviewPaginationContext
 {
     private readonly Workbook _workbook;
     private readonly Sheet _sheet;
-    private readonly PagePaginationResult _plan;
+    private readonly IReadOnlyList<PagePaginationResult> _plans;
     private readonly ITextMeasurer _textMeasurer;
     private readonly string _workbookDirectory;
 
     private PrintPreviewPaginationContext(
         Workbook workbook,
         Sheet sheet,
-        PagePaginationResult plan,
+        IReadOnlyList<PagePaginationResult> plans,
         ITextMeasurer textMeasurer,
         string workbookDirectory)
     {
         _workbook = workbook;
         _sheet = sheet;
-        _plan = plan;
+        _plans = plans;
         _textMeasurer = textMeasurer;
         _workbookDirectory = workbookDirectory;
     }
 
-    public int PageCount => _plan.PageCount;
+    public int PageCount
+    {
+        get
+        {
+            var total = 0;
+            foreach (var plan in _plans)
+                total += plan.PageCount;
+            return total;
+        }
+    }
 
     /// <summary>
-    /// Resolves the print range (explicit print area, else used range), paginates it, and returns a
-    /// context when the sheet has at least one printable page. Returns false for an empty sheet.
+    /// Resolves every print range for the sheet (all configured print areas, else the used range; see
+    /// <see cref="PageBreakPreviewInstructionBuilder.TryResolvePrintRanges"/>), paginates each
+    /// independently, and returns a context when at least one range has a printable page. Page numbers
+    /// continue across ranges in the order given, mirroring <c>WorkbookExportPrintPlanner</c> and the
+    /// multi-area page-break-preview overlay so the interactive Print Preview never omits a configured
+    /// print-area region that the real print/PDF export includes. Returns false for an empty sheet.
     /// </summary>
     public static bool TryCreate(
         Workbook workbook,
@@ -47,44 +60,68 @@ public sealed class PrintPreviewPaginationContext
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(textMeasurer);
 
-        if (!PageBreakPreviewInstructionBuilder.TryResolvePrintRange(sheet, out var printRange))
+        if (!PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out var printRanges))
         {
             context = null!;
             return false;
         }
 
-        var plan = PagePaginationPlanner.Paginate(
-            printRange,
-            sheet.ScaleToFit,
-            sheet.PrintTitleRows,
-            sheet.PrintTitleColumns,
-            sheet.PaperSize,
-            sheet.PageOrientation,
-            sheet.PageMargins,
-            sheet.RowHeights,
-            sheet.DefaultRowHeight,
-            sheet.ColumnWidths,
-            sheet.DefaultColumnWidth,
-            sheet.HeaderMargin,
-            sheet.FooterMargin,
-            sheet.RowPageBreaks,
-            sheet.ColumnPageBreaks,
-            // Match the actual print/PDF job (WorkbookExportPrintPlanner), which excludes
-            // hidden/filtered rows and columns via these same predicates — otherwise the preview
-            // shows rows/columns and a page count that the real output never produces.
-            sheet.IsRowEffectivelyHidden,
-            sheet.IsColEffectivelyHidden);
+        var plans = new List<PagePaginationResult>(printRanges.Count);
+        foreach (var printRange in printRanges)
+        {
+            var plan = PagePaginationPlanner.Paginate(
+                printRange,
+                sheet.ScaleToFit,
+                sheet.PrintTitleRows,
+                sheet.PrintTitleColumns,
+                sheet.PaperSize,
+                sheet.PageOrientation,
+                sheet.PageMargins,
+                sheet.RowHeights,
+                sheet.DefaultRowHeight,
+                sheet.ColumnWidths,
+                sheet.DefaultColumnWidth,
+                sheet.HeaderMargin,
+                sheet.FooterMargin,
+                sheet.RowPageBreaks,
+                sheet.ColumnPageBreaks,
+                // Match the actual print/PDF job (WorkbookExportPrintPlanner), which excludes
+                // hidden/filtered rows and columns via these same predicates — otherwise the preview
+                // shows rows/columns and a page count that the real output never produces.
+                sheet.IsRowEffectivelyHidden,
+                sheet.IsColEffectivelyHidden);
 
-        if (plan.PageCount <= 0)
+            if (plan.PageCount > 0)
+                plans.Add(plan);
+        }
+
+        if (plans.Count == 0)
         {
             context = null!;
             return false;
         }
 
-        context = new PrintPreviewPaginationContext(workbook, sheet, plan, textMeasurer, workbookDirectory);
+        context = new PrintPreviewPaginationContext(workbook, sheet, plans, textMeasurer, workbookDirectory);
         return true;
     }
 
-    public PageContentLayout? BuildPage(int pageIndex) =>
-        PageContentRenderModelBuilder.Build(_workbook, _sheet, _plan, pageIndex, _textMeasurer, workbookDirectory: _workbookDirectory);
+    public PageContentLayout? BuildPage(int pageIndex)
+    {
+        if (pageIndex < 0)
+            return null;
+
+        var remaining = pageIndex;
+        foreach (var plan in _plans)
+        {
+            if (remaining < plan.PageCount)
+            {
+                return PageContentRenderModelBuilder.Build(
+                    _workbook, _sheet, plan, remaining, _textMeasurer, workbookDirectory: _workbookDirectory);
+            }
+
+            remaining -= plan.PageCount;
+        }
+
+        return null;
+    }
 }

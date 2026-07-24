@@ -23,9 +23,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             "baseColWidth",
             "zeroHeight",
             "thickTop",
-            "thickBottom",
-            "outlineLevelRow",
-            "outlineLevelCol"
+            "thickBottom"
         ];
         var nativeOnlyAttributeNames = nativeOnlyAttributes
             .Select(name => XName.Get(name))
@@ -37,7 +35,19 @@ internal static partial class XlsxWorksheetMetadataPreserver
         // (XlsxWorksheetDimensionDefaultsWriter.IsNonDefaultColumnWidth/IsNonDefaultRowHeight). They
         // must never be copied back from the stale pre-edit source sheetFormatPr, otherwise resetting
         // either value to the Excel default is silently reverted on the next full-rebuild save.
-        string[] modeledAttributes = ["defaultColWidth", "defaultRowHeight"];
+        //
+        // outlineLevelRow/outlineLevelCol belong in this same "fully modeled, never copy from
+        // source" bucket rather than in nativeOnlyAttributes above: unlike baseColWidth/
+        // zeroHeight/thickTop/thickBottom (which ClosedXML never recomputes and must be
+        // preserved verbatim from the pre-edit source), ClosedXML's own worksheet writer
+        // recomputes both live on every save (XLWorksheet.GetMaxRowOutline/GetMaxColumnOutline)
+        // and correctly OMITS the attribute entirely once no rows/columns remain grouped.
+        // Treating them as nativeOnlyAttributes would unconditionally clobber that live-computed
+        // value (or its correct absence) back to the stale pre-edit snapshot
+        // (R84-io-sheet-props-5-1) -- e.g. rows whose outlineLevel was just bumped to 3 by a
+        // Group command left with a stale outlineLevelRow="2", or ungrouping every row leaving a
+        // resurrected outlineLevelRow="2" attribute that the freshly rebuilt file never wrote.
+        string[] modeledAttributes = ["defaultColWidth", "defaultRowHeight", "outlineLevelRow", "outlineLevelCol"];
         var modeledAttributeNames = modeledAttributes
             .Select(name => XName.Get(name))
             .ToHashSet();

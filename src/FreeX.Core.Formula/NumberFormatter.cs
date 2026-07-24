@@ -109,8 +109,11 @@ public static partial class NumberFormatter
             return value switch
             {
                 TextValue t   => new FormatResult(t.Value),
-                NumberValue n => new FormatResult(FormatGeneral(value, uses1904DateSystem)),
-                _             => new FormatResult(FormatGeneral(value, uses1904DateSystem))
+                // A numeric value under Text format is NOT converted to a string -- it still
+                // renders via General numeric formatting, including the column-width-aware
+                // '#####' overflow indicator (matching the General-format dispatch above).
+                NumberValue n => new FormatResult(FormatGeneral(value, uses1904DateSystem, targetWidthCharacters)),
+                _             => new FormatResult(FormatGeneral(value, uses1904DateSystem, targetWidthCharacters))
             };
         }
 

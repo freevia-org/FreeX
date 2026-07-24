@@ -200,6 +200,9 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     private bool? _previousSeriesInRows;
     private List<ChartSeriesColumnMapping>? _previousSeriesColumnMappings;
     private List<ChartSeriesVerbatimFormulas>? _previousVerbatimSeriesFormulas;
+    private List<ChartSeriesOrderOverride>? _previousSeriesOrderOverrides;
+    private List<ChartSeriesRawXmlEntry>? _previousMultiLevelCategoryXml;
+    private List<ChartPointMarkerFormat>? _previousPointMarkerFormats;
     private bool _clearedMappingsForSourceChange;
 
     public string Label => "Select Chart Data";
@@ -256,11 +259,21 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             // writer: XlsxChartXmlWriter.Series.cs prefers verbatim?.ValFormula over the
             // range-computed formula), silently reverting a plain "Select Data" range edit on
             // reload. Clear on ANY data-range or orientation change, not just orientation flips.
+            // Per-series/per-point overrides (plot order, marker formatting, multi-level category
+            // XML) are keyed by SeriesIndex too, so they must be cleared for the same reason -
+            // otherwise they silently mis-apply to whichever unrelated series now sits at that
+            // index after the re-index.
             _previousSeriesColumnMappings = chart.SeriesColumnMappings;
             _previousVerbatimSeriesFormulas = chart.VerbatimSeriesFormulas;
+            _previousSeriesOrderOverrides = chart.SeriesOrderOverrides;
+            _previousMultiLevelCategoryXml = chart.MultiLevelCategoryXml;
+            _previousPointMarkerFormats = chart.PointMarkerFormats;
             _clearedMappingsForSourceChange = true;
             chart.SeriesColumnMappings = [];
             chart.VerbatimSeriesFormulas = null;
+            chart.SeriesOrderOverrides = [];
+            chart.MultiLevelCategoryXml = [];
+            chart.PointMarkerFormats = [];
         }
 
         chart.DataRange = _dataRange;
@@ -286,6 +299,9 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         {
             chart.SeriesColumnMappings = _previousSeriesColumnMappings ?? [];
             chart.VerbatimSeriesFormulas = _previousVerbatimSeriesFormulas;
+            chart.SeriesOrderOverrides = _previousSeriesOrderOverrides ?? [];
+            chart.MultiLevelCategoryXml = _previousMultiLevelCategoryXml ?? [];
+            chart.PointMarkerFormats = _previousPointMarkerFormats ?? [];
         }
 
         _previousDataRange = null;
@@ -294,6 +310,9 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         _previousSeriesInRows = null;
         _previousSeriesColumnMappings = null;
         _previousVerbatimSeriesFormulas = null;
+        _previousSeriesOrderOverrides = null;
+        _previousMultiLevelCategoryXml = null;
+        _previousPointMarkerFormats = null;
         _clearedMappingsForSourceChange = false;
     }
 }

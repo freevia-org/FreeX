@@ -98,6 +98,15 @@ public sealed partial class NativeJsonAdapter
         public ThemeColorReferenceDto? LegendBorderThemeColor { get; set; }
         public double LegendBorderThickness { get; set; }
         public double LegendFontSize { get; set; } = 12;
+
+        /// <summary>R80-app-accessibility-a11y-5-1: see <see cref="ChartModel.LegendBold"/>.</summary>
+        public bool? LegendBold { get; set; }
+
+        /// <summary>See <see cref="ChartModel.LegendItalic"/>.</summary>
+        public bool? LegendItalic { get; set; }
+
+        /// <summary>R45-io-chart-datatable-legend-3-2: see <see cref="ChartModel.LegendPositionExplicit"/>.</summary>
+        public bool? LegendPositionExplicit { get; set; }
         public List<ChartLegendEntryModel>? LegendEntries { get; set; }
         public double DoughnutHoleSize { get; set; } = 0.55;
         public double FirstSliceAngle { get; set; }
@@ -279,11 +288,26 @@ public sealed partial class NativeJsonAdapter
         public double? DownBarBorderThickness { get; set; }
         public bool ShowSecondaryAxis { get; set; }
         public List<int>? SecondaryAxisSeriesIndexes { get; set; }
+
+        /// <summary>R62-io-chart-axis-6-2: see <see cref="ChartModel.SecondaryAxisMajorUnit"/>.</summary>
+        public double? SecondaryAxisMajorUnit { get; set; }
+
+        /// <summary>See <see cref="ChartModel.SecondaryAxisMinorUnit"/>.</summary>
+        public double? SecondaryAxisMinorUnit { get; set; }
         public List<int>? ComboLineSeriesIndexes { get; set; }
         public List<ChartSeriesFormat>? SeriesFormats { get; set; }
         public List<ChartSeriesDataLabelFormat>? SeriesDataLabelFormats { get; set; }
         public List<ChartPointDataLabelFormat>? PointDataLabelFormats { get; set; }
         public List<ChartSeriesRangeDataLabels>? SeriesRangeDataLabels { get; set; }
+
+        /// <summary>R82-io-chart-series-5-1: see <see cref="ChartModel.SeriesOrderOverrides"/>.</summary>
+        public List<ChartSeriesOrderOverride>? SeriesOrderOverrides { get; set; }
+
+        /// <summary>R82-io-chart-series-5-2: see <see cref="ChartModel.MultiLevelCategoryXml"/>.</summary>
+        public List<ChartSeriesRawXmlEntry>? MultiLevelCategoryXml { get; set; }
+
+        /// <summary>R82-io-chart-series-5-3: see <see cref="ChartModel.PointMarkerFormats"/>.</summary>
+        public List<ChartPointMarkerFormat>? PointMarkerFormats { get; set; }
         public bool UseComboLineForSecondarySeries { get; set; }
         public double Left { get; set; } = 50;
         public double Top { get; set; } = 50;

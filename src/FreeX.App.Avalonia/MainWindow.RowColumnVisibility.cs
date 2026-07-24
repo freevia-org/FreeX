@@ -127,6 +127,25 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
+    /// Row-header counterpart of <see cref="AddAdditionalColumnSelection"/>
+    /// (R84-app-mouse-selection-5-1).
+    /// </summary>
+    private void AddAdditionalRowSelection(uint row)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var sheet = _session.ActiveSheet.Id;
+        var newRange = SelectionRangeService.GetWholeRows(
+            new GridRange(new CellAddress(sheet, row, 1), new CellAddress(sheet, row, 1)));
+        var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
+        _session.SelectRanges(newRange, ranges, newRange.Start);
+        RefreshTableContextualTab();
+        ApplyFormatPainterAfterTargetSelection();
+    }
+
+    /// <summary>
     /// Selects an entire column (every row) so subsequent column commands target it. Extends the
     /// existing selection when <paramref name="extend"/> is set (Shift-click on a header).
     /// </summary>
@@ -141,6 +160,27 @@ public sealed partial class MainWindow
         var range = SelectionRangeService.GetWholeColumns(
             new GridRange(new CellAddress(sheet, 1, anchorCol), new CellAddress(sheet, 1, col)));
         _session.SelectRange(range);
+        RefreshTableContextualTab();
+        ApplyFormatPainterAfterTargetSelection();
+    }
+
+    /// <summary>
+    /// Ctrl+clicking a column header adds the whole column as a disjoint SECOND (or later)
+    /// selection area instead of collapsing the selection down to just this column, mirroring the
+    /// WPF host's AddAdditionalColumnSelection (MainWindow.Selection.cs, R49-render-multiarea-
+    /// selection-3-2) for the Avalonia shell (R84-app-mouse-selection-5-1).
+    /// </summary>
+    private void AddAdditionalColumnSelection(uint col)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        var sheet = _session.ActiveSheet.Id;
+        var newRange = SelectionRangeService.GetWholeColumns(
+            new GridRange(new CellAddress(sheet, 1, col), new CellAddress(sheet, 1, col)));
+        var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
+        _session.SelectRanges(newRange, ranges, newRange.Start);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
     }

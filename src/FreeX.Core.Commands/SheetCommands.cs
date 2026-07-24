@@ -4,9 +4,16 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Command to add a new sheet to the workbook.</summary>
-public sealed class AddSheetCommand : IWorkbookCommand
+public sealed class AddSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand
 {
     private readonly string _name;
+    // R84-calc-crosssheet-3d-5-3: null means "append at the end" (the historical, still-default
+    // behavior -- matches the sheet-tab '+' button, which always adds after the last sheet, just
+    // like real Excel's own New Sheet button). A non-null value inserts BEFORE that workbook
+    // position instead, so a sheet inserted from the tab context menu (or the ribbon's Insert
+    // Sheet) can land inside an existing 3-D span reference (e.g. Sheet1:Sheet3), matching Excel's
+    // "insert before the acted-on sheet" placement.
+    private readonly int? _insertIndex;
     private SheetId? _addedSheetId;
     // R83-io-vba-macro-5-1: the codeName assigned below on first Apply, cached and reused on
     // redo (mirrors _addedSheetId's R16 redo-stability fix) so a redone Apply doesn't mint a
@@ -15,7 +22,11 @@ public sealed class AddSheetCommand : IWorkbookCommand
 
     public string Label => $"Add Sheet '{_name}'";
 
-    public AddSheetCommand(string name) => _name = name;
+    public AddSheetCommand(string name, int? insertIndex = null)
+    {
+        _name = name;
+        _insertIndex = insertIndex;
+    }
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
@@ -26,6 +37,10 @@ public sealed class AddSheetCommand : IWorkbookCommand
         if (validationError is not null)
             return new CommandOutcome(false, validationError);
 
+        // Clamp defensively: a redo re-runs this after other commands may have changed the sheet
+        // count, and an out-of-range index would otherwise throw from List<T>.Insert.
+        var targetIndex = Math.Clamp(_insertIndex ?? ctx.Workbook.Sheets.Count, 0, ctx.Workbook.Sheets.Count);
+
         Sheet sheet;
         if (_addedSheetId is { } existingId)
         {
@@ -34,11 +49,11 @@ public sealed class AddSheetCommand : IWorkbookCommand
             // later redo-stack command that captured the original id. Re-create with the SAME
             // id captured below instead, via the "reinsert an existing sheet instance" overload.
             sheet = new Sheet(existingId, _name);
-            ctx.Workbook.InsertSheet(ctx.Workbook.Sheets.Count, sheet);
+            ctx.Workbook.InsertSheet(targetIndex, sheet);
         }
         else
         {
-            sheet = ctx.Workbook.AddSheet(_name);
+            sheet = ctx.Workbook.InsertSheet(targetIndex, _name);
             _addedSheetId = sheet.Id;
         }
         sheet.ResetViewStateToA1();
@@ -485,7 +500,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
 }
 
 /// <summary>Command to delete a sheet from the workbook.</summary>
-public sealed class RemoveSheetCommand : IWorkbookCommand
+public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand
 {
     private readonly SheetId _sheetId;
     private Sheet? _removedSheet;
@@ -897,7 +912,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
 }
 
 /// <summary>Command to move a sheet tab from one workbook position to another.</summary>
-public sealed class MoveSheetCommand : IWorkbookCommand
+public sealed class MoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand
 {
     private readonly int _fromIndex;
     private readonly int _toIndex;

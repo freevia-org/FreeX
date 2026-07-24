@@ -122,6 +122,62 @@ public sealed partial class ChartCommandTests
     }
 
     [Fact]
+    public void R84_ChangeChartSourceCommand_ClearsAndRevertsStaleOrderMarkerAndMultiLevelCategoryOverridesOnSourceChange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var range = CreateChartRange(sheet);
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+        chart.SeriesOrderOverrides.Add(new ChartSeriesOrderOverride(2, 0));
+        chart.MultiLevelCategoryXml.Add(new ChartSeriesRawXmlEntry(2, "<c:multiLvlStrRef/>"));
+        chart.PointMarkerFormats.Add(new ChartPointMarkerFormat(2, 0, ChartMarkerStyle.Diamond));
+        var newRange = Range(sheet, 2, 2, 6, 5);
+        var command = new ChangeChartSourceCommand(sheet.Id, chart.Id, newRange);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        // Per-series/per-point overrides are keyed by SeriesIndex and describe the OLD source's
+        // series layout; keeping them after a data-range edit would silently mis-apply them to
+        // whichever unrelated series now sits at that index post re-index.
+        chart.SeriesOrderOverrides.Should().BeEmpty();
+        chart.MultiLevelCategoryXml.Should().BeEmpty();
+        chart.PointMarkerFormats.Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        chart.SeriesOrderOverrides.Should().ContainSingle();
+        chart.MultiLevelCategoryXml.Should().ContainSingle();
+        chart.PointMarkerFormats.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void R84_ChangeChartSourceCommand_KeepsOrderMarkerAndMultiLevelCategoryOverridesWhenSourceUnchanged()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var range = CreateChartRange(sheet);
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+        chart.SeriesOrderOverrides.Add(new ChartSeriesOrderOverride(1, 0));
+        chart.MultiLevelCategoryXml.Add(new ChartSeriesRawXmlEntry(1, "<c:multiLvlStrRef/>"));
+        chart.PointMarkerFormats.Add(new ChartPointMarkerFormat(1, 0, ChartMarkerStyle.Diamond));
+        // Same range and orientation as the chart already has: not a source change, so nothing
+        // that's keyed by SeriesIndex should be touched.
+        var command = new ChangeChartSourceCommand(sheet.Id, chart.Id, range, firstRowIsHeader: chart.FirstRowIsHeader);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        chart.SeriesOrderOverrides.Should().ContainSingle();
+        chart.MultiLevelCategoryXml.Should().ContainSingle();
+        chart.PointMarkerFormats.Should().ContainSingle();
+    }
+
+    [Fact]
     public void ChangeChartSourceCommand_KeepsOrientationAndMappingsWhenSeriesInRowsOmitted()
     {
         var wb = new Workbook("test");

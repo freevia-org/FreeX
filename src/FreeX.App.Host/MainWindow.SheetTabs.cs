@@ -342,18 +342,47 @@ public partial class MainWindow
 
     private void AddSheetButton_Click(object sender, RoutedEventArgs e)
     {
+        // The tab-strip '+' button always adds after the last sheet, matching real Excel's own
+        // New Sheet button -- pass no target so InsertNewSheet appends (see its doc comment).
         InsertNewSheet();
     }
 
-    private void InsertNewSheet()
+    /// <summary>
+    /// Inserts a new sheet, optionally BEFORE <paramref name="insertBeforeSheetId"/> (the tab the
+    /// user right-clicked to invoke Insert) instead of always appending. R84-calc-crosssheet-3d-5-3:
+    /// Excel inserts a sheet acted on via the tab context menu immediately before that tab, so it
+    /// lands inside any 3-D span reference the acted-on sheet already sits within (e.g.
+    /// =SUM(Sheet1:Sheet3!A1)) -- appending unconditionally (the pre-fix behavior) always placed
+    /// the new sheet outside such a span.
+    /// </summary>
+    private void InsertNewSheet(SheetId? insertBeforeSheetId = null)
     {
-        if (!TryExecuteRepeatableCommand(
-                () => new AddSheetCommand(GenerateUniqueSheetName()),
-                "Insert Sheet",
-                out _))
+        int? insertIndex = null;
+
+        IWorkbookCommand CreateCommand()
+        {
+            insertIndex = insertBeforeSheetId is { } beforeId && FindWorkbookSheetIndex(beforeId) is var idx && idx >= 0
+                ? idx
+                : null;
+            return new AddSheetCommand(GenerateUniqueSheetName(), insertIndex);
+        }
+
+        if (!TryExecuteRepeatableCommand(CreateCommand, "Insert Sheet", out _))
             return;
 
-        ActivateNewWorksheetAtA1(_workbook.Sheets[^1].Id);
+        if (insertIndex is not null)
+        {
+            // Inserting before an existing tab can place the new sheet inside a 3-D span
+            // reference, so recalculate just like the other structural sheet operations
+            // (delete/move/duplicate/rename) do -- appending (insertIndex null) can never land
+            // inside an existing span, so it deliberately skips this like it always has.
+            RecalculateWorkbook();
+        }
+
+        var newSheetId = insertIndex is { } idx2 && idx2 < _workbook.Sheets.Count
+            ? _workbook.Sheets[idx2].Id
+            : _workbook.Sheets[^1].Id;
+        ActivateNewWorksheetAtA1(newSheetId);
         UpdateViewport();
         RefreshSheetTabs();
     }
@@ -1597,7 +1626,11 @@ public partial class MainWindow
 
     private void SheetCtxInsert_Click(object sender, RoutedEventArgs e)
     {
-        InsertNewSheet();
+        // R84-calc-crosssheet-3d-5-3: insert BEFORE the right-clicked tab (matching Excel's own
+        // tab-context-menu Insert), not always at the end -- see InsertNewSheet's doc comment.
+        var tab = GetContextMenuTab(sender);
+        if (tab is null) return;
+        InsertNewSheet(tab.Id);
     }
 
     private void SheetCtxDelete_Click(object sender, RoutedEventArgs e)

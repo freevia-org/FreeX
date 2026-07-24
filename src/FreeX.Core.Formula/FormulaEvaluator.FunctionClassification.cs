@@ -14,6 +14,23 @@ public sealed partial class FormulaEvaluator
         "NPV"
     };
 
+    // R84-calc-crosssheet-3d-5-2: Excel restricts 3-D sheet-span references (e.g.
+    // Sheet1:Sheet3!A1) to exactly this subset of aggregate functions -- every other function,
+    // including several members of AggregateFunctions above (MEDIAN, MODE*, AND, OR, XOR,
+    // CONCAT(ENATE), GEOMEAN, HARMEAN, AVEDEV, GCD, LCM, SUMSQ/SUMX2*/SUMXMY2, NPV), rejects a
+    // 3-D span with #VALUE!. AggregateFunctions itself must stay broader than this set: it also
+    // gates unrelated concerns (variadic arity for MEDIAN/AND/OR/CONCAT, and flattening an
+    // array/named-formula RangeValue result into scalar args), which those extra functions
+    // legitimately need. Only the sheet-span-expansion decision in FormulaEvaluator.Functions.cs
+    // (the RangeRefNode-with-EndSheetName branch, and its named-formula-span counterpart) should
+    // consult this narrower set.
+    private static readonly HashSet<string> SheetSpanAggregateFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SUM", "AVERAGE", "AVERAGEA", "COUNT", "COUNTA", "MAX", "MAXA", "MIN", "MINA", "PRODUCT",
+        "STDEV", "STDEV.S", "STDEVA", "STDEVP", "STDEV.P", "STDEVPA",
+        "VAR", "VAR.S", "VARA", "VARP", "VAR.P", "VARPA"
+    };
+
     private static readonly HashSet<string> DirectTextCoercingAggregates = new(StringComparer.OrdinalIgnoreCase)
     {
         "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2",
@@ -22,6 +39,7 @@ public sealed partial class FormulaEvaluator
         "MEDIAN",
         "GEOMEAN", "HARMEAN", "AVEDEV", "DEVSQ",
         "COVAR", "COVARIANCE.P", "COVARIANCE.S", "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
+        "CORREL", "FORECAST", "FORECAST.LINEAR",
         "MODE", "MODE.SNGL", "MODE.MULT",
         "NPV",
         "GCD", "LCM"
@@ -35,6 +53,14 @@ public sealed partial class FormulaEvaluator
         "MEDIAN",
         "GEOMEAN", "HARMEAN", "AVEDEV",
         "COVAR", "COVARIANCE.P", "COVARIANCE.S", "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
+        // R84-formula-stat-regression-5-1: CORREL/PEARSON are literally the same computation
+        // (Pearson just calls Correl) and FORECAST(.LINEAR) shares the same paired-source
+        // machinery, so a bare single-cell reference argument (e.g. A1, not A1:A1) must be
+        // wrapped into a ReferencedScalarValue exactly like their SLOPE/INTERCEPT/RSQ/STEYX/
+        // COVARIANCE.P/S siblings -- otherwise BuiltInFunctions.StatisticalCore.Regression.cs's
+        // BuildPairedSource falls to its raw-ToNumber fallback and throws #VALUE! on a
+        // non-numeric bare cell (text/blank/logical) instead of ignoring it like Excel does.
+        "CORREL", "FORECAST", "FORECAST.LINEAR",
         "MODE", "MODE.SNGL", "MODE.MULT",
         "NPV",
         "GCD", "LCM"
@@ -163,6 +189,9 @@ public sealed partial class FormulaEvaluator
     private static bool IsAggregateFunction(string name) =>
         AggregateFunctions.Contains(name);
 
+    private static bool IsSheetSpanAggregateFunction(string name) =>
+        SheetSpanAggregateFunctions.Contains(name);
+
     private static bool IsErrorInspectingFunction(string name) =>
         ErrorInspectingFunctions.Contains(name);
 
@@ -176,7 +205,15 @@ public sealed partial class FormulaEvaluator
         string name,
         int argIndex,
         bool preservesReferenceProvenance) =>
-        preservesReferenceProvenance && (name != "NPV" || argIndex > 0);
+        preservesReferenceProvenance &&
+        (name != "NPV" || argIndex > 0) &&
+        // FORECAST(.LINEAR)'s first argument (x, the value to forecast) is a plain scalar that
+        // BuiltInFunctions.StatisticalCore.Regression.cs's Forecast() coerces directly via
+        // ToNumber -- unlike known_ys/known_xs (args 1/2), it never goes through the
+        // ReferencedScalarValue-aware BuildPairedSource/TryReferencedNumber path, so wrapping a
+        // bare cell ref there would make ToNumber throw #VALUE! on its unhandled type instead of
+        // reading the number (same reasoning as the NPV rate-argument exclusion above).
+        (name is not ("FORECAST" or "FORECAST.LINEAR") || argIndex > 0);
 
     private static bool IsStructuredRangeFunction(string name) =>
         StructuredRangeFunctions.Contains(name);

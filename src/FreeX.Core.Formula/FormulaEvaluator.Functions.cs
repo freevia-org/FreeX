@@ -49,6 +49,7 @@ public sealed partial class FormulaEvaluator
 
         bool isStructured = IsStructuredRangeFunction(functionName);
         bool isAggregate = IsAggregateFunction(functionName);
+        bool isSheetSpanAggregate = IsSheetSpanAggregateFunction(functionName);
         bool isDirectTextCoercingAggregate = IsDirectTextCoercingAggregate(functionName);
         bool preservesReferenceProvenance = IsReferenceProvenanceAggregate(functionName);
         bool isSingleCellReferenceRangeFunction = IsSingleCellReferenceRangeFunction(functionName);
@@ -144,7 +145,7 @@ public sealed partial class FormulaEvaluator
             // ultimately surfaces #VALUE!; this is the one place that actually expands it.
             if (arg is RangeRefNode { EndSheetName: not null } spanRange)
             {
-                if (isStructured || !isAggregate)
+                if (isStructured || !isSheetSpanAggregate)
                 {
                     // SHEETS(Sheet1:Sheet3!A1) is valid Excel and must return the number of sheets
                     // spanned (3), not #VALUE!. SheetsFunc/SheetSpanCount (see
@@ -349,7 +350,7 @@ public sealed partial class FormulaEvaluator
                             AddRangeValues(expandedArgs, values, preservesReferenceProvenance);
                         }
                     }
-                    else if (isAggregate && !isStructured &&
+                    else if (isSheetSpanAggregate && !isStructured &&
                              TryExpandNamedFormulaSheetSpanAggregateRange(
                                  named.Name, context, expandedArgs, preservesReferenceProvenance, out var spanError))
                     {

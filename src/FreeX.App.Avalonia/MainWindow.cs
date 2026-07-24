@@ -1008,15 +1008,22 @@ public sealed partial class MainWindow : Window
         double? OverrideMax,
         double? OverrideMaxAbs);
 
+    // StartIndex/EndIndex span the whole resize target: just Index..Index for a lone header, or
+    // the full band of a pre-existing multi-column/row selection that Index falls inside
+    // (GridResizePreviewPlanner.GetSelectedColumnResizeRange/GetSelectedRowResizeRange -- matching
+    // the WPF host, R84-app-mouse-selection-5-2). Snapshot captures every original size/hidden-flag
+    // across that whole band so the drag can preview/restore it in one shot via
+    // GridResizePreviewPlanner.
     private sealed record HeaderResizeDrag(
         HeaderResizeKind Kind,
         uint Index,
+        uint StartIndex,
+        uint EndIndex,
         Control Capture,
         IPointer Pointer,
         double StartPointer,
         double StartSize,
-        bool HadOriginalSize,
-        double OriginalSize);
+        GridResizePreviewSnapshot Snapshot);
 
     private enum HeaderResizeKind
     {
@@ -6946,6 +6953,18 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            if (!args.KeyModifiers.HasFlag(KeyModifiers.Shift) && args.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
+                // Ctrl+click a column header adds it as a disjoint area (Excel's multi-area
+                // column selection), matching the WPF host's AddAdditionalColumnSelection
+                // (R84-app-mouse-selection-5-1) instead of wiping the existing selection down
+                // to just this column the way a plain click does.
+                AddAdditionalColumnSelection(col);
+                BeginHeaderSelectionDrag(args, header, HeaderResizeKind.Column, col);
+                args.Handled = true;
+                return;
+            }
+
             SelectEntireColumn(col, extend: args.KeyModifiers.HasFlag(KeyModifiers.Shift));
             BeginHeaderSelectionDrag(args, header, HeaderResizeKind.Column, col);
             args.Handled = true;
@@ -6984,6 +7003,16 @@ public sealed partial class MainWindow : Window
                 if (!IsSelectedRow(row))
                     SelectEntireRow(row);
                 OpenRowHeaderContextMenu(_sheetGridHost);
+                args.Handled = true;
+                return;
+            }
+
+            if (!args.KeyModifiers.HasFlag(KeyModifiers.Shift) && args.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
+                // Row-header counterpart of the column-header Ctrl+click fix above
+                // (R84-app-mouse-selection-5-1).
+                AddAdditionalRowSelection(row);
+                BeginHeaderSelectionDrag(args, header, HeaderResizeKind.Row, row);
                 args.Handled = true;
                 return;
             }
@@ -7460,16 +7489,23 @@ public sealed partial class MainWindow : Window
             return;
 
         var sheet = _session.ActiveSheet;
-        var (hadOriginalSize, originalSize) = kind == HeaderResizeKind.Column
-            ? (sheet.ColumnWidths.TryGetValue(index, out var width), width)
-            : (sheet.RowHeights.TryGetValue(index, out var height), height);
         var pointer = kind == HeaderResizeKind.Column
             ? args.GetPosition(this).X
             : args.GetPosition(this).Y;
+        // Dragging a header border resizes every row/column in a pre-existing multi-area
+        // selection that spans `index`, not just the one header under the pointer -- matching
+        // Excel and the WPF host's GridResizePreviewPlanner.GetColumnResizeRange/
+        // GetRowResizeRange (R84-app-mouse-selection-5-2).
+        var (startIndex, endIndex) = kind == HeaderResizeKind.Column
+            ? GridResizePreviewPlanner.GetColumnResizeRange(sheet, _session.SelectedRange, index)
+            : GridResizePreviewPlanner.GetRowResizeRange(sheet, _session.SelectedRange, index);
+        var snapshot = kind == HeaderResizeKind.Column
+            ? GridResizePreviewPlanner.CaptureColumnSnapshot(sheet, startIndex, endIndex)
+            : GridResizePreviewPlanner.CaptureRowSnapshot(sheet, startIndex, endIndex);
         // Defensive: drop any stale subscription left over from a drag that lost capture without a
         // PointerReleased, so we never double-subscribe (which would run Continue/Commit twice per event).
         DetachHeaderResizeCaptureHandlers();
-        _headerResizeDrag = new HeaderResizeDrag(kind, index, _sheetGridHost, args.Pointer, pointer, displayedSize, hadOriginalSize, originalSize);
+        _headerResizeDrag = new HeaderResizeDrag(kind, index, startIndex, endIndex, _sheetGridHost, args.Pointer, pointer, displayedSize, snapshot);
         _sheetGridHost.PointerMoved += HeaderResizeCapturePointerMoved;
         _sheetGridHost.PointerReleased += HeaderResizeCapturePointerReleased;
         _sheetGridHost.PointerCaptureLost += HeaderResizeCapturePointerCaptureLost;
@@ -7544,8 +7580,8 @@ public sealed partial class MainWindow : Window
             var result = _session.ExecuteReviewCommand(
                 new SetColumnWidthCommand(
                     _session.ActiveSheet.Id,
-                    drag.Index,
-                    drag.Index,
+                    drag.StartIndex,
+                    drag.EndIndex,
                     ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize)),
                 _session.ActiveCell);
             RefreshShell(result.Success
@@ -7557,8 +7593,8 @@ public sealed partial class MainWindow : Window
             var result = _session.ExecuteReviewCommand(
                 new SetRowHeightCommand(
                     _session.ActiveSheet.Id,
-                    drag.Index,
-                    drag.Index,
+                    drag.StartIndex,
+                    drag.EndIndex,
                     clampedSize),
                 _session.ActiveCell);
             RefreshShell(result.Success
@@ -7572,9 +7608,9 @@ public sealed partial class MainWindow : Window
     private void PreviewHeaderResize(HeaderResizeDrag drag, double clampedSize)
     {
         if (drag.Kind == HeaderResizeKind.Column)
-            _session.ActiveSheet.ColumnWidths[drag.Index] = ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize);
+            GridResizePreviewPlanner.ApplyColumnResizePreview(_session.ActiveSheet, drag.StartIndex, drag.EndIndex, clampedSize);
         else
-            _session.ActiveSheet.RowHeights[drag.Index] = clampedSize;
+            GridResizePreviewPlanner.ApplyRowResizePreview(_session.ActiveSheet, drag.StartIndex, drag.EndIndex, clampedSize);
 
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
     }
@@ -7604,30 +7640,51 @@ public sealed partial class MainWindow : Window
     private void RestoreHeaderResizeOriginal(HeaderResizeDrag drag)
     {
         if (drag.Kind == HeaderResizeKind.Column)
+            GridResizePreviewPlanner.RestoreColumnResizePreview(_session.ActiveSheet, drag.Snapshot);
+        else
+            GridResizePreviewPlanner.RestoreRowResizePreview(_session.ActiveSheet, drag.Snapshot);
+    }
+
+    // Double-clicking a column header's resize border autofits the whole current selection's
+    // column band when `col` falls inside a pre-existing multi-column selection, matching Excel
+    // and the WPF host's OnColumnAutoFitRequested (GridResizePreviewPlanner.
+    // GetSelectedColumnResizeRange) -- rather than collapsing that selection down to just `col`
+    // first, which destroyed the multi-column selection before autofitting only `col`
+    // (R84-app-mouse-selection-5-2).
+    private void AutoFitColumnFromHeader(uint col)
+    {
+        var (startCol, endCol) = GridResizePreviewPlanner.GetSelectedColumnResizeRange(_session.SelectedRange, col);
+        if (startCol != endCol)
         {
-            if (drag.HadOriginalSize)
-                _session.ActiveSheet.ColumnWidths[drag.Index] = drag.OriginalSize;
-            else
-                _session.ActiveSheet.ColumnWidths.Remove(drag.Index);
+            var wideRange = SelectionRangeService.GetWholeColumns(new GridRange(
+                new CellAddress(_session.ActiveSheet.Id, 1, startCol),
+                new CellAddress(_session.ActiveSheet.Id, 1, endCol)));
+            _session.SelectRange(wideRange);
         }
         else
         {
-            if (drag.HadOriginalSize)
-                _session.ActiveSheet.RowHeights[drag.Index] = drag.OriginalSize;
-            else
-                _session.ActiveSheet.RowHeights.Remove(drag.Index);
+            SelectEntireColumn(col);
         }
-    }
 
-    private void AutoFitColumnFromHeader(uint col)
-    {
-        SelectEntireColumn(col);
         AutoFitSelectedColumnWidth();
     }
 
+    /// <summary>Row-header counterpart of <see cref="AutoFitColumnFromHeader"/>.</summary>
     private void AutoFitRowFromHeader(uint row)
     {
-        SelectEntireRow(row);
+        var (startRow, endRow) = GridResizePreviewPlanner.GetSelectedRowResizeRange(_session.SelectedRange, row);
+        if (startRow != endRow)
+        {
+            var wideRange = SelectionRangeService.GetWholeRows(new GridRange(
+                new CellAddress(_session.ActiveSheet.Id, startRow, 1),
+                new CellAddress(_session.ActiveSheet.Id, endRow, 1)));
+            _session.SelectRange(wideRange);
+        }
+        else
+        {
+            SelectEntireRow(row);
+        }
+
         AutoFitSelectedRowHeight();
     }
 
@@ -10496,7 +10553,8 @@ public sealed partial class MainWindow : Window
                 textRotation,
                 effectiveTextWrapping,
                 style,
-                borderNeighbors)
+                borderNeighbors,
+                isEffectivelyRightToLeft: flowDirection == FlowDirection.RightToLeft)
             : CreateDefaultCellContent(
                 textBlock,
                 style,
@@ -10781,6 +10839,22 @@ public sealed partial class MainWindow : Window
         return string.IsNullOrEmpty(title) ? body : $"{title}{Environment.NewLine}{body}";
     }
 
+    /// <summary>
+    /// Wrap-width available to a rotated cell's TextBlock before it is measured, matching WPF's
+    /// unconditional-of-rotation <c>rect.Width - 4 - indentPx</c> (GridView.Rendering.cs
+    /// wrapMaxTextWidth): the indent must be subtracted here too, or a rotated+wrapped+indented cell
+    /// measures its wrapped lines wider than the space actually left once CalculateLayout's boundsX
+    /// applies the same indent as an offset.
+    /// </summary>
+    private static double ResolveOrientedWrapMeasureWidth(double cellWidth, double indentPixels, TextWrapping textWrapping) =>
+        textWrapping == TextWrapping.Wrap
+            ? Math.Max(1, cellWidth - 4 - indentPixels)
+            : double.PositiveInfinity;
+
+    /// <summary>Test-only forwarder for <see cref="ResolveOrientedWrapMeasureWidth"/>.</summary>
+    internal static double ResolveOrientedWrapMeasureWidthForTest(double cellWidth, double indentPixels, TextWrapping textWrapping) =>
+        ResolveOrientedWrapMeasureWidth(cellWidth, indentPixels, textWrapping);
+
     private static AvaloniaGrid CreateOrientedCellContent(
         TextBlock textBlock,
         double cellWidth,
@@ -10792,13 +10866,12 @@ public sealed partial class MainWindow : Window
         int textRotation,
         TextWrapping textWrapping,
         CellStyle? style,
-        CellBorderNeighborEdges borderNeighbors = default)
+        CellBorderNeighborEdges borderNeighbors = default,
+        bool isEffectivelyRightToLeft = false)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
         var canvas = new Canvas { ClipToBounds = true };
-        var measureWidth = textWrapping == TextWrapping.Wrap
-            ? Math.Max(1, cellWidth - 4)
-            : double.PositiveInfinity;
+        var measureWidth = ResolveOrientedWrapMeasureWidth(cellWidth, indentPixels, textWrapping);
 
         textBlock.Margin = default;
         textBlock.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
@@ -10816,7 +10889,8 @@ public sealed partial class MainWindow : Window
             verticalAlignment,
             isNumeric,
             indentPixels,
-            textRotation);
+            textRotation,
+            isEffectivelyRightToLeft);
         if (CreateTextRotationTransform(layout.TransformAngle) is { } transform)
         {
             textBlock.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
@@ -10830,6 +10904,38 @@ public sealed partial class MainWindow : Window
         AddStyledCellBorderOverlay(content, style, borderNeighbors);
         return content;
     }
+
+    /// <summary>
+    /// Test-only forwarder exposing the private <see cref="CreateOrientedCellContent"/> so
+    /// regression tests can inspect the resulting Canvas-left/top of a rotated cell's TextBlock
+    /// without spinning up a full MainWindow/viewport.
+    /// </summary>
+    internal static AvaloniaGrid CreateOrientedCellContentForTest(
+        TextBlock textBlock,
+        double cellWidth,
+        double cellHeight,
+        CellHAlign horizontalAlignment,
+        CellVAlign? verticalAlignment,
+        bool isNumeric,
+        double indentPixels,
+        int textRotation,
+        TextWrapping textWrapping,
+        CellStyle? style,
+        CellBorderNeighborEdges borderNeighbors = default,
+        bool isEffectivelyRightToLeft = false) =>
+        CreateOrientedCellContent(
+            textBlock,
+            cellWidth,
+            cellHeight,
+            horizontalAlignment,
+            verticalAlignment,
+            isNumeric,
+            indentPixels,
+            textRotation,
+            textWrapping,
+            style,
+            borderNeighbors,
+            isEffectivelyRightToLeft);
 
     private static void AddStyledCellBorderOverlay(AvaloniaGrid content, CellStyle? style, CellBorderNeighborEdges borderNeighbors = default)
     {
@@ -11429,7 +11535,40 @@ public sealed partial class MainWindow : Window
         if (!CommandGuards.CanSelectCell(_session.Workbook, _session.ActiveSheet, address))
             return;
 
+        // Ctrl+click (without Shift, checked above) adds the clicked cell as a disjoint SECOND
+        // (or later) selection area instead of collapsing the selection down to just this cell --
+        // Excel's multi-area selection (select A1, Ctrl+click C3 -> "A1,C3", usable directly by a
+        // formula like =SUM(A1,C3)). Before this fix Ctrl+click behaved identically to a plain
+        // click here, discarding every prior area (R84-app-mouse-selection-5-1).
+        if (modifiers.HasFlag(KeyModifiers.Control))
+        {
+            AddAdditionalCellSelection(address);
+            return;
+        }
+
         SelectCell(address);
+    }
+
+    /// <summary>
+    /// Appends <paramref name="address"/> as a new disjoint selection area on top of whatever is
+    /// already selected, mirroring the WPF host's AddOrMoveAdditionalSelection (MainWindow.
+    /// Selection.cs) for a fresh (non-dragging) Ctrl+click. The active cell moves to the newly
+    /// added area so subsequent editing/formula-bar state targets it, matching Excel.
+    /// </summary>
+    private void AddAdditionalCellSelection(CellAddress address)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectionExtensionState();
+        ClearSelectedDrawingObject();
+        var newRange = new GridRange(address, address);
+        var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
+        _session.SelectRanges(newRange, ranges, address);
+        RefreshTableContextualTab();
+        RefreshPivotContextualTab();
+        ApplyFormatPainterAfterTargetSelection();
+        FocusShellRegion(ShellFocusTarget.Worksheet);
     }
 
     private void ClearSelectionExtensionState()

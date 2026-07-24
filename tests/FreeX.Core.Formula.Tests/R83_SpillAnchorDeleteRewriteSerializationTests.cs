@@ -72,4 +72,35 @@ public sealed class R83_SpillAnchorDeleteRewriteSerializationTests
 
         FormulaSerializer.Serialize(node).Should().Be("#REF!");
     }
+
+    [Fact]
+    public void Serialize_AnchorArrayRangeShape_WithErrorNodeEnd_KeepsSurvivingAnchor()
+    {
+        // R84-meta-2: the A1#:B5 shape where only the END cell (B5) was invalidated by a delete
+        // (e.g. deleting B5's own row) while the anchor A1 was untouched. A1# alone is still a
+        // complete, valid reference -- Excel keeps it and only replaces the invalidated endpoint,
+        // exactly like its ordinary two-endpoint range behavior (A1:C5 -> A1:#REF! when only
+        // C5's row is deleted) -- so this must serialize as "A1#:#REF!", never a bare "#REF!"
+        // that silently discards the still-live spill anchor.
+        var node = new FunctionCallNode(
+            "ANCHORARRAY",
+            [new CellRefNode("A", 1), new ErrorNode(ErrorValue.Ref)]);
+
+        FormulaSerializer.Serialize(node).Should().Be("A1#:#REF!");
+    }
+
+    [Fact]
+    public void Rewrite_DeleteEndCellRowOnly_KeepsSurvivingAnchorInRangeShape()
+    {
+        // No-regression sibling at the FormulaRewriter level: deleting B5's own row (not A1's)
+        // must rewrite SUM(A1#:B5) to SUM(A1#:#REF!), preserving the still-valid spill anchor,
+        // not collapsing the whole reference to a bare #REF!.
+        var result = FormulaRewriter.Rewrite(
+            "SUM(A1#:B5)",
+            new DeleteRowsOp("Sheet1", 5, 1),
+            "Sheet1");
+
+        result.Should().NotBeNull();
+        result.Should().Be("SUM(A1#:#REF!)");
+    }
 }

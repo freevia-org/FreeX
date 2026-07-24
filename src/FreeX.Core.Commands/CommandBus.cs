@@ -106,7 +106,10 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
         _repeatableCommandFactories.Remove(workbookId);
 
         NotifyStackChanged(workbookId);
-        return new CommandOutcome(true, AffectedCells: entry.Payload ?? GetAffectedCells(command));
+        return new CommandOutcome(
+            true,
+            AffectedCells: entry.Payload ?? GetAffectedCells(command),
+            RequiresFullRecalc: command is IWholeWorkbookRecalcCommand);
     }
 
     public CommandOutcome Redo(WorkbookId workbookId)
@@ -145,7 +148,11 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
         if (outcome.Success && !outcome.IsNoOp)
             NotifyStackChanged(workbookId);
 
-        return outcome with { AffectedCells = affectedCells };
+        return outcome with
+        {
+            AffectedCells = affectedCells,
+            RequiresFullRecalc = command is IWholeWorkbookRecalcCommand,
+        };
     }
 
     public bool CanUndo(WorkbookId workbookId) =>

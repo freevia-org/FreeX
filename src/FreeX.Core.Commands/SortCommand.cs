@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Xml.Linq;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -53,6 +54,15 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
     // there before — which may be null, or a stale sortState left over from a prior Excel sort).
     private WorksheetSortStateModel? _priorSortState;
     private bool _sortStateCaptured;
+    // R84-io-tables-listobject-5-1: when _range falls entirely inside one of the sheet's own
+    // Structured Tables (Insert > Table), the sort's persisted indicator belongs in that table's
+    // own <sortState> (xl/tables/tableN.xml), never as a sibling <sortState> under the worksheet
+    // root — a table's autoFilter lives entirely inside its own table part, so a worksheet-root
+    // sortState for a table-scoped sort is a shape Excel's writer never produces. _structuredTableIndex
+    // is -1 when the range isn't table-owned (the classic worksheet-autofilter/plain-range case,
+    // which keeps writing sheet.SortState exactly as before).
+    private int _structuredTableIndex = -1;
+    private StructuredTableModel? _priorStructuredTable;
 
     private sealed record SortPayloadCapture(
         SortCellPayload[][] Rows,
@@ -221,6 +231,12 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         // Revert — back to that same pristine value) each time Apply runs.
         _priorSortState = sheet.SortState;
         _sortStateCaptured = true;
+
+        // R84-io-tables-listobject-5-1: capture the owning Structured Table (if any) the same
+        // way — Redo replays Apply after Revert, so this must re-resolve against the sheet's
+        // current StructuredTables each time, exactly like _priorSortState above.
+        _structuredTableIndex = FindOwningStructuredTableIndex(sheet, _range);
+        _priorStructuredTable = _structuredTableIndex >= 0 ? sheet.StructuredTables[_structuredTableIndex] : null;
 
         if (_options.LeftToRight)
             return ApplyLeftToRight(ctx.Workbook, sheet, startRow, endRow, startCol, endCol, keyColIndexes, rowCount, colCount);
@@ -419,7 +435,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         }
 
         _affectedCells = affected;
-        sheet.SortState = BuildSortState(_range, keyColIndexes, leftToRight: false);
+        ApplySortStateResult(sheet, BuildSortState(_range, keyColIndexes, leftToRight: false));
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -540,7 +556,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         }
 
         _affectedCells = affected;
-        sheet.SortState = BuildSortState(_range, keyRowIndexes, leftToRight: true);
+        ApplySortStateResult(sheet, BuildSortState(_range, keyRowIndexes, leftToRight: true));
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -602,6 +618,128 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         return model;
     }
 
+    /// <summary>
+    /// R84-io-tables-listobject-5-1: finds the index of the Structured Table on <paramref
+    /// name="sheet"/> that owns <paramref name="range"/> — i.e. a table whose column span exactly
+    /// matches the range's and whose row span fully contains it (true whether or not the caller
+    /// already stripped the header row, since callers differ on that — see
+    /// MainWindow.DataFilterCommands.ExcludeHeaderRowForAutoFilterSort vs the ribbon's quick Sort
+    /// buttons). Returns -1 when no table owns the range, meaning this is a plain worksheet range/
+    /// autofilter sort and sheet.SortState is still the right place to persist the result.
+    /// </summary>
+    private static int FindOwningStructuredTableIndex(Sheet sheet, GridRange range)
+    {
+        for (var i = 0; i < sheet.StructuredTables.Count; i++)
+        {
+            var table = sheet.StructuredTables[i];
+            if (table.Range.Start.Col == range.Start.Col &&
+                table.Range.End.Col == range.End.Col &&
+                table.Range.Contains(range))
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// R84-io-tables-listobject-5-1: records the sort just performed in whichever place Excel
+    /// itself would persist it. When _range belongs to a Structured Table, that's the table's own
+    /// &lt;sortState&gt; inside xl/tables/tableN.xml (via StructuredTableModel.NativeSortStateXml)
+    /// — sheet.SortState is intentionally left untouched, since a table-scoped sort never gets a
+    /// worksheet-root &lt;sortState&gt; sibling from Excel's own writer. Otherwise this is the
+    /// classic plain-range/worksheet-autofilter sort, which keeps writing sheet.SortState exactly
+    /// as before R84.
+    /// </summary>
+    private void ApplySortStateResult(Sheet sheet, WorksheetSortStateModel model)
+    {
+        if (_structuredTableIndex >= 0 && _structuredTableIndex < sheet.StructuredTables.Count)
+        {
+            var table = sheet.StructuredTables[_structuredTableIndex];
+            sheet.StructuredTables[_structuredTableIndex] =
+                CopyTableWithNativeSortState(table, BuildTableNativeSortStateXml(model));
+            return;
+        }
+
+        sheet.SortState = model;
+    }
+
+    /// <summary>
+    /// Serializes <paramref name="model"/> into the raw &lt;sortState&gt; XML that
+    /// StructuredTableModel.NativeSortStateXml expects (see XlsxStructuredTableWriter.
+    /// TryCreateNativeSortState, which re-parses this string and requires the root element name to
+    /// be the spreadsheetml "sortState" element) — the table-part shape omits columnSort (a
+    /// Structured Table's Sort dialog never offers "left to right", so Excel's own table sortState
+    /// never carries that attribute).
+    /// </summary>
+    private static string BuildTableNativeSortStateXml(WorksheetSortStateModel model)
+    {
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var element = new XElement(ns + "sortState");
+        if (!string.IsNullOrWhiteSpace(model.Reference))
+            element.SetAttributeValue("ref", model.Reference);
+        if (model.CaseSensitive == true)
+            element.SetAttributeValue("caseSensitive", "1");
+
+        foreach (var condition in model.Conditions)
+        {
+            var conditionElement = new XElement(ns + "sortCondition");
+            if (!string.IsNullOrWhiteSpace(condition.Reference))
+                conditionElement.SetAttributeValue("ref", condition.Reference);
+            if (condition.Descending == true)
+                conditionElement.SetAttributeValue("descending", "1");
+            if (!string.IsNullOrWhiteSpace(condition.SortBy))
+                conditionElement.SetAttributeValue("sortBy", condition.SortBy);
+            if (!string.IsNullOrWhiteSpace(condition.CustomList))
+                conditionElement.SetAttributeValue("customList", condition.CustomList);
+            element.Add(conditionElement);
+        }
+
+        return element.ToString(SaveOptions.DisableFormatting);
+    }
+
+    /// <summary>
+    /// Full-field copy of <paramref name="table"/> with only NativeSortStateXml replaced, matching
+    /// the copy-then-replace-in-list convention every other StructuredTableModel-mutating command
+    /// uses (e.g. StructuredTableCommand.CopyWithStyleOptions) — StructuredTableModel's properties
+    /// are init-only and _priorStructuredTable (captured for Revert) must keep pointing at the
+    /// original, untouched instance.
+    /// </summary>
+    private static StructuredTableModel CopyTableWithNativeSortState(StructuredTableModel table, string? nativeSortStateXml)
+    {
+        var copy = new StructuredTableModel
+        {
+            Id = table.Id,
+            Name = table.Name,
+            DisplayName = table.DisplayName,
+            Range = table.Range,
+            HasAutoFilter = table.HasAutoFilter,
+            TotalsRowShown = table.TotalsRowShown,
+            HeaderRowCount = table.HeaderRowCount,
+            TotalsRowCount = table.TotalsRowCount,
+            InsertRow = table.InsertRow,
+            InsertRowShift = table.InsertRowShift,
+            Published = table.Published,
+            Comment = table.Comment,
+            StyleName = table.StyleName,
+            ShowFirstColumn = table.ShowFirstColumn,
+            ShowLastColumn = table.ShowLastColumn,
+            ShowRowStripes = table.ShowRowStripes,
+            ShowColumnStripes = table.ShowColumnStripes,
+            PackagePart = table.PackagePart,
+            NativeSortStateXml = nativeSortStateXml,
+            NativeAttributes = table.NativeAttributes,
+            NativeChildXmls = table.NativeChildXmls,
+            NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
+            NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
+            NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
+            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
+        };
+
+        copy.Columns.AddRange(table.Columns);
+        copy.FilterColumns.AddRange(table.FilterColumns);
+        return copy;
+    }
+
     public void Revert(ICommandContext ctx)
     {
         if (_snapshot is null) return;
@@ -616,6 +754,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         RestoreColumnFilterOwnedRows(sheet);
         if (_sortStateCaptured)
             sheet.SortState = _priorSortState;
+        // R84-io-tables-listobject-5-1: undo a table-scoped sort's NativeSortStateXml change by
+        // putting the original StructuredTableModel instance back, mirroring how sheet.SortState
+        // is restored just above.
+        if (_structuredTableIndex >= 0 && _structuredTableIndex < sheet.StructuredTables.Count)
+            sheet.StructuredTables[_structuredTableIndex] = _priorStructuredTable!;
     }
 
     private static SortPayloadCapture CapturePayloads(
