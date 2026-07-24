@@ -170,6 +170,18 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_RendersTextWatermarkThroughSharedVmlPlanner()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("WatermarkVisualPlanner.BuildTextLayout(wm, pageRect.Width, pageRect.Height)");
+        source.Should().Contain("WatermarkVisualPlanner.ResolveTextPathFontSize(plan, unitText.Width)");
+        source.Should().Contain("FontStyle.Normal, FontWeight.Normal");
+        source.Should().Contain("Matrix.CreateRotation(plan.RotationDegrees * Math.PI / 180.0)");
+        source.Should().NotContain("Math.Min(pageRect.Width, 480) / Math.Max(4, wm.Text.Length) * 1.6");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_UsesWordArtFillAsFieldAndContrastingText()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));

@@ -6342,33 +6342,42 @@ public sealed class DocumentView : Control
         if (string.IsNullOrWhiteSpace(wm.Text))
             return;
 
+        var plan = WatermarkVisualPlanner.BuildTextLayout(wm, pageRect.Width, pageRect.Height);
+        if (plan is null)
+            return;
+
         var color = TryParseAvaloniaColor(wm.FontColorHex, out var c) ? c : Color.FromRgb(0x80, 0x80, 0x80);
         var opacity = Math.Clamp(wm.Opacity, 0.0, 1.0);
         var brush = new SolidColorBrush(color, opacity);
 
-        // Size the text to span most of the page width (Word auto-scales). Cap the point size sensibly.
+        // The shared planner preserves Word's VML text-path footprint and fitshape sizing.
         var typeface = new Typeface(
             wm.FontFamily is { Length: > 0 } family ? new FontFamily(family) : FontFamily.Default,
-            FontStyle.Normal, FontWeight.Bold);
-        var fontSize = Math.Min(pageRect.Width, 480) / Math.Max(4, wm.Text.Length) * 1.6;
-        fontSize = Math.Clamp(fontSize, 24, 130);
-
-        var ft = new FormattedText(
-            wm.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
+            FontStyle.Normal, FontWeight.Normal);
+        var unitText = new FormattedText(
+            wm.Text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 1, brush);
+        var fontSize = WatermarkVisualPlanner.ResolveTextPathFontSize(plan, unitText.Width);
+        var text = new FormattedText(
+            wm.Text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
 
         // Clip to the page sheet: an un-clipped long watermark string (fontSize floors at 24pt) can extend
         // past the page rect onto the grey desk / an adjacent page. Word tiles+clips watermarks via a brush
         // so they never overflow the page — mirror that here with a hard clip to pageRect.
         using var clip = context.PushClip(pageRect);
 
-        var center = pageRect.Center;
-        using var _ = context.PushTransform(
-            Matrix.CreateTranslation(-ft.Width / 2, -ft.Height / 2)
-            * (wm.Layout == WatermarkLayout.Diagonal
-                ? Matrix.CreateRotation(-Math.PI / 4)
-                : Matrix.Identity)
-            * Matrix.CreateTranslation(center.X, center.Y));
-        context.DrawText(ft, new Point(0, 0));
+        var centerX = pageRect.X + plan.CenterXDip;
+        var centerY = pageRect.Y + plan.CenterYDip;
+        if (Math.Abs(plan.RotationDegrees) > 0.01)
+        {
+            using var transform = context.PushTransform(
+                Matrix.CreateTranslation(-centerX, -centerY)
+                * Matrix.CreateRotation(plan.RotationDegrees * Math.PI / 180.0)
+                * Matrix.CreateTranslation(centerX, centerY));
+            context.DrawText(text, new Point(centerX - text.Width / 2, centerY - text.Height / 2));
+            return;
+        }
+
+        context.DrawText(text, new Point(centerX - text.Width / 2, centerY - text.Height / 2));
     }
 
     private void DrawPictureWatermark(DrawingContext context, Rect pageRect, WatermarkOptions wm)
