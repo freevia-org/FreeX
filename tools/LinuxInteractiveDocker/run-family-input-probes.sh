@@ -265,6 +265,7 @@ send_active_text() {
     text_budget_ms=$((text_length * input_delay_ms + text_entry_margin_ms))
     text_timeout_seconds=$(( (text_budget_ms + 999) / 1000 ))
     (( text_timeout_seconds < 1 )) && text_timeout_seconds=1
+    release_active_text_keys "$active_id" "$text_value"
     if ! timeout --foreground --kill-after=1s "$text_timeout_seconds" \
         xdotool type --clearmodifiers --delay "$input_delay_ms" --window "$active_id" "$text_value"; then
         release_active_text_keys "$active_id" "$text_value"
@@ -747,7 +748,7 @@ if [[ "$app" == "FreeW" ]]; then
         baseline_count="$(window_count)"
         capture "$before"
         capture_window_state "$before_state"
-        if ! send_editor_key "$key"; then
+        if ! send_active_key "$key"; then
             trigger_ready=false
         fi
         capture "$open"

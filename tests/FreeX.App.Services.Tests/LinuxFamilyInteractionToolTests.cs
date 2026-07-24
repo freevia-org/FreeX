@@ -37,6 +37,13 @@ public sealed class LinuxFamilyInteractionToolTests
         probe.Should().Contain("editor-reveal-formatting-dismissal");
         probe.Should().Contain("editor-thesaurus-open");
         probe.Should().Contain("editor-thesaurus-dismissal");
+        var findReplaceStart = probe.IndexOf("run_find_replace_route()", StringComparison.Ordinal);
+        var findReplaceEnd = probe.IndexOf("run_side_pane_toggle_probe()", findReplaceStart, StringComparison.Ordinal);
+        findReplaceStart.Should().BeGreaterThanOrEqualTo(0);
+        findReplaceEnd.Should().BeGreaterThan(findReplaceStart);
+        var findReplaceRoute = probe[findReplaceStart..findReplaceEnd];
+        findReplaceRoute.Should().Contain("if ! send_active_key \"$key\"");
+        findReplaceRoute.Should().NotContain("if ! send_editor_key \"$key\"");
         probe.Should().Contain("editor-keyboard-context-open");
         probe.Should().Contain("editor-pointer-context-open");
         probe.Should().Contain("slide-pane-new-slide-create");
@@ -92,6 +99,8 @@ public sealed class LinuxFamilyInteractionToolTests
         textEntry.Should().Contain("text_budget_ms");
         textEntry.Should().Contain("text_timeout_seconds");
         textEntry.Should().Contain("release_active_text_keys \"$active_id\" \"$text_value\"");
+        textEntry.IndexOf("release_active_text_keys \"$active_id\" \"$text_value\"", StringComparison.Ordinal)
+            .Should().BeLessThan(textEntry.IndexOf("if ! timeout", StringComparison.Ordinal));
         textEntry.Should().NotContain("\"$pointer_timeout_seconds\"");
         probe.Should().Contain("xdotool keyup --window \"$active_id\" \"$key_name\"");
     }
