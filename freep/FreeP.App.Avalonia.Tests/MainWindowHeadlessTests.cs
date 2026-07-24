@@ -770,6 +770,7 @@ public sealed class MainWindowHeadlessTests
         ids.Should().Contain([
             "freep.arrange.group",
             "freep.arrange.ungroup",
+            "freep.arrange.edit-points",
             "freep.arrange.bring-to-front",
             "freep.arrange.bring-forward",
             "freep.arrange.send-backward",
@@ -5724,6 +5725,7 @@ public sealed class MainWindowHeadlessTests
     [Theory]
     [InlineData("freep.arrange.group")]
     [InlineData("freep.arrange.ungroup")]
+    [InlineData("freep.arrange.edit-points")]
     [InlineData("freep.arrange.bring-to-front")]
     [InlineData("freep.arrange.bring-forward")]
     [InlineData("freep.arrange.send-backward")]
