@@ -227,6 +227,9 @@ public sealed class DocumentView : Control
     // in-memory CustomDictionary, so Add-to-Dictionary survives a restart. Loaded once at construction;
     // best-effort (a failed load/save never blocks editing — see CustomDictionaryStore).
     private readonly CustomDictionaryStore _customDictionary;
+    // WPF's native Ignore All action is session-scoped. Keep the same behavior without pretending that
+    // Avalonia has an operating-system dictionary provider; Add to Dictionary remains persistent.
+    private readonly HashSet<string> _ignoredProofingWords = new(StringComparer.OrdinalIgnoreCase);
     private double _laidOutWidth = -1;
     private double _contentHeight;
     private double _pageLeft;
@@ -9194,16 +9197,71 @@ public sealed class DocumentView : Control
         return true;
     }
 
+    private void PositionCaretForContextMenu(Point point)
+    {
+        if (_hfCaret is not null || !TryHitTest(point, out var position))
+            return;
+
+        if (_cellCaret is not null)
+        {
+            _cellAnchor = _cellCaret;
+            CaretMoved?.Invoke();
+            return;
+        }
+
+        _caret = position;
+        _selectionAnchor = position;
+        CaretMoved?.Invoke();
+        InvalidateVisual();
+    }
+
     private void OpenEditorContextMenu()
     {
+        var spellingDiagnostic = CurrentProofingDiagnostic;
         var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
             FreeWContextMenuPlanner.BuildEditor(new FreeWEditorContextMenuState(
                 CanUndo,
                 CanRedo,
                 HasSelection: SelectedText.Length > 0,
                 CanPaste: TopLevel.GetTopLevel(this)?.Clipboard is not null,
-                CanEdit: !IsEditingLocked)),
-            commandId => ContextMenuCommandRequested?.Invoke(commandId));
+                CanEdit: !IsEditingLocked),
+                spellingDiagnostic is { Kind: ProofingDiagnosticKind.Spelling } diagnostic
+                    ? new FreeWSpellingContextMenuState(
+                        diagnostic,
+                        CanEdit: !IsEditingLocked,
+                        CanIgnore: true,
+                        CanAddToDictionary: true)
+                    : null),
+            commandId =>
+            {
+                if (spellingDiagnostic is { Kind: ProofingDiagnosticKind.Spelling } diagnostic)
+                {
+                    if (FreeWContextMenuPlanner.TryParseIndex(
+                        commandId,
+                        FreeWContextMenuPlanner.EditorSpellingReplacementPrefix,
+                        out var replacementIndex))
+                    {
+                        var suggestions = ProofingCorrectionCatalog.SuggestionsFor(diagnostic.Word);
+                        if (replacementIndex < suggestions.Count)
+                            ReplaceCurrentProofingWord(suggestions[replacementIndex]);
+                        return;
+                    }
+
+                    if (commandId.Value == FreeWContextMenuPlanner.EditorSpellingIgnoreAll)
+                    {
+                        IgnoreCurrentProofingWord();
+                        return;
+                    }
+
+                    if (commandId.Value == FreeWContextMenuPlanner.EditorSpellingAddToDictionary)
+                    {
+                        AddCurrentWordToDictionary();
+                        return;
+                    }
+                }
+
+                ContextMenuCommandRequested?.Invoke(commandId);
+            });
         OpenContextMenu(menu);
     }
 
@@ -9239,6 +9297,7 @@ public sealed class DocumentView : Control
 
         if (updateKind == PointerUpdateKind.RightButtonPressed)
         {
+            PositionCaretForContextMenu(point);
             if (!TryOpenContentControlMenu(point))
                 OpenEditorContextMenu();
             e.Handled = true;
@@ -10461,6 +10520,18 @@ public sealed class DocumentView : Control
         return true;
     }
 
+    public bool IgnoreCurrentProofingWord()
+    {
+        if (CurrentProofingDiagnostic is not { Kind: ProofingDiagnosticKind.Spelling } diagnostic)
+            return false;
+
+        if (!_ignoredProofingWords.Add(diagnostic.NormalizedWord))
+            return false;
+
+        InvalidateVisual();
+        return true;
+    }
+
     public bool AddToDictionary(string? word)
     {
         var normalized = NormalizeProofingWord(word);
@@ -10487,7 +10558,7 @@ public sealed class DocumentView : Control
             && selection.Start.Offset != selection.End.Offset
             && NormalizeProofingWord(SelectedText) is not null)
         {
-            InsertText(replacement);
+            ReplaceSelectionWith(replacement);
             return true;
         }
 
@@ -10496,14 +10567,16 @@ public sealed class DocumentView : Control
 
         _selectionAnchor = new DocPosition(range.Block, range.Start);
         _caret = new DocPosition(range.Block, range.End);
-        InsertText(replacement);
+        ReplaceSelectionWith(replacement);
         return true;
     }
 
     public ProofingDiagnostic? CurrentProofingDiagnostic => CurrentProofingDiagnosticAtCaret();
 
     private IReadOnlyList<ProofingDiagnostic> BuildProofingDiagnostics() =>
-        ProofingDiagnosticPlanner.Build(_doc, SpellCheckEnabled, _customDictionary.Words);
+        ProofingDiagnosticPlanner.Build(_doc, SpellCheckEnabled, _customDictionary.Words)
+            .Where(diagnostic => !_ignoredProofingWords.Contains(diagnostic.NormalizedWord))
+            .ToArray();
 
     private HashSet<(int Block, int Offset)> BuildProofingOffsetSet()
     {

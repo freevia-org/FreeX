@@ -10,7 +10,7 @@ public sealed class FreeWContextMenuPlannerTests
     public void Inventory_CoversSevenExplicitWpfFamiliesAndPortableEditorCore()
     {
         FreeWContextMenuPlanner.Inventory.Count(entry => entry.IsExplicitWpfContextMenu).Should().Be(7);
-        FreeWContextMenuPlanner.Inventory.Count(entry => entry.Coverage == FreeWContextMenuCoverage.Paired).Should().Be(8);
+        FreeWContextMenuPlanner.Inventory.Count(entry => entry.Coverage == FreeWContextMenuCoverage.Paired).Should().Be(9);
         FreeWContextMenuPlanner.Inventory.Count(entry => entry.Coverage == FreeWContextMenuCoverage.ExternalOnly).Should().Be(1);
         FreeWContextMenuPlanner.Inventory.Select(entry => entry.Id).Should().OnlyHaveUniqueItems();
     }
@@ -98,6 +98,69 @@ public sealed class FreeWContextMenuPlannerTests
         Enabled(plan, FreeWContextMenuPlanner.EditorPaste).Should().BeFalse();
         Enabled(plan, FreeWContextMenuPlanner.EditorDelete).Should().BeFalse();
         Enabled(plan, FreeWContextMenuPlanner.EditorSelectAll).Should().BeTrue();
+    }
+
+    [Fact]
+    public void SpellingPlan_MatchesWpfOrderAndStateForPortableDiagnostic()
+    {
+        var diagnostic = new ProofingDiagnostic(
+            BlockIndex: 0,
+            RunIndex: 0,
+            RunOffset: 0,
+            ParagraphOffset: 0,
+            Length: 3,
+            Word: "teh",
+            NormalizedWord: "teh",
+            LanguageTag: "en-US");
+
+        var spelling = FreeWContextMenuPlanner.BuildSpelling(new(
+            diagnostic,
+            CanEdit: true,
+            CanIgnore: true,
+            CanAddToDictionary: true));
+        var editor = FreeWContextMenuPlanner.BuildEditor(
+            new(false, false, false, false, true),
+            new(diagnostic, CanEdit: true, CanIgnore: true, CanAddToDictionary: true));
+
+        spelling.Items.Select(item => item.Kind == RibbonMenuItemKind.Separator ? "<separator>" : item.Header)
+            .Should().Equal("the", "<separator>", "Ignore All", "Add to Dictionary", "<separator>");
+        editor.Items.Select(item => item.Kind == RibbonMenuItemKind.Separator ? "<separator>" : item.Header)
+            .Should().StartWith("the", "<separator>", "Ignore All", "Add to Dictionary");
+        editor.Items.First(item => item.CommandId?.Value == FreeWContextMenuPlanner.EditorSpellingReplacementPrefix + "0")
+            .IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SpellingPlan_DisablesReplacementButKeepsDictionaryActionsWhenEditingIsLocked()
+    {
+        var diagnostic = new ProofingDiagnostic(0, 0, 0, 0, 3, "teh", "teh", "en-US");
+        var menu = FreeWContextMenuPlanner.BuildSpelling(new(
+            diagnostic,
+            CanEdit: false,
+            CanIgnore: true,
+            CanAddToDictionary: true));
+
+        menu.Items.Single(item => item.CommandId?.Value == FreeWContextMenuPlanner.EditorSpellingReplacementPrefix + "0")
+            .IsEnabled.Should().BeFalse();
+        menu.Items.Single(item => item.CommandId?.Value == FreeWContextMenuPlanner.EditorSpellingIgnoreAll)
+            .IsEnabled.Should().BeTrue();
+        menu.Items.Single(item => item.CommandId?.Value == FreeWContextMenuPlanner.EditorSpellingAddToDictionary)
+            .IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GrammarDiagnostic_DoesNotAddSpellingActions()
+    {
+        var diagnostic = new ProofingDiagnostic(0, 0, 0, 4, 3, "teh", "teh", "en-US", ProofingDiagnosticKind.Grammar);
+        var menu = FreeWContextMenuPlanner.BuildEditor(
+            new(false, false, false, false, true),
+            new(diagnostic, CanEdit: true, CanIgnore: true, CanAddToDictionary: true));
+
+        CommandCount(menu).Should().Be(7);
+        menu.Items
+            .Where(item => item.CommandId?.Value == FreeWContextMenuPlanner.EditorSpellingIgnoreAll)
+            .Should()
+            .BeEmpty();
     }
 
     private static int CommandCount(RibbonMenu menu) =>

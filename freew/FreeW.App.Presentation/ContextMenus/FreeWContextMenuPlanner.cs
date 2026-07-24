@@ -11,6 +11,12 @@ public sealed record FreeWEditorContextMenuState(
     bool CanPaste,
     bool CanEdit);
 
+public sealed record FreeWSpellingContextMenuState(
+    ProofingDiagnostic Diagnostic,
+    bool CanEdit,
+    bool CanIgnore,
+    bool CanAddToDictionary);
+
 public enum FreeWContextMenuCoverage
 {
     Paired,
@@ -38,6 +44,9 @@ public static class FreeWContextMenuPlanner
     public const string EditorPaste = "freew.context.editor.paste";
     public const string EditorDelete = "freew.context.editor.delete";
     public const string EditorSelectAll = "freew.context.editor.select-all";
+    public const string EditorSpellingIgnoreAll = "freew.context.editor.spelling.ignore-all";
+    public const string EditorSpellingAddToDictionary = "freew.context.editor.spelling.add-to-dictionary";
+    public const string EditorSpellingReplacementPrefix = "freew.context.editor.spelling.replace.";
 
     public const string OutlineMoveUp = "freew.context.outline.move-up";
     public const string OutlineMoveDown = "freew.context.outline.move-down";
@@ -76,21 +85,57 @@ public static class FreeWContextMenuPlanner
         new("paragraph-spacing", "Design paragraph-spacing catalog", "Ribbon/ThemeGallery.cs", "FreeWAvaloniaRibbonDefinition.cs", FreeWContextMenuCoverage.Paired, true),
         new("effects", "Design effects catalog", "Ribbon/ThemeGallery.cs", "FreeWAvaloniaRibbonDefinition.cs", FreeWContextMenuCoverage.Paired, true),
         new("table-styles", "Table Styles catalog", "Ribbon/TableStylesGallery.cs", "FreeWAvaloniaRibbonDefinition.cs", FreeWContextMenuCoverage.Paired, true),
-        new("editor-spelling", "Native spelling suggestions and dictionary actions", "WPF RichTextBox/Windows spell checker", "No portable OS dictionary provider", FreeWContextMenuCoverage.ExternalOnly, false),
+        new("editor-spelling", "Portable spelling suggestions and dictionary actions for planner diagnostics", "WPF RichTextBox/Windows spell checker", "ProofingDiagnosticPlanner correction catalog", FreeWContextMenuCoverage.Paired, false),
+        new("editor-spelling-native", "Native OS spelling coverage beyond planner diagnostics", "WPF RichTextBox/Windows spell checker", "No portable OS dictionary provider", FreeWContextMenuCoverage.ExternalOnly, false),
     ];
 
-    public static RibbonMenu BuildEditor(FreeWEditorContextMenuState state) => new(
-    [
-        Command("Undo", EditorUndo, state.CanUndo),
-        Command("Redo", EditorRedo, state.CanRedo),
-        RibbonMenuItem.Separator(),
-        Command("Cut", EditorCut, state.HasSelection && state.CanEdit),
-        Command("Copy", EditorCopy, state.HasSelection),
-        Command("Paste", EditorPaste, state.CanPaste && state.CanEdit),
-        Command("Delete", EditorDelete, state.HasSelection && state.CanEdit),
-        RibbonMenuItem.Separator(),
-        Command("Select All", EditorSelectAll, true),
-    ]);
+    public static RibbonMenu BuildEditor(
+        FreeWEditorContextMenuState state,
+        FreeWSpellingContextMenuState? spelling = null)
+    {
+        var items = new List<RibbonMenuItem>();
+        if (spelling is not null && spelling.Diagnostic.Kind == ProofingDiagnosticKind.Spelling)
+            items.AddRange(BuildSpelling(spelling).Items);
+
+        items.AddRange(
+        [
+            Command("Undo", EditorUndo, state.CanUndo),
+            Command("Redo", EditorRedo, state.CanRedo),
+            RibbonMenuItem.Separator(),
+            Command("Cut", EditorCut, state.HasSelection && state.CanEdit),
+            Command("Copy", EditorCopy, state.HasSelection),
+            Command("Paste", EditorPaste, state.CanPaste && state.CanEdit),
+            Command("Delete", EditorDelete, state.HasSelection && state.CanEdit),
+            RibbonMenuItem.Separator(),
+            Command("Select All", EditorSelectAll, true),
+        ]);
+        return new RibbonMenu(items);
+    }
+
+    public static RibbonMenu BuildSpelling(FreeWSpellingContextMenuState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (state.Diagnostic.Kind != ProofingDiagnosticKind.Spelling)
+            return RibbonMenu.Empty;
+
+        var items = new List<RibbonMenuItem>();
+        var suggestions = ProofingCorrectionCatalog.SuggestionsFor(state.Diagnostic.Word);
+        for (var index = 0; index < suggestions.Count; index++)
+        {
+            items.Add(Command(
+                suggestions[index],
+                EditorSpellingReplacementPrefix + index,
+                state.CanEdit));
+        }
+
+        if (items.Count > 0)
+            items.Add(RibbonMenuItem.Separator());
+
+        items.Add(Command("Ignore All", EditorSpellingIgnoreAll, state.CanIgnore));
+        items.Add(Command("Add to Dictionary", EditorSpellingAddToDictionary, state.CanAddToDictionary));
+        items.Add(RibbonMenuItem.Separator());
+        return new RibbonMenu(items);
+    }
 
     public static RibbonMenu BuildContentControl(Run run, DateTime? today = null, bool isEnabled = true)
     {

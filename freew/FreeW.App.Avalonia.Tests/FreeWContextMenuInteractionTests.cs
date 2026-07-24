@@ -5,6 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Proofing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -58,6 +59,89 @@ public sealed class FreeWContextMenuInteractionTests
                 shiftF10.Handled.Should().BeTrue();
                 view.ActiveContextMenuForTests.Should().NotBeNull();
                 view.ActiveContextMenuForTests!.Close();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task EditorSpellingMenu_ReplacesWordThroughUndoableDocumentEdit()
+        => Session.Dispatch(() =>
+        {
+            var document = SpellingDocument("teh");
+            var view = new DocumentView(new CustomDictionaryStore(null));
+            view.LoadDocument(document);
+            view.MoveCaretToBlockForTest(0, 1);
+            var window = new Window { Content = view };
+            try
+            {
+                window.Show();
+                window.Measure(new Size(800, 600));
+                window.Arrange(new Rect(0, 0, 800, 600));
+                view.RaiseKeyDownForContextMenuTests(new KeyEventArgs { Key = Key.Apps });
+
+                var menu = view.ActiveContextMenuForTests;
+                menu.Should().NotBeNull();
+                var items = menu!.Items.OfType<MenuItem>().ToArray();
+                items.Select(item => item.Header?.ToString()).Should().ContainInOrder(
+                    "the", "Ignore All", "Add to Dictionary", "Undo");
+
+                items.Single(item => string.Equals(item.Header?.ToString(), "the", StringComparison.Ordinal))
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+
+                ((Paragraph)document.Blocks[0]).PlainText.Should().Be("the");
+                view.CanUndo.Should().BeTrue();
+                view.Undo();
+                ((Paragraph)document.Blocks[0]).PlainText.Should().Be("teh");
+                menu.Close();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task EditorSpellingMenu_AddToDictionaryAndIgnoreAllRemoveDiagnostics()
+        => Session.Dispatch(() =>
+        {
+            var dictionary = new CustomDictionaryStore(null);
+            var document = SpellingDocument("teh teh");
+            var view = new DocumentView(dictionary);
+            view.LoadDocument(document);
+            view.MoveCaretToBlockForTest(0, 1);
+            var window = new Window { Content = view };
+            try
+            {
+                window.Show();
+                window.Measure(new Size(800, 600));
+                window.Arrange(new Rect(0, 0, 800, 600));
+
+                view.RaiseKeyDownForContextMenuTests(new KeyEventArgs { Key = Key.Apps });
+                var addMenu = view.ActiveContextMenuForTests!;
+                addMenu.Items.OfType<MenuItem>()
+                    .Single(item => string.Equals(item.Header?.ToString(), "Add to Dictionary", StringComparison.Ordinal))
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                dictionary.Contains("teh").Should().BeTrue();
+                view.ProofingDiagnosticsForTest
+                    .Where(diagnostic => diagnostic.Kind == ProofingDiagnosticKind.Spelling)
+                    .Should().BeEmpty();
+                addMenu.Close();
+
+                dictionary.Remove("teh");
+                view.LoadDocument(SpellingDocument("teh teh"));
+                view.MoveCaretToBlockForTest(0, 1);
+                view.RaiseKeyDownForContextMenuTests(new KeyEventArgs { Key = Key.Apps });
+                var ignoreMenu = view.ActiveContextMenuForTests!;
+                ignoreMenu.Items.OfType<MenuItem>()
+                    .Single(item => string.Equals(item.Header?.ToString(), "Ignore All", StringComparison.Ordinal))
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                view.ProofingDiagnosticsForTest
+                    .Where(diagnostic => diagnostic.Kind == ProofingDiagnosticKind.Spelling)
+                    .Should().BeEmpty();
+                ignoreMenu.Close();
             }
             finally
             {
@@ -194,4 +278,12 @@ public sealed class FreeWContextMenuInteractionTests
 
     private static Paragraph Heading(string styleId, string text) =>
         new(text) { StyleId = styleId };
+
+    private static TextDocument SpellingDocument(string text)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph(text));
+        return document;
+    }
 }

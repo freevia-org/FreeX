@@ -31,21 +31,6 @@ public static class ProofingDiagnosticPlanner
         public int End => Start + Length;
     }
 
-    private static readonly HashSet<string> KnownMisspellings = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "acommodate",
-        "adress",
-        "arguement",
-        "beleive",
-        "definately",
-        "enviroment",
-        "occured",
-        "recieve",
-        "seperate",
-        "teh",
-        "wierd",
-    };
-
     public static IReadOnlyList<ProofingDiagnostic> Build(
         TextDocument document,
         bool spellCheckEnabled,
@@ -146,7 +131,8 @@ public static class ProofingDiagnosticPlanner
 
             if (!token.IsEmailOrUrlLike
                 && !customWords.Contains(normalized)
-                && KnownMisspellings.Contains(normalized))
+                && ProofingCorrectionCatalog.Entries.Any(entry =>
+                    string.Equals(entry.Misspelling, normalized, StringComparison.OrdinalIgnoreCase)))
             {
                 AddDiagnostic(
                     diagnostics,
