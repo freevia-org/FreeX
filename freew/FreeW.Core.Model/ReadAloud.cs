@@ -33,6 +33,13 @@ public readonly record struct ReadAloudSegment(int ParagraphIndex, string Text);
 public interface ISpeechEngine
 {
     /// <summary>
+    /// True when <see cref="Pause"/> and <see cref="Resume"/> suspend and continue the current utterance.
+    /// Engines that only provide speak/stop should return false so the controller does not report a
+    /// paused state that the backend cannot actually honour.
+    /// </summary>
+    bool SupportsPause => true;
+
+    /// <summary>
     /// Begins speaking <paramref name="text"/>. The engine invokes <paramref name="onCompleted"/> once,
     /// when (and only when) the utterance finishes on its own. Cancelling via <see cref="Stop"/> must not
     /// invoke the callback.
@@ -169,6 +176,9 @@ public sealed class ReadAloudController
     /// </summary>
     public void TogglePause()
     {
+        if (!_engine.SupportsPause)
+            return;
+
         switch (State)
         {
             case ReadAloudState.Playing:

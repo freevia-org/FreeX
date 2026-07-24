@@ -55,6 +55,8 @@ public sealed class SystemSpeechEngine : ISpeechEngine, IDisposable
         }
     }
 
+    public bool SupportsPause => true;
+
     /// <summary>True when a usable TTS voice is installed and the synthesizer initialised successfully.</summary>
     public bool HasVoice
     {

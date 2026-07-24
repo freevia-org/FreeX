@@ -473,6 +473,39 @@ public sealed class DocumentView : Control
         DocumentChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Returns the index, in <see cref="ReadAloudController.ExtractSegments(TextDocument)"/>'s ordered
+    /// non-empty segment list, at which Review &gt; Read Aloud should begin. The mapping mirrors the WPF host:
+    /// reading starts at the caret's body block (or containing table) and continues to the end.
+    /// </summary>
+    public int ReadAloudStartSegmentIndex()
+    {
+        var caretBlockIndex = _cellCaret?.TableBlock ?? _caret.Block;
+        if (caretBlockIndex < 0)
+            return 0;
+
+        var segmentIndex = 0;
+        for (var i = 0; i < _doc.Blocks.Count && i < caretBlockIndex; i++)
+        {
+            switch (_doc.Blocks[i])
+            {
+                case Paragraph paragraph:
+                    if (!string.IsNullOrWhiteSpace(paragraph.PlainText))
+                        segmentIndex++;
+                    break;
+                case Table table:
+                    foreach (var row in table.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellParagraph in cell.Paragraphs)
+                                if (!string.IsNullOrWhiteSpace(cellParagraph.PlainText))
+                                    segmentIndex++;
+                    break;
+            }
+        }
+
+        return segmentIndex;
+    }
+
     public void Undo()
     {
         if (!AllowsRestrictEditingHistoryOperation(

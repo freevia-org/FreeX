@@ -91,6 +91,7 @@ public sealed partial class MainWindow : Window
     private readonly NotesPane _notesPane;
     private readonly ThesaurusPane _thesaurusPane;
     private Control? _ribbonControl;
+    private IRibbonCommandRegistry? _ribbonRegistry;
     private bool _ribbonKeyTipsVisible;
     private Border? _findBar;
     private FindReplaceDialog? _findReplaceDialog;
@@ -124,6 +125,8 @@ public sealed partial class MainWindow : Window
     private Thickness _editorMarginBeforeReadMode;
     private bool _suppressEditorDirty;
     private bool _closingConfirmed;
+    private AvaloniaSpeechEngine? _readAloudEngine;
+    private ReadAloudController? _readAloudController;
     private CancellationTokenSource? _printCancellation;
     private PrinterDiscoveryResult? _latestPrinterDiscovery;
 
@@ -224,6 +227,7 @@ public sealed partial class MainWindow : Window
         workArea.Children.Add(_workspace);
 
         _editor.DocumentChanged += OnEditorDocumentChanged;
+        _editor.DocumentChanged += StopReadAloudAfterDocumentChange;
         _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_reviewingPane.IsVisible) _reviewingPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_reviewBalloonsPane.IsVisible) _reviewBalloonsPane.Refresh(); };
@@ -322,6 +326,10 @@ public sealed partial class MainWindow : Window
     }
 
     public DocumentView Editor => _editor;
+
+    internal bool IsReadAloudActiveForTest => _readAloudController?.IsActive == true;
+
+    internal void ToggleReadAloudForTest() => ToggleReadAloud();
     public bool HasToolbar { get; private set; }
 
     /// <summary>
@@ -1636,6 +1644,8 @@ public sealed partial class MainWindow : Window
             AddToDictionary: AddCurrentWordToDictionary,
             OpenThesaurus: ToggleThesaurusPane,
             SetProofingLanguage: () => _ = OpenProofingLanguageDialogAsync(),
+            ToggleReadAloud: ToggleReadAloud,
+            IsReadAloudActive: IsReadAloudActive,
             CompareDocuments: () => _ = CompareDocumentsAsync(),
             CombineDocuments: () => _ = CombineDocumentsAsync(),
             OpenHelpOnline: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.HelpUrl, "Help Online"),
@@ -1650,6 +1660,7 @@ public sealed partial class MainWindow : Window
         // AV-MAIL: capture the Mailings engine so the shell can drive dialog-bound commands with async
         // Avalonia dialogs over the same session the ribbon commands share.
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks, out var mailMerge);
+        _ribbonRegistry = registry;
         _mailMerge = mailMerge;
         registry.Register(new RibbonCommandId("freew.start-mail-merge"),
             new ActionRibbonCommand(() => _ = OpenStartMailMergeAsync()));
@@ -2500,10 +2511,12 @@ public sealed partial class MainWindow : Window
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         _printCancellation?.Cancel();
+        StopReadAloud();
 
         // If we already ran the async gate and decided it's OK to close, let it through.
         if (_closingConfirmed)
         {
+            DisposeReadAloud();
             _ = _autosave.StopAsync(); // fire-and-forget — cleanup is best-effort on close
             return;
         }
@@ -3490,6 +3503,7 @@ public sealed partial class MainWindow : Window
 
     private void LoadDocumentContent(TextDocument document)
     {
+        StopReadAloud();
         ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
         _suppressEditorDirty = true;
         try
@@ -3500,6 +3514,89 @@ public sealed partial class MainWindow : Window
         {
             _suppressEditorDirty = false;
         }
+    }
+
+    private void ToggleReadAloud()
+    {
+        var controller = EnsureReadAloudController();
+        if (controller.IsActive)
+        {
+            controller.Stop();
+        }
+        else
+        {
+            controller.Start(_editor.Document, _editor.ReadAloudStartSegmentIndex());
+        }
+
+        RefreshRibbonCommandStates();
+    }
+
+    private bool IsReadAloudActive() => _readAloudController?.IsActive == true;
+
+    private ReadAloudController EnsureReadAloudController()
+    {
+        if (_readAloudController is not null)
+            return _readAloudController;
+
+        _readAloudEngine = new AvaloniaSpeechEngine();
+        _readAloudController = new ReadAloudController(_readAloudEngine);
+        _readAloudController.StateChanged += OnReadAloudStateChanged;
+        return _readAloudController;
+    }
+
+    private void OnReadAloudStateChanged()
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            RefreshRibbonCommandStates();
+            return;
+        }
+
+        try
+        {
+            Dispatcher.UIThread.Post(RefreshRibbonCommandStates);
+        }
+        catch (Exception)
+        {
+            // The window may be closing; no UI state update is needed once the dispatcher is gone.
+        }
+    }
+
+    private void RefreshRibbonCommandStates()
+    {
+        if (_ribbonControl is null || _ribbonRegistry is null)
+            return;
+
+        AvaloniaRibbonRenderer.SyncToggleStates(
+            _ribbonControl,
+            _ribbonRegistry,
+            RibbonVisualPalette.FromTheme(App.ActiveTheme));
+    }
+
+    private void StopReadAloudAfterDocumentChange()
+    {
+        if (_readAloudController?.IsActive == true)
+            StopReadAloud();
+    }
+
+    private void StopReadAloud()
+    {
+        _readAloudController?.Stop();
+        RefreshRibbonCommandStates();
+    }
+
+    private void DisposeReadAloud()
+    {
+        var controller = _readAloudController;
+        _readAloudController = null;
+        if (controller is not null)
+        {
+            controller.StateChanged -= OnReadAloudStateChanged;
+            controller.Stop();
+        }
+
+        _readAloudEngine?.Dispose();
+        _readAloudEngine = null;
     }
 
     private void OnEditorDocumentChanged()
