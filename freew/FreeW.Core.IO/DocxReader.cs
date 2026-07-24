@@ -3621,7 +3621,11 @@ public static class DocxReader
         var text = string.Concat(txbxContent.Descendants(W + "t").Select(t => t.Value));
         var fontSizePt = HalfPointsToPoints(rPr?.Element(W + "sz")?.Attribute(W + "val")?.Value) ?? 36;
 
-        var wordArt = new WordArt(text, style.Value, fontSizePt);
+        var wordArt = new WordArt(text, style.Value, fontSizePt)
+        {
+            FontFamily = rPr?.Element(W + "rFonts")?.Attribute(W + "ascii")?.Value
+                ?? rPr?.Element(W + "rFonts")?.Attribute(W + "hAnsi")?.Value
+        };
         var wordArtExtent = container.Element(Wp + "extent");
         wordArt.WidthPt = EmuToPoints(wordArtExtent?.Attribute("cx")?.Value);
         wordArt.HeightPt = EmuToPoints(wordArtExtent?.Attribute("cy")?.Value);

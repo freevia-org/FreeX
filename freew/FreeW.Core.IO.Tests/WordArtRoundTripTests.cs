@@ -83,6 +83,24 @@ public class WordArtRoundTripTests
     }
 
     [Fact]
+    public void FontFamily_EmitsAndRoundTripsWordArtRunFonts()
+    {
+        var wordArt = new WordArt("Typeface", WordArtStyle.GlowBlue, fontSizePt: 36)
+        {
+            FontFamily = "Arial"
+        };
+
+        var xml = WriteDocumentXml(DocumentWith(wordArt));
+        var fonts = xml.Descendants(W + "rFonts").Single();
+        var read = RoundTrippedWordArt(DocumentWith(wordArt));
+
+        fonts.Attribute(W + "ascii")!.Value.Should().Be("Arial");
+        fonts.Attribute(W + "hAnsi")!.Value.Should().Be("Arial");
+        fonts.Attribute(W + "cs")!.Value.Should().Be("Arial");
+        read.FontFamily.Should().Be("Arial");
+    }
+
+    [Fact]
     public void AuthoredBounds_SurviveFloatingWordArtRoundTrip()
     {
         var wordArt = new WordArt("FreeW", WordArtStyle.GlowBlue, 30)

@@ -97,6 +97,18 @@ public sealed class DocumentEffectRenderingTests
         wordArt.Effect.Should().BeNull();
     }
 
+    [StaFact]
+    public void InlineWordArt_RendersItsAuthoredFontFamily()
+    {
+        var wordArtModel = new WordArt("Typeface", WordArtStyle.FillBlue, fontSizePt: 24)
+        {
+            FontFamily = "Arial"
+        };
+        var view = RenderWithEffectSet("Office", ModelRun.FromWordArt(wordArtModel));
+
+        SingleTagged<TextBlock, WordArt>(view).FontFamily.Source.Should().Be("Arial");
+    }
+
     private static DocumentView RenderWithEffectSet(string effectSetName, params ModelRun[] runs)
     {
         var document = TextDocument.CreateEmpty();

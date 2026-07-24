@@ -170,6 +170,19 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
+    public void WordArtPlan_PreservesAuthoredFontFamilyAndDefaultsOnlyWhenAbsent()
+    {
+        var authored = new WordArt("Typeface", WordArtStyle.FillBlue, fontSizePt: 24)
+        {
+            FontFamily = "Arial"
+        };
+
+        DrawingObjectVisualPlanner.BuildInlineWordArtPlan(authored).WordArt.FontFamily.Should().Be("Arial");
+        DrawingObjectVisualPlanner.BuildInlineWordArtPlan(
+            new WordArt("Default", WordArtStyle.FillBlue, fontSizePt: 24)).WordArt.FontFamily.Should().Be("Calibri");
+    }
+
+    [Fact]
     public void WordArtPlan_AppliesOnlyAuthoredNormalAutoFitFontScale()
     {
         var normalAutoFit = new WordArt("Fit", WordArtStyle.GlowBlue, fontSizePt: 30)

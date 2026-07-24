@@ -16030,6 +16030,7 @@ public sealed class DocumentView : Control
         public string       Text        = string.Empty;
         public WordArtStyle Style;
         public double       FontSizePt  = 36;
+        public string       FontFamily  = "Calibri";
         public WordArtWarp  Warp;
         public DrawingObjectFillPlan Fill = DrawingObjectFillPlan.None;
         public DrawingObjectOutlinePlan Outline = new(false, null, 0, null);
@@ -16108,6 +16109,7 @@ public sealed class DocumentView : Control
             Text = plan.WordArt?.Text ?? string.Empty,
             Style = plan.WordArt?.Style ?? WordArtStyle.FillBlue,
             FontSizePt = (plan.WordArt?.FontSizeDip ?? 48) / PxPerPoint,
+            FontFamily = plan.WordArt?.FontFamily ?? "Calibri",
             Warp = plan.WordArt?.Warp ?? WordArtWarp.None,
             Fill = plan.WordArt?.Fill ?? DrawingObjectFillPlan.None,
             Outline = plan.WordArt?.Outline ?? new DrawingObjectOutlinePlan(false, null, 0, null),
@@ -16137,6 +16139,7 @@ public sealed class DocumentView : Control
             Text = plan.WordArt.Text,
             Style = plan.WordArt.Style,
             FontSizePt = plan.WordArt.FontSizeDip / PxPerPoint,
+            FontFamily = plan.WordArt.FontFamily,
             Warp = plan.WordArt.Warp,
             Fill = plan.WordArt.Fill,
             Outline = plan.WordArt.Outline,
@@ -16486,7 +16489,7 @@ public sealed class DocumentView : Control
         // Render the text centred in the rect at the WordArt font size.
         var textFmt = new RunFormatting
         {
-            FontFamily = "Calibri",
+            FontFamily = wd.FontFamily,
             FontSizePt = Math.Max(8, wd.FontSizePt),
             Bold       = wd.Bold,
             ColorHex   = ContrastingWordArtTextColor(wd.Fill),

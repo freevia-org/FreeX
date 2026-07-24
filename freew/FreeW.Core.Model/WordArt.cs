@@ -110,6 +110,12 @@ public sealed class WordArt
     public double FontSizePt { get; set; } = 36;
 
     /// <summary>
+    /// Optional WordprocessingML font family from the WordArt text run. A null value preserves
+    /// the document theme/default-font route instead of serializing an explicit <c>w:rFonts</c>.
+    /// </summary>
+    public string? FontFamily { get; set; }
+
+    /// <summary>
     /// Authored text-box dimensions in points. Imported floating WordArt uses these extents instead of
     /// re-estimating bounds from its text, preserving Word's anchor geometry.
     /// </summary>

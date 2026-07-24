@@ -5883,6 +5883,7 @@ public sealed class DocumentView : RichTextBox
         var textBlock = new TextBlock
         {
             Text = wordArt.Text,
+            FontFamily = new FontFamily(wordArt.FontFamily),
             FontSize = wordArt.FontSizeDip,
             FontWeight = wordArt.Bold ? FontWeights.Bold : FontWeights.Normal,
             Foreground = foreground,
@@ -6055,7 +6056,7 @@ public sealed class DocumentView : RichTextBox
         foreach (var glyph in canvas.Children.OfType<TextBlock>().ToList())
             canvas.Children.Remove(glyph);
         var fontSize = Math.Max(8, wordArt.FontSizeDip);
-        var glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
+        var glyphs = CreateWordArtGlyphs(wordArt.Text, wordArt.FontFamily, fontSize, wordArt.Bold, foreground);
         var totalWidth = glyphs.Sum(glyph => glyph.DesiredSize.Width);
         var isImportedGoldArchUp = wordArt is
         {
@@ -6073,7 +6074,7 @@ public sealed class DocumentView : RichTextBox
         if (fitTextToBounds && wordArt.Warp != WordArtWarp.Wave1 && totalWidth > targetWidth && totalWidth > 0)
         {
             fontSize = Math.Max(8, fontSize * targetWidth / totalWidth);
-            glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
+            glyphs = CreateWordArtGlyphs(wordArt.Text, wordArt.FontFamily, fontSize, wordArt.Bold, foreground);
             totalWidth = glyphs.Sum(glyph => glyph.DesiredSize.Width);
         }
 
@@ -6127,14 +6128,15 @@ public sealed class DocumentView : RichTextBox
             if (outlineBrush is not null)
             {
                 foreach (var offset in new[] { (-0.8, 0.0), (0.8, 0.0), (0.0, -0.8), (0.0, 0.8) })
-                    AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, outlineBrush, placement, horizontalScale, verticalScale, offset);
+                    AddWarpedWordArtGlyph(canvas, character, wordArt.FontFamily, fontSize, wordArt.Bold, outlineBrush, placement, horizontalScale, verticalScale, offset);
             }
-            AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, foreground, placement, horizontalScale, verticalScale, (0, 0));
+            AddWarpedWordArtGlyph(canvas, character, wordArt.FontFamily, fontSize, wordArt.Bold, foreground, placement, horizontalScale, verticalScale, (0, 0));
         }
     }
 
     private static List<TextBlock> CreateWordArtGlyphs(
         string text,
+        string fontFamily,
         double fontSize,
         bool bold,
         System.Windows.Media.Brush foreground)
@@ -6145,7 +6147,7 @@ public sealed class DocumentView : RichTextBox
             var glyph = new TextBlock
             {
                 Text = character.ToString(),
-                FontFamily = new FontFamily("Calibri"),
+                FontFamily = new FontFamily(fontFamily),
                 FontSize = fontSize,
                 FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
                 Foreground = foreground,
@@ -6160,6 +6162,7 @@ public sealed class DocumentView : RichTextBox
     private static void AddWarpedWordArtGlyph(
         Canvas canvas,
         string character,
+        string fontFamily,
         double fontSize,
         bool bold,
         System.Windows.Media.Brush foreground,
@@ -6171,7 +6174,7 @@ public sealed class DocumentView : RichTextBox
         var glyph = new TextBlock
         {
             Text = character,
-            FontFamily = new FontFamily("Calibri"),
+            FontFamily = new FontFamily(fontFamily),
             FontSize = fontSize,
             FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
             Foreground = foreground,
@@ -12113,6 +12116,7 @@ public sealed class DocumentView : RichTextBox
                 fitTextToBounds: false);
             var glyphs = CreateWordArtGlyphs(
                 wordArtPlan.Text,
+                wordArtPlan.FontFamily,
                 Math.Max(8, wordArtPlan.FontSizeDip),
                 wordArtPlan.Bold,
                 warpForeground);
@@ -12125,6 +12129,7 @@ public sealed class DocumentView : RichTextBox
             var textBlock = new TextBlock
             {
                 Text       = wordArtPlan.Text,
+                FontFamily = new FontFamily(wordArtPlan.FontFamily),
                 FontSize   = wordArtPlan.FontSizeDip,
                 FontWeight = wordArtPlan.Bold ? FontWeights.Bold : FontWeights.Normal,
                 Foreground = foreground,

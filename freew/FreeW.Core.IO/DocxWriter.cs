@@ -4242,7 +4242,15 @@ public static class DocxWriter
     /// </summary>
     private static XElement BuildWordArtParagraph(WordArt wordArt)
     {
-        var rPr = new XElement(W + "rPr",
+        var rPr = new XElement(W + "rPr");
+        if (!string.IsNullOrWhiteSpace(wordArt.FontFamily))
+        {
+            rPr.Add(new XElement(W + "rFonts",
+                new XAttribute(W + "ascii", wordArt.FontFamily),
+                new XAttribute(W + "hAnsi", wordArt.FontFamily),
+                new XAttribute(W + "cs", wordArt.FontFamily)));
+        }
+        rPr.Add(
             new XElement(W + "sz", new XAttribute(W + "val", PointsToHalfPoints(wordArt.FontSizePt))),
             new XElement(W + "szCs", new XAttribute(W + "val", PointsToHalfPoints(wordArt.FontSizePt))));
 
