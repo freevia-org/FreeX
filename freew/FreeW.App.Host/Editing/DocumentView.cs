@@ -6413,12 +6413,13 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private FrameworkElement BuildFloatingGroupVisual(
         DrawingObjectVisualPlan plan,
-        FreeW.Core.Model.DrawingGroup group)
+        FreeW.Core.Model.DrawingGroup group,
+        bool enableSelection = true)
     {
         var widthPx = plan.Rect.WidthDip;
         var heightPx = plan.Rect.HeightDip;
 
-        var isSelected = _selectedFloatingObjects.Contains(group);
+        var isSelected = enableSelection && _selectedFloatingObjects.Contains(group);
 
         var innerCanvas = new Canvas
         {
@@ -6480,13 +6481,16 @@ public sealed class DocumentView : RichTextBox
             root.RenderTransform = transforms;
         }
 
-        root.Cursor = Cursors.SizeAll;
-        root.MouseLeftButtonDown += (_, e) =>
+        if (enableSelection)
         {
-            var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
-            SelectFloatingObject(group, addToMulti);
-            e.Handled = true;
-        };
+            root.Cursor = Cursors.SizeAll;
+            root.MouseLeftButtonDown += (_, e) =>
+            {
+                var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+                SelectFloatingObject(group, addToMulti);
+                e.Handled = true;
+            };
+        }
         return root;
     }
 
@@ -6507,6 +6511,8 @@ public sealed class DocumentView : RichTextBox
                 BuildFloatingChartVisual(chart, plan.Rect, enableSelection: false),
             DrawingObjectVisualKind.SmartArt when child is SmartArt smartArt =>
                 BuildFloatingSmartArtVisual(smartArt, plan.Rect, enableSelection: false),
+            DrawingObjectVisualKind.Group when child is FreeW.Core.Model.DrawingGroup nestedGroup =>
+                BuildFloatingGroupVisual(plan, nestedGroup, enableSelection: false),
             _ => BuildGroupUnsupportedChildPlaceholder(
                 child,
                 plan.Rect.WidthDip / PxPerPoint,

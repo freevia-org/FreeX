@@ -43,7 +43,7 @@ public sealed class DrawingGroup
     /// <summary>
     /// The grouped drawing objects.  Each element is one of:
     /// <see cref="InlineImage"/>, <see cref="Shape"/>, <see cref="Chart"/>,
-    /// <see cref="SmartArt"/>, or <see cref="WordArt"/>.
+    /// <see cref="SmartArt"/>, <see cref="WordArt"/>, or another <see cref="DrawingGroup"/>.
     /// </summary>
     public List<object> Children { get; } = [];
 
@@ -69,6 +69,7 @@ public sealed class DrawingGroup
         Chart c => c.WidthPt,
         SmartArt sa => sa.WidthPt,
         WordArt wa => wa.FontSizePt * Math.Max(1, wa.Text.Length) * 0.62,
+        DrawingGroup group => group.WidthPt,
         _ => 36
     };
 
@@ -80,6 +81,7 @@ public sealed class DrawingGroup
         Chart c => c.HeightPt,
         SmartArt sa => sa.HeightPt,
         WordArt wa => wa.FontSizePt * 1.6,
+        DrawingGroup group => group.HeightPt,
         _ => 36
     };
 }

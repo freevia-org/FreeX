@@ -6086,15 +6086,17 @@ public static class DocxReader
         var childScaleX = childExtentX > 0 ? group.WidthPt / childExtentX : 1;
         var childScaleY = childExtentY > 0 ? group.HeightPt / childExtentY : 1;
 
-        // wpg:wgp permits shape, picture, and graphic-frame children. The latter two retain their real
-        // relationship-bearing payload instead of the old marker-only wps:wsp placeholders.
+        // wpg:wgp permits shape, picture, graphic-frame, and nested group children. The latter three retain
+        // their real relationship-bearing payload instead of reducing a rich child to a placeholder.
         foreach (var groupChild in wgp.Elements().Where(element =>
             element.Name == Wps + "wsp"
             || element.Name == Pic + "pic"
-            || element.Name == Wpg + "graphicFrame"))
+            || element.Name == Wpg + "graphicFrame"
+            || element.Name == Wpg + "wgp"))
         {
             var isShape = groupChild.Name == Wps + "wsp";
             var isPicture = groupChild.Name == Pic + "pic";
+            var isNestedGroup = groupChild.Name == Wpg + "wgp";
             var childDocPr = isShape
                 ? groupChild.Element(Wps + "cNvPr") ?? groupChild.Element(Wp + "docPr")
                 : isPicture
@@ -6102,7 +6104,9 @@ public static class DocxReader
                     : groupChild.Element(Wpg + "cNvPr");
             var name = childDocPr?.Attribute("name")?.Value ?? string.Empty;
 
-            var xfrm = isShape
+            var xfrm = isNestedGroup
+                ? groupChild.Element(Wpg + "grpSpPr")?.Element(A + "xfrm")
+                : isShape
                 ? groupChild.Element(Wps + "spPr")?.Element(A + "xfrm")
                 : isPicture
                     ? groupChild.Element(Pic + "spPr")?.Element(A + "xfrm")
@@ -6114,11 +6118,13 @@ public static class DocxReader
             var cw = EmuToPoints(ext?.Attribute("cx")?.Value ?? "36") * childScaleX;
             var ch = EmuToPoints(ext?.Attribute("cy")?.Value ?? "36") * childScaleY;
 
-            var fakeRun = BuildGroupChildRun(groupChild, childDocPr, cw, ch);
-            object? child = isPicture
-                ? ReadImage(fakeRun, archive, imageRelationships)
+            var fakeRun = isNestedGroup ? null : BuildGroupChildRun(groupChild, childDocPr, cw, ch);
+            object? child = isNestedGroup
+                ? ReadNestedDrawingGroup(groupChild, cw, ch, archive, imageRelationships, hyperlinkRelationships, numbering)
+                : isPicture
+                ? ReadImage(fakeRun!, archive, imageRelationships)
                 : groupChild.Name == Wpg + "graphicFrame"
-                    ? ReadChart(fakeRun, archive, imageRelationships) ?? (object?)ReadSmartArt(fakeRun, archive, imageRelationships)
+                    ? ReadChart(fakeRun!, archive, imageRelationships) ?? (object?)ReadSmartArt(fakeRun!, archive, imageRelationships)
                     : null;
             if (child is null && name.StartsWith("GroupChild:Image", StringComparison.Ordinal))
             {
@@ -6127,7 +6133,7 @@ public static class DocxReader
             }
             else if (child is null && name.StartsWith("GroupChild:Shape:", StringComparison.Ordinal))
             {
-                child = ReadShape(fakeRun, archive, imageRelationships, hyperlinkRelationships, numbering);
+                child = ReadShape(fakeRun!, archive, imageRelationships, hyperlinkRelationships, numbering);
                 if (child is null)
                 {
                     var kindStr = name["GroupChild:Shape:".Length..];
@@ -6149,13 +6155,13 @@ public static class DocxReader
             {
                 var styleStr = name["GroupChild:WordArt:".Length..];
                 var style = Enum.TryParse<WordArtStyle>(styleStr, out var s) ? s : WordArtStyle.FillBlue;
-                child = ReadWordArt(fakeRun) ?? new WordArt { Style = style, Text = "WordArt", FontSizePt = 36 };
+                child = ReadWordArt(fakeRun!) ?? new WordArt { Style = style, Text = "WordArt", FontSizePt = 36 };
             }
             else if (child is null)
             {
                 // Unknown child type — try the rich shape/WordArt readers before falling back to a rectangle.
-                child = ReadWordArt(fakeRun)
-                    ?? (object?)ReadShape(fakeRun, archive, imageRelationships, hyperlinkRelationships, numbering)
+                child = ReadWordArt(fakeRun!)
+                    ?? (object?)ReadShape(fakeRun!, archive, imageRelationships, hyperlinkRelationships, numbering)
                     ?? new Shape(ShapeKind.Rectangle, cw, ch);
             }
 
@@ -6200,6 +6206,28 @@ public static class DocxReader
                     childDocPr is null ? null : new XElement(Wp + "docPr",
                         childDocPr.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration)),
                     graphic)));
+    }
+
+    private static DrawingGroup? ReadNestedDrawingGroup(
+        XElement group,
+        double widthPt,
+        double heightPt,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
+    {
+        var run = new XElement(W + "r",
+            new XElement(W + "drawing",
+                new XElement(Wp + "anchor",
+                    new XElement(Wp + "extent",
+                        new XAttribute("cx", PointsToEmu(widthPt)),
+                        new XAttribute("cy", PointsToEmu(heightPt))),
+                    new XElement(A + "graphic",
+                        new XElement(A + "graphicData",
+                            new XAttribute("uri", GroupGraphicDataUri),
+                            new XElement(group))))));
+        return ReadDrawingGroup(run, archive, imageRelationships, hyperlinkRelationships, numbering);
     }
 
     /// <summary>

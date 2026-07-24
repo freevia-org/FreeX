@@ -742,6 +742,39 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingOverlay_RendersNestedGroupChildrenThroughSharedPlan()
+    {
+        var inner = new FreeW.Core.Model.DrawingGroup { WidthPt = 72, HeightPt = 42, RotationAngle = 15 };
+        var ellipse = new Shape(ShapeKind.Ellipse, 30, 24, "#70AD47");
+        inner.Children.Add(ellipse);
+        inner.ChildOffsets.Add((6, 6));
+        inner.Children.Add(new WordArt("Inner", WordArtStyle.GlowGold, 16));
+        inner.ChildOffsets.Add((36, 9));
+
+        var outer = new FreeW.Core.Model.DrawingGroup { WidthPt = 180, HeightPt = 96 };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((12, 18));
+        outer.Children.Add(new Shape(ShapeKind.Rectangle, 54, 36, "#4472C4"));
+        outer.ChildOffsets.Add((108, 24));
+
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        doc.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var outerRoot = canvas.Children.OfType<Border>().Single(border => ReferenceEquals(border.Tag, outer));
+        LogicalDescendants<Border>(outerRoot)
+            .Should().Contain(border => ReferenceEquals(border.Tag, inner));
+        LogicalDescendants<System.Windows.Shapes.Ellipse>(outerRoot)
+            .Should().ContainSingle("the nested group's ellipse should render instead of a placeholder");
+    }
+
+    [StaFact]
     public void FloatingOverlay_RendersChartFromSharedPlanWithActualGeometryTextAndStyle()
     {
         var chart = Chart.Create(

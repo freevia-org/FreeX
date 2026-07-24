@@ -473,4 +473,36 @@ public sealed class DrawingObjectVisualPlannerTests
         smartArtPlan.LayoutGeometry!.Kind.Should().Be(SmartArtLayoutGeometryKind.Matrix);
         smartArtPlan.LayoutGeometry.Nodes.Should().HaveCount(4);
     }
+
+    [Fact]
+    public void GroupPlan_RecursesNestedGroupWithLocalTransform()
+    {
+        var inner = new DrawingGroup { WidthPt = 72, HeightPt = 36, RotationAngle = 20, FlipV = true };
+        inner.Children.Add(new Shape(ShapeKind.Ellipse, 24, 24, "#70AD47"));
+        inner.ChildOffsets.Add((3, 4));
+        inner.Children.Add(new WordArt("Inner", WordArtStyle.GlowGold, 16));
+        inner.ChildOffsets.Add((30, 6));
+
+        var outer = new DrawingGroup { WidthPt = 180, HeightPt = 90 };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((12, 18));
+        outer.Children.Add(new Shape(ShapeKind.Rectangle, 36, 24, "#4472C4"));
+        outer.ChildOffsets.Add((108, 24));
+
+        var plan = DrawingObjectVisualPlanner.BuildVisualPlan(outer,
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Group, 0, 0,
+                new DocumentFloatRect(100, 200, 240, 120), false, 0, ImageWrapping.Square));
+
+        plan.GroupChildren.Should().HaveCount(2);
+        var nested = plan.GroupChildren[0].Visual;
+        nested.Kind.Should().Be(DrawingObjectVisualKind.Group);
+        nested.Rect.XDip.Should().BeApproximately(116, 0.01);
+        nested.Rect.YDip.Should().BeApproximately(224, 0.01);
+        nested.RotationAngle.Should().Be(20);
+        nested.FlipV.Should().BeTrue();
+        nested.GroupChildren.Select(child => child.Visual.Kind).Should().Equal(
+            DrawingObjectVisualKind.Shape,
+            DrawingObjectVisualKind.WordArt);
+    }
 }
