@@ -17,6 +17,44 @@ public sealed class AvaloniaRichTextEditorTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
 
     [Fact]
+    public async Task EnterSplit_PreservesNumberingMetadataThroughHostBuffer()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Level = 2,
+                BulletKind = BulletKind.Auto,
+                AutoNumType = AutoNumType.AlphaLcParenBoth,
+                AutoNumStartAt = 3,
+                Runs = { new Run { Text = "AlphaBeta" } },
+            });
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.Text = "Alpha\nBeta";
+
+                editor.EditedBody.Paragraphs.Should().HaveCount(2);
+                editor.EditedBody.Paragraphs.Should().OnlyContain(paragraph =>
+                    paragraph.Level == 2
+                    && paragraph.BulletKind == BulletKind.Auto
+                    && paragraph.AutoNumType == AutoNumType.AlphaLcParenBoth
+                    && paragraph.AutoNumStartAt == 3);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InheritedRuns_UseSharedWpfFallbackInsteadOfNativeTextBoxTheme()
     {
         await Session.Dispatch(async () =>

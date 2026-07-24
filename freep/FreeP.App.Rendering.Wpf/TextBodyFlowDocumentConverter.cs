@@ -137,10 +137,21 @@ internal static class TextBodyFlowDocumentConverter
             InsetBottomPt = originalBody?.InsetBottomPt,
         };
 
+        var blocks = doc.Blocks.ToList();
         int modelParaIndex = 0;
-        foreach (var block in doc.Blocks)
+        foreach (var block in blocks)
         {
-            var mp = new ModelParagraph();
+            int sourceParaIndex = originalBody is null
+                ? -1
+                : InCanvasRichTextParagraphEditPlanner.ResolveSourceParagraphIndex(
+                    originalBody.Paragraphs.Count,
+                    blocks.Count,
+                    modelParaIndex);
+            var mp = sourceParaIndex >= 0
+                ? InCanvasRichTextParagraphEditPlanner.CloneParagraphMetadata(
+                    originalBody!.Paragraphs[sourceParaIndex])
+                : new ModelParagraph();
+            mp.Runs.Clear();
 
             // Restore paragraph alignment.
             if (block is WpfParagraph wpPara)
@@ -152,18 +163,6 @@ internal static class TextBodyFlowDocumentConverter
                     TextAlignment.Justify => TextAlign.Justify,
                     _                     => TextAlign.Left
                 };
-            }
-
-            // Restore level/bullet/spacing from original body where count allows.
-            if (originalBody is not null &&
-                modelParaIndex < originalBody.Paragraphs.Count)
-            {
-                var orig          = originalBody.Paragraphs[modelParaIndex];
-                mp.Level          = orig.Level;
-                mp.BulletKind     = orig.BulletKind;
-                mp.BulletChar     = orig.BulletChar;
-                mp.SpaceBeforePt  = orig.SpaceBeforePt;
-                mp.SpaceAfterPt   = orig.SpaceAfterPt;
             }
 
             if (block is WpfParagraph wp2)

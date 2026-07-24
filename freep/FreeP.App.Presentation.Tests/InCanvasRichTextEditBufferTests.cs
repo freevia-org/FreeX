@@ -59,6 +59,58 @@ public sealed class InCanvasRichTextEditBufferTests
     }
 
     [Fact]
+    public void EnterSplit_ClonesNumberingMetadataToTheNewParagraph()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            Level = 1,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.AlphaLcParenBoth,
+            AutoNumStartAt = 4,
+            Runs = { new Run { Text = "AlphaBeta" } },
+        });
+        var buffer = new InCanvasRichTextEditBuffer(source);
+
+        buffer.ReplacePlainText("Alpha\nBeta");
+
+        buffer.Body.Paragraphs.Should().HaveCount(2);
+        buffer.Body.Paragraphs.Should().OnlyContain(paragraph =>
+            paragraph.Level == 1
+            && paragraph.BulletKind == BulletKind.Auto
+            && paragraph.AutoNumType == AutoNumType.AlphaLcParenBoth
+            && paragraph.AutoNumStartAt == 4);
+    }
+
+    [Fact]
+    public void BackspaceJoin_KeepsLeadingParagraphListMetadata()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            Level = 1,
+            BulletKind = BulletKind.Char,
+            BulletChar = "*",
+            Runs = { new Run { Text = "Alpha" } },
+        });
+        source.Paragraphs.Add(new Paragraph
+        {
+            Level = 2,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.AlphaUcPeriod,
+            Runs = { new Run { Text = "Beta" } },
+        });
+        var buffer = new InCanvasRichTextEditBuffer(source);
+
+        buffer.ReplacePlainText("AlphaBeta");
+
+        var paragraph = buffer.Body.Paragraphs.Single();
+        paragraph.Level.Should().Be(1);
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("*");
+    }
+
+    [Fact]
     public void NewlineDeletion_MergesParagraphsAndRetainsMixedRuns()
     {
         var source = new TextBody();

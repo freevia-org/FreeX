@@ -28,6 +28,36 @@ namespace FreeP.App.Host.Tests;
 public sealed class RichTextEditorTests
 {
     [StaFact]
+    public void WpfEnterSplit_PreservesListMetadataOnBothResultParagraphs()
+    {
+        var original = new TextBody();
+        original.Paragraphs.Add(new ModelParagraph
+        {
+            Level = 2,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.AlphaLcParenBoth,
+            AutoNumStartAt = 3,
+            Runs = { new ModelRun { Text = "AlphaBeta" } },
+        });
+
+        // This is the FlowDocument state produced by WPF after Enter splits one
+        // list paragraph into two paragraphs. The list marker is paragraph metadata,
+        // not editable text, so the original body is the authority for the style.
+        var edited = new FlowDocument();
+        edited.Blocks.Add(new WpfParagraph { Inlines = { new WpfRun("Alpha") } });
+        edited.Blocks.Add(new WpfParagraph { Inlines = { new WpfRun("Beta") } });
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(edited, original);
+
+        restored.Paragraphs.Should().HaveCount(2);
+        restored.Paragraphs.Should().OnlyContain(paragraph =>
+            paragraph.Level == 2
+            && paragraph.BulletKind == BulletKind.Auto
+            && paragraph.AutoNumType == AutoNumType.AlphaLcParenBoth
+            && paragraph.AutoNumStartAt == 3);
+    }
+
+    [StaFact]
     public void WpfAuthority_UsesSharedRichEditorFallbackTypography()
     {
         var doc = TextBodyFlowDocumentConverter.ToFlowDocument(
