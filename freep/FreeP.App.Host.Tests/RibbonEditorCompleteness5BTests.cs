@@ -137,6 +137,20 @@ public class RibbonEditorCompleteness5BTests
         Assert.Contains("freep.insert-chart-bar",    ids);
         Assert.Contains("freep.insert-chart-line",   ids);
         Assert.Contains("freep.insert-chart-pie",    ids);
+        Assert.Contains("freep.insert-chart-column-stacked", ids);
+        Assert.Contains("freep.insert-chart-column-stacked-100", ids);
+        Assert.Contains("freep.insert-chart-bar-stacked", ids);
+        Assert.Contains("freep.insert-chart-bar-stacked-100", ids);
+        Assert.Contains("freep.insert-chart-line-markers", ids);
+        Assert.Contains("freep.insert-chart-area", ids);
+        Assert.Contains("freep.insert-chart-area-stacked", ids);
+        Assert.Contains("freep.insert-chart-scatter", ids);
+        Assert.Contains("freep.insert-chart-doughnut", ids);
+        Assert.Contains("freep.insert-chart-radar", ids);
+        Assert.Contains("freep.insert-chart-bubble", ids);
+        Assert.Contains("freep.insert-chart-stock", ids);
+        Assert.Contains("freep.insert-chart-surface", ids);
+        Assert.Contains("freep.insert-chart-surface-3d", ids);
     }
 
     [Fact]

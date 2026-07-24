@@ -50,6 +50,20 @@ public static class SlideObjectInsertionPlanner
     public const string ChartBarCommandId = "freep.insert-chart-bar";
     public const string ChartLineCommandId = "freep.insert-chart-line";
     public const string ChartPieCommandId = "freep.insert-chart-pie";
+    public const string ChartColumnStackedCommandId = "freep.insert-chart-column-stacked";
+    public const string ChartColumnStacked100CommandId = "freep.insert-chart-column-stacked-100";
+    public const string ChartBarStackedCommandId = "freep.insert-chart-bar-stacked";
+    public const string ChartBarStacked100CommandId = "freep.insert-chart-bar-stacked-100";
+    public const string ChartLineMarkersCommandId = "freep.insert-chart-line-markers";
+    public const string ChartAreaCommandId = "freep.insert-chart-area";
+    public const string ChartAreaStackedCommandId = "freep.insert-chart-area-stacked";
+    public const string ChartScatterCommandId = "freep.insert-chart-scatter";
+    public const string ChartDoughnutCommandId = "freep.insert-chart-doughnut";
+    public const string ChartRadarCommandId = "freep.insert-chart-radar";
+    public const string ChartBubbleCommandId = "freep.insert-chart-bubble";
+    public const string ChartStockCommandId = "freep.insert-chart-stock";
+    public const string ChartSurfaceCommandId = "freep.insert-chart-surface";
+    public const string ChartSurface3DCommandId = "freep.insert-chart-surface-3d";
 
     private static readonly SlideObjectInsertionPlan[] Plans =
     [
@@ -66,6 +80,20 @@ public static class SlideObjectInsertionPlanner
         new(ChartBarCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.BarClustered),
         new(ChartLineCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Line),
         new(ChartPieCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Pie),
+        new(ChartColumnStackedCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.ColumnStacked),
+        new(ChartColumnStacked100CommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.ColumnStacked100),
+        new(ChartBarStackedCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.BarStacked),
+        new(ChartBarStacked100CommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.BarStacked100),
+        new(ChartLineMarkersCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.LineMarkers),
+        new(ChartAreaCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Area),
+        new(ChartAreaStackedCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.AreaStacked),
+        new(ChartScatterCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Scatter),
+        new(ChartDoughnutCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Doughnut),
+        new(ChartRadarCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Radar),
+        new(ChartBubbleCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Bubble),
+        new(ChartStockCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Stock),
+        new(ChartSurfaceCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Surface),
+        new(ChartSurface3DCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Surface3D),
     ];
 
     public static IReadOnlyList<SlideObjectInsertionPlan> BuiltInPlans { get; } =

@@ -84,6 +84,20 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.ChartBarCommandId, ChartType.BarClustered)]
     [InlineData(SlideObjectInsertionPlanner.ChartLineCommandId, ChartType.Line)]
     [InlineData(SlideObjectInsertionPlanner.ChartPieCommandId, ChartType.Pie)]
+    [InlineData(SlideObjectInsertionPlanner.ChartColumnStackedCommandId, ChartType.ColumnStacked)]
+    [InlineData(SlideObjectInsertionPlanner.ChartColumnStacked100CommandId, ChartType.ColumnStacked100)]
+    [InlineData(SlideObjectInsertionPlanner.ChartBarStackedCommandId, ChartType.BarStacked)]
+    [InlineData(SlideObjectInsertionPlanner.ChartBarStacked100CommandId, ChartType.BarStacked100)]
+    [InlineData(SlideObjectInsertionPlanner.ChartLineMarkersCommandId, ChartType.LineMarkers)]
+    [InlineData(SlideObjectInsertionPlanner.ChartAreaCommandId, ChartType.Area)]
+    [InlineData(SlideObjectInsertionPlanner.ChartAreaStackedCommandId, ChartType.AreaStacked)]
+    [InlineData(SlideObjectInsertionPlanner.ChartScatterCommandId, ChartType.Scatter)]
+    [InlineData(SlideObjectInsertionPlanner.ChartDoughnutCommandId, ChartType.Doughnut)]
+    [InlineData(SlideObjectInsertionPlanner.ChartRadarCommandId, ChartType.Radar)]
+    [InlineData(SlideObjectInsertionPlanner.ChartBubbleCommandId, ChartType.Bubble)]
+    [InlineData(SlideObjectInsertionPlanner.ChartStockCommandId, ChartType.Stock)]
+    [InlineData(SlideObjectInsertionPlanner.ChartSurfaceCommandId, ChartType.Surface)]
+    [InlineData(SlideObjectInsertionPlanner.ChartSurface3DCommandId, ChartType.Surface3D)]
     public void ApplyCommand_InsertsExpectedChart(string commandId, ChartType chartType)
     {
         var editor = MakeSession();

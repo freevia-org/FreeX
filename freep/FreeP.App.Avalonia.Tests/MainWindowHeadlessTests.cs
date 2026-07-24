@@ -1341,6 +1341,20 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.insert-chart-bar", ChartType.BarClustered)]
     [InlineData("freep.insert-chart-line", ChartType.Line)]
     [InlineData("freep.insert-chart-pie", ChartType.Pie)]
+    [InlineData("freep.insert-chart-column-stacked", ChartType.ColumnStacked)]
+    [InlineData("freep.insert-chart-column-stacked-100", ChartType.ColumnStacked100)]
+    [InlineData("freep.insert-chart-bar-stacked", ChartType.BarStacked)]
+    [InlineData("freep.insert-chart-bar-stacked-100", ChartType.BarStacked100)]
+    [InlineData("freep.insert-chart-line-markers", ChartType.LineMarkers)]
+    [InlineData("freep.insert-chart-area", ChartType.Area)]
+    [InlineData("freep.insert-chart-area-stacked", ChartType.AreaStacked)]
+    [InlineData("freep.insert-chart-scatter", ChartType.Scatter)]
+    [InlineData("freep.insert-chart-doughnut", ChartType.Doughnut)]
+    [InlineData("freep.insert-chart-radar", ChartType.Radar)]
+    [InlineData("freep.insert-chart-bubble", ChartType.Bubble)]
+    [InlineData("freep.insert-chart-stock", ChartType.Stock)]
+    [InlineData("freep.insert-chart-surface", ChartType.Surface)]
+    [InlineData("freep.insert-chart-surface-3d", ChartType.Surface3D)]
     public async Task Ribbon_insert_chart_commands_add_expected_chart(
         string commandId,
         ChartType expectedChartType)
