@@ -5035,12 +5035,21 @@ public sealed class MainWindowHeadlessTests
 
             foreach (var commandId in new[]
             {
+                SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
+                SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
+                SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
+                SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
+                SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.StackedListLayoutCommandId,
+                SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
+                SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
+                SmartArtAuthoringPlanner.TargetListLayoutCommandId,
+                SmartArtAuthoringPlanner.StackedVennLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
             })
             {

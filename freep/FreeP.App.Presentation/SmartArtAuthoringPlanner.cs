@@ -18,14 +18,23 @@ public enum SmartArtColorPreset
 public enum SmartArtLayoutPreset
 {
     BasicProcess,
+    AlternatingProcess,
+    ArrowRibbon,
+    CircleProcess,
+    FunnelProcess,
+    VerticalProcess,
     VerticalBoxList,
     BasicCycle,
     BasicBlockList,
     StackedList,
+    DescendingBlockList,
     BasicPyramid,
     RadialCycle,
     BasicMatrix,
     BasicVenn,
+    RadialVenn,
+    TargetList,
+    StackedVenn,
     BasicHierarchy,
 }
 
@@ -69,14 +78,23 @@ public static class SmartArtAuthoringPlanner
     public const string SingleAccentCommandId = "freep.smartart.colors.single-accent";
     public const string GrayscaleCommandId = "freep.smartart.colors.grayscale";
     public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
+    public const string AlternatingProcessLayoutCommandId = "freep.smartart.layout.alternating-process";
+    public const string ArrowRibbonLayoutCommandId = "freep.smartart.layout.arrow-ribbon";
+    public const string CircleProcessLayoutCommandId = "freep.smartart.layout.circle-process";
+    public const string FunnelProcessLayoutCommandId = "freep.smartart.layout.funnel-process";
+    public const string VerticalProcessLayoutCommandId = "freep.smartart.layout.vertical-process";
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
     public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
     public const string BasicBlockListLayoutCommandId = "freep.smartart.layout.basic-block-list";
     public const string StackedListLayoutCommandId = "freep.smartart.layout.stacked-list";
+    public const string DescendingBlockListLayoutCommandId = "freep.smartart.layout.descending-block-list";
     public const string BasicPyramidLayoutCommandId = "freep.smartart.layout.basic-pyramid";
     public const string RadialCycleLayoutCommandId = "freep.smartart.layout.radial-cycle";
     public const string BasicMatrixLayoutCommandId = "freep.smartart.layout.basic-matrix";
     public const string BasicVennLayoutCommandId = "freep.smartart.layout.basic-venn";
+    public const string RadialVennLayoutCommandId = "freep.smartart.layout.radial-venn";
+    public const string TargetListLayoutCommandId = "freep.smartart.layout.target-list";
+    public const string StackedVennLayoutCommandId = "freep.smartart.layout.stacked-venn";
     public const string BasicHierarchyLayoutCommandId = "freep.smartart.layout.basic-hierarchy";
     public const string SimpleQuickStyleCommandId = "freep.smartart.style.simple";
     public const string ModerateQuickStyleCommandId = "freep.smartart.style.moderate";
@@ -177,6 +195,16 @@ public static class SmartArtAuthoringPlanner
         {
             SmartArtLayoutPreset.BasicProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.AlternatingProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.ArrowRibbon =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon", SmartArtFamily.Process),
+            SmartArtLayoutPreset.CircleProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/circleProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.FunnelProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.VerticalProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/verticalProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalBoxList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle =>
@@ -185,6 +213,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.StackedList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/stackedList", SmartArtFamily.List),
+            SmartArtLayoutPreset.DescendingBlockList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/descendingBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicPyramid =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.RadialCycle =>
@@ -193,6 +223,12 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix", SmartArtFamily.Matrix),
             SmartArtLayoutPreset.BasicVenn =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicVenn", SmartArtFamily.Relationship),
+            SmartArtLayoutPreset.RadialVenn =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/radialVenn", SmartArtFamily.Relationship),
+            SmartArtLayoutPreset.TargetList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/targetList", SmartArtFamily.Relationship),
+            SmartArtLayoutPreset.StackedVenn =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicHierarchy =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy", SmartArtFamily.Hierarchy),
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
