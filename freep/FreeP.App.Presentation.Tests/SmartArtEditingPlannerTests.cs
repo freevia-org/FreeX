@@ -12,6 +12,55 @@ public sealed class SmartArtEditingPlannerTests
     private const long FrameCx = 7_315_200L;
     private const long FrameCy = 3_657_600L;
 
+    [Theory]
+    [InlineData(SmartArtLayoutPreset.BasicProcess, "basicProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.VerticalBoxList, "verticalBoxList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.BasicCycle, "basicCycle", SmartArtFamily.Cycle)]
+    public void ApplyLayoutPreset_UpdatesLiveModelAndNativeLayoutPart(
+        SmartArtLayoutPreset preset,
+        string expectedId,
+        SmartArtFamily expectedFamily)
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"), ("n2", "Build")),
+        };
+        var layoutPart = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/layout1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:layoutDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" uniqueId=\"old\" />")
+        };
+        smartArt.Parts[layoutPart.PartPath] = layoutPart;
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset);
+
+        result.Applied.Should().BeTrue();
+        result.LayoutUniqueId.Should().EndWith($"/layout/{expectedId}");
+        result.Family.Should().Be(expectedFamily);
+        smartArt.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+        smartArt.Data.Family.Should().Be(expectedFamily);
+        XDocument.Parse(Encoding.UTF8.GetString(layoutPart.Bytes))
+            .Root!.Attribute("uniqueId")!.Value.Should().Be(result.LayoutUniqueId);
+    }
+
+    [Fact]
+    public void ApplyLayoutPreset_RequiresNativeLayoutPart()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"))
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
+            smartArt,
+            SmartArtLayoutPreset.BasicCycle);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Contain("native layout definition");
+    }
+
     [Fact]
     public void ChangeText_UpdatesTargetNodeAndLiveLayoutText()
     {

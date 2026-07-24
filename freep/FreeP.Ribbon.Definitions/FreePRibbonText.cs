@@ -174,6 +174,10 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtThemeAccentsCommand { get; } = new("Ribbon_Command_SmartArtThemeAccents_Label", "Ribbon_Command_SmartArtThemeAccents_KeyTip");
     public static RibbonText SmartArtSingleAccentCommand { get; } = new("Ribbon_Command_SmartArtSingleAccent_Label", "Ribbon_Command_SmartArtSingleAccent_KeyTip");
     public static RibbonText SmartArtGrayscaleCommand { get; } = new("Ribbon_Command_SmartArtGrayscale_Label", "Ribbon_Command_SmartArtGrayscale_KeyTip");
+    public static RibbonText SmartArtLayoutsGroup { get; } = new("Ribbon_Group_SmartArtLayouts_Label", "Ribbon_Group_SmartArtLayouts_KeyTip");
+    public static RibbonText SmartArtBasicProcessCommand { get; } = new("Ribbon_Command_SmartArtBasicProcess_Label", "Ribbon_Command_SmartArtBasicProcess_KeyTip");
+    public static RibbonText SmartArtVerticalBoxListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBoxList_Label", "Ribbon_Command_SmartArtVerticalBoxList_KeyTip");
+    public static RibbonText SmartArtBasicCycleCommand { get; } = new("Ribbon_Command_SmartArtBasicCycle_Label", "Ribbon_Command_SmartArtBasicCycle_KeyTip");
     public static RibbonText SlideSizeWidescreenCommand { get; } = new("Ribbon_Command_SlideSizeWidescreen_Label", "Ribbon_Command_SlideSizeWidescreen_KeyTip");
     public static RibbonText SlideSizeStandardCommand { get; } = new("Ribbon_Command_SlideSizeStandard_Label", "Ribbon_Command_SlideSizeStandard_KeyTip");
     public static RibbonText SlideSizeCustomCommand { get; } = new("Ribbon_Command_SlideSizeCustom_Label", "Ribbon_Command_SlideSizeCustom_KeyTip");
