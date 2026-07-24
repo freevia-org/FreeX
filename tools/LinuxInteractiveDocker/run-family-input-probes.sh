@@ -38,6 +38,16 @@ if [[ "$app" == "FreeW" ]]; then
         "editor-pointer-context-open"
         "editor-pointer-context-dismissal"
     )
+else
+    required_ids+=(
+        "slide-pane-new-slide-create"
+        "slide-pane-new-slide-undo"
+        "slide-pane-new-slide-redo"
+        "slide-pane-keyboard-context-open"
+        "slide-pane-keyboard-context-dismissal"
+        "slide-pane-pointer-context-open"
+        "slide-pane-pointer-context-dismissal"
+    )
 fi
 manifest_written=false
 clipboard_owner_pid=""
@@ -275,6 +285,12 @@ screen_changed() {
     local before="$1" after="$2" minimum="${3:-100}" changed
     changed="$(compare -metric AE "$before" "$after" null: 2>&1 || true)"
     [[ "$changed" =~ ^[0-9]+ ]] && (( ${BASH_REMATCH[0]} >= minimum ))
+}
+
+capture_region() {
+    local source_name="$1" name="$2" geometry="$3"
+    convert "$output/$source_name" -crop "$geometry" +repage "$output/$name"
+    track_screenshot "$name"
 }
 
 active_window_is_owner() {
@@ -581,6 +597,227 @@ if [[ "$app" == "FreeW" ]]; then
         "editor-keyboard-context-before.png" "editor-keyboard-context-open.png" "editor-keyboard-context-dismissed.png"
     run_editor_context_probe "editor-pointer-context" pointer \
         "editor-pointer-context-before.png" "editor-pointer-context-open.png" "editor-pointer-context-dismissed.png"
+else
+    # FreeP-only physical slide-pane evidence. Geometry is derived from the real
+    # window bounds and the baseline screenshot, then retained in a calibration
+    # artifact so the row cannot receive managed-only credit.
+    geometry="$(xdotool getwindowgeometry --shell "$window_id" 2>/dev/null || true)"
+    eval "$geometry"
+    baseline_dimensions="$(identify -format '%wx%h' "$output/baseline.png" 2>/dev/null || true)"
+    baseline_width="${baseline_dimensions%x*}"
+    baseline_height="${baseline_dimensions#*x}"
+    if [[ -z "$baseline_width" || -z "$baseline_height" || "$baseline_width" -le 0 || "$baseline_height" -le 0 ]]; then
+        baseline_width="$WIDTH"
+        baseline_height="$HEIGHT"
+    fi
+    slide_pane_width=$(( WIDTH * 14 / 100 ))
+    [[ "$slide_pane_width" -gt 180 ]] && slide_pane_width=180
+    [[ "$slide_pane_width" -lt 140 ]] && slide_pane_width=140
+    slide_thumbnail_x=$(( X + slide_pane_width / 2 ))
+    slide_thumbnail_y=$(( Y + HEIGHT * 34 / 100 ))
+    new_slide_x=$(( X + slide_pane_width / 2 ))
+    # The baseline's button band ends above the status bar; keep the click
+    # centered in that band rather than using the window's bottom edge.
+    new_slide_y=$(( Y + HEIGHT - 66 ))
+    main_view_x=$(( X + slide_pane_width + (WIDTH - slide_pane_width) / 2 ))
+    main_view_y=$(( Y + HEIGHT * 55 / 100 ))
+    # Exclude the bottom button, notes, and status bar from exact-state crops;
+    # those controls legitimately change hover/focus chrome during keyboard input.
+    slide_pane_stable_top=$(( Y + HEIGHT * 17 / 100 ))
+    slide_pane_stable_height=$(( HEIGHT * 50 / 100 ))
+    slide_pane_geometry="${slide_pane_width}x${slide_pane_stable_height}+${X}+${slide_pane_stable_top}"
+    main_view_geometry="$((WIDTH - slide_pane_width))x$((HEIGHT * 68 / 100))+$((X + slide_pane_width))+$((Y + HEIGHT * 20 / 100))"
+    {
+        printf 'window-geometry=%s\n' "$geometry"
+        printf 'baseline-dimensions=%s\n' "$baseline_dimensions"
+        printf 'slide-pane-geometry=%s\n' "$slide_pane_geometry"
+        printf 'slide-pane-stable-band=thumbnail-area-below-ribbon-above-button-and-status\n'
+        printf 'main-view-geometry=%s\n' "$main_view_geometry"
+        printf 'thumbnail-point=%s,%s\n' "$slide_thumbnail_x" "$slide_thumbnail_y"
+        printf 'new-slide-point=%s,%s\n' "$new_slide_x" "$new_slide_y"
+        printf 'baseline-calibration=window-geometry-plus-baseline-screenshot\n'
+    } > "$output/slide-pane-calibration.txt"
+
+    # The preceding Alt/key-tip probes can leave badges painted until the
+    # focused shell receives Escape. Establish and retain two identical frames
+    # before taking the actual state baseline; this keeps exact comparisons
+    # about slide state rather than transient key-tip chrome.
+    send_active_key Escape || true
+    capture "slide-pane-prestate-1.png"
+    send_active_key Escape || true
+    capture "slide-pane-prestate-2.png"
+    prestate_stable=false
+    if screen_matches "$output/slide-pane-prestate-1.png" "$output/slide-pane-prestate-2.png" 200; then
+        prestate_stable=true
+    else
+        send_active_key Escape || true
+        capture "slide-pane-prestate-3.png"
+        if screen_matches "$output/slide-pane-prestate-2.png" "$output/slide-pane-prestate-3.png" 200; then
+            prestate_stable=true
+        fi
+    fi
+    capture "slide-pane-before.png"
+    capture_region "slide-pane-before.png" "slide-pane-before-region.png" "$slide_pane_geometry"
+    capture_region "slide-pane-before.png" "slide-main-before-region.png" "$main_view_geometry"
+    new_slide_ready=true
+    if ! click_pointer 1 "$new_slide_x" "$new_slide_y"; then
+        new_slide_ready=false
+    fi
+    capture "slide-pane-created.png"
+    capture_region "slide-pane-created.png" "slide-pane-created-region.png" "$slide_pane_geometry"
+    capture_region "slide-pane-created.png" "slide-main-created-region.png" "$main_view_geometry"
+    created_changed=false
+    pane_changed=false
+    main_view_changed=false
+    if screen_changed "$output/slide-pane-before-region.png" "$output/slide-pane-created-region.png" 200; then
+        pane_changed=true
+    fi
+    if screen_changed "$output/slide-main-before-region.png" "$output/slide-main-created-region.png" 200; then
+        main_view_changed=true
+    fi
+    if $pane_changed; then
+        created_changed=true
+    fi
+    {
+        printf 'new-slide-ready=%s\n' "$new_slide_ready"
+        printf 'prestate-stable=%s\n' "$prestate_stable"
+        printf 'slide-pane-before=slide-pane-before-region.png\n'
+        printf 'slide-pane-created=slide-pane-created-region.png\n'
+        printf 'main-view-before=slide-main-before-region.png\n'
+        printf 'main-view-created=slide-main-created-region.png\n'
+        printf 'slide-pane-state-proven=%s\n' "$created_changed"
+        printf 'main-view-contextual-evidence=true\n'
+        printf 'main-view-changed=%s\n' "$main_view_changed"
+        printf 'thumbnail-evidence=slide-pane-created-region.png\n'
+    } > "$output/slide-pane-new-slide-create-proof.txt"
+    if $new_slide_ready && $prestate_stable && $created_changed; then
+        record "slide-pane-new-slide-create" "passed" "slide-pane-new-slide-create-proof.txt" \
+            "Clicked the real FreeP bottom New Slide affordance and proved changed thumbnail-pane evidence; the calibrated main-view frame is retained as contextual evidence."
+    else
+        record "slide-pane-new-slide-create" "failed" "slide-pane-new-slide-create-proof.txt" \
+            "The real New Slide input did not produce calibrated thumbnail-pane state evidence."
+    fi
+
+    send_key ctrl+z
+    capture "slide-pane-after-undo.png"
+    capture_region "slide-pane-after-undo.png" "slide-pane-undo-region.png" "$slide_pane_geometry"
+    capture_region "slide-pane-after-undo.png" "slide-main-undo-region.png" "$main_view_geometry"
+    undo_restored=false
+    if screen_matches "$output/slide-pane-before-region.png" "$output/slide-pane-undo-region.png" 200 &&
+       screen_matches "$output/slide-main-before-region.png" "$output/slide-main-undo-region.png" 200; then
+        undo_restored=true
+    fi
+    {
+        printf 'pre-create-pane=slide-pane-before-region.png\n'
+        printf 'undo-pane=slide-pane-undo-region.png\n'
+        printf 'pre-create-main=slide-main-before-region.png\n'
+        printf 'undo-main=slide-main-undo-region.png\n'
+        printf 'exact-calibrated-pre-create-state=%s\n' "$undo_restored"
+    } > "$output/slide-pane-new-slide-undo-proof.txt"
+    if $undo_restored; then
+        record "slide-pane-new-slide-undo" "passed" "slide-pane-new-slide-undo-proof.txt" \
+            "Ctrl+Z restored the calibrated pre-create thumbnail-pane state; the main-view frame is retained as contextual evidence."
+    else
+        record "slide-pane-new-slide-undo" "failed" "slide-pane-new-slide-undo-proof.txt" \
+            "Ctrl+Z did not restore the calibrated pre-create thumbnail-pane state and contextual main-view frame."
+    fi
+
+    redo_gate_open=false
+    if $created_changed && $undo_restored; then
+        redo_gate_open=true
+        send_key ctrl+y
+    fi
+    capture "slide-pane-after-redo.png"
+    capture_region "slide-pane-after-redo.png" "slide-pane-redo-region.png" "$slide_pane_geometry"
+    capture_region "slide-pane-after-redo.png" "slide-main-redo-region.png" "$main_view_geometry"
+    redo_restored=false
+    if $created_changed && $undo_restored &&
+       screen_matches "$output/slide-pane-created-region.png" "$output/slide-pane-redo-region.png" 200 &&
+       screen_matches "$output/slide-main-created-region.png" "$output/slide-main-redo-region.png" 200; then
+        redo_restored=true
+    fi
+    {
+        printf 'created-pane=slide-pane-created-region.png\n'
+        printf 'redo-pane=slide-pane-redo-region.png\n'
+        printf 'created-main=slide-main-created-region.png\n'
+        printf 'redo-main=slide-main-redo-region.png\n'
+        printf 'create-proven=%s\n' "$created_changed"
+        printf 'undo-proven=%s\n' "$undo_restored"
+        printf 'redo-gated-on-create-and-undo=%s\n' "$redo_gate_open"
+        printf 'exact-calibrated-created-state=%s\n' "$redo_restored"
+    } > "$output/slide-pane-new-slide-redo-proof.txt"
+    if $redo_restored; then
+        record "slide-pane-new-slide-redo" "passed" "slide-pane-new-slide-redo-proof.txt" \
+            "Ctrl+Y restored the calibrated created thumbnail-pane state; the main-view frame is retained as contextual evidence."
+    else
+        record "slide-pane-new-slide-redo" "failed" "slide-pane-new-slide-redo-proof.txt" \
+            "Ctrl+Y did not restore the calibrated created thumbnail-pane state and contextual main-view frame."
+    fi
+
+    run_slide_context_probe() {
+        local id_prefix="$1" trigger="$2" before="$3" open="$4" dismissed="$5"
+        local before_state="${id_prefix}-before-state.txt" open_state="${id_prefix}-open-state.txt"
+        local open_proof="${id_prefix}-open-proof.txt" dismissal_proof="${id_prefix}-dismissal-proof.txt"
+        local trigger_ready=true
+        focus_app
+        if ! click_pointer 1 "$slide_thumbnail_x" "$slide_thumbnail_y"; then
+            trigger_ready=false
+        fi
+        capture "$before"
+        capture_window_state "$before_state"
+        if [[ "$trigger" == "keyboard" ]]; then
+            if ! send_key shift+F10; then
+                trigger_ready=false
+            fi
+        else
+            if ! click_pointer 3 "$slide_thumbnail_x" "$slide_thumbnail_y"; then
+                trigger_ready=false
+            fi
+        fi
+        capture "$open"
+        capture_window_state "$open_state"
+        {
+            printf 'thumbnail-point=%s,%s\n' "$slide_thumbnail_x" "$slide_thumbnail_y"
+            printf 'before-screenshot=%s\n' "$before"
+            printf 'open-screenshot=%s\n' "$open"
+            printf 'dismissed-screenshot=%s\n' "$dismissed"
+            printf 'before-window-state=%s\n' "$before_state"
+            printf 'open-window-state=%s\n' "$open_state"
+            printf 'trigger-ready=%s\n' "$trigger_ready"
+            printf 'open-window-state-changed='; if ! cmp -s "$output/$before_state" "$output/$open_state"; then printf 'true\n'; else printf 'false\n'; fi
+            printf 'open-screenshot-changed='; if screen_changed "$output/$before" "$output/$open" 200; then printf 'true\n'; else printf 'false\n'; fi
+        } > "$output/$open_proof"
+        if $trigger_ready && screen_changed "$output/$before" "$output/$open" 200; then
+            record "${id_prefix}-open" "passed" "$open_proof" \
+                "The real FreeP slide thumbnail context menu opened through $trigger input; screenshot and window-state evidence are retained."
+        else
+            record "${id_prefix}-open" "failed" "$open_proof" \
+                "The real FreeP slide thumbnail context menu did not produce a visible state transition."
+        fi
+        send_active_key Escape || true
+        focus_app
+        capture "$dismissed"
+        capture_window_state "${id_prefix}-dismissed-state.txt"
+        {
+            printf 'before-screenshot=%s\n' "$before"
+            printf 'open-screenshot=%s\n' "$open"
+            printf 'dismissed-screenshot=%s\n' "$dismissed"
+            printf 'dismissed-window-state=%s\n' "${id_prefix}-dismissed-state.txt"
+            printf 'dismissed-returns-to-before='; if screen_matches "$output/$before" "$output/$dismissed" 200; then printf 'true\n'; else printf 'false\n'; fi
+        } > "$output/$dismissal_proof"
+        if screen_matches "$output/$before" "$output/$dismissed" 200; then
+            record "${id_prefix}-dismissal" "passed" "$dismissal_proof" \
+                "Escape dismissed the real FreeP slide thumbnail context menu and returned to the pre-open view."
+        else
+            record "${id_prefix}-dismissal" "failed" "$dismissal_proof" \
+                "Escape did not return to the pre-open slide-pane view."
+        fi
+    }
+
+    run_slide_context_probe "slide-pane-keyboard-context" keyboard \
+        "slide-pane-keyboard-context-before.png" "slide-pane-keyboard-context-open.png" "slide-pane-keyboard-context-dismissed.png"
+    run_slide_context_probe "slide-pane-pointer-context" pointer \
+        "slide-pane-pointer-context-before.png" "slide-pane-pointer-context-open.png" "slide-pane-pointer-context-dismissed.png"
 fi
 
 write_manifest

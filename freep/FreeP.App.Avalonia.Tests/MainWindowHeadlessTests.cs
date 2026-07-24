@@ -1239,6 +1239,48 @@ public sealed class MainWindowHeadlessTests
         after.Should().Be(before, "Undo must restore the original slide count");
     }
 
+    [Fact]
+    public async Task BottomNewSlideAffordance_undo_redo_restores_slide_count()
+    {
+        var before = -1;
+        var created = -1;
+        var undone = -1;
+        var redone = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            before = window.SlideCount;
+            window.ClickSlidePaneNewSlideAffordanceForTests().Should().BeTrue();
+            created = window.SlideCount;
+            window.Editor.Undo();
+            undone = window.SlideCount;
+            window.Editor.Redo();
+            redone = window.SlideCount;
+        });
+
+        if (!ran) return;
+        created.Should().Be(before + 1);
+        undone.Should().Be(before);
+        redone.Should().Be(created);
+    }
+
+    [Fact]
+    public async Task Shell_undo_redo_tunnel_skips_inline_text_editor_focus()
+    {
+        var textEditorTarget = false;
+        var slidePaneTarget = false;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            textEditorTarget = window.IsShellShortcutTargetForTests(new TextBox());
+            slidePaneTarget = window.IsShellShortcutTargetForTests(window.SlidePaneNewSlideButtonForTests);
+        });
+
+        if (!ran) return;
+        textEditorTarget.Should().BeFalse("inline text editors must retain Ctrl+Z/Ctrl+Y");
+        slidePaneTarget.Should().BeTrue("focused slide-pane controls need shell undo/redo routing");
+    }
+
     // ── Insert commands ─────────────────────────────────────────────────────────
 
     [Theory]

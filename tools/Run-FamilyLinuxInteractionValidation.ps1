@@ -135,14 +135,24 @@ function Assert-ManifestContract {
             "editor-pointer-context-open",
             "editor-pointer-context-dismissal"
         )
+    } else {
+        $requiredIds += @(
+            "slide-pane-new-slide-create",
+            "slide-pane-new-slide-undo",
+            "slide-pane-new-slide-redo",
+            "slide-pane-keyboard-context-open",
+            "slide-pane-keyboard-context-dismissal",
+            "slide-pane-pointer-context-open",
+            "slide-pane-pointer-context-dismissal"
+        )
     }
     $results = @($manifest.results)
     $ids = @($results | ForEach-Object { [string]$_.id })
     if ($ids.Count -ne ($ids | Select-Object -Unique).Count) {
         throw "Manifest contains duplicate result IDs."
     }
-    if ($App -eq "FreeP" -and $results.Count -ne 8) {
-        throw "FreeP family baseline must retain exactly eight result rows."
+    if ($results.Count -ne 15) {
+        throw "$App family baseline must contain exactly fifteen result rows."
     }
     foreach ($requiredId in $requiredIds) {
         if ($ids -notcontains $requiredId) {
@@ -285,6 +295,16 @@ try {
                 "editor-keyboard-context-dismissal",
                 "editor-pointer-context-open",
                 "editor-pointer-context-dismissal"
+            )
+        } else {
+            $failureIds += @(
+                "slide-pane-new-slide-create",
+                "slide-pane-new-slide-undo",
+                "slide-pane-new-slide-redo",
+                "slide-pane-keyboard-context-open",
+                "slide-pane-keyboard-context-dismissal",
+                "slide-pane-pointer-context-open",
+                "slide-pane-pointer-context-dismissal"
             )
         }
         $failureResults = @($failureIds | ForEach-Object {

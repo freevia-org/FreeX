@@ -47,6 +47,19 @@ public sealed class PhysicalValidationSourceTests
         source.Should().Contain("cups-dry-run/last-submitted.pdf");
     }
 
+    [Fact]
+    public void Shell_shortcuts_tunnel_before_focused_slide_pane_controls()
+    {
+        var source = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/MainWindow.cs"));
+
+        source.Should().Contain("InputElement.KeyDownEvent");
+        source.Should().Contain("RoutingStrategies.Tunnel");
+        source.Should().Contain("MainWindow_KeyDown(this, e)");
+        source.Should().Contain("KeyDown += MainWindow_KeyDown;");
+        source.Should().Contain("ShouldTunnelShellUndoRedo");
+        source.Should().Contain("current is TextBox");
+    }
+
     private static string RepoFile(string relativePath) =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../", relativePath));
 }

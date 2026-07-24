@@ -298,6 +298,8 @@ public sealed partial class MainWindow : Window
     internal bool IsSlidePaneNewSlideButtonVisible => _slidePaneNewSlideButton.IsVisible;
     internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
     internal string? SlidePaneNewSlideButtonAutomationName => AutomationProperties.GetName(_slidePaneNewSlideButton);
+    internal Button SlidePaneNewSlideButtonForTests => _slidePaneNewSlideButton;
+    internal bool IsShellShortcutTargetForTests(Control? focused) => IsShellShortcutTarget(focused);
     internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans => _slidePaneRenderedThumbnailPlans;
     internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans => _slidePaneRenderedSectionHeaderPlans;
 
@@ -705,6 +707,19 @@ public sealed partial class MainWindow : Window
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
+        // A focused ribbon or slide-pane button can consume Ctrl+Z/Ctrl+Y before
+        // the shell sees it. Tunnel only those two shell commands; leave the
+        // normal bubble route in place so inline text editors retain ownership
+        // of Ctrl+C/V/X/Z/Y and the rest of the shortcut catalog.
+        AddHandler(
+            InputElement.KeyDownEvent,
+            (_, e) =>
+            {
+                if (ShouldTunnelShellUndoRedo(e))
+                    MainWindow_KeyDown(this, e);
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
         KeyDown += MainWindow_KeyDown;
         AddHandler(
             InputElement.KeyDownEvent,
@@ -7340,6 +7355,27 @@ public sealed partial class MainWindow : Window
                 _slideCanvas.Refresh();
             }
         }
+    }
+
+    private bool ShouldTunnelShellUndoRedo(KeyEventArgs e) =>
+        e.Key is Key.Z or Key.Y &&
+        (e.KeyModifiers & KeyModifiers.Control) != 0 &&
+        IsShellShortcutTarget(FocusManager?.GetFocusedElement() as Control ?? e.Source as Control);
+
+    private bool IsShellShortcutTarget(Control? focused)
+    {
+        if (ReferenceEquals(focused, _slidePaneNewSlideButton))
+            return true;
+
+        for (var current = focused; current is not null; current = current.Parent as Control)
+        {
+            if (current is TextBox)
+                return false;
+            if (ReferenceEquals(current, _slidePaneList) || ReferenceEquals(current, _ribbonControl))
+                return true;
+        }
+
+        return false;
     }
 
     private void ExecuteKeyboardCommand(FreePKeyboardCommand command)
