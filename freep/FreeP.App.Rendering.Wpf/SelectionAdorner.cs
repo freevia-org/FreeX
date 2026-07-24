@@ -33,6 +33,9 @@ public sealed class SelectionAdorner : Adorner
     private static readonly Pen   RotateHandleBorder;
     private static readonly Pen MarqueePen;
     private static readonly Pen SnapGuidePen;    // Wave 12B — snap guide lines
+    private static readonly Brush EditPointFill;
+    private static readonly Pen EditPointBorder;
+    private static readonly Pen EditPointPreviewPen;
 
     static SelectionAdorner()
     {
@@ -66,6 +69,18 @@ public sealed class SelectionAdorner : Adorner
         // Wave 12B: snap guide lines — thin magenta lines, PowerPoint-style.
         SnapGuidePen = new Pen(new SolidColorBrush(Color.FromArgb(0xCC, 0xE9, 0x1E, 0x63)), 1.0);
         SnapGuidePen.Freeze();
+
+        EditPointFill = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07));
+        EditPointFill.Freeze();
+
+        EditPointBorder = new Pen(Brushes.White, 1.0);
+        EditPointBorder.Freeze();
+
+        EditPointPreviewPen = new Pen(new SolidColorBrush(Color.FromRgb(0xFF, 0x98, 0x00)), 1.5)
+        {
+            DashStyle = DashStyles.Dash
+        };
+        EditPointPreviewPen.Freeze();
     }
 
     // ── State owned by CanvasGestureHandler ───────────────────────────────────────────────────
@@ -86,6 +101,10 @@ public sealed class SelectionAdorner : Adorner
     private IReadOnlyList<SnapGuideLine>? _snapGuides;
     private SlideTransform _snapTransform = SlideTransform.Identity;
 
+    /// <summary>Screen-space preset geometry handles for the active selection.</summary>
+    private readonly List<(string Name, Point Position)> _geometryHandles = new();
+    private (string Name, Point Position)? _geometryPreview;
+
     // ── Construction ──────────────────────────────────────────────────────────────────────────
 
     public SelectionAdorner(UIElement adornedElement) : base(adornedElement)
@@ -101,6 +120,24 @@ public sealed class SelectionAdorner : Adorner
         _selectionRects.Clear();
         _selectionRects.AddRange(rects);
         _previewRect = null;
+        InvalidateVisual();
+    }
+
+    /// <summary>Replaces the visible preset-shape edit points.</summary>
+    public void UpdateGeometryHandles(IEnumerable<(string Name, Point Position)> handles)
+    {
+        _geometryHandles.Clear();
+        _geometryHandles.AddRange(handles);
+        _geometryPreview = null;
+        InvalidateVisual();
+    }
+
+    /// <summary>Shows the transient position of the handle being dragged.</summary>
+    public void UpdateGeometryPreview(string? name, Point? position)
+    {
+        _geometryPreview = name is not null && position is { } point
+            ? (name, point)
+            : null;
         InvalidateVisual();
     }
 
@@ -155,6 +192,8 @@ public sealed class SelectionAdorner : Adorner
         {
             DrawSelectionRect(dc, rect);
         }
+
+        DrawGeometryHandles(dc);
 
         // Draw preview
         if (_previewRect.HasValue)
@@ -234,6 +273,25 @@ public sealed class SelectionAdorner : Adorner
             new Point(topCenter.X, rotY), RotateHandleRadius, RotateHandleRadius);
     }
 
+    private void DrawGeometryHandles(DrawingContext dc)
+    {
+        const double radius = 5.0;
+        foreach (var (_, point) in _geometryHandles)
+        {
+            dc.DrawEllipse(EditPointFill, EditPointBorder, point, radius, radius);
+        }
+
+        if (_geometryPreview is { } preview)
+        {
+            dc.DrawEllipse(
+                null,
+                EditPointPreviewPen,
+                preview.Position,
+                radius + 2,
+                radius + 2);
+        }
+    }
+
     /// <summary>
     /// Returns centers of the 8 resize handles for a given selection rect.
     /// Order: N, NE, E, SE, S, SW, W, NW.
@@ -264,6 +322,21 @@ public sealed class SelectionAdorner : Adorner
         return SelectionAdornerGeometry.HitTestHandle(
             ToSelectionAdornerRect(selectionRect),
             ToCanvasPoint(screenPt));
+    }
+
+    /// <summary>Returns the preset edit-point name under a screen-space pointer, if any.</summary>
+    public string? HitTestGeometryHandle(Point screenPt)
+    {
+        const double hitRadius = 9.0;
+        foreach (var (name, position) in _geometryHandles)
+        {
+            var dx = screenPt.X - position.X;
+            var dy = screenPt.Y - position.Y;
+            if (dx * dx + dy * dy <= hitRadius * hitRadius)
+                return name;
+        }
+
+        return null;
     }
 
     private static SelectionAdornerRect ToSelectionAdornerRect(Rect rect)

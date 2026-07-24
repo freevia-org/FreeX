@@ -138,6 +138,23 @@ public sealed class SlideCanvas : FrameworkElement
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Gets or sets whether supported preset shapes expose draggable edit points.
+    /// The mutation still flows through <see cref="EditingSession"/> and remains undoable.
+    /// </summary>
+    public bool EditPointsEnabled
+    {
+        get => _gestureHandler?.EditPointsEnabled ?? false;
+        set
+        {
+            if (_gestureHandler is not null)
+                _gestureHandler.EditPointsEnabled = value;
+        }
+    }
+
+    /// <summary>Enables or disables the Edit Points interaction mode.</summary>
+    public void SetEditPointsMode(bool enabled) => EditPointsEnabled = enabled;
+
     // ── Wave 10A: active editor access for ribbon routing ──────────────────────
 
     /// <summary>

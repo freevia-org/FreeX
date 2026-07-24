@@ -295,6 +295,20 @@ public sealed class CanvasEditingTests
         handle.Should().Be(CanvasGestureHandleKind.None);
     }
 
+    [StaFact]
+    public void SelectionAdorner_HitTestGeometryHandle_ReturnsPlannerHandleName()
+    {
+        var adorner = new SelectionAdorner(new System.Windows.Controls.Canvas());
+        adorner.UpdateGeometryHandles([
+            (Name: "adj1", Position: new Point(210, 70)),
+            (Name: "adj2", Position: new Point(10, 70)),
+        ]);
+
+        adorner.HitTestGeometryHandle(new Point(211, 69)).Should().Be("adj1");
+        adorner.HitTestGeometryHandle(new Point(10, 70)).Should().Be("adj2");
+        adorner.HitTestGeometryHandle(new Point(100, 100)).Should().BeNull();
+    }
+
     // ── CanvasGestureHandler.ComputeResizeBounds (pure logic) ────────────────────
 
     [StaFact]
@@ -517,6 +531,36 @@ public sealed class CanvasEditingTests
     {
         var canvas = new SlideCanvas();
         canvas.CurrentTransform.Should().NotBeNull();
+    }
+
+    [StaFact]
+    public void SlideCanvas_EditPointsMode_IsForwardedToGestureHandler()
+    {
+        var canvas  = new SlideCanvas();
+        var p       = Presentation.CreateEmpty();
+        var bus     = new PresentationCommandBus(p);
+        var editor  = new EditingSession(p, bus);
+        var overlay = new System.Windows.Controls.Canvas();
+
+        canvas.AttachEditing(editor, overlay);
+        canvas.EditPointsEnabled.Should().BeTrue();
+
+        canvas.SetEditPointsMode(false);
+
+        canvas.EditPointsEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void WpfEditPointsRoute_UsesSharedPlannerAndSingleCommandBoundary()
+    {
+        var gestures = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
+        var adorner = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SelectionAdorner.cs");
+
+        gestures.Should().Contain("ShapeGeometryAdjustmentPlanner.BuildMutationPlan");
+        gestures.Should().Contain("_editor.SetShapeGeometryAdjustment");
+        gestures.Should().Contain("GestureKind.GeometryAdjustment");
+        adorner.Should().Contain("UpdateGeometryHandles");
+        adorner.Should().Contain("HitTestGeometryHandle");
     }
 
     [StaFact]
