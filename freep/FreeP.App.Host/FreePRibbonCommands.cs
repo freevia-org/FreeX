@@ -101,7 +101,8 @@ internal static class FreePRibbonCommands
         Action?             onCustomShows     = null,
         Func<PresentationPictureBulletPayload?>? pickPictureBulletPayload = null,
         Action<SmartArtColorPreset>? onSmartArtColorPreset = null,
-        Action<SmartArtLayoutPreset>? onSmartArtLayoutPreset = null)
+        Action<SmartArtLayoutPreset>? onSmartArtLayoutPreset = null,
+        Action<SmartArtQuickStylePreset>? onSmartArtQuickStylePreset = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -132,6 +133,12 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalBoxList)));
         registry.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicCycle)));
+        registry.Register(SmartArtAuthoringPlanner.SimpleQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Simple)));
+        registry.Register(SmartArtAuthoringPlanner.ModerateQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Moderate)));
+        registry.Register(SmartArtAuthoringPlanner.IntenseQuickStyleCommandId,
+            new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Intense)));
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
         //

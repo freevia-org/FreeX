@@ -339,6 +339,18 @@ public static class FreePRibbon
                 FreePRibbonText.SmartArtBasicCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtBasicCycleCommand.KeyTip);
         });
+        tab.Group("smartart-styles", FreePRibbonText.SmartArtStylesGroup.Label, FreePRibbonText.SmartArtStylesGroup.KeyTip, 80, group =>
+        {
+            group.Medium(SmartArtAuthoringPlanner.SimpleQuickStyleCommandId,
+                FreePRibbonText.SmartArtSimpleStyleCommand.Label, RibbonCommandIconKind.Rectangle,
+                FreePRibbonText.SmartArtSimpleStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.ModerateQuickStyleCommandId,
+                FreePRibbonText.SmartArtModerateStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtModerateStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.IntenseQuickStyleCommandId,
+                FreePRibbonText.SmartArtIntenseStyleCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtIntenseStyleCommand.KeyTip);
+        });
     }
 
     private static void AddTransitionGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)

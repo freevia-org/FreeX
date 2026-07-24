@@ -5012,6 +5012,36 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_quick_style_routes_through_command_and_undo_bus()
+    {
+        SmartArtShape? smartArt = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape();
+            smartArt = shape.SmartArt!;
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(SmartArtAuthoringPlanner.IntenseQuickStyleCommandId, out var command)
+                .Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+            smartArt.QuickStyle!.UniqueId.Should().EndWith("/quickstyle/intense1");
+            smartArt.QuickStyle.Title.Should().Be("Intense");
+
+            window.Editor.Undo();
+            smartArt.QuickStyle.Should().BeNull();
+            window.Editor.Redo();
+            smartArt.QuickStyle!.UniqueId.Should().EndWith("/quickstyle/intense1");
+        });
+
+        if (!ran) return;
+        smartArt.Should().NotBeNull();
+        smartArt!.QuickStyle!.Title.Should().Be("Intense");
+    }
+
+    [Fact]
     public async Task SmartArt_bending_process_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];
@@ -5926,6 +5956,12 @@ public sealed class MainWindowHeadlessTests
             PartPath = "ppt/diagrams/layout1.xml",
             ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
             Bytes = Encoding.UTF8.GetBytes($"<dgm:layoutDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" uniqueId=\"{layoutUniqueId}\" />")
+        };
+        smartArt.Parts["ppt/diagrams/quickStyle1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/quickStyle1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:styleDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" uniqueId=\"urn:microsoft.com/office/officeart/2005/8/quickstyle/simple1\" />")
         };
         smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
         {
