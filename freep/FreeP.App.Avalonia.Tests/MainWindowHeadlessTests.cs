@@ -1913,6 +1913,7 @@ public sealed class MainWindowHeadlessTests
     {
         var found = false;
         var foundAxis = false;
+        var foundSeries = false;
         var before = -1;
         var after = -1;
 
@@ -1923,6 +1924,7 @@ public sealed class MainWindowHeadlessTests
             found = registry.TryGet(ChartDataDialogPlanner.EditDataCommandId, out var command);
             found.Should().BeTrue("the Avalonia chart-data command must be registered");
             foundAxis = registry.TryGet(ChartAxisOptionsPlanner.CommandId, out _);
+            foundSeries = registry.TryGet(ChartSeriesOptionsPlanner.CommandId, out _);
 
             before = window.Editor.CurrentSlide!.Shapes.Count;
             command!.Execute(RibbonCommandContext.Empty);
@@ -1932,6 +1934,7 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         found.Should().BeTrue("the Avalonia chart-data command must be registered");
         foundAxis.Should().BeTrue("the Avalonia chart-axis command must be registered");
+        foundSeries.Should().BeTrue("the Avalonia chart-series command must be registered");
         after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
     }
 
@@ -5861,6 +5864,27 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         options.Should().Be(new ChartAxisOptions(
             ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false));
+    }
+
+    [Fact]
+    public async Task ChartSeriesOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartSeriesOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.LineMarkers);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartSeriesOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().Be(new ChartSeriesOptions(
+            0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8));
     }
 
     [Fact]

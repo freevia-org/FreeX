@@ -937,4 +937,57 @@ public sealed class ChartDataCommandTests
         chart.ValueAxis.NumberFormatSourceLinked.Should().BeTrue();
         chart.ValueAxis.HasMajorGridlines.Should().BeTrue();
     }
+
+    [Fact]
+    public void SetChartSeriesOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.Series[1].SmoothLine = true;
+        chart.Series[1].OnSecondaryAxis = true;
+        chart.Series[1].LineStyle = new ChartLineStyle { WidthPt = 1.5, Dash = OutlineDash.Dash };
+        chart.Series[1].MarkerStyle = new ChartMarkerStyle
+        {
+            Symbol = ChartMarkerSymbol.Circle,
+            SizePt = 6,
+            NoStroke = true,
+        };
+
+        bus.Execute(new SetChartSeriesOptionsCommand(
+            0,
+            id,
+            new ChartSeriesOptions(
+                1, false, false, 2.25, ChartMarkerSymbol.Diamond, 8)));
+
+        var series = chart.Series[1];
+        series.SmoothLine.Should().BeFalse();
+        series.OnSecondaryAxis.Should().BeFalse();
+        series.LineStyle!.WidthPt.Should().Be(2.25);
+        series.LineStyle.Dash.Should().Be(OutlineDash.Dash);
+        series.MarkerStyle!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
+        series.MarkerStyle.SizePt.Should().Be(8);
+        series.MarkerStyle.NoStroke.Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.Series[1].SmoothLine.Should().BeFalse();
+        roundTripped.Series[1].OnSecondaryAxis.Should().BeFalse();
+        roundTripped.Series[1].LineStyle!.WidthPt.Should().Be(2.25);
+        var roundTrippedMarker = roundTripped.Series[1].MarkerStyle!;
+        roundTrippedMarker.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
+        roundTrippedMarker.SizePt.Should().Be(8);
+
+        bus.Undo();
+        series.SmoothLine.Should().BeTrue();
+        series.OnSecondaryAxis.Should().BeTrue();
+        var revertedLine = series.LineStyle!;
+        var revertedMarker = series.MarkerStyle!;
+        revertedLine.WidthPt.Should().Be(1.5);
+        revertedLine.Dash.Should().Be(OutlineDash.Dash);
+        revertedMarker.Symbol.Should().Be(ChartMarkerSymbol.Circle);
+        revertedMarker.SizePt.Should().Be(6);
+        revertedMarker.NoStroke.Should().BeTrue();
+    }
 }

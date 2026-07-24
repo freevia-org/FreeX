@@ -302,6 +302,38 @@ public sealed class ChartDataDialogPlannerTests
             .Should().Be(ChartAxisOptionsPlanner.CommandId);
     }
 
+    [Fact]
+    public void ChartSeriesOptionsPlanner_UsesWorkingCopyAndBuildsFormattingOptions()
+    {
+        var chart = MakeChart();
+        chart.Series[0].Name = "Revenue";
+        chart.Series[1].Name = "Margin";
+        chart.Series[1].SmoothLine = true;
+        chart.Series[1].OnSecondaryAxis = true;
+        chart.Series[1].LineStyle = new ChartLineStyle { WidthPt = 1.5 };
+        chart.Series[1].MarkerStyle = new ChartMarkerStyle
+        {
+            Symbol = ChartMarkerSymbol.Circle,
+            SizePt = 6,
+        };
+
+        var planner = ChartSeriesOptionsPlanner.FromChart(chart);
+        planner.SetSeriesIndex(1);
+        planner.SetSmoothLine(false);
+        planner.SetOnSecondaryAxis(false);
+        planner.SetLineWidth(2.25);
+        planner.SetMarkerSymbol(ChartMarkerSymbol.Diamond);
+        planner.SetMarkerSize(8);
+
+        planner.BuildCommitPlan().Should().Be(new ChartSeriesOptions(
+            1, false, false, 2.25, ChartMarkerSymbol.Diamond, 8));
+        planner.SeriesOptions.Select(option => option.Label)
+            .Should().Equal("Revenue", "Margin");
+        chart.Series[1].SmoothLine.Should().BeTrue("series dialogs must edit a working copy");
+        ChartSeriesOptionsPlanner.BuildSurfacePlan().CommandId
+            .Should().Be(ChartSeriesOptionsPlanner.CommandId);
+    }
+
     private static ChartShape MakeChart()
     {
         var chart = new ChartShape();

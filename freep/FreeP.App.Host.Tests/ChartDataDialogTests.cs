@@ -134,6 +134,22 @@ public sealed class ChartDataDialogTests : IDisposable
         options.Maximum.Should().Be(100);
     }
 
+    [StaFact]
+    public void ChartSeriesOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.Series[1].Name = "Margin";
+        sess.SelectedChart.Series[1].SmoothLine = true;
+
+        var dialog = new ChartSeriesOptionsDialog(sess);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.SeriesIndex.Should().Be(0);
+        options.SmoothLine.Should().BeFalse();
+        options.OnSecondaryAxis.Should().BeFalse();
+    }
+
     [Fact]
     public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {
@@ -154,6 +170,17 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().Contain("_planner.BuildCommitPlan()");
         source.Should().Contain("_editor.ApplyChartAxisOptions");
         source.Should().NotContain("new SetChartAxisOptionsCommand");
+    }
+
+    [Fact]
+    public void ChartSeriesOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartSeriesOptionsDialog.cs");
+
+        source.Should().Contain("ChartSeriesOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChartSeriesOptions");
+        source.Should().NotContain("new SetChartSeriesOptionsCommand");
     }
 
     [Fact]

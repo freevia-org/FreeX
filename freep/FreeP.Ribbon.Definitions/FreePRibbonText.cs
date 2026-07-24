@@ -157,6 +157,8 @@ internal static class FreePRibbonText
     public static string ChartDisplayOptionsKeyTip => Get("Ribbon_Command_ChartDisplayOptions_KeyTip");
     public static string ChartAxisOptionsLabel => Get("Ribbon_Command_ChartAxisOptions_Label");
     public static string ChartAxisOptionsKeyTip => Get("Ribbon_Command_ChartAxisOptions_KeyTip");
+    public static string ChartSeriesOptionsLabel => Get("Ribbon_Command_ChartSeriesOptions_Label");
+    public static string ChartSeriesOptionsKeyTip => Get("Ribbon_Command_ChartSeriesOptions_KeyTip");
 
     public static string LinksGroupLabel => Get("Ribbon_Group_Links_Label");
     public static string LinksGroupKeyTip => Get("Ribbon_Group_Links_KeyTip");

@@ -1,0 +1,10 @@
+namespace FreeP.Core.Model;
+
+/// <summary>Working values for a PowerPoint-style chart series formatting edit.</summary>
+public sealed record ChartSeriesOptions(
+    int SeriesIndex,
+    bool SmoothLine,
+    bool OnSecondaryAxis,
+    double? LineWidthPt,
+    ChartMarkerSymbol MarkerSymbol,
+    double? MarkerSizePt);

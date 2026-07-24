@@ -460,6 +460,12 @@
   <data name="Ribbon_Command_ChartAxisOptions_KeyTip" xml:space="preserve">
     <value>X</value>
   </data>
+  <data name="Ribbon_Command_ChartSeriesOptions_Label" xml:space="preserve">
+    <value>Series Options</value>
+  </data>
+  <data name="Ribbon_Command_ChartSeriesOptions_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
   <data name="Ribbon_Group_Links_Label" xml:space="preserve">
     <value>Links</value>
   </data>

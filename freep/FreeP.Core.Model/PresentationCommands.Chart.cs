@@ -17,6 +17,18 @@ internal static class ChartHelper
         return shape?.Chart;
     }
 
+    internal static ChartSeries? FindSeries(
+        Presentation p,
+        int slideIndex,
+        uint shapeId,
+        int seriesIndex)
+    {
+        var chart = Find(p, slideIndex, shapeId);
+        return chart is not null && seriesIndex >= 0 && seriesIndex < chart.Series.Count
+            ? chart.Series[seriesIndex]
+            : null;
+    }
+
     internal static void MarkWorkbookDirty(ChartShape chart) =>
         chart.RegenerateWorkbookOnSave = true;
 }
