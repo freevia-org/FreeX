@@ -685,6 +685,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.TargetList, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.StackedVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicHierarchy, SmartArtFamily.Hierarchy)]
+    [InlineData(SmartArtLayoutPreset.Hierarchy3, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.OrgChart, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.PictureCaptionList, SmartArtFamily.List)]

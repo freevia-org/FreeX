@@ -257,6 +257,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtTargetListCommand { get; } = new("Ribbon_Command_SmartArtTargetList_Label", "Ribbon_Command_SmartArtTargetList_KeyTip");
     public static RibbonText SmartArtStackedVennCommand { get; } = new("Ribbon_Command_SmartArtStackedVenn_Label", "Ribbon_Command_SmartArtStackedVenn_KeyTip");
     public static RibbonText SmartArtBasicHierarchyCommand { get; } = new("Ribbon_Command_SmartArtBasicHierarchy_Label", "Ribbon_Command_SmartArtBasicHierarchy_KeyTip");
+    public static RibbonText SmartArtHierarchy3Command { get; } = new("Ribbon_Command_SmartArtHierarchy3_Label", "Ribbon_Command_SmartArtHierarchy3_KeyTip");
     public static RibbonText SmartArtHorizontalHierarchyCommand { get; } = new("Ribbon_Command_SmartArtHorizontalHierarchy_Label", "Ribbon_Command_SmartArtHorizontalHierarchy_KeyTip");
     public static RibbonText SmartArtOrgChartCommand { get; } = new("Ribbon_Command_SmartArtOrgChart_Label", "Ribbon_Command_SmartArtOrgChart_KeyTip");
     public static RibbonText SmartArtPictureCaptionListCommand { get; } = new("Ribbon_Command_SmartArtPictureCaptionList_Label", "Ribbon_Command_SmartArtPictureCaptionList_KeyTip");

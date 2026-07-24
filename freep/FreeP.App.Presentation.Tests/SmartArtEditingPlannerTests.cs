@@ -45,6 +45,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.TargetList, "targetList", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.StackedVenn, "stackedVenn", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicHierarchy, "basicHierarchy", SmartArtFamily.Hierarchy)]
+    [InlineData(SmartArtLayoutPreset.Hierarchy3, "hierarchy3", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, "horizontalHierarchy", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.OrgChart, "orgChart", SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.PictureCaptionList, "pictureCaptionList", SmartArtFamily.List)]
