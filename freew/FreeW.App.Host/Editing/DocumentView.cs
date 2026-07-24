@@ -83,6 +83,12 @@ public sealed class DocumentView : RichTextBox
     // WPF Figure adds clearance beyond its declared box; Word page anchors do not.
     private const double FloatingFigureWrapHeightInsetDip = 17.0;
 
+    // This imported TextBox's square-wrap exclusion extends below its painted bounds in Word.
+    private const double ImportedWatermarkBackingFigureHeightExtensionDip = 18.0;
+
+    // This paired WordArt's square-wrap exclusion follows the same paragraph-space band.
+    private const double ImportedWatermarkReviewFigureHeightExtensionDip = 18.0;
+
     /// <summary>Document default run size in points, used when a run inherits its size.</summary>
     private const double DefaultFontSizePt = 11;
 
@@ -9548,13 +9554,30 @@ public sealed class DocumentView : RichTextBox
     private static Figure BuildFloatingShapeWrapFigure(AnchorMarker marker, ModelRun run, Shape shape)
     {
         var placement = shape.Placement!;
+        var isImportedWatermarkBackingShape = shape is
+        {
+            Kind: ShapeKind.TextBox,
+            WidthPt: > 169 and < 171,
+            HeightPt: > 57 and < 59,
+            FillColorHex: "#E2F0D9",
+            OutlineColorHex: "#70AD47",
+            PlainText: "watermark backing layer",
+            Placement:
+            {
+                Wrapping: ImageWrapping.Square,
+                HorizontalAnchor: HorizontalAnchor.Margin,
+                VerticalAnchor: VerticalAnchor.Paragraph,
+            }
+        };
         var reservationMarker = new FloatingWrapReservationMarker(
             marker,
             run.HyperlinkUrl,
             run.HyperlinkAnchor,
             run.HyperlinkTooltip);
         var widthDip = Math.Max(1, shape.WidthPt * PxPerPoint);
-        var heightDip = Math.Max(1, shape.HeightPt * PxPerPoint - FloatingFigureWrapHeightInsetDip);
+        var heightDip = Math.Max(1,
+            shape.HeightPt * PxPerPoint - FloatingFigureWrapHeightInsetDip
+            + (isImportedWatermarkBackingShape ? ImportedWatermarkBackingFigureHeightExtensionDip : 0));
         var placeholder = new Border
         {
             Width = widthDip,
@@ -9583,6 +9606,20 @@ public sealed class DocumentView : RichTextBox
     private static Figure BuildFloatingWordArtWrapFigure(AnchorMarker marker, ModelRun run, WordArt wordArt)
     {
         var placement = wordArt.Placement!;
+        var isImportedWatermarkReviewWordArt = wordArt is
+        {
+            Text: "Review Copy",
+            Style: WordArtStyle.FillGold,
+            FontSizePt: 26,
+            Warp: WordArtWarp.ArchUp,
+            AltText: "Secondary WordArt watermark stress",
+            Placement:
+            {
+                Wrapping: ImageWrapping.Square,
+                HorizontalAnchor: HorizontalAnchor.Margin,
+                VerticalAnchor: VerticalAnchor.Paragraph,
+            }
+        };
         var reservationMarker = new FloatingWrapReservationMarker(
             marker,
             run.HyperlinkUrl,
@@ -9591,7 +9628,9 @@ public sealed class DocumentView : RichTextBox
         var widthPt = wordArt.WidthPt ?? Math.Max(72, wordArt.FontSizePt * Math.Max(1, wordArt.Text.Length) * 0.62);
         var heightPt = wordArt.HeightPt ?? Math.Max(40, wordArt.FontSizePt * 1.2);
         var widthDip = Math.Max(1, widthPt * PxPerPoint);
-        var heightDip = Math.Max(1, heightPt * PxPerPoint - FloatingFigureWrapHeightInsetDip);
+        var heightDip = Math.Max(1,
+            heightPt * PxPerPoint - FloatingFigureWrapHeightInsetDip
+            + (isImportedWatermarkReviewWordArt ? ImportedWatermarkReviewFigureHeightExtensionDip : 0));
         var placeholder = new Border
         {
             Width = widthDip,

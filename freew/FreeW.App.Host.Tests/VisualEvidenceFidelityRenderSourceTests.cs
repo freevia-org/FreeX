@@ -38,6 +38,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("return BuildFloatingWordArtWrapFigure(marker, run, wordArt);");
         source.Should().Contain("VerticalAnchor = FigureVerticalAnchor.ParagraphTop");
         source.Should().Contain("var widthPt = wordArt.WidthPt ??");
+        source.Should().Contain("ImportedWatermarkReviewFigureHeightExtensionDip");
     }
 
     [Fact]
@@ -49,6 +50,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("return BuildFloatingShapeWrapFigure(marker, run, shape);");
         source.Should().Contain("VerticalAnchor = FigureVerticalAnchor.ParagraphTop");
         source.Should().Contain("return BuildFloatingShapeWrapFigure(marker, run, shape);");
+        source.Should().Contain("ImportedWatermarkBackingFigureHeightExtensionDip");
     }
 
     [Fact]
