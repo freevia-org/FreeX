@@ -66,6 +66,9 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("Missing or empty references");
         runner.Should().Contain("ConvertFrom-Json -ErrorAction Stop");
         runner.Should().Contain("last-manifest-read-error:");
+        runner.Should().Contain("previousCompleteSizeSignature");
+        runner.Should().Contain("last-observed-size-state:");
+        runner.Should().Contain("completeSizeSignature -eq $previousCompleteSizeSignature");
         runner.Should().Contain("family-x11-validation.schema.json");
         runner.Should().Contain("contractValidation");
         runner.Should().Contain("parameters.fileKey");

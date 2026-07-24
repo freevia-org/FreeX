@@ -96,6 +96,8 @@ function Wait-ForManifestEvidence {
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     $lastMissing = @()
     $lastReadError = $null
+    $previousCompleteSizeSignature = $null
+    $lastSizeState = @()
     do {
         try {
             $manifest = Get-Content -LiteralPath $ManifestPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
@@ -104,6 +106,8 @@ function Wait-ForManifestEvidence {
             $manifest = $null
             $lastReadError = $_.Exception.ToString()
             $lastMissing = @([IO.Path]::GetFileName($ManifestPath))
+            $lastSizeState = @("manifest-unreadable")
+            $previousCompleteSizeSignature = $null
         }
 
         if ($null -eq $manifest) {
@@ -121,13 +125,32 @@ function Wait-ForManifestEvidence {
                 ForEach-Object { [string]$_ }
         ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 
-        $lastMissing = @($references | Where-Object {
+        $lastSizeState = @($references | ForEach-Object {
                 $path = Join-Path $EvidenceDirectory $_
-                -not (Test-Path -LiteralPath $path -PathType Leaf) -or
-                ((Get-Item -LiteralPath $path -ErrorAction SilentlyContinue).Length -le 0)
+                if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                    "$_=MISSING"
+                    return
+                }
+                $length = (Get-Item -LiteralPath $path -ErrorAction SilentlyContinue).Length
+                if ($length -le 0) {
+                    "$_=EMPTY"
+                    return
+                }
+                "$_=$length"
+            }) | Sort-Object
+        $lastMissing = @($lastSizeState | ForEach-Object {
+                if ($_ -match "^(.*)=(MISSING|EMPTY)$") {
+                    $Matches[1]
+                }
             })
+        $completeSizeSignature = [string]::Join("|", $lastSizeState)
         if ($lastMissing.Count -eq 0) {
-            return
+            if ($completeSizeSignature -eq $previousCompleteSizeSignature) {
+                return
+            }
+            $previousCompleteSizeSignature = $completeSizeSignature
+        } else {
+            $previousCompleteSizeSignature = $null
         }
 
         if ([DateTime]::UtcNow -ge $deadline) {
@@ -147,6 +170,8 @@ function Wait-ForManifestEvidence {
         "missing-or-empty-count=$($lastMissing.Count)",
         "missing-or-empty-paths:",
         $lastMissing | ForEach-Object { Join-Path $EvidenceDirectory $_ },
+        "last-observed-size-state:",
+        $lastSizeState,
         "last-manifest-read-error:",
         $(if ($null -eq $lastReadError) { "<none>" } else { $lastReadError })
     ) | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
