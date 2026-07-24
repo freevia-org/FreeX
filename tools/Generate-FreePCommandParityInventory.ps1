@@ -1634,9 +1634,11 @@ internal static class FreePCommandInventory
             [
                 "freep/FreeP.Core.IO/PptxPackageReader.cs",
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
-                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+                "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "labeledHierarchy now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes and shared connector ops, while other unsupported hierarchy siblings remain on cached drawing fallback. This is a shared hierarchy approximation, not true PowerPoint label geometry; exact label placement/effects, authoring regeneration for layout/style/color parts, and authoritative PNG baselines remain deferred.")
+            RemainingWork: "labeledHierarchy now uses the bounded shared hierarchy-family live-layout path and has a shared undoable authoring command, while other unsupported hierarchy siblings remain on cached drawing fallback. This is a shared hierarchy approximation, not true PowerPoint label geometry; exact label placement/effects and authoritative PNG baselines remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.table-hierarchy",
@@ -1651,9 +1653,11 @@ internal static class FreePCommandInventory
             [
                 "freep/FreeP.Core.IO/PptxPackageReader.cs",
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
-                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+                "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "tableHierarchy now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes and shared connector ops, while other unsupported hierarchy siblings remain on cached drawing fallback. This is a shared hierarchy approximation, not exact PowerPoint table grid geometry; exact cell/table styling, spacing/effects, authoring regeneration for layout/style/color parts, and authoritative PNG baselines remain deferred.")
+            RemainingWork: "tableHierarchy now uses the bounded shared hierarchy-family live-layout path and has a shared undoable authoring command, while other unsupported hierarchy siblings remain on cached drawing fallback. This is a shared hierarchy approximation, not exact PowerPoint table grid geometry; exact cell/table styling, spacing/effects, and authoritative PNG baselines remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.org-chart",

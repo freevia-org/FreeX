@@ -2122,6 +2122,10 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.OrgChart)));
         r.Register(SmartArtAuthoringPlanner.PictureCaptionListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureCaptionList)));
+        r.Register(SmartArtAuthoringPlanner.LabeledHierarchyLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.LabeledHierarchy)));
+        r.Register(SmartArtAuthoringPlanner.TableHierarchyLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TableHierarchy)));
         r.Register(SmartArtAuthoringPlanner.SimpleQuickStyleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Simple)));
         r.Register(SmartArtAuthoringPlanner.ModerateQuickStyleCommandId,
