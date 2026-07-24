@@ -3007,6 +3007,20 @@ public sealed class AvaloniaInteractionTests
     }
 
     [Fact]
+    public void AdornerLayer_HitTestGeometryHandle_ReturnsPlannerHandleName()
+    {
+        var adorner = new SelectionAdornerLayer();
+        adorner.UpdateGeometryHandles([
+            (Name: "adj1", Position: new Point(210, 70)),
+            (Name: "adj2", Position: new Point(10, 70)),
+        ]);
+
+        adorner.HitTestGeometryHandle(new Point(211, 69)).Should().Be("adj1");
+        adorner.HitTestGeometryHandle(new Point(10, 70)).Should().Be("adj2");
+        adorner.HitTestGeometryHandle(new Point(100, 100)).Should().BeNull();
+    }
+
+    [Fact]
     public void AdornerLayer_UpdateSelection_ClearsPreviousRects()
     {
         var adorner = new SelectionAdornerLayer();
@@ -3015,6 +3029,7 @@ public sealed class AvaloniaInteractionTests
         adorner.SelectionRects.Should().HaveCount(1)
                .And.Contain(r => r.id == 2u);
     }
+
 }
 
 // ── AD1 + AD2 gesture handler logic tests ─────────────────────────────────────────────────────

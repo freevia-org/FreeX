@@ -96,6 +96,8 @@ public sealed class SlideCanvas : Control
     private double _slideWidthDip;
     private double _slideHeightDip;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
+    private AvaloniaCanvasGestureHandler? _gestureHandler;
+    private bool _editPointsEnabled = true;
 
     public PresentationViewZoomState ViewZoomState => _viewZoomState;
 
@@ -103,6 +105,30 @@ public sealed class SlideCanvas : Control
     {
         _viewZoomState = state;
         InvalidateVisual();
+    }
+
+    /// <summary>Whether supported preset shapes expose draggable edit points in the host.</summary>
+    public bool EditPointsEnabled
+    {
+        get => _editPointsEnabled;
+        set
+        {
+            if (_editPointsEnabled == value)
+                return;
+            _editPointsEnabled = value;
+            if (_gestureHandler is not null)
+                _gestureHandler.EditPointsEnabled = value;
+        }
+    }
+
+    /// <summary>Sets the Edit Points interaction mode for the attached host handler.</summary>
+    public void SetEditPointsMode(bool enabled) => EditPointsEnabled = enabled;
+
+    /// <summary>Connects the host gesture handler to the canvas mode property.</summary>
+    public void AttachGestureHandler(AvaloniaCanvasGestureHandler handler)
+    {
+        _gestureHandler = handler ?? throw new ArgumentNullException(nameof(handler));
+        handler.EditPointsEnabled = _editPointsEnabled;
     }
 
     // ── Slideshow entrance-animation suppression ──────────────────────────────
