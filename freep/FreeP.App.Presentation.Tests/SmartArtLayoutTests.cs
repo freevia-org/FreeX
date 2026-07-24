@@ -470,6 +470,21 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Hierarchy3_ReturnsLiveTreeBoxesAndConnectors()
+    {
+        var data = MakeHierarchyData("CEO", "Sales", "Engineering");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("hierarchy3 authoring uses the shared hierarchy tree planner");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "hierarchy3 should emit the root and two child boxes");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "hierarchy3 should emit one connector per parent-child relationship");
+    }
+
+    [Fact]
     public void OrgChart_ReturnsLiveTreeBoxesAndConnectors()
     {
         var data = MakeHierarchyData("CEO", "Sales", "Engineering");

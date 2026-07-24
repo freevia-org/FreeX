@@ -140,6 +140,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId] = SmartArtLayoutPreset.VerticalBulletList,
             [SmartArtAuthoringPlanner.TitledMatrixLayoutCommandId] = SmartArtLayoutPreset.TitledMatrix,
             [SmartArtAuthoringPlanner.GridMatrixLayoutCommandId] = SmartArtLayoutPreset.GridMatrix,
+            [SmartArtAuthoringPlanner.Hierarchy3LayoutCommandId] = SmartArtLayoutPreset.Hierarchy3,
             [SmartArtAuthoringPlanner.GearCycleLayoutCommandId] = SmartArtLayoutPreset.GearCycle,
             [SmartArtAuthoringPlanner.TextCycleLayoutCommandId] = SmartArtLayoutPreset.TextCycle,
             [SmartArtAuthoringPlanner.BlockCycleLayoutCommandId] = SmartArtLayoutPreset.BlockCycle,

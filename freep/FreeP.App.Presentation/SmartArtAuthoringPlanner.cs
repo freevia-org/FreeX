@@ -54,6 +54,7 @@ public enum SmartArtLayoutPreset
     TargetList,
     StackedVenn,
     BasicHierarchy,
+    Hierarchy3,
     HorizontalHierarchy,
     OrgChart,
     PictureCaptionList,
@@ -137,6 +138,7 @@ public static class SmartArtAuthoringPlanner
     public const string TargetListLayoutCommandId = "freep.smartart.layout.target-list";
     public const string StackedVennLayoutCommandId = "freep.smartart.layout.stacked-venn";
     public const string BasicHierarchyLayoutCommandId = "freep.smartart.layout.basic-hierarchy";
+    public const string Hierarchy3LayoutCommandId = "freep.smartart.layout.hierarchy-3";
     public const string HorizontalHierarchyLayoutCommandId = "freep.smartart.layout.horizontal-hierarchy";
     public const string OrgChartLayoutCommandId = "freep.smartart.layout.org-chart";
     public const string PictureCaptionListLayoutCommandId = "freep.smartart.layout.picture-caption-list";
@@ -309,6 +311,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicHierarchy =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.Hierarchy3 =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.HorizontalHierarchy =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.OrgChart =>

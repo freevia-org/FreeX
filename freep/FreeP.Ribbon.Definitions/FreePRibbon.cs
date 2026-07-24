@@ -500,6 +500,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
                 FreePRibbonText.SmartArtBasicHierarchyCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtBasicHierarchyCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.Hierarchy3LayoutCommandId,
+                FreePRibbonText.SmartArtHierarchy3Command.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtHierarchy3Command.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.HorizontalHierarchyLayoutCommandId,
                 FreePRibbonText.SmartArtHorizontalHierarchyCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtHorizontalHierarchyCommand.KeyTip);
