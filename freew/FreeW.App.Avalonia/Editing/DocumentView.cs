@@ -6524,6 +6524,7 @@ public sealed class DocumentView : Control
     private static Pen    RulerTickPen     { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x70, 0x80, 0x98)), 0.75);
     // AV-VIEW: darker tint marking the page margins on the ruler (the body text area is the lighter span).
     private static IBrush RulerMarginFill  { get; } = new SolidColorBrush(Color.FromRgb(0xD8, 0xDE, 0xE8));
+    private static RunFormatting LineNumberFormatting { get; } = new() { FontSizePt = 8, ColorHex = "#606060" };
 
     // ---- Render ---------------------------------------------------------------------------------
 
@@ -6606,6 +6607,8 @@ public sealed class DocumentView : Control
                 }
             }
         }
+
+        DrawLineNumbers(context);
 
         // Behind-text pass: planner snapshots merge all floating kinds into one z-ordered band.
         foreach (var snapshot in DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(_floatingSnapshots, behindText: true))
@@ -6853,6 +6856,85 @@ public sealed class DocumentView : Control
     }
 
     // ── AV-HFEDIT: render the active header/footer edit region outline + label + caret ──────────────
+
+    private void DrawLineNumbers(DrawingContext context)
+    {
+        foreach (var item in BuildLineNumberRenderItems())
+        {
+            var formatted = Build(item.Number.ToString(CultureInfo.InvariantCulture), LineNumberFormatting);
+            var x = item.GutterRight - formatted.WidthIncludingTrailingWhitespace;
+            var y = item.Y + Math.Max(0, (item.LineHeight - formatted.Height) / 2);
+            context.DrawText(formatted, new Point(x, y));
+        }
+    }
+
+    internal IReadOnlyList<LineNumberRenderItem> GetLineNumberRenderItemsForTest() =>
+        BuildLineNumberRenderItems();
+
+    private IReadOnlyList<LineNumberRenderItem> BuildLineNumberRenderItems()
+    {
+        if (_viewMode != DocumentViewMode.PrintLayout || _doc.Page.LineNumberMode == LineNumberMode.None)
+            return [];
+
+        var sourceLines = _placed
+            .Where(placed => !placed.IsCell
+                && placed.Block >= 0
+                && placed.Block < _doc.Blocks.Count
+                && _doc.Blocks[placed.Block] is Paragraph)
+            .GroupBy(placed => new
+            {
+                PageIndex = PageIndexFromPageSpaceY(placed.Y),
+                ColumnIndex = ColumnIndexFor(placed.X),
+                Y = Math.Round(placed.Y * 16),
+            })
+            .OrderBy(group => group.Key.PageIndex)
+            .ThenBy(group => group.Key.ColumnIndex)
+            .ThenBy(group => group.Key.Y)
+            .Select(group =>
+            {
+                var placed = group.OrderBy(item => item.X).First();
+                var paragraph = (Paragraph)_doc.Blocks[placed.Block];
+                var formatting = ResolveParagraphFmt(paragraph);
+                return new LineNumberSourcePlacement(
+                    group.Key.PageIndex,
+                    group.Key.ColumnIndex,
+                    placed.Y,
+                    placed.LineHeight,
+                    formatting.SuppressLineNumbers);
+            })
+            .ToList();
+
+        var plans = LineNumberVisualPlanner.Build(
+            _doc.Page.LineNumberMode,
+            _doc.Page.LineNumberStartAt,
+            _doc.Page.LineNumberCountBy,
+            sourceLines.Select(line => new LineNumberVisualSourceLine(line.PageIndex, line.SuppressNumber)).ToList());
+
+        var results = new List<LineNumberRenderItem>(plans.Count);
+        for (var index = 0; index < plans.Count; index++)
+        {
+            var plan = plans[index];
+            if (!plan.IsVisible)
+                continue;
+
+            var line = sourceLines[index];
+            var columnLeft = _contentLeft + line.ColumnIndex * (_colWidth + _colGap);
+            results.Add(new LineNumberRenderItem(
+                plan.Number,
+                plan.PageIndex,
+                line.ColumnIndex,
+                Math.Max(_pageLeft, columnLeft - 8),
+                line.Y,
+                line.LineHeight));
+        }
+
+        return results;
+    }
+
+    private int ColumnIndexFor(double x) =>
+        _colCount <= 1 || _colWidth <= 0
+            ? 0
+            : Math.Clamp((int)Math.Floor((x - _contentLeft) / (_colWidth + _colGap)), 0, _colCount - 1);
 
     private static readonly IPen HfRegionPen =
         new Pen(new SolidColorBrush(Color.FromArgb(160, 90, 120, 200)), 1, DashStyle.Dash);
@@ -15316,6 +15398,11 @@ public sealed class DocumentView : Control
                 ? paragraph.Formatting.SpaceAfterPt
                 : styleParagraph.SpaceAfterPt,
             SpaceAfterIsSet = paragraph.Formatting.SpaceAfterIsSet || styleParagraph.SpaceAfterIsSet,
+            SuppressLineNumbers = paragraph.Formatting.SuppressLineNumbersIsSet
+                ? paragraph.Formatting.SuppressLineNumbers
+                : styleParagraph.SuppressLineNumbers,
+            SuppressLineNumbersIsSet = paragraph.Formatting.SuppressLineNumbersIsSet
+                || styleParagraph.SuppressLineNumbersIsSet,
         };
     }
 
@@ -15373,6 +15460,10 @@ public sealed class DocumentView : Control
         SpaceBeforeIsSet = baseParagraph.SpaceBeforeIsSet || over.SpaceBeforeIsSet,
         SpaceAfterPt = over.SpaceAfterIsSet ? over.SpaceAfterPt : baseParagraph.SpaceAfterPt,
         SpaceAfterIsSet = baseParagraph.SpaceAfterIsSet || over.SpaceAfterIsSet,
+        SuppressLineNumbers = over.SuppressLineNumbersIsSet
+            ? over.SuppressLineNumbers
+            : baseParagraph.SuppressLineNumbers,
+        SuppressLineNumbersIsSet = baseParagraph.SuppressLineNumbersIsSet || over.SuppressLineNumbersIsSet,
     };
 
     private static RunFormatting ActiveFormatting(Paragraph paragraph, int offset)
@@ -15899,6 +15990,21 @@ public sealed class DocumentView : Control
     }
 
     private readonly record struct DocPosition(int Block, int Offset);
+
+    private readonly record struct LineNumberSourcePlacement(
+        int PageIndex,
+        int ColumnIndex,
+        double Y,
+        double LineHeight,
+        bool SuppressNumber);
+
+    internal readonly record struct LineNumberRenderItem(
+        int Number,
+        int PageIndex,
+        int ColumnIndex,
+        double GutterRight,
+        double Y,
+        double LineHeight);
 
     private readonly record struct PlacedChar(
         int Block,
