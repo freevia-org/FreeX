@@ -6110,7 +6110,7 @@ public sealed class DocumentView : RichTextBox
             sharedPlacements = sharedPlacements.Select(placement => placement with
             {
                 CenterYNormalized = 0.5 + (0.5 - placement.CenterYNormalized) * 1.35,
-                RotationRadians = -placement.RotationRadians * 1.35
+                RotationRadians = -placement.RotationRadians * 0.4
             }).ToList();
         }
         var verticalScale = isPrimaryGlowBlueStress ? 1.72 : 1;
