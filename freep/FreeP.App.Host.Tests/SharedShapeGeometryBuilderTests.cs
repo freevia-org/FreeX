@@ -122,6 +122,29 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void RoundedRectangle_UsesAuthoredAdjustmentWhenPresent()
+    {
+        var geometry = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.RoundedRectangle,
+            Bounds,
+            new Dictionary<string, double> { ["adj"] = 50000 });
+
+        geometry.Contours.Should().ContainSingle();
+        geometry.Contours[0].Start.Should().Be(new LayoutPoint(Bounds.Left + Bounds.Height / 2, Bounds.Top));
+    }
+
+    [Fact]
+    public void RoundedRectangle_ClampsAuthoredAdjustmentToHalfDimension()
+    {
+        var geometry = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.RoundedRectangle,
+            Bounds,
+            new Dictionary<string, double> { ["adj"] = 90000 });
+
+        geometry.Contours[0].Start.Should().Be(new LayoutPoint(Bounds.Left + Bounds.Height / 2, Bounds.Top));
+    }
+
+    [Fact]
     public void Cylinder_EnumValue_Is44_NoRenumbering()
     {
         // Appended after HomePlate=43 — verify no renumbering occurred.
