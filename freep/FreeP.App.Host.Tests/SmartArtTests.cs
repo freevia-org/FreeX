@@ -657,6 +657,13 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.BasicProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.BasicBlockList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.StackedList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.BasicPyramid, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.RadialCycle, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.BasicMatrix, SmartArtFamily.Matrix)]
+    [InlineData(SmartArtLayoutPreset.BasicVenn, SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.BasicHierarchy, SmartArtFamily.Hierarchy)]
     public void SmartArtLayoutPreset_PersistsNativeLayoutAndRereads(
         SmartArtLayoutPreset preset,
         SmartArtFamily expectedFamily)
