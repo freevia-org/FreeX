@@ -375,19 +375,55 @@ public sealed partial class MainWindow
             return false;
         }
 
-        var objectRect = new LayoutRect(
-            DrawingObjectSelectionHorizontalPadding,
-            DrawingObjectSelectionTopPadding,
-            surface.Bounds.Width > 0 ? surface.Bounds.Width : surface.Width,
-            surface.Bounds.Height > 0 ? surface.Bounds.Height : surface.Height);
         var localPoint = args.GetCurrentPoint(container).Position;
+        var objectRect = DrawingObjectObjectRect(surface);
+        var kind = ObjectDragPlanner.HitTestHandle(new LayoutPoint(localPoint.X, localPoint.Y), objectRect,
+            DrawingObjectHandleSize, DrawingObjectHandleHitPadding, renderPlan.Bounds.RotationDegrees);
+        if (kind == ObjectDragKind.None)
+            return false;
+
+        var pointer = args.GetCurrentPoint(canvas).Position;
+        if (!TryBeginDrawingObjectDragAtPoint(
+                renderPlan,
+                container,
+                surface,
+                adorner,
+                new LayoutPoint(localPoint.X, localPoint.Y),
+                new LayoutPoint(pointer.X, pointer.Y),
+                kind))
+            return false;
+
+        args.Pointer.Capture(container);
+        args.Handled = true;
+        return true;
+    }
+
+    private LayoutRect DrawingObjectObjectRect(AvaloniaGrid surface) => new(
+        DrawingObjectSelectionHorizontalPadding,
+        DrawingObjectSelectionTopPadding,
+        surface.Bounds.Width > 0 ? surface.Bounds.Width : surface.Width,
+        surface.Bounds.Height > 0 ? surface.Bounds.Height : surface.Height);
+
+    private bool TryBeginDrawingObjectDragAtPoint(
+        DrawingObjectRenderPlan renderPlan,
+        Control container,
+        AvaloniaGrid surface,
+        AvaloniaCanvas adorner,
+        LayoutPoint localPoint,
+        LayoutPoint pointerInCanvas,
+        ObjectDragKind? expectedKind = null)
+    {
+        if (container.Parent is not AvaloniaCanvas)
+            return false;
+
+        var objectRect = DrawingObjectObjectRect(surface);
         var kind = ObjectDragPlanner.HitTestHandle(
-            new LayoutPoint(localPoint.X, localPoint.Y),
+            localPoint,
             objectRect,
             DrawingObjectHandleSize,
             DrawingObjectHandleHitPadding,
             renderPlan.Bounds.RotationDegrees);
-        if (kind == ObjectDragKind.None)
+        if (kind == ObjectDragKind.None || expectedKind is { } expected && kind != expected)
             return false;
 
         var canvasRect = new LayoutRect(
@@ -395,7 +431,6 @@ public sealed partial class MainWindow
             AvaloniaCanvas.GetTop(container) + DrawingObjectSelectionTopPadding,
             objectRect.Width,
             objectRect.Height);
-        var pointer = args.GetCurrentPoint(canvas).Position;
         _drawingObjectDragSession = new DrawingObjectDragSession
         {
             RenderPlan = renderPlan,
@@ -404,7 +439,7 @@ public sealed partial class MainWindow
             Adorner = adorner,
             Kind = kind,
             StartCanvasRect = canvasRect,
-            StartPointerInCanvas = new LayoutPoint(pointer.X, pointer.Y),
+            StartPointerInCanvas = pointerInCanvas,
             StartAnchor = new CellAddress(
                 _session.ActiveSheet.Id,
                 renderPlan.Bounds.AnchorRow,
@@ -417,10 +452,7 @@ public sealed partial class MainWindow
             CurrentFlipHorizontal = renderPlan.Bounds.FlipHorizontal,
             CurrentFlipVertical = renderPlan.Bounds.FlipVertical,
         };
-
         container.Cursor = DrawingObjectDragCursor(kind);
-        args.Pointer.Capture(container);
-        args.Handled = true;
         return true;
     }
 
@@ -457,18 +489,7 @@ public sealed partial class MainWindow
                 container.Cursor = Cursor.Default;
         };
         container.PointerReleased += (_, args) => EndDrawingObjectDrag(container, args);
-        container.PointerCaptureLost += (_, _) =>
-        {
-            if (_drawingObjectDragSession is { } session && ReferenceEquals(session.Container, container))
-            {
-                _drawingObjectDragSession = null;
-                container.Cursor = Cursor.Default;
-                // Capture can be revoked without PointerReleased (window deactivation, an overlay
-                // rebuild, or platform cancellation). Discard the live preview just as WPF does
-                // from OnLostMouseCapture, so it never becomes a false committed state.
-                RefreshShell(string.Empty);
-            }
-        };
+        container.PointerCaptureLost += (_, _) => CancelDrawingObjectDrag(container);
     }
 
     private void ContinueDrawingObjectDrag(DrawingObjectDragSession session, PointerEventArgs args)
@@ -477,12 +498,20 @@ public sealed partial class MainWindow
             return;
 
         var point = args.GetCurrentPoint(canvas).Position;
+        ContinueDrawingObjectDragAtPoint(session, new LayoutPoint(point.X, point.Y));
+        args.Handled = true;
+    }
+
+    private void ContinueDrawingObjectDragAtPoint(
+        DrawingObjectDragSession session,
+        LayoutPoint point)
+    {
         if (session.Kind == ObjectDragKind.Rotate)
         {
             var center = session.StartCanvasRect.Center;
             session.CurrentRotationDegrees = ObjectDragPlanner.CalculateRotationDegrees(
                 center,
-                new LayoutPoint(point.X, point.Y));
+                point);
         }
         else
         {
@@ -490,7 +519,7 @@ public sealed partial class MainWindow
                 session.Kind,
                 session.StartCanvasRect,
                 session.StartPointerInCanvas,
-                new LayoutPoint(point.X, point.Y));
+                point);
             session.CurrentCanvasRect = transform.Rect;
             session.CurrentFlipHorizontal = session.StartFlipHorizontal ^ transform.CrossedHorizontally;
             session.CurrentFlipVertical = session.StartFlipVertical ^ transform.CrossedVertically;
@@ -499,7 +528,18 @@ public sealed partial class MainWindow
         session.Moved = true;
         UpdateDrawingObjectDragPreview(session);
         session.Container.Cursor = DrawingObjectDragCursor(session.Kind);
-        args.Handled = true;
+    }
+
+    private void CancelDrawingObjectDrag(Control container)
+    {
+        if (_drawingObjectDragSession is not { } session || !ReferenceEquals(session.Container, container))
+            return;
+
+        _drawingObjectDragSession = null;
+        container.Cursor = Cursor.Default;
+        // Capture can be revoked without PointerReleased (window deactivation, an overlay rebuild,
+        // or platform cancellation). Discard the live preview just as WPF does from OnLostMouseCapture.
+        RefreshShell(string.Empty);
     }
 
     private void UpdateDrawingObjectDragPreview(DrawingObjectDragSession session)

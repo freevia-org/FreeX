@@ -526,6 +526,22 @@ function Assert-ManifestResultShape {
                 throw "Editing section result IDs are not authoritative."
             }
         }
+        "quick-analysis-drawing" {
+            $expectedQuickAnalysis = @(
+                "quick-analysis.conditional-format",
+                "quick-analysis.total")
+            $expectedDrawing = @(
+                "drawing.shape.move",
+                "drawing.shape.resize",
+                "drawing.shape.rotate",
+                "drawing.shape.capture-loss-no-op")
+            $actualQuickAnalysis = @($results | Where-Object category -eq "quick-analysis" | ForEach-Object id | Sort-Object)
+            $actualDrawing = @($results | Where-Object category -eq "drawing-pointer" | ForEach-Object id | Sort-Object)
+            if (($actualQuickAnalysis -join "`n") -ne (@($expectedQuickAnalysis | Sort-Object) -join "`n") -or
+                ($actualDrawing -join "`n") -ne (@($expectedDrawing | Sort-Object) -join "`n")) {
+                throw "Quick Analysis/drawing section result IDs are not authoritative."
+            }
+        }
     }
 }
 
@@ -860,7 +876,7 @@ try {
         $authoritativeDialogCount = $null
         $authoritativeRibbonCount = $null
         $authoritativeContextCount = $null
-        $coreSections = @("ribbon-bindings", "shortcuts", "range-inventory", "editing")
+        $coreSections = @("ribbon-bindings", "shortcuts", "range-inventory", "editing", "quick-analysis-drawing")
         foreach ($coreSection in $coreSections) {
         $existingCorePath = Join-Path $reportDirectory "core-$coreSection.json"
         if (Test-Path -LiteralPath $existingCorePath -PathType Leaf) {

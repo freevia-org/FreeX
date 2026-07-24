@@ -52,6 +52,8 @@ public sealed partial class MainWindow
                     AddDialogRangeTargetInventoryResults(results);
                 if (Includes("editing"))
                     await AddPhysicalEditingInteractionResultsAsync(results);
+                if (Includes("quick-analysis-drawing"))
+                    await AddQuickAnalysisDrawingInteractionResultsAsync(results);
             }
         }
 
