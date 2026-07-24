@@ -13717,16 +13717,16 @@ public sealed partial class MainWindow : Window
         var choiceGrid = CreateGoToSpecialChoiceGrid(choices, kindButtons);
         AutomationProperties.SetAutomationId(choiceGrid, "GoToSpecialKindBox");
         foreach (var button in kindButtons)
-            ApplyDialogRadioButtonChrome(button);
+            AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, AvaloniaCompactDialogChrome.WindowsStyle);
 
         var numbersBox = CreateGoToSpecialValueTypeBox("Numbers", "GoToSpecialNumbersBox");
         var textBox = CreateGoToSpecialValueTypeBox("Text", "GoToSpecialTextBox");
         var logicalsBox = CreateGoToSpecialValueTypeBox("Logicals", "GoToSpecialLogicalsBox");
         var errorsBox = CreateGoToSpecialValueTypeBox("Errors", "GoToSpecialErrorsBox");
-        ApplyDialogCheckBoxChrome(numbersBox);
-        ApplyDialogCheckBoxChrome(textBox);
-        ApplyDialogCheckBoxChrome(logicalsBox);
-        ApplyDialogCheckBoxChrome(errorsBox);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(numbersBox, AvaloniaCompactDialogChrome.WindowsStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(textBox, AvaloniaCompactDialogChrome.WindowsStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(logicalsBox, AvaloniaCompactDialogChrome.WindowsStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(errorsBox, AvaloniaCompactDialogChrome.WindowsStyle);
 
         var okButton = new Button
         {
@@ -13737,9 +13737,6 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(okButton, "GoToSpecialOkButton");
         ApplyDialogButtonChrome(okButton, width: 72, isDefault: true);
-        okButton.Height = 18;
-        okButton.MinHeight = 18;
-        okButton.MaxHeight = 18;
 
         var cancelButton = new Button
         {
@@ -13750,9 +13747,6 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(cancelButton, "GoToSpecialCancelButton");
         ApplyDialogButtonChrome(cancelButton, width: 72);
-        cancelButton.Height = 18;
-        cancelButton.MinHeight = 18;
-        cancelButton.MaxHeight = 18;
 
         void RefreshValueTypeState()
         {
@@ -13828,44 +13822,41 @@ public sealed partial class MainWindow : Window
             },
         };
 
-        var buttonRow = new StackPanel
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [okButton, cancelButton],
+            new Thickness(0, 10, 28, 51));
+
+        var availableGroup = new GroupBox
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 30, 47),
-            Children =
-            {
-                okButton,
-                cancelButton,
-            },
+            Header = "Go To Special",
+            Margin = new Thickness(0, 0, 0, 12),
+            Padding = new Thickness(8, 1, 8, 6),
+            Content = choiceGrid,
         };
+        AvaloniaCompactDialogChrome.ApplyGroupBox(availableGroup);
+
+        var valueTypeGroup = new GroupBox
+        {
+            Header = "Values for constants and formulas",
+            Margin = new Thickness(0),
+            Padding = new Thickness(0, 0, 0, 3),
+            Content = valueTypeRow,
+        };
+        AvaloniaCompactDialogChrome.ApplyGroupBox(valueTypeGroup);
 
         var content = new StackPanel
         {
-            Margin = new Thickness(12, 16, 30, 0),
+            Margin = new Thickness(12, 12, 30, 0),
             Children =
             {
                 new TextBlock
                 {
                     Text = "Select",
                     FontWeight = FontWeight.SemiBold,
-                    Margin = new Thickness(0, 0, 0, 3),
+                    Margin = new Thickness(0, 0, 0, 7),
                 },
-                new GroupBox
-                {
-                    Header = "Go To Special",
-                    Margin = new Thickness(0, 0, 0, 10),
-                    Padding = new Thickness(8, 6, 8, 2),
-                    Content = choiceGrid,
-                },
-                new GroupBox
-                {
-                    Header = "Values for constants and formulas",
-                    Margin = new Thickness(0),
-                    Padding = new Thickness(0),
-                    Content = valueTypeRow,
-                },
+                availableGroup,
+                valueTypeGroup,
             },
         };
         var root = new DockPanel { Margin = new Thickness(0) };
@@ -13876,6 +13867,8 @@ public sealed partial class MainWindow : Window
         dialog.Opened += (_, _) =>
         {
             RefreshValueTypeState();
+            ApplyGoToSpecialButtonSize(okButton);
+            ApplyGoToSpecialButtonSize(cancelButton);
             kindButtons.FirstOrDefault()?.Focus();
         };
         if (launchSmokeProbe is not null)
@@ -13953,6 +13946,14 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(checkBox, automationId);
         return checkBox;
+    }
+
+    private static void ApplyGoToSpecialButtonSize(Button button)
+    {
+        button.Height = 20;
+        button.MinHeight = 20;
+        button.MaxHeight = 20;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
     }
 
     private static GoToSpecialChoice[] CreateGoToSpecialChoices() =>

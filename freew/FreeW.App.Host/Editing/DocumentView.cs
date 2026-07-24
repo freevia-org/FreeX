@@ -4157,7 +4157,7 @@ public sealed class DocumentView : RichTextBox
         double leftPt, double rightPt, double firstLinePt,
         double spaceBeforePt, double spaceAfterPt, double lineSpacing,
         bool keepWithNext, bool keepLinesTogether, bool widowControl,
-        bool pageBreakBefore, bool suppressAutoHyphens) =>
+        bool pageBreakBefore, bool suppressAutoHyphens, bool contextualSpacing) =>
         FormatSelectedModelParagraphs(f => f with
         {
             IndentLeftPt       = leftPt,
@@ -4172,6 +4172,7 @@ public sealed class DocumentView : RichTextBox
             WidowControlIsSet  = true,
             PageBreakBefore    = pageBreakBefore,
             SuppressAutoHyphens= suppressAutoHyphens,
+            ContextualSpacing  = contextualSpacing,
         });
 
     // Map the WPF paragraphs spanned by the selection to their model block indices. The model is built

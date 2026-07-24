@@ -49,6 +49,7 @@ public static class AvaloniaCompactDialogChrome
     private static readonly IBrush SelectedItemBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 232, 255));
     private static readonly IBrush SelectedItemBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(153, 209, 255));
     private static readonly IBrush DialogForegroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x1f, 0x1f, 0x1f));
+    private static readonly IBrush GroupBoxBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(198, 215, 232));
     private static readonly IBrush ValidationStatusBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00));
     private static readonly IBrush DialogTabPaneBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(192, 192, 192));
     private static readonly IBrush DialogInactiveTabBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 160));
@@ -241,6 +242,83 @@ public static class AvaloniaCompactDialogChrome
                 Spacing = 4,
                 Children = { indicator, content },
             };
+        });
+    }
+
+    public static void ApplyCompactRadioButton(RadioButton radioButton, AvaloniaCompactDialogChromeStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(radioButton);
+        ArgumentNullException.ThrowIfNull(style);
+
+        ApplyRadioButton(radioButton, style);
+        radioButton.Height = 20;
+        radioButton.MinHeight = 20;
+        radioButton.MaxHeight = 20;
+        radioButton.Padding = new Thickness(0);
+        radioButton.Foreground = DialogForegroundBrush;
+        radioButton.Template = new FuncControlTemplate<RadioButton>((control, _) =>
+        {
+            var dot = new Ellipse
+            {
+                Width = 6,
+                Height = 6,
+                Fill = DialogForegroundBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            dot.Bind(
+                Visual.IsVisibleProperty,
+                new Binding(nameof(ToggleButton.IsChecked))
+                {
+                    Source = control,
+                });
+
+            var indicator = new Border
+            {
+                Width = 13,
+                Height = 13,
+                Background = Brushes.White,
+                BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(7),
+                Child = dot,
+            };
+            var content = new ContentPresenter
+            {
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            content.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
+            content.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = control });
+
+            return new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+                Spacing = 4,
+                Children = { indicator, content },
+            };
+        });
+    }
+
+    public static void ApplyGroupBox(
+        GroupBox groupBox,
+        AvaloniaCompactDialogChromeStyle? style = null)
+    {
+        ArgumentNullException.ThrowIfNull(groupBox);
+        style ??= WindowsStyle;
+
+        groupBox.FontFamily = style.FontFamily;
+        groupBox.FontSize = style.FontSize;
+        groupBox.Foreground = Brushes.Black;
+        groupBox.BorderBrush = GroupBoxBorderBrush;
+        groupBox.BorderThickness = new Thickness(1);
+        groupBox.HeaderTemplate = new FuncDataTemplate<object>((header, _) => new TextBlock
+        {
+            Text = header?.ToString() ?? string.Empty,
+            FontFamily = style.FontFamily,
+            FontSize = style.FontSize,
+            Foreground = Brushes.Black,
+            TextWrapping = TextWrapping.NoWrap,
         });
     }
 

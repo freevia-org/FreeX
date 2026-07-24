@@ -39,6 +39,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     private readonly CheckBox _widowControl;
     private readonly CheckBox _pageBreakBefore;
     private readonly CheckBox _suppressHyphens;
+    private readonly CheckBox _contextualSpacing;
     private readonly TextBlock _status = PageLayoutDialogChrome.Status();
 
     public ParagraphDialog(ParagraphFormatting current)
@@ -65,6 +66,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         _widowControl = Check("Widow/orphan control", state.WidowControl);
         _pageBreakBefore = Check("Page break before", state.PageBreakBefore);
         _suppressHyphens = Check("Suppress auto-hyphenation", state.SuppressAutoHyphens);
+        _contextualSpacing = Check("Don't add space between paragraphs of the same style", state.ContextualSpacing);
 
         AutomationProperties.SetAutomationId(_left, "paragraph-left-indent");
 
@@ -101,7 +103,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         var grid = new Grid { Margin = new Thickness(10, 10, 13, 10) };
         grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(104)));
         grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
-        for (var row = 0; row < 7; row++)
+        for (var row = 0; row < 8; row++)
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         AddGridRow(grid, 0, "Left indent (pt):", _left);
         AddGridRow(grid, 1, "Right indent (pt):", _right);
@@ -110,6 +112,9 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         AddGridRow(grid, 4, "Space before (pt):", _before);
         AddGridRow(grid, 5, "Space after (pt):", _after);
         AddGridRow(grid, 6, "Line spacing (\u00d7):", _lineSpacing);
+        Grid.SetRow(_contextualSpacing, 7);
+        Grid.SetColumnSpan(_contextualSpacing, 2);
+        grid.Children.Add(_contextualSpacing);
         return grid;
     }
 
@@ -126,7 +131,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         panel.Children.Add(_suppressHyphens);
         panel.Children.Add(new TextBlock
         {
-            Text = "Note: 'Don't add space between paragraphs of same style' and 'Suppress line numbers' are not yet modelled.",
+            Text = "Note: 'Suppress line numbers' is not yet modelled.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
             FontSize = 10,
@@ -149,7 +154,8 @@ public sealed class ParagraphDialog : FreeWDialogWindow
             _keepLinesTogether.IsChecked == true,
             _widowControl.IsChecked == true,
             _pageBreakBefore.IsChecked == true,
-            _suppressHyphens.IsChecked == true);
+            _suppressHyphens.IsChecked == true,
+            _contextualSpacing.IsChecked == true);
         if (!ParagraphBreaksDialogPlanner.TryBuildResult(input, DialogCulture, out var result, out var validation))
         {
             PageLayoutDialogChrome.ShowError(_status, validation?.Message ?? ParagraphBreaksDialogPlanner.ValidationMessage);
@@ -181,7 +187,8 @@ public sealed class ParagraphDialog : FreeWDialogWindow
             result.KeepLinesTogether,
             result.WidowControl,
             result.PageBreakBefore,
-            result.SuppressAutoHyphens);
+            result.SuppressAutoHyphens,
+            result.ContextualSpacing);
 
     public static async Task ShowAndApplyAsync(Window owner, DocumentView editor)
     {
@@ -219,7 +226,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         foreach (var box in new[] { _left, _right, _specialAmount, _before, _after, _lineSpacing })
             AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_special, DialogChromeStyle);
-        foreach (var checkBox in new[] { _keepWithNext, _keepLinesTogether, _widowControl, _pageBreakBefore, _suppressHyphens })
+        foreach (var checkBox in new[] { _keepWithNext, _keepLinesTogether, _widowControl, _pageBreakBefore, _suppressHyphens, _contextualSpacing })
             AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);
         foreach (var button in this.GetVisualDescendants().OfType<Button>())
             AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 72, button.IsDefault);

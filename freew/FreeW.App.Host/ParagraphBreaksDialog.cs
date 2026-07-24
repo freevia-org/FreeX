@@ -41,6 +41,12 @@ internal static class ParagraphBreaksDialog
         var spaceBefore = NumberBox(state.SpaceBeforeText);
         var spaceAfter = NumberBox(state.SpaceAfterText);
         var lineSpacing = NumberBox(state.LineSpacingText);
+        var contextualSpacingCheck = new CheckBox
+        {
+            Content = "Don't add space between paragraphs of the same style",
+            IsChecked = state.ContextualSpacing,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
         AutomationProperties.SetAutomationId(leftBox, "paragraph-left-indent");
 
         var specialAmtBox = NumberBox(state.SpecialAmountText);
@@ -65,7 +71,9 @@ internal static class ParagraphBreaksDialog
         AddGridRow(indentsPanel, 4, "Space before (pt):", spaceBefore);
         AddGridRow(indentsPanel, 5, "Space after (pt):", spaceAfter);
         AddGridRow(indentsPanel, 6, "Line spacing (\u00d7):", lineSpacing);
-        indentsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(contextualSpacingCheck, 7);
+        Grid.SetColumnSpan(contextualSpacingCheck, 2);
+        indentsPanel.Children.Add(contextualSpacingCheck);
 
         var keepWithNextCheck = new CheckBox { Content = "Keep with next", IsChecked = state.KeepWithNext, Margin = new Thickness(0, 0, 0, 6) };
         var keepLinesTogetherCheck = new CheckBox { Content = "Keep lines together", IsChecked = state.KeepLinesTogether, Margin = new Thickness(0, 0, 0, 6) };
@@ -94,7 +102,7 @@ internal static class ParagraphBreaksDialog
         breaksPanel.Children.Add(suppressHyphensCheck);
         breaksPanel.Children.Add(new TextBlock
         {
-            Text = "Note: 'Don't add space between paragraphs of same style' and 'Suppress line numbers' are not yet modelled.",
+            Text = "Note: 'Suppress line numbers' is not yet modelled.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = System.Windows.Media.Brushes.Gray,
             FontSize = 10,
@@ -119,7 +127,8 @@ internal static class ParagraphBreaksDialog
                 keepLinesTogetherCheck.IsChecked == true,
                 widowControlCheck.IsChecked == true,
                 pageBreakBeforeCheck.IsChecked == true,
-                suppressHyphensCheck.IsChecked == true);
+                suppressHyphensCheck.IsChecked == true,
+                contextualSpacingCheck.IsChecked == true);
 
             if (!ParagraphBreaksDialogPlanner.TryBuildResult(
                     input,
