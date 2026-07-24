@@ -24,7 +24,7 @@ namespace FreeP.App.Rendering.Wpf;
 /// Right-click: surfaces a context menu (Insert Row Above/Below, Insert Column
 /// Left/Right, Delete Row, Delete Column, Merge Cells, Split Cell).
 ///
-/// Tab navigation is not implemented (deferred).
+/// Tab and Shift+Tab navigation use the shared table-cell navigation planner.
 /// </summary>
 public sealed class InCanvasTableCellEditor
 {

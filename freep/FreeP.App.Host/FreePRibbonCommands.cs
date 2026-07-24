@@ -18,7 +18,8 @@ namespace FreeP.App.Host;
 /// Wave 5B: clipboard (copy/cut/paste) wired; font-family ComboBox wired; Design tab (themes +
 ///           slide-size) wired; Insert tables + charts wired; Format Painter wired.
 ///
-/// Still stubbed (noted below): freep.anim.trigger / .duration / .delay combo-box live-change.
+/// Animation trigger, duration, and delay edits are routed through the shared
+/// animation-pane timing mutation planner.
 /// </summary>
 internal static class FreePRibbonCommands
 {
@@ -198,8 +199,8 @@ internal static class FreePRibbonCommands
         // ── Format Painter — Wave 5B ─────────────────────────────────────────────
         // Single-click mode: copies formatting from the first selected shape, then immediately
         // applies it to the rest of the multi-selection.
-        // NOTE: full "click source → click target" canvas mode is deferred (requires a
-        // modal interaction state in the gesture handler).
+        // With one selected shape, the canvas gesture handler arms the source-then-target
+        // interaction; multi-selection keeps the immediate source-to-selection behavior.
         registry.Register("freep.format-painter",
             new ActionRibbonCommand(() =>
             {
