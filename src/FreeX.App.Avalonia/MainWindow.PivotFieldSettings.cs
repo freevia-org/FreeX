@@ -135,6 +135,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(numberFormatButton, "PivotValueNumberFormatButton");
         AutomationProperties.SetName(numberFormatButton, UiText.Get("PivotValueFieldSettings_NumberFormat2"));
 
+        string CurrentNumberFormatCode() =>
+            !string.IsNullOrWhiteSpace(numberFormatCode)
+                ? numberFormatCode!
+                : PivotValueFieldPlanner.NumberFormatPresets
+                    .FirstOrDefault(preset => preset.NumberFormatId == numberFormatId)?.FormatCode
+                    ?? "General";
+
         var numberFormatPresetBox = new ComboBox { MinWidth = 240 };
         foreach (var preset in PivotValueFieldPlanner.NumberFormatPresets)
             numberFormatPresetBox.Items.Add(UiText.Get(preset.ResourceKey));
@@ -144,10 +151,42 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(numberFormatPresetBox, UiText.Get("PivotValueFieldSettings_NumberFormatPreset"));
         numberFormatPresetBox.SelectionChanged += (_, _) =>
         {
-            var index = Math.Clamp(numberFormatPresetBox.SelectedIndex, 0, PivotValueFieldPlanner.NumberFormatPresets.Count - 1);
+            var index = numberFormatPresetBox.SelectedIndex;
+            if (index < 0 || index >= PivotValueFieldPlanner.NumberFormatPresets.Count)
+                return;
+
             var preset = PivotValueFieldPlanner.NumberFormatPresets[index];
             numberFormatId = preset.NumberFormatId;
             numberFormatCode = null;
+        };
+
+        void SetNumberFormatState(string formatCode)
+        {
+            var state = PivotValueFieldPlanner.ResolveNumberFormatState(formatCode);
+            numberFormatId = state.NumberFormatId;
+            numberFormatCode = state.NumberFormatCode;
+            var presetIndex = PivotValueFieldPlanner.FindNumberFormatPresetIndex(numberFormatId, formatCode);
+            if (presetIndex < 0)
+            {
+                presetIndex = numberFormatPresetBox.Items
+                    .Select((item, index) => (item, index))
+                    .FirstOrDefault(candidate => string.Equals(candidate.item as string, formatCode, StringComparison.OrdinalIgnoreCase))
+                    .index;
+                if (presetIndex == 0 && !string.Equals(numberFormatPresetBox.Items[0] as string, formatCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    numberFormatPresetBox.Items.Add(formatCode);
+                    presetIndex = numberFormatPresetBox.Items.Count - 1;
+                }
+            }
+
+            numberFormatPresetBox.SelectedIndex = presetIndex;
+        }
+
+        numberFormatButton.Click += async (_, _) =>
+        {
+            var selection = await ShowPivotNumberFormatInputDialogAsync(CurrentNumberFormatCode());
+            if (selection?.Request.NumberFormat is { } acceptedFormat)
+                SetNumberFormatState(acceptedFormat);
         };
 
         var dialog = new Window

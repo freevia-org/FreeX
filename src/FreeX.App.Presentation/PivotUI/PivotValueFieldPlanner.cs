@@ -179,6 +179,30 @@ public static class PivotValueFieldPlanner
         return 0;
     }
 
+    public static int FindNumberFormatPresetIndex(int? numberFormatId, string? formatCode)
+    {
+        if (!string.IsNullOrWhiteSpace(formatCode))
+        {
+            for (var index = 0; index < NumberFormatPresets.Count; index++)
+            {
+                var preset = NumberFormatPresets[index];
+                if (preset.NumberFormatId == numberFormatId &&
+                    string.Equals(preset.FormatCode, formatCode.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return index;
+                }
+            }
+        }
+
+        for (var index = 0; index < NumberFormatPresets.Count; index++)
+        {
+            if (NumberFormatPresets[index].NumberFormatId == numberFormatId)
+                return index;
+        }
+
+        return -1;
+    }
+
     public static string SummaryFunctionFromIndex(int selectedIndex) =>
         SummaryFunctions[Math.Max(0, Math.Min(selectedIndex, SummaryFunctions.Count - 1))].Value;
 
@@ -284,6 +308,33 @@ public static class PivotValueFieldPlanner
         return numberFormatId is >= DefaultCustomNumberFormatId
             ? numberFormatId
             : DefaultCustomNumberFormatId;
+    }
+
+    public static (int? NumberFormatId, string? NumberFormatCode) ResolveNumberFormatState(string? formatCode)
+    {
+        var trimmed = formatCode?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed) || string.Equals(trimmed, "General", StringComparison.OrdinalIgnoreCase))
+            return (null, null);
+
+        if (TryResolveBuiltInNumberFormatIdForCode(trimmed, out var builtInId))
+            return (builtInId, null);
+
+        // Format Cells emits the compact positive form for common currency presets, while the
+        // OOXML catalog retains its optional alignment padding and negative section. Treat those
+        // spellings as the same built-in preset before falling back to a custom format.
+        var normalized = NormalizeNumberFormatCode(trimmed);
+        foreach (var preset in NumberFormatPresets)
+        {
+            var presetCode = NormalizeNumberFormatCode(preset.FormatCode);
+            if (string.Equals(presetCode, normalized, StringComparison.OrdinalIgnoreCase) ||
+                (!trimmed.Contains(';', StringComparison.Ordinal) &&
+                 string.Equals(presetCode.Split(';')[0], normalized, StringComparison.OrdinalIgnoreCase)))
+            {
+                return (preset.NumberFormatId, null);
+            }
+        }
+
+        return (DefaultCustomNumberFormatId, trimmed);
     }
 
     public static int? ResolvePresetNumberFormatId(string? label) =>
@@ -447,4 +498,7 @@ public static class PivotValueFieldPlanner
         BuiltInNumberFormatCatalog.TryResolveFormatCode(numberFormatId, out var formatCode)
             ? formatCode
             : "General";
+
+    private static string NormalizeNumberFormatCode(string formatCode) =>
+        formatCode.Replace("_)", string.Empty, StringComparison.Ordinal);
 }

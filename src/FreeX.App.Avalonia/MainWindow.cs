@@ -14564,16 +14564,27 @@ public sealed partial class MainWindow : Window
         RefreshShell(UiText.Format("MainLoc_FormattedX", rangeReference));
     }
 
-    internal async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
+    internal Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
         Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null,
-        int initialTabIndex = 0)
+        int initialTabIndex = 0) =>
+        ShowFormatCellsInputDialogCoreAsync(launchSmokeProbe, initialTabIndex, numberFormatOverride: null);
+
+    internal Task<FormatCellsDialogResult?> ShowPivotNumberFormatInputDialogAsync(
+        string? currentNumberFormat,
+        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null) =>
+        ShowFormatCellsInputDialogCoreAsync(launchSmokeProbe, initialTabIndex: 0, currentNumberFormat);
+
+    private async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogCoreAsync(
+        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null,
+        int initialTabIndex = 0,
+        string? numberFormatOverride = null)
     {
         const double formatCellsDialogWidth = 620;
         const double formatCellsDefaultDialogHeight = 540;
         const double formatCellsBorderDialogHeight = 596.5;
 
         FormatCellsDialogResult? result = null;
-        var currentNumberFormat = _session.SelectedRangeStartNumberFormat;
+        var currentNumberFormat = numberFormatOverride ?? _session.SelectedRangeStartNumberFormat;
         var currentHorizontalAlignment = _session.SelectedRangeStartHorizontalAlignment;
         var currentVerticalAlignment = _session.SelectedRangeStartVerticalAlignment;
         var currentMergeCells = _session.IsSelectedRangeMerged;

@@ -14,6 +14,10 @@ public sealed class PivotValueFieldSettingsParitySourceTests
         source.Should().Contain("numberFormatPanel.Children.Add(numberFormatPresetBox);");
         source.Should().Contain("numberFormatId = preset.NumberFormatId;");
         source.Should().Contain("numberFormatCode = null;");
+        source.Should().Contain("numberFormatButton.Click += async");
+        source.Should().Contain("ShowPivotNumberFormatInputDialogAsync(CurrentNumberFormatCode())");
+        source.Should().Contain("SetNumberFormatState(acceptedFormat)");
+        source.Should().Contain("numberFormatPresetBox.Items.Add(formatCode)");
     }
 
     [Fact]
@@ -39,6 +43,22 @@ public sealed class PivotValueFieldSettingsParitySourceTests
 
         result.NumberFormatId.Should().Be(14);
         result.NumberFormatCode.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("General", null, null)]
+    [InlineData("$#,##0.00", 7, null)]
+    [InlineData("$#,##0.00;[Red]($#,##0.00)", 8, null)]
+    [InlineData("0.0000", 164, "0.0000")]
+    public void SharedNumberFormatStatePlanner_MapsAcceptedFormatCode(
+        string code,
+        int? expectedId,
+        string? expectedCustomCode)
+    {
+        var state = FreeX.App.Presentation.PivotUI.PivotValueFieldPlanner.ResolveNumberFormatState(code);
+
+        state.NumberFormatId.Should().Be(expectedId);
+        state.NumberFormatCode.Should().Be(expectedCustomCode);
     }
 
     private static string RepoFile(params string[] parts)
