@@ -3910,6 +3910,19 @@ public static class DocxWriter
                                 new XAttribute("x", seg.Point.X),
                                 new XAttribute("y", seg.Point.Y))));
                         break;
+                    case CustomSegmentKind.CubicBezierTo when seg.Point is not null
+                        && seg.ControlPoint1 is not null && seg.ControlPoint2 is not null:
+                        path.Add(new XElement(A + "cubicBezTo",
+                            new XElement(A + "pt",
+                                new XAttribute("x", seg.ControlPoint1.X),
+                                new XAttribute("y", seg.ControlPoint1.Y)),
+                            new XElement(A + "pt",
+                                new XAttribute("x", seg.ControlPoint2.X),
+                                new XAttribute("y", seg.ControlPoint2.Y)),
+                            new XElement(A + "pt",
+                                new XAttribute("x", seg.Point.X),
+                                new XAttribute("y", seg.Point.Y))));
+                        break;
                     case CustomSegmentKind.Close:
                         path.Add(new XElement(A + "close"));
                         break;

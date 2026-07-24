@@ -151,6 +151,51 @@ public class ShapeCustomGeometryRoundTripTests
     // ── Ellipse poly round-trip ────────────────────────────────────────────────
 
     [Fact]
+    public void CustomGeometry_CubicBezier_WritesOrderedControlAndEndpointPoints()
+    {
+        var cubic = new CustomSegment(
+            CustomSegmentKind.CubicBezierTo,
+            new CustomPoint(21_000, 10_800),
+            new CustomPoint(7_200, 0),
+            new CustomPoint(14_400, 21_600));
+        var geometry = new CustomGeometry();
+        geometry.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, new CustomPoint(0, 10_800)));
+        geometry.Segments.Add(cubic);
+
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.CustomGeometry = geometry;
+
+        var cubicXml = WriteDocXml(DocumentWith(shape)).Descendants(A + "cubicBezTo").Single();
+        var points = cubicXml.Elements(A + "pt").ToList();
+
+        points.Should().HaveCount(3);
+        points.Select(point => (long)point.Attribute("x")!).Should().Equal(7_200, 14_400, 21_000);
+        points.Select(point => (long)point.Attribute("y")!).Should().Equal(0, 21_600, 10_800);
+    }
+
+    [Fact]
+    public void CustomGeometry_CubicBezier_RoundTripsEndpointAndControls()
+    {
+        var geometry = new CustomGeometry();
+        geometry.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, new CustomPoint(0, 10_800)));
+        geometry.Segments.Add(new CustomSegment(
+            CustomSegmentKind.CubicBezierTo,
+            new CustomPoint(21_000, 10_800),
+            new CustomPoint(7_200, 0),
+            new CustomPoint(14_400, 21_600)));
+
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.CustomGeometry = geometry;
+
+        var cubic = ReadBackShape(shape).CustomGeometry!.Segments.Single(segment =>
+            segment.Kind == CustomSegmentKind.CubicBezierTo);
+
+        cubic.Point.Should().Be(new CustomPoint(21_000, 10_800));
+        cubic.ControlPoint1.Should().Be(new CustomPoint(7_200, 0));
+        cubic.ControlPoint2.Should().Be(new CustomPoint(14_400, 21_600));
+    }
+
+    [Fact]
     public void EllipsePoly_RoundTrips_WithExpectedSegmentKinds()
     {
         var shape = Shape.Preset(ShapeKind.Ellipse, widthPt: 80, heightPt: 80);

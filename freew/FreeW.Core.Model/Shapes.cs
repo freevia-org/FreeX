@@ -13,7 +13,7 @@ public sealed record CustomPoint(long X, long Y);
 
 /// <summary>
 /// A freeform custom geometry path segment. The first point starts a move-to; subsequent points are
-/// line-to segments (a straight-line polygon). Cubic Bezier curves are not yet modelled (W25 roadmap).
+/// line-to segments, and cubic Bezier segments carry two control points plus their endpoint.
 /// </summary>
 public enum CustomSegmentKind
 {
@@ -21,23 +21,31 @@ public enum CustomSegmentKind
     MoveTo,
     /// <summary>Draw a straight line from the current position to the point.</summary>
     LineTo,
+    /// <summary>Draw a cubic Bezier curve using two control points and an endpoint.</summary>
+    CubicBezierTo,
     /// <summary>Close the sub-path back to the most recent move-to.</summary>
     Close,
 }
 
 /// <summary>
-/// A single path segment in a <see cref="CustomGeometry"/> path list. <see cref="Close"/> segments
-/// carry no point (Point is irrelevant and may be null/default).
+/// A single path segment in a <see cref="CustomGeometry"/> path list. Cubic Bezier segments use
+/// <see cref="ControlPoint1"/> and <see cref="ControlPoint2"/> before their <see cref="Point"/> endpoint.
+/// <see cref="Close"/> segments carry no points.
 /// </summary>
-public sealed record CustomSegment(CustomSegmentKind Kind, CustomPoint? Point = null);
+public sealed record CustomSegment(
+    CustomSegmentKind Kind,
+    CustomPoint? Point = null,
+    CustomPoint? ControlPoint1 = null,
+    CustomPoint? ControlPoint2 = null);
 
 /// <summary>
 /// Freeform custom geometry for a <see cref="Shape"/>, replacing its preset geometry (<c>a:prstGeom</c>)
 /// with an explicit polygon defined by user-draggable edit points (<c>a:custGeom</c>). The geometry is
 /// expressed in a 21600×21600 local grid and serialised as a single <c>a:path</c> sub-path.
 ///
-/// DOCX round-trip: writer emits <c>wps:spPr/a:custGeom/a:pathLst/a:path</c> with moveTo + lnTo +
-/// close segments; reader recovers them from the same structure and populates <see cref="Segments"/>.
+/// DOCX round-trip: writer emits <c>wps:spPr/a:custGeom/a:pathLst/a:path</c> with moveTo, lnTo,
+/// cubicBezTo, and close segments; reader recovers them from the same structure and populates
+/// <see cref="Segments"/>.
 ///
 /// When this property is set on a <see cref="Shape"/>, the writer emits <c>a:custGeom</c> instead of
 /// <c>a:prstGeom</c>; the renderer draws the polygon using WPF StreamGeometry.
@@ -51,13 +59,12 @@ public sealed class CustomGeometry
     public long Height { get; set; } = 21600;
 
     /// <summary>
-    /// Path segments forming the freeform polygon. The first segment should be a <see cref="CustomSegmentKind.MoveTo"/>
-    /// followed by one or more <see cref="CustomSegmentKind.LineTo"/> segments and an optional
-    /// <see cref="CustomSegmentKind.Close"/>.
+    /// Path segments forming the freeform geometry. The first segment should be a <see cref="CustomSegmentKind.MoveTo"/>
+    /// followed by line or cubic Bezier segments and an optional <see cref="CustomSegmentKind.Close"/>.
     /// </summary>
     public List<CustomSegment> Segments { get; } = [];
 
-    /// <summary>All edit points (MoveTo / LineTo only; Close has no point).</summary>
+    /// <summary>All editable endpoints (MoveTo, LineTo, and cubic Bezier endpoints; Close has no point).</summary>
     public IEnumerable<CustomPoint> EditPoints =>
         Segments.Where(s => s.Point is not null).Select(s => s.Point!);
 

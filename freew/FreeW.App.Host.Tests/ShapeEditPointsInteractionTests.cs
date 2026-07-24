@@ -78,4 +78,69 @@ public sealed class ShapeEditPointsInteractionTests
             window.Close();
         }
     }
+
+    [StaFact]
+    public void MoveActiveShapeEditPoint_PreservesCubicBezierControls()
+    {
+        var geometry = new CustomGeometry();
+        geometry.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, new CustomPoint(0, 10_800)));
+        geometry.Segments.Add(new CustomSegment(
+            CustomSegmentKind.CubicBezierTo,
+            new CustomPoint(21_600, 10_800),
+            new CustomPoint(7_200, 0),
+            new CustomPoint(14_400, 21_600)));
+        var shape = new Shape(ShapeKind.Rectangle, 120, 60) { CustomGeometry = geometry };
+        var document = TextDocument.CreateEmpty();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var container = view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(item => item.Inlines)
+            .OfType<InlineUIContainer>()
+            .Single();
+        view.Selection.Select(container.ElementStart, container.ElementEnd);
+        view.CaretPosition = container.ElementStart;
+        view.BeginShapeEditPoints();
+
+        view.MoveActiveShapeEditPoint(segmentIndex: 1, x: 20_000, y: 9_000).Should().BeTrue();
+
+        var cubic = shape.CustomGeometry!.Segments[1];
+        cubic.Point.Should().Be(new CustomPoint(20_000, 9_000));
+        cubic.ControlPoint1.Should().Be(new CustomPoint(7_200, 0));
+        cubic.ControlPoint2.Should().Be(new CustomPoint(14_400, 21_600));
+    }
+
+    [StaFact]
+    public void InlineCustomGeometry_RendersCubicSegmentAsBezier()
+    {
+        var geometry = new CustomGeometry();
+        geometry.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, new CustomPoint(0, 10_800)));
+        geometry.Segments.Add(new CustomSegment(
+            CustomSegmentKind.CubicBezierTo,
+            new CustomPoint(21_600, 10_800),
+            new CustomPoint(7_200, 0),
+            new CustomPoint(14_400, 21_600)));
+        var shape = new Shape(ShapeKind.Rectangle, 120, 60) { CustomGeometry = geometry };
+        var document = TextDocument.CreateEmpty();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var path = view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(item => item.Inlines)
+            .OfType<InlineUIContainer>()
+            .Single()
+            .Child.Should().BeOfType<System.Windows.Shapes.Path>().Subject;
+
+        var figure = System.Windows.Media.PathGeometry.CreateFromGeometry(path.Data).Figures.Single();
+
+        figure.Segments.Should().ContainSingle().Which.Should().BeOfType<System.Windows.Media.BezierSegment>();
+    }
 }

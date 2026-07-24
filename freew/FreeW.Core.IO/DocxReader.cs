@@ -3834,6 +3834,29 @@ public static class DocxReader
                             && long.TryParse(pt.Attribute("y")?.Value, out var ly))
                             custGeo.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(lx, ly)));
                     }
+                    else if (seg.Name == A + "cubicBezTo")
+                    {
+                        var points = seg.Elements(A + "pt")
+                            .Select(pt =>
+                            {
+                                if (long.TryParse(pt.Attribute("x")?.Value, out var x)
+                                    && long.TryParse(pt.Attribute("y")?.Value, out var y))
+                                {
+                                    return new CustomPoint(x, y);
+                                }
+
+                                return null;
+                            })
+                            .ToList();
+                        if (points.Count == 3 && points.All(point => point is not null))
+                        {
+                            custGeo.Segments.Add(new CustomSegment(
+                                CustomSegmentKind.CubicBezierTo,
+                                points[2]!,
+                                points[0]!,
+                                points[1]!));
+                        }
+                    }
                     else if (seg.Name == A + "close")
                     {
                         custGeo.Segments.Add(new CustomSegment(CustomSegmentKind.Close));

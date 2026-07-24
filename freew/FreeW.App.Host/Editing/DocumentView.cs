@@ -5614,15 +5614,34 @@ public sealed class DocumentView : RichTextBox
                 var inFigure = false;
                 var closeFigure = false;
                 System.Windows.Point startPt = default;
-                var linePoints = new List<System.Windows.Point>();
+                var pathSegments = new List<CustomSegment>();
 
                 void FlushFigure()
                 {
                     if (!inFigure) return;
                     ctx.BeginFigure(startPt, isFilled: true, isClosed: closeFigure);
-                    foreach (var point in linePoints)
-                        ctx.LineTo(point, isStroked: true, isSmoothJoin: false);
-                    linePoints.Clear();
+                    foreach (var segment in pathSegments)
+                    {
+                        if (segment.Kind == CustomSegmentKind.LineTo && segment.Point is not null)
+                        {
+                            ctx.LineTo(new System.Windows.Point(
+                                segment.Point.X / (double)cg.Width * widthPx,
+                                segment.Point.Y / (double)cg.Height * heightPx),
+                                isStroked: true,
+                                isSmoothJoin: false);
+                        }
+                        else if (segment.Kind == CustomSegmentKind.CubicBezierTo
+                            && segment.Point is not null && segment.ControlPoint1 is not null && segment.ControlPoint2 is not null)
+                        {
+                            ctx.BezierTo(
+                                new System.Windows.Point(segment.ControlPoint1.X / (double)cg.Width * widthPx, segment.ControlPoint1.Y / (double)cg.Height * heightPx),
+                                new System.Windows.Point(segment.ControlPoint2.X / (double)cg.Width * widthPx, segment.ControlPoint2.Y / (double)cg.Height * heightPx),
+                                new System.Windows.Point(segment.Point.X / (double)cg.Width * widthPx, segment.Point.Y / (double)cg.Height * heightPx),
+                                isStroked: true,
+                                isSmoothJoin: false);
+                        }
+                    }
+                    pathSegments.Clear();
                     inFigure = false;
                     closeFigure = false;
                 }
@@ -5637,11 +5656,9 @@ public sealed class DocumentView : RichTextBox
                             segment.Point.Y / (double)cg.Height * heightPx);
                         inFigure = true;
                     }
-                    else if (segment.Kind == CustomSegmentKind.LineTo && segment.Point is not null && inFigure)
+                    else if ((segment.Kind == CustomSegmentKind.LineTo || segment.Kind == CustomSegmentKind.CubicBezierTo) && inFigure)
                     {
-                        linePoints.Add(new System.Windows.Point(
-                            segment.Point.X / (double)cg.Width * widthPx,
-                            segment.Point.Y / (double)cg.Height * heightPx));
+                        pathSegments.Add(segment);
                     }
                     else if (segment.Kind == CustomSegmentKind.Close && inFigure)
                     {
@@ -11182,14 +11199,34 @@ public sealed class DocumentView : RichTextBox
                 bool inFigure = false;
                 bool closeFigure = false;
                 System.Windows.Point startPt = default;
-                var linePoints = new System.Collections.Generic.List<System.Windows.Point>();
+                var pathSegments = new System.Collections.Generic.List<CustomSegment>();
 
                 void FlushFigure()
                 {
                     if (!inFigure) return;
                     ctx.BeginFigure(startPt, isFilled: true, isClosed: closeFigure);
-                    foreach (var lp in linePoints) ctx.LineTo(lp, isStroked: true, isSmoothJoin: false);
-                    linePoints.Clear();
+                    foreach (var segment in pathSegments)
+                    {
+                        if (segment.Kind == CustomSegmentKind.LineTo && segment.Point is not null)
+                        {
+                            ctx.LineTo(new System.Windows.Point(
+                                segment.Point.X / (double)cg.Width * widthPx,
+                                segment.Point.Y / (double)cg.Height * heightPx),
+                                isStroked: true,
+                                isSmoothJoin: false);
+                        }
+                        else if (segment.Kind == CustomSegmentKind.CubicBezierTo
+                            && segment.Point is not null && segment.ControlPoint1 is not null && segment.ControlPoint2 is not null)
+                        {
+                            ctx.BezierTo(
+                                new System.Windows.Point(segment.ControlPoint1.X / (double)cg.Width * widthPx, segment.ControlPoint1.Y / (double)cg.Height * heightPx),
+                                new System.Windows.Point(segment.ControlPoint2.X / (double)cg.Width * widthPx, segment.ControlPoint2.Y / (double)cg.Height * heightPx),
+                                new System.Windows.Point(segment.Point.X / (double)cg.Width * widthPx, segment.Point.Y / (double)cg.Height * heightPx),
+                                isStroked: true,
+                                isSmoothJoin: false);
+                        }
+                    }
+                    pathSegments.Clear();
                     inFigure = false;
                     closeFigure = false;
                 }
@@ -11204,11 +11241,9 @@ public sealed class DocumentView : RichTextBox
                             seg.Point.Y / (double)cg.Height * heightPx);
                         inFigure = true;
                     }
-                    else if (seg.Kind == CustomSegmentKind.LineTo && seg.Point is not null && inFigure)
+                    else if ((seg.Kind == CustomSegmentKind.LineTo || seg.Kind == CustomSegmentKind.CubicBezierTo) && inFigure)
                     {
-                        linePoints.Add(new System.Windows.Point(
-                            seg.Point.X / (double)cg.Width  * widthPx,
-                            seg.Point.Y / (double)cg.Height * heightPx));
+                        pathSegments.Add(seg);
                     }
                     else if (seg.Kind == CustomSegmentKind.Close && inFigure)
                     {

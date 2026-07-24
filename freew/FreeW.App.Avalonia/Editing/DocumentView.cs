@@ -7060,6 +7060,14 @@ public sealed class DocumentView : Control
                                 rect.X + seg.Point.X / (double)cg.Width  * rect.Width,
                                 rect.Y + seg.Point.Y / (double)cg.Height * rect.Height));
                         }
+                        else if (seg.Kind == CustomSegmentKind.CubicBezierTo
+                            && seg.Point is not null && seg.ControlPoint1 is not null && seg.ControlPoint2 is not null && inFigure)
+                        {
+                            ctx.CubicBezierTo(
+                                new Point(rect.X + seg.ControlPoint1.X / (double)cg.Width * rect.Width, rect.Y + seg.ControlPoint1.Y / (double)cg.Height * rect.Height),
+                                new Point(rect.X + seg.ControlPoint2.X / (double)cg.Width * rect.Width, rect.Y + seg.ControlPoint2.Y / (double)cg.Height * rect.Height),
+                                new Point(rect.X + seg.Point.X / (double)cg.Width * rect.Width, rect.Y + seg.Point.Y / (double)cg.Height * rect.Height));
+                        }
                         else if (seg.Kind == CustomSegmentKind.Close && inFigure)
                         {
                             closeFig = true;
@@ -7205,6 +7213,14 @@ public sealed class DocumentView : Control
                         linePoints.Add(new Point(
                             rect.X + segment.Point.X / (double)cg.Width * rect.Width,
                             rect.Y + segment.Point.Y / (double)cg.Height * rect.Height));
+                    }
+                    else if (segment.Kind == CustomSegmentKind.CubicBezierTo
+                        && segment.Point is not null && segment.ControlPoint1 is not null && segment.ControlPoint2 is not null && inFigure)
+                    {
+                        ctx.CubicBezierTo(
+                            new Point(rect.X + segment.ControlPoint1.X / (double)cg.Width * rect.Width, rect.Y + segment.ControlPoint1.Y / (double)cg.Height * rect.Height),
+                            new Point(rect.X + segment.ControlPoint2.X / (double)cg.Width * rect.Width, rect.Y + segment.ControlPoint2.Y / (double)cg.Height * rect.Height),
+                            new Point(rect.X + segment.Point.X / (double)cg.Width * rect.Width, rect.Y + segment.Point.Y / (double)cg.Height * rect.Height));
                     }
                     else if (segment.Kind == CustomSegmentKind.Close && inFigure)
                     {
