@@ -171,11 +171,14 @@ if open_backstage_print; then
     printf 'window=%s x=%s y=%s width=%s height=%s cancelX=%s cancelY=%s\n' \
         "$WINDOW" "$X" "$Y" "$WIDTH" "$HEIGHT" "$((X + WIDTH - 48))" "$((Y + HEIGHT - 49))" \
         > "$output/print-cancel-geometry.txt"
+    cancel_method="not-completed"
     # The explicit Escape handler may destroy the X11 window before xdotool returns. That is
     # the expected cancellation result, so the transient BadWindow response is non-fatal.
     xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$dialog_id" Escape 2>/dev/null || true
     sleep "$settle_seconds"
-    if xdotool search --onlyvisible --name '^Print$' >/dev/null 2>&1; then
+    if ! xdotool search --onlyvisible --name '^Print$' >/dev/null 2>&1; then
+        cancel_method="escape"
+    else
         # IsCancel is a managed contract, but targeted X11 Escape is not reliable in this
         # Avalonia/Xvfb session. Exercise the same physical cancellation through the visible button.
         xdotool windowactivate --sync "$dialog_id"
@@ -183,20 +186,61 @@ if open_backstage_print; then
         # outside the Avalonia button hit target.
         xdotool mousemove --sync --window "$dialog_id" "$((WIDTH - 48))" "$((HEIGHT - 49))" click 1
         sleep "$settle_seconds"
-        if xdotool search --onlyvisible --name '^Print$' >/dev/null 2>&1; then
+        if ! xdotool search --onlyvisible --name '^Print$' >/dev/null 2>&1; then
+            cancel_method="pointer-click"
+        else
             # The dialog opens with Print focused. Tab moves to the visible Cancel button and
             # Return invokes its real Avalonia command when a compositor drops pointer clicks.
             xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$dialog_id" Tab Return
             sleep "$settle_seconds"
+            if ! xdotool search --onlyvisible --name '^Print$' >/dev/null 2>&1; then
+                cancel_method="tab-return"
+            fi
         fi
     fi
-    capture "print-cancelled-owner.png"
-    if ! xdotool search --onlyvisible --name '^Print$' >/dev/null 2>&1 && active_is "$owner_id"; then
-        record "print-cancel-restores-owner-focus" "passed" "print-cancelled-owner.png; print-cancel-geometry.txt" \
-            "Escape closed the app-owned dialog and restored the FreeW owner as active; the geometry record covers the visible Cancel fallback target."
+    if xdotool search --onlyvisible --name '^Print$' >/dev/null 2>&1; then
+        dialog_closed=false
     else
-        record "print-cancel-restores-owner-focus" "failed" "print-cancelled-owner.png" \
-            "Escape did not close the print dialog and restore owner focus."
+        dialog_closed=true
+    fi
+    if active_is "$owner_id"; then
+        owner_active=true
+    else
+        owner_active=false
+    fi
+    printf 'method=%s\ndialog-closed=%s\nowner-active=%s\n' \
+        "$cancel_method" "$dialog_closed" "$owner_active" > "$output/print-cancel-method.txt"
+    capture "print-cancelled-owner.png"
+    if $dialog_closed && $owner_active; then
+        case "$cancel_method" in
+            escape)
+                cancel_note="Escape closed the app-owned dialog and restored the FreeW owner as active."
+                ;;
+            pointer-click)
+                cancel_note="The visible Cancel pointer action closed the app-owned dialog and restored the FreeW owner as active."
+                ;;
+            tab-return)
+                cancel_note="Tab then Return activated the visible Cancel action and restored the FreeW owner as active."
+                ;;
+            *)
+                cancel_note="The dialog closed and the FreeW owner became active, but no cancellation method was identified."
+                ;;
+        esac
+        record "print-cancel-restores-owner-focus" "passed" "print-cancelled-owner.png; print-cancel-method.txt; print-cancel-geometry.txt" \
+            "$cancel_note"
+    else
+        record "print-cancel-restores-owner-focus" "failed" "print-cancelled-owner.png; print-cancel-method.txt" \
+            "Cancellation did not close the print dialog and restore owner focus."
+    fi
+    if [[ "$cancel_method" == "escape" && "$dialog_closed" == true ]]; then
+        record "print-cancel-escape" "passed" "print-cancelled-owner.png; print-cancel-method.txt" \
+            "Escape alone closed the app-owned print dialog."
+    elif [[ "$cancel_method" == "not-completed" ]]; then
+        record "print-cancel-escape" "failed" "print-cancelled-owner.png; print-cancel-method.txt" \
+            "Escape and the supported cancellation fallbacks did not close the app-owned print dialog."
+    else
+        record "print-cancel-escape" "not-proven" "print-cancelled-owner.png; print-cancel-method.txt" \
+            "Escape did not close the dialog alone; cancellation completed through $cancel_method."
     fi
 else
     capture "print-dialog-open-failed.png"
@@ -206,6 +250,9 @@ else
         "The production print dialog did not open, so owner metadata could not be checked."
     record "print-cancel-restores-owner-focus" "failed" "print-dialog-open-failed.png" \
         "Cancellation could not be exercised because the production dialog did not open."
+    printf 'method=not-completed\ndialog-closed=false\nowner-active=false\n' > "$output/print-cancel-method.txt"
+    record "print-cancel-escape" "not-proven" "print-dialog-open-failed.png; print-cancel-method.txt" \
+        "Escape-only cancellation was not proven because the production print dialog did not open."
 fi
 
 if open_backstage_print; then
