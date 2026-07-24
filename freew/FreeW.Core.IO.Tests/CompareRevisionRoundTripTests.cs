@@ -304,6 +304,30 @@ public class CompareRevisionRoundTripTests
     }
 
     [Fact]
+    public void Compare_RetainedCommentAnchor_RoundTripsWithItsCommentThread()
+    {
+        var original = DocWith("Annotated text");
+        var revised = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Annotated text") { CommentId = 5 });
+        paragraph.Runs.Add(Run.CommentReference(5));
+        revised.Blocks.Add(paragraph);
+
+        var comment = new Comment(5, "Please verify", "Alice", "A") { Resolved = true };
+        comment.AddReply(6, "Verified", "Bob", "B");
+        revised.Comments[5] = comment;
+
+        var reloaded = RoundTrip(DocumentCompare.Compare(original, revised, Author, DateXml));
+
+        reloaded.Paragraphs.Single().Runs.Should().Contain(run => run.CommentId == 5 && run.IsCommentReference);
+        reloaded.Comments.Should().ContainKey(5);
+        reloaded.Comments[5].PlainText.Should().Be("Please verify");
+        reloaded.Comments[5].Resolved.Should().BeTrue();
+        reloaded.Comments[5].Replies.Should().ContainSingle(reply =>
+            reply.Id == 6 && reply.PlainText == "Verified" && reply.Author == "Bob");
+    }
+
+    [Fact]
     public void Compare_RevisionList_After_RoundTrip_EnumeratesAllEntries()
     {
         // "hello world" → "hello earth": one deletion ("world") and one insertion ("earth").

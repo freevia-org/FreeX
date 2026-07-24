@@ -588,7 +588,27 @@ public static class DocumentCompare
         target.Page.AutoHyphenation = source.Page.AutoHyphenation;
         target.Page.VerticalAlignment = source.Page.VerticalAlignment;
         target.Page.DifferentFirstPage = source.Page.DifferentFirstPage;
+        foreach (var (id, comment) in source.Comments)
+            target.Comments[id] = CloneComment(comment);
         target.Preserved.CopyFrom(source.Preserved);
+    }
+
+    // Compared body runs retain their comment ids. Carry the revised document's comment graph as owned
+    // model objects as well, otherwise a saved compare result would emit orphaned comment anchors.
+    private static Comment CloneComment(Comment source)
+    {
+        var clone = new Comment(source.Id)
+        {
+            Author = source.Author,
+            Initials = source.Initials,
+            DateXml = source.DateXml,
+            Resolved = source.Resolved,
+        };
+        foreach (var paragraph in source.Content)
+            clone.Content.Add(ClonePlain(paragraph));
+        foreach (var reply in source.Replies)
+            clone.Replies.Add(CloneComment(reply));
+        return clone;
     }
 
     // Clone a paragraph with its runs verbatim and no revision marks (used for unchanged paragraphs).

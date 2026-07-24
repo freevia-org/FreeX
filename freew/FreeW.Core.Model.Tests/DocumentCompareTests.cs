@@ -454,4 +454,37 @@ public class DocumentCompareTests
         result.Preserved.Parts.Single().Bytes.Should().NotBeSameAs(revised.Preserved.Parts.Single().Bytes);
         result.Preserved.ContentTypeDefaults.Should().ContainKey("xml");
     }
+
+    [Fact]
+    public void Compare_CopiesRevisedCommentThreadForRetainedAnchors()
+    {
+        var original = DocWith("Annotated text");
+        var revised = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Annotated text") { CommentId = 5 });
+        paragraph.Runs.Add(Run.CommentReference(5));
+        revised.Blocks.Add(paragraph);
+
+        var comment = new Comment(5, "Please verify", "Alice", "A")
+        {
+            DateXml = "2026-07-24T12:00:00Z",
+            Resolved = true,
+        };
+        comment.AddReply(6, "Verified", "Bob", "B").DateXml = "2026-07-24T13:00:00Z";
+        revised.Comments[5] = comment;
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Paragraphs.Single().Runs.Should().Contain(run => run.CommentId == 5 && !run.IsCommentReference)
+            .And.Contain(run => run.CommentId == 5 && run.IsCommentReference);
+        result.Comments.Should().ContainKey(5);
+        result.Comments[5].Should().NotBeSameAs(comment);
+        result.Comments[5].PlainText.Should().Be("Please verify");
+        result.Comments[5].Resolved.Should().BeTrue();
+        result.Comments[5].Replies.Should().ContainSingle();
+        result.Comments[5].Replies[0].PlainText.Should().Be("Verified");
+
+        comment.Content[0].Runs[0].Text = "Mutated source";
+        result.Comments[5].PlainText.Should().Be("Please verify");
+    }
 }
