@@ -160,7 +160,7 @@ public static class PresentationPrintOutputPackageExecutor
     {
         ArgumentNullException.ThrowIfNull(presentation);
 
-        var printPlan = PresentationExportPlanner.BuildPrintPlan(request, presentation.Slides.Count);
+        var printPlan = PresentationExportPlanner.BuildPrintPlan(request, presentation);
         var notesRenderPlan = printPlan.Layout.Layout == PresentationPrintLayoutKind.NotesPages &&
             printPlan.SlideRange.SlideNumbers.Count > 0
                 ? PresentationNotesPagePdfExporter.BuildRenderPlan(

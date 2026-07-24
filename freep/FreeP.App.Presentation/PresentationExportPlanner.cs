@@ -352,6 +352,40 @@ public static class PresentationExportPlanner
             BuildPrintOptionsPlan(request));
     }
 
+    /// <summary>
+    /// Builds a print plan with the presentation's hidden-slide policy applied. The count-only
+    /// overload remains available for callers that do not have slide metadata; presentation-aware
+    /// print paths must use this overload so the default PowerPoint behavior excludes hidden slides.
+    /// </summary>
+    public static PresentationPrintPlan BuildPrintPlan(
+        PresentationPrintRequest? request,
+        Presentation presentation)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var plan = BuildPrintPlan(request, presentation.Slides.Count);
+        if (plan.PrintHiddenSlides || plan.SlideRange.SlideNumbers.Count == 0)
+            return plan;
+
+        var visibleNumbers = plan.SlideRange.SlideNumbers
+            .Where(slideNumber =>
+                slideNumber >= 1 &&
+                slideNumber <= presentation.Slides.Count &&
+                !presentation.Slides[slideNumber - 1].IsHidden)
+            .ToArray();
+
+        return plan with
+        {
+            SlideRange = new PresentationSlideRangePlan(
+                plan.SlideRange.Kind,
+                visibleNumbers,
+                FormatRangeDisplayName(
+                    plan.SlideRange.Kind,
+                    visibleNumbers,
+                    presentation.Slides.Count)),
+        };
+    }
+
     public static PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
         PresentationPrintRequest? request,
         int slideCount,
@@ -369,6 +403,42 @@ public static class PresentationExportPlanner
                 : null,
         };
         var printPlan = BuildPrintPlan(handoutRequest, slideCount);
+        var slidesPerPage = printPlan.Layout.SlidesPerPage;
+        var slideAspect = NormalizeAspectRatio(slideWidth, slideHeight);
+        var pages = BuildHandoutPages(
+            printPlan.SlideRange.SlideNumbers,
+            slidesPerPage,
+            Math.Max(1, pageWidth),
+            Math.Max(1, pageHeight),
+            slideAspect);
+
+        return new PresentationHandoutLayoutPlan(
+            printPlan,
+            Math.Max(1, pageWidth),
+            Math.Max(1, pageHeight),
+            pages.Count,
+            pages);
+    }
+
+    public static PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
+        PresentationPrintRequest? request,
+        Presentation presentation,
+        double slideWidth = 16,
+        double slideHeight = 9,
+        double pageWidth = DefaultPrintPageWidth,
+        double pageHeight = DefaultPrintPageHeight)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        request ??= new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts);
+        var handoutRequest = request with
+        {
+            Layout = PresentationPrintLayoutKind.Handouts,
+            HandoutSlidesPerPage = request.Layout == PresentationPrintLayoutKind.Handouts
+                ? request.HandoutSlidesPerPage
+                : null,
+        };
+        var printPlan = BuildPrintPlan(handoutRequest, presentation);
         var slidesPerPage = printPlan.Layout.SlidesPerPage;
         var slideAspect = NormalizeAspectRatio(slideWidth, slideHeight);
         var pages = BuildHandoutPages(

@@ -306,6 +306,49 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void PresentationAwarePrintPlan_ExcludesHiddenSlidesUnlessRequested()
+    {
+        var presentation = BuildHandoutDeck(4);
+        presentation.Slides[1].IsHidden = true;
+        presentation.Slides[3].IsHidden = true;
+
+        var hiddenExcluded = PresentationExportPlanner.BuildPrintPlan(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides),
+            presentation);
+        var hiddenIncluded = PresentationExportPlanner.BuildPrintPlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                PrintHiddenSlides: true),
+            presentation);
+
+        hiddenExcluded.SlideRange.SlideNumbers.Should().Equal(1, 3);
+        hiddenExcluded.SlideRange.DisplayName.Should().Be("Slides 1, 3");
+        hiddenIncluded.SlideRange.SlideNumbers.Should().Equal(1, 2, 3, 4);
+        hiddenIncluded.SlideRange.DisplayName.Should().Be("All slides");
+    }
+
+    [Fact]
+    public void PresentationAwareNotesAndHandoutPackages_UseFilteredHiddenSlideRange()
+    {
+        var presentation = BuildNotesDeck();
+        presentation.Slides.Add(new Slide { Title = "Slide 4", IsHidden = true });
+
+        var notes = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages),
+            presentation);
+        var handouts = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                HandoutSlidesPerPage: 1),
+            presentation);
+
+        notes.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1, 2, 3);
+        notes.PageCount.Should().Be(3);
+        handouts.PrintPlan.SlideRange.SlideNumbers.Should().Equal(1, 2, 3);
+        handouts.PageCount.Should().Be(3);
+    }
+
+    [Fact]
     public void PrintOutputPackagePlan_SelectsSharedRoutesAndBuildsNativeHandoffPlan()
     {
         var fullPage = PresentationPrintOutputPackageExecutor.BuildPackagePlan(

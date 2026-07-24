@@ -77,7 +77,7 @@ public static class PresentationNotesPagePdfExporter
             Layout = PresentationPrintLayoutKind.NotesPages,
             HandoutSlidesPerPage = null,
         };
-        var printPlan = PresentationExportPlanner.BuildPrintPlan(notesRequest, presentation.Slides.Count);
+        var printPlan = PresentationExportPlanner.BuildPrintPlan(notesRequest, presentation);
 
         if (printPlan.SlideRange.SlideNumbers.Count == 0)
         {

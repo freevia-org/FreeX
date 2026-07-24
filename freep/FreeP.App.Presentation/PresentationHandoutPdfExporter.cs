@@ -57,7 +57,7 @@ public static class PresentationHandoutPdfExporter
         var pageHeight = Math.Max(1, request.PageHeight);
         var layout = PresentationExportPlanner.BuildHandoutLayoutPlan(
             request.PrintRequest,
-            presentation.Slides.Count,
+            presentation,
             PresentationPdfExporter.DefaultSlideWidthPoints,
             PresentationPdfExporter.DefaultSlideHeightPoints,
             pageWidth,

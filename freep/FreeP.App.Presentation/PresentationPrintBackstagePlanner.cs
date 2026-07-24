@@ -113,7 +113,9 @@ public static class PresentationPrintBackstagePlanner
             slideCount,
             printPlan.SlideRange.Kind,
             currentSlideNumber,
-            selectedSlideNumbers);
+            selectedSlideNumbers,
+            presentation,
+            printPlan.PrintHiddenSlides);
         var selectedRange = ranges.FirstOrDefault(choice => choice.Kind == printPlan.SlideRange.Kind)
             ?? ranges[0];
 
@@ -245,20 +247,26 @@ public static class PresentationPrintBackstagePlanner
         int slideCount,
         PresentationSlideRangeKind selectedKind,
         int? currentSlideNumber,
-        IReadOnlyList<int>? selectedSlideNumbers)
+        IReadOnlyList<int>? selectedSlideNumbers,
+        Presentation? presentation,
+        bool printHiddenSlides)
     {
         var choices = new List<PresentationPrintBackstageRangeChoice>
         {
             BuildRangeChoice(
                 new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides),
                 slideCount,
-                "Print the full deck."),
+                "Print the full deck.",
+                presentation,
+                printHiddenSlides),
             BuildRangeChoice(
                 new PresentationSlideRangeRequest(
                     PresentationSlideRangeKind.CurrentSlide,
                     CurrentSlideNumber: currentSlideNumber),
                 slideCount,
-                "Print only the current slide."),
+                "Print only the current slide.",
+                presentation,
+                printHiddenSlides),
         };
 
         if (selectedSlideNumbers is not null)
@@ -268,7 +276,9 @@ public static class PresentationPrintBackstagePlanner
                     PresentationSlideRangeKind.SelectedSlides,
                     SelectedSlideNumbers: selectedSlideNumbers),
                 slideCount,
-                "Print the slides selected in the host."));
+                "Print the slides selected in the host.",
+                presentation,
+                printHiddenSlides));
         }
 
         choices.Add(new PresentationPrintBackstageRangeChoice(
@@ -277,7 +287,14 @@ public static class PresentationPrintBackstagePlanner
                 ? "Custom Range"
                 : "Custom Range...",
             "Enter a custom slide range in the host UI. Parsing and validation are deferred to a later input surface.",
-            slideCount > 0,
+            presentation is null
+                ? slideCount > 0
+                : PresentationExportPlanner.BuildPrintPlan(
+                        new PresentationPrintRequest(
+                            PresentationPrintLayoutKind.FullPageSlides,
+                            PrintHiddenSlides: printHiddenSlides),
+                        presentation)
+                    .SlideRange.SlideNumbers.Count > 0,
             Request: null));
 
         return choices;
@@ -286,9 +303,19 @@ public static class PresentationPrintBackstagePlanner
     private static PresentationPrintBackstageRangeChoice BuildRangeChoice(
         PresentationSlideRangeRequest request,
         int slideCount,
-        string description)
+        string description,
+        Presentation? presentation,
+        bool printHiddenSlides)
     {
-        var plan = PresentationExportPlanner.BuildSlideRangePlan(request, slideCount);
+        var plan = presentation is null
+            ? PresentationExportPlanner.BuildSlideRangePlan(request, slideCount)
+            : PresentationExportPlanner.BuildPrintPlan(
+                    new PresentationPrintRequest(
+                        PresentationPrintLayoutKind.FullPageSlides,
+                        request,
+                        PrintHiddenSlides: printHiddenSlides),
+                    presentation)
+                .SlideRange;
         return new PresentationPrintBackstageRangeChoice(
             request.Kind,
             LabelRange(request.Kind, plan.DisplayName),
