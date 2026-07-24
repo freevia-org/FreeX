@@ -523,6 +523,39 @@ public sealed class EditingSession
         Bus.Execute(new RotateShapeCommand(_currentSlideIndex, shapeId, newRotationDeg));
     }
 
+    /// <summary>Sets the source crop fractions on a picture and records one undoable edit.</summary>
+    public bool SetPictureCrop(uint shapeId, PictureCropValues values)
+    {
+        if (CurrentSlide is null || !PictureCropAuthoringPlanner.TryPlan(
+                values.Left, values.Top, values.Right, values.Bottom, out var plan))
+            return false;
+
+        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        if (shape?.Kind != SlideShapeKind.Picture)
+            return false;
+
+        Bus.Execute(new SetPictureCropCommand(
+            _currentSlideIndex,
+            shapeId,
+            plan.Left,
+            plan.Top,
+            plan.Right,
+            plan.Bottom));
+        return true;
+    }
+
+    /// <summary>Applies one crop edit to every selected picture.</summary>
+    public int SetSelectedPictureCrop(PictureCropValues values)
+    {
+        var count = 0;
+        foreach (var id in _selectedShapeIds)
+        {
+            if (SetPictureCrop(id, values))
+                count++;
+        }
+        return count;
+    }
+
     /// <summary>Sets fill on all selected shapes.</summary>
     public void SetSelectedFill(ShapeFill? fill)
     {

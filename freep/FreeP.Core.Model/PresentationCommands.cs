@@ -631,6 +631,116 @@ public sealed class ResizeShapeCommand : IPresentationCommand
     }
 }
 
+/// <summary>Sets the source crop rectangle on a picture without changing its frame geometry.</summary>
+public sealed class SetPictureCropCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly double _left;
+    private readonly double _top;
+    private readonly double _right;
+    private readonly double _bottom;
+    private bool _captured;
+    private bool _hadFormat;
+    private double _oldLeft;
+    private double _oldTop;
+    private double _oldRight;
+    private double _oldBottom;
+
+    public SetPictureCropCommand(
+        int slideIndex,
+        uint shapeId,
+        double left,
+        double top,
+        double right,
+        double bottom)
+    {
+        Validate(left, top, right, bottom);
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _left = left;
+        _top = top;
+        _right = right;
+        _bottom = bottom;
+    }
+
+    public string Label => "Crop Picture";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.Kind != SlideShapeKind.Picture)
+            return false;
+
+        var format = shape.PictureFormat;
+        return (format?.CropLeft ?? 0) != _left ||
+               (format?.CropTop ?? 0) != _top ||
+               (format?.CropRight ?? 0) != _right ||
+               (format?.CropBottom ?? 0) != _bottom;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.Kind != SlideShapeKind.Picture)
+            return;
+
+        if (!_captured)
+        {
+            _captured = true;
+            _hadFormat = shape.PictureFormat is not null;
+            _oldLeft = shape.PictureFormat?.CropLeft ?? 0;
+            _oldTop = shape.PictureFormat?.CropTop ?? 0;
+            _oldRight = shape.PictureFormat?.CropRight ?? 0;
+            _oldBottom = shape.PictureFormat?.CropBottom ?? 0;
+        }
+
+        if (shape.PictureFormat is null)
+        {
+            if (_left == 0 && _top == 0 && _right == 0 && _bottom == 0)
+                return;
+            shape.PictureFormat = new PictureFormat();
+        }
+
+        shape.PictureFormat.CropLeft = _left;
+        shape.PictureFormat.CropTop = _top;
+        shape.PictureFormat.CropRight = _right;
+        shape.PictureFormat.CropBottom = _bottom;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.Kind != SlideShapeKind.Picture || !_captured)
+            return;
+
+        if (shape.PictureFormat is null)
+        {
+            if (!_hadFormat && (_oldLeft != 0 || _oldTop != 0 || _oldRight != 0 || _oldBottom != 0))
+                shape.PictureFormat = new PictureFormat();
+            else
+                return;
+        }
+
+        shape.PictureFormat.CropLeft = _oldLeft;
+        shape.PictureFormat.CropTop = _oldTop;
+        shape.PictureFormat.CropRight = _oldRight;
+        shape.PictureFormat.CropBottom = _oldBottom;
+        if (!_hadFormat && !shape.PictureFormat.HasColorEffect)
+            shape.PictureFormat = null;
+    }
+
+    private static void Validate(double left, double top, double right, double bottom)
+    {
+        if (double.IsNaN(left) || double.IsNaN(top) || double.IsNaN(right) || double.IsNaN(bottom) ||
+            left < 0 || top < 0 || right < 0 || bottom < 0 ||
+            left + right >= 1 || top + bottom >= 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(left), "Picture crop fractions must be non-negative and leave a visible source rectangle.");
+        }
+    }
+}
+
 /// <summary>
 /// Sets one DrawingML preset-geometry adjustment on a shape.
 /// A missing value removes the authored adjustment and restores the preset default.

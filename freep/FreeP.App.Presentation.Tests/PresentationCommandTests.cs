@@ -268,6 +268,55 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SetPictureCropCommand_ApplyUndoRedo_PreservesFormatAndCrop()
+    {
+        var (p, bus) = Make();
+        var picture = new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = [1, 2, 3] },
+            PictureFormat = new PictureFormat { Grayscale = true, CropLeft = 0.05 }
+        };
+        p.Slides[0].Shapes.Add(picture);
+
+        bus.Execute(new SetPictureCropCommand(0, 1, 0.1, 0.2, 0.3, 0.05));
+        picture.PictureFormat!.CropLeft.Should().Be(0.1);
+        picture.PictureFormat.CropTop.Should().Be(0.2);
+        picture.PictureFormat.CropRight.Should().Be(0.3);
+        picture.PictureFormat.CropBottom.Should().Be(0.05);
+        picture.PictureFormat.Grayscale.Should().BeTrue();
+
+        bus.Undo();
+        picture.PictureFormat!.CropLeft.Should().Be(0.05);
+        picture.PictureFormat.CropTop.Should().Be(0);
+        picture.PictureFormat.CropRight.Should().Be(0);
+        picture.PictureFormat.CropBottom.Should().Be(0);
+        picture.PictureFormat.Grayscale.Should().BeTrue();
+
+        bus.Redo();
+        picture.PictureFormat.CropRight.Should().Be(0.3);
+    }
+
+    [Fact]
+    public void SetPictureCropCommand_Reset_RemovesNewFormatWithoutEffects()
+    {
+        var (p, bus) = Make();
+        var picture = new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = [1] }
+        };
+        p.Slides[0].Shapes.Add(picture);
+
+        bus.Execute(new SetPictureCropCommand(0, 1, 0.1, 0.1, 0.1, 0.1));
+        picture.PictureFormat.Should().NotBeNull();
+        bus.Undo();
+        picture.PictureFormat.Should().BeNull();
+    }
+
+    [Fact]
     public void SetShapeGeometryAdjustmentCommand_SetsAndUndoRestoresMissingValue()
     {
         var (p, bus) = Make();
