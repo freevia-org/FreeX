@@ -4978,6 +4978,40 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_layout_preset_routes_through_command_and_undo_bus()
+    {
+        SmartArtShape? smartArt = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape();
+            smartArt = shape.SmartArt!;
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId, out var command)
+                .Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+            smartArt.Data!.LayoutUniqueId.Should().Be(
+                "urn:microsoft.com/office/officeart/2005/8/layout/basicProcess");
+            smartArt.Data.Family.Should().Be(SmartArtFamily.Process);
+            Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/layout1.xml"].Bytes)
+                .Should().Contain("basicProcess");
+
+            window.Editor.Undo();
+            smartArt.Data.LayoutUniqueId.Should().Be(
+                "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList");
+            window.Editor.Redo();
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
+        });
+
+        if (!ran) return;
+        smartArt.Should().NotBeNull();
+        smartArt!.Data!.Family.Should().Be(SmartArtFamily.Process);
+    }
+
+    [Fact]
     public async Task SmartArt_bending_process_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];
@@ -5886,6 +5920,12 @@ public sealed class MainWindowHeadlessTests
             PartPath = "ppt/diagrams/data1.xml",
             ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
             Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+        smartArt.Parts["ppt/diagrams/layout1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/layout1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+            Bytes = Encoding.UTF8.GetBytes($"<dgm:layoutDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" uniqueId=\"{layoutUniqueId}\" />")
         };
         smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
         {

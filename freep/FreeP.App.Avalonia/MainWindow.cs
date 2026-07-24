@@ -2078,6 +2078,12 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.SingleAccent)));
         r.Register(SmartArtAuthoringPlanner.GrayscaleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.Grayscale)));
+        r.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicProcess)));
+        r.Register(SmartArtAuthoringPlanner.VerticalBoxListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBoxList)));
+        r.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicCycle)));
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
@@ -5088,6 +5094,36 @@ public sealed partial class MainWindow : Window
 
     internal SmartArtColorApplyResult ApplySmartArtColorPresetForTests(SmartArtColorPreset preset) =>
         ApplySmartArtColorPreset(preset);
+
+    internal SmartArtLayoutApplyResult ApplySmartArtLayoutPresetForTests(SmartArtLayoutPreset preset) =>
+        ApplySmartArtLayoutPreset(preset);
+
+    private SmartArtLayoutApplyResult ApplySmartArtLayoutPreset(SmartArtLayoutPreset preset)
+    {
+        var smartArtShape = GetSelectedSmartArtShape();
+        if (smartArtShape is null)
+            return SmartArtAuthoringPlanner.ApplyLayoutPreset(null, preset);
+
+        SmartArtLayoutApplyResult? result = null;
+        Editor.EditSmartArt(smartArtShape.Id, smartArt =>
+        {
+            result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset);
+            if (result is not { Applied: true })
+                return false;
+
+            CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
+            return true;
+        });
+
+        if (result is { Applied: true })
+        {
+            _fileWorkflow.MarkDirty();
+            RefreshCanvas();
+            UpdateStatus();
+        }
+
+        return result ?? new SmartArtLayoutApplyResult(false, "No SmartArt layout was changed.", null, null, SmartArtFamily.Unknown);
+    }
 
     private SmartArtColorApplyResult ApplySmartArtColorPreset(SmartArtColorPreset preset)
     {

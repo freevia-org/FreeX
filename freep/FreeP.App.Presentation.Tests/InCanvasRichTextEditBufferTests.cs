@@ -111,6 +111,106 @@ public sealed class InCanvasRichTextEditBufferTests
     }
 
     [Fact]
+    public void SplitFirstParagraph_PreservesFollowingParagraphLineage()
+    {
+        var source = DistinctParagraphBody();
+        var buffer = new InCanvasRichTextEditBuffer(source);
+
+        buffer.ReplacePlainText("A1\nA2\nB\nC");
+
+        AssertMetadata(buffer.Body.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(buffer.Body.Paragraphs, 1, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(buffer.Body.Paragraphs, 2, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(buffer.Body.Paragraphs, 3, BulletKind.None, 3, 30, 300);
+    }
+
+    [Fact]
+    public void SplitMiddleParagraph_PreservesTrailingParagraphLineage()
+    {
+        var source = DistinctParagraphBody();
+        var buffer = new InCanvasRichTextEditBuffer(source);
+
+        buffer.ReplacePlainText("A\nB1\nB2\nC");
+
+        AssertMetadata(buffer.Body.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(buffer.Body.Paragraphs, 1, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(buffer.Body.Paragraphs, 2, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(buffer.Body.Paragraphs, 3, BulletKind.None, 3, 30, 300);
+    }
+
+    [Fact]
+    public void SequenceAlignment_DistinguishesDuplicateSourceParagraphs()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(Paragraph("foo", BulletKind.Char, 1, 10, 100, "*"));
+        source.Paragraphs.Add(Paragraph("foo", BulletKind.Auto, 2, 20, 200, null));
+
+        InCanvasRichTextParagraphEditPlanner.ResolveSourceParagraphIndices(
+                source.Paragraphs,
+                new[] { "foo", "foo" })
+            .Should().Equal(0, 1);
+    }
+
+    [Fact]
+    public void EmptySplitParagraph_InheritsTheSourceParagraphBeforeTheAnchor()
+    {
+        var buffer = new InCanvasRichTextEditBuffer(DistinctParagraphBody());
+
+        buffer.ReplacePlainText("\nA\nB\nC");
+
+        AssertMetadata(buffer.Body.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(buffer.Body.Paragraphs, 1, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(buffer.Body.Paragraphs, 2, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(buffer.Body.Paragraphs, 3, BulletKind.None, 3, 30, 300);
+    }
+
+    [Fact]
+    public void RewrittenSplitBeforeTrailingAnchors_InheritsTheUnmatchedSourceParagraph()
+    {
+        var buffer = new InCanvasRichTextEditBuffer(DistinctParagraphBody());
+
+        buffer.ReplacePlainText("X\nY\nB\nC");
+
+        AssertMetadata(buffer.Body.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(buffer.Body.Paragraphs, 1, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(buffer.Body.Paragraphs, 2, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(buffer.Body.Paragraphs, 3, BulletKind.None, 3, 30, 300);
+    }
+
+    [Fact]
+    public void AnchorlessRewrite_EqualCount_UsesOrderedSourceLineage()
+    {
+        var source = DistinctParagraphBody();
+
+        InCanvasRichTextParagraphEditPlanner.ResolveSourceParagraphIndices(
+                source.Paragraphs,
+                new[] { "X", "Y", "Z" })
+            .Should().Equal(0, 1, 2);
+    }
+
+    [Fact]
+    public void AnchorlessRewriteWithSplit_AssignsSurplusToLeadingLineage()
+    {
+        var source = DistinctParagraphBody();
+
+        InCanvasRichTextParagraphEditPlanner.ResolveSourceParagraphIndices(
+                source.Paragraphs,
+                new[] { "X", "Y", "Z", "W" })
+            .Should().Equal(0, 0, 1, 2);
+    }
+
+    [Fact]
+    public void AnchorlessJoin_RetainsOrderedLeadingLineage()
+    {
+        var source = DistinctParagraphBody();
+
+        InCanvasRichTextParagraphEditPlanner.ResolveSourceParagraphIndices(
+                source.Paragraphs,
+                new[] { "X", "Y" })
+            .Should().Equal(0, 1);
+    }
+
+    [Fact]
     public void NewlineDeletion_MergesParagraphsAndRetainsMixedRuns()
     {
         var source = new TextBody();
@@ -237,6 +337,55 @@ public sealed class InCanvasRichTextEditBufferTests
             },
         });
         return body;
+    }
+
+    private static TextBody DistinctParagraphBody()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(Paragraph("A", BulletKind.Char, 1, 10, 100, "*"));
+        body.Paragraphs.Add(Paragraph("B", BulletKind.Auto, 2, 20, 200, null));
+        body.Paragraphs.Add(Paragraph("C", BulletKind.None, 3, 30, 300, null));
+        return body;
+    }
+
+    private static Paragraph Paragraph(
+        string text,
+        BulletKind bulletKind,
+        int level,
+        double spaceBefore,
+        double spaceAfter,
+        string? bulletChar)
+    {
+        var paragraph = new Paragraph
+        {
+            Level = level,
+            BulletKind = bulletKind,
+            BulletChar = bulletChar,
+            AutoNumType = AutoNumType.AlphaLcPeriod,
+            AutoNumStartAt = level + 1,
+            SpaceBeforePt = spaceBefore,
+            SpaceAfterPt = spaceAfter,
+            Runs = { new Run { Text = text } },
+        };
+        paragraph.TabStops.Add(new TabStop { PositionEmu = level * 100L });
+        return paragraph;
+    }
+
+    private static void AssertMetadata(
+        IReadOnlyList<Paragraph> paragraphs,
+        int index,
+        BulletKind bulletKind,
+        int level,
+        double spaceBefore,
+        double spaceAfter)
+    {
+        var paragraph = paragraphs[index];
+        paragraph.BulletKind.Should().Be(bulletKind);
+        paragraph.Level.Should().Be(level);
+        paragraph.SpaceBeforePt.Should().Be(spaceBefore);
+        paragraph.SpaceAfterPt.Should().Be(spaceAfter);
+        paragraph.AutoNumStartAt.Should().Be(level + 1);
+        paragraph.TabStops.Should().ContainSingle(stop => stop.PositionEmu == level * 100L);
     }
 
     private static TextBody CloneWith(TextBody source, Action<Paragraph> mutate)

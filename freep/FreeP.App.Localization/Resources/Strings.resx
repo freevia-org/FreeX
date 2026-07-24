@@ -568,6 +568,30 @@
   <data name="Ribbon_Command_SmartArtGrayscale_KeyTip" xml:space="preserve">
     <value>G</value>
   </data>
+  <data name="Ribbon_Group_SmartArtLayouts_Label" xml:space="preserve">
+    <value>SmartArt Layouts</value>
+  </data>
+  <data name="Ribbon_Group_SmartArtLayouts_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicProcess_Label" xml:space="preserve">
+    <value>Basic Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicProcess_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtVerticalBoxList_Label" xml:space="preserve">
+    <value>Vertical List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtVerticalBoxList_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicCycle_Label" xml:space="preserve">
+    <value>Basic Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicCycle_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
   <data name="Ribbon_Command_SlideSizeWidescreen_Label" xml:space="preserve">
     <value>Widescreen (16:9)</value>
   </data>

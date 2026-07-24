@@ -653,6 +653,35 @@ public sealed class SmartArtTests : IDisposable
         reread.DiagramRelIds.Should().ContainKey("cs");
     }
 
+    [Theory]
+    [InlineData(SmartArtLayoutPreset.BasicProcess, SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
+    public void SmartArtLayoutPreset_PersistsNativeLayoutAndRereads(
+        SmartArtLayoutPreset preset,
+        SmartArtFamily expectedFamily)
+    {
+        var sourcePath = MakeSmartArtPptx(["One", "Two"]);
+        var savedPath = Path.Combine(_tempDir, $"smartart-layout-{preset}.pptx");
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset);
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.Family.Should().Be(expectedFamily);
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reread.Data.Should().NotBeNull();
+        reread.Data!.Family.Should().Be(expectedFamily);
+        reread.Data.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+    }
+
     // ── Compositor ───────────────────────────────────────────────────────────────
 
     [Fact]

@@ -14,11 +14,26 @@ public enum SmartArtColorPreset
     Grayscale,
 }
 
+/// <summary>Bounded SmartArt layout choices whose live layout engine can regenerate the cache.</summary>
+public enum SmartArtLayoutPreset
+{
+    BasicProcess,
+    VerticalBoxList,
+    BasicCycle,
+}
+
 public sealed record SmartArtColorApplyResult(
     bool Applied,
     string Message,
     string? PartPath,
     int ColorCount);
+
+public sealed record SmartArtLayoutApplyResult(
+    bool Applied,
+    string Message,
+    string? PartPath,
+    string? LayoutUniqueId,
+    SmartArtFamily Family);
 
 /// <summary>
 /// Applies SmartArt Change Colors operations to both the live model and the native diagram
@@ -32,6 +47,64 @@ public static class SmartArtAuthoringPlanner
     public const string ThemeAccentsCommandId = "freep.smartart.colors.theme-accents";
     public const string SingleAccentCommandId = "freep.smartart.colors.single-accent";
     public const string GrayscaleCommandId = "freep.smartart.colors.grayscale";
+    public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
+    public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
+    public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
+
+    public static SmartArtLayoutApplyResult ApplyLayoutPreset(
+        SmartArtShape? smartArt,
+        SmartArtLayoutPreset preset)
+    {
+        if (smartArt?.Data is null)
+            return NotAppliedLayout("No SmartArt data model is available.");
+
+        var layoutPart = smartArt.Parts.Values.FirstOrDefault(candidate =>
+            candidate.ContentType.Contains("diagramLayout", StringComparison.OrdinalIgnoreCase) ||
+            candidate.PartPath.Contains("layout", StringComparison.OrdinalIgnoreCase));
+        if (layoutPart is null || layoutPart.Bytes.Length == 0)
+            return NotAppliedLayout("The SmartArt graphic has no native layout definition.");
+
+        var (layoutId, family) = preset switch
+        {
+            SmartArtLayoutPreset.BasicProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.VerticalBoxList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
+            SmartArtLayoutPreset.BasicCycle =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
+            _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
+        };
+
+        XDocument document;
+        try
+        {
+            document = ParseXml(layoutPart.Bytes);
+        }
+        catch (Exception ex) when (ex is FormatException or XmlException)
+        {
+            return NotAppliedLayout("The native SmartArt layout part is not valid XML.");
+        }
+
+        var layoutDefinition = document
+            .Descendants(Diagram + "layoutDef")
+            .FirstOrDefault();
+        if (layoutDefinition is null)
+            return NotAppliedLayout("The native SmartArt layout definition is missing.");
+
+        layoutDefinition.SetAttributeValue("uniqueId", layoutId);
+        layoutPart.Bytes = Serialize(document);
+        smartArt.Data.LayoutUniqueId = layoutId;
+        smartArt.Data.Family = family;
+        smartArt.Data.IsLiveLayoutSupported = true;
+        smartArt.FallbackShapes.Clear();
+
+        return new SmartArtLayoutApplyResult(
+            true,
+            $"SmartArt layout changed to {preset}.",
+            layoutPart.PartPath,
+            layoutId,
+            family);
+    }
 
     public static SmartArtColorApplyResult ApplyColorPreset(
         SmartArtShape? smartArt,
@@ -67,7 +140,7 @@ public static class SmartArtAuthoringPlanner
 
             try
             {
-                document = XDocument.Parse(Encoding.UTF8.GetString(part.Bytes), LoadOptions.PreserveWhitespace);
+                document = ParseXml(part.Bytes);
             }
             catch (Exception ex) when (ex is FormatException or XmlException)
             {
@@ -230,8 +303,14 @@ public static class SmartArtAuthoringPlanner
         return stream.ToArray();
     }
 
+    private static XDocument ParseXml(byte[] bytes) =>
+        XDocument.Parse(Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF'), LoadOptions.PreserveWhitespace);
+
     private static SmartArtColorApplyResult NotApplied(string message) =>
         new(false, message, null, 0);
+
+    private static SmartArtLayoutApplyResult NotAppliedLayout(string message) =>
+        new(false, message, null, null, SmartArtFamily.Unknown);
 
     private sealed record PaletteColor(SrgbColor Resolved, string? SchemeRole, ThemeAwareColor ModelColor);
 }

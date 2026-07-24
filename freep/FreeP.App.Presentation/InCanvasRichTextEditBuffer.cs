@@ -436,9 +436,6 @@ internal static class RichTextBodyMutationPlanner
         EnsureRun(paragraph, activeTemplate ?? firstTemplate.Runs.FirstOrDefault());
         result.Paragraphs.Add(paragraph);
 
-        InCanvasRichTextParagraphEditPlanner.ApplySourceParagraphMetadata(
-            source.Paragraphs,
-            result.Paragraphs);
         return result;
     }
 

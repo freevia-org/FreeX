@@ -327,6 +327,18 @@ public static class FreePRibbon
                 FreePRibbonText.SmartArtGrayscaleCommand.Label, RibbonCommandIconKind.Clear,
                 FreePRibbonText.SmartArtGrayscaleCommand.KeyTip);
         });
+        tab.Group("smartart-layouts", FreePRibbonText.SmartArtLayoutsGroup.Label, FreePRibbonText.SmartArtLayoutsGroup.KeyTip, 80, group =>
+        {
+            group.Medium(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
+                FreePRibbonText.SmartArtBasicProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtBasicProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.VerticalBoxListLayoutCommandId,
+                FreePRibbonText.SmartArtVerticalBoxListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtVerticalBoxListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
+                FreePRibbonText.SmartArtBasicCycleCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtBasicCycleCommand.KeyTip);
+        });
     }
 
     private static void AddTransitionGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
