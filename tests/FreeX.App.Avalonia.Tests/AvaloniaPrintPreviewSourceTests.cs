@@ -53,13 +53,18 @@ public sealed class AvaloniaPrintPreviewSourceTests
     }
 
     [Fact]
-    public void PrintPreview_MatchesWpfDocumentViewerWhiteSurface()
+    public void PrintPreview_MatchesWpfDocumentViewerPaperAndSurround()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PrintPreview.cs"));
 
-        source.Should().Contain("private static readonly IBrush PrintPreviewSurfaceBackground = Brushes.White;");
+        source.Should().Contain("private static readonly IBrush PrintPreviewSurfaceBackground = Brush(240, 240, 240);");
         source.Should().NotContain("PrintPreviewSurfaceBackground = Brush(82, 86, 92)");
         source.Should().Contain("Foreground = Brush(92, 92, 92)");
+        source.Should().Contain("Background = Brushes.White");
+        source.Should().Contain("BorderBrush = Brush(128, 128, 128)");
+        source.Should().Contain("OffsetX = 4");
+        source.Should().Contain("OffsetY = 4");
+        source.Should().Contain("Color = Color.FromArgb(89, 0, 0, 0)");
     }
 
     [Fact]

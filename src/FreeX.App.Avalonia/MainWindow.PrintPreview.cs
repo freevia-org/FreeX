@@ -46,9 +46,8 @@ public sealed partial class MainWindow
     private const string PrintPreviewDefaultPrinterName = "Windows print dialog";
 
     private static readonly ITextMeasurer PrintPreviewTextMeasurer = new AvaloniaTextMeasurer();
-    // WPF DocumentViewer keeps the area around the paper white; matching it avoids a large
-    // non-content color delta in the paired Print Preview capture.
-    private static readonly IBrush PrintPreviewSurfaceBackground = Brushes.White;
+    // WPF DocumentViewer uses its light neutral control surface around the white paper.
+    private static readonly IBrush PrintPreviewSurfaceBackground = Brush(240, 240, 240);
     private static AvaloniaCompactDialogChromeStyle PrintPreviewChromeStyle =>
         new(FormulaBarFontFamily) { ButtonPadding = new Thickness(6, 1) };
     private static readonly PrintSettingsTextResolver PrintPreviewSettingsTextResolver = new(
@@ -811,16 +810,36 @@ public sealed partial class MainWindow
             canvas.Children.Add(text);
         }
 
+        var paper = new Grid
+        {
+            ClipToBounds = true,
+            Children =
+            {
+                canvas,
+                new Border
+                {
+                    BorderBrush = Brush(128, 128, 128),
+                    BorderThickness = new Thickness(1),
+                    IsHitTestVisible = false,
+                },
+            },
+        };
+
         return new Border
         {
             Width = PrintPreviewParityFixture.PageWidth,
             Height = PrintPreviewParityFixture.PageHeight,
             Background = Brushes.White,
-            BorderBrush = Brush(160, 160, 160),
-            BorderThickness = new Thickness(1),
+            BoxShadow = new BoxShadows(new BoxShadow
+            {
+                OffsetX = 4,
+                OffsetY = 4,
+                Blur = 0,
+                Color = Color.FromArgb(89, 0, 0, 0),
+            }),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
-            Child = canvas,
+            Child = paper,
         };
     }
 
