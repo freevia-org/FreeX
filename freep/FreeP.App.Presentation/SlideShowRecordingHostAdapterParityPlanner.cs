@@ -241,7 +241,7 @@ public sealed record SlideShowRecordingUnavailableHardwareEvidence(
             : "Unavailable-hardware recording evidence is not paired across WPF and Avalonia.";
 
     public string RemainingWork =>
-        "Live capture on real microphone/camera hardware, local default camera mp4 encoding, PowerPoint COM recording baselines, and broader real-deck media/caption baselines remain deferred.";
+        "Live capture permission/error and unavailable-hardware evidence, PowerPoint COM recording baselines, and broader real-deck media/caption baselines remain deferred.";
 
     private static bool IsWpf(string hostName) =>
         hostName.Contains("WPF", StringComparison.OrdinalIgnoreCase);

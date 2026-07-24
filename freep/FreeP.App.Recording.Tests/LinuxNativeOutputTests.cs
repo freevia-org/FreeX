@@ -215,6 +215,61 @@ public sealed class LinuxNativeOutputTests
     }
 
     [Fact]
+    public async Task Linux_ffmpeg_export_muxes_persisted_camera_as_timed_picture_in_picture()
+    {
+        var output = Path.Combine(Path.GetTempPath(), $"freep-camera-video-{Guid.NewGuid():N}.mp4");
+        var runner = new CapturingVideoProcessRunner(output);
+        var presentation = FreeP.Core.Model.Presentation.CreateEmpty();
+        presentation.Slides.Add(new FreeP.Core.Model.Slide
+        {
+            LayoutId = presentation.Layouts[0].Id,
+            Title = "Slide 2",
+        });
+        var cameraBytes = Encoding.ASCII.GetBytes("camera ftyp moov mdat payload");
+        var artifact = new PresentationRecordingMediaArtifact(
+            PresentationRecordingMediaArtifactKind.CameraVideo,
+            SlideIndex: 1,
+            SuggestedFileName: "slide-2-camera.mp4",
+            ContentType: "video/mp4",
+            PackagePath: "ppt/media/freep-recordings/avalonia/slide-1-camera.mp4",
+            ContentLengthBytes: cameraBytes.Length,
+            ContentSha256: "camera-sha",
+            DurationMs: 200,
+            CapturedByHost: "test",
+            StatusText: "captured",
+            PayloadBytes: cameraBytes);
+
+        try
+        {
+            var result = await new LinuxVideoExportAdapter(
+                new LinuxVideoEncoderCapability(true, "ffmpeg", "libx264", true, "ready"),
+                runner)
+                .ExportAsync(
+                    BuildPackage(presentation, includeNarration: false),
+                    output,
+                    CancellationToken.None,
+                    [artifact]);
+
+            result.Succeeded.Should().BeTrue(result.FailureReason);
+            result.MuxedCameraTrackCount.Should().Be(1);
+            result.StatusText.Should().Contain("camera");
+            runner.Arguments.Should().Contain(argument =>
+                argument.EndsWith("camera-0000.mp4", StringComparison.OrdinalIgnoreCase));
+            runner.Arguments.Should().Contain(argument =>
+                argument.Contains("[1:v]setpts=PTS-STARTPTS,trim=duration=0.2,setpts=PTS+1/TB", StringComparison.Ordinal));
+            runner.Arguments.Should().Contain(argument =>
+                argument.Contains("overlay=x=main_w-overlay_w-32:y=main_h-overlay_h-32", StringComparison.Ordinal));
+            runner.Arguments.Should().ContainInOrder("-map", "[vout]");
+            runner.Arguments.Should().Contain("-an");
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
     public async Task Video_export_cancellation_removes_partial_output_after_runner_is_cancelled()
     {
         var output = Path.Combine(Path.GetTempPath(), $"freep-cancelled-video-{Guid.NewGuid():N}.mp4");

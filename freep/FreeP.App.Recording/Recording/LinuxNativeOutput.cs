@@ -71,7 +71,8 @@ public sealed record LinuxVideoExportResult(
     string OutputPath,
     string? EncoderName,
     long ByteCount,
-    int MuxedNarrationTrackCount = 0)
+    int MuxedNarrationTrackCount = 0,
+    int MuxedCameraTrackCount = 0)
 {
     public static LinuxVideoExportResult Failed(string reason, string outputPath = "") =>
         new(false, false, "Linux video export failed", reason, outputPath, null, 0);
@@ -83,18 +84,23 @@ public sealed record LinuxVideoExportResult(
         string outputPath,
         string encoderName,
         long byteCount,
-        int muxedNarrationTrackCount = 0) =>
+        int muxedNarrationTrackCount = 0,
+        int muxedCameraTrackCount = 0) =>
         new(
             true,
             false,
-            muxedNarrationTrackCount > 0
-                ? $"Linux video export completed with {muxedNarrationTrackCount} narration track(s)"
-                : "Linux video export completed (video-only; narration and camera/media were not muxed)",
+            BuildVideoSuccessText(muxedNarrationTrackCount, muxedCameraTrackCount),
             null,
             outputPath,
             encoderName,
             byteCount,
-            muxedNarrationTrackCount);
+            muxedNarrationTrackCount,
+            muxedCameraTrackCount);
+
+    private static string BuildVideoSuccessText(int narrationCount, int cameraCount) =>
+        narrationCount == 0 && cameraCount == 0
+            ? "Linux video export completed (video-only)"
+            : $"Linux video export completed with {narrationCount} narration track(s) and {cameraCount} camera track(s)";
 }
 
 public sealed class LinuxNativeOutputCapabilityDetector
@@ -473,13 +479,16 @@ public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
         {
             Directory.CreateDirectory(temporaryDirectory);
             var concatPath = ExtractFramesAndBuildConcatFile(package, temporaryDirectory);
-            var narrationTracks = PrepareNarrationTracks(package, mediaArtifacts, temporaryDirectory);
+            var mediaPlan = PresentationVideoMediaMuxPlanner.Prepare(
+                package,
+                mediaArtifacts,
+                temporaryDirectory);
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
-            var arguments = BuildFfmpegArguments(
+            var arguments = PresentationVideoMediaMuxPlanner.BuildFfmpegArguments(
                 concatPath,
                 outputPath,
                 _capability.EncoderName!,
-                narrationTracks);
+                mediaPlan);
             var processResult = await RunFfmpegAsync(
                 _capability.ExecutablePath,
                 arguments,
@@ -505,7 +514,8 @@ public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
                 outputPath,
                 _capability.EncoderName!,
                 bytes.LongLength,
-                narrationTracks.Count);
+                mediaPlan.MuxedNarrationTrackCount,
+                mediaPlan.MuxedCameraTrackCount);
         }
         catch (OperationCanceledException)
         {
@@ -555,103 +565,6 @@ public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
         File.WriteAllLines(concatPath, lines, new UTF8Encoding(false));
         return concatPath;
     }
-
-    private static IReadOnlyList<string> BuildFfmpegArguments(
-        string concatPath,
-        string outputPath,
-        string encoderName,
-        IReadOnlyList<LinuxNarrationTrack> narrationTracks)
-    {
-        var arguments = new List<string>
-        {
-            "-hide_banner",
-            "-loglevel", "error",
-            "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", concatPath,
-        };
-
-        foreach (var track in narrationTracks)
-        {
-            arguments.Add("-i");
-            arguments.Add(track.Path);
-        }
-
-        if (narrationTracks.Count == 0)
-        {
-            arguments.Add("-an");
-        }
-        else
-        {
-            var filters = narrationTracks
-                .Select((track, index) =>
-                    $"[{index + 1}:a]adelay={StartDelayMilliseconds(track.StartTime)}:all=1[a{index}]")
-                .ToList();
-            var mixedInputs = string.Concat(narrationTracks.Select((_, index) => $"[a{index}]"));
-            filters.Add(narrationTracks.Count == 1
-                ? "[a0]aresample=async=1[aout]"
-                : $"{mixedInputs}amix=inputs={narrationTracks.Count}:duration=longest:dropout_transition=0,aresample=async=1[aout]");
-
-            arguments.Add("-filter_complex");
-            arguments.Add(string.Join(';', filters));
-            arguments.Add("-map");
-            arguments.Add("0:v:0");
-            arguments.Add("-map");
-            arguments.Add("[aout]");
-            arguments.Add("-shortest");
-            arguments.Add("-c:a");
-            arguments.Add("aac");
-            arguments.Add("-b:a");
-            arguments.Add("192k");
-        }
-
-        arguments.Add("-c:v");
-        arguments.Add(encoderName);
-        arguments.Add("-pix_fmt");
-        arguments.Add("yuv420p");
-        arguments.Add("-movflags");
-        arguments.Add("+faststart");
-        arguments.Add(outputPath);
-        return arguments;
-    }
-
-    private static IReadOnlyList<LinuxNarrationTrack> PrepareNarrationTracks(
-        PresentationVideoFramePackage package,
-        IReadOnlyList<PresentationRecordingMediaArtifact>? mediaArtifacts,
-        string directory)
-    {
-        if (!package.Plan.ExportPlan.IncludeNarration || mediaArtifacts is null)
-            return [];
-
-        var slideStartTimes = package.Frames
-            .GroupBy(frame => frame.SlideIndex)
-            .ToDictionary(group => group.Key, group => group.Min(frame => frame.StartTime));
-        var tracks = new List<LinuxNarrationTrack>();
-        foreach (var artifact in mediaArtifacts)
-        {
-            if (artifact.Kind != PresentationRecordingMediaArtifactKind.NarrationAudio ||
-                !artifact.HasPayload ||
-                !slideStartTimes.TryGetValue(artifact.SlideIndex, out var startTime))
-            {
-                continue;
-            }
-
-            var extension = Path.GetExtension(artifact.SuggestedFileName);
-            if (string.IsNullOrWhiteSpace(extension) || extension.Length > 8)
-                extension = ".audio";
-            var path = Path.Combine(directory, $"narration-{tracks.Count:D4}{extension}");
-            File.WriteAllBytes(path, artifact.PayloadBytes!);
-            tracks.Add(new LinuxNarrationTrack(path, startTime));
-        }
-
-        return tracks;
-    }
-
-    private static long StartDelayMilliseconds(TimeSpan startTime) =>
-        Math.Max(0, (long)Math.Round(startTime.TotalMilliseconds, MidpointRounding.AwayFromZero));
-
-    private sealed record LinuxNarrationTrack(string Path, TimeSpan StartTime);
 
     private async Task<LinuxVideoExportResult?> RunFfmpegAsync(
         string executable,

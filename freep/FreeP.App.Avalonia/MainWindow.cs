@@ -3489,8 +3489,8 @@ public sealed partial class MainWindow : Window
             CanCaptureCameraAndMedia: false,
             capability.CanEncodeMp4
                 ? capability.CanCaptureNarration
-                    ? "ffmpeg video export and persisted narration muxing are available; camera/media muxing is not implemented."
-                    : "Video-only ffmpeg export is available; narration capture is unavailable and camera/media muxing is not implemented."
+                    ? "ffmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
+                    : "Video-only ffmpeg export is available; narration and captured camera picture-in-picture are unavailable."
                 : capability.Reason);
 
     private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)

@@ -97,7 +97,7 @@ public sealed class SlideShowRecordingHostAdapterParityPlannerTests
         evidence.HasPairedEncodedPayload.Should().BeFalse();
         evidence.ClaimsPowerPointComBaseline.Should().BeFalse();
         evidence.SummaryText.Should().Contain("deferring video encoding honestly");
-        evidence.RemainingWork.Should().Contain("Actual local default no-COM real camera video encoding");
+        evidence.RemainingWork.Should().Contain("default-camera permission/error evidence");
         evidence.RemainingWork.Should().Contain("PowerPoint COM recording baselines");
     }
 
@@ -140,7 +140,7 @@ public sealed class SlideShowRecordingHostAdapterParityPlannerTests
         evidence.HostRows.Should().OnlyContain(row => row.HasPackageTarget);
         evidence.SummaryText.Should().Contain("deterministic injected encoded mp4 payload packaging");
         evidence.SummaryText.Should().Contain("real default camera video encoding remains deferred");
-        evidence.RemainingWork.Should().Contain("Actual local default no-COM real camera video encoding");
+        evidence.RemainingWork.Should().Contain("default-camera permission/error evidence");
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public sealed class SlideShowRecordingHostAdapterParityPlannerTests
                 SlideShowRecordingCaptureStreamKind.CameraVideo
             }));
         evidence.SummaryText.Should().Contain("no available microphone or camera hardware");
-        evidence.RemainingWork.Should().Contain("Live capture on real microphone/camera hardware");
+        evidence.RemainingWork.Should().Contain("Live capture permission/error");
     }
 
     [Fact]

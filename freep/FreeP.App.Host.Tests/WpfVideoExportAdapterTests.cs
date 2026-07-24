@@ -103,6 +103,53 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
         runner.Arguments.Should().NotContain("-an");
     }
 
+    [Fact]
+    public async Task Export_MuxesPersistedCameraAsTimedPictureInPicture()
+    {
+        var output = Path.Combine(_tempDirectory, "camera.mp4");
+        var runner = new SuccessfulVideoProcessRunner(output);
+        var adapter = new WpfVideoExportAdapter(
+            new WpfVideoEncoderCapability(true, "ffmpeg.exe", "libx264", "ready"),
+            runner);
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Add(new Slide
+        {
+            LayoutId = presentation.Layouts[0].Id,
+            Title = "Slide 2",
+        });
+        var cameraBytes = Encoding.ASCII.GetBytes("camera ftyp moov mdat payload");
+        var artifact = new PresentationRecordingMediaArtifact(
+            PresentationRecordingMediaArtifactKind.CameraVideo,
+            SlideIndex: 1,
+            SuggestedFileName: "slide-2-camera.mp4",
+            ContentType: "video/mp4",
+            PackagePath: "ppt/media/freep-recordings/wpf/slide-1-camera.mp4",
+            ContentLengthBytes: cameraBytes.Length,
+            ContentSha256: "camera-sha",
+            DurationMs: 200,
+            CapturedByHost: "test",
+            StatusText: "captured",
+            PayloadBytes: cameraBytes);
+
+        var result = await adapter.ExportAsync(
+            BuildPackage(presentation),
+            output,
+            CancellationToken.None,
+            [artifact]);
+
+        result.Succeeded.Should().BeTrue(result.FailureReason);
+        result.MuxedCameraTrackCount.Should().Be(1);
+        result.StatusText.Should().Contain("camera");
+        runner.Arguments.Should().Contain(argument =>
+            argument.EndsWith("camera-0000.mp4", StringComparison.OrdinalIgnoreCase));
+        runner.Arguments.Should().Contain(argument =>
+            argument.Contains("[1:v]setpts=PTS-STARTPTS,trim=duration=0.2,setpts=PTS+1/TB", StringComparison.Ordinal));
+        runner.Arguments.Should().Contain(argument =>
+            argument.Contains("overlay=x=main_w-overlay_w-32:y=main_h-overlay_h-32", StringComparison.Ordinal));
+        runner.Arguments.Should().ContainInOrder("-map", "[vout]");
+        runner.Arguments.Should().Contain("-an");
+    }
+
     private static PresentationVideoFramePackage BuildPackage(bool includeNarration = false) =>
         BuildPackage(Presentation.CreateEmpty(), includeNarration);
 

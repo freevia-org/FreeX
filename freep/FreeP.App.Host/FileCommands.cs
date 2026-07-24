@@ -504,7 +504,7 @@ internal sealed class FileCommands
             CanCaptureNarration: false,
             CanCaptureCameraAndMedia: false,
             capability.CanEncodeMp4
-                ? "FFmpeg video export and persisted narration muxing are available; live narration capture and camera/media muxing are not implemented."
+                ? "FFmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available."
                 : capability.Reason);
 
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>
