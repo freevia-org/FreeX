@@ -47,6 +47,13 @@ else
         "slide-pane-keyboard-context-dismissal"
         "slide-pane-pointer-context-open"
         "slide-pane-pointer-context-dismissal"
+        "slide-pane-pointer-select-second"
+        "slide-pane-keyboard-up-first"
+        "slide-pane-duplicate-create"
+        "slide-pane-duplicate-undo"
+        "slide-pane-duplicate-redo"
+        "slide-pane-delete-selected"
+        "slide-pane-delete-undo"
     )
 fi
 manifest_written=false
@@ -615,6 +622,7 @@ else
     [[ "$slide_pane_width" -lt 140 ]] && slide_pane_width=140
     slide_thumbnail_x=$(( X + slide_pane_width / 2 ))
     slide_thumbnail_y=$(( Y + HEIGHT * 34 / 100 ))
+    second_slide_thumbnail_y=$(( slide_thumbnail_y + HEIGHT * 17 / 100 ))
     new_slide_x=$(( X + slide_pane_width / 2 ))
     # The baseline's button band ends above the status bar; keep the click
     # centered in that band rather than using the window's bottom edge.
@@ -627,6 +635,8 @@ else
     slide_pane_stable_height=$(( HEIGHT * 50 / 100 ))
     slide_pane_geometry="${slide_pane_width}x${slide_pane_stable_height}+${X}+${slide_pane_stable_top}"
     main_view_geometry="$((WIDTH - slide_pane_width))x$((HEIGHT * 68 / 100))+$((X + slide_pane_width))+$((Y + HEIGHT * 20 / 100))"
+    status_height=26
+    status_geometry="${baseline_width}x${status_height}+0+$((baseline_height - status_height))"
     {
         printf 'window-geometry=%s\n' "$geometry"
         printf 'baseline-dimensions=%s\n' "$baseline_dimensions"
@@ -634,6 +644,8 @@ else
         printf 'slide-pane-stable-band=thumbnail-area-below-ribbon-above-button-and-status\n'
         printf 'main-view-geometry=%s\n' "$main_view_geometry"
         printf 'thumbnail-point=%s,%s\n' "$slide_thumbnail_x" "$slide_thumbnail_y"
+        printf 'second-thumbnail-point=%s,%s\n' "$slide_thumbnail_x" "$second_slide_thumbnail_y"
+        printf 'status-geometry=%s\n' "$status_geometry"
         printf 'new-slide-point=%s,%s\n' "$new_slide_x" "$new_slide_y"
         printf 'baseline-calibration=window-geometry-plus-baseline-screenshot\n'
     } > "$output/slide-pane-calibration.txt"
@@ -754,11 +766,15 @@ else
             "Ctrl+Y did not restore the calibrated created thumbnail-pane state and contextual main-view frame."
     fi
 
+    slide_context_opened=false
+    slide_context_dismissed=false
     run_slide_context_probe() {
         local id_prefix="$1" trigger="$2" before="$3" open="$4" dismissed="$5"
         local before_state="${id_prefix}-before-state.txt" open_state="${id_prefix}-open-state.txt"
         local open_proof="${id_prefix}-open-proof.txt" dismissal_proof="${id_prefix}-dismissal-proof.txt"
         local trigger_ready=true
+        slide_context_opened=false
+        slide_context_dismissed=false
         focus_app
         if ! click_pointer 1 "$slide_thumbnail_x" "$slide_thumbnail_y"; then
             trigger_ready=false
@@ -788,6 +804,7 @@ else
             printf 'open-screenshot-changed='; if screen_changed "$output/$before" "$output/$open" 200; then printf 'true\n'; else printf 'false\n'; fi
         } > "$output/$open_proof"
         if $trigger_ready && screen_changed "$output/$before" "$output/$open" 200; then
+            slide_context_opened=true
             record "${id_prefix}-open" "passed" "$open_proof" \
                 "The real FreeP slide thumbnail context menu opened through $trigger input; screenshot and window-state evidence are retained."
         else
@@ -806,6 +823,7 @@ else
             printf 'dismissed-returns-to-before='; if screen_matches "$output/$before" "$output/$dismissed" 200; then printf 'true\n'; else printf 'false\n'; fi
         } > "$output/$dismissal_proof"
         if screen_matches "$output/$before" "$output/$dismissed" 200; then
+            slide_context_dismissed=true
             record "${id_prefix}-dismissal" "passed" "$dismissal_proof" \
                 "Escape dismissed the real FreeP slide thumbnail context menu and returned to the pre-open view."
         else
@@ -816,8 +834,227 @@ else
 
     run_slide_context_probe "slide-pane-keyboard-context" keyboard \
         "slide-pane-keyboard-context-before.png" "slide-pane-keyboard-context-open.png" "slide-pane-keyboard-context-dismissed.png"
+    keyboard_context_opened="$slide_context_opened"
+    keyboard_context_dismissed="$slide_context_dismissed"
     run_slide_context_probe "slide-pane-pointer-context" pointer \
         "slide-pane-pointer-context-before.png" "slide-pane-pointer-context-open.png" "slide-pane-pointer-context-dismissed.png"
+    pointer_context_opened="$slide_context_opened"
+    pointer_context_dismissed="$slide_context_dismissed"
+
+    capture_slide_navigation_state() {
+        local prefix="$1"
+        capture "${prefix}.png"
+        capture_region "${prefix}.png" "${prefix}-thumbnails.png" "$slide_pane_geometry"
+        capture_region "${prefix}.png" "${prefix}-status.png" "$status_geometry"
+    }
+
+    navigation_start_gate=false
+    if $redo_restored &&
+       $keyboard_context_opened && $keyboard_context_dismissed &&
+       $pointer_context_opened && $pointer_context_dismissed; then
+        navigation_start_gate=true
+    fi
+    move_pointer "$main_view_x" "$main_view_y"
+    capture_slide_navigation_state "slide-navigation-two-first"
+
+    pointer_select_ready=false
+    if $navigation_start_gate &&
+       click_pointer 1 "$slide_thumbnail_x" "$second_slide_thumbnail_y"; then
+        pointer_select_ready=true
+    fi
+    move_pointer "$main_view_x" "$main_view_y"
+    capture_slide_navigation_state "slide-navigation-two-second"
+    pointer_select_proven=false
+    if $navigation_start_gate && $pointer_select_ready &&
+       screen_changed "$output/slide-navigation-two-first-thumbnails.png" "$output/slide-navigation-two-second-thumbnails.png" 200 &&
+       screen_changed "$output/slide-navigation-two-first-status.png" "$output/slide-navigation-two-second-status.png" 5; then
+        pointer_select_proven=true
+    fi
+    {
+        printf 'prior-sequence-proven=%s\n' "$navigation_start_gate"
+        printf 'pointer-input-ready=%s\n' "$pointer_select_ready"
+        printf 'second-thumbnail-point=%s,%s\n' "$slide_thumbnail_x" "$second_slide_thumbnail_y"
+        printf 'before-thumbnails=slide-navigation-two-first-thumbnails.png\n'
+        printf 'selected-thumbnails=slide-navigation-two-second-thumbnails.png\n'
+        printf 'before-status=slide-navigation-two-first-status.png\n'
+        printf 'selected-status=slide-navigation-two-second-status.png\n'
+        printf 'thumbnail-and-status-transition-proven=%s\n' "$pointer_select_proven"
+    } > "$output/slide-pane-pointer-select-second-proof.txt"
+    if $pointer_select_proven; then
+        record "slide-pane-pointer-select-second" "passed" "slide-pane-pointer-select-second-proof.txt" \
+            "Pointer input selected the real second FreeP thumbnail; calibrated thumbnail-pane and status crops prove the selection transition."
+    else
+        record "slide-pane-pointer-select-second" "failed" "slide-pane-pointer-select-second-proof.txt" \
+            "Pointer selection of the second FreeP thumbnail was not proven from the gated calibrated crops."
+    fi
+
+    keyboard_up_sent=false
+    if $pointer_select_proven && send_key Up; then
+        keyboard_up_sent=true
+    fi
+    capture_slide_navigation_state "slide-navigation-up-first"
+    keyboard_up_proven=false
+    if $pointer_select_proven && $keyboard_up_sent &&
+       screen_matches "$output/slide-navigation-two-first-thumbnails.png" "$output/slide-navigation-up-first-thumbnails.png" 200 &&
+       screen_matches "$output/slide-navigation-two-first-status.png" "$output/slide-navigation-up-first-status.png" 30; then
+        keyboard_up_proven=true
+    fi
+    {
+        printf 'pointer-select-proven=%s\n' "$pointer_select_proven"
+        printf 'keyboard-up-sent=%s\n' "$keyboard_up_sent"
+        printf 'expected-thumbnails=slide-navigation-two-first-thumbnails.png\n'
+        printf 'actual-thumbnails=slide-navigation-up-first-thumbnails.png\n'
+        printf 'expected-status=slide-navigation-two-first-status.png\n'
+        printf 'actual-status=slide-navigation-up-first-status.png\n'
+        printf 'exact-first-slide-state-proven=%s\n' "$keyboard_up_proven"
+    } > "$output/slide-pane-keyboard-up-first-proof.txt"
+    if $keyboard_up_proven; then
+        record "slide-pane-keyboard-up-first" "passed" "slide-pane-keyboard-up-first-proof.txt" \
+            "Up moved the focused real slide pane from slide 2 to slide 1 and restored the calibrated first-slide state."
+    else
+        record "slide-pane-keyboard-up-first" "failed" "slide-pane-keyboard-up-first-proof.txt" \
+            "The gated Up input did not restore the calibrated first-slide thumbnail and status state."
+    fi
+
+    duplicate_sent=false
+    if $keyboard_up_proven && send_key ctrl+d; then
+        duplicate_sent=true
+    fi
+    capture_slide_navigation_state "slide-navigation-duplicated-three"
+    duplicate_proven=false
+    if $keyboard_up_proven && $duplicate_sent &&
+       screen_changed "$output/slide-navigation-up-first-thumbnails.png" "$output/slide-navigation-duplicated-three-thumbnails.png" 200 &&
+       screen_changed "$output/slide-navigation-up-first-status.png" "$output/slide-navigation-duplicated-three-status.png" 5; then
+        duplicate_proven=true
+    fi
+    {
+        printf 'keyboard-up-proven=%s\n' "$keyboard_up_proven"
+        printf 'ctrl-d-sent=%s\n' "$duplicate_sent"
+        printf 'before-thumbnails=slide-navigation-up-first-thumbnails.png\n'
+        printf 'duplicated-thumbnails=slide-navigation-duplicated-three-thumbnails.png\n'
+        printf 'before-status=slide-navigation-up-first-status.png\n'
+        printf 'duplicated-status=slide-navigation-duplicated-three-status.png\n'
+        printf 'three-slide-state-proven=%s\n' "$duplicate_proven"
+    } > "$output/slide-pane-duplicate-create-proof.txt"
+    if $duplicate_proven; then
+        record "slide-pane-duplicate-create" "passed" "slide-pane-duplicate-create-proof.txt" \
+            "Ctrl+D on the focused slide pane created a third slide, proven by calibrated thumbnail-pane and status transitions."
+    else
+        record "slide-pane-duplicate-create" "failed" "slide-pane-duplicate-create-proof.txt" \
+            "The gated focused Ctrl+D input did not prove a three-slide state."
+    fi
+
+    duplicate_undo_sent=false
+    if $duplicate_proven && send_key ctrl+z; then
+        duplicate_undo_sent=true
+    fi
+    capture_slide_navigation_state "slide-navigation-duplicate-undo-two"
+    duplicate_undo_proven=false
+    if $duplicate_proven && $duplicate_undo_sent &&
+       screen_matches "$output/slide-navigation-up-first-thumbnails.png" "$output/slide-navigation-duplicate-undo-two-thumbnails.png" 200 &&
+       screen_matches "$output/slide-navigation-up-first-status.png" "$output/slide-navigation-duplicate-undo-two-status.png" 30; then
+        duplicate_undo_proven=true
+    fi
+    {
+        printf 'duplicate-proven=%s\n' "$duplicate_proven"
+        printf 'ctrl-z-sent=%s\n' "$duplicate_undo_sent"
+        printf 'expected-two-thumbnails=slide-navigation-up-first-thumbnails.png\n'
+        printf 'undo-thumbnails=slide-navigation-duplicate-undo-two-thumbnails.png\n'
+        printf 'expected-two-status=slide-navigation-up-first-status.png\n'
+        printf 'undo-status=slide-navigation-duplicate-undo-two-status.png\n'
+        printf 'exact-two-slide-state-proven=%s\n' "$duplicate_undo_proven"
+    } > "$output/slide-pane-duplicate-undo-proof.txt"
+    if $duplicate_undo_proven; then
+        record "slide-pane-duplicate-undo" "passed" "slide-pane-duplicate-undo-proof.txt" \
+            "Ctrl+Z removed the duplicate and restored the exact calibrated two-slide first-selected state."
+    else
+        record "slide-pane-duplicate-undo" "failed" "slide-pane-duplicate-undo-proof.txt" \
+            "The gated duplicate undo did not restore the calibrated two-slide state."
+    fi
+
+    duplicate_redo_sent=false
+    if $duplicate_undo_proven && send_key ctrl+y; then
+        duplicate_redo_sent=true
+    fi
+    capture_slide_navigation_state "slide-navigation-duplicate-redo-three"
+    duplicate_redo_proven=false
+    if $duplicate_undo_proven && $duplicate_redo_sent &&
+       screen_matches "$output/slide-navigation-duplicated-three-thumbnails.png" "$output/slide-navigation-duplicate-redo-three-thumbnails.png" 200 &&
+       screen_matches "$output/slide-navigation-duplicated-three-status.png" "$output/slide-navigation-duplicate-redo-three-status.png" 30; then
+        duplicate_redo_proven=true
+    fi
+    {
+        printf 'duplicate-undo-proven=%s\n' "$duplicate_undo_proven"
+        printf 'ctrl-y-sent=%s\n' "$duplicate_redo_sent"
+        printf 'expected-three-thumbnails=slide-navigation-duplicated-three-thumbnails.png\n'
+        printf 'redo-thumbnails=slide-navigation-duplicate-redo-three-thumbnails.png\n'
+        printf 'expected-three-status=slide-navigation-duplicated-three-status.png\n'
+        printf 'redo-status=slide-navigation-duplicate-redo-three-status.png\n'
+        printf 'exact-three-slide-state-proven=%s\n' "$duplicate_redo_proven"
+    } > "$output/slide-pane-duplicate-redo-proof.txt"
+    if $duplicate_redo_proven; then
+        record "slide-pane-duplicate-redo" "passed" "slide-pane-duplicate-redo-proof.txt" \
+            "Ctrl+Y restored the exact calibrated three-slide duplicated state after the proven undo."
+    else
+        record "slide-pane-duplicate-redo" "failed" "slide-pane-duplicate-redo-proof.txt" \
+            "The gated duplicate redo did not restore the calibrated three-slide state."
+    fi
+
+    delete_sent=false
+    if $duplicate_redo_proven && send_key Delete; then
+        delete_sent=true
+    fi
+    capture_slide_navigation_state "slide-navigation-delete-two"
+    delete_proven=false
+    if $duplicate_redo_proven && $delete_sent &&
+       screen_changed "$output/slide-navigation-duplicate-redo-three-thumbnails.png" "$output/slide-navigation-delete-two-thumbnails.png" 200 &&
+       screen_changed "$output/slide-navigation-duplicate-redo-three-status.png" "$output/slide-navigation-delete-two-status.png" 5; then
+        delete_proven=true
+    fi
+    {
+        printf 'duplicate-redo-proven=%s\n' "$duplicate_redo_proven"
+        printf 'delete-sent=%s\n' "$delete_sent"
+        printf 'before-thumbnails=slide-navigation-duplicate-redo-three-thumbnails.png\n'
+        printf 'deleted-thumbnails=slide-navigation-delete-two-thumbnails.png\n'
+        printf 'before-status=slide-navigation-duplicate-redo-three-status.png\n'
+        printf 'deleted-status=slide-navigation-delete-two-status.png\n'
+        printf 'two-slide-delete-state-proven=%s\n' "$delete_proven"
+    } > "$output/slide-pane-delete-selected-proof.txt"
+    if $delete_proven; then
+        record "slide-pane-delete-selected" "passed" "slide-pane-delete-selected-proof.txt" \
+            "Delete on the focused slide pane removed the selected duplicate and produced a calibrated two-slide state."
+    else
+        record "slide-pane-delete-selected" "failed" "slide-pane-delete-selected-proof.txt" \
+            "The gated focused Delete input did not prove the expected two-slide state."
+    fi
+
+    delete_undo_sent=false
+    if $delete_proven && send_key ctrl+z; then
+        delete_undo_sent=true
+    fi
+    capture_slide_navigation_state "slide-navigation-delete-undo-three"
+    delete_undo_proven=false
+    if $delete_proven && $delete_undo_sent &&
+       screen_matches "$output/slide-navigation-duplicate-redo-three-thumbnails.png" "$output/slide-navigation-delete-undo-three-thumbnails.png" 200 &&
+       screen_matches "$output/slide-navigation-duplicate-redo-three-status.png" "$output/slide-navigation-delete-undo-three-status.png" 30; then
+        delete_undo_proven=true
+    fi
+    {
+        printf 'delete-proven=%s\n' "$delete_proven"
+        printf 'ctrl-z-sent=%s\n' "$delete_undo_sent"
+        printf 'expected-three-thumbnails=slide-navigation-duplicate-redo-three-thumbnails.png\n'
+        printf 'undo-delete-thumbnails=slide-navigation-delete-undo-three-thumbnails.png\n'
+        printf 'expected-three-status=slide-navigation-duplicate-redo-three-status.png\n'
+        printf 'undo-delete-status=slide-navigation-delete-undo-three-status.png\n'
+        printf 'exact-three-slide-state-proven=%s\n' "$delete_undo_proven"
+    } > "$output/slide-pane-delete-undo-proof.txt"
+    if $delete_undo_proven; then
+        record "slide-pane-delete-undo" "passed" "slide-pane-delete-undo-proof.txt" \
+            "Ctrl+Z undid the selected-slide deletion and restored the exact calibrated three-slide state."
+    else
+        record "slide-pane-delete-undo" "failed" "slide-pane-delete-undo-proof.txt" \
+            "The gated delete undo did not restore the calibrated three-slide state."
+    fi
 fi
 
 write_manifest

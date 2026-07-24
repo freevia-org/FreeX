@@ -497,6 +497,65 @@ public sealed class KeyboardContextParityTests
     }
 
     [Fact]
+    public async Task SlidePaneFocusSurvivesDuplicateUndoRedoAndRoutesDeleteToSharedPlanner()
+    {
+        MainWindow? window = null;
+        await Session.Dispatch(() =>
+        {
+            window = new MainWindow([]);
+            window.Show();
+            window.Editor.InsertSlide();
+        }, CancellationToken.None);
+
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                window.Should().NotBeNull();
+                window!.Activate();
+                var selected = window.SelectedSlidePaneItemForTests;
+                selected.Should().NotBeNull();
+                selected!.Focus().Should().BeTrue();
+
+                var duplicate = RoutedKey(Key.D, KeyModifiers.Control, selected);
+                selected.RaiseEvent(duplicate);
+                duplicate.Handled.Should().BeTrue();
+                window.Editor.Presentation.Slides.Should().HaveCount(3);
+
+                window.Editor.Undo();
+                window.Editor.Redo();
+            }, CancellationToken.None);
+
+            await Session.Dispatch(() =>
+            {
+                window.Should().NotBeNull();
+                var rebuiltSelected = window.SelectedSlidePaneItemForTests;
+                rebuiltSelected.Should().NotBeNull();
+                rebuiltSelected!.IsFocused.Should().BeTrue(
+                    "slide-pane rebuilds after undo/redo must preserve keyboard routing");
+
+                var delete = RoutedKey(Key.Delete, KeyModifiers.None, rebuiltSelected);
+                rebuiltSelected.RaiseEvent(delete);
+                delete.Handled.Should().BeTrue();
+                window.Editor.Presentation.Slides.Should().HaveCount(2);
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await Session.Dispatch(() =>
+            {
+                try
+                {
+                    window?.Close();
+                }
+                catch
+                {
+                }
+            }, CancellationToken.None);
+        }
+    }
+
+    [Fact]
     public async Task AvaloniaTableContextMenuMatchesWpfAndExecutesCellMutations()
     {
         await Session.Dispatch(() =>

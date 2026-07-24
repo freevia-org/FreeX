@@ -145,7 +145,14 @@ function Assert-ManifestContract {
             "slide-pane-keyboard-context-open",
             "slide-pane-keyboard-context-dismissal",
             "slide-pane-pointer-context-open",
-            "slide-pane-pointer-context-dismissal"
+            "slide-pane-pointer-context-dismissal",
+            "slide-pane-pointer-select-second",
+            "slide-pane-keyboard-up-first",
+            "slide-pane-duplicate-create",
+            "slide-pane-duplicate-undo",
+            "slide-pane-duplicate-redo",
+            "slide-pane-delete-selected",
+            "slide-pane-delete-undo"
         )
     }
     $results = @($manifest.results)
@@ -153,8 +160,9 @@ function Assert-ManifestContract {
     if ($ids.Count -ne ($ids | Select-Object -Unique).Count) {
         throw "Manifest contains duplicate result IDs."
     }
-    if ($results.Count -ne 15) {
-        throw "$App family baseline must contain exactly fifteen result rows."
+    $expectedResultCount = if ($App -eq "FreeP") { 22 } else { 15 }
+    if ($results.Count -ne $expectedResultCount) {
+        throw "$App family baseline must contain exactly $expectedResultCount result rows."
     }
     foreach ($requiredId in $requiredIds) {
         if ($ids -notcontains $requiredId) {
@@ -307,7 +315,14 @@ try {
                 "slide-pane-keyboard-context-open",
                 "slide-pane-keyboard-context-dismissal",
                 "slide-pane-pointer-context-open",
-                "slide-pane-pointer-context-dismissal"
+                "slide-pane-pointer-context-dismissal",
+                "slide-pane-pointer-select-second",
+                "slide-pane-keyboard-up-first",
+                "slide-pane-duplicate-create",
+                "slide-pane-duplicate-undo",
+                "slide-pane-duplicate-redo",
+                "slide-pane-delete-selected",
+                "slide-pane-delete-undo"
             )
         }
         $failureResults = @($failureIds | ForEach-Object {
