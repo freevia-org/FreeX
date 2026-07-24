@@ -161,14 +161,14 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("const double FootnoteTrailingReserveDip = 15.0;");
         source.Should().Contain("thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip");
         source.Should().Contain("PageLayout.PointsToDip(24)");
-        source.Should().Contain("thisPixW - 2 * ins");
-        source.Should().Contain("width - inset");
+        source.Should().Contain("DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);");
+        source.Should().Contain("width - 2 * inset");
         source.Should().Contain("if (panel is not null && i < panel.PageBoxes.Count)");
         source.Should().Contain("var box = panel.PageBoxes[i];");
         source.Should().Contain("box.HeaderSubEditor is not null");
         source.Should().Contain("box.FooterSubEditor is not null");
-        source.Should().Contain("var headerTop = thisPageSettings.HeaderDistancePt > 0");
-        source.Should().Contain("var footerTop = thisPageSettings.FooterDistancePt > 0");
+        source.Should().Contain("var headerDistance = thisPageSettings.HeaderDistancePt > 0");
+        source.Should().Contain("var footerDistance = thisPageSettings.FooterDistancePt > 0");
         source.Should().Contain("flow.PagePadding = new Thickness(");
         project.Should().Contain("FreeW.App.Presentation");
         project.Should().Contain("PackageReference Include=\"SkiaSharp\"");

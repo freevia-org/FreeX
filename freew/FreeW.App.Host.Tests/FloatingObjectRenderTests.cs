@@ -536,10 +536,15 @@ public sealed class FloatingObjectRenderTests
             .Effect.Should().BeOfType<DropShadowEffect>();
         var glyphs = root.Children.OfType<TextBlock>().ToList();
         glyphs.Should().HaveCount(wordArt.Text.Length);
-        glyphs.Select(glyph => ((TransformGroup)glyph.RenderTransform).Children
+        var rotations = glyphs.Select(glyph => ((TransformGroup)glyph.RenderTransform).Children
                 .OfType<RotateTransform>().Single().Angle)
-            .Should().OnlyContain(angle => Math.Abs(angle) < 0.01,
-                "Word renders this exact imported Wave1 signature on an unrotated baseline");
+            .ToList();
+        rotations.Should().Contain(angle => angle < -1,
+            "Wave1 slopes glyphs downward at both ends");
+        rotations.Should().Contain(angle => angle > 1,
+            "Wave1 rises through the center");
+        rotations.Select(angle => Math.Abs(angle)).Max().Should().BeGreaterThan(5,
+            "the imported Wave1 signature carries visible per-glyph rotation");
     }
 
     [StaFact]
