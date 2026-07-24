@@ -150,6 +150,24 @@ public sealed class ChartDataDialogTests : IDisposable
         options.OnSecondaryAxis.Should().BeFalse();
     }
 
+    [StaFact]
+    public void ChartPointOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartPointOptionsDialog(sess);
+        dialog.SetOptionsForTests(1, 2, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.SeriesIndex.Should().Be(1);
+        options.PointIndex.Should().Be(2);
+        options.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        options.StrokeColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        options.StrokeWidthPt.Should().Be(1.5);
+        options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
+        options.MarkerSizePt.Should().Be(7);
+    }
+
     [Fact]
     public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {
@@ -181,6 +199,17 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().Contain("_planner.BuildCommitPlan()");
         source.Should().Contain("_editor.ApplyChartSeriesOptions");
         source.Should().NotContain("new SetChartSeriesOptionsCommand");
+    }
+
+    [Fact]
+    public void ChartPointOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartPointOptionsDialog.cs");
+
+        source.Should().Contain("ChartPointOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChartPointOptions");
+        source.Should().NotContain("new SetChartPointOptionsCommand");
     }
 
     [Fact]

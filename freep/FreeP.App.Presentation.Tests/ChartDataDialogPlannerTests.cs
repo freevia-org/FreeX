@@ -334,6 +334,34 @@ public sealed class ChartDataDialogPlannerTests
             .Should().Be(ChartSeriesOptionsPlanner.CommandId);
     }
 
+    [Fact]
+    public void ChartPointOptionsPlanner_UsesWorkingCopyAndBuildsPointFormattingOptions()
+    {
+        var chart = MakeChart();
+        chart.Series[1].PointColors[1] = new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4));
+
+        var planner = ChartPointOptionsPlanner.FromChart(chart);
+        planner.SetSeriesIndex(1);
+        planner.SetPointIndex(1);
+        planner.SetFillColor("#C00000");
+        planner.SetStrokeColor("#1F4E79");
+        planner.SetStrokeWidth(1.5);
+        planner.SetMarkerSymbol(ChartMarkerSymbol.Diamond);
+        planner.SetMarkerSize(7);
+
+        var options = planner.BuildCommitPlan();
+        options.SeriesIndex.Should().Be(1);
+        options.PointIndex.Should().Be(1);
+        options.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        options.StrokeColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        options.StrokeWidthPt.Should().Be(1.5);
+        options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
+        options.MarkerSizePt.Should().Be(7);
+        planner.PointOptions.Select(option => option.Label).Should().Equal("1: Q1", "2: Q2", "3: Q3");
+        chart.Series[1].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
+        ChartPointOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartPointOptionsPlanner.CommandId);
+    }
+
     private static ChartShape MakeChart()
     {
         var chart = new ChartShape();

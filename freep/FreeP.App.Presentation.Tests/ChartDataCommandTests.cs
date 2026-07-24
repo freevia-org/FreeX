@@ -990,4 +990,55 @@ public sealed class ChartDataCommandTests
         revertedMarker.SizePt.Should().Be(6);
         revertedMarker.NoStroke.Should().BeTrue();
     }
+
+    [Fact]
+    public void SetChartPointOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.Series[0].PointColors[1] = new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4));
+        chart.Series[0].PointStyles[1] = new ChartPointStyle
+        {
+            StrokeColor = new ThemeAwareColor(SrgbColor.FromRgb(0x808080)),
+            StrokeWidthPt = 0.75,
+            Marker = new ChartMarkerStyle { Symbol = ChartMarkerSymbol.Circle, SizePt = 5 },
+        };
+
+        bus.Execute(new SetChartPointOptionsCommand(
+            0,
+            id,
+            new ChartPointOptions(
+                0,
+                1,
+                new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
+                null,
+                null,
+                2.25,
+                ChartMarkerSymbol.Diamond,
+                8)));
+
+        var style = chart.Series[0].PointStyles[1];
+        chart.Series[0].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        style.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        style.StrokeColor.Should().BeNull();
+        style.StrokeWidthPt.Should().Be(2.25);
+        style.Marker!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
+        style.Marker.SizePt.Should().Be(8);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        var roundTrippedSeries = roundTripped.Series[0];
+        roundTrippedSeries.PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        roundTrippedSeries.PointStyles[1].FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        roundTrippedSeries.PointStyles[1].StrokeWidthPt.Should().Be(2.25);
+        roundTrippedSeries.PointStyles[1].Marker!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
+
+        bus.Undo();
+        chart.Series[0].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
+        chart.Series[0].PointStyles[1].StrokeColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x808080));
+        chart.Series[0].PointStyles[1].StrokeWidthPt.Should().Be(0.75);
+        chart.Series[0].PointStyles[1].Marker!.Symbol.Should().Be(ChartMarkerSymbol.Circle);
+    }
 }
