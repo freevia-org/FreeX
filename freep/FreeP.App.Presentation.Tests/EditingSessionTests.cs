@@ -30,6 +30,58 @@ public sealed class EditingSessionTests
         ExtentCyEmu = 100,
     };
 
+    private static (EditingSession Session, SmartArtShape SmartArt) MakeSmartArtSession()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var smartArt = new SmartArtShape
+        {
+            Data = new SmartArtData
+            {
+                Family = SmartArtFamily.Process,
+                LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicProcess",
+                IsLiveLayoutSupported = true,
+            },
+            DrawingPartPath = "ppt/diagrams/drawing1.xml",
+        };
+        smartArt.Data.Nodes.Add(new SmartArtNode { ModelId = "n1", Text = "Plan", Level = 0 });
+        smartArt.Data.Nodes.Add(new SmartArtNode { ModelId = "n2", Text = "Build", Level = 0 });
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = System.Text.Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
+        };
+        smartArt.Parts["ppt/diagrams/layout1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/layout1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+            Bytes = System.Text.Encoding.UTF8.GetBytes(
+                "<dgm:layoutDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" uniqueId=\"old\" />"),
+        };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = System.Text.Encoding.UTF8.GetBytes(
+                "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />"),
+        };
+
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.SmartArt,
+            SmartArt = smartArt,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 7_315_200,
+            ExtentCyEmu = 3_657_600,
+        };
+        slide.Shapes.Add(shape);
+        presentation.Slides.Add(slide);
+        return (new EditingSession(presentation, new PresentationCommandBus(presentation)), smartArt);
+    }
+
     // ── Construction ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -48,6 +100,21 @@ public sealed class EditingSessionTests
         var sess = new EditingSession(p, bus);
         sess.CurrentSlideIndex.Should().Be(-1);
         sess.CurrentSlide.Should().BeNull();
+    }
+
+    [Fact]
+    public void ApplySmartArtLayout_RefreshesNativeDataAndDrawingCacheThroughSharedSession()
+    {
+        var (session, _) = MakeSmartArtSession();
+
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.BasicProcess).Should().BeTrue();
+
+        var saved = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        saved.Data!.LayoutUniqueId.Should().EndWith("/layout/basicProcess");
+        saved.FallbackShapes.Should().NotBeEmpty();
+        saved.Parts["ppt/diagrams/data1.xml"].Bytes.Should().NotBeEmpty();
+        saved.Parts["ppt/diagrams/drawing1.xml"].Bytes.Should().Contain((byte)'P');
+        session.Bus.CanUndo.Should().BeTrue();
     }
 
     // ── Slide operations ──────────────────────────────────────────────────────────

@@ -129,12 +129,62 @@ public sealed class EditingSession
         return true;
     }
 
-    /// <summary>Applies one supported SmartArt layout through the shared undoable edit path.</summary>
+    /// <summary>
+    /// Applies one supported SmartArt layout through the shared undoable edit path and refreshes
+    /// the native data/cache payload before the replacement command is committed.
+    /// </summary>
     public bool ApplySmartArtLayout(uint shapeId, SmartArtLayoutPreset preset) =>
-        EditSmartArt(shapeId, smartArt => SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset).Applied);
+        EditSmartArtWithPackageRefresh(shapeId, smartArt =>
+            SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset).Applied);
 
+    /// <summary>
+    /// Applies one supported SmartArt Quick Style through the shared undoable edit path and
+    /// refreshes the native drawing cache so a saved package does not retain stale visuals.
+    /// </summary>
     public bool ApplySmartArtQuickStyle(uint shapeId, SmartArtQuickStylePreset preset) =>
-        EditSmartArt(shapeId, smartArt => SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset).Applied);
+        EditSmartArtWithPackageRefresh(shapeId, smartArt =>
+            SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset).Applied);
+
+    /// <summary>
+    /// Applies one supported SmartArt Change Colors preset through the same shared, undoable
+    /// package-refresh path used by layout and Quick Style edits.
+    /// </summary>
+    public bool ApplySmartArtColor(uint shapeId, SmartArtColorPreset preset)
+    {
+        return EditSmartArtWithPackageRefresh(shapeId, smartArt =>
+            SmartArtAuthoringPlanner.ApplyColorPreset(
+                smartArt,
+                preset,
+                Presentation.Theme,
+                CurrentSlide?.ColorMapOverride).Applied);
+    }
+
+    private bool EditSmartArtWithPackageRefresh(uint shapeId, Func<SmartArtShape, bool> edit)
+    {
+        var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
+            candidate.Id == shapeId &&
+            candidate.Kind == SlideShapeKind.SmartArt &&
+            candidate.SmartArt is not null);
+        if (shape?.SmartArt is null)
+            return false;
+
+        return EditSmartArt(shapeId, smartArt =>
+        {
+            if (!edit(smartArt))
+                return false;
+
+            SmartArtEditingPlanner.RewriteDataPart(smartArt);
+            SmartArtEditingPlanner.RegenerateDrawingCache(
+                smartArt,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu,
+                Presentation.Theme,
+                CurrentSlide?.ColorMapOverride);
+            return true;
+        });
+    }
 
     // ── Selection ─────────────────────────────────────────────────────────────────
 
