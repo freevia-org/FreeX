@@ -2138,6 +2138,19 @@ public sealed class EditingSession
             options));
     }
 
+    /// <summary>Applies chart-wide default text formatting as one undo step.</summary>
+    public void ApplyChartTextOptions(ChartTextOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return;
+
+        Bus.Execute(new SetChartTextOptionsCommand(
+            _currentSlideIndex,
+            _selectedShapeIds[0],
+            options));
+    }
+
     /// <summary>
     /// Non-nullable overload for callers that already work with <c>double</c> sequences (no gaps).
     /// </summary>

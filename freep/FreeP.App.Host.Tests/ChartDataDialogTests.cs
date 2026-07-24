@@ -307,6 +307,53 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().NotContain("new SetChart3DViewOptionsCommand");
     }
 
+    [StaFact]
+    public void ChartTextOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.TextStyle = new ChartTextStyle
+        {
+            FontFamily = "Aptos",
+            FontSizePt = 11,
+            Bold = true,
+            Italic = false,
+            Color = new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
+        };
+
+        var dialog = new ChartTextOptionsDialog(sess);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.FontFamily.Should().Be("Aptos");
+        options.FontSizePt.Should().Be(11);
+        options.Bold.Should().BeTrue();
+        options.Italic.Should().BeFalse();
+        options.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [Fact]
+    public void Chart3DAndTextOptions_AreReachableThroughHostSourceRoutes()
+    {
+        var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
+        var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+
+        ribbonSource.Should().Contain("Chart3DViewOptionsPlanner.CommandId");
+        ribbonSource.Should().Contain("ChartTextOptionsPlanner.CommandId");
+        windowSource.Should().Contain("OpenChart3DViewOptionsDialog");
+        windowSource.Should().Contain("OpenChartTextOptionsDialog");
+    }
+
+    [Fact]
+    public void ChartTextOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartTextOptionsDialog.cs");
+
+        source.Should().Contain("ChartTextOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChartTextOptions");
+        source.Should().NotContain("new SetChartTextOptionsCommand");
+    }
+
     [Fact]
     public void ChartDataDialog_UsesSharedPlannerForPolicy()
     {

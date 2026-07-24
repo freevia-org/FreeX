@@ -1,0 +1,108 @@
+using FreeP.App.Compositor;
+using FreeP.Core.IO;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Compositor.Tests;
+
+public sealed class ChartTextOptionsTests
+{
+    [Fact]
+    public void Planner_UsesWorkingCopyAndBuildsAutomaticOrExplicitValues()
+    {
+        var chart = new ChartShape
+        {
+            TextStyle = new ChartTextStyle
+            {
+                FontFamily = "Aptos",
+                FontSizePt = 11,
+                Bold = true,
+                Italic = false,
+                Color = new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)),
+            },
+        };
+
+        var planner = ChartTextOptionsPlanner.FromChart(chart);
+        planner.SetFontFamily("Calibri");
+        planner.SetFontSizePt(14);
+        planner.SetBold(false);
+        planner.SetItalic(true);
+        planner.SetColor("#C00000");
+
+        var options = planner.BuildCommitPlan();
+        options.FontFamily.Should().Be("Calibri");
+        options.FontSizePt.Should().Be(14);
+        options.Bold.Should().BeFalse();
+        options.Italic.Should().BeTrue();
+        options.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        chart.TextStyle!.FontFamily.Should().Be("Aptos");
+        chart.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [Theory]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("14.5", 14.5)]
+    public void ParseOptionalFontSize_MapsBlankAndParsesCurrentCulture(string text, double? expected)
+    {
+        ChartTextOptionsPlanner.ParseOptionalFontSize(text).Should().Be(expected);
+    }
+
+    [Fact]
+    public void SetChartTextOptions_RoundTripsAndUndoRestoresInheritedText()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape();
+        var shape = new SlideShape { Id = 1, Kind = SlideShapeKind.Chart, Chart = chart };
+        slide.Shapes.Add(shape);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        var options = new ChartTextOptions(
+            "Calibri", 14, false, true,
+            new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)));
+        bus.Execute(new SetChartTextOptionsCommand(0, shape.Id, options));
+
+        chart.TextStyle.Should().NotBeNull();
+        chart.TextStyle!.IsImplicitDefault.Should().BeFalse();
+        chart.TextStyle.FontFamily.Should().Be("Calibri");
+        chart.TextStyle.FontSizePt.Should().Be(14);
+        chart.TextStyle.Bold.Should().BeFalse();
+        chart.TextStyle.Italic.Should().BeTrue();
+        chart.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.TextStyle.Should().NotBeNull();
+        roundTripped.TextStyle!.FontFamily.Should().Be("Calibri");
+        roundTripped.TextStyle.FontSizePt.Should().Be(14);
+        roundTripped.TextStyle.Bold.Should().BeFalse();
+        roundTripped.TextStyle.Italic.Should().BeTrue();
+        roundTripped.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+
+        bus.Undo();
+        chart.TextStyle.Should().BeNull();
+    }
+
+    [Fact]
+    public void SetChartTextOptions_BlankValuesClearAuthoredStyle()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape
+        {
+            TextStyle = new ChartTextStyle { FontFamily = "Aptos", FontSizePt = 12 },
+        };
+        var shape = new SlideShape { Id = 1, Kind = SlideShapeKind.Chart, Chart = chart };
+        slide.Shapes.Add(shape);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetChartTextOptionsCommand(0, shape.Id,
+            new ChartTextOptions(null, null, null, null, null)));
+
+        chart.TextStyle.Should().BeNull("blank values restore inherited chart defaults");
+    }
+}

@@ -484,6 +484,18 @@
   <data name="Ribbon_Command_ChartDataTableOptions_KeyTip" xml:space="preserve">
     <value>D</value>
   </data>
+  <data name="Ribbon_Command_Chart3DViewOptions_Label" xml:space="preserve">
+    <value>3-D View</value>
+  </data>
+  <data name="Ribbon_Command_Chart3DViewOptions_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Command_ChartTextOptions_Label" xml:space="preserve">
+    <value>Text Options</value>
+  </data>
+  <data name="Ribbon_Command_ChartTextOptions_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
   <data name="Ribbon_Group_Links_Label" xml:space="preserve">
     <value>Links</value>
   </data>

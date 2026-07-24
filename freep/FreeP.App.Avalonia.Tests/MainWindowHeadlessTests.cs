@@ -1989,6 +1989,8 @@ public sealed class MainWindowHeadlessTests
         var foundPoint = false;
         var foundLayout = false;
         var foundDataTable = false;
+        var found3DView = false;
+        var foundTextOptions = false;
         var before = -1;
         var after = -1;
 
@@ -2003,6 +2005,8 @@ public sealed class MainWindowHeadlessTests
             foundPoint = registry.TryGet(ChartPointOptionsPlanner.CommandId, out _);
             foundLayout = registry.TryGet(ChartLayoutOptionsPlanner.CommandId, out _);
             foundDataTable = registry.TryGet(ChartDataTableOptionsPlanner.CommandId, out _);
+            found3DView = registry.TryGet(Chart3DViewOptionsPlanner.CommandId, out _);
+            foundTextOptions = registry.TryGet(ChartTextOptionsPlanner.CommandId, out _);
 
             before = window.Editor.CurrentSlide!.Shapes.Count;
             command!.Execute(RibbonCommandContext.Empty);
@@ -2016,6 +2020,8 @@ public sealed class MainWindowHeadlessTests
         foundPoint.Should().BeTrue("the Avalonia chart-point command must be registered");
         foundLayout.Should().BeTrue("the Avalonia chart-layout command must be registered");
         foundDataTable.Should().BeTrue("the Avalonia chart-data-table command must be registered");
+        found3DView.Should().BeTrue("the Avalonia chart-3-D-view command must be registered");
+        foundTextOptions.Should().BeTrue("the Avalonia chart-text command must be registered");
         after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
     }
 
@@ -5949,6 +5955,30 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         options.Should().Be(new ChartDataTableOptions(true, false, true, false, true,
             "#F2F2F2", "#4472C4", 1.25, "#112233", 9, "Aptos", true, false));
+    }
+
+    [Fact]
+    public async Task ChartTextOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartTextOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartTextOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests("Calibri", 14, false, true, "#C00000");
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options!.FontFamily.Should().Be("Calibri");
+        options.FontSizePt.Should().Be(14);
+        options.Bold.Should().BeFalse();
+        options.Italic.Should().BeTrue();
+        options.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
     }
 
     [Fact]
