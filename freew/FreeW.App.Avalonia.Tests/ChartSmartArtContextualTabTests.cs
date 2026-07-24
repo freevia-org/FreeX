@@ -150,6 +150,10 @@ public sealed class ChartSmartArtContextualTabTests
         foreach (var layout in ChartQuickLayout.Catalog)
             registry.TryGet(new RibbonCommandId($"freew.chart-quick-layout-{layout.Id}"), out _)
                 .Should().BeTrue($"quick layout {layout.Id} must be registered");
+
+        foreach (var layout in SmartArtLayoutPreset.Catalog)
+            registry.TryGet(new RibbonCommandId($"freew.smartart-layout-{layout.Id}"), out _)
+                .Should().BeTrue($"smartart layout {layout.Id} must be registered");
     }
 
     [Fact]
@@ -666,6 +670,35 @@ public sealed class ChartSmartArtContextualTabTests
     }
 
     [Fact]
+    public async Task SmartArt_layout_catalog_commands_apply_each_shared_preset()
+    {
+        var applied = new List<string>();
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingSmartArt();
+            var smartArt = ((Paragraph)doc.Blocks[bi]).Runs[ri].SmartArt!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+            foreach (var preset in SmartArtLayoutPreset.Catalog)
+            {
+                registry.TryGet(new RibbonCommandId($"freew.smartart-layout-{preset.Id}"), out var command)
+                    .Should().BeTrue();
+                command!.Execute(RibbonCommandContext.Empty);
+                smartArt.LayoutId.Should().Be(preset.Id);
+                smartArt.Kind.Should().Be(preset.Kind);
+                applied.Add(preset.Id);
+            }
+        });
+
+        if (!ran) return;
+        applied.Should().Equal(SmartArtLayoutPreset.Catalog.Select(preset => preset.Id));
+    }
+
+    [Fact]
     public async Task SetSmartArtColor_command_changes_scheme()
     {
         string? after = null;
@@ -709,6 +742,10 @@ public sealed class ChartSmartArtContextualTabTests
         });
         var styles = tab.FindGroup("smartart-styles")!.Controls.OfType<RibbonComboBox>().Single();
         styles.Items.Should().Equal(SmartArtStyle.Catalog.Select(style => style.Name));
+        var layouts = tab.FindGroup("smartart-layouts")!.Controls.OfType<RibbonDropdown>().Single();
+        layouts.Menu.Items.Select(item => item.CommandId!.Value)
+            .Should().Equal(SmartArtLayoutPreset.Catalog.Select(preset =>
+                new RibbonCommandId($"freew.smartart-layout-{preset.Id}")));
     }
 
     [Fact]

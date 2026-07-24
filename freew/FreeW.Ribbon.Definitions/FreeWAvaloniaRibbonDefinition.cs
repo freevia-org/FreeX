@@ -277,18 +277,16 @@ internal static class FreeWAvaloniaRibbonDefinition
             .ToArray());
 
     /// <summary>
-    /// AV-CHARTTAB: SmartArt Design &gt; Layouts dropdown. Maps the four Word layout families to the model's
-    /// <see cref="SmartArtKind"/> (Cycle reuses Process — the closest flat-sequence kind in the model).
-    /// Command ids are <c>freew.smartart-layout-&lt;name&gt;</c>.
+    /// AV-CHARTTAB: SmartArt Design &gt; Layouts dropdown. The menu is driven by the shared preset catalog
+    /// so every layout that the model and renderer can represent is reachable from the Avalonia host.
+    /// Command ids are <c>freew.smartart-layout-&lt;preset-id&gt;</c>.
     /// </summary>
     private static RibbonMenu BuildSmartArtLayoutMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("List",      new RibbonCommandId("freew.smartart-layout-list")),
-            new("Process",   new RibbonCommandId("freew.smartart-layout-process")),
-            new("Cycle",     new RibbonCommandId("freew.smartart-layout-cycle")),
-            new("Hierarchy", new RibbonCommandId("freew.smartart-layout-hierarchy")),
-        });
+        new(SmartArtLayoutPreset.Catalog
+            .Select(preset => new RibbonMenuItem(
+                preset.Name,
+                new RibbonCommandId($"freew.smartart-layout-{preset.Id}")))
+            .ToArray());
 
     /// <summary>
     /// AV-CHARTTAB: SmartArt Design &gt; Change Colors dropdown — reuses the chart colour-scheme catalog
