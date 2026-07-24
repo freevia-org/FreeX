@@ -737,7 +737,18 @@ public sealed class SlideShowWindow : Window
         // Use actual canvas dimensions when available; fall back to slide DIP size.
         double mediaCanvasW = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
         double mediaCanvasH = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
-        _mediaController.EnterSlide(slide, _slideDipW, _slideDipH, mediaCanvasW, mediaCanvasH);
+        var captionTracks = PresentationMediaTranscriptPlanner
+            .BuildTranscriptPlan(_presentation)
+            .Tracks
+            .Where(track => track.SlideIndex == CurrentPresentationSlideIndex)
+            .ToArray();
+        _mediaController.EnterSlide(
+            slide,
+            _slideDipW,
+            _slideDipH,
+            mediaCanvasW,
+            mediaCanvasH,
+            captionTracks);
 
         // Apply transition if requested.
         if (plan.Transition is { } t)

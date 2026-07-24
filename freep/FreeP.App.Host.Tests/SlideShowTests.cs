@@ -1702,6 +1702,42 @@ public sealed class SlideShowMediaControllerTests
     }
 
     [StaFact]
+    public void EnterSlide_WithCaptionTrack_CreatesAndTearsDownCaptionSurface()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay = new System.Windows.Controls.Canvas();
+        var ctrl = new SlideShowMediaController(overlay, fakeWriter);
+        var slide = SlideWithMedia(MakeMediaShape());
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            SlideIndex: 0,
+            ShapeId: 1,
+            ShapeName: "Video1",
+            TrackIndex: 0,
+            Label: "English",
+            Language: "en-US",
+            Source: "captions.vtt",
+            ContentType: "text/vtt",
+            Status: PresentationMediaTranscriptTrackStatus.Available,
+            StatusMessage: string.Empty,
+            Cues: [new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Hello from WPF")]);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720, [track]);
+        ctrl.RefreshCaptionsForTest(TimeSpan.FromMilliseconds(500));
+        ctrl.CaptionTextForTest(1).Should().Be("Hello from WPF");
+        overlay.Children.OfType<System.Windows.Controls.Border>()
+            .Should().Contain(border => border.Visibility == System.Windows.Visibility.Visible);
+
+        ctrl.RefreshCaptionsForTest(TimeSpan.FromSeconds(2));
+        ctrl.CaptionTextForTest(1).Should().BeEmpty();
+        overlay.Children.OfType<System.Windows.Controls.Border>()
+            .Should().NotContain(border => border.Visibility == System.Windows.Visibility.Visible);
+
+        ctrl.Teardown();
+        overlay.Children.OfType<System.Windows.Controls.Border>()
+            .Should().BeEmpty();
+    }
+
+    [StaFact]
     public void Teardown_AfterEnter_DeletesWrittenFiles()
     {
         var fakeWriter = new FakeFileWriter();

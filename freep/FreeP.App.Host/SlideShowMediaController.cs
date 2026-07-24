@@ -1,6 +1,8 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -136,8 +138,14 @@ public sealed class SlideShowMediaController
     // ── per-slide state ───────────────────────────────────────────────────────
 
     // For each media shape: the MediaElement (null if creation failed) + optional temp path.
-    private readonly record struct MediaSlot(MediaElement? Element, string? TempPath);
+    private sealed record MediaSlot(
+        MediaElement? Element,
+        string? TempPath,
+        PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
+        Border? CaptionHost = null,
+        TextBlock? CaptionText = null);
     private readonly List<MediaSlot> _slots = new();
+    private readonly DispatcherTimer _captionTimer;
 
     // ── construction ──────────────────────────────────────────────────────────
 
@@ -147,7 +155,18 @@ public sealed class SlideShowMediaController
     {
         _overlay    = overlay ?? throw new ArgumentNullException(nameof(overlay));
         _fileWriter = fileWriter ?? new TempMediaFileWriter();
+        _captionTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(100),
+        };
+        _captionTimer.Tick += (_, _) => UpdateCaptions();
     }
+
+    internal string? CaptionTextForTest(uint shapeId) =>
+        _slots.FirstOrDefault(slot => slot.CaptionTrack?.ShapeId == shapeId)?.CaptionText?.Text;
+
+    internal void RefreshCaptionsForTest(TimeSpan? playbackPosition = null) =>
+        UpdateCaptions(playbackPosition);
 
     // ── public API ────────────────────────────────────────────────────────────
 
@@ -179,7 +198,8 @@ public sealed class SlideShowMediaController
     /// <param name="canvasW">Actual pixel width of the slide canvas at the moment of entry.</param>
     /// <param name="canvasH">Actual pixel height of the slide canvas.</param>
     public void EnterSlide(Slide slide, double slideDipW, double slideDipH,
-                           double canvasW, double canvasH)
+                           double canvasW, double canvasH,
+                           IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? captionTracks = null)
     {
         // Teardown any previous slide's media first (guard against double-call).
         Teardown();
@@ -194,8 +214,23 @@ public sealed class SlideShowMediaController
 
             var rect = ComputeMediaRect(shape, slideDipW, slideDipH, canvasW, canvasH);
             var slot = CreateSlot(shape.Media, rect, shape.Media.IsVideo);
+            var captionTrack = captionTracks?.FirstOrDefault(track =>
+                track.ShapeId == shape.Id && track.HasTranscript);
+            if (captionTrack is not null)
+            {
+                var caption = CreateCaptionView(rect);
+                slot = slot with
+                {
+                    CaptionTrack = captionTrack,
+                    CaptionHost = caption.Host,
+                    CaptionText = caption.Text,
+                };
+            }
             _slots.Add(slot);
         }
+
+        _captionTimer.IsEnabled = _slots.Any(slot => slot.CaptionTrack is not null);
+        UpdateCaptions();
     }
 
     /// <summary>
@@ -237,10 +272,14 @@ public sealed class SlideShowMediaController
                 catch { /* ignore */ }
             }
 
+            if (slot.CaptionHost is not null)
+                _overlay.Children.Remove(slot.CaptionHost);
+
             if (slot.TempPath is not null)
                 _fileWriter.Delete(slot.TempPath);
         }
         _slots.Clear();
+        _captionTimer.Stop();
     }
 
     /// <summary>
@@ -272,6 +311,59 @@ public sealed class SlideShowMediaController
     }
 
     // ── internal helpers ──────────────────────────────────────────────────────
+
+    private (Border Host, TextBlock Text) CreateCaptionView(MediaShapeRect bounds)
+    {
+        var text = new TextBlock
+        {
+            Foreground = Brushes.White,
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(10, 4, 10, 4),
+        };
+        var height = Math.Clamp(bounds.Height * 0.2, 36, 86);
+        var host = new Border
+        {
+            Background = Brushes.Black,
+            Opacity = 0.82,
+            Width = Math.Max(1, bounds.Width),
+            Height = height,
+            Child = text,
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false,
+        };
+        Canvas.SetLeft(host, bounds.X);
+        Canvas.SetTop(host, Math.Max(bounds.Y, bounds.Y + bounds.Height - height));
+        Panel.SetZIndex(host, 10);
+        _overlay.Children.Add(host);
+        return (host, text);
+    }
+
+    private void UpdateCaptions(TimeSpan? testPlaybackPosition = null)
+    {
+        foreach (var slot in _slots)
+        {
+            if (slot.CaptionHost is null || slot.CaptionText is null)
+                continue;
+
+            if (slot.Element is null && testPlaybackPosition is null)
+            {
+                slot.CaptionText.Text = string.Empty;
+                slot.CaptionHost.Visibility = Visibility.Collapsed;
+                continue;
+            }
+
+            var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
+                slot.CaptionTrack,
+                testPlaybackPosition ?? slot.Element!.Position);
+            slot.CaptionText.Text = cue?.Text ?? string.Empty;
+            slot.CaptionHost.Visibility = cue is null
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+    }
 
     private MediaSlot CreateSlot(MediaInfo media, MediaShapeRect rect, bool isVideo)
     {
