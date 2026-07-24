@@ -38,6 +38,7 @@ public enum SmartArtLayoutPreset
     BasicHierarchy,
     HorizontalHierarchy,
     OrgChart,
+    PictureCaptionList,
 }
 
 /// <summary>Bounded PowerPoint SmartArt Quick Style choices.</summary>
@@ -100,6 +101,7 @@ public static class SmartArtAuthoringPlanner
     public const string BasicHierarchyLayoutCommandId = "freep.smartart.layout.basic-hierarchy";
     public const string HorizontalHierarchyLayoutCommandId = "freep.smartart.layout.horizontal-hierarchy";
     public const string OrgChartLayoutCommandId = "freep.smartart.layout.org-chart";
+    public const string PictureCaptionListLayoutCommandId = "freep.smartart.layout.picture-caption-list";
     public const string SimpleQuickStyleCommandId = "freep.smartart.style.simple";
     public const string ModerateQuickStyleCommandId = "freep.smartart.style.moderate";
     public const string IntenseQuickStyleCommandId = "freep.smartart.style.intense";
@@ -189,6 +191,12 @@ public static class SmartArtAuthoringPlanner
         if (smartArt?.Data is null)
             return NotAppliedLayout("No SmartArt data model is available.");
 
+        if (preset == SmartArtLayoutPreset.PictureCaptionList &&
+            smartArt.Data.Nodes.Any(node => node.Picture?.Bytes is not { Length: > 0 }))
+        {
+            return NotAppliedLayout("Picture Caption List requires image content for every SmartArt node.");
+        }
+
         var layoutPart = smartArt.Parts.Values.FirstOrDefault(candidate =>
             candidate.ContentType.Contains("diagramLayout", StringComparison.OrdinalIgnoreCase) ||
             candidate.PartPath.Contains("layout", StringComparison.OrdinalIgnoreCase));
@@ -239,6 +247,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.OrgChart =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/orgChart", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.PictureCaptionList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList", SmartArtFamily.List),
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
         };
 
