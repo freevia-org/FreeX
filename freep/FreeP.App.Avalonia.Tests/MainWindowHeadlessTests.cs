@@ -5864,13 +5864,15 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDataTableOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(true, false, true, false, true);
+            dialog.SetOptionsForTests(true, false, true, false, true,
+                "#F2F2F2", "#4472C4", 1.25, "#112233", 9, "Aptos", true, false);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
 
         if (!ran) return;
-        options.Should().Be(new ChartDataTableOptions(true, false, true, false, true));
+        options.Should().Be(new ChartDataTableOptions(true, false, true, false, true,
+            "#F2F2F2", "#4472C4", 1.25, "#112233", 9, "Aptos", true, false));
     }
 
     [Fact]
