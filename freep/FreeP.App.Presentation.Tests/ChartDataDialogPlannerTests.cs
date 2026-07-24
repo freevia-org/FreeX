@@ -301,8 +301,18 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetShowVerticalBorder(true);
         planner.SetShowOutlineBorder(false);
         planner.SetShowLegendKeys(true);
+        planner.SetBackgroundColor("#F2F2F2");
+        planner.SetBorderColor("#4472C4");
+        planner.SetBorderWidth(1.25);
+        planner.SetTextColor("#112233");
+        planner.SetFontSize(9);
+        planner.SetFontFamily("Aptos");
+        planner.SetBold(true);
+        planner.SetItalic(false);
 
-        planner.BuildCommitPlan().Should().Be(new ChartDataTableOptions(false, false, true, false, true));
+        var options = planner.BuildCommitPlan();
+        options.Should().Be(new ChartDataTableOptions(false, false, true, false, true,
+            "#F2F2F2", "#4472C4", 1.25, "#112233", 9, "Aptos", true, false));
         chart.DataTable.Should().NotBeNull("the planner edits a working copy");
         ChartDataTableOptionsPlanner.BuildSurfacePlan().CommandId
             .Should().Be(ChartDataTableOptionsPlanner.CommandId);

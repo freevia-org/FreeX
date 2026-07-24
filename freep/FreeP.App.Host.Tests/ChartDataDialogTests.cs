@@ -198,6 +198,10 @@ public sealed class ChartDataDialogTests : IDisposable
         options.ShowVerticalBorder.Should().BeTrue();
         options.ShowOutlineBorder.Should().BeTrue();
         options.ShowLegendKeys.Should().BeFalse();
+        options.BackgroundColor.Should().BeNull();
+        options.BorderColor.Should().BeNull();
+        options.BorderWidthPt.Should().BeNull();
+        options.FontSizePt.Should().BeNull();
     }
 
     [Fact]
@@ -263,6 +267,8 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().Contain("ChartDataTableOptionsPlanner.FromChart(chart)");
         source.Should().Contain("_planner.BuildCommitPlan()");
         source.Should().Contain("_editor.ApplyChartDataTableOptions");
+        source.Should().Contain("_planner.SetBackgroundColor");
+        source.Should().Contain("_planner.SetFontSize");
         source.Should().NotContain("new SetChartDataTableOptionsCommand");
     }
 

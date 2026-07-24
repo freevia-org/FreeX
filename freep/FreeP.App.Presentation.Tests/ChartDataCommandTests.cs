@@ -983,6 +983,70 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartDataTableOptions_AppliesAuthoredFillBorderAndTextStyle()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.DataTable = new ChartDataTableSettings();
+
+        bus.Execute(new SetChartDataTableOptionsCommand(
+            0,
+            id,
+            new ChartDataTableOptions(true, true, true, true, false,
+                "#F2F2F2", "#4472C4", 1.25, "#112233", 9, "Aptos", true, false)));
+
+        var dataTable = chart.DataTable!;
+        ((ShapeFill.Solid)dataTable.BackgroundFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xF2F2F2));
+        var border = (ShapeOutline.Visible)dataTable.BorderOutline!;
+        border.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
+        border.WidthPt.Should().Be(1.25);
+        dataTable.TextStyle!.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x112233));
+        dataTable.TextStyle.FontSizePt.Should().Be(9);
+        dataTable.TextStyle.FontFamily.Should().Be("Aptos");
+        dataTable.TextStyle.Bold.Should().BeTrue();
+        dataTable.TextStyle.Italic.Should().BeFalse();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!.DataTable;
+        roundTripped.Should().NotBeNull();
+        ((ShapeFill.Solid)roundTripped!.BackgroundFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xF2F2F2));
+        ((ShapeOutline.Visible)roundTripped.BorderOutline!).WidthPt.Should().Be(1.25);
+        roundTripped.TextStyle!.FontFamily.Should().Be("Aptos");
+        roundTripped.TextStyle.FontSizePt.Should().Be(9);
+    }
+
+    [Fact]
+    public void SetChartDataTableOptions_BlankStyleFieldsPreserveExistingAdvancedStyles()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        var gradient = new ShapeFill.Gradient(new[]
+        {
+            new GradientStop(0, new ThemeAwareColor(SrgbColor.FromRgb(0xFFFFFF))),
+            new GradientStop(1, new ThemeAwareColor(SrgbColor.FromRgb(0xD9E2F3))),
+        });
+        var textStyle = new ChartTextStyle { FontFamily = "Calibri", FontSizePt = 11, Bold = true };
+        var gradientBorder = new ShapeOutline.GradientVisible(gradient, 1.5);
+        chart.DataTable = new ChartDataTableSettings
+        {
+            BackgroundFill = gradient,
+            BorderOutline = gradientBorder,
+            TextStyle = textStyle,
+        };
+
+        bus.Execute(new SetChartDataTableOptionsCommand(
+            0, id, new ChartDataTableOptions(true, false, true, false, true)));
+
+        chart.DataTable!.BackgroundFill.Should().BeSameAs(gradient);
+        chart.DataTable.BorderOutline.Should().BeSameAs(gradientBorder);
+        chart.DataTable.TextStyle!.FontFamily.Should().Be("Calibri");
+        chart.DataTable.TextStyle.FontSizePt.Should().Be(11);
+        chart.DataTable.TextStyle.Bold.Should().BeTrue();
+    }
+
+    [Fact]
     public void SetChartAxisOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();
