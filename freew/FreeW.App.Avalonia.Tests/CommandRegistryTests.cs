@@ -651,6 +651,64 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Paste_keep_source_formatting_parses_rtf_runs_and_paragraphs()
+    {
+        const string rtf = @"{\rtf1\ansi\b Bold\b0  plain\par\i Second\i0}";
+
+        DocumentView.TryReadRtfClipboardDocument(rtf, out var source).Should().BeTrue();
+
+        var paragraphs = source!.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Runs.Should().Contain(run => run.Text == "Bold" && run.Formatting.Bold);
+        paragraphs[1].Runs.Should().Contain(run => run.Text == "Second" && run.Formatting.Italic);
+    }
+
+    [Fact]
+    public void Paste_keep_source_formatting_replaces_empty_paragraph_as_one_undoable_edit()
+    {
+        var destination = TextDocument.CreateEmpty();
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        var formatted = new Paragraph();
+        formatted.Runs.Add(new Run("Bold", new RunFormatting { Bold = true, ColorHex = "#AA0000" }));
+        formatted.Runs.Add(new Run(" normal"));
+        source.Blocks.Add(formatted);
+        source.Blocks.Add(new Paragraph("Second paragraph"));
+
+        var view = new DocumentView();
+        view.LoadDocument(destination);
+
+        view.PasteKeepSourceFormatting(source).Should().BeTrue();
+        view.Document.Blocks.Should().HaveCount(2);
+        var inserted = view.Document.Blocks[0].Should().BeOfType<Paragraph>().Which;
+        inserted.Runs.Should().Contain(run => run.Text == "Bold"
+            && run.Formatting.Bold
+            && run.Formatting.ColorHex == "#AA0000");
+
+        view.Undo();
+        view.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Paste_keep_source_formatting_rejects_partial_selection_and_tracked_changes()
+    {
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        source.Blocks.Add(new Paragraph("Rich source"));
+
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc("Destination"));
+        view.SetSelectionRangePublic(0, 0, 0, "Destination".Length);
+        view.PasteKeepSourceFormatting(source).Should().BeFalse();
+        view.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Destination");
+
+        view.LoadDocument(TextDocument.CreateEmpty());
+        view.ToggleTrackChanges();
+        view.PasteKeepSourceFormatting(source).Should().BeFalse();
+        view.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Format_painter_command_stamps_run_and_paragraph_formatting()
     {
         var doc = TextDocument.CreateEmpty();

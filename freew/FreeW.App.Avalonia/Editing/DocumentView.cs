@@ -15,6 +15,7 @@ using FreeW.App.Presentation.Links;
 using FreeW.App.Presentation.Proofing;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
+using FreeW.Core.IO;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
 
@@ -13920,6 +13921,72 @@ public sealed class DocumentView : Control
 
     public bool PasteMergeFormatting(string? clipboardText) =>
         PasteNormalizedText(clipboardText, "Merge Formatting");
+
+    // Test seam for the platform clipboard conversion. RTF control syntax is ASCII, while Latin-1
+    // preserves every supplied code unit for RtfReader's own code-page handling.
+    internal static bool TryReadRtfClipboardDocument(string? rtf, out TextDocument? document)
+    {
+        document = null;
+        if (string.IsNullOrWhiteSpace(rtf))
+            return false;
+
+        try
+        {
+            using var stream = new MemoryStream(Encoding.Latin1.GetBytes(rtf));
+            var parsed = RtfReader.Read(stream);
+            if (parsed.Blocks.Count == 0)
+                return false;
+
+            document = parsed;
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Replaces one empty editable body paragraph with parsed source blocks. Partial-paragraph and
+    /// tracked-change edits keep the merge-formatting route until inline rich splicing is lossless.
+    /// </summary>
+    internal bool PasteKeepSourceFormatting(TextDocument source)
+    {
+        if (source is null
+            || source.Blocks.Count == 0
+            || IsEditingLocked
+            || TrackChangesEnabled
+            || _hfCaret is not null
+            || _cellCaret is not null
+            || NormalizedSelection() is not null
+            || CurrentParagraph() is not { } paragraph
+            || !IsEditable(paragraph)
+            || ParaCells(paragraph).Count != 0)
+        {
+            return false;
+        }
+
+        var clones = DocumentMerge.CloneBlocks(source);
+        if (clones.Count == 0)
+            return false;
+
+        foreach (var (id, style) in source.Styles)
+            _doc.Styles.TryAdd(id, style);
+
+        var blockIndex = _caret.Block;
+        _bus.Execute(new ReplaceBlocksCommand(blockIndex, 1, clones));
+        _caret = new DocPosition(blockIndex, 0);
+        _selectionAnchor = _caret;
+        _pendingRunFmt = null;
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
+        Focus();
+        return true;
+    }
 
     private bool PasteNormalizedText(string? clipboardText, string undoLabel)
     {
