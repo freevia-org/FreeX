@@ -27,8 +27,6 @@ public enum PivotHeaderMenuAction
     LabelFilter,
     ValueFilter,
     ClearFilter,
-    ExpandField,
-    CollapseField,
     MoveToRows,
     MoveToColumns,
     MoveToFilters,

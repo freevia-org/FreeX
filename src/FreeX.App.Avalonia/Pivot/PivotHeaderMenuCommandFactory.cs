@@ -44,8 +44,8 @@ internal sealed record PivotHeaderMenuCommandResult(
 /// and clear actions build a <see cref="ConfigurePivotTableViewCommand"/>; move/remove actions reuse the
 /// shared <see cref="PivotFieldDragValidator"/> + <see cref="PivotFieldLayoutCommandFactory"/> so a header
 /// "Move to Columns"/"Remove Field" follows the exact same layout rules as a field-pane drag. Actions that
-/// require a dialog (filters, field settings, custom sort) or a command FreeX does not expose yet
-/// (expand/collapse entire field) are reported as <see cref="PivotHeaderMenuCommandResult.IsDeferred"/>.
+/// require a dialog (filters, field settings, custom sort) remain deferred at this UI-free boundary because
+/// the shell routes them through existing dialog continuations.
 /// Kept UI-free so the mapping can be asserted without a running app.
 /// </summary>
 internal static class PivotHeaderMenuCommandFactory
@@ -85,19 +85,15 @@ internal static class PivotHeaderMenuCommandFactory
             PivotHeaderMenuAction.RemoveField =>
                 Move(sheetId, pivotTable, headers, target, PivotFieldBucket.Available, validator),
             PivotHeaderMenuAction.LabelFilter =>
-                PivotHeaderMenuCommandResult.Deferred("Label filter dialog not yet implemented in the Avalonia shell."),
+                PivotHeaderMenuCommandResult.Deferred("Label filter is routed through the existing dialog continuation."),
             PivotHeaderMenuAction.ValueFilter =>
-                PivotHeaderMenuCommandResult.Deferred("Value filter dialog not yet implemented in the Avalonia shell."),
+                PivotHeaderMenuCommandResult.Deferred("Value filter is routed through the existing dialog continuation."),
             PivotHeaderMenuAction.MoreSortOptions =>
-                PivotHeaderMenuCommandResult.Deferred("More Sort Options dialog not yet implemented in the Avalonia shell."),
+                PivotHeaderMenuCommandResult.Deferred("More Sort Options is routed through the existing dialog continuation."),
             PivotHeaderMenuAction.FieldSettings =>
-                PivotHeaderMenuCommandResult.Deferred("Field Settings dialog not yet implemented in the Avalonia shell."),
+                PivotHeaderMenuCommandResult.Deferred("Field Settings is routed through the existing dialog continuation."),
             PivotHeaderMenuAction.ValueFieldSettings =>
-                PivotHeaderMenuCommandResult.Deferred("Value Field Settings dialog not yet implemented in the Avalonia shell."),
-            PivotHeaderMenuAction.ExpandField =>
-                PivotHeaderMenuCommandResult.Deferred("No expand-entire-field command exists in FreeX.Core.Commands yet."),
-            PivotHeaderMenuAction.CollapseField =>
-                PivotHeaderMenuCommandResult.Deferred("No collapse-entire-field command exists in FreeX.Core.Commands yet."),
+                PivotHeaderMenuCommandResult.Deferred("Value Field Settings is routed through the existing dialog continuation."),
             _ => PivotHeaderMenuCommandResult.Deferred($"Unhandled pivot header action {action}."),
         };
     }

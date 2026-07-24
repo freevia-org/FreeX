@@ -324,6 +324,30 @@ public sealed class ContextMenuInteractionValidationTests
     }
 
     [Fact]
+    public async Task ProductionDispatch_OpensAndCancelsPivotHeaderFieldSettings()
+    {
+        const string id = "context-menu.pivot-header.area.row:FieldSettings";
+
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var result = await window.RunContextMenuInteractionValidationForTestAsync(id);
+
+                result.Status.Should().Be("passed", $"{result.EvidenceLevel}: {result.Note}");
+                result.EvidenceLevel.Should().Be("production-dialog-opened-cancelled");
+                result.Evidence.Should().Contain("InvokePivotHeaderAction");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ProductionDispatch_ClosesAllEightExhaustiveContextMenuResiduals()
     {
         string[] ids =

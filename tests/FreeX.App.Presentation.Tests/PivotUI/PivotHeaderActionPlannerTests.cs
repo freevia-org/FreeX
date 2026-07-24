@@ -26,6 +26,7 @@ public sealed class PivotHeaderActionPlannerTests
     [InlineData(PivotHeaderMenuAction.LabelFilter, PivotHeaderDialogKind.LabelFilter)]
     [InlineData(PivotHeaderMenuAction.ValueFilter, PivotHeaderDialogKind.ValueFilter)]
     [InlineData(PivotHeaderMenuAction.MoreSortOptions, PivotHeaderDialogKind.MoreSortOptions)]
+    [InlineData(PivotHeaderMenuAction.FieldSettings, PivotHeaderDialogKind.FieldSettings)]
     [InlineData(PivotHeaderMenuAction.ValueFieldSettings, PivotHeaderDialogKind.ValueFieldSettings)]
     public void Plan_DialogBackedActions_RouteToSharedDialogContinuations(
         PivotHeaderMenuAction action,
@@ -38,15 +39,4 @@ public sealed class PivotHeaderActionPlannerTests
         plan.DeferredReason.Should().BeNull();
     }
 
-    [Theory]
-    [InlineData(PivotHeaderMenuAction.FieldSettings)]
-    [InlineData(PivotHeaderMenuAction.ExpandField)]
-    [InlineData(PivotHeaderMenuAction.CollapseField)]
-    public void Plan_UnsupportedActions_KeepHonestDeferredReasons(PivotHeaderMenuAction action)
-    {
-        var plan = PivotHeaderActionPlanner.Plan(action);
-
-        plan.RouteKind.Should().Be(PivotHeaderActionRouteKind.Deferred);
-        plan.DeferredReason.Should().NotBeNullOrWhiteSpace();
-    }
 }

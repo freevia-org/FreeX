@@ -6,8 +6,9 @@ namespace FreeX.App.Presentation.PivotUI;
 /// Builds portable header-dropdown targets and menus from a <see cref="PivotTableModel"/>. The "active"
 /// classification (whether a field has an explicit item selection, a label/value filter, or a sort) is
 /// ported from the header-target planning logic in the desktop hosts. Item generation per area
-/// (sort, label/value filters, expand/collapse, move, settings, remove) is the menu content the desktop
-/// header dropdowns present.
+/// (sort, label/value filters, move, settings, remove) is the menu content the desktop header dropdowns
+/// present. Unsupported expand/collapse entries are intentionally omitted because the WPF host does not
+/// expose an equivalent command or persisted state.
 /// </summary>
 public static class PivotHeaderDropdownMenuBuilder
 {
@@ -47,12 +48,6 @@ public static class PivotHeaderDropdownMenuBuilder
         items.Add(PivotHeaderMenuItemModel.Separator);
         AddFilterItems(pivotTable, target, items);
         items.Add(PivotHeaderMenuItemModel.Separator);
-
-        if (target.Area is PivotHeaderArea.Row or PivotHeaderArea.Column)
-        {
-            AddExpandCollapseItems(pivotTable, items);
-            items.Add(PivotHeaderMenuItemModel.Separator);
-        }
 
         AddMoveItems(target, items);
         items.Add(PivotHeaderMenuItemModel.Separator);
@@ -115,17 +110,6 @@ public static class PivotHeaderDropdownMenuBuilder
         items.Add(new PivotHeaderMenuItemModel(PivotHeaderMenuAction.ValueFilter, "Value Filters..."));
         items.Add(new PivotHeaderMenuItemModel(
             PivotHeaderMenuAction.ClearFilter, "Clear Filter", IsEnabled: hasFilter));
-    }
-
-    private static void AddExpandCollapseItems(
-        PivotTableModel pivotTable,
-        List<PivotHeaderMenuItemModel> items)
-    {
-        var enabled = pivotTable.ShowExpandCollapseButtons;
-        items.Add(new PivotHeaderMenuItemModel(
-            PivotHeaderMenuAction.ExpandField, "Expand Entire Field", IsEnabled: enabled));
-        items.Add(new PivotHeaderMenuItemModel(
-            PivotHeaderMenuAction.CollapseField, "Collapse Entire Field", IsEnabled: enabled));
     }
 
     private static void AddMoveItems(

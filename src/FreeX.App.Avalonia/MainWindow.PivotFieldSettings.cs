@@ -23,8 +23,10 @@ namespace FreeX.App.Avalonia;
 /// validation/result building, so the logic is single-sourced with the WPF host and reusable on macOS. The
 /// value-field result replaces the data field in the layout (<see cref="ConfigurePivotTableLayoutCommand"/>);
 /// the sort result replaces the field's sort in the pivot's view state
-/// (<see cref="ConfigurePivotTableViewCommand"/>). These two header actions are deferred by
-/// <c>PivotHeaderMenuCommandFactory</c>; <c>InvokePivotHeaderAction</c> routes them here before the factory.
+/// (<see cref="ConfigurePivotTableViewCommand"/>). These header actions are dialog routes in
+/// <c>PivotHeaderActionPlanner</c>; <c>InvokePivotHeaderAction</c> routes them here before the UI-free
+/// command factory. Field Settings reuses the same value-field dialog and data-field ownership fallback
+/// as the WPF host.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -42,6 +44,7 @@ public sealed partial class MainWindow
     {
         switch (action)
         {
+            case PivotHeaderMenuAction.FieldSettings:
             case PivotHeaderMenuAction.ValueFieldSettings:
                 _ = OpenPivotValueFieldSettingsDialogAsync(pivot, headers, target);
                 return true;

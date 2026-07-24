@@ -232,9 +232,8 @@ public sealed class PivotFieldPaneGlueTests
     [InlineData(PivotHeaderMenuAction.ValueFilter)]
     [InlineData(PivotHeaderMenuAction.MoreSortOptions)]
     [InlineData(PivotHeaderMenuAction.FieldSettings)]
-    [InlineData(PivotHeaderMenuAction.ExpandField)]
-    [InlineData(PivotHeaderMenuAction.CollapseField)]
-    public void HeaderAction_DialogBackedOrUnsupported_AreDeferred(PivotHeaderMenuAction action)
+    [InlineData(PivotHeaderMenuAction.ValueFieldSettings)]
+    public void HeaderAction_DialogBackedActions_RemainDeferredAtFactoryBoundary(PivotHeaderMenuAction action)
     {
         var (workbook, sheet, pivot) = BuildPivotWorkbook();
         pivot.RowFields.Add(new PivotFieldModel(0));

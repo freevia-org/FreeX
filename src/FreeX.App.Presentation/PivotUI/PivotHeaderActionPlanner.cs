@@ -14,6 +14,7 @@ public enum PivotHeaderDialogKind
     LabelFilter,
     ValueFilter,
     MoreSortOptions,
+    FieldSettings,
     ValueFieldSettings
 }
 
@@ -49,13 +50,11 @@ public static class PivotHeaderActionPlanner
             PivotHeaderMenuAction.LabelFilter => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.LabelFilter),
             PivotHeaderMenuAction.ValueFilter => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.ValueFilter),
             PivotHeaderMenuAction.MoreSortOptions => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.MoreSortOptions),
+            // The field-menu entry uses the same value-field settings surface as WPF. The shared
+            // Avalonia handler resolves the data-field index from the target caption, with the
+            // one-value-field fallback used by the desktop host.
+            PivotHeaderMenuAction.FieldSettings => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.FieldSettings),
             PivotHeaderMenuAction.ValueFieldSettings => PivotHeaderActionPlan.Dialog(PivotHeaderDialogKind.ValueFieldSettings),
-            PivotHeaderMenuAction.FieldSettings =>
-                PivotHeaderActionPlan.Deferred("Field Settings dialog not yet implemented in this shell."),
-            PivotHeaderMenuAction.ExpandField =>
-                PivotHeaderActionPlan.Deferred("No expand-entire-field command exists in FreeX.Core.Commands yet."),
-            PivotHeaderMenuAction.CollapseField =>
-                PivotHeaderActionPlan.Deferred("No collapse-entire-field command exists in FreeX.Core.Commands yet."),
             _ => PivotHeaderActionPlan.CommandFactory,
         };
 }

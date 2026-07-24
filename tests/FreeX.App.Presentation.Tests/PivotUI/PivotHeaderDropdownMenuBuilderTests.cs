@@ -101,7 +101,7 @@ public sealed class PivotHeaderDropdownMenuBuilderTests
     }
 
     [Fact]
-    public void BuildMenu_RowFieldHasSortFilterExpandMoveSettingsAndRemove()
+    public void BuildMenu_RowFieldHasWpfParitySortFilterMoveSettingsAndRemove()
     {
         var pivot = BuildPivot();
         var target = PivotHeaderDropdownMenuBuilder.BuildTargets(pivot, Headers)
@@ -113,25 +113,9 @@ public sealed class PivotHeaderDropdownMenuBuilderTests
         actions.Should().Contain(PivotHeaderMenuAction.SortAscending);
         actions.Should().Contain(PivotHeaderMenuAction.LabelFilter);
         actions.Should().Contain(PivotHeaderMenuAction.ValueFilter);
-        actions.Should().Contain(PivotHeaderMenuAction.ExpandField);
-        actions.Should().Contain(PivotHeaderMenuAction.CollapseField);
         actions.Should().Contain(PivotHeaderMenuAction.FieldSettings);
         actions.Should().Contain(PivotHeaderMenuAction.RemoveField);
         actions.Should().NotContain(PivotHeaderMenuAction.ValueFieldSettings);
-    }
-
-    [Fact]
-    public void BuildMenu_PageFieldOmitsExpandCollapse()
-    {
-        var pivot = BuildPivot();
-        var target = PivotHeaderDropdownMenuBuilder.BuildTargets(pivot, Headers)
-            .Single(t => t.Area == PivotHeaderArea.Page);
-
-        var menu = PivotHeaderDropdownMenuBuilder.BuildMenu(pivot, target);
-        var actions = menu.Items.Select(i => i.Action).ToList();
-
-        actions.Should().NotContain(PivotHeaderMenuAction.ExpandField);
-        actions.Should().NotContain(PivotHeaderMenuAction.CollapseField);
     }
 
     [Fact]
@@ -186,19 +170,6 @@ public sealed class PivotHeaderDropdownMenuBuilderTests
 
         menu.Items.Single(i => i.Action == PivotHeaderMenuAction.MoveToRows).IsEnabled.Should().BeFalse();
         menu.Items.Single(i => i.Action == PivotHeaderMenuAction.MoveToColumns).IsEnabled.Should().BeTrue();
-    }
-
-    [Fact]
-    public void BuildMenu_ExpandCollapseDisabledWhenButtonsHidden()
-    {
-        var pivot = BuildPivot();
-        pivot.ShowExpandCollapseButtons = false;
-        var target = PivotHeaderDropdownMenuBuilder.BuildTargets(pivot, Headers)
-            .Single(t => t.Area == PivotHeaderArea.Row);
-
-        var menu = PivotHeaderDropdownMenuBuilder.BuildMenu(pivot, target);
-
-        menu.Items.Single(i => i.Action == PivotHeaderMenuAction.ExpandField).IsEnabled.Should().BeFalse();
     }
 
     [Fact]

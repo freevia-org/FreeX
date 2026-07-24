@@ -737,7 +737,7 @@ public sealed partial class MainWindow
         if (row.FamilyId is PivotFieldContextFamily or PivotHeaderContextFamily or PivotChartContextFamily)
         {
             return row.ActionKey is "SelectItems" or "LabelFilter" or "ValueFilter" or
-                "ValueFieldSettings" or "MoreSortOptions";
+                "FieldSettings" or "ValueFieldSettings" or "MoreSortOptions";
         }
         if (row.FamilyId != WorksheetContextFamily)
             return false;
