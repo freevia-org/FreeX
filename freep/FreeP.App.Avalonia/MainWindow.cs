@@ -1687,6 +1687,7 @@ public sealed partial class MainWindow : Window
 
         // Gesture handler drives selection, move, resize, rotate.
         _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
+        _slideCanvas.AttachGestureHandler(_gestureHandler);
         ApplyPresentationViewShowState(_viewShowState);
 
         // Text editor: double-click a shape to edit its text.
@@ -1725,6 +1726,7 @@ public sealed partial class MainWindow : Window
         if (textOverlay is not null)
         {
             _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
+            _slideCanvas.AttachGestureHandler(_gestureHandler);
             ApplyPresentationViewShowState(_viewShowState);
             _textEditor     = new AvaloniaInCanvasTextEditor(_slideCanvas, Editor, textOverlay);
             WireTableContextMenu();
