@@ -4151,12 +4151,29 @@ public static class DocxWriter
         foreach (var effect in WordArtShapeProperties(wordArt.Style))
             spPr.Add(effect);
 
-        // wps:bodyPr: required; carries the optional a:prstTxWarp warp preset (W24).
+        // wps:bodyPr: required; carries the optional warp and explicit text-fit semantics.
         var wordArtBodyPr = new XElement(Wps + "bodyPr");
         if (wordArt.Warp != WordArtWarp.None)
             wordArtBodyPr.Add(new XElement(A + "prstTxWarp",
                 new XAttribute("prst", WordArtWarpToken(wordArt.Warp)),
                 new XElement(A + "avLst")));
+        switch (wordArt.TextFitMode)
+        {
+            case WordArtTextFitMode.NoAutoFit:
+                wordArtBodyPr.Add(new XElement(A + "noAutofit"));
+                break;
+            case WordArtTextFitMode.ShapeAutoFit:
+                wordArtBodyPr.Add(new XElement(A + "spAutoFit"));
+                break;
+            case WordArtTextFitMode.NormalAutoFit:
+                var normalAutoFit = new XElement(A + "normAutofit");
+                if (wordArt.NormalAutoFitFontScale is { } fontScale)
+                    normalAutoFit.Add(new XAttribute("fontScale", fontScale));
+                if (wordArt.NormalAutoFitLineSpacingReduction is { } lineSpacingReduction)
+                    normalAutoFit.Add(new XAttribute("lnSpcReduction", lineSpacingReduction));
+                wordArtBodyPr.Add(normalAutoFit);
+                break;
+        }
 
         var wsp = new XElement(Wps + "wsp",
             new XElement(Wps + "cNvSpPr"),

@@ -308,6 +308,61 @@ public class WordArtRoundTripTests
         warpEl!.Attribute("prst")!.Value.Should().Be("textArchUp");
     }
 
+    [Theory]
+    [InlineData(WordArtTextFitMode.NoAutoFit, "noAutofit")]
+    [InlineData(WordArtTextFitMode.ShapeAutoFit, "spAutoFit")]
+    [InlineData(WordArtTextFitMode.NormalAutoFit, "normAutofit")]
+    public void WordArtTextFitMode_SurvivesRoundTripAndEmitsExactDrawingMlChild(
+        WordArtTextFitMode textFitMode,
+        string expectedElement)
+    {
+        var wordArt = new WordArt("Fit", WordArtStyle.GlowBlue, 32)
+        {
+            Warp = WordArtWarp.Wave1,
+            TextFitMode = textFitMode
+        };
+
+        var document = DocumentWith(wordArt);
+        var bodyPr = WriteDocumentXml(document).Descendants(Wps + "bodyPr").Single();
+        var read = RoundTrippedWordArt(document);
+
+        bodyPr.Element(A + expectedElement).Should().NotBeNull();
+        read.TextFitMode.Should().Be(textFitMode);
+    }
+
+    [Fact]
+    public void WordArtTextFitMode_UnspecifiedLeavesNoDrawingMlFitChild()
+    {
+        var xml = WriteDocumentXml(DocumentWith(new WordArt("Fit", WordArtStyle.FillBlue)));
+        var bodyPr = xml.Descendants(Wps + "bodyPr").Single();
+
+        bodyPr.Elements().Where(element =>
+                element.Name == A + "noAutofit"
+                || element.Name == A + "spAutoFit"
+                || element.Name == A + "normAutofit")
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void WordArtNormalAutoFit_PreservesItsFontAndLineSpacingAttributes()
+    {
+        var wordArt = new WordArt("Fit", WordArtStyle.GlowBlue, 32)
+        {
+            TextFitMode = WordArtTextFitMode.NormalAutoFit,
+            NormalAutoFitFontScale = 85000,
+            NormalAutoFitLineSpacingReduction = 12000
+        };
+
+        var document = DocumentWith(wordArt);
+        var normalAutoFit = WriteDocumentXml(document).Descendants(A + "normAutofit").Single();
+        var read = RoundTrippedWordArt(document);
+
+        normalAutoFit.Attribute("fontScale")!.Value.Should().Be("85000");
+        normalAutoFit.Attribute("lnSpcReduction")!.Value.Should().Be("12000");
+        read.NormalAutoFitFontScale.Should().Be(85000);
+        read.NormalAutoFitLineSpacingReduction.Should().Be(12000);
+    }
+
     [Fact]
     public void NativeWarpWithoutGalleryEffects_ReadsAsDefaultWordArt()
     {

@@ -80,6 +80,19 @@ public enum WordArtWarp
 }
 
 /// <summary>
+/// The explicit DrawingML text-fit child on a WordArt <c>wps:bodyPr</c>. <see cref="Unspecified"/>
+/// preserves a body property with no fit child; the other values map directly to Word's
+/// <c>a:noAutofit</c>, <c>a:spAutoFit</c>, and <c>a:normAutofit</c> elements.
+/// </summary>
+public enum WordArtTextFitMode
+{
+    Unspecified,
+    NoAutoFit,
+    ShapeAutoFit,
+    NormalAutoFit,
+}
+
+/// <summary>
 /// WordArt decorative text carried inline by a <see cref="Run"/> (via <see cref="Run.WordArt"/>), mirroring
 /// <see cref="Shape"/> and <see cref="InlineImage"/>. It serialises as an inline <c>w:drawing</c> wrapping a
 /// <c>wps:wsp</c> text box whose single text run carries DrawingML text effects (chosen by
@@ -133,6 +146,24 @@ public sealed class WordArt
     /// <c>a:prstTxWarp</c>; any other value emits the matching preset token and is recovered on read.
     /// </summary>
     public WordArtWarp Warp { get; set; } = WordArtWarp.None;
+
+    /// <summary>
+    /// Explicit DrawingML text-fit behavior for the WordArt body. Word distinguishes an absent fit
+    /// child from each authored auto-fit mode, so FreeW retains that distinction on DOCX round-trip.
+    /// </summary>
+    public WordArtTextFitMode TextFitMode { get; set; } = WordArtTextFitMode.Unspecified;
+
+    /// <summary>
+    /// Optional <c>a:normAutofit/@fontScale</c> value in thousandths of a percent. It is meaningful
+    /// only for <see cref="WordArtTextFitMode.NormalAutoFit"/> and is retained exactly on round-trip.
+    /// </summary>
+    public int? NormalAutoFitFontScale { get; set; }
+
+    /// <summary>
+    /// Optional <c>a:normAutofit/@lnSpcReduction</c> value in thousandths of a percent. It is meaningful
+    /// only for <see cref="WordArtTextFitMode.NormalAutoFit"/> and is retained exactly on round-trip.
+    /// </summary>
+    public int? NormalAutoFitLineSpacingReduction { get; set; }
 
     public WordArt() { }
 

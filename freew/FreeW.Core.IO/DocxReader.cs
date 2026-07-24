@@ -3632,6 +3632,12 @@ public static class DocxReader
 
         // Warp: a:prstTxWarp/@prst inside wps:bodyPr (W24).
         wordArt.Warp = WarpFromToken(warpToken);
+        wordArt.TextFitMode = WordArtTextFitModeFromBodyPr(bodyPrEl);
+        var normalAutoFit = bodyPrEl?.Element(A + "normAutofit");
+        if (int.TryParse(normalAutoFit?.Attribute("fontScale")?.Value, out var fontScale))
+            wordArt.NormalAutoFitFontScale = fontScale;
+        if (int.TryParse(normalAutoFit?.Attribute("lnSpcReduction")?.Value, out var lineSpacingReduction))
+            wordArt.NormalAutoFitLineSpacingReduction = lineSpacingReduction;
 
         if (anchor is not null)
         {
@@ -3640,6 +3646,12 @@ public static class DocxReader
         }
         return wordArt;
     }
+
+    private static WordArtTextFitMode WordArtTextFitModeFromBodyPr(XElement? bodyPr) =>
+        bodyPr?.Element(A + "noAutofit") is not null ? WordArtTextFitMode.NoAutoFit :
+        bodyPr?.Element(A + "spAutoFit") is not null ? WordArtTextFitMode.ShapeAutoFit :
+        bodyPr?.Element(A + "normAutofit") is not null ? WordArtTextFitMode.NormalAutoFit :
+        WordArtTextFitMode.Unspecified;
 
     /// <summary>
     /// Infers a <see cref="WordArtStyle"/> from the DrawingML text effects under a WordArt run's w:rPr, or
