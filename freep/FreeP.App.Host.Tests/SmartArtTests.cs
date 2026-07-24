@@ -2077,7 +2077,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownMatrixFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    public void Reader_ParsesGridMatrixAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix",
@@ -2090,8 +2090,8 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Matrix,
             "unsupported matrix siblings still retain broad family metadata for future layout slices");
-        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
-            "matrix-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "gridMatrix is now in the shared live Matrix layout allow-list");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("A", "B", "C", "D");
     }
 

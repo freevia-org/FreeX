@@ -1370,6 +1370,20 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void GridMatrix_UsesLiveMultiRowMatrixGeometry()
+    {
+        var data = MakeData(SmartArtFamily.Matrix, "A", "B", "C", "D", "E", "F");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix";
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().NotBeNull("gridMatrix is admitted to the shared live Matrix engine");
+        result!.Should().HaveCount(6);
+        result.Select(shape => shape.OffsetXEmu).Distinct().Should().HaveCount(2);
+        result.Select(shape => shape.OffsetYEmu).Distinct().Should().HaveCount(3);
+    }
+
+    [Fact]
     public void UnsupportedRelationshipSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C");

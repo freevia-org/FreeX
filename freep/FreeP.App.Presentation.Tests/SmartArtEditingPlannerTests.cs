@@ -39,6 +39,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.RadialCycle, "radialCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicMatrix, "basicMatrix", SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.TitledMatrix, "titledMatrix", SmartArtFamily.Matrix)]
+    [InlineData(SmartArtLayoutPreset.GridMatrix, "gridMatrix", SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, "basicVenn", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.RadialVenn, "radialVenn", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.TargetList, "targetList", SmartArtFamily.Relationship)]
