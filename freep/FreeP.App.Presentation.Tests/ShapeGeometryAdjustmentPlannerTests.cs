@@ -133,6 +133,50 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
+    public void Build_CustomGeometry_ExposesCubicAndQuadraticControlHandles()
+    {
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 50));
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.CubicBezTo,
+            X: 20, Y: 0, X1: 80, Y1: 0, X2: 100, Y2: 50));
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.QuadBezTo,
+            X: 50, Y: 100, X1: 0, Y1: 50));
+        var shape = MakeCustomShape(path);
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.Handles.Select(handle => handle.Name).Should().Equal(
+            "custom:0:0",
+            "custom:0:1:c1", "custom:0:1:c2", "custom:0:1:end",
+            "custom:0:2:c1", "custom:0:2:end");
+        plan.Handles[1].PositionDip.Should().Be(new LayoutPoint(50, 20));
+        plan.Handles[2].PositionDip.Should().Be(new LayoutPoint(170, 20));
+        plan.Handles[3].PositionDip.Should().Be(new LayoutPoint(210, 70));
+        plan.Handles[4].Label.Should().Be("Curve control");
+    }
+
+    [Fact]
+    public void BuildMutationPlan_CustomGeometry_MapsCurveControlSlot()
+    {
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 50));
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.CubicBezTo,
+            X: 20, Y: 0, X1: 80, Y1: 0, X2: 100, Y2: 50));
+        var shape = MakeCustomShape(path);
+
+        var plan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape, Bounds, "custom:0:1:c2", new LayoutPoint(150, 70));
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.CustomPoint!.Slot.Should().Be(CustomGeometryPointSlot.Control2);
+        plan.CustomPoint.X.Should().BeApproximately(70, 0.001);
+        plan.CustomPoint.Y.Should().BeApproximately(50, 0.001);
+    }
+
+    [Fact]
     public void Build_NonChordPreset_ReportsUnsupportedWithoutInventingHandles()
     {
         var shape = new SlideShape
@@ -162,6 +206,18 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
             Id = 7,
             Kind = SlideShapeKind.AutoShape,
             AutoShapeKind = DrawingShapeKind.Triangle,
+        };
+        shape.CustomGeometry.Add(path);
+        return shape;
+    }
+
+    private static SlideShape MakeCustomShape(CustomGeometryPath path)
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
         };
         shape.CustomGeometry.Add(path);
         return shape;

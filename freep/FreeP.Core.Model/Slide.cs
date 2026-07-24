@@ -30,6 +30,9 @@ public sealed class ConnectorAttachment
 /// </summary>
 public enum CustomSegmentKind { MoveTo, LineTo, CubicBezTo, QuadBezTo, ArcTo, Close }
 
+/// <summary>Which authored point within a custom-geometry segment an Edit Points handle moves.</summary>
+public enum CustomGeometryPointSlot { Endpoint, Control1, Control2 }
+
 public sealed record CustomSegment(
     CustomSegmentKind Kind,
     double X = 0, double Y = 0,

@@ -566,7 +566,8 @@ public sealed class CanvasGestureHandler
                 customPoint.PathIndex,
                 customPoint.SegmentIndex,
                 customPoint.X,
-                customPoint.Y);
+                customPoint.Y,
+                customPoint.Slot);
         }
         else if (mutation.ShouldApply && mutation.Name is not null && mutation.Value is { } value)
             _editor.SetShapeGeometryAdjustment(_geometryShapeId, mutation.Name, value);
