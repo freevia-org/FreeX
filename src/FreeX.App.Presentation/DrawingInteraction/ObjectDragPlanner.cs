@@ -1,3 +1,5 @@
+using FreeX.Core.Model;
+
 using SharedInteractionKind = Free.Shared.Drawing.DrawingObjectInteractionKind;
 using SharedInteractionPlanner = Free.Shared.Drawing.DrawingObjectInteractionPlanner;
 
@@ -72,6 +74,24 @@ public static class ObjectDragPlanner
             shared.CrossedHorizontally,
             shared.CrossedVertically);
     }
+
+    public static bool ShouldCommitMove(CellAddress startAnchor, CellAddress currentAnchor) =>
+        startAnchor != currentAnchor;
+
+    public static bool ShouldCommitResize(
+        LayoutRect startRect,
+        LayoutRect currentRect,
+        bool startFlipHorizontal,
+        bool startFlipVertical,
+        bool currentFlipHorizontal,
+        bool currentFlipVertical,
+        double threshold = 1) =>
+        Math.Abs(currentRect.Left - startRect.Left) > threshold ||
+        Math.Abs(currentRect.Top - startRect.Top) > threshold ||
+        Math.Abs(currentRect.Width - startRect.Width) > threshold ||
+        Math.Abs(currentRect.Height - startRect.Height) > threshold ||
+        currentFlipHorizontal != startFlipHorizontal ||
+        currentFlipVertical != startFlipVertical;
 
     /// <summary>
     /// Computes the rotation angle (in degrees, clockwise, 0 = pointer straight up) of the

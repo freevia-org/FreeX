@@ -238,6 +238,7 @@ public sealed partial class MainWindow
         public required ObjectDragKind Kind { get; init; }
         public required LayoutRect StartCanvasRect { get; init; }
         public required LayoutPoint StartPointerInCanvas { get; init; }
+        public required CellAddress StartAnchor { get; init; }
         public required double StartRotationDegrees { get; init; }
         public required bool StartFlipHorizontal { get; init; }
         public required bool StartFlipVertical { get; init; }
@@ -404,6 +405,10 @@ public sealed partial class MainWindow
             Kind = kind,
             StartCanvasRect = canvasRect,
             StartPointerInCanvas = new LayoutPoint(pointer.X, pointer.Y),
+            StartAnchor = new CellAddress(
+                _session.ActiveSheet.Id,
+                renderPlan.Bounds.AnchorRow,
+                renderPlan.Bounds.AnchorCol),
             StartRotationDegrees = renderPlan.Bounds.RotationDegrees,
             StartFlipHorizontal = renderPlan.Bounds.FlipHorizontal,
             StartFlipVertical = renderPlan.Bounds.FlipVertical,
@@ -455,7 +460,14 @@ public sealed partial class MainWindow
         container.PointerCaptureLost += (_, _) =>
         {
             if (_drawingObjectDragSession is { } session && ReferenceEquals(session.Container, container))
+            {
                 _drawingObjectDragSession = null;
+                container.Cursor = Cursor.Default;
+                // Capture can be revoked without PointerReleased (window deactivation, an overlay
+                // rebuild, or platform cancellation). Discard the live preview just as WPF does
+                // from OnLostMouseCapture, so it never becomes a false committed state.
+                RefreshShell(string.Empty);
+            }
         };
     }
 
@@ -569,6 +581,12 @@ public sealed partial class MainWindow
                 return;
             }
 
+            if (!ObjectDragPlanner.ShouldCommitMove(session.StartAnchor, anchor))
+            {
+                RefreshShell(string.Empty);
+                return;
+            }
+
             command = DrawingObjectCommandPlanner.BuildMoveCommand(
                 sheetId,
                 targetKind,
@@ -583,8 +601,19 @@ public sealed partial class MainWindow
             var width = Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Width / zoomFactor);
             var height = Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Height / zoomFactor);
             var movedTopLeft =
-                Math.Abs(session.CurrentCanvasRect.Left - session.StartCanvasRect.Left) > 0.5 ||
-                Math.Abs(session.CurrentCanvasRect.Top - session.StartCanvasRect.Top) > 0.5;
+                Math.Abs(session.CurrentCanvasRect.Left - session.StartCanvasRect.Left) > 1 ||
+                Math.Abs(session.CurrentCanvasRect.Top - session.StartCanvasRect.Top) > 1;
+            if (!ObjectDragPlanner.ShouldCommitResize(
+                    session.StartCanvasRect,
+                    session.CurrentCanvasRect,
+                    session.StartFlipHorizontal,
+                    session.StartFlipVertical,
+                    session.CurrentFlipHorizontal,
+                    session.CurrentFlipVertical))
+            {
+                RefreshShell(string.Empty);
+                return;
+            }
 
             if (movedTopLeft && TryResolveCellAddressFromSheetGridPosition(
                     new Point(session.CurrentCanvasRect.Left, session.CurrentCanvasRect.Top),
@@ -646,7 +675,7 @@ public sealed partial class MainWindow
     // rectangle back into the chart's sheet-pixel Left/Top/Width/Height and applies one undoable
     // SetChartBoundsCommand. The overlay is then rebuilt from the model, so the live preview and the
     // committed state are always identical. Pictures/shapes use a cell-anchor + offset model rather than
-    // absolute pixels, so direct drag for them is deferred (see the structured report).
+    // absolute pixels, so their direct drag commits through the shared object command planner below.
     // -------------------------------------------------------------------------------------------------------
 
     private const double ChartHandleSize = 9;

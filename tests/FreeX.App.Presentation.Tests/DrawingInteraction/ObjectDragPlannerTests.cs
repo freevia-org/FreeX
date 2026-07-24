@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.DrawingInteraction;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.DrawingInteraction;
 
@@ -15,6 +16,30 @@ public sealed class ObjectDragPlannerTests
             ObjectDragKind.Move, Start, new LayoutPoint(150, 150), new LayoutPoint(180, 130));
 
         result.Should().Be(new LayoutRect(130, 80, 200, 100));
+    }
+
+    [Fact]
+    public void ShouldCommitMove_OnlyWhenAnchorChanges()
+    {
+        var sheet = new SheetId(Guid.NewGuid());
+        var anchor = new CellAddress(sheet, 4, 5);
+
+        ObjectDragPlanner.ShouldCommitMove(anchor, anchor).Should().BeFalse();
+        ObjectDragPlanner.ShouldCommitMove(anchor, new CellAddress(sheet, 4, 6)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ShouldCommitResize_RejectsNoOpAndAcceptsGeometryOrFlipChanges()
+    {
+        ObjectDragPlanner.ShouldCommitResize(Start, Start, false, false, false, false).Should().BeFalse();
+        ObjectDragPlanner.ShouldCommitResize(
+            Start,
+            new LayoutRect(100, 100, 201.1, 100),
+            false,
+            false,
+            false,
+            false).Should().BeTrue();
+        ObjectDragPlanner.ShouldCommitResize(Start, Start, false, false, true, false).Should().BeTrue();
     }
 
     [Fact]
