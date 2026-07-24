@@ -3,6 +3,60 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class PivotValueFieldSettingsParitySourceTests
 {
     [Fact]
+    public void AvaloniaValueFieldSettings_MatchesWpfClientGeometryAndControlMetrics()
+    {
+        var avalonia = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFieldSettings.cs"));
+        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+
+        wpf.Should().Contain("Width=\"430\"");
+        wpf.Should().Contain("Height=\"430\"");
+        wpf.Should().Contain("<DockPanel Margin=\"14\">");
+        wpf.Should().Contain("<ColumnDefinition Width=\"118\"/>");
+        wpf.Should().Contain("Width=\"78\"");
+        wpf.Should().Contain("Height=\"24\"");
+
+        avalonia.Should().Contain("Background = Brushes.Transparent,");
+        avalonia.Should().Contain("Width = 414,");
+        avalonia.Should().Contain("Height = 391,");
+        avalonia.Should().Contain("Child = new Grid { Margin = new Thickness(14), Children = { bodyGrid } }");
+        avalonia.Should().Contain("SetWpfValueFieldTextBoxHeight(nameBox);");
+        avalonia.Should().Contain("SetWpfValueFieldButtonHeight(ok);");
+        avalonia.Should().Contain("SetWpfValueFieldButtonHeight(cancel);");
+        avalonia.Should().Contain("textBox.Height = 18;");
+        avalonia.Should().Contain("button.Height = 20;");
+        avalonia.Should().Contain("PivotDialogChromeStyle with { ControlHeight = 20 }");
+        avalonia.Should().Contain("new StackPanel { Spacing = 6, Margin = new Thickness(0) }");
+        avalonia.Should().Contain("HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch");
+        avalonia.Should().Contain("new Thickness(0, 10, 0, 6)");
+        avalonia.Should().Contain("ApplyPivotButtonChrome(ok, 78, isDefault: true);");
+        avalonia.Should().Contain("ApplyPivotButtonChrome(cancel, 78);");
+    }
+
+    [Fact]
+    public void AvaloniaValueFieldSettings_PreservesProductionAutomationIds()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFieldSettings.cs"));
+
+        foreach (var automationId in new[]
+                 {
+                     "PivotValueFieldSettingsDialog",
+                     "PivotValueFieldSettingsNameBox",
+                     "PivotValueFieldSettingsSummaryBox",
+                     "PivotValueFieldSettingsShowValuesAsBox",
+                     "PivotValueFieldSettingsBaseFieldBox",
+                     "PivotValueFieldSettingsBaseItemBox",
+                     "PivotValueNumberFormatPresetBox",
+                     "PivotValueNumberFormatButton",
+                     "PivotValueFieldSettingsOkButton",
+                     "PivotValueFieldSettingsCancelButton",
+                     "PivotValueFieldSettingsTabs",
+                 })
+        {
+            source.Should().Contain($"\"{automationId}\"");
+        }
+    }
+
+    [Fact]
     public void AvaloniaValueFieldSettings_UsesTheSharedLocalizedNumberFormatCatalog()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFieldSettings.cs"));
