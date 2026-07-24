@@ -26,7 +26,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
-    public void DocumentView_LeavesTheExactImportedReviewCopyWordArtOutOfWpfFlow()
+    public void DocumentView_UsesAPageRelativeFigureForTheExactImportedReviewCopyWordArt()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
 
@@ -35,7 +35,9 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FontSizePt: 26,");
         source.Should().Contain("Warp: WordArtWarp.ArchUp,");
         source.Should().Contain("AltText: \"Secondary WordArt watermark stress\",");
-        source.Should().Contain("WPF's zero-height Floater moves the owning paragraph");
+        source.Should().Contain("return BuildFloatingWordArtWrapFigure(marker, run, wordArt);");
+        source.Should().Contain("VerticalAnchor = FigureVerticalAnchor.ParagraphTop");
+        source.Should().Contain("var widthPt = wordArt.WidthPt ??");
     }
 
     [Fact]
@@ -46,7 +48,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("PlainText: \"watermark backing layer\",");
         source.Should().Contain("return BuildFloatingShapeWrapFigure(marker, run, shape);");
         source.Should().Contain("VerticalAnchor = FigureVerticalAnchor.ParagraphTop");
-        source.Should().Contain("WPF's zero-height Floater moves the owning paragraph");
+        source.Should().Contain("return BuildFloatingShapeWrapFigure(marker, run, shape);");
     }
 
     [Fact]

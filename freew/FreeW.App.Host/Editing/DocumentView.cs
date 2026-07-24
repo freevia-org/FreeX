@@ -9234,12 +9234,9 @@ public sealed class DocumentView : RichTextBox
                     HorizontalAnchor: HorizontalAnchor.Margin,
                     VerticalAnchor: VerticalAnchor.Paragraph,
                 },
-            })
+            } wordArt)
         {
-            // WPF's zero-height Floater moves the owning paragraph without representing this
-            // paragraph-anchored WordArt's page-space exclusion. The floating overlay remains
-            // authoritative until its true wrap geometry is modeled.
-            return WrapHyperlinkIfNeeded(run, new WpfRun(string.Empty) { Tag = marker });
+            return BuildFloatingWordArtWrapFigure(marker, run, wordArt);
         }
 
         var topAndBottomWidthDip = FloatingWrapReservationTextWidthDip(document);
@@ -9302,6 +9299,43 @@ public sealed class DocumentView : RichTextBox
             run.HyperlinkTooltip);
         var widthDip = Math.Max(1, shape.WidthPt * PxPerPoint);
         var heightDip = Math.Max(1, shape.HeightPt * PxPerPoint - FloatingFigureWrapHeightInsetDip);
+        var placeholder = new Border
+        {
+            Width = widthDip,
+            Height = heightDip,
+            Background = Brushes.Transparent,
+            Opacity = 0,
+            IsHitTestVisible = false,
+            Focusable = false,
+            Tag = reservationMarker,
+        };
+
+        return new Figure(new BlockUIContainer(placeholder) { Margin = new Thickness(0) })
+        {
+            Width = new FigureLength(widthDip, FigureUnitType.Pixel),
+            Height = new FigureLength(heightDip, FigureUnitType.Pixel),
+            HorizontalAnchor = FigureHorizontalAnchor.ContentLeft,
+            VerticalAnchor = FigureVerticalAnchor.ParagraphTop,
+            HorizontalOffset = placement.HorizontalOffsetPt * PxPerPoint,
+            VerticalOffset = placement.VerticalOffsetPt * PxPerPoint,
+            WrapDirection = WrapDirection.Both,
+            Margin = new Thickness(0),
+            Tag = reservationMarker,
+        };
+    }
+
+    private static Figure BuildFloatingWordArtWrapFigure(AnchorMarker marker, ModelRun run, WordArt wordArt)
+    {
+        var placement = wordArt.Placement!;
+        var reservationMarker = new FloatingWrapReservationMarker(
+            marker,
+            run.HyperlinkUrl,
+            run.HyperlinkAnchor,
+            run.HyperlinkTooltip);
+        var widthPt = wordArt.WidthPt ?? Math.Max(72, wordArt.FontSizePt * Math.Max(1, wordArt.Text.Length) * 0.62);
+        var heightPt = wordArt.HeightPt ?? Math.Max(40, wordArt.FontSizePt * 1.2);
+        var widthDip = Math.Max(1, widthPt * PxPerPoint);
+        var heightDip = Math.Max(1, heightPt * PxPerPoint - FloatingFigureWrapHeightInsetDip);
         var placeholder = new Border
         {
             Width = widthDip,
