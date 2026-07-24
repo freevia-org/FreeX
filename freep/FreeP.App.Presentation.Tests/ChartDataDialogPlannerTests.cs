@@ -276,6 +276,32 @@ public sealed class ChartDataDialogPlannerTests
             .Should().Be(ChartDisplayOptionsPlanner.CommandId);
     }
 
+    [Fact]
+    public void ChartAxisOptionsPlanner_UsesWorkingCopyAndBuildsScaleOptions()
+    {
+        var chart = MakeChart();
+        chart.ValueAxis.Title = "Amount";
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 100;
+        chart.ValueAxis.MajorUnit = 20;
+        chart.ValueAxis.HasMajorGridlines = true;
+
+        var planner = ChartAxisOptionsPlanner.FromChart(chart);
+        planner.SetTitle("Revenue");
+        planner.SetMinimum(10);
+        planner.SetMaximum(90);
+        planner.SetMajorUnit(10);
+        planner.SetMinorUnit(5);
+        planner.SetNumberFormatCode("$#,##0");
+        planner.SetMajorGridlines(false);
+
+        planner.BuildCommitPlan().Should().Be(new ChartAxisOptions(
+            ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false));
+        chart.ValueAxis.Title.Should().Be("Amount", "axis dialogs must edit a working copy");
+        ChartAxisOptionsPlanner.BuildSurfacePlan().CommandId
+            .Should().Be(ChartAxisOptionsPlanner.CommandId);
+    }
+
     private static ChartShape MakeChart()
     {
         var chart = new ChartShape();

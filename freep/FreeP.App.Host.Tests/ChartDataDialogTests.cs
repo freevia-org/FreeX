@@ -116,6 +116,24 @@ public sealed class ChartDataDialogTests : IDisposable
         options.Legend.Should().Be(LegendPosition.Right);
     }
 
+    [StaFact]
+    public void ChartAxisOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.ValueAxis.Title = "Amount";
+        sess.SelectedChart.ValueAxis.Min = 0;
+        sess.SelectedChart.ValueAxis.Max = 100;
+
+        var dialog = new ChartAxisOptionsDialog(sess);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.Axis.Should().Be(ChartAxisKind.Value);
+        options.Title.Should().Be("Amount");
+        options.Minimum.Should().Be(0);
+        options.Maximum.Should().Be(100);
+    }
+
     [Fact]
     public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {
@@ -125,6 +143,17 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().Contain("_planner.BuildCommitPlan()");
         source.Should().Contain("_editor.ApplyChartDisplayOptions");
         source.Should().NotContain("new SetChartDisplayOptionsCommand");
+    }
+
+    [Fact]
+    public void ChartAxisOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartAxisOptionsDialog.cs");
+
+        source.Should().Contain("ChartAxisOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChartAxisOptions");
+        source.Should().NotContain("new SetChartAxisOptionsCommand");
     }
 
     [Fact]

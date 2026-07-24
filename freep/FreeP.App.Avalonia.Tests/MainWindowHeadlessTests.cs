@@ -1912,6 +1912,7 @@ public sealed class MainWindowHeadlessTests
     public async Task Ribbon_chart_edit_data_command_is_registered_and_noops_without_selected_chart()
     {
         var found = false;
+        var foundAxis = false;
         var before = -1;
         var after = -1;
 
@@ -1921,6 +1922,7 @@ public sealed class MainWindowHeadlessTests
             var registry = window.BuildCommandRegistry();
             found = registry.TryGet(ChartDataDialogPlanner.EditDataCommandId, out var command);
             found.Should().BeTrue("the Avalonia chart-data command must be registered");
+            foundAxis = registry.TryGet(ChartAxisOptionsPlanner.CommandId, out _);
 
             before = window.Editor.CurrentSlide!.Shapes.Count;
             command!.Execute(RibbonCommandContext.Empty);
@@ -1929,6 +1931,7 @@ public sealed class MainWindowHeadlessTests
 
         if (!ran) return;
         found.Should().BeTrue("the Avalonia chart-data command must be registered");
+        foundAxis.Should().BeTrue("the Avalonia chart-axis command must be registered");
         after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
     }
 
@@ -5829,6 +5832,35 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         options.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, true, DataLabelPosition.OutsideEnd, false, true));
+    }
+
+    [Fact]
+    public async Task ChartAxisOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartAxisOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartAxisOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(
+                ChartAxisKind.Value,
+                "Revenue",
+                10,
+                90,
+                10,
+                5,
+                "$#,##0",
+                false);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().Be(new ChartAxisOptions(
+            ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false));
     }
 
     [Fact]

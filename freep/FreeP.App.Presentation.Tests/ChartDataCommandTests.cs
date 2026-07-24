@@ -887,4 +887,54 @@ public sealed class ChartDataCommandTests
         chart.CategoryAxis.HasMajorGridlines.Should().BeTrue();
         chart.ValueAxis.HasMajorGridlines.Should().BeFalse();
     }
+
+    [Fact]
+    public void SetChartAxisOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ValueAxis.Title = "Old axis";
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 200;
+        chart.ValueAxis.MajorUnit = 50;
+        chart.ValueAxis.NumberFormatCode = "0";
+        chart.ValueAxis.NumberFormatSourceLinked = true;
+        chart.ValueAxis.HasMajorGridlines = true;
+
+        bus.Execute(new SetChartAxisOptionsCommand(
+            0,
+            id,
+            new ChartAxisOptions(
+                ChartAxisKind.Value, "Revenue", 10, 90, 10, 5, "$#,##0", false)));
+
+        chart.ValueAxis.Title.Should().Be("Revenue");
+        chart.ValueAxis.Min.Should().Be(10);
+        chart.ValueAxis.Max.Should().Be(90);
+        chart.ValueAxis.MajorUnit.Should().Be(10);
+        chart.ValueAxis.MinorUnit.Should().Be(5);
+        chart.ValueAxis.NumberFormatCode.Should().Be("$#,##0");
+        chart.ValueAxis.NumberFormatSourceLinked.Should().BeFalse();
+        chart.ValueAxis.HasMajorGridlines.Should().BeFalse();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.ValueAxis.Title.Should().Be("Revenue");
+        roundTripped.ValueAxis.Min.Should().Be(10);
+        roundTripped.ValueAxis.Max.Should().Be(90);
+        roundTripped.ValueAxis.MajorUnit.Should().Be(10);
+        roundTripped.ValueAxis.MinorUnit.Should().Be(5);
+        roundTripped.ValueAxis.NumberFormatCode.Should().Be("$#,##0");
+        roundTripped.ValueAxis.HasMajorGridlines.Should().BeFalse();
+
+        bus.Undo();
+        chart.ValueAxis.Title.Should().Be("Old axis");
+        chart.ValueAxis.Min.Should().Be(0);
+        chart.ValueAxis.Max.Should().Be(200);
+        chart.ValueAxis.MajorUnit.Should().Be(50);
+        chart.ValueAxis.NumberFormatCode.Should().Be("0");
+        chart.ValueAxis.NumberFormatSourceLinked.Should().BeTrue();
+        chart.ValueAxis.HasMajorGridlines.Should().BeTrue();
+    }
 }

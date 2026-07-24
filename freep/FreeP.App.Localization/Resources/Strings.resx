@@ -454,6 +454,12 @@
   <data name="Ribbon_Command_ChartDisplayOptions_KeyTip" xml:space="preserve">
     <value>O</value>
   </data>
+  <data name="Ribbon_Command_ChartAxisOptions_Label" xml:space="preserve">
+    <value>Axis Options</value>
+  </data>
+  <data name="Ribbon_Command_ChartAxisOptions_KeyTip" xml:space="preserve">
+    <value>X</value>
+  </data>
   <data name="Ribbon_Group_Links_Label" xml:space="preserve">
     <value>Links</value>
   </data>
