@@ -13,6 +13,12 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly TextBox _titleBox;
     private readonly ComboBox _legendCombo;
     private readonly CheckBox _valueLabelsCheck;
+    private readonly CheckBox _percentLabelsCheck;
+    private readonly CheckBox _categoryLabelsCheck;
+    private readonly CheckBox _seriesLabelsCheck;
+    private readonly CheckBox _legendKeysCheck;
+    private readonly TextBox _numberFormatBox;
+    private readonly TextBox _separatorBox;
     private readonly ComboBox _labelPositionCombo;
     private readonly CheckBox _categoryGridlinesCheck;
     private readonly CheckBox _valueGridlinesCheck;
@@ -45,6 +51,28 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             Content = surface.ValueLabelsLabel,
             IsChecked = _planner.ShowValueLabels,
         };
+        _percentLabelsCheck = new CheckBox
+        {
+            Content = surface.PercentLabelsLabel,
+            IsChecked = _planner.ShowPercentLabels,
+        };
+        _categoryLabelsCheck = new CheckBox
+        {
+            Content = surface.CategoryLabelsLabel,
+            IsChecked = _planner.ShowCategoryLabels,
+        };
+        _seriesLabelsCheck = new CheckBox
+        {
+            Content = surface.SeriesLabelsLabel,
+            IsChecked = _planner.ShowSeriesLabels,
+        };
+        _legendKeysCheck = new CheckBox
+        {
+            Content = surface.LegendKeysLabel,
+            IsChecked = _planner.ShowLegendKeys,
+        };
+        _numberFormatBox = new TextBox { Text = _planner.LabelNumberFormat, MinWidth = 160 };
+        _separatorBox = new TextBox { Text = _planner.LabelSeparator, MinWidth = 160 };
         _labelPositionCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions,
@@ -81,6 +109,12 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(MakeRow(surface.LegendLabel, _legendCombo));
         content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
         content.Children.Add(_valueLabelsCheck);
+        content.Children.Add(_percentLabelsCheck);
+        content.Children.Add(_categoryLabelsCheck);
+        content.Children.Add(_seriesLabelsCheck);
+        content.Children.Add(_legendKeysCheck);
+        content.Children.Add(MakeRow(surface.NumberFormatLabel, _numberFormatBox));
+        content.Children.Add(MakeRow(surface.SeparatorLabel, _separatorBox));
         content.Children.Add(_categoryGridlinesCheck);
         content.Children.Add(_valueGridlinesCheck);
         content.Children.Add(buttons);
@@ -104,8 +138,14 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetTitle(_titleBox.Text);
         _planner.SetLegend(_legendCombo.SelectedItem is ChartDisplayLegendOption legend ? legend.Value : null);
         _planner.SetShowValueLabels(_valueLabelsCheck.IsChecked == true);
+        _planner.SetShowPercentLabels(_percentLabelsCheck.IsChecked == true);
+        _planner.SetShowCategoryLabels(_categoryLabelsCheck.IsChecked == true);
+        _planner.SetShowSeriesLabels(_seriesLabelsCheck.IsChecked == true);
+        _planner.SetShowLegendKeys(_legendKeysCheck.IsChecked == true);
         if (_labelPositionCombo.SelectedItem is ChartDisplayLabelPositionOption position)
             _planner.SetLabelPosition(position.Value);
+        _planner.SetLabelNumberFormat(_numberFormatBox.Text);
+        _planner.SetLabelSeparator(_separatorBox.Text);
         _planner.SetCategoryGridlines(_categoryGridlinesCheck.IsChecked == true);
         _planner.SetValueGridlines(_valueGridlinesCheck.IsChecked == true);
     }

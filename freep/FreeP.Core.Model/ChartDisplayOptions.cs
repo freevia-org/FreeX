@@ -10,4 +10,10 @@ public sealed record ChartDisplayOptions(
     bool ShowValueLabels,
     DataLabelPosition LabelPosition,
     bool CategoryGridlines,
-    bool ValueGridlines);
+    bool ValueGridlines,
+    bool ShowPercentLabels = false,
+    bool ShowCategoryLabels = false,
+    bool ShowSeriesLabels = false,
+    bool ShowLegendKeys = false,
+    string? LabelNumberFormat = null,
+    string? LabelSeparator = null);

@@ -48,14 +48,32 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         if (chart.DataLabels is not null)
         {
             chart.DataLabels.ShowValue = _newOptions.ShowValueLabels;
+            chart.DataLabels.ShowPercent = _newOptions.ShowPercentLabels;
+            chart.DataLabels.ShowCategoryName = _newOptions.ShowCategoryLabels;
+            chart.DataLabels.ShowSeriesName = _newOptions.ShowSeriesLabels;
+            chart.DataLabels.ShowLegendKey = _newOptions.ShowLegendKeys;
             chart.DataLabels.Position = _newOptions.LabelPosition;
+            chart.DataLabels.NumberFormat = _newOptions.LabelNumberFormat;
+            chart.DataLabels.Separator = _newOptions.LabelSeparator;
         }
-        else if (_newOptions.ShowValueLabels)
+        else if (_newOptions.ShowValueLabels ||
+                 _newOptions.ShowPercentLabels ||
+                 _newOptions.ShowCategoryLabels ||
+                 _newOptions.ShowSeriesLabels ||
+                 _newOptions.ShowLegendKeys ||
+                 !string.IsNullOrWhiteSpace(_newOptions.LabelNumberFormat) ||
+                 !string.IsNullOrEmpty(_newOptions.LabelSeparator))
         {
             chart.DataLabels = new ChartDataLabels
             {
-                ShowValue = true,
+                ShowValue = _newOptions.ShowValueLabels,
+                ShowPercent = _newOptions.ShowPercentLabels,
+                ShowCategoryName = _newOptions.ShowCategoryLabels,
+                ShowSeriesName = _newOptions.ShowSeriesLabels,
+                ShowLegendKey = _newOptions.ShowLegendKeys,
                 Position = _newOptions.LabelPosition,
+                NumberFormat = _newOptions.LabelNumberFormat,
+                Separator = _newOptions.LabelSeparator,
             };
         }
 
