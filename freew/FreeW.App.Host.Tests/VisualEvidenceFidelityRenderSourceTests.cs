@@ -26,6 +26,19 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void DocumentView_LeavesTheExactImportedReviewCopyWordArtOutOfWpfFlow()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("Text: \"Review Copy\",");
+        source.Should().Contain("Style: WordArtStyle.FillGold,");
+        source.Should().Contain("FontSizePt: 26,");
+        source.Should().Contain("Warp: WordArtWarp.ArchUp,");
+        source.Should().Contain("AltText: \"Secondary WordArt watermark stress\",");
+        source.Should().Contain("WPF's zero-height Floater moves the owning paragraph");
+    }
+
+    [Fact]
     public void FidelityRender_EmitsSharedVisualEvidenceManifestAndTrustChecks()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));

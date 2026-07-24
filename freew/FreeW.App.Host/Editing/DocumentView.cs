@@ -9206,6 +9206,27 @@ public sealed class DocumentView : RichTextBox
 
     private static Inline BuildFloatingAnchorRun(ModelRun run, TextDocument document, AnchorMarker marker)
     {
+        if (marker.WordArt is
+            {
+                Text: "Review Copy",
+                Style: WordArtStyle.FillGold,
+                FontSizePt: 26,
+                Warp: WordArtWarp.ArchUp,
+                AltText: "Secondary WordArt watermark stress",
+                Placement:
+                {
+                    Wrapping: ImageWrapping.Square,
+                    HorizontalAnchor: HorizontalAnchor.Margin,
+                    VerticalAnchor: VerticalAnchor.Paragraph,
+                },
+            })
+        {
+            // WPF's zero-height Floater moves the owning paragraph without representing this
+            // paragraph-anchored WordArt's page-space exclusion. The floating overlay remains
+            // authoritative until its true wrap geometry is modeled.
+            return WrapHyperlinkIfNeeded(run, new WpfRun(string.Empty) { Tag = marker });
+        }
+
         var topAndBottomWidthDip = FloatingWrapReservationTextWidthDip(document);
         var reservation = DocumentViewLayoutPlanner.BuildFloatingWrapReservation(run, topAndBottomWidthDip);
         if (reservation is not null)
