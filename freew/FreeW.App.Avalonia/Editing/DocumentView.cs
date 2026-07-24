@@ -10835,6 +10835,44 @@ public sealed class DocumentView : Control
     /// <summary>Every tracked change in the committed document, in reading order — drives Previous/Next.</summary>
     public IReadOnlyList<RevisionEntry> Revisions => RevisionList.Enumerate(_doc);
 
+    /// <summary>Moves the caret to the top-level block owning a tracked change without mutating the document.</summary>
+    public void NavigateToRevision(RevisionEntry entry)
+    {
+        for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
+        {
+            if (ReferenceEquals(_doc.Blocks[blockIndex], entry.Paragraph))
+            {
+                _hfCaret = null;
+                MoveCaretToBlock(blockIndex, 0);
+                InvalidateVisual();
+                Focus();
+                CaretMoved?.Invoke();
+                ScrollToCaretRequested?.Invoke();
+                return;
+            }
+
+            if (_doc.Blocks[blockIndex] is not Table table)
+                continue;
+
+            for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+            {
+                foreach (var cell in table.Rows[rowIndex].Cells)
+                {
+                    if (cell.Paragraphs.Any(paragraph => ReferenceEquals(paragraph, entry.Paragraph)))
+                    {
+                        _hfCaret = null;
+                        MoveCaretToBlock(blockIndex, 0);
+                        InvalidateVisual();
+                        Focus();
+                        CaretMoved?.Invoke();
+                        ScrollToCaretRequested?.Invoke();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     /// <summary>True when the document carries any tracked change (insertion/deletion/formatting).</summary>
     public bool HasRevisions => TrackChanges.HasRevisions(_doc);
 

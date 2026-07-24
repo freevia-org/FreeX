@@ -619,8 +619,8 @@ internal static class FreeWCommandInventory
             summary: summary,
             wpfPath: "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             wpfTest: "FreeWRibbonParityTests.ReviewTrackingAndChanges_CommandRoutesExecuteBackedActions",
-            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/DocumentViewReviewTests.cs",
-            avaloniaTest: "DocumentViewReviewTests.Review_change_navigation_commands_route_to_host_callbacks");
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/ReviewChangeNavigationTests.cs",
+            avaloniaTest: "ReviewChangeNavigationTests.Production_MainWindow_step_opens_hidden_pane_and_navigates");
 
     private static CommandBehaviorEvidence StatisticsEvidence(string summary) =>
         ReviewEvidence(

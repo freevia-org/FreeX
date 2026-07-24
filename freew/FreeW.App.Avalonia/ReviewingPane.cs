@@ -33,6 +33,7 @@ public sealed class ReviewingPane : SidePaneBase
     private readonly TextBlock _countLabel;
     private readonly Button _acceptAllButton;
     private readonly Button _rejectAllButton;
+    private IReadOnlyList<RevisionEntry> _revisions = Array.Empty<RevisionEntry>();
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -81,6 +82,13 @@ public sealed class ReviewingPane : SidePaneBase
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
         };
+        _revisionList.SelectionChanged += (_, _) =>
+        {
+            if (_revisionList.SelectedItem is RevisionItemView item)
+            {
+                _editor.NavigateToRevision(item.Entry);
+            }
+        };
 
         // Dock bulk row and count label into InnerLayout (base added header + separator already).
         //   [bulkRow]      Dock.Top
@@ -102,6 +110,8 @@ public sealed class ReviewingPane : SidePaneBase
     public override void Refresh()
     {
         var revisions = RevisionList.Enumerate(_editor.Document);
+        var previousIndex = _revisionList.SelectedIndex;
+        _revisions = revisions;
         var hasRevisions = revisions.Count > 0;
 
         _acceptAllButton.IsEnabled = hasRevisions;
@@ -112,6 +122,28 @@ public sealed class ReviewingPane : SidePaneBase
 
         var items = revisions.Select(r => new RevisionItemView(r, this)).ToArray();
         _revisionList.ItemsSource = items;
+        _revisionList.SelectedIndex = revisions.Count == 0
+            ? -1
+            : Math.Clamp(previousIndex < 0 ? 0 : previousIndex, 0, revisions.Count - 1);
+    }
+
+    /// <summary>Steps through tracked changes using WPF's open, refresh, and wrapping semantics.</summary>
+    internal bool StepRevision(int direction, bool refresh = true)
+    {
+        if (direction == 0)
+            throw new ArgumentOutOfRangeException(nameof(direction));
+
+        if (refresh)
+            Refresh();
+        if (_revisions.Count == 0)
+            return false;
+
+        var current = _revisionList.SelectedIndex;
+        var next = current < 0
+            ? (direction < 0 ? _revisions.Count - 1 : 0)
+            : (current + Math.Sign(direction) + _revisions.Count) % _revisions.Count;
+        _revisionList.SelectedIndex = next;
+        return true;
     }
 
     // ── Accept / Reject per-entry (called from item rows) ────────────────────
@@ -159,6 +191,8 @@ public sealed class ReviewingPane : SidePaneBase
 
     /// <summary>Number of revision rows currently shown in the list (for headless testing).</summary>
     internal int RevisionItemCount => (_revisionList.ItemsSource as RevisionItemView[])?.Length ?? 0;
+    internal int SelectedRevisionIndexForTest => _revisionList.SelectedIndex;
+    internal RevisionEntry? SelectedRevisionForTest => (_revisionList.SelectedItem as RevisionItemView)?.Entry;
 
     /// <summary>
     /// Enumerates the tracked-change entries for <paramref name="doc"/> via the model tier — the same

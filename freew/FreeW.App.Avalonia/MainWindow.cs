@@ -342,6 +342,15 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal ReviewingPane ReviewingPane => _reviewingPane;
 
+    internal bool StepRevision(int direction)
+    {
+        if (!_reviewingPane.IsVisible)
+            ToggleReviewingPane();
+        else
+            _reviewingPane.Refresh();
+        return _reviewingPane.StepRevision(direction, refresh: false);
+    }
+
     internal ReviewBalloonsPane ReviewBalloonsPane => _reviewBalloonsPane;
     internal bool RibbonKeyTipsVisibleForTest => _ribbonKeyTipsVisible;
     internal Control? RibbonControlForTest => _ribbonControl;
@@ -1535,6 +1544,8 @@ public sealed partial class MainWindow : Window
             NewDocument: NewDocument,
             ToggleNavigationPane: ToggleNavigationPane,
             ToggleReviewingPane: ToggleReviewingPane,
+            PreviousChange: () => StepRevision(-1),
+            NextChange: () => StepRevision(1),
             ToggleRevealFormatting: ToggleRevealFormatting,
             OpenFindReplaceDialog: OpenFindReplaceDialog,
             SetPrintLayout: () => SetViewMode(DocumentViewMode.PrintLayout),
