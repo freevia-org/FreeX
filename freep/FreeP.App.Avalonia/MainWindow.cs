@@ -2116,6 +2116,10 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StackedVenn)));
         r.Register(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicHierarchy)));
+        r.Register(SmartArtAuthoringPlanner.HorizontalHierarchyLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalHierarchy)));
+        r.Register(SmartArtAuthoringPlanner.OrgChartLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.OrgChart)));
         r.Register(SmartArtAuthoringPlanner.SimpleQuickStyleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Simple)));
         r.Register(SmartArtAuthoringPlanner.ModerateQuickStyleCommandId,

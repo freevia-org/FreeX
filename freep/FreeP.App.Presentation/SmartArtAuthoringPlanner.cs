@@ -36,6 +36,8 @@ public enum SmartArtLayoutPreset
     TargetList,
     StackedVenn,
     BasicHierarchy,
+    HorizontalHierarchy,
+    OrgChart,
 }
 
 /// <summary>Bounded PowerPoint SmartArt Quick Style choices.</summary>
@@ -96,6 +98,8 @@ public static class SmartArtAuthoringPlanner
     public const string TargetListLayoutCommandId = "freep.smartart.layout.target-list";
     public const string StackedVennLayoutCommandId = "freep.smartart.layout.stacked-venn";
     public const string BasicHierarchyLayoutCommandId = "freep.smartart.layout.basic-hierarchy";
+    public const string HorizontalHierarchyLayoutCommandId = "freep.smartart.layout.horizontal-hierarchy";
+    public const string OrgChartLayoutCommandId = "freep.smartart.layout.org-chart";
     public const string SimpleQuickStyleCommandId = "freep.smartart.style.simple";
     public const string ModerateQuickStyleCommandId = "freep.smartart.style.moderate";
     public const string IntenseQuickStyleCommandId = "freep.smartart.style.intense";
@@ -231,6 +235,10 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicHierarchy =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.HorizontalHierarchy =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.OrgChart =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/orgChart", SmartArtFamily.Hierarchy),
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
         };
 

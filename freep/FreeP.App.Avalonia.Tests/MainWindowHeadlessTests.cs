@@ -5051,6 +5051,8 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.TargetListLayoutCommandId,
                 SmartArtAuthoringPlanner.StackedVennLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
+                SmartArtAuthoringPlanner.HorizontalHierarchyLayoutCommandId,
+                SmartArtAuthoringPlanner.OrgChartLayoutCommandId,
             })
             {
                 registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be registered");
