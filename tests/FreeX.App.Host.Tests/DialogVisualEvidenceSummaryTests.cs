@@ -150,6 +150,16 @@ public sealed class DialogVisualEvidenceSummaryTests
         summary.GetProperty("stalePromotedExpectedSizeEvidence").GetInt32().Should().Be(0);
         summary.GetProperty("policyAcceptedNativeDifferences").GetInt32().Should().Be(0);
         summary.GetProperty("dimensionMismatchBuckets").GetProperty("real logical-size mismatch").GetInt32().Should().Be(1);
+        summary.GetProperty("visualReviewTriageThreshold").GetDouble().Should().Be(0.4);
+        summary.GetProperty("visualReviewTriageThresholdRationale").GetString().Should().Contain("not a pass/fail");
+        summary.GetProperty("visualReviewCandidateCount").GetInt32().Should().Be(1);
+        summary.GetProperty("highestTriageScore").GetDouble().Should().BeGreaterThan(0.4);
+
+        var reviewCandidate = json.RootElement.GetProperty("visualReviewCandidates")[0];
+        reviewCandidate.GetProperty("id").GetString().Should().Be("dialog.Sample.Valid");
+        reviewCandidate.GetProperty("reviewStatus").GetString().Should().Be("unresolved visual review candidate");
+        reviewCandidate.GetProperty("logicalDimensionMatch").GetBoolean().Should().BeFalse();
+        reviewCandidate.GetProperty("reviewReason").GetString().Should().Contain("paired WPF/Avalonia visual review");
 
         var paired = json.RootElement.GetProperty("pairedSurfaces")[0];
         paired.GetProperty("wpf").GetProperty("width").GetInt32().Should().Be(3);

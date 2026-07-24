@@ -10,6 +10,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$visualReviewTriageThreshold = 0.4
+$visualReviewTriageThresholdRationale = "This is a deterministic review-prioritization cutoff over the triage score (normalized sample, luma, non-background, and logical-size deltas); it is not a pass/fail or visual-parity acceptance threshold. Rows at or above it remain unresolved review candidates until a human compares the paired evidence."
+
 Add-Type -ReferencedAssemblies "System.Drawing.dll" -TypeDefinition @"
 using System;
 using System.Collections.Generic;
@@ -954,6 +957,9 @@ $policyAcceptedNativeDifferenceRows = @($dimensionMismatchRows | Where-Object {
         $_.comparison.policyAcceptance.status -eq "policy-accepted"
     } | Sort-Object -Property id)
 $topOutlierRows = @($pairedRows | Sort-Object @{ Expression = { $_.comparison.triageScore }; Descending = $true }, @{ Expression = { $_.id }; Ascending = $true } | Select-Object -First 10)
+$visualReviewCandidateRows = @($pairedRows | Where-Object {
+        $_.comparison.triageScore -ge $visualReviewTriageThreshold
+    } | Sort-Object @{ Expression = { $_.comparison.triageScore }; Descending = $true }, @{ Expression = { $_.id }; Ascending = $true })
 $dimensionMismatchBucketGroups = @(
     $dimensionMismatchRows |
         Group-Object -Property { $_.comparison.dimensionMismatchBucket } |
@@ -998,6 +1004,10 @@ $jsonModel = [ordered]@{
         pairedExpectedSizeMismatches = [int]$expectedSizeMismatchRows.Count
         stalePromotedExpectedSizeEvidence = [int]$stalePromotedExpectedSizeRows.Count
         policyAcceptedNativeDifferences = [int]$policyAcceptedNativeDifferenceRows.Count
+        visualReviewTriageThreshold = $visualReviewTriageThreshold
+        visualReviewTriageThresholdRationale = $visualReviewTriageThresholdRationale
+        visualReviewCandidateCount = [int]$visualReviewCandidateRows.Count
+        highestTriageScore = if ($pairedRows.Count -eq 0) { 0 } else { [math]::Round(([double]($pairedRows | ForEach-Object { [double]$_.comparison.triageScore } | Measure-Object -Maximum).Maximum), 6) }
         dimensionMismatchBuckets = [ordered]@{}
     }
     pairedSurfaces = @(
@@ -1047,6 +1057,19 @@ $jsonModel = [ordered]@{
                 dimension = "$([math]::Round($row.wpf.metrics.LogicalWidth, 3))x$([math]::Round($row.wpf.metrics.LogicalHeight, 3)) vs $([math]::Round($row.avalonia.metrics.LogicalWidth, 3))x$([math]::Round($row.avalonia.metrics.LogicalHeight, 3)) logical; $($row.wpf.metrics.Width)x$($row.wpf.metrics.Height) vs $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) px"
                 dimensionMismatchBucket = $row.comparison.dimensionMismatchBucket
                 nonBackgroundDelta = [math]::Round($row.comparison.nonBackgroundDelta, 6)
+            }
+        }
+    )
+    visualReviewCandidates = @(
+        foreach ($row in $visualReviewCandidateRows) {
+            [ordered]@{
+                id = $row.id
+                triageScore = [math]::Round($row.comparison.triageScore, 6)
+                reviewStatus = "unresolved visual review candidate"
+                logicalDimensionMatch = $row.comparison.logicalDimensionMatch
+                dimensionMismatchBucket = $row.comparison.dimensionMismatchBucket
+                expectedSizeMismatch = $row.comparison.expectedSizeMismatch
+                reviewReason = if ($row.comparison.expectedSizeMismatch) { "High image delta with suspect expected-size evidence; recapture before drawing a product conclusion." } elseif ($null -ne $row.comparison.policyAcceptance) { "High image delta retained for visual review even though a dimension difference has policy-accepted native/control variance." } else { "High image delta requires paired WPF/Avalonia visual review; equal dimensions do not resolve it." }
             }
         }
     )
@@ -1159,6 +1182,23 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine("| Paired expected-size evidence mismatches | $($expectedSizeMismatchRows.Count) |")
 [void]$md.AppendLine("| Stale promoted expected-size evidence | $($stalePromotedExpectedSizeRows.Count) |")
 [void]$md.AppendLine("| Policy-accepted native/control differences | $($policyAcceptedNativeDifferenceRows.Count) |")
+[void]$md.AppendLine("| High-delta visual review candidates | $($visualReviewCandidateRows.Count) |")
+[void]$md.AppendLine("| Visual review triage threshold | $visualReviewTriageThreshold |")
+[void]$md.AppendLine()
+
+[void]$md.AppendLine("## Visual Review Queue")
+[void]$md.AppendLine()
+[void]$md.AppendLine("This queue is a deterministic prioritization aid, not a pass/fail result. The threshold is ${visualReviewTriageThreshold}: $visualReviewTriageThresholdRationale")
+[void]$md.AppendLine()
+[void]$md.AppendLine("Equal logical dimensions, nonblank PNGs, and paired manifest ids establish evidence coverage and size comparability only; they do not establish visual parity. The $($visualReviewCandidateRows.Count) rows below remain unresolved high-delta candidates.")
+[void]$md.AppendLine()
+[void]$md.AppendLine("| Surface id | Score | Logical dimensions match | Dimension bucket | Expected-size mismatch | Review status | Review reason |")
+[void]$md.AppendLine("| --- | ---: | --- | --- | --- | --- | --- |")
+foreach ($row in $visualReviewCandidateRows) {
+    $bucket = if ([string]::IsNullOrWhiteSpace([string]$row.comparison.dimensionMismatchBucket)) { "none" } else { [string]$row.comparison.dimensionMismatchBucket }
+    $reviewReason = if ($row.comparison.expectedSizeMismatch) { "High image delta with suspect expected-size evidence; recapture before drawing a product conclusion." } elseif ($null -ne $row.comparison.policyAcceptance) { "High image delta retained for visual review despite policy-accepted native/control variance." } else { "High image delta requires paired WPF/Avalonia visual review; equal dimensions do not resolve it." }
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $row.id) | $(Format-ReportNumber $row.comparison.triageScore) | $($row.comparison.logicalDimensionMatch) | $(ConvertTo-ToolMarkdownCell $bucket) | $($row.comparison.expectedSizeMismatch) | unresolved visual review candidate | $(ConvertTo-ToolMarkdownCell $reviewReason) |")
+}
 [void]$md.AppendLine()
 
 [void]$md.AppendLine("## Scale-Aware Dimension Mismatch Classification")

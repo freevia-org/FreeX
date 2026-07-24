@@ -74,17 +74,20 @@ function Get-FreeXNextSlice {
         $DialogRoutes.totalRoutes -eq $DialogRoutes.avaloniaCaptures
     $allDialogManifestSurfacesPaired = $DialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds -eq 0 -and
         $DialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair -eq 0
+    $visualReviewCandidateCount = [int]$DialogVisualEvidence.visualReviewCandidateCount
+    $visualReviewTriageThreshold = [double]$DialogVisualEvidence.visualReviewTriageThreshold
+    $highestTriageScore = [double]$DialogVisualEvidence.highestTriageScore
 
     if ($FunctionalMatrix.avaloniaMissing -eq 0 -and
         $realBehaviorGaps -eq 0 -and
         $allDialogRoutesCaptured -and
         $allDialogManifestSurfacesPaired -and
         $catalogBackedPseudoGalleryRows -eq $pseudoGalleryItems) {
-        return "Command/dialog route coverage is green; all $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence ($conditionalFormatPopupGalleryRows conditional-format rows over $conditionalFormatPopupCatalogItems runtime catalog items, $fontBorderPopupGalleryRows font/border rows, and $accountingSymbolPopupGalleryRows accounting-symbol rows), and dialog screenshot evidence has $($DialogVisualEvidence.pairedCapturedSurfaceIds) paired WPF/Avalonia manifest surface ids with $($DialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only ids. Keep the $($DialogVisualEvidence.pairedRawPixelDimensionMismatches) raw PNG pixel mismatches separate from missing-pair status: $($DialogVisualEvidence.pairedCaptureScaleNormalizedDimensionMatches) normalize away by capture DPI, while $($DialogVisualEvidence.pairedDimensionMismatches) scale-aware paired mismatches remain, with $($DialogVisualEvidence.policyAcceptedNativeDifferences) policy-accepted native/control rows, $($DialogVisualEvidence.contentVisualMismatches) content/visual mismatches, $($DialogVisualEvidence.evidenceLimitations) evidence limitations, $($DialogVisualEvidence.realLogicalSizeMismatches) real logical-size mismatches, and $($DialogVisualEvidence.stalePromotedExpectedSizeEvidence) stale promoted expected-size evidence rows."
+        return "Command/dialog route coverage is complete for the generated inputs: all $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence ($conditionalFormatPopupGalleryRows conditional-format rows over $conditionalFormatPopupCatalogItems runtime catalog items, $fontBorderPopupGalleryRows font/border rows, and $accountingSymbolPopupGalleryRows accounting-symbol rows), and dialog screenshot evidence has $($DialogVisualEvidence.pairedCapturedSurfaceIds) paired WPF/Avalonia manifest surface ids with $($DialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only ids. This is coverage and size-comparability evidence, not visual parity. The paired screenshots retain $visualReviewCandidateCount unresolved high-delta visual review candidates at triage score >= $visualReviewTriageThreshold (highest $highestTriageScore); keep those candidates separate from $($DialogVisualEvidence.pairedDimensionMismatches) scale-aware dimension mismatch rows and $($DialogVisualEvidence.pairedRawPixelDimensionMismatches) raw PNG pixel dimension mismatches."
     }
 
     if ($FunctionalMatrix.avaloniaMissing -eq 0 -and $realBehaviorGaps -eq 0 -and $allDialogRoutesCaptured) {
-        return "Command/dialog route coverage is green; $catalogBackedPseudoGalleryRows of $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence, and dialog screenshot evidence currently has $($DialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only manifest ids plus $($DialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair) WPF-only manifest ids. Continue catalog/evidence cleanup before claiming full visual parity."
+        return "Command/dialog route coverage is complete for the generated inputs; $catalogBackedPseudoGalleryRows of $pseudoGalleryItems pseudo-gallery rows are catalog-backed in classifier evidence, and dialog screenshot evidence currently has $($DialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only manifest ids plus $($DialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair) WPF-only manifest ids. Continue catalog/evidence cleanup and visual review before claiming full visual parity."
     }
 
     if ($FunctionalMatrix.avaloniaMissing -gt 0 -or $realBehaviorGaps -gt 0) {
@@ -139,6 +142,7 @@ try {
         sharedOrPresentationBacked = [int]$dialogInventory.summary.sharedOrPresentationBacked
     }
     $dimensionMismatchBuckets = $dialogVisualEvidence.summary.dimensionMismatchBuckets
+    $visualReviewCandidates = Get-JsonPropertyValue $dialogVisualEvidence "visualReviewCandidates" @()
     $freeXDialogVisualEvidence = [ordered]@{
         wpfCapturedManifestSurfaces = [int]$dialogVisualEvidence.summary.wpfCapturedManifestSurfaces
         avaloniaCapturedManifestSurfaces = [int]$dialogVisualEvidence.summary.avaloniaCapturedManifestSurfaces
@@ -150,11 +154,25 @@ try {
         pairedCaptureScaleNormalizedDimensionMatches = [int]$dialogVisualEvidence.summary.pairedCaptureScaleNormalizedDimensionMatches
         pairedExpectedSizeMismatches = [int]$dialogVisualEvidence.summary.pairedExpectedSizeMismatches
         stalePromotedExpectedSizeEvidence = [int]$dialogVisualEvidence.summary.stalePromotedExpectedSizeEvidence
-        contentVisualMismatches = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "content/visual mismatch")
-        evidenceLimitations = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "evidence limitation")
-        expectedPlatformNativeDifferences = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "expected platform/native difference")
-        realLogicalSizeMismatches = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "real logical-size mismatch")
+        contentVisualDimensionMismatchRows = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "content/visual mismatch")
+        evidenceLimitationDimensionMismatchRows = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "evidence limitation")
+        expectedPlatformNativeDimensionMismatchRows = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "expected platform/native difference")
+        realLogicalSizeMismatchRows = [int](Get-JsonPropertyValue $dimensionMismatchBuckets "real logical-size mismatch")
         policyAcceptedNativeDifferences = [int](Get-JsonPropertyValue $dialogVisualEvidence.summary "policyAcceptedNativeDifferences")
+        visualReviewTriageThreshold = [double](Get-JsonPropertyValue $dialogVisualEvidence.summary "visualReviewTriageThreshold")
+        visualReviewTriageThresholdRationale = [string](Get-JsonPropertyValue $dialogVisualEvidence.summary "visualReviewTriageThresholdRationale" "")
+        visualReviewCandidateCount = [int](Get-JsonPropertyValue $dialogVisualEvidence.summary "visualReviewCandidateCount")
+        highestTriageScore = [double](Get-JsonPropertyValue $dialogVisualEvidence.summary "highestTriageScore")
+        visualReviewCandidateSurfaceIds = @($visualReviewCandidates | ForEach-Object { [string]$_.id })
+        visualReviewCandidates = @($visualReviewCandidates | ForEach-Object {
+                [ordered]@{
+                    id = [string]$_.id
+                    triageScore = [double]$_.triageScore
+                    reviewStatus = [string]$_.reviewStatus
+                    logicalDimensionMatch = [bool]$_.logicalDimensionMatch
+                    dimensionMismatchBucket = $_.dimensionMismatchBucket
+                }
+            })
     }
     $freeX = [ordered]@{
         app = "FreeX"
@@ -215,8 +233,8 @@ try {
       }
 
     $dashboard = [ordered]@{
-        schema = "freex.parity.cross-app-dashboard.v1"
-        scopeBoundary = "Generated counts prove command/profile routing and evidence-pair coverage only. They do not prove that every end-to-end workflow or pixel-level visual comparison is complete."
+        schema = "freex.parity.cross-app-dashboard.v2"
+        scopeBoundary = "Generated counts prove command/profile routing, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates remain explicitly listed for human visual review."
         sources = @(
             "docs/parity/command-inventory.json",
             "docs/parity/functional-parity.json",
@@ -232,20 +250,34 @@ try {
     $json = ($dashboard | ConvertTo-Json -Depth 12) + "`n"
     Set-Content -LiteralPath $tempJsonPath -Value $json -NoNewline -Encoding UTF8
 
+    $freeXVisualReviewMarkdownRows = @(
+        foreach ($candidate in @($freeX.dialogVisualEvidence.visualReviewCandidates)) {
+            "| $(ConvertTo-ToolMarkdownCell $candidate.id) | $($candidate.triageScore) | $($candidate.logicalDimensionMatch) | $(ConvertTo-ToolMarkdownCell $(if ([string]::IsNullOrWhiteSpace([string]$candidate.dimensionMismatchBucket)) { "none" } else { $candidate.dimensionMismatchBucket })) | $(ConvertTo-ToolMarkdownCell $candidate.reviewStatus) |"
+        }
+    )
+
     $md = @(
         "# Avalonia/WPF Cross-App Parity Dashboard",
         "",
         'Generated by `tools/Generate-CrossAppParityDashboard.ps1` from existing generated parity JSON. Do not edit by hand.',
         "",
-        "> Generated counts prove command/profile routing and evidence-pair coverage only. They do not prove that every end-to-end workflow or pixel-level visual comparison is complete.",
+        "> Generated counts prove command/profile routing, screenshot manifest coverage, and DPI-normalized size comparability only. They do not prove visual parity, workflow completeness, or pixel-level equivalence. High-delta paired screenshot candidates remain explicitly listed for human visual review.",
         "",
         "## Summary",
         "",
         "| App | Primary evidence | Current generated state | Next slice |",
         "|---|---|---|---|",
-        "| FreeX | Functional matrix, classifier, dialog inventory, dialog visual evidence, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) catalog-backed pseudo-gallery rows ($($freeX.functionalMatrix.conditionalFormatPopupGalleryRows) conditional-format, $($freeX.functionalMatrix.fontBorderPopupGalleryRows) font/border, $($freeX.functionalMatrix.accountingSymbolPopupGalleryRows) accounting-symbol); $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia; $($freeX.dialogVisualEvidence.pairedCapturedSurfaceIds) paired screenshot surface ids, $($freeX.dialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only ids, $($freeX.dialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair) WPF-only ids; $($freeX.dialogVisualEvidence.pairedRawPixelDimensionMismatches) raw PNG pixel mismatches, $($freeX.dialogVisualEvidence.pairedCaptureScaleNormalizedDimensionMatches) DPI-normalized matches, $($freeX.dialogVisualEvidence.policyAcceptedNativeDifferences) policy-accepted native/control differences, $($freeX.dialogVisualEvidence.contentVisualMismatches) content/visual mismatches, $($freeX.dialogVisualEvidence.evidenceLimitations) evidence limitations, $($freeX.dialogVisualEvidence.realLogicalSizeMismatches) real logical-size mismatches | $($freeX.nextSlice) |",
+        "| FreeX | Functional matrix, classifier, dialog inventory, dialog visual evidence, command surface | $($freeX.functionalMatrix.totalCommands) functional commands; $($freeX.functionalMatrix.parity) command inventory parity; $($freeX.functionalMatrix.avaloniaMissing) Avalonia-missing; $($freeX.functionalMatrix.realBehaviorGaps) real classified binding gaps; $($freeX.functionalMatrix.pseudoCommandGalleryItems) catalog-backed pseudo-gallery rows ($($freeX.functionalMatrix.conditionalFormatPopupGalleryRows) conditional-format, $($freeX.functionalMatrix.fontBorderPopupGalleryRows) font/border, $($freeX.functionalMatrix.accountingSymbolPopupGalleryRows) accounting-symbol); $($freeX.dialogRoutes.totalRoutes)/$($freeX.dialogRoutes.totalRoutes) dialog routes captured on WPF and Avalonia; $($freeX.dialogVisualEvidence.pairedCapturedSurfaceIds) paired screenshot surface ids, $($freeX.dialogVisualEvidence.additionalAvaloniaCapturedSurfaceIds) Avalonia-only ids, $($freeX.dialogVisualEvidence.wpfManifestIdsWithoutAvaloniaPair) WPF-only ids; $($freeX.dialogVisualEvidence.pairedDimensionMismatches) scale-aware dimension mismatches; $($freeX.dialogVisualEvidence.visualReviewCandidateCount) unresolved high-delta visual review candidates at triage score >= $($freeX.dialogVisualEvidence.visualReviewTriageThreshold) (highest $($freeX.dialogVisualEvidence.highestTriageScore)); $($freeX.dialogVisualEvidence.pairedRawPixelDimensionMismatches) raw PNG pixel dimension mismatches, of which $($freeX.dialogVisualEvidence.pairedCaptureScaleNormalizedDimensionMatches) normalize by capture DPI. These are coverage/triage metrics, not a visual-parity claim. | $($freeX.nextSlice) |",
         "| FreeW | Generated command inventory | $($freeW.commandInventory.totalCommands) commands; $($freeW.commandInventory.bothProfiles) shared-profile; $($freeW.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeW.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeW.commandInventory.profileShapeOnly) profile-shape-only; $($freeW.commandInventory.commandIdAliases) command-id aliases; $($freeW.commandInventory.platformOnly) platform-only; $($freeW.commandInventory.deferred) deferred | $($freeW.nextSlice) |",
         "| FreeP | Generated command/evidence inventory | $($freeP.commandInventory.totalCommands) commands; $($freeP.commandInventory.bothProfiles) shared-profile; $($freeP.commandInventory.actionableMissingWpf) actionable WPF-missing; $($freeP.commandInventory.actionableMissingAvalonia) actionable Avalonia-missing; $($freeP.commandInventory.platformOnly) platform-only; $($freeP.commandInventory.workflowEvidenceRows) workflow evidence rows | $($freeP.nextSlice) |",
+        "",
+        "## FreeX Visual Review Queue",
+        "",
+        "This is a deterministic human-review queue, not a pass/fail result. The threshold and rationale are generated in `docs/parity/dialog-visual-evidence-summary.json`; equal dimensions or paired ids do not establish visual parity.",
+        "",
+        "| Surface id | Triage score | Logical dimensions match | Dimension bucket | Review status |",
+        "|---|---:|---|---|---|"
+    ) + $freeXVisualReviewMarkdownRows + @(
         "",
         "## Source Files",
         "",
