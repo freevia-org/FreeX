@@ -1,4 +1,5 @@
 using System.Text;
+using System.Security.Cryptography;
 using System.Xml;
 using System.Xml.Linq;
 using FreeP.Core.Model;
@@ -46,17 +47,32 @@ public static class SmartArtAuthoringPlanner
         var part = smartArt.Parts.Values.FirstOrDefault(candidate =>
             candidate.ContentType.Contains("diagramColors", StringComparison.OrdinalIgnoreCase) ||
             candidate.PartPath.Contains("colors", StringComparison.OrdinalIgnoreCase));
-        if (part is null || part.Bytes.Length == 0)
-            return NotApplied("The SmartArt graphic has no native diagram colors part.");
 
         XDocument document;
-        try
+        if (part is null)
         {
-            document = XDocument.Parse(Encoding.UTF8.GetString(part.Bytes), LoadOptions.PreserveWhitespace);
+            if (!smartArt.Parts.Values.Any(candidate =>
+                    candidate.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase)))
+            {
+                return NotApplied("The SmartArt graphic has no native data part for a new colors definition.");
+            }
+
+            part = CreateColorsPart(smartArt);
+            document = CreateEmptyColorsDefinition();
         }
-        catch (Exception ex) when (ex is FormatException or XmlException)
+        else
         {
-            return NotApplied("The native SmartArt colors part is not valid XML.");
+            if (part.Bytes.Length == 0)
+                return NotApplied("The SmartArt colors part is empty.");
+
+            try
+            {
+                document = XDocument.Parse(Encoding.UTF8.GetString(part.Bytes), LoadOptions.PreserveWhitespace);
+            }
+            catch (Exception ex) when (ex is FormatException or XmlException)
+            {
+                return NotApplied("The native SmartArt colors part is not valid XML.");
+            }
         }
 
         var fillLists = document
@@ -90,6 +106,44 @@ public static class SmartArtAuthoringPlanner
             $"SmartArt colors changed to the {preset} preset.",
             part.PartPath,
             appliedColors.Count);
+    }
+
+    private static DiagramPart CreateColorsPart(SmartArtShape smartArt)
+    {
+        var dataPartPath = smartArt.Parts.Values
+            .FirstOrDefault(part => part.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase))
+            ?.PartPath;
+        if (string.IsNullOrWhiteSpace(dataPartPath))
+            throw new InvalidOperationException("A SmartArt data part is required to create a colors part.");
+
+        var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(dataPartPath)))
+            .ToLowerInvariant()[..8];
+        var directory = dataPartPath[..(dataPartPath.LastIndexOf('/') + 1)];
+        var part = new DiagramPart
+        {
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml",
+            PartPath = $"{directory}colors-freep-{digest}.xml",
+            Bytes = Array.Empty<byte>(),
+        };
+
+        smartArt.Parts[part.PartPath] = part;
+        smartArt.DiagramRelIds["cs"] = "rIdFreePColors";
+        return part;
+    }
+
+    private static XDocument CreateEmptyColorsDefinition()
+    {
+        var fillColors = Enumerable.Range(0, 6)
+            .Select(_ => new XElement(Drawing + "schemeClr", new XAttribute("val", "accent1")));
+        return new XDocument(
+            new XElement(
+                Diagram + "colorsDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", Drawing.NamespaceName),
+                new XElement(
+                    Diagram + "styleLbl",
+                    new XAttribute("name", "node0"),
+                    new XElement(Diagram + "fillClrLst", fillColors))));
     }
 
     private static bool IsColorElement(XElement element) =>

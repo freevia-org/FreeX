@@ -1,0 +1,43 @@
+using System.Text;
+using System.Xml.Linq;
+using FreeP.App.Compositor;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Compositor.Tests;
+
+public sealed class SmartArtAuthoringPlannerTests
+{
+    [Fact]
+    public void ApplyColorPreset_CreatesMissingDiagramColorsPart()
+    {
+        var smartArt = new SmartArtShape();
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            PartPath = "ppt/diagrams/data1.xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyColorPreset(
+            smartArt,
+            SmartArtColorPreset.SingleAccent,
+            Presentation.CreateEmpty().Theme!);
+
+        result.Applied.Should().BeTrue();
+        result.PartPath.Should().Be("ppt/diagrams/colors-freep-19fb754e.xml");
+        result.ColorCount.Should().Be(6);
+        smartArt.DiagramRelIds["cs"].Should().Be("rIdFreePColors");
+        smartArt.Colors!.Palette.Should().HaveCount(6);
+        smartArt.Colors.Palette.Select(color => color.SchemeColor!.RoleName)
+            .Should().Equal(Enumerable.Repeat("accent1", 6));
+
+        var part = smartArt.Parts[result.PartPath!];
+        var document = XDocument.Parse(Encoding.UTF8.GetString(part.Bytes));
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        document.Descendants(dgm + "fillClrLst").Single()
+            .Elements(drawing + "schemeClr")
+            .Select(element => element.Attribute("val")?.Value)
+            .Should().Equal(Enumerable.Repeat("accent1", 6));
+    }
+}

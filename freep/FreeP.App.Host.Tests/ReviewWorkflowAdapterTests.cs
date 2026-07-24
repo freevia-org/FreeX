@@ -1806,6 +1806,40 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_SmartArtColorPreset_CreatesMissingPartAndUndoRestoresIt()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var shape = MakeSmartArtShape();
+            var smartArt = shape.SmartArt!;
+            smartArt.Parts.Remove("ppt/diagrams/colors1.xml");
+            smartArt.DiagramRelIds.Remove("cs");
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            var result = window.ApplySmartArtColorPresetForTests(SmartArtColorPreset.SingleAccent);
+
+            result.Applied.Should().BeTrue();
+            result.PartPath.Should().NotBeNull();
+            smartArt.Parts.Should().ContainKey(result.PartPath!);
+            smartArt.DiagramRelIds.Should().ContainKey("cs");
+
+            window.Editor.Undo();
+            smartArt.Parts.Should().NotContainKey(result.PartPath!);
+            smartArt.DiagramRelIds.Should().NotContainKey("cs");
+
+            window.Editor.Redo();
+            smartArt.Parts.Should().ContainKey(result.PartPath!);
+            smartArt.DiagramRelIds.Should().ContainKey("cs");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_TablePickerRequest_ShowsPickerAndAppliesChoice()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

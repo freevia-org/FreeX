@@ -4853,6 +4853,47 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_color_preset_creates_missing_part_and_undo_restores_it()
+    {
+        SmartArtColorApplyResult? result = null;
+        SmartArtShape? smartArt = null;
+        string? createdPartPath = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape();
+            smartArt = shape.SmartArt!;
+            smartArt.Parts.Remove("ppt/diagrams/colors1.xml");
+            smartArt.DiagramRelIds.Remove("cs");
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(SmartArtAuthoringPlanner.SingleAccentCommandId, out var command).Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+            result = window.LastSmartArtColorApplyResult;
+            result!.Applied.Should().BeTrue();
+            createdPartPath = result.PartPath;
+            smartArt.Parts.Should().ContainKey(createdPartPath!);
+            smartArt.DiagramRelIds.Should().ContainKey("cs");
+
+            window.Editor.Undo();
+            smartArt.Parts.Should().NotContainKey(createdPartPath!);
+            smartArt.DiagramRelIds.Should().NotContainKey("cs");
+            window.Editor.Redo();
+            smartArt.Parts.Should().ContainKey(createdPartPath!);
+            smartArt.DiagramRelIds.Should().ContainKey("cs");
+        });
+
+        if (!ran) return;
+        result.Should().NotBeNull();
+        result!.Applied.Should().BeTrue();
+        smartArt.Should().NotBeNull();
+        createdPartPath.Should().NotBeNull();
+    }
+
+    [Fact]
     public async Task SmartArt_bending_process_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];
