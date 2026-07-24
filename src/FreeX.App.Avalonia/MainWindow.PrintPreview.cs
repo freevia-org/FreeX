@@ -12,6 +12,8 @@ using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Text;
 using FreeX.Core.Model;
+using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Avalonia;
 
 using AvaloniaControlShapesLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -51,7 +53,9 @@ public sealed partial class MainWindow
         UiText.Get,
         (key, args) => UiText.Format(key, args));
 
-    private async Task ShowPrintPreviewDialogAsync(string? fixturePrinterName = null)
+    private async Task ShowPrintPreviewDialogAsync(
+        string? fixturePrinterName = null,
+        IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
     {
         await WaitForPendingDirtyWorkbookGateAsync();
 
@@ -70,7 +74,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        await ShowPrintPreviewWindowCoreAsync(context, fixturePrinterName);
+        await ShowPrintPreviewWindowCoreAsync(context, fixturePrinterName, parityPages);
     }
 
     /// <summary>
@@ -137,15 +141,19 @@ public sealed partial class MainWindow
         sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
     }
 
-    private async Task ShowPrintPreviewWindowCoreAsync(PrintPreviewPaginationContext context, string? fixturePrinterName = null)
+    private async Task ShowPrintPreviewWindowCoreAsync(
+        PrintPreviewPaginationContext context,
+        string? fixturePrinterName = null,
+        IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
     {
         var printerName = fixturePrinterName ?? PrintPreviewDefaultPrinterName;
-        var navigator = PrintPreviewPageNavigator.Create(context.PageCount);
+        var pageCount = parityPages?.Count ?? context.PageCount;
+        var navigator = PrintPreviewPageNavigator.Create(pageCount);
         var documentToolbarPlan = PrintPreviewSurfacePlanner.CreateDocumentToolbarPlan(
-            context.PageCount,
+            pageCount,
             PrintPreviewSettingsTextResolver);
         var topToolbarPlan = PrintPreviewSurfacePlanner.CreateTopToolbarPlan(
-            context.PageCount,
+            pageCount,
             printerName,
             PrintPreviewSettingsTextResolver);
 
@@ -205,7 +213,7 @@ public sealed partial class MainWindow
         var exportButton = new Button
         {
             Content = topToolbarPlan.PrintButtonText,
-            MinWidth = 68,
+            MinWidth = 60,
             Height = 24,
             MinHeight = 24,
             MaxHeight = 24,
@@ -224,7 +232,7 @@ public sealed partial class MainWindow
         var closeButton = new Button
         {
             Content = topToolbarPlan.CloseButtonText,
-            MinWidth = 68,
+            MinWidth = 60,
             Height = 24,
             MinHeight = 24,
             MaxHeight = 24,
@@ -242,9 +250,9 @@ public sealed partial class MainWindow
 
         void Render()
         {
-            pageHost.Child = BuildPreviewDocumentViewerSurface(context, navigator.CurrentIndex);
+            pageHost.Child = BuildPreviewDocumentViewerSurface(context, navigator.CurrentIndex, parityPages);
             pageNumberBox.Text = (navigator.CurrentIndex + 1).ToString(CultureInfo.InvariantCulture);
-            pageStatusText.Text = PrintPreviewNavigationState.Create(navigator.CurrentIndex + 1, context.PageCount).StatusText;
+            pageStatusText.Text = PrintPreviewNavigationState.Create(navigator.CurrentIndex + 1, pageCount).StatusText;
             firstButton.IsEnabled = navigator.CanGoPrevious;
             prevButton.IsEnabled = navigator.CanGoPrevious;
             nextButton.IsEnabled = navigator.CanGoNext;
@@ -268,7 +276,7 @@ public sealed partial class MainWindow
         };
         lastButton.Click += (_, _) =>
         {
-            navigator = navigator.JumpTo(context.PageCount - 1);
+            navigator = navigator.JumpTo(pageCount - 1);
             Render();
         };
         pageNumberBox.KeyDown += (_, e) =>
@@ -276,7 +284,7 @@ public sealed partial class MainWindow
             if (e.Key != Key.Enter)
                 return;
 
-            if (PrintPreviewDialogPlanner.TryParsePageNumber(pageNumberBox.Text, context.PageCount, out var pageNumber))
+            if (PrintPreviewDialogPlanner.TryParsePageNumber(pageNumberBox.Text, pageCount, out var pageNumber))
             {
                 navigator = navigator.JumpTo(pageNumber - 1);
                 Render();
@@ -327,7 +335,7 @@ public sealed partial class MainWindow
         var settingsRail = CreatePrintPreviewSettingsRail(
             PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
                 _session.ActiveSheet,
-                context.PageCount,
+                pageCount,
                 printerName,
                 new PrintPreviewSettings(),
                 hasSelection: false,
@@ -371,8 +379,8 @@ public sealed partial class MainWindow
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(4),
+            Spacing = 4,
+            Margin = new Thickness(10, 6, 4, 4),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Children =
             {
@@ -423,6 +431,7 @@ public sealed partial class MainWindow
 
         return new Border
         {
+            MinHeight = 38,
             Background = Brush(235, 244, 253),
             BorderBrush = Brush(190, 204, 220),
             BorderThickness = new Thickness(0, 0, 0, 1),
@@ -638,18 +647,21 @@ public sealed partial class MainWindow
 
         return new Border
         {
-            Background = Brush(235, 244, 253),
-            BorderBrush = Brush(190, 204, 220),
+            MinHeight = 34,
+            Background = Brush(245, 245, 245),
+            BorderBrush = Brush(208, 208, 208),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = toolbar,
         };
     }
 
-    private static TextBlock CreatePreviewToolbarSeparator() =>
+    private static Border CreatePreviewToolbarSeparator() =>
         new()
         {
-            Text = "|",
-            Foreground = Brush(170, 180, 190),
+            Width = 1,
+            Height = 18,
+            Background = Brush(190, 190, 190),
+            Margin = new Thickness(1, 0),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
 
@@ -659,8 +671,37 @@ public sealed partial class MainWindow
     private static Button CreatePreviewToolbarButton(PrintPreviewNavigationGlyphPlan plan)
     {
         var button = CreatePreviewToolbarButton(plan.Text);
+        button.Content = CreatePreviewNavigationGlyph(plan.Command);
         AutomationProperties.SetAutomationId(button, plan.AutomationId);
         return button;
+    }
+
+    private static Control CreatePreviewNavigationGlyph(PrintPreviewToolbarCommand command)
+    {
+        var kind = command switch
+        {
+            PrintPreviewToolbarCommand.FirstPage or PrintPreviewToolbarCommand.PreviousPage => RibbonCommandIconKind.Previous,
+            PrintPreviewToolbarCommand.NextPage or PrintPreviewToolbarCommand.LastPage => RibbonCommandIconKind.Next,
+            _ => RibbonCommandIconKind.Generic,
+        };
+
+        var glyph = AvaloniaRibbonIcons.BuildMonochrome(kind, 14, null, Brush(92, 92, 92));
+        if (command is not (PrintPreviewToolbarCommand.FirstPage or PrintPreviewToolbarCommand.LastPage))
+            return glyph;
+
+        var wrapper = new Grid { Width = 14, Height = 14 };
+        wrapper.Children.Add(glyph);
+        wrapper.Children.Add(new Border
+        {
+            Width = 1,
+            Height = 11,
+            Background = Brush(92, 92, 92),
+            HorizontalAlignment = command == PrintPreviewToolbarCommand.FirstPage
+                ? AvaloniaHorizontalAlignment.Left
+                : AvaloniaHorizontalAlignment.Right,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        });
+        return wrapper;
     }
 
     private static Button ApplyPreviewToolbarButtonChrome(Button button, double minWidth)
@@ -724,16 +765,61 @@ public sealed partial class MainWindow
             SelectedIndex = selectedIndex,
         };
 
-    private static Control BuildPreviewDocumentViewerSurface(PrintPreviewPaginationContext context, int pageIndex)
+    private static Control BuildPreviewDocumentViewerSurface(
+        PrintPreviewPaginationContext context,
+        int pageIndex,
+        IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
     {
         var surface = new Border
         {
             Background = PrintPreviewSurfaceBackground,
-            Padding = new Thickness(84, 8, 84, 8),
-            Child = BuildPreviewPageView(context, pageIndex),
+            Padding = new Thickness(84, 5, 84, 8),
+            Child = parityPages is null
+                ? BuildPreviewPageView(context, pageIndex)
+                : BuildPreviewParityPageView(parityPages[pageIndex]),
         };
 
         return surface;
+    }
+
+    private static Control BuildPreviewParityPageView(PrintPreviewParityPage page)
+    {
+        var canvas = new Canvas
+        {
+            Width = PrintPreviewParityFixture.PageWidth,
+            Height = PrintPreviewParityFixture.PageHeight,
+            Background = Brushes.White,
+            ClipToBounds = true,
+        };
+        AutomationProperties.SetAutomationId(canvas, PrintPreviewDialogPlanner.PageCanvasAutomationId);
+
+        foreach (var run in page.TextRuns)
+        {
+            var text = new TextBlock
+            {
+                Text = run.Text,
+                FontFamily = FormulaBarFontFamily,
+                FontSize = run.FontSize,
+                FontWeight = run.Bold ? FontWeight.SemiBold : FontWeight.Normal,
+                Foreground = PreviewBrush(run.Color),
+                TextWrapping = TextWrapping.NoWrap,
+            };
+            Canvas.SetLeft(text, run.Left);
+            Canvas.SetTop(text, run.Top);
+            canvas.Children.Add(text);
+        }
+
+        return new Border
+        {
+            Width = PrintPreviewParityFixture.PageWidth,
+            Height = PrintPreviewParityFixture.PageHeight,
+            Background = Brushes.White,
+            BorderBrush = Brush(160, 160, 160),
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Child = canvas,
+        };
     }
 
     /// <summary>

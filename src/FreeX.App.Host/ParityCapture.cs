@@ -930,70 +930,42 @@ internal static class ParityCapture
     private static FixedDocument CreatePrintPreviewDocument()
     {
         var document = new FixedDocument();
-        document.DocumentPaginator.PageSize = new Size(PrintPreviewDialogPlanner.WindowWidth * 0.62, PrintPreviewDialogPlanner.WindowHeight * 1.1);
-        document.Pages.Add(CreatePrintPreviewPage("Parity Demo", "Revenue by region", 1));
-        document.Pages.Add(CreatePrintPreviewPage("Parity Demo", "Pipeline by product", 2));
+        document.DocumentPaginator.PageSize = new Size(
+            PrintPreviewParityFixture.DocumentWidth,
+            PrintPreviewParityFixture.DocumentHeight);
+        foreach (var page in PrintPreviewParityFixture.Pages)
+            document.Pages.Add(CreatePrintPreviewPage(page));
         return document;
     }
 
-    private static PageContent CreatePrintPreviewPage(string title, string subtitle, int pageNumber)
+    private static PageContent CreatePrintPreviewPage(PrintPreviewParityPage fixturePage)
     {
         var page = new FixedPage
         {
-            Width = 696,
-            Height = 768,
+            Width = PrintPreviewParityFixture.PageWidth,
+            Height = PrintPreviewParityFixture.PageHeight,
             Background = Brushes.White,
         };
 
-        AddFixedText(page, title, 48, 44, 22, FontWeights.SemiBold, Brushes.Black);
-        AddFixedText(page, subtitle, 48, 78, 14, FontWeights.Normal, Brushes.DimGray);
-
-        var headers = new[] { "Region", "Product", "Units", "Revenue" };
-        var rows = new[]
-        {
-            new[] { "North", "Widget", "120", "$12,480" },
-            new[] { "South", "Gadget", "85", "$8,925" },
-            new[] { "East", "Sprocket", "200", "$21,700" },
-            new[] { "West", "Gizmo", "64", "$6,080" },
-        };
-
-        var y = 132d;
-        for (var column = 0; column < headers.Length; column++)
-            AddFixedText(page, headers[column], 48 + column * 132, y, 12, FontWeights.SemiBold, Brushes.Black);
-
-        y += 28;
-        foreach (var row in rows)
-        {
-            for (var column = 0; column < row.Length; column++)
-                AddFixedText(page, row[column], 48 + column * 132, y, 12, FontWeights.Normal, Brushes.Black);
-            y += 24;
-        }
-
-        AddFixedText(page, $"Page {pageNumber}", 48, 704, 11, FontWeights.Normal, Brushes.DimGray);
+        foreach (var run in fixturePage.TextRuns)
+            AddFixedText(page, run);
 
         var pageContent = new PageContent();
         ((IAddChild)pageContent).AddChild(page);
         return pageContent;
     }
 
-    private static void AddFixedText(
-        FixedPage page,
-        string text,
-        double left,
-        double top,
-        double fontSize,
-        FontWeight fontWeight,
-        Brush foreground)
+    private static void AddFixedText(FixedPage page, PrintPreviewParityTextRun run)
     {
         var block = new TextBlock
         {
-            Text = text,
-            FontSize = fontSize,
-            FontWeight = fontWeight,
-            Foreground = foreground,
+            Text = run.Text,
+            FontSize = run.FontSize,
+            FontWeight = run.Bold ? FontWeights.SemiBold : FontWeights.Normal,
+            Foreground = new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B)),
         };
-        FixedPage.SetLeft(block, left);
-        FixedPage.SetTop(block, top);
+        FixedPage.SetLeft(block, run.Left);
+        FixedPage.SetTop(block, run.Top);
         page.Children.Add(block);
     }
 

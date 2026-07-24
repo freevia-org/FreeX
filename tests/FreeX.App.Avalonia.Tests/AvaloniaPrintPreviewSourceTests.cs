@@ -33,6 +33,9 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("Content = plan.PrintHeadingsText");
         source.Should().Contain("IsChecked = plan.Settings.PrintHeadings");
         source.Should().Contain("IsEnabled = plan.Settings.IgnorePrintAreaEnabled");
+        source.Should().Contain("IReadOnlyList<PrintPreviewParityPage>? parityPages = null");
+        source.Should().Contain("BuildPreviewParityPageView(parityPages[pageIndex])");
+        source.Should().Contain("AvaloniaRibbonIcons.BuildMonochrome");
 
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_PrintWhatActiveSheets\"");
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_SidesOneSided\"");
@@ -47,6 +50,16 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().NotContain("CreatePreviewComboBox(82, \"100%\")");
         source.Should().NotContain("AlignCellTextLeft");
         source.Should().NotContain("drawing objects / charts on the page (the page-content model omits them by design)");
+    }
+
+    [Fact]
+    public void ParityCapture_UsesTheSharedPrintPreviewFixtureInsteadOfLiveWorksheetPagination()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+
+        source.Should().Contain("PrintPreviewParityFixture.Pages");
+        source.Should().Contain("ShowPrintPreviewDialogAsync(");
+        source.Should().NotContain("SeedPrintPreviewParityReport();\n    await ShowPrintPreviewDialogAsync(");
     }
 
     private static string RepoFile(params string[] parts)

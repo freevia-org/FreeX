@@ -850,7 +850,9 @@ public sealed partial class MainWindow
     private Task ShowPrintPreviewParityDialogAsync()
     {
         SeedPrintPreviewParityReport();
-        return ShowPrintPreviewDialogAsync(PrintPreviewSurfacePlanner.ParityPrinterName);
+        return ShowPrintPreviewDialogAsync(
+            PrintPreviewSurfacePlanner.ParityPrinterName,
+            PrintPreviewParityFixture.Pages);
     }
 
     private WorkbookFileDialogSurfacePlan CreateOpenWorkbookDialogSurfacePlan() =>

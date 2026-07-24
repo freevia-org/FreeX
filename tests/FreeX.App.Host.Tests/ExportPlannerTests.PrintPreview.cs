@@ -28,6 +28,8 @@ public partial class ExportPlannerTests
         source.Should().Contain("PrintPreviewDialogPlanner.DialogAutomationId");
         parityCaptureSource.Should().Contain("CaptureDialog(results, \"dialog.PrintPreview\", outDir");
         parityCaptureSource.Should().Contain("CreatePrintPreviewDocument()");
+        parityCaptureSource.Should().Contain("PrintPreviewParityFixture.Pages");
+        parityCaptureSource.Should().Contain("PrintPreviewParityFixture.PageWidth");
     }
 
     [Fact]
