@@ -252,6 +252,19 @@ internal static class XlsxSlicerTimelineStateRewriter
                                     SlicerXmlNs + "pivotTable",
                                     OptionalAttribute("name", slicer.SourcePivotTableName),
                                     new XAttribute("tabId", ResolvePivotHostTabId(workbook, workbookXml, slicer.SourcePivotTableName)))),
+                        // R84-io-slicer-append-tabular: a pivot slicer ADDED to an already-loaded
+                        // (source-preserved) workbook (AddSlicerCommand) must carry the SAME native
+                        // <data><tabular pivotCacheId=".."><items><i x=".." s="1"/> list the fresh writer
+                        // emits (R44-io-pivot-filter-page-3-2) -- it is the ONLY form real Excel and FreeX's
+                        // own reload (XlsxSlicerTimelineMetadataReader -> SlicerModel.CacheItems) draw the
+                        // slicer's item tiles from; the fx: selectedItems extLst below is a FreeX-private
+                        // fallback neither reads. Shared with the fresh writer via XlsxPivotSlicerCacheData so
+                        // both stamp the required pivotCacheId from the OWNING pivot cache's id
+                        // (R83-io-slicer-tabular-pivotcacheid). Null for a table slicer (no bound pivot cache
+                        // field), keeping it purely on the x15:tableSlicerCache binding exactly as before.
+                        isTableSlicer
+                            ? null
+                            : XlsxPivotSlicerCacheData.BuildPivotSlicerCacheDataElement(workbook, slicer),
                         extensions.Count == 0
                             ? null
                             : new XElement(SlicerXmlNs + "extLst", extensions))));
@@ -960,7 +973,7 @@ internal static class XlsxSlicerTimelineStateRewriter
         // same name (e.g. "Region") but different shared-item lists; scanning workbook.PivotCaches in
         // collection order and returning the first name match silently picks the wrong cache's caption
         // list whenever the slicer's bound cache isn't first, corrupting the selection on save.
-        var boundCache = ResolveSlicerBoundPivotCache(workbook, slicer.SourcePivotTableName);
+        var boundCache = XlsxPivotSlicerCacheData.ResolveSlicerBoundPivotCache(workbook, slicer.SourcePivotTableName);
         if (boundCache is not null)
         {
             var captions = TryResolveSharedItemCaptions(archive, boundCache, fieldName);
@@ -979,34 +992,6 @@ internal static class XlsxSlicerTimelineStateRewriter
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Resolves the specific <see cref="PivotCacheModel"/> backing <paramref name="sourcePivotTableName"/>,
-    /// mirroring <see cref="ResolvePivotHostTabId"/>'s name-based pivot table lookup: find the
-    /// <see cref="PivotTableModel"/> with that name across every sheet, then match its
-    /// <see cref="PivotTableModel.CacheId"/> to a <see cref="PivotCacheModel"/> in
-    /// <see cref="Workbook.PivotCaches"/>. Returns <see langword="null"/> when the name is absent or
-    /// unresolvable so callers can fall back to the legacy name-only scan.
-    /// </summary>
-    private static PivotCacheModel? ResolveSlicerBoundPivotCache(Workbook workbook, string? sourcePivotTableName)
-    {
-        if (string.IsNullOrWhiteSpace(sourcePivotTableName))
-            return null;
-
-        PivotTableModel? boundPivotTable = null;
-        foreach (var sheet in workbook.Sheets)
-        {
-            boundPivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-                string.Equals(pivot.Name, sourcePivotTableName, StringComparison.OrdinalIgnoreCase));
-            if (boundPivotTable is not null)
-                break;
-        }
-
-        if (boundPivotTable is null)
-            return null;
-
-        return workbook.PivotCaches.FirstOrDefault(cache => cache.CacheId == boundPivotTable.CacheId);
     }
 
     /// <summary>

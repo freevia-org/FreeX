@@ -167,6 +167,115 @@ public sealed class FreeXR37SlicerTimelineTests
         reloaded.Slicers.Should().Contain(slicer => slicer.Name == "Status Slicer" && slicer.SourceFieldName == "Status");
     }
 
+    // ── R84-io-slicer-append-tabular ─────────────────────────────────────────────────────────────
+    //
+    // A pivot slicer ADDED to an already-loaded (source-preserved) workbook used to be authored by
+    // AppendNewControls WITHOUT the native <data><tabular><items> item list -- only the FreeX-private
+    // fx: selectedItems extLst -- so on reload it rendered with zero item buttons (the same symptom
+    // R44-io-pivot-filter-page-3-2 fixed for the fresh save path). AppendNewSlicers now emits the same
+    // native list via the shared XlsxPivotSlicerCacheData builder, including the required pivotCacheId
+    // (R83-io-slicer-tabular-pivotcacheid).
+
+    [Fact]
+    public void NewPivotSlicerAddedToLoadedWorkbook_WritesNativeTabularItemsWithRequiredPivotCacheId()
+    {
+        // Seed: a workbook that already has a pivot cache field carrying SharedItems + a pivot table + a
+        // slicer, saved once to a real source package, then LOADED (so the whole thing goes through the
+        // source-preserved / FullSave path on the second save).
+        using var source = SaveWorkbook(BuildPivotWorkbookWithRegionSlicer());
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        loaded.Slicers.Should().ContainSingle(slicer => slicer.Name == "Region Slicer");
+
+        // Add a brand-new pivot slicer (mimics AddSlicerCommand) bound to a DIFFERENT field on the same
+        // pivot table, whose shared items ("Open"/"Closed") resolve on the loaded model.
+        loaded.Slicers.Add(new SlicerModel
+        {
+            Name = "Status Slicer",
+            CacheName = "Slicer_Status",
+            Caption = "Status",
+            SourcePivotTableName = "PivotTable1",
+            SourceFieldName = "Status"
+        });
+
+        // Force the source-preserved (FullSave) path with a trivial cell edit.
+        var sheet = loaded.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 9), new NumberValue(1));
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+
+        // (a) The whole package must validate clean under Microsoft365 -- proving the newly-authored
+        // <tabular> carries the required pivotCacheId (missing it trips "The required attribute
+        // 'pivotCacheId' is missing" on /x14:slicerCacheDefinition/x14:data/x14:tabular).
+        SchemaErrors(saved).Should().BeEmpty(
+            "a pivot slicer added to a loaded workbook must author a schema-clean native tabular cache");
+
+        var newCachePath = ResolveSlicerCachePath(saved, "Slicer_Status");
+        var tabular = ReadRoot(saved, newCachePath).Descendants(SlicerXmlNs + "tabular").Should().ContainSingle().Subject;
+        tabular.Attribute("pivotCacheId")!.Value.Should().Be("1",
+            "the native tabular slicer cache's pivotCacheId must be the bound pivot cache's CacheId (1)");
+
+        // (b) The native <items> list must carry one <i> per shared item, all selected (no explicit
+        // selection recorded == the unfiltered '(All)' state), and round-trip into SlicerModel.CacheItems.
+        var items = ReadNativeCacheItems(saved, newCachePath);
+        items.Should().HaveCount(2, "the bound field carries two shared items (Open, Closed)");
+        items.Should().OnlyContain(item => item.Selected,
+            "a newly-added slicer with no explicit selection starts with every tile selected");
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSlicer = reloaded.Slicers.Single(slicer => slicer.Name == "Status Slicer");
+        reloadedSlicer.CacheItems.Should().HaveCount(2,
+            "SlicerItemResolver gates on CacheItems.Count > 0 -- an empty list means zero item buttons");
+    }
+
+    [Fact]
+    public void NewPivotSlicerAddedToLoadedWorkbook_WithExplicitSelection_ValidatesCleanAndSelectionRoundTrips()
+    {
+        using var source = SaveWorkbook(BuildPivotWorkbookWithRegionSlicer());
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+
+        var newSlicer = new SlicerModel
+        {
+            Name = "Status Slicer",
+            CacheName = "Slicer_Status",
+            Caption = "Status",
+            SourcePivotTableName = "PivotTable1",
+            SourceFieldName = "Status"
+        };
+        newSlicer.SelectedItems.Add("Open"); // shared-item index 0
+        loaded.Slicers.Add(newSlicer);
+
+        var sheet = loaded.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 9), new NumberValue(1));
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+
+        SchemaErrors(saved).Should().BeEmpty(
+            "authoring the native tabular with the required pivotCacheId must keep the package schema-clean");
+
+        var newCachePath = ResolveSlicerCachePath(saved, "Slicer_Status");
+        var items = ReadNativeCacheItems(saved, newCachePath);
+        items.Should().ContainSingle(item => item.Selected).Which.Index.Should().Be(0,
+            "only 'Open' (shared-item index 0) was explicitly selected");
+        items.Where(item => item.Index != 0).Should().OnlyContain(item => !item.Selected);
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedSlicer = reloaded.Slicers.Single(slicer => slicer.Name == "Status Slicer");
+        reloadedSlicer.CacheItems.Should().HaveCount(2,
+            "both shared items must round-trip as cache items so the reloaded slicer renders its tiles");
+        reloadedSlicer.CacheItems.Single(item => item.IsSelected).Index.Should().Be(0,
+            "the reloaded slicer must still report only 'Open' (index 0) as the selected tile");
+    }
+
     // ── R37-io-slicer-timeline-2 ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -360,6 +469,28 @@ public sealed class FreeXR37SlicerTimelineTests
         }
 
         package.Position = 0;
+    }
+
+    /// <summary>
+    /// Locates the <c>xl/slicerCaches/*.xml</c> part whose root <c>slicerCacheDefinition/@name</c> equals
+    /// <paramref name="cacheName"/> -- used to find the brand-new appended slicer's cache without hard-coding
+    /// the allocated <c>slicerCacheN.xml</c> index.
+    /// </summary>
+    private static string ResolveSlicerCachePath(MemoryStream package, string cacheName)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        foreach (var entry in archive.Entries.Where(e =>
+                     e.FullName.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase) &&
+                     e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            using var entryStream = entry.Open();
+            var name = XDocument.Load(entryStream).Root?.Attribute("name")?.Value;
+            if (string.Equals(name, cacheName, StringComparison.OrdinalIgnoreCase))
+                return entry.FullName;
+        }
+
+        throw new InvalidOperationException($"No slicerCache part named '{cacheName}' was found in the package.");
     }
 
     private static (int Index, bool Selected)[] ReadNativeCacheItems(MemoryStream package, string cacheEntryName)
