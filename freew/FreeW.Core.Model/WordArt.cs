@@ -116,6 +116,12 @@ public sealed class WordArt
     public string? FontFamily { get; set; }
 
     /// <summary>
+    /// Whether the WordArt text run uses bold formatting. This maps to <c>w:b</c> in the
+    /// embedded WordprocessingML run and is consumed by both host renderers.
+    /// </summary>
+    public bool Bold { get; set; }
+
+    /// <summary>
     /// Authored text-box dimensions in points. Imported floating WordArt uses these extents instead of
     /// re-estimating bounds from its text, preserving Word's anchor geometry.
     /// </summary>

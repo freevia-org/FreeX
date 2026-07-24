@@ -101,6 +101,21 @@ public class WordArtRoundTripTests
     }
 
     [Fact]
+    public void Bold_EmitsAndRoundTripsWordArtRunFormatting()
+    {
+        var wordArt = new WordArt("Bold", WordArtStyle.GlowBlue, fontSizePt: 36)
+        {
+            Bold = true
+        };
+
+        var xml = WriteDocumentXml(DocumentWith(wordArt));
+        var read = RoundTrippedWordArt(DocumentWith(wordArt));
+
+        xml.Descendants(W + "rPr").Single().Element(W + "b").Should().NotBeNull();
+        read.Bold.Should().BeTrue();
+    }
+
+    [Fact]
     public void AuthoredBounds_SurviveFloatingWordArtRoundTrip()
     {
         var wordArt = new WordArt("FreeW", WordArtStyle.GlowBlue, 30)

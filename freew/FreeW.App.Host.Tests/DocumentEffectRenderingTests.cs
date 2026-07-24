@@ -109,6 +109,19 @@ public sealed class DocumentEffectRenderingTests
         SingleTagged<TextBlock, WordArt>(view).FontFamily.Source.Should().Be("Arial");
     }
 
+    [StaFact]
+    public void InlineWordArt_RendersItsAuthoredFontWeight()
+    {
+        var wordArtModel = new WordArt("Bold", WordArtStyle.FillBlue, fontSizePt: 24)
+        {
+            Bold = true
+        };
+
+        var view = RenderWithEffectSet("Office", ModelRun.FromWordArt(wordArtModel));
+
+        SingleTagged<TextBlock, WordArt>(view).FontWeight.Should().Be(System.Windows.FontWeights.Bold);
+    }
+
     private static DocumentView RenderWithEffectSet(string effectSetName, params ModelRun[] runs)
     {
         var document = TextDocument.CreateEmpty();

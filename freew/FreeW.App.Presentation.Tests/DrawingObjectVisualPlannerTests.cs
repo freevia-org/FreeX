@@ -183,6 +183,19 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
+    public void WordArtPlan_PreservesAuthoredBoldFormatting()
+    {
+        var bold = new WordArt("Bold", WordArtStyle.FillBlue, fontSizePt: 24)
+        {
+            Bold = true
+        };
+
+        DrawingObjectVisualPlanner.BuildInlineWordArtPlan(bold).WordArt.Bold.Should().BeTrue();
+        DrawingObjectVisualPlanner.BuildInlineWordArtPlan(
+            new WordArt("Regular", WordArtStyle.FillBlue, fontSizePt: 24)).WordArt.Bold.Should().BeFalse();
+    }
+
+    [Fact]
     public void WordArtPlan_AppliesOnlyAuthoredNormalAutoFitFontScale()
     {
         var normalAutoFit = new WordArt("Fit", WordArtStyle.GlowBlue, fontSizePt: 30)

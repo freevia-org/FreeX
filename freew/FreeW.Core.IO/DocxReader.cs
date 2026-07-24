@@ -3624,7 +3624,8 @@ public static class DocxReader
         var wordArt = new WordArt(text, style.Value, fontSizePt)
         {
             FontFamily = rPr?.Element(W + "rFonts")?.Attribute(W + "ascii")?.Value
-                ?? rPr?.Element(W + "rFonts")?.Attribute(W + "hAnsi")?.Value
+                ?? rPr?.Element(W + "rFonts")?.Attribute(W + "hAnsi")?.Value,
+            Bold = ReadToggle(rPr, "b")
         };
         var wordArtExtent = container.Element(Wp + "extent");
         wordArt.WidthPt = EmuToPoints(wordArtExtent?.Attribute("cx")?.Value);

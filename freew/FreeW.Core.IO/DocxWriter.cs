@@ -4250,6 +4250,8 @@ public static class DocxWriter
                 new XAttribute(W + "hAnsi", wordArt.FontFamily),
                 new XAttribute(W + "cs", wordArt.FontFamily)));
         }
+        if (wordArt.Bold)
+            rPr.Add(new XElement(W + "b"));
         rPr.Add(
             new XElement(W + "sz", new XAttribute(W + "val", PointsToHalfPoints(wordArt.FontSizePt))),
             new XElement(W + "szCs", new XAttribute(W + "val", PointsToHalfPoints(wordArt.FontSizePt))));

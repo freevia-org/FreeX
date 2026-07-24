@@ -654,7 +654,7 @@ public static class DrawingObjectVisualPlanner
             string.IsNullOrWhiteSpace(wordArt.FontFamily) ? "Calibri" : wordArt.FontFamily,
             fill,
             outline,
-            false,
+            wordArt.Bold,
             BuildWordArtWarpHint(wordArt.Warp));
     }
 
