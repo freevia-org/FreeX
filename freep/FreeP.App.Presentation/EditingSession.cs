@@ -129,6 +129,13 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>Applies one supported SmartArt layout through the shared undoable edit path.</summary>
+    public bool ApplySmartArtLayout(uint shapeId, SmartArtLayoutPreset preset) =>
+        EditSmartArt(shapeId, smartArt => SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset).Applied);
+
+    public bool ApplySmartArtQuickStyle(uint shapeId, SmartArtQuickStylePreset preset) =>
+        EditSmartArt(shapeId, smartArt => SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset).Applied);
+
     // ── Selection ─────────────────────────────────────────────────────────────────
 
     /// <summary>The set of selected shape ids on the current slide.</summary>

@@ -446,7 +446,9 @@ public sealed partial class MainWindow : Window
             getViewZoomState:   () => _viewZoomState,
             applyViewZoomState: ApplyPresentationViewZoomState,
             onCustomShows:      () => OpenCustomShowDialog(),
-            onSmartArtColorPreset: preset => ApplySmartArtColorPreset(preset));
+            onSmartArtColorPreset: preset => ApplySmartArtColorPreset(preset),
+            onSmartArtLayoutPreset: preset => ApplySmartArtLayoutPreset(preset),
+            onSmartArtQuickStylePreset: preset => ApplySmartArtQuickStylePreset(preset));
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -2231,6 +2233,66 @@ public sealed partial class MainWindow : Window
 
     internal SmartArtColorApplyResult ApplySmartArtColorPresetForTests(SmartArtColorPreset preset) =>
         ApplySmartArtColorPreset(preset);
+
+    internal SmartArtLayoutApplyResult ApplySmartArtLayoutPresetForTests(SmartArtLayoutPreset preset) =>
+        ApplySmartArtLayoutPreset(preset);
+
+    internal SmartArtQuickStyleApplyResult ApplySmartArtQuickStylePresetForTests(SmartArtQuickStylePreset preset) =>
+        ApplySmartArtQuickStylePreset(preset);
+
+    private SmartArtLayoutApplyResult ApplySmartArtLayoutPreset(SmartArtLayoutPreset preset)
+    {
+        var smartArtShape = GetSelectedSmartArtShape();
+        if (smartArtShape is null)
+            return SmartArtAuthoringPlanner.ApplyLayoutPreset(null, preset);
+
+        SmartArtLayoutApplyResult? result = null;
+        Editor.EditSmartArt(smartArtShape.Id, smartArt =>
+        {
+            result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset);
+            if (result is not { Applied: true })
+                return false;
+
+            CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
+            return true;
+        });
+
+        if (result is { Applied: true })
+        {
+            _file.MarkDirty();
+            RefreshCanvas();
+            UpdateTitle();
+        }
+
+        return result ?? new SmartArtLayoutApplyResult(false, "No SmartArt layout was changed.", null, null, SmartArtFamily.Unknown);
+    }
+
+    private SmartArtQuickStyleApplyResult ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset preset)
+    {
+        var smartArtShape = GetSelectedSmartArtShape();
+        if (smartArtShape is null)
+            return SmartArtAuthoringPlanner.ApplyQuickStylePreset(null, preset);
+
+        SmartArtQuickStyleApplyResult? result = null;
+        Editor.EditSmartArt(smartArtShape.Id, smartArt =>
+        {
+            result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset);
+            if (result is not { Applied: true })
+                return false;
+
+            CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
+            return true;
+        });
+
+        if (result is { Applied: true })
+        {
+            _file.MarkDirty();
+            RefreshCanvas();
+            UpdateTitle();
+        }
+
+        return result ?? new SmartArtQuickStyleApplyResult(false, "No SmartArt Quick Style was changed.", null, null);
+    }
 
     private SmartArtColorApplyResult ApplySmartArtColorPreset(SmartArtColorPreset preset)
     {

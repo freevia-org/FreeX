@@ -568,6 +568,54 @@
   <data name="Ribbon_Command_SmartArtGrayscale_KeyTip" xml:space="preserve">
     <value>G</value>
   </data>
+  <data name="Ribbon_Group_SmartArtLayouts_Label" xml:space="preserve">
+    <value>SmartArt Layouts</value>
+  </data>
+  <data name="Ribbon_Group_SmartArtLayouts_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicProcess_Label" xml:space="preserve">
+    <value>Basic Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicProcess_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtVerticalBoxList_Label" xml:space="preserve">
+    <value>Vertical List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtVerticalBoxList_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicCycle_Label" xml:space="preserve">
+    <value>Basic Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtBasicCycle_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Group_SmartArtStyles_Label" xml:space="preserve">
+    <value>SmartArt Styles</value>
+  </data>
+  <data name="Ribbon_Group_SmartArtStyles_KeyTip" xml:space="preserve">
+    <value>Y</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSimpleStyle_Label" xml:space="preserve">
+    <value>Simple</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtSimpleStyle_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtModerateStyle_Label" xml:space="preserve">
+    <value>Moderate</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtModerateStyle_KeyTip" xml:space="preserve">
+    <value>M</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtIntenseStyle_Label" xml:space="preserve">
+    <value>Intense</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtIntenseStyle_KeyTip" xml:space="preserve">
+    <value>I</value>
+  </data>
   <data name="Ribbon_Command_SlideSizeWidescreen_Label" xml:space="preserve">
     <value>Widescreen (16:9)</value>
   </data>

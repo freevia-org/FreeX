@@ -14,11 +14,40 @@ public enum SmartArtColorPreset
     Grayscale,
 }
 
+/// <summary>Bounded SmartArt layout choices whose live layout engine can regenerate the cache.</summary>
+public enum SmartArtLayoutPreset
+{
+    BasicProcess,
+    VerticalBoxList,
+    BasicCycle,
+}
+
+/// <summary>Bounded PowerPoint SmartArt Quick Style choices.</summary>
+public enum SmartArtQuickStylePreset
+{
+    Simple,
+    Moderate,
+    Intense,
+}
+
 public sealed record SmartArtColorApplyResult(
     bool Applied,
     string Message,
     string? PartPath,
     int ColorCount);
+
+public sealed record SmartArtLayoutApplyResult(
+    bool Applied,
+    string Message,
+    string? PartPath,
+    string? LayoutUniqueId,
+    SmartArtFamily Family);
+
+public sealed record SmartArtQuickStyleApplyResult(
+    bool Applied,
+    string Message,
+    string? PartPath,
+    string? StyleUniqueId);
 
 /// <summary>
 /// Applies SmartArt Change Colors operations to both the live model and the native diagram
@@ -32,6 +61,145 @@ public static class SmartArtAuthoringPlanner
     public const string ThemeAccentsCommandId = "freep.smartart.colors.theme-accents";
     public const string SingleAccentCommandId = "freep.smartart.colors.single-accent";
     public const string GrayscaleCommandId = "freep.smartart.colors.grayscale";
+    public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
+    public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
+    public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
+    public const string SimpleQuickStyleCommandId = "freep.smartart.style.simple";
+    public const string ModerateQuickStyleCommandId = "freep.smartart.style.moderate";
+    public const string IntenseQuickStyleCommandId = "freep.smartart.style.intense";
+
+    public static SmartArtQuickStyleApplyResult ApplyQuickStylePreset(
+        SmartArtShape? smartArt,
+        SmartArtQuickStylePreset preset)
+    {
+        if (smartArt is null)
+            return NotAppliedQuickStyle("No SmartArt graphic is available.");
+
+        var styleId = preset switch
+        {
+            SmartArtQuickStylePreset.Simple =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple1",
+            SmartArtQuickStylePreset.Moderate =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/moderate1",
+            SmartArtQuickStylePreset.Intense =>
+                "urn:microsoft.com/office/officeart/2005/8/quickstyle/intense1",
+            _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
+        };
+
+        var part = smartArt.Parts.Values.FirstOrDefault(candidate =>
+            candidate.ContentType.Contains("diagramStyle", StringComparison.OrdinalIgnoreCase) ||
+            candidate.PartPath.Contains("quickStyle", StringComparison.OrdinalIgnoreCase));
+        XDocument document;
+        if (part is null)
+        {
+            if (!smartArt.Parts.Values.Any(candidate =>
+                    candidate.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase)))
+            {
+                return NotAppliedQuickStyle("The SmartArt graphic has no native data part for a Quick Style definition.");
+            }
+
+            part = CreateQuickStylePart(smartArt);
+            document = CreateEmptyQuickStyleDefinition();
+        }
+        else
+        {
+            if (part.Bytes.Length == 0)
+                return NotAppliedQuickStyle("The native SmartArt Quick Style part is empty.");
+
+            try
+            {
+                document = ParseXml(part.Bytes);
+            }
+            catch (Exception ex) when (ex is FormatException or XmlException)
+            {
+                return NotAppliedQuickStyle("The native SmartArt Quick Style part is not valid XML.");
+            }
+        }
+
+        var styleDefinition = document.Root;
+        if (styleDefinition is null || styleDefinition.Name != Diagram + "styleDef")
+            return NotAppliedQuickStyle("The native SmartArt Quick Style definition is missing.");
+
+        styleDefinition.SetAttributeValue("uniqueId", styleId);
+        var title = preset switch
+        {
+            SmartArtQuickStylePreset.Simple => "Simple",
+            SmartArtQuickStylePreset.Moderate => "Moderate",
+            SmartArtQuickStylePreset.Intense => "Intense",
+            _ => preset.ToString(),
+        };
+        var titleElement = styleDefinition.Elements(Diagram + "title").FirstOrDefault();
+        if (titleElement is null)
+            styleDefinition.AddFirst(new XElement(Diagram + "title", new XAttribute("val", title)));
+        else
+            titleElement.SetAttributeValue("val", title);
+
+        part.Bytes = Serialize(document);
+        smartArt.QuickStyle ??= new SmartArtQuickStyleMetadata();
+        smartArt.QuickStyle.UniqueId = styleId;
+        smartArt.QuickStyle.Title = title;
+
+        return new SmartArtQuickStyleApplyResult(
+            true,
+            $"SmartArt Quick Style changed to {preset}.",
+            part.PartPath,
+            styleId);
+    }
+
+    public static SmartArtLayoutApplyResult ApplyLayoutPreset(
+        SmartArtShape? smartArt,
+        SmartArtLayoutPreset preset)
+    {
+        if (smartArt?.Data is null)
+            return NotAppliedLayout("No SmartArt data model is available.");
+
+        var layoutPart = smartArt.Parts.Values.FirstOrDefault(candidate =>
+            candidate.ContentType.Contains("diagramLayout", StringComparison.OrdinalIgnoreCase) ||
+            candidate.PartPath.Contains("layout", StringComparison.OrdinalIgnoreCase));
+        if (layoutPart is null || layoutPart.Bytes.Length == 0)
+            return NotAppliedLayout("The SmartArt graphic has no native layout definition.");
+
+        var (layoutId, family) = preset switch
+        {
+            SmartArtLayoutPreset.BasicProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.VerticalBoxList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
+            SmartArtLayoutPreset.BasicCycle =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
+            _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
+        };
+
+        XDocument document;
+        try
+        {
+            document = ParseXml(layoutPart.Bytes);
+        }
+        catch (Exception ex) when (ex is FormatException or XmlException)
+        {
+            return NotAppliedLayout("The native SmartArt layout part is not valid XML.");
+        }
+
+        var layoutDefinition = document
+            .Descendants(Diagram + "layoutDef")
+            .FirstOrDefault();
+        if (layoutDefinition is null)
+            return NotAppliedLayout("The native SmartArt layout definition is missing.");
+
+        layoutDefinition.SetAttributeValue("uniqueId", layoutId);
+        layoutPart.Bytes = Serialize(document);
+        smartArt.Data.LayoutUniqueId = layoutId;
+        smartArt.Data.Family = family;
+        smartArt.Data.IsLiveLayoutSupported = true;
+        smartArt.FallbackShapes.Clear();
+
+        return new SmartArtLayoutApplyResult(
+            true,
+            $"SmartArt layout changed to {preset}.",
+            layoutPart.PartPath,
+            layoutId,
+            family);
+    }
 
     public static SmartArtColorApplyResult ApplyColorPreset(
         SmartArtShape? smartArt,
@@ -67,7 +235,7 @@ public static class SmartArtAuthoringPlanner
 
             try
             {
-                document = XDocument.Parse(Encoding.UTF8.GetString(part.Bytes), LoadOptions.PreserveWhitespace);
+                document = ParseXml(part.Bytes);
             }
             catch (Exception ex) when (ex is FormatException or XmlException)
             {
@@ -130,6 +298,34 @@ public static class SmartArtAuthoringPlanner
         smartArt.DiagramRelIds["cs"] = "rIdFreePColors";
         return part;
     }
+
+    private static DiagramPart CreateQuickStylePart(SmartArtShape smartArt)
+    {
+        var dataPartPath = smartArt.Parts.Values
+            .FirstOrDefault(part => part.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase))
+            ?.PartPath;
+        if (string.IsNullOrWhiteSpace(dataPartPath))
+            throw new InvalidOperationException("A SmartArt data part is required to create a Quick Style part.");
+
+        var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(dataPartPath)))
+            .ToLowerInvariant()[..8];
+        var directory = dataPartPath[..(dataPartPath.LastIndexOf('/') + 1)];
+        var part = new DiagramPart
+        {
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
+            PartPath = $"{directory}quickStyle-freep-{digest}.xml",
+            Bytes = Array.Empty<byte>(),
+        };
+
+        smartArt.Parts[part.PartPath] = part;
+        smartArt.DiagramRelIds["qs"] = "rIdFreePQuickStyle";
+        return part;
+    }
+
+    private static XDocument CreateEmptyQuickStyleDefinition() =>
+        new(new XElement(
+            Diagram + "styleDef",
+            new XAttribute(XNamespace.Xmlns + "dgm", Diagram.NamespaceName)));
 
     private static XDocument CreateEmptyColorsDefinition()
     {
@@ -230,8 +426,17 @@ public static class SmartArtAuthoringPlanner
         return stream.ToArray();
     }
 
+    private static XDocument ParseXml(byte[] bytes) =>
+        XDocument.Parse(Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF'), LoadOptions.PreserveWhitespace);
+
     private static SmartArtColorApplyResult NotApplied(string message) =>
         new(false, message, null, 0);
+
+    private static SmartArtLayoutApplyResult NotAppliedLayout(string message) =>
+        new(false, message, null, null, SmartArtFamily.Unknown);
+
+    private static SmartArtQuickStyleApplyResult NotAppliedQuickStyle(string message) =>
+        new(false, message, null, null);
 
     private sealed record PaletteColor(SrgbColor Resolved, string? SchemeRole, ThemeAwareColor ModelColor);
 }

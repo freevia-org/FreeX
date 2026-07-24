@@ -653,6 +653,64 @@ public sealed class SmartArtTests : IDisposable
         reread.DiagramRelIds.Should().ContainKey("cs");
     }
 
+    [Theory]
+    [InlineData(SmartArtLayoutPreset.BasicProcess, SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
+    public void SmartArtLayoutPreset_PersistsNativeLayoutAndRereads(
+        SmartArtLayoutPreset preset,
+        SmartArtFamily expectedFamily)
+    {
+        var sourcePath = MakeSmartArtPptx(["One", "Two"]);
+        var savedPath = Path.Combine(_tempDir, $"smartart-layout-{preset}.pptx");
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, preset);
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.Family.Should().Be(expectedFamily);
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reread.Data.Should().NotBeNull();
+        reread.Data!.Family.Should().Be(expectedFamily);
+        reread.Data.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+    }
+
+    [Theory]
+    [InlineData(SmartArtQuickStylePreset.Simple, "simple1")]
+    [InlineData(SmartArtQuickStylePreset.Moderate, "moderate1")]
+    [InlineData(SmartArtQuickStylePreset.Intense, "intense1")]
+    public void SmartArtQuickStylePreset_PersistsNativeStyleAndRereads(
+        SmartArtQuickStylePreset preset,
+        string expectedStyle)
+    {
+        var sourcePath = MakeSmartArtPptx(["One", "Two"]);
+        var savedPath = Path.Combine(_tempDir, $"smartart-style-{preset}.pptx");
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        var result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset);
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.StyleUniqueId.Should().EndWith($"/quickstyle/{expectedStyle}");
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reread.QuickStyle.Should().NotBeNull();
+        reread.QuickStyle!.UniqueId.Should().Be(result.StyleUniqueId);
+        reread.QuickStyle.Title.Should().Be(preset.ToString());
+    }
+
     // ── Compositor ───────────────────────────────────────────────────────────────
 
     [Fact]
