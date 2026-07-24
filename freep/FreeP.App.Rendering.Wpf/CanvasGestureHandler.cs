@@ -34,7 +34,7 @@ public sealed class CanvasGestureHandler
 
     // ── Drag state ────────────────────────────────────────────────────────────────────────────
 
-    private enum GestureKind { None, Move, Resize, Rotate, Marquee }
+    private enum GestureKind { None, Move, Resize, Rotate, GeometryAdjustment, Marquee }
 
     private GestureKind                     _gesture = GestureKind.None;
     private Point                           _dragStartScreen;          // screen px at start
@@ -53,6 +53,12 @@ public sealed class CanvasGestureHandler
     private double _rotateOrigDeg;
     private Point  _rotateCenterSlide;  // shape center in slide DIP
 
+    // Preset geometry edit-point gesture
+    private uint _geometryShapeId;
+    private string? _geometryHandleName;
+    private LayoutRect _geometryBoundsDip;
+    private Point _geometryDragStartScreen;
+
     // ── Marquee ───────────────────────────────────────────────────────────────────────────────
     private Point  _marqueeStartSlide;
 
@@ -68,6 +74,21 @@ public sealed class CanvasGestureHandler
 
     /// <summary>When true (default), shapes snap to other shapes' edges and centers during move/resize.</summary>
     public bool SnapToShapes { get; set; } = true;
+
+    private bool _editPointsEnabled = true;
+
+    /// <summary>When enabled, supported preset shapes expose draggable edit points.</summary>
+    public bool EditPointsEnabled
+    {
+        get => _editPointsEnabled;
+        set
+        {
+            if (_editPointsEnabled == value)
+                return;
+            _editPointsEnabled = value;
+            RefreshAdorner();
+        }
+    }
 
     // ── Construction / attach ─────────────────────────────────────────────────────────────────
 
@@ -168,6 +189,17 @@ public sealed class CanvasGestureHandler
                 var selRect = GetSelectionScreenRect(selId, slide, xf);
                 if (selRect.HasValue)
                 {
+                    if (EditPointsEnabled)
+                    {
+                        var geometryHandle = _adorner.HitTestGeometryHandle(pt);
+                        if (geometryHandle is not null)
+                        {
+                            StartGeometryAdjustment(selId, slide, xf, geometryHandle, pt);
+                            e.Handled = true;
+                            return;
+                        }
+                    }
+
                     var hitHandle = _adorner.HitTestHandle(selRect.Value, pt);
                     if (hitHandle == CanvasGestureHandleKind.Rotate)
                     {
@@ -267,6 +299,9 @@ public sealed class CanvasGestureHandler
             case GestureKind.Rotate:
                 PreviewRotate(pt, xf);
                 break;
+            case GestureKind.GeometryAdjustment:
+                PreviewGeometryAdjustment(pt, xf);
+                break;
             case GestureKind.Marquee:
                 PreviewMarquee(pt, xf);
                 break;
@@ -291,6 +326,9 @@ public sealed class CanvasGestureHandler
             case GestureKind.Rotate:
                 CommitRotate(pt, xf);
                 break;
+            case GestureKind.GeometryAdjustment:
+                CommitGeometryAdjustment(pt, xf);
+                break;
             case GestureKind.Marquee:
                 CommitMarquee(pt, xf);
                 break;
@@ -298,6 +336,7 @@ public sealed class CanvasGestureHandler
 
         _gesture = GestureKind.None;
         _adorner.UpdatePreview(null);
+        _adorner.UpdateGeometryPreview(null, null);
         _adorner.UpdateMarquee(null);
         _adorner.UpdateSnapGuides(null, SlideTransform.Identity); // Wave 12B: clear guides
         _canvas.ReleaseMouseCapture();
@@ -461,6 +500,69 @@ public sealed class CanvasGestureHandler
         _editor.RotateShape(_rotateShapeId, angle);
     }
 
+    // ── Preset geometry edit-point gesture ─────────────────────────────────────────────────────
+
+    private void StartGeometryAdjustment(
+        uint shapeId,
+        Slide slide,
+        SlideTransform xf,
+        string handleName,
+        Point screenPt)
+    {
+        if (_editor.Presentation is null)
+            return;
+
+        var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        if (shape is null)
+            return;
+
+        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation).ToLayoutRect();
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
+        if (!plan.CanEdit || plan.Handles.All(handle => handle.Name != handleName))
+            return;
+
+        _gesture = GestureKind.GeometryAdjustment;
+        _geometryShapeId = shapeId;
+        _geometryHandleName = handleName;
+        _geometryBoundsDip = bounds;
+        _geometryDragStartScreen = screenPt;
+        _canvas.CaptureMouse();
+    }
+
+    private void PreviewGeometryAdjustment(Point screenPt, SlideTransform xf)
+    {
+        if (_geometryHandleName is null)
+            return;
+
+        var pointerSlide = xf.ScreenToSlide(screenPt.X, screenPt.Y);
+        var previewScreen = xf.SlideToScreen(pointerSlide.X, pointerSlide.Y);
+        _adorner.UpdateGeometryPreview(_geometryHandleName, previewScreen);
+    }
+
+    private void CommitGeometryAdjustment(Point screenPt, SlideTransform xf)
+    {
+        if (_geometryHandleName is null || _editor.CurrentSlide is null)
+            return;
+
+        var dx = screenPt.X - _geometryDragStartScreen.X;
+        var dy = screenPt.Y - _geometryDragStartScreen.Y;
+        if (dx * dx + dy * dy < 1.0)
+            return;
+
+        var shape = _editor.CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == _geometryShapeId);
+        if (shape is null)
+            return;
+
+        var pointerSlide = xf.ScreenToSlide(screenPt.X, screenPt.Y);
+        var mutation = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape,
+            _geometryBoundsDip,
+            _geometryHandleName,
+            new LayoutPoint(pointerSlide.X, pointerSlide.Y));
+        if (mutation.ShouldApply && mutation.Name is not null && mutation.Value is { } value)
+            _editor.SetShapeGeometryAdjustment(_geometryShapeId, mutation.Name, value);
+    }
+
     /// <summary>
     /// Computes the new absolute rotation angle in degrees given the current drag position.
     /// Snaps to 15° increments when Shift is held.
@@ -573,6 +675,12 @@ public sealed class CanvasGestureHandler
             var selRect = GetSelectionScreenRect(selId, slide, xf);
             if (selRect.HasValue)
             {
+                if (EditPointsEnabled && _adorner.HitTestGeometryHandle(screenPt) is not null)
+                {
+                    _canvas.Cursor = Cursors.Hand;
+                    return;
+                }
+
                 var handle = _adorner.HitTestHandle(selRect.Value, screenPt);
                 _canvas.Cursor = handle switch
                 {
@@ -620,6 +728,7 @@ public sealed class CanvasGestureHandler
         if (slide is null || _editor.Presentation is null)
         {
             _adorner.UpdateSelection(Array.Empty<(uint, Rect)>());
+            _adorner.UpdateGeometryHandles(Array.Empty<(string Name, Point Position)>());
             return;
         }
 
@@ -632,6 +741,25 @@ public sealed class CanvasGestureHandler
                 rects.Add((id, r.Value));
         }
         _adorner.UpdateSelection(rects);
+
+        if (EditPointsEnabled && _editor.SelectedShapeIds.Count == 1)
+        {
+            var id = _editor.SelectedShapeIds[0];
+            var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == id);
+            if (shape is not null)
+            {
+                var bounds = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation).ToLayoutRect();
+                var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
+                var handles = plan.CanEdit
+                    ? plan.Handles.Select(handle =>
+                        (handle.Name, xf.SlideToScreen(handle.PositionDip.X, handle.PositionDip.Y)))
+                    : Enumerable.Empty<(string Name, Point Position)>();
+                _adorner.UpdateGeometryHandles(handles);
+                return;
+            }
+        }
+
+        _adorner.UpdateGeometryHandles(Array.Empty<(string Name, Point Position)>());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────
