@@ -1041,4 +1041,55 @@ public sealed class ChartDataCommandTests
         chart.Series[0].PointStyles[1].StrokeWidthPt.Should().Be(0.75);
         chart.Series[0].PointStyles[1].Marker!.Symbol.Should().Be(ChartMarkerSymbol.Circle);
     }
+
+    [Fact]
+    public void SetChartLayoutOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.PlotAreaManualLayout = new ChartManualLayout
+        {
+            LayoutTarget = "inner",
+            X = 0.1,
+            Y = 0.2,
+            Width = 0.8,
+            Height = 0.7,
+        };
+
+        bus.Execute(new SetChartLayoutOptionsCommand(
+            0,
+            id,
+            new ChartLayoutOptions(
+                ChartLayoutTarget.PlotArea,
+                "outer",
+                ChartManualLayoutMode.Edge,
+                ChartManualLayoutMode.Factor,
+                ChartManualLayoutMode.Factor,
+                ChartManualLayoutMode.Edge,
+                12,
+                0.15,
+                0.75,
+                24)));
+
+        var layout = chart.PlotAreaManualLayout!;
+        layout.LayoutTarget.Should().Be("outer");
+        layout.XMode.Should().Be(ChartManualLayoutMode.Edge);
+        layout.Y.Should().Be(0.15);
+        layout.Width.Should().Be(0.75);
+        layout.HeightMode.Should().Be(ChartManualLayoutMode.Edge);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.PlotAreaManualLayout!.LayoutTarget.Should().Be("outer");
+        roundTripped.PlotAreaManualLayout.XMode.Should().Be(ChartManualLayoutMode.Edge);
+        roundTripped.PlotAreaManualLayout.X.Should().Be(12);
+        roundTripped.PlotAreaManualLayout.HeightMode.Should().Be(ChartManualLayoutMode.Edge);
+
+        bus.Undo();
+        chart.PlotAreaManualLayout!.LayoutTarget.Should().Be("inner");
+        chart.PlotAreaManualLayout.X.Should().Be(0.1);
+        chart.PlotAreaManualLayout.Height.Should().Be(0.7);
+    }
 }

@@ -1915,6 +1915,7 @@ public sealed class MainWindowHeadlessTests
         var foundAxis = false;
         var foundSeries = false;
         var foundPoint = false;
+        var foundLayout = false;
         var before = -1;
         var after = -1;
 
@@ -1927,6 +1928,7 @@ public sealed class MainWindowHeadlessTests
             foundAxis = registry.TryGet(ChartAxisOptionsPlanner.CommandId, out _);
             foundSeries = registry.TryGet(ChartSeriesOptionsPlanner.CommandId, out _);
             foundPoint = registry.TryGet(ChartPointOptionsPlanner.CommandId, out _);
+            foundLayout = registry.TryGet(ChartLayoutOptionsPlanner.CommandId, out _);
 
             before = window.Editor.CurrentSlide!.Shapes.Count;
             command!.Execute(RibbonCommandContext.Empty);
@@ -1938,6 +1940,7 @@ public sealed class MainWindowHeadlessTests
         foundAxis.Should().BeTrue("the Avalonia chart-axis command must be registered");
         foundSeries.Should().BeTrue("the Avalonia chart-series command must be registered");
         foundPoint.Should().BeTrue("the Avalonia chart-point command must be registered");
+        foundLayout.Should().BeTrue("the Avalonia chart-layout command must be registered");
         after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
     }
 
@@ -5915,6 +5918,32 @@ public sealed class MainWindowHeadlessTests
         options.StrokeWidthPt.Should().Be(1.5);
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
         options.MarkerSizePt.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task ChartLayoutOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartLayoutOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartLayoutOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(ChartLayoutTarget.PlotArea, "inner", ChartManualLayoutMode.Edge, ChartManualLayoutMode.Factor, ChartManualLayoutMode.Factor, ChartManualLayoutMode.Edge, 12, 0.1, 0.8, 20);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        options!.Target.Should().Be(ChartLayoutTarget.PlotArea);
+        options.LayoutTarget.Should().Be("inner");
+        options.XMode.Should().Be(ChartManualLayoutMode.Edge);
+        options.HeightMode.Should().Be(ChartManualLayoutMode.Edge);
+        options.X.Should().Be(12);
+        options.Height.Should().Be(20);
     }
 
     [Fact]

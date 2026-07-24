@@ -362,6 +362,42 @@ public sealed class ChartDataDialogPlannerTests
         ChartPointOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartPointOptionsPlanner.CommandId);
     }
 
+    [Fact]
+    public void ChartLayoutOptionsPlanner_UsesWorkingCopyAndBuildsManualLayoutOptions()
+    {
+        var chart = MakeChart();
+        chart.PlotAreaManualLayout = new ChartManualLayout
+        {
+            LayoutTarget = "inner",
+            X = 0.1,
+            Y = 0.2,
+            Width = 0.8,
+            Height = 0.7,
+        };
+
+        var planner = ChartLayoutOptionsPlanner.FromChart(chart);
+        planner.SetTarget(ChartLayoutTarget.Legend);
+        planner.SetLayoutTarget("outer");
+        planner.SetXMode(ChartManualLayoutMode.Edge);
+        planner.SetYMode(ChartManualLayoutMode.Edge);
+        planner.SetWidthMode(ChartManualLayoutMode.Factor);
+        planner.SetHeightMode(ChartManualLayoutMode.Factor);
+        planner.SetX(12);
+        planner.SetY(18);
+        planner.SetWidth(0.25);
+        planner.SetHeight(0.4);
+
+        var options = planner.BuildCommitPlan();
+        options.Target.Should().Be(ChartLayoutTarget.Legend);
+        options.LayoutTarget.Should().Be("outer");
+        options.XMode.Should().Be(ChartManualLayoutMode.Edge);
+        options.YMode.Should().Be(ChartManualLayoutMode.Edge);
+        options.Width.Should().Be(0.25);
+        options.Height.Should().Be(0.4);
+        chart.LegendManualLayout.Should().BeNull("layout planners must edit a working copy");
+        ChartLayoutOptionsPlanner.BuildSurfacePlan().CommandId.Should().Be(ChartLayoutOptionsPlanner.CommandId);
+    }
+
     private static ChartShape MakeChart()
     {
         var chart = new ChartShape();
