@@ -581,9 +581,9 @@ if [[ "$app" == "FreeW" ]]; then
         cut_clipboard_ready=false
     fi
     send_editor_key ctrl+z
+    send_editor_key ctrl+a
     capture "editor-after-cut-undo.png"
     capture_region "editor-after-cut-undo.png" "editor-after-cut-undo-document.png" "$editor_proof_geometry"
-    send_editor_key ctrl+a
     send_editor_key ctrl+c
     if read_clipboard_bounded "$cut_restore_clipboard" "$output/editor-cut-restore-clipboard-error.txt"; then
         cut_restore_ready=true
@@ -692,7 +692,7 @@ if [[ "$app" == "FreeW" ]]; then
         local expected="${id_prefix}-expected.txt" clipboard="${id_prefix}-clipboard.txt"
         local proof="${id_prefix}-proof.txt"
         local trigger_ready=true typed_ready=false clipboard_ready=false entry_ready=false
-        local baseline_count open_count dismissed_count active_dialog_window
+        local baseline_count open_count dismissed_count active_window_id dialog_window
         printf '%s' "$marker" > "$output/$expected"
 
         focus_app
@@ -705,7 +705,12 @@ if [[ "$app" == "FreeW" ]]; then
         fi
         capture "$open"
         capture_window_state "$open_state"
-        active_dialog_window="$(xdotool getactivewindow 2>/dev/null || true)"
+        active_window_id="$(xdotool getactivewindow 2>/dev/null || true)"
+        dialog_window="$(xdotool search --onlyvisible --name 'Find & Replace' 2>/dev/null | while read -r candidate; do
+            if [[ "$candidate" != "$window_id" ]]; then
+                printf '%s\n' "$candidate"
+            fi
+        done | tail -n 1)"
         open_count="$(window_count)"
 
         if send_active_text "$marker"; then
@@ -714,7 +719,7 @@ if [[ "$app" == "FreeW" ]]; then
         capture "$typed"
         send_active_key ctrl+a || true
         send_active_key ctrl+c || true
-        if read_clipboard_bounded "$clipboard" "$output/${id_prefix}-clipboard-error.txt"; then
+        if read_clipboard_bounded "$output/$clipboard" "$output/${id_prefix}-clipboard-error.txt"; then
             clipboard_ready=true
         fi
 
@@ -738,7 +743,8 @@ if [[ "$app" == "FreeW" ]]; then
             printf 'open-screenshot=%s\n' "$open"
             printf 'typed-screenshot=%s\n' "$typed"
             printf 'entered-screenshot=%s\n' "$entered"
-            printf 'active-dialog-window=%s\n' "$active_dialog_window"
+            printf 'active-window=%s\n' "$active_window_id"
+            printf 'find-replace-window=%s\n' "$dialog_window"
             printf 'baseline-window-count=%s\n' "$baseline_count"
             printf 'open-window-count=%s\n' "$open_count"
             printf 'trigger-ready=%s\n' "$trigger_ready"
@@ -746,12 +752,12 @@ if [[ "$app" == "FreeW" ]]; then
             printf 'clipboard-ready=%s\n' "$clipboard_ready"
             printf 'clipboard-exact='; if $clipboard_ready && cmp -s "$output/$expected" "$output/$clipboard"; then printf 'true\n'; else printf 'false\n'; fi
             printf 'route-entry-transition=%s\n' "$entry_ready"
-            printf 'separate-window='; if [[ -n "$active_dialog_window" && "$active_dialog_window" != "$window_id" && "$open_count" -gt "$baseline_count" ]]; then printf 'true\n'; else printf 'false\n'; fi
+            printf 'separate-window='; if [[ -n "$dialog_window" && "$dialog_window" != "$window_id" && "$open_count" -gt "$baseline_count" ]]; then printf 'true\n'; else printf 'false\n'; fi
             printf 'open-screenshot-changed='; if screen_changed "$output/$before" "$output/$open" 200; then printf 'true\n'; else printf 'false\n'; fi
         } > "$output/$proof"
         if $trigger_ready && $typed_ready && $clipboard_ready && $entry_ready &&
            cmp -s "$output/$expected" "$output/$clipboard" &&
-           [[ -n "$active_dialog_window" && "$active_dialog_window" != "$window_id" ]] &&
+           [[ -n "$dialog_window" && "$dialog_window" != "$window_id" ]] &&
            (( open_count > baseline_count )) && screen_changed "$output/$before" "$output/$open" 200; then
             record "${id_prefix}-open" "passed" "$proof" \
                 "$route_label shortcut opened the real Find & Replace window, typed an exact route marker into its initial field, and produced route-specific Enter evidence."
