@@ -2809,7 +2809,10 @@ public sealed partial class MainWindow : Window
 
             using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
                 StorageProvider,
-                AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, plan));
+                AvaloniaFilePickerSaveRequest.FromSavePlan(
+                    FileText.SavePickerTitle,
+                    plan,
+                    showOverwritePrompt: true));
 
             var path = file?.LocalPath;
             if (path is null)
