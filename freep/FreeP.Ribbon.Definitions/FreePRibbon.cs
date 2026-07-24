@@ -282,6 +282,48 @@ public static class FreePRibbon
             group.Medium("freep.insert-chart-bar", FreePRibbonText.InsertChartBarLabel, RibbonCommandIconKind.ChartColumn, FreePRibbonText.InsertChartBarKeyTip);
             group.Medium("freep.insert-chart-line", FreePRibbonText.InsertChartLineLabel, RibbonCommandIconKind.ChartLine, FreePRibbonText.InsertChartLineKeyTip);
             group.Medium("freep.insert-chart-pie", FreePRibbonText.InsertChartPieLabel, RibbonCommandIconKind.ChartPie, FreePRibbonText.InsertChartPieKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartColumnStackedCommandId,
+                FreePRibbonText.InsertChartColumnStackedLabel, RibbonCommandIconKind.ChartColumn,
+                FreePRibbonText.InsertChartColumnStackedKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartColumnStacked100CommandId,
+                FreePRibbonText.InsertChartColumnStacked100Label, RibbonCommandIconKind.ChartColumn,
+                FreePRibbonText.InsertChartColumnStacked100KeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartBarStackedCommandId,
+                FreePRibbonText.InsertChartBarStackedLabel, RibbonCommandIconKind.ChartColumn,
+                FreePRibbonText.InsertChartBarStackedKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartBarStacked100CommandId,
+                FreePRibbonText.InsertChartBarStacked100Label, RibbonCommandIconKind.ChartColumn,
+                FreePRibbonText.InsertChartBarStacked100KeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartLineMarkersCommandId,
+                FreePRibbonText.InsertChartLineMarkersLabel, RibbonCommandIconKind.ChartLine,
+                FreePRibbonText.InsertChartLineMarkersKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartAreaCommandId,
+                FreePRibbonText.InsertChartAreaLabel, RibbonCommandIconKind.ChartLine,
+                FreePRibbonText.InsertChartAreaKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartAreaStackedCommandId,
+                FreePRibbonText.InsertChartAreaStackedLabel, RibbonCommandIconKind.ChartLine,
+                FreePRibbonText.InsertChartAreaStackedKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartScatterCommandId,
+                FreePRibbonText.InsertChartScatterLabel, RibbonCommandIconKind.ChartLine,
+                FreePRibbonText.InsertChartScatterKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartDoughnutCommandId,
+                FreePRibbonText.InsertChartDoughnutLabel, RibbonCommandIconKind.ChartPie,
+                FreePRibbonText.InsertChartDoughnutKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartRadarCommandId,
+                FreePRibbonText.InsertChartRadarLabel, RibbonCommandIconKind.ChartLine,
+                FreePRibbonText.InsertChartRadarKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartBubbleCommandId,
+                FreePRibbonText.InsertChartBubbleLabel, RibbonCommandIconKind.ChartPie,
+                FreePRibbonText.InsertChartBubbleKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartStockCommandId,
+                FreePRibbonText.InsertChartStockLabel, RibbonCommandIconKind.ChartLine,
+                FreePRibbonText.InsertChartStockKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartSurfaceCommandId,
+                FreePRibbonText.InsertChartSurfaceLabel, RibbonCommandIconKind.ChartColumn,
+                FreePRibbonText.InsertChartSurfaceKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartSurface3DCommandId,
+                FreePRibbonText.InsertChartSurface3DLabel, RibbonCommandIconKind.ChartColumn,
+                FreePRibbonText.InsertChartSurface3DKeyTip);
             group.Medium("freep.chart.edit-data", FreePRibbonText.ChartEditDataLabel, RibbonCommandIconKind.ChartTitle, FreePRibbonText.ChartEditDataKeyTip);
         });
         tab.Group("links", FreePRibbonText.LinksGroupLabel, FreePRibbonText.LinksGroupKeyTip, 92, group =>

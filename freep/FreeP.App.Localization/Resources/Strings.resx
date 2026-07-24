@@ -358,6 +358,90 @@
   <data name="Ribbon_Command_InsertChartPie_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_InsertChartColumnStacked_Label" xml:space="preserve">
+    <value>Stacked Column</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartColumnStacked_KeyTip" xml:space="preserve">
+    <value>SC</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartColumnStacked100_Label" xml:space="preserve">
+    <value>100% Stacked Column</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartColumnStacked100_KeyTip" xml:space="preserve">
+    <value>S1</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartBarStacked_Label" xml:space="preserve">
+    <value>Stacked Bar</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartBarStacked_KeyTip" xml:space="preserve">
+    <value>SB</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartBarStacked100_Label" xml:space="preserve">
+    <value>100% Stacked Bar</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartBarStacked100_KeyTip" xml:space="preserve">
+    <value>B1</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartLineMarkers_Label" xml:space="preserve">
+    <value>Line with Markers</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartLineMarkers_KeyTip" xml:space="preserve">
+    <value>LM</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartArea_Label" xml:space="preserve">
+    <value>Area</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartArea_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartAreaStacked_Label" xml:space="preserve">
+    <value>Stacked Area</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartAreaStacked_KeyTip" xml:space="preserve">
+    <value>AS</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartScatter_Label" xml:space="preserve">
+    <value>Scatter</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartScatter_KeyTip" xml:space="preserve">
+    <value>SS</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartDoughnut_Label" xml:space="preserve">
+    <value>Doughnut</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartDoughnut_KeyTip" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartRadar_Label" xml:space="preserve">
+    <value>Radar</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartRadar_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartBubble_Label" xml:space="preserve">
+    <value>Bubble</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartBubble_KeyTip" xml:space="preserve">
+    <value>BU</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartStock_Label" xml:space="preserve">
+    <value>Stock</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartStock_KeyTip" xml:space="preserve">
+    <value>ST</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartSurface_Label" xml:space="preserve">
+    <value>Surface</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartSurface_KeyTip" xml:space="preserve">
+    <value>SU</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartSurface3D_Label" xml:space="preserve">
+    <value>3-D Surface</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartSurface3D_KeyTip" xml:space="preserve">
+    <value>S3</value>
+  </data>
   <data name="Ribbon_Command_ChartEditData_Label" xml:space="preserve">
     <value>Edit Data</value>
   </data>
