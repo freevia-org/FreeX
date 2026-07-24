@@ -44,6 +44,17 @@ internal static class Program
             args = [];
         }
 
+        if (!PhysicalValidationOptions.TryParse(
+                args,
+                out var physicalValidationOptions,
+                out var physicalStartupArguments,
+                out var physicalValidationError))
+        {
+            Console.Error.WriteLine(physicalValidationError);
+            return 2;
+        }
+        args = physicalStartupArguments;
+
         // Headless engine smoke (no display): exercise the model + .pptx round-trip and exit.
         if (PackagingSmoke.TryRun(args, Console.Out, Console.Error, out var packagingExit))
             return packagingExit;
@@ -56,6 +67,7 @@ internal static class Program
         }
 
         App.StartupArguments = startupArguments;
+        App.PhysicalValidationOptions = physicalValidationOptions;
         App.LaunchSmokeOptions = launchSmoke;
 
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);

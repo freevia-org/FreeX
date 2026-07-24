@@ -70,13 +70,15 @@ cd /opt/published
 if [[ "${FREEX_CUPS_DRY_RUN:-0}" == "1" ]]; then
     cups_dry_run_bin="/tmp/freex-cups-dry-run"
     cups_dry_run_output="/work/cups-dry-run"
+    cups_dry_run_queue="${app_executable}-DryRun"
     mkdir -p "$cups_dry_run_bin" "$cups_dry_run_output"
+    export FREEX_CUPS_DRY_RUN_QUEUE="$cups_dry_run_queue"
     cat > "$cups_dry_run_bin/lpstat" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 case " $* " in
-    *" -p "*) printf 'printer FreeW-DryRun is idle.\n' ;;
-    *" -d "*) printf 'system default destination: FreeW-DryRun\n' ;;
+    *" -p "*) printf 'printer %s is idle.\n' "${FREEX_CUPS_DRY_RUN_QUEUE}" ;;
+    *" -d "*) printf 'system default destination: %s\n' "${FREEX_CUPS_DRY_RUN_QUEUE}" ;;
     *) printf 'FreeW dry-run lpstat received unsupported arguments: %s\n' "$*" >&2; exit 2 ;;
 esac
 SH
@@ -98,7 +100,7 @@ if [[ "${FREEX_CUPS_DRY_RUN_MODE:-success}" == "failure" ]]; then
     exit 1
 fi
 cp -- "$pdf_path" /work/cups-dry-run/last-submitted.pdf
-printf 'request id is FreeW-DryRun-1 (1 file(s))\n'
+printf 'request id is %s-1 (1 file(s))\n' "${FREEX_CUPS_DRY_RUN_QUEUE}"
 SH
     chmod 0755 "$cups_dry_run_bin/lpstat" "$cups_dry_run_bin/lp"
     export PATH="$cups_dry_run_bin:$PATH"
@@ -109,9 +111,14 @@ if [[ -n "$app_arguments_b64" ]]; then
     mapfile -t app_arguments < <(printf '%s' "$app_arguments_b64" | base64 -d)
 fi
 interaction_validation=false
+physical_validation=false
 for argument in "${app_arguments[@]}"; do
     if [[ "$argument" == "--interaction-validation" ]]; then
         interaction_validation=true
+        break
+    fi
+    if [[ "$argument" == "--physical-validation" ]]; then
+        physical_validation=true
         break
     fi
 done
@@ -125,13 +132,13 @@ child_pids+=("$app_pid")
 # Interaction validation is intentionally headless and can finish before X11 observes a window.
 # Publish readiness immediately so the host can wait on the mounted manifest, then retain the
 # desktop container until the orchestrator has collected the result and stops this owned session.
-if [[ "$interaction_validation" == true ]]; then
+if [[ "$interaction_validation" == true || "$physical_validation" == true ]]; then
     cat > /work/ready.json <<JSON
 {
   "status": "ready",
   "appExecutable": "$app_executable",
   "windowId": "",
-  "windowTitle": "$app_window_title interaction validation",
+  "windowTitle": "$app_window_title validation",
   "display": ":99",
   "screen": "${screen_width}x${screen_height}",
   "dpi": $screen_dpi,

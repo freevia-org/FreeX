@@ -296,15 +296,20 @@ if (-not $SkipImageBuild) {
 $projectPath = Join-Path $repoRoot $definition.Project
 if (-not $SkipPublish) {
     Write-Host "Publishing $App for linux-x64..."
-    & dotnet publish $projectPath `
-        --configuration Release `
-        --framework net10.0 `
-        --runtime linux-x64 `
-        --self-contained true `
-        -p:UseAppHost=true `
-        -p:PublishReadyToRun=false `
-        -p:PublishSingleFile=false `
-        --output $publishDir
+    $publishArguments = @(
+        "--configuration", "Release",
+        "--framework", "net10.0",
+        "--runtime", "linux-x64",
+        "--self-contained", "true",
+        "-p:UseAppHost=true",
+        "-p:PublishReadyToRun=false",
+        "-p:PublishSingleFile=false",
+        "--output", $publishDir)
+    if ($App -eq "FreeP") {
+        # FreeP selects its Windows target on a Windows host unless the Linux target is explicit.
+        $publishArguments += "-p:FreePWindowsBuild=false"
+    }
+    & dotnet publish $projectPath @publishArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Publishing $App for linux-x64 failed."
     }

@@ -702,7 +702,9 @@ public sealed partial class MainWindow : Window
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
         Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
-        Closing += (_, e) => e.Cancel = _closeCoordinator.ShouldCancelClosing();
+        Closing += (_, e) => e.Cancel =
+            !_allowCloseWithoutDirtyPromptForPhysicalValidation &&
+            _closeCoordinator.ShouldCancelClosing();
         Closed += (_, _) =>
         {
             _findReplaceDialog?.Close();
