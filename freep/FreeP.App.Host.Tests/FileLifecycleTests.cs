@@ -24,7 +24,7 @@ public sealed class FileLifecycleTests : IDisposable
         FileCommands File,
         Func<Presentation> GetModel,
         Func<int> ChangeCount,
-        RecordingUserMessageService Messages) CreateHarness()
+        RecordingUserMessageService Messages) CreateHarness(bool canEncodeVideo = false)
     {
         var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
         var model = Presentation.CreateEmpty();
@@ -38,6 +38,9 @@ public sealed class FileLifecycleTests : IDisposable
             () => changes++,
             loadRecentFilesStore: () => RecentFilesStore.Load(recentStorePath),
             messageService: messages,
+            videoEncoderCapability: canEncodeVideo
+                ? new WpfVideoEncoderCapability(true, "ffmpeg.exe", "libx264", "test encoder ready")
+                : WpfVideoEncoderCapability.Unavailable("Test encoder handoff deferred."),
             nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
         return (window, file, () => model, () => changes, messages);
     }
@@ -271,6 +274,19 @@ public sealed class FileLifecycleTests : IDisposable
         plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(24));
         plan.CanExecute.Should().BeFalse();
         plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+    }
+
+    [StaFact]
+    public void BuildVideoExportPlan_EnablesWpfExecutionWhenEncoderIsAvailable()
+    {
+        var (_, file, getModel, _, _) = CreateHarness(canEncodeVideo: true);
+        getModel().Slides.Add(new Slide { Title = "Two" });
+
+        var plan = file.BuildVideoExportPlan();
+
+        plan.IsImplemented.Should().BeTrue();
+        plan.CanExecute.Should().BeTrue();
+        plan.DisabledReason.Should().BeNull();
     }
 
     [StaFact]

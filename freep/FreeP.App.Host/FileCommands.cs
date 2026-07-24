@@ -428,7 +428,17 @@ internal sealed class FileCommands
     public PresentationVideoExportPlan BuildVideoExportPlan(PresentationVideoExportRequest? request = null)
     {
         var presentation = _getModel();
-        return PresentationExportPlanner.BuildVideoExportPlan(request, presentation);
+        var plan = PresentationExportPlanner.BuildVideoExportPlan(request, presentation);
+        if (!_videoExportHostCapabilities.CanEncodeMp4)
+            return plan;
+
+        var hasSlides = plan.SlideRange.SlideNumbers.Count > 0;
+        return plan with
+        {
+            IsImplemented = true,
+            CanExecute = hasSlides,
+            DisabledReason = hasSlides ? null : plan.DisabledReason,
+        };
     }
 
     /// <summary>

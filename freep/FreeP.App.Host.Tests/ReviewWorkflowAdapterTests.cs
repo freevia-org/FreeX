@@ -1824,7 +1824,8 @@ public sealed class ReviewWorkflowAdapterTests
             var plan = package.Plan.ExportPlan;
 
             window.LastVideoFramePackage.Should().BeSameAs(package);
-            window.LastVideoExportPlan.Should().BeSameAs(plan);
+            window.LastVideoExportPlan.Should().NotBeNull();
+            window.LastVideoExportPlan!.CommandId.Should().Be(plan.CommandId);
             window.LastVideoExportHandoffPlan.Should().NotBeNull();
             window.LastVideoExportHandoffPlan!.PackagePlan.Should().BeSameAs(package.Plan);
             window.LastVideoExportHandoffPlan.Status.Should()

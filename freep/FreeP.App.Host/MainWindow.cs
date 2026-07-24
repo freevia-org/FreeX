@@ -1749,7 +1749,7 @@ public sealed partial class MainWindow : Window
     internal PresentationVideoFramePackage RefreshVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
         LastVideoFramePackage = _file.BuildVideoFramePackage(request);
-        LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
+        LastVideoExportPlan = _file.BuildVideoExportPlan(request);
         LastVideoExportHandoffPlan = _file.LastVideoExportHandoffPlan;
         return LastVideoFramePackage;
     }
