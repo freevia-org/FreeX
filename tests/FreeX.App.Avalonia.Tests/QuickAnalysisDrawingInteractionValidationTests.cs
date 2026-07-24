@@ -35,7 +35,7 @@ public sealed class QuickAnalysisDrawingInteractionValidationTests
                     result.EvidenceLevel == "production-model-observed" &&
                     result.Evidence.Contains("undo=", StringComparison.Ordinal));
                 results.Single(result => result.Id == "drawing.shape.capture-loss-no-op")
-                    .Evidence.Should().Contain("commandAdded=false", StringComparison.Ordinal);
+                    .Evidence.Should().Contain("commandAdded=false");
             }
             finally
             {
