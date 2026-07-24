@@ -138,15 +138,22 @@ internal static class TextBodyFlowDocumentConverter
         };
 
         var blocks = doc.Blocks.ToList();
+        var editedParagraphTexts = blocks
+            .Select(block => block is WpfParagraph paragraph
+                ? ParagraphText(paragraph)
+                : string.Empty)
+            .ToArray();
+        var sourceParagraphIndices = originalBody is null
+            ? Array.Empty<int>()
+            : InCanvasRichTextParagraphEditPlanner.ResolveSourceParagraphIndices(
+                originalBody.Paragraphs,
+                editedParagraphTexts);
         int modelParaIndex = 0;
         foreach (var block in blocks)
         {
             int sourceParaIndex = originalBody is null
                 ? -1
-                : InCanvasRichTextParagraphEditPlanner.ResolveSourceParagraphIndex(
-                    originalBody.Paragraphs.Count,
-                    blocks.Count,
-                    modelParaIndex);
+                : sourceParagraphIndices[modelParaIndex];
             var mp = sourceParaIndex >= 0
                 ? InCanvasRichTextParagraphEditPlanner.CloneParagraphMetadata(
                     originalBody!.Paragraphs[sourceParaIndex])
@@ -199,8 +206,8 @@ internal static class TextBodyFlowDocumentConverter
                 // prefix, and B (now at a lower index) only enters the suffix match where its
                 // text must equal the original's text at that suffix position.
                 IReadOnlyList<ModelRun>? origRuns = null;
-                if (originalBody is not null && modelParaIndex < originalBody.Paragraphs.Count)
-                    origRuns = originalBody.Paragraphs[modelParaIndex].Runs;
+                if (sourceParaIndex >= 0)
+                    origRuns = originalBody!.Paragraphs[sourceParaIndex].Runs;
 
                 // Materialise leaf inlines so we can index them.
                 var leafList = EnumerateLeafInlines(wp2.Inlines).ToList();
@@ -356,6 +363,14 @@ internal static class TextBodyFlowDocumentConverter
             }
         }
     }
+
+    private static string ParagraphText(WpfParagraph paragraph) =>
+        string.Concat(EnumerateLeafInlines(paragraph.Inlines).Select(inline => inline switch
+        {
+            WpfRun run => run.Text ?? string.Empty,
+            LineBreak => "\n",
+            _ => string.Empty,
+        }));
 
     /// <summary>
     /// Reads formatting properties from a WPF <see cref="Inline"/> into a model <see cref="ModelRun"/>.

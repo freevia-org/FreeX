@@ -58,6 +58,111 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void WpfSplitFirstParagraph_UsesTextLineageForFollowingMetadata()
+    {
+        var original = DistinctParagraphBody();
+        var edited = FlowDocumentFor("A1", "A2", "B", "C");
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(edited, original);
+
+        AssertMetadata(restored.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 1, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 2, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(restored.Paragraphs, 3, BulletKind.None, 3, 30, 300);
+    }
+
+    [StaFact]
+    public void WpfSplitMiddleParagraph_UsesTextLineageForTrailingMetadata()
+    {
+        var original = DistinctParagraphBody();
+        var edited = FlowDocumentFor("A", "B1", "B2", "C");
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(edited, original);
+
+        AssertMetadata(restored.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 1, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(restored.Paragraphs, 2, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(restored.Paragraphs, 3, BulletKind.None, 3, 30, 300);
+    }
+
+    [StaFact]
+    public void WpfDuplicateParagraphTexts_ConsumeDistinctOrderedSources()
+    {
+        var original = new TextBody();
+        original.Paragraphs.Add(ModelParagraph("foo", BulletKind.Char, 1, 10, 100, "*"));
+        original.Paragraphs.Add(ModelParagraph("foo", BulletKind.Auto, 2, 20, 200, null));
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(
+            FlowDocumentFor("foo", "foo"),
+            original);
+
+        AssertMetadata(restored.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 1, BulletKind.Auto, 2, 20, 200);
+    }
+
+    [StaFact]
+    public void WpfEmptySplitParagraph_UsesTheSourceBeforeTheAnchor()
+    {
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(
+            FlowDocumentFor("", "A", "B", "C"),
+            DistinctParagraphBody());
+
+        AssertMetadata(restored.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 1, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 2, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(restored.Paragraphs, 3, BulletKind.None, 3, 30, 300);
+    }
+
+    [StaFact]
+    public void WpfRewrittenSplitBeforeTrailingAnchors_UsesUnmatchedSourceLineage()
+    {
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(
+            FlowDocumentFor("X", "Y", "B", "C"),
+            DistinctParagraphBody());
+
+        AssertMetadata(restored.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 1, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 2, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(restored.Paragraphs, 3, BulletKind.None, 3, 30, 300);
+    }
+
+    [StaFact]
+    public void WpfAnchorlessRewrite_EqualCount_UsesOrderedSourceLineage()
+    {
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(
+            FlowDocumentFor("X", "Y", "Z"),
+            DistinctParagraphBody());
+
+        AssertMetadata(restored.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 1, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(restored.Paragraphs, 2, BulletKind.None, 3, 30, 300);
+    }
+
+    [StaFact]
+    public void WpfAnchorlessRewriteWithSplit_AssignsSurplusToLeadingLineage()
+    {
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(
+            FlowDocumentFor("X", "Y", "Z", "W"),
+            DistinctParagraphBody());
+
+        AssertMetadata(restored.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 1, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 2, BulletKind.Auto, 2, 20, 200);
+        AssertMetadata(restored.Paragraphs, 3, BulletKind.None, 3, 30, 300);
+    }
+
+    [StaFact]
+    public void WpfAnchorlessJoin_RetainsOrderedLeadingLineage()
+    {
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(
+            FlowDocumentFor("X", "Y"),
+            DistinctParagraphBody());
+
+        AssertMetadata(restored.Paragraphs, 0, BulletKind.Char, 1, 10, 100);
+        AssertMetadata(restored.Paragraphs, 1, BulletKind.Auto, 2, 20, 200);
+    }
+
+    [StaFact]
     public void WpfAuthority_UsesSharedRichEditorFallbackTypography()
     {
         var doc = TextBodyFlowDocumentConverter.ToFlowDocument(
@@ -1136,6 +1241,63 @@ public sealed class RichTextEditorTests
     /// - Run 0: "Hello", Bold=true, Color=Red(#FF0000), FontSize=24pt
     /// - Run 1: " world", Bold=false, no color, FontSize=12pt
     /// </summary>
+    private static TextBody DistinctParagraphBody()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(ModelParagraph("A", BulletKind.Char, 1, 10, 100, "*"));
+        body.Paragraphs.Add(ModelParagraph("B", BulletKind.Auto, 2, 20, 200, null));
+        body.Paragraphs.Add(ModelParagraph("C", BulletKind.None, 3, 30, 300, null));
+        return body;
+    }
+
+    private static ModelParagraph ModelParagraph(
+        string text,
+        BulletKind bulletKind,
+        int level,
+        double spaceBefore,
+        double spaceAfter,
+        string? bulletChar)
+    {
+        var paragraph = new ModelParagraph
+        {
+            Level = level,
+            BulletKind = bulletKind,
+            BulletChar = bulletChar,
+            AutoNumType = AutoNumType.AlphaLcPeriod,
+            AutoNumStartAt = level + 1,
+            SpaceBeforePt = spaceBefore,
+            SpaceAfterPt = spaceAfter,
+            Runs = { new ModelRun { Text = text } },
+        };
+        paragraph.TabStops.Add(new TabStop { PositionEmu = level * 100L });
+        return paragraph;
+    }
+
+    private static FlowDocument FlowDocumentFor(params string[] paragraphs)
+    {
+        var document = new FlowDocument();
+        foreach (var text in paragraphs)
+            document.Blocks.Add(new WpfParagraph { Inlines = { new WpfRun(text) } });
+        return document;
+    }
+
+    private static void AssertMetadata(
+        IReadOnlyList<ModelParagraph> paragraphs,
+        int index,
+        BulletKind bulletKind,
+        int level,
+        double spaceBefore,
+        double spaceAfter)
+    {
+        var paragraph = paragraphs[index];
+        paragraph.BulletKind.Should().Be(bulletKind);
+        paragraph.Level.Should().Be(level);
+        paragraph.SpaceBeforePt.Should().Be(spaceBefore);
+        paragraph.SpaceAfterPt.Should().Be(spaceAfter);
+        paragraph.AutoNumStartAt.Should().Be(level + 1);
+        paragraph.TabStops.Should().ContainSingle(stop => stop.PositionEmu == level * 100L);
+    }
+
     private static TextBody MakeTwoRunBody()
     {
         var body = new TextBody { Wrap = true };
