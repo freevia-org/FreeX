@@ -2341,6 +2341,35 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Print_options_pane_parses_custom_range_through_avalonia_adapter()
+    {
+        PresentationPrintBackstagePlan? printPlan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+
+            printPlan = window.ShowPrintOptionsPane(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    CustomRangeText: "2,4")));
+        });
+
+        if (!ran) return;
+        printPlan.Should().NotBeNull();
+        printPlan!.SelectedRange.Kind.Should().Be(PresentationSlideRangeKind.CustomRange);
+        printPlan.SelectedRange.Request!.CustomRangeText.Should().Be("2,4");
+        printPlan.SelectedRange.DisplayName.Should().Be("Slides 2, 4");
+        printPlan.SelectedRange.IsAvailable.Should().BeTrue();
+        printPlan.PageCount.Should().Be(2);
+        printPlan.CanBuildPackage.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Notes_page_pdf_refresh_uses_shared_render_plan()
     {
         PresentationNotesPagePdfRenderPlan? notesPdfPlan = null;

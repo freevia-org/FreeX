@@ -1976,6 +1976,39 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_PrintBackstageRequest_ParsesCustomRangeThroughWpfAdapter()
+    {
+        var window = new MainWindow(
+            new FreePOptions(),
+            messageService: TestUserMessageService.DiscardUnsavedChanges,
+            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+        try
+        {
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+
+            var plan = window.RefreshPrintBackstagePlan(new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    CustomRangeText: "2,4")));
+
+            plan.SelectedRange.Kind.Should().Be(PresentationSlideRangeKind.CustomRange);
+            plan.SelectedRange.Request!.CustomRangeText.Should().Be("2,4");
+            plan.SelectedRange.DisplayName.Should().Be("Slides 2, 4");
+            plan.SelectedRange.IsAvailable.Should().BeTrue();
+            plan.PageCount.Should().Be(2);
+            plan.CanBuildPackage.Should().BeTrue();
+            window.LastPrintOutputPackage.Should().BeNull();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_NotesPagePdfRequest_RecordsSharedRenderPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

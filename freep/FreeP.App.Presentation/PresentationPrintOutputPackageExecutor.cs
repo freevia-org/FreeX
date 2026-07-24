@@ -179,7 +179,9 @@ public static class PresentationPrintOutputPackageExecutor
         var canBuild = printPlan.SlideRange.SlideNumbers.Count > 0;
         var route = ResolveRoute(printPlan.Layout.Layout);
         var pageCount = CalculatePageCount(printPlan, notesPageCount);
-        var disabledReason = canBuild ? null : "Print output requires at least one slide.";
+        var disabledReason = canBuild
+            ? null
+            : printPlan.SlideRange.ValidationMessage ?? "Print output requires at least one slide.";
         var previewPlan = BuildPreviewPlan(printPlan, route, pageCount, canBuild, disabledReason, notesPreviewPlans);
         return new PresentationPrintOutputPackagePlan(
             printPlan,
@@ -565,9 +567,27 @@ public static class PresentationPrintOutputPackageExecutor
     private static PresentationPrintRequest ToPrintRequest(PresentationPrintPlan plan) =>
         new(
             plan.Layout.Layout,
-            new PresentationSlideRangeRequest(
-                PresentationSlideRangeKind.SelectedSlides,
-                SelectedSlideNumbers: plan.SlideRange.SlideNumbers),
+            plan.SlideRange.Kind switch
+            {
+                PresentationSlideRangeKind.CurrentSlide => new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CurrentSlide,
+                    CurrentSlideNumber: plan.SlideRange.SlideNumbers.Count == 0
+                        ? null
+                        : plan.SlideRange.SlideNumbers[0]),
+                PresentationSlideRangeKind.CustomRange => new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    StartSlideNumber: plan.SlideRange.SlideNumbers.Count == 0
+                        ? null
+                        : plan.SlideRange.SlideNumbers[0],
+                    EndSlideNumber: plan.SlideRange.SlideNumbers.Count == 0
+                        ? null
+                        : plan.SlideRange.SlideNumbers[^1],
+                    CustomRangeText: plan.SlideRange.CustomRangeText),
+                PresentationSlideRangeKind.SelectedSlides => new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.SelectedSlides,
+                    SelectedSlideNumbers: plan.SlideRange.SlideNumbers),
+                _ => new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides),
+            },
             plan.Layout.IsHandout ? plan.Layout.SlidesPerPage : null,
             plan.PrintHiddenSlides,
             plan.Options.Copies,

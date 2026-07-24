@@ -306,6 +306,68 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void CustomSlideRangeParser_ExpandsRangesPreservesOrderAndDeduplicates()
+    {
+        var result = PresentationExportPlanner.ParseCustomSlideRange("5, 2-4; 3", slideCount: 6);
+
+        result.IsValid.Should().BeTrue();
+        result.SlideNumbers.Should().Equal(5, 2, 3, 4);
+        result.ErrorMessage.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("2, 7")]
+    [InlineData("4-2")]
+    [InlineData("1-")]
+    public void CustomSlideRangeParser_RejectsInvalidInput(string text)
+    {
+        var result = PresentationExportPlanner.ParseCustomSlideRange(text, slideCount: 6);
+
+        result.IsValid.Should().BeFalse();
+        result.SlideNumbers.Should().BeEmpty();
+        result.ErrorMessage.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void CustomSlideRangeText_FlowsThroughHiddenSlideFilteringAndPackageValidation()
+    {
+        var presentation = BuildHandoutDeck(6);
+        presentation.Slides[2].IsHidden = true;
+        var request = new PresentationPrintRequest(
+            PresentationPrintLayoutKind.NotesPages,
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CustomRange,
+                CustomRangeText: "2-5"));
+
+        var plan = PresentationExportPlanner.BuildPrintPlan(request, presentation);
+        var package = PresentationPrintOutputPackageExecutor.BuildPackagePlan(request, presentation);
+
+        plan.SlideRange.SlideNumbers.Should().Equal(2, 4, 5);
+        plan.SlideRange.CustomRangeText.Should().Be("2-5");
+        plan.SlideRange.ValidationMessage.Should().BeNull();
+        package.PrintPlan.SlideRange.CustomRangeText.Should().Be("2-5");
+        package.SlideRangeSummary.Should().Be("Slides 2, 4, 5");
+        package.CanBuildPackage.Should().BeTrue();
+    }
+
+    [Fact]
+    public void InvalidCustomSlideRange_DisablesPackageWithValidationMessage()
+    {
+        var request = new PresentationPrintRequest(
+            PresentationPrintLayoutKind.FullPageSlides,
+            new PresentationSlideRangeRequest(
+                PresentationSlideRangeKind.CustomRange,
+                CustomRangeText: "2, 9"));
+
+        var package = PresentationPrintOutputPackageExecutor.BuildPackagePlan(request, slideCount: 4);
+
+        package.CanBuildPackage.Should().BeFalse();
+        package.SlideRangeSummary.Should().Be("Invalid custom range");
+        package.DisabledReason.Should().Be("Slide '9' is outside slides 1-4.");
+    }
+
+    [Fact]
     public void PresentationAwarePrintPlan_ExcludesHiddenSlidesUnlessRequested()
     {
         var presentation = BuildHandoutDeck(4);
