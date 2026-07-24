@@ -315,6 +315,16 @@ screen_changed() {
     [[ "$changed" =~ ^[0-9]+ ]] && (( ${BASH_REMATCH[0]} >= minimum ))
 }
 
+screen_difference() {
+    local before="$1" after="$2" changed
+    changed="$(compare -metric AE "$before" "$after" null: 2>&1 || true)"
+    if [[ "$changed" =~ ^[0-9]+ ]]; then
+        printf '%s' "${BASH_REMATCH[0]}"
+    else
+        printf 'unknown'
+    fi
+}
+
 capture_region() {
     local source_name="$1" name="$2" geometry="$3"
     convert "$output/$source_name" -crop "$geometry" +repage "$output/$name"
@@ -590,6 +600,22 @@ if [[ "$app" == "FreeW" ]]; then
     else
         cut_restore_ready=false
     fi
+    cut_document_ae="$(screen_difference "$output/editor-before-cut-document.png" "$output/editor-after-cut-document.png")"
+    cut_undo_ae="$(screen_difference "$output/editor-after-cut-document.png" "$output/editor-after-cut-undo-document.png")"
+    cut_restore_ae="$(screen_difference "$output/editor-before-cut-document.png" "$output/editor-after-cut-undo-document.png")"
+    cut_restore_threshold=500
+    cut_document_transition=false
+    cut_undo_transition=false
+    cut_document_restored=false
+    if [[ "$cut_document_ae" =~ ^[0-9]+$ ]] && (( cut_document_ae >= 100 )); then
+        cut_document_transition=true
+    fi
+    if [[ "$cut_undo_ae" =~ ^[0-9]+$ ]] && (( cut_undo_ae >= 100 )); then
+        cut_undo_transition=true
+    fi
+    if [[ "$cut_restore_ae" =~ ^[0-9]+$ ]] && (( cut_restore_ae <= cut_restore_threshold )); then
+        cut_document_restored=true
+    fi
     {
         printf 'cut-sent=%s\n' "$cut_sent"
         printf 'document-proof-geometry=%s\n' "$editor_proof_geometry"
@@ -601,22 +627,14 @@ if [[ "$app" == "FreeW" ]]; then
         printf 'restored-observed='; if $cut_restore_ready; then cat "$cut_restore_clipboard"; fi; printf '\n'
         printf 'cut-exact-match='; if $cut_clipboard_ready && cmp -s "$cut_expected" "$cut_clipboard"; then printf 'true\n'; else printf 'false\n'; fi
         printf 'restore-exact-match='; if $cut_restore_ready && cmp -s "$cut_expected" "$cut_restore_clipboard"; then printf 'true\n'; else printf 'false\n'; fi
-        printf 'cut-document-transition='; if screen_changed "$output/editor-before-cut-document.png" "$output/editor-after-cut-document.png" 100; then printf 'true\n'; else printf 'false\n'; fi
-        printf 'undo-document-transition='; if screen_changed "$output/editor-after-cut-document.png" "$output/editor-after-cut-undo-document.png" 100; then printf 'true\n'; else printf 'false\n'; fi
-        printf 'undo-document-restored='; if screen_matches "$output/editor-before-cut-document.png" "$output/editor-after-cut-undo-document.png" 500; then printf 'true\n'; else printf 'false\n'; fi
+        printf 'cut-document-ae=%s\n' "$cut_document_ae"
+        printf 'undo-document-ae=%s\n' "$cut_undo_ae"
+        printf 'undo-document-restored-ae=%s\n' "$cut_restore_ae"
+        printf 'undo-document-restoration-threshold-ae=%s\n' "$cut_restore_threshold"
+        printf 'cut-document-transition=%s\n' "$cut_document_transition"
+        printf 'undo-document-transition=%s\n' "$cut_undo_transition"
+        printf 'undo-document-restored=%s\n' "$cut_document_restored"
     } > "$cut_proof"
-    cut_document_transition=false
-    cut_undo_transition=false
-    cut_document_restored=false
-    if screen_changed "$output/editor-before-cut-document.png" "$output/editor-after-cut-document.png" 100; then
-        cut_document_transition=true
-    fi
-    if screen_changed "$output/editor-after-cut-document.png" "$output/editor-after-cut-undo-document.png" 100; then
-        cut_undo_transition=true
-    fi
-    if screen_matches "$output/editor-before-cut-document.png" "$output/editor-after-cut-undo-document.png" 500; then
-        cut_document_restored=true
-    fi
     if $cut_sent && $cut_clipboard_ready && $cut_restore_ready &&
        cmp -s "$cut_expected" "$cut_clipboard" && cmp -s "$cut_expected" "$cut_restore_clipboard" &&
        $cut_document_transition && $cut_undo_transition && $cut_document_restored; then
@@ -684,15 +702,15 @@ if [[ "$app" == "FreeW" ]]; then
 
     run_find_replace_route() {
         local id_prefix="$1" key="$2" marker="$3" route_label="$4"
-        local before="${id_prefix}-before.png" open="${id_prefix}-open.png"
+        local before="${id_prefix}-before.png" open="${id_prefix}-open.png" focused="${id_prefix}-focused.png"
         local typed="${id_prefix}-typed.png" entered="${id_prefix}-entered.png"
         local dismissed="${id_prefix}-dismissed.png"
         local before_state="${id_prefix}-before-state.txt" open_state="${id_prefix}-open-state.txt"
-        local dismissed_state="${id_prefix}-dismissed-state.txt"
+        local focused_state="${id_prefix}-focused-state.txt" dismissed_state="${id_prefix}-dismissed-state.txt"
         local expected="${id_prefix}-expected.txt" clipboard="${id_prefix}-clipboard.txt"
         local proof="${id_prefix}-proof.txt"
-        local trigger_ready=true typed_ready=false clipboard_ready=false entry_ready=false
-        local baseline_count open_count dismissed_count active_window_id dialog_window
+        local trigger_ready=true typed_ready=false clipboard_ready=false entry_ready=false focus_ready=false
+        local baseline_count open_count dismissed_count active_window_id active_after_focus="" dialog_window=""
         printf '%s' "$marker" > "$output/$expected"
 
         focus_app
@@ -712,6 +730,20 @@ if [[ "$app" == "FreeW" ]]; then
             fi
         done | tail -n 1)"
         open_count="$(window_count)"
+        if [[ -n "$dialog_window" ]]; then
+            if timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+                xdotool windowactivate --sync "$dialog_window" 2>/dev/null &&
+               timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+                xdotool windowfocus "$dialog_window" 2>/dev/null; then
+                sleep 0.12
+                active_after_focus="$(xdotool getactivewindow 2>/dev/null || true)"
+                if [[ "$active_after_focus" == "$dialog_window" ]]; then
+                    focus_ready=true
+                fi
+            fi
+        fi
+        capture "$focused"
+        capture_window_state "$focused_state"
 
         if send_active_text "$marker"; then
             typed_ready=true
@@ -741,13 +773,16 @@ if [[ "$app" == "FreeW" ]]; then
             printf 'marker=%s\n' "$marker"
             printf 'before-screenshot=%s\n' "$before"
             printf 'open-screenshot=%s\n' "$open"
+            printf 'focused-screenshot=%s\n' "$focused"
             printf 'typed-screenshot=%s\n' "$typed"
             printf 'entered-screenshot=%s\n' "$entered"
             printf 'active-window=%s\n' "$active_window_id"
+            printf 'active-after-focus=%s\n' "$active_after_focus"
             printf 'find-replace-window=%s\n' "$dialog_window"
             printf 'baseline-window-count=%s\n' "$baseline_count"
             printf 'open-window-count=%s\n' "$open_count"
             printf 'trigger-ready=%s\n' "$trigger_ready"
+            printf 'dialog-focus-ready=%s\n' "$focus_ready"
             printf 'typed-ready=%s\n' "$typed_ready"
             printf 'clipboard-ready=%s\n' "$clipboard_ready"
             printf 'clipboard-exact='; if $clipboard_ready && cmp -s "$output/$expected" "$output/$clipboard"; then printf 'true\n'; else printf 'false\n'; fi
@@ -755,7 +790,7 @@ if [[ "$app" == "FreeW" ]]; then
             printf 'separate-window='; if [[ -n "$dialog_window" && "$dialog_window" != "$window_id" && "$open_count" -gt "$baseline_count" ]]; then printf 'true\n'; else printf 'false\n'; fi
             printf 'open-screenshot-changed='; if screen_changed "$output/$before" "$output/$open" 200; then printf 'true\n'; else printf 'false\n'; fi
         } > "$output/$proof"
-        if $trigger_ready && $typed_ready && $clipboard_ready && $entry_ready &&
+        if $trigger_ready && $focus_ready && $typed_ready && $clipboard_ready && $entry_ready &&
            cmp -s "$output/$expected" "$output/$clipboard" &&
            [[ -n "$dialog_window" && "$dialog_window" != "$window_id" ]] &&
            (( open_count > baseline_count )) && screen_changed "$output/$before" "$output/$open" 200; then
@@ -777,6 +812,7 @@ if [[ "$app" == "FreeW" ]]; then
             printf 'dismissed-screenshot=%s\n' "$dismissed"
             printf 'before-state=%s\n' "$before_state"
             printf 'open-state=%s\n' "$open_state"
+            printf 'focused-state=%s\n' "$focused_state"
             printf 'dismissed-state=%s\n' "$dismissed_state"
             printf 'baseline-window-count=%s\n' "$baseline_count"
             printf 'dismissed-window-count=%s\n' "$dismissed_count"
