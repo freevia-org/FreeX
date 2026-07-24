@@ -92,6 +92,11 @@ mkdir -p /work/cups-dry-run
 printf 'lp ' > /work/cups-dry-run/last-invocation.txt
 printf '%q ' "$@" >> /work/cups-dry-run/last-invocation.txt
 printf '\n' >> /work/cups-dry-run/last-invocation.txt
+if [[ "${FREEX_CUPS_DRY_RUN_MODE:-success}" == "failure" ]]; then
+    printf 'FreeW dry-run backend rejected the job.\n' > /work/cups-dry-run/last-error.txt
+    printf 'FreeW dry-run backend rejected the job.\n' >&2
+    exit 1
+fi
 cp -- "$pdf_path" /work/cups-dry-run/last-submitted.pdf
 printf 'request id is FreeW-DryRun-1 (1 file(s))\n'
 SH

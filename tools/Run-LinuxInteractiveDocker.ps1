@@ -45,6 +45,8 @@ param(
     [string]$DocumentPath = "",
     [string[]]$AppArgument = @(),
     [switch]$CupsDryRun,
+    [ValidateSet("success", "failure")]
+    [string]$CupsDryRunMode = "success",
     [string]$SessionMetadataPath = "",
     [switch]$SkipPublish,
     [switch]$SkipImageBuild,
@@ -435,6 +437,7 @@ $dockerRunArguments = @(
 if ($CupsDryRun) {
     $dockerRunArguments = @($dockerRunArguments[0..($dockerRunArguments.Count - 2)]) + @(
         "--env", "FREEX_CUPS_DRY_RUN=1",
+        "--env", "FREEX_CUPS_DRY_RUN_MODE=$CupsDryRunMode",
         $dockerRunArguments[-1])
 }
 $runResult = Invoke-Docker -Arguments $dockerRunArguments

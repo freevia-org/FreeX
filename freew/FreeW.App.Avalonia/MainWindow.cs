@@ -3031,8 +3031,8 @@ public sealed partial class MainWindow : Window
 
     private BackstageDirectPrintCapability DirectPrintCapability =>
         _latestPrinterDiscovery?.IsAvailable == true
-            ? BackstageDirectPrintCapability.NativeDialogAvailable(
-                "CUPS printer discovery and foreground submission are available on this Avalonia host.")
+            ? BackstageDirectPrintCapability.PlatformPrinterAvailable(
+                "CUPS printer discovery and foreground submission are available on this Avalonia host; no native system print dialog is used.")
             : BackstageDirectPrintCapability.Deferred(
                 DirectPrintDeferredReason());
 

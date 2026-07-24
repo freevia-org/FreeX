@@ -75,6 +75,15 @@ public sealed record BackstageDirectPrintCapability(
             Normalize(evidenceDescription, "Direct native printer selection is backed by this host."),
             DeferredNote: null);
 
+    public static BackstageDirectPrintCapability PlatformPrinterAvailable(
+        string evidenceDescription = "Direct printer submission is backed by this host.") =>
+        new(
+            BackstagePrintEvidenceStatus.HostBacked,
+            "Available - platform printer submission",
+            "Choose a printer and submit the document to the platform printer service.",
+            Normalize(evidenceDescription, "Direct printer submission is backed by this host."),
+            DeferredNote: null);
+
     public static BackstageDirectPrintCapability Deferred(
         string reason = "Direct native printer selection remains host-specific; use Print Preview or Create PDF for OS printing.") =>
         CreateDeferred(reason, BackstageViewTextResources.DirectPrintDeferredNote);

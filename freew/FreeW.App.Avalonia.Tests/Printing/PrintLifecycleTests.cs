@@ -68,6 +68,26 @@ public sealed class PrintLifecycleTests
     }
 
     [Fact]
+    public async Task MainWindow_CupsAvailabilityDoesNotClaimNativeSystemPrintDialog()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateWindow(
+                new FakePrintService(isSupported: true),
+                showPrintSelectionDialog: (_, _, _) => Task.FromResult<PrintSelection?>(null));
+
+            await window.PrintAsync();
+
+            var capability = window.BuildBackstageCallbacks().DirectPrintCapability;
+            capability!.IsAvailable.Should().BeTrue();
+            capability.FieldValue.Should().Contain("platform printer submission");
+            capability.FieldValue.Should().NotContain("operating-system printer dialog");
+            capability.ActionDescription.Should().Contain("platform printer service");
+            capability.ActionDescription.Should().NotContain("native");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task MainWindow_NoPrintersDisablesDirectPrintAndReportsPdfFallback()
     {
         var restoreCalls = 0;
