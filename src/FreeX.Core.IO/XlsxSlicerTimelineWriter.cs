@@ -398,16 +398,21 @@ internal static class XlsxSlicerTimelineWriter
     // list a pivot slicer cache needs to render item tiles (mirrors
     // XlsxSlicerTimelineMetadataReader.ReadSlicerCacheItems's read shape exactly -- x is the 0-based
     // index into the pivot cache field's shared items, s="1" marks a selected item, and both this
-    // writer and that reader agree an absent @s means "not selected"). Resolves the field purely by
-    // name across every pivot cache in the workbook (a slicer cache carries no stable cache id here),
-    // matching SlicerItemResolver.ResolveSharedItemsField's association rule. Returns null when the
-    // field can't be resolved (e.g. a slicer authored against a cache FreeX doesn't model shared items
-    // for yet) so the cache definition is left exactly as it was before this fix in that case.
+    // writer and that reader agree an absent @s means "not selected"). Resolves the SPECIFIC owning
+    // pivot cache + field (bound cache first, then a name-only fallback scan; see
+    // ResolveSlicerSharedItemsField), and stamps the tabular element's required pivotCacheId from that
+    // cache's id (R83-io-slicer-tabular-pivotcacheid). Returns null when the field can't be resolved
+    // (e.g. a slicer authored against a cache FreeX doesn't model shared items for yet) so the cache
+    // definition is left exactly as it was before this fix in that case.
     private static XElement? BuildPivotSlicerCacheDataElement(Workbook workbook, SlicerModel slicer)
     {
-        var field = ResolveSlicerSharedItemsField(workbook, slicer);
-        if (field?.SharedItems is not { Count: > 0 } sharedItems)
+        if (ResolveSlicerSharedItemsField(workbook, slicer) is not { } binding ||
+            binding.Field.SharedItems is not { Count: > 0 } sharedItems)
+        {
             return null;
+        }
+
+        var ownerCache = binding.Cache;
 
         // No explicit selection recorded on the model (slicer.SelectedItems empty) means the
         // unfiltered "(All items selected)" state -- every tile starts selected, matching how Excel
@@ -430,6 +435,17 @@ internal static class XlsxSlicerTimelineWriter
             SlicerNs + "data",
             new XElement(
                 SlicerNs + "tabular",
+                // R83-io-slicer-tabular-pivotcacheid: CT_TabularSlicerCache (the x14-namespace slicer
+                // cache type, ECMA-376 / [MS-XLSX] §2.3.2.1.2) requires a pivotCacheId attribute --
+                // without it OpenXmlValidator(Microsoft365) reports "The required attribute
+                // 'pivotCacheId' is missing" and real Excel can repair (silently drop) the slicer cache
+                // on open. Emit the OWNING pivot cache's own CacheId: it is the same stable, positive
+                // identifier the workbook's <pivotCache cacheId="N"> already uses for this cache, so it
+                // satisfies both the schema's unsignedInt type and the spec rule that a slicer's
+                // pivotCacheId "uniquely identifies this PivotCache" and MUST NOT be 0. (FreeX does not
+                // emit the optional workbook-level x14:pivotCaches list, so there is no separate x14
+                // numbering this must instead index into.)
+                new XAttribute("pivotCacheId", ownerCache.CacheId.ToString(CultureInfo.InvariantCulture)),
                 new XElement(
                     SlicerNs + "items",
                     new XAttribute("count", items.Count.ToString(CultureInfo.InvariantCulture)),
@@ -442,7 +458,13 @@ internal static class XlsxSlicerTimelineWriter
     // field with the same name but different shared-item lists; a name-only scan in collection order
     // would pick whichever cache happens to come first, authoring the wrong item/selection list for a
     // freshly inserted slicer whenever its bound cache isn't first.
-    private static PivotCacheFieldModel? ResolveSlicerSharedItemsField(Workbook workbook, SlicerModel slicer)
+    // Returns BOTH the resolved field and the specific PivotCacheModel it lives in: the caller needs the
+    // owning cache's id to stamp the tabular slicer cache's required pivotCacheId attribute
+    // (R83-io-slicer-tabular-pivotcacheid), and only this resolution knows which cache the field's shared
+    // items actually came from (bound cache first, then a name-only fallback scan).
+    private static (PivotCacheModel Cache, PivotCacheFieldModel Field)? ResolveSlicerSharedItemsField(
+        Workbook workbook,
+        SlicerModel slicer)
     {
         var sourceFieldName = slicer.SourceFieldName;
         if (string.IsNullOrWhiteSpace(sourceFieldName))
@@ -455,7 +477,7 @@ internal static class XlsxSlicerTimelineWriter
                 string.Equals(field.Name, sourceFieldName, StringComparison.OrdinalIgnoreCase) &&
                 field.SharedItems is { Count: > 0 });
             if (boundField is not null)
-                return boundField;
+                return (boundCache, boundField);
         }
 
         foreach (var cache in workbook.PivotCaches)
@@ -468,7 +490,7 @@ internal static class XlsxSlicerTimelineWriter
                 if (string.Equals(field.Name, sourceFieldName, StringComparison.OrdinalIgnoreCase) &&
                     field.SharedItems is { Count: > 0 })
                 {
-                    return field;
+                    return (cache, field);
                 }
             }
         }

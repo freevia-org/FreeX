@@ -1,5 +1,8 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using FluentAssertions;
 using FreeX.Core.Model;
 using Xunit;
@@ -21,6 +24,13 @@ namespace FreeX.Core.IO.Tests;
 /// so real Excel (and FreeX's own reload, which gates <c>SlicerItemResolver</c> on
 /// <see cref="SlicerModel.CacheItems"/> being non-empty) had nothing to draw the slicer's button tiles
 /// from. Fixed by <c>XlsxSlicerTimelineWriter.BuildPivotSlicerCacheDataElement</c>.
+///
+/// R83-io-slicer-tabular-pivotcacheid: that same native <c>&lt;tabular&gt;</c> element was emitted
+/// WITHOUT the <c>pivotCacheId</c> attribute the OOXML schema (CT_TabularSlicerCache, x14 namespace)
+/// marks required, so every freshly-authored .xlsx with a pivot slicer bound to a field with resolvable
+/// shared items failed strict schema validation ("The required attribute 'pivotCacheId' is missing") and
+/// could be repaired destructively by real Excel on open. Fixed by stamping the owning pivot cache's
+/// CacheId onto the <c>&lt;tabular&gt;</c> element in the same method.
 /// </summary>
 public sealed class R44_PivotFilterPageAndSlicerItemsTests
 {
@@ -304,6 +314,58 @@ public sealed class R44_PivotFilterPageAndSlicerItemsTests
             "<data> element from the pivot-slicer fix");
     }
 
+    // ── R83-io-slicer-tabular-pivotcacheid ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void SaveSlicerTimelines_FreshPivotSlicerWithSharedItems_TabularCarriesRequiredPivotCacheId()
+    {
+        // The default (no explicit selection) insert path -- a pivot slicer bound to a field WITH
+        // resolvable shared items writes a native <data><tabular><items> list. CT_TabularSlicerCache
+        // requires a pivotCacheId attribute on the <tabular> element; before the fix it was omitted, so
+        // OpenXmlValidator(Microsoft365) reported "The required attribute 'pivotCacheId' is missing" on
+        // /x14:slicerCacheDefinition/x14:data/x14:tabular. The value must be the OWNING pivot cache's id.
+        using var saved = SaveWorkbook(CreateRegionPivotWorkbookWithSlicer());
+
+        var tabular = ReadPackageXml(saved, "xl/slicerCaches/slicerCache1.xml")
+            .Root!.Descendants(SlicerNs + "tabular").Should().ContainSingle().Subject;
+        tabular.Attribute("pivotCacheId").Should().NotBeNull(
+            "CT_TabularSlicerCache marks pivotCacheId required");
+        tabular.Attribute("pivotCacheId")!.Value.Should().Be("1",
+            "the tabular slicer cache's pivotCacheId must be the bound pivot cache's CacheId (1)");
+
+        SchemaErrors(saved).Should().NotContain(error => error.Contains("pivotCacheId"),
+            "the freshly-authored pivot slicer cache must no longer trip the required-pivotCacheId rule");
+        SchemaErrors(saved).Should().BeEmpty(
+            "a freshly-saved pivot slicer bound to a field with shared items must be schema-clean");
+    }
+
+    [Fact]
+    public void SaveSlicerTimelines_FreshPivotSlicerWithSelection_ValidatesCleanAndSelectionRoundTrips()
+    {
+        // Sibling with an explicit selection ("West"), proving the pivotCacheId addition left the item /
+        // selection payload the reader depends on untouched: the package validates clean AND the reloaded
+        // slicer still reports exactly the same selected tile.
+        var workbook = CreateRegionPivotWorkbookWithSlicer();
+        workbook.Slicers.Single().SelectedItems.Add("West");
+
+        using var saved = SaveWorkbook(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty(
+            "adding the required pivotCacheId must make the pivot slicer package schema-clean");
+
+        var items = ReadNativeSlicerCacheItems(saved);
+        items.Should().ContainSingle(item => item.Selected).Which.Index.Should().Be(1,
+            "only 'West' (shared-item index 1) was explicitly selected");
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        var reloadedSlicer = reloaded.Slicers.Should().ContainSingle().Subject;
+        reloadedSlicer.CacheItems.Should().HaveCount(2,
+            "both shared items must round-trip as cache items so the reloaded slicer renders its tiles");
+        reloadedSlicer.CacheItems.Single(item => item.IsSelected).Index.Should().Be(1,
+            "the reloaded slicer must still report only 'West' (index 1) as the selected tile");
+    }
+
     private static Workbook CreateRegionPivotWorkbookWithSlicer()
     {
         var workbook = CreateRegionPivotWorkbook();
@@ -346,5 +408,16 @@ public sealed class R44_PivotFilterPageAndSlicerItemsTests
         new XlsxFileAdapter().Save(workbook, stream);
         stream.Position = 0;
         return stream;
+    }
+
+    private static List<string> SchemaErrors(Stream stream)
+    {
+        stream.Position = 0;
+        using var document = SpreadsheetDocument.Open(stream, false);
+        var validator = new OpenXmlValidator(FileFormatVersions.Microsoft365);
+        return validator.Validate(document)
+            .Where(error => error.ErrorType == ValidationErrorType.Schema)
+            .Select(error => $"{error.Description} @ {error.Path?.XPath}")
+            .ToList();
     }
 }
