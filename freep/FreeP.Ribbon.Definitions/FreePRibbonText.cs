@@ -216,6 +216,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtFunnelProcessCommand { get; } = new("Ribbon_Command_SmartArtFunnelProcess_Label", "Ribbon_Command_SmartArtFunnelProcess_KeyTip");
     public static RibbonText SmartArtVerticalProcessCommand { get; } = new("Ribbon_Command_SmartArtVerticalProcess_Label", "Ribbon_Command_SmartArtVerticalProcess_KeyTip");
     public static RibbonText SmartArtVerticalBoxListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBoxList_Label", "Ribbon_Command_SmartArtVerticalBoxList_KeyTip");
+    public static RibbonText SmartArtVerticalBulletListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBulletList_Label", "Ribbon_Command_SmartArtVerticalBulletList_KeyTip");
     public static RibbonText SmartArtBasicCycleCommand { get; } = new("Ribbon_Command_SmartArtBasicCycle_Label", "Ribbon_Command_SmartArtBasicCycle_KeyTip");
     public static RibbonText SmartArtGearCycleCommand { get; } = new("Ribbon_Command_SmartArtGearCycle_Label", "Ribbon_Command_SmartArtGearCycle_KeyTip");
     public static RibbonText SmartArtTextCycleCommand { get; } = new("Ribbon_Command_SmartArtTextCycle_Label", "Ribbon_Command_SmartArtTextCycle_KeyTip");
@@ -227,6 +228,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtBasicPyramidCommand { get; } = new("Ribbon_Command_SmartArtBasicPyramid_Label", "Ribbon_Command_SmartArtBasicPyramid_KeyTip");
     public static RibbonText SmartArtRadialCycleCommand { get; } = new("Ribbon_Command_SmartArtRadialCycle_Label", "Ribbon_Command_SmartArtRadialCycle_KeyTip");
     public static RibbonText SmartArtBasicMatrixCommand { get; } = new("Ribbon_Command_SmartArtBasicMatrix_Label", "Ribbon_Command_SmartArtBasicMatrix_KeyTip");
+    public static RibbonText SmartArtTitledMatrixCommand { get; } = new("Ribbon_Command_SmartArtTitledMatrix_Label", "Ribbon_Command_SmartArtTitledMatrix_KeyTip");
     public static RibbonText SmartArtBasicVennCommand { get; } = new("Ribbon_Command_SmartArtBasicVenn_Label", "Ribbon_Command_SmartArtBasicVenn_KeyTip");
     public static RibbonText SmartArtRadialVennCommand { get; } = new("Ribbon_Command_SmartArtRadialVenn_Label", "Ribbon_Command_SmartArtRadialVenn_KeyTip");
     public static RibbonText SmartArtTargetListCommand { get; } = new("Ribbon_Command_SmartArtTargetList_Label", "Ribbon_Command_SmartArtTargetList_KeyTip");
