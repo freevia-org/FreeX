@@ -13811,7 +13811,7 @@ public sealed partial class MainWindow : Window
         var valueTypeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 16,
+            Spacing = 12,
             Margin = new Thickness(8, 6, 8, 1),
             Children =
             {
@@ -13829,20 +13829,20 @@ public sealed partial class MainWindow : Window
         var availableGroup = new GroupBox
         {
             Header = "Go To Special",
-            Margin = new Thickness(0, 0, 0, 12),
-            Padding = new Thickness(8, 1, 8, 6),
+            Margin = new Thickness(0, 3, 0, 13),
+            Padding = new Thickness(8, 1, 8, 9),
             Content = choiceGrid,
         };
-        AvaloniaCompactDialogChrome.ApplyGroupBox(availableGroup);
+        AvaloniaCompactDialogChrome.ApplyGroupBox(availableGroup, borderBrush: Brush(213, 223, 229));
 
         var valueTypeGroup = new GroupBox
         {
             Header = "Values for constants and formulas",
             Margin = new Thickness(0),
-            Padding = new Thickness(0, 0, 0, 3),
+            Padding = new Thickness(0, 0, 0, 4),
             Content = valueTypeRow,
         };
-        AvaloniaCompactDialogChrome.ApplyGroupBox(valueTypeGroup);
+        AvaloniaCompactDialogChrome.ApplyGroupBox(valueTypeGroup, borderBrush: Brush(213, 223, 229));
 
         var content = new StackPanel
         {

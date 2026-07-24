@@ -24,11 +24,12 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("numbersBox.Opacity = enabled ? 1 : 0.7;");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, AvaloniaCompactDialogChrome.WindowsStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactCheckBox(numbersBox, AvaloniaCompactDialogChrome.WindowsStyle);");
-        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(availableGroup);");
-        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(valueTypeGroup);");
-        source.Should().Contain("Margin = new Thickness(0, 0, 0, 12),");
-        source.Should().Contain("Padding = new Thickness(8, 1, 8, 6),");
-        source.Should().Contain("Padding = new Thickness(0, 0, 0, 3),");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(availableGroup, borderBrush: Brush(213, 223, 229));");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(valueTypeGroup, borderBrush: Brush(213, 223, 229));");
+        source.Should().Contain("Margin = new Thickness(0, 3, 0, 13),");
+        source.Should().Contain("Padding = new Thickness(8, 1, 8, 9),");
+        source.Should().Contain("Padding = new Thickness(0, 0, 0, 4),");
+        source.Should().Contain("Spacing = 12,");
         source.Should().Contain("Margin = new Thickness(0, 0, 12, 1),");
         source.Should().Contain("Margin = new Thickness(12, 12, 30, 0),");
         source.Should().Contain("Margin = new Thickness(0, 0, 0, 7),");
@@ -37,6 +38,11 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("ApplyGoToSpecialButtonSize(cancelButton);");
         source.Should().Contain("var root = new DockPanel { Margin = new Thickness(0) };");
         source.Should().Contain("DockPanel.SetDock(buttonRow, Dock.Bottom);");
+
+        var chrome = File.ReadAllText(RepoFile("shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs"));
+        chrome.Should().Contain("IBrush? borderBrush = null");
+        chrome.Should().Contain("Color.FromRgb(198, 215, 232)");
+        chrome.Should().Contain("groupBox.BorderBrush = borderBrush ?? GroupBoxBorderBrush;");
     }
 
     private static string RepoFile(params string[] parts)
