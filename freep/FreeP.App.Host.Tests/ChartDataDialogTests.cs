@@ -111,6 +111,7 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().Contain("new ChartRowViewModel(row)");
         source.Should().Contain("MakeEditableHeader(seriesColumn)");
         source.Should().Contain("_planner.BuildCommitPlan(ReadCategoryEditsFromGrid())");
+        source.Should().Contain("commit.ChartType");
         source.Should().Contain("_planner.AddSeries()");
         source.Should().Contain("_planner.AddCategory()");
         source.Should().Contain("_planner.SwitchRowsAndColumns()");

@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
@@ -20,6 +21,7 @@ internal sealed class ChartDataDialog : Window
     private readonly List<IndexedTextBox> _seriesNameBoxes = new();
     private readonly List<IndexedTextBox> _categoryBoxes = new();
     private readonly List<ValueTextBox> _valueBoxes = new();
+    private readonly ComboBox _chartTypeCombo;
     private readonly TextBlock _validationText = new();
 
     public ChartDataDialog(EditingSession editor)
@@ -37,6 +39,24 @@ internal sealed class ChartDataDialog : Window
 
         _planner = ChartDataDialogPlanner.FromChart(chart);
         _surface = ChartDataDialogPlanner.BuildSurfacePlan();
+        var chartTypeOptions = ChartDataDialogPlanner.ChartTypeOptions;
+        var selectedChartTypeIndex = chartTypeOptions
+            .ToList()
+            .FindIndex(option => option.Value == _planner.SelectedChartType);
+        _chartTypeCombo = new ComboBox
+        {
+            ItemsSource = chartTypeOptions.Select(option => option.Label).ToArray(),
+            SelectedIndex = selectedChartTypeIndex >= 0 ? selectedChartTypeIndex : 0,
+            MinWidth = 170,
+        };
+        _chartTypeCombo.SelectionChanged += (_, _) =>
+        {
+            if (_chartTypeCombo.SelectedIndex >= 0 &&
+                _chartTypeCombo.SelectedIndex < chartTypeOptions.Count)
+            {
+                _planner.SetChartType(chartTypeOptions[_chartTypeCombo.SelectedIndex].Value);
+            }
+        };
 
         Title = _surface.Title;
         Width = 625.3333333333334;
@@ -72,6 +92,15 @@ internal sealed class ChartDataDialog : Window
         RebuildTable();
     }
 
+    internal void SetChartTypeForTests(ChartType chartType)
+    {
+        _planner.SetChartType(chartType);
+        var options = ChartDataDialogPlanner.ChartTypeOptions;
+        var index = options.ToList().FindIndex(option => option.Value == chartType);
+        if (index >= 0)
+            _chartTypeCombo.SelectedIndex = index;
+    }
+
     private Control BuildContent()
     {
         var root = new Grid();
@@ -93,6 +122,13 @@ internal sealed class ChartDataDialog : Window
                 MakeToolbarButton(_surface.AddCategoryLabel, OnAddCategory),
                 MakeToolbarButton(_surface.RemoveCategoryLabel, OnRemoveCategory),
                 MakeToolbarButton(_surface.SwitchRowsAndColumnsLabel, OnSwitchRowsAndColumns),
+                new TextBlock
+                {
+                    Text = _surface.ChartTypeLabel,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(8, 0, 0, 0),
+                },
+                _chartTypeCombo,
             },
         };
 
@@ -257,7 +293,8 @@ internal sealed class ChartDataDialog : Window
         _editor.ReplaceChartData(
             commit.Categories,
             commit.SeriesNames,
-            commit.ValuesForCommand());
+            commit.ValuesForCommand(),
+            commit.ChartType);
         Close(true);
     }
 

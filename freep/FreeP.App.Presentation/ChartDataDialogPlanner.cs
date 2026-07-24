@@ -107,13 +107,17 @@ public sealed record ChartDataDialogSurfacePlan(
     string AddCategoryLabel,
     string RemoveCategoryLabel,
     string SwitchRowsAndColumnsLabel,
+    string ChartTypeLabel,
     string OkLabel,
     string CancelLabel);
+
+public sealed record ChartDataDialogChartTypeOption(ChartType Value, string Label);
 
 public sealed record ChartDataDialogCommitPlan(
     IReadOnlyList<string> Categories,
     IReadOnlyList<string> SeriesNames,
-    IReadOnlyList<IReadOnlyList<double?>> Values)
+    IReadOnlyList<IReadOnlyList<double?>> Values,
+    ChartType ChartType)
 {
     public IEnumerable<IEnumerable<double?>> ValuesForCommand()
     {
@@ -132,6 +136,7 @@ public sealed class ChartDataDialogPlanner
     public const string AddCategoryLabel = "+ Category";
     public const string RemoveCategoryLabel = "- Category";
     public const string SwitchRowsAndColumnsLabel = "Switch Row/Column";
+    public const string ChartTypeLabel = "Chart Type";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
     public const string InvalidNumericValueMessage = "Enter a valid number or leave the value blank.";
@@ -140,11 +145,21 @@ public sealed class ChartDataDialogPlanner
     public const double DefaultDialogHeight = 440;
 
     private readonly ChartDataGridPlanner _grid;
+    private ChartType _chartType;
 
-    private ChartDataDialogPlanner(ChartDataGridPlanner grid)
+    private ChartDataDialogPlanner(ChartDataGridPlanner grid, ChartType chartType)
     {
         _grid = grid;
+        _chartType = chartType;
     }
+
+    public static IReadOnlyList<ChartDataDialogChartTypeOption> ChartTypeOptions { get; } =
+        Enum.GetValues<ChartType>()
+            .Where(chartType => chartType != ChartType.Unknown)
+            .Select(chartType => new ChartDataDialogChartTypeOption(
+                chartType,
+                FormatChartTypeLabel(chartType)))
+            .ToArray();
 
     public int CategoryCount => _grid.CategoryCount;
 
@@ -162,6 +177,7 @@ public sealed class ChartDataDialogPlanner
             AddCategoryLabel,
             RemoveCategoryLabel,
             SwitchRowsAndColumnsLabel,
+            ChartTypeLabel,
             OkLabel,
             CancelLabel);
     }
@@ -173,7 +189,15 @@ public sealed class ChartDataDialogPlanner
         return new ChartDataDialogPlanner(ChartDataGridPlanner.Create(
             chart.Categories,
             chart.Series.Select(series => series.Name),
-            chart.Series.Select(series => series.Values)));
+            chart.Series.Select(series => series.Values)), chart.ChartType);
+    }
+
+    public ChartType SelectedChartType => _chartType;
+
+    public void SetChartType(ChartType chartType)
+    {
+        if (chartType != ChartType.Unknown)
+            _chartType = chartType;
     }
 
     public string GetCategory(int categoryIndex)
@@ -299,7 +323,8 @@ public sealed class ChartDataDialogPlanner
         return new ChartDataDialogCommitPlan(
             CategoriesForCommit(),
             SeriesNamesForCommit(),
-            ValuesForCommit());
+            ValuesForCommit(),
+            _chartType);
     }
 
     public IReadOnlyList<string> CategoriesForCommit()
@@ -337,6 +362,32 @@ public sealed class ChartDataDialogPlanner
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(oneBasedIndex, 1);
         return $"Cat {oneBasedIndex}";
+    }
+
+    private static string FormatChartTypeLabel(ChartType chartType)
+    {
+        return chartType switch
+        {
+            ChartType.ColumnClustered => "Clustered Column",
+            ChartType.ColumnStacked => "Stacked Column",
+            ChartType.ColumnStacked100 => "100% Stacked Column",
+            ChartType.BarClustered => "Clustered Bar",
+            ChartType.BarStacked => "Stacked Bar",
+            ChartType.BarStacked100 => "100% Stacked Bar",
+            ChartType.Line => "Line",
+            ChartType.LineMarkers => "Line with Markers",
+            ChartType.Pie => "Pie",
+            ChartType.Area => "Area",
+            ChartType.AreaStacked => "Stacked Area",
+            ChartType.Scatter => "Scatter",
+            ChartType.Doughnut => "Doughnut",
+            ChartType.Radar => "Radar",
+            ChartType.Bubble => "Bubble",
+            ChartType.Stock => "Stock",
+            ChartType.Surface => "Surface",
+            ChartType.Surface3D => "3-D Surface",
+            _ => chartType.ToString(),
+        };
     }
 
 }

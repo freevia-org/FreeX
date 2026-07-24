@@ -320,6 +320,66 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void ReplaceChartData_WithChartType_ChangesTypeAndUndoRestoresIt()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+
+        chart.ChartType.Should().Be(ChartType.ColumnClustered);
+        bus.Execute(new ReplaceChartDataCommand(
+            0,
+            id,
+            chart.Categories,
+            chart.Series.Select(series => series.Name),
+            chart.Series.Select(series => (IEnumerable<double?>)series.Values),
+            ChartType.LineMarkers));
+
+        chart.ChartType.Should().Be(ChartType.LineMarkers);
+
+        using var package = new MemoryStream();
+        PptxPackageWriter.Write(p, package);
+        package.Position = 0;
+        PptxPackageReader.Read(package)
+            .Slides[0].Shapes[0].Chart!.ChartType
+            .Should().Be(ChartType.LineMarkers);
+
+        bus.Undo();
+        chart.ChartType.Should().Be(ChartType.ColumnClustered);
+    }
+
+    [Fact]
+    public void ReplaceChartData_ToScatter_CreatesCoordinatesAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+
+        chart.Series[0].XValues.Should().BeEmpty();
+        bus.Execute(new ReplaceChartDataCommand(
+            0,
+            id,
+            chart.Categories,
+            chart.Series.Select(series => series.Name),
+            chart.Series.Select(series => (IEnumerable<double?>)series.Values),
+            ChartType.Bubble));
+
+        chart.ChartType.Should().Be(ChartType.Bubble);
+        chart.ScatterStyle.Should().Be(ScatterStyle.LineMarker);
+        foreach (var series in chart.Series)
+        {
+            series.XValues.Should().HaveCount(3);
+            series.BubbleSizes.Should().HaveCount(3);
+        }
+
+        bus.Undo();
+        chart.ChartType.Should().Be(ChartType.ColumnClustered);
+        foreach (var series in chart.Series)
+        {
+            series.XValues.Should().BeEmpty();
+            series.BubbleSizes.Should().BeEmpty();
+        }
+    }
+
+    [Fact]
     public void ReplaceChartData_Revert_RestoresPreviousWorkbookRegenerationFlag()
     {
         var (p, bus, id) = MakeChartPresentation();
