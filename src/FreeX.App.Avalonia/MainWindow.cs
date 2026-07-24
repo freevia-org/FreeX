@@ -1873,6 +1873,7 @@ public sealed partial class MainWindow : Window
         _sheetTabsScroller.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetTabsScroller.Content = _sheetTabsHost;
         _sheetTabsScroller.SizeChanged += (_, _) => UpdateSheetTabNavigationVisibility();
+        _sheetTabsScroller.ScrollChanged += (_, _) => UpdateSheetTabNavigationVisibility();
 
         _sheetTabsContourLayer.Height = 27;
         _sheetTabsContourLayer.IsHitTestVisible = false;
@@ -1968,11 +1969,12 @@ public sealed partial class MainWindow : Window
             border.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = control });
             return border;
         });
-        button.Click += (_, _) => SelectAdjacentVisibleSheetFromKeyboard(direction, selectRange: false);
+        button.PointerPressed += (_, args) => HandleSheetTabNavigationPointerPressed(button, args);
+        button.Click += (_, _) => ScrollSheetTabs(direction);
         AutomationProperties.SetName(button, automationName);
         AutomationProperties.SetHelpText(button, direction < 0
-            ? "Moves to the previous visible worksheet tab."
-            : "Moves to the next visible worksheet tab.");
+            ? "Scrolls the worksheet tab list to the left."
+            : "Scrolls the worksheet tab list to the right.");
     }
 
     private void UpdateSheetTabNavigationVisibility()
@@ -1991,8 +1993,13 @@ public sealed partial class MainWindow : Window
 
         _sheetTabLeftNavButton.IsVisible = hasOverflow;
         _sheetTabRightNavButton.IsVisible = hasOverflow;
-        _sheetTabLeftNavButton.IsEnabled = hasOverflow && activeIndex > 0;
-        _sheetTabRightNavButton.IsEnabled = hasOverflow && activeIndex >= 0 && activeIndex < _session.SheetTabs.Count - 1;
+        _sheetTabLeftNavButton.IsEnabled = hasOverflow;
+        _sheetTabRightNavButton.IsEnabled = hasOverflow;
+        _sheetTabLeftNavButton.Opacity = SheetTabPointerPlanner.CanScrollLeft(_sheetTabsScroller.Offset.X) ? 1 : 0.45;
+        _sheetTabRightNavButton.Opacity = SheetTabPointerPlanner.CanScrollRight(
+            _sheetTabsScroller.Offset.X,
+            _sheetTabsScroller.Extent.Width,
+            _sheetTabsScroller.Viewport.Width) ? 1 : 0.45;
         UpdateSheetTabsContourLayer();
     }
 
@@ -4414,8 +4421,7 @@ public sealed partial class MainWindow : Window
                 Margin = tab.IsActive ? new Thickness(0, -1, 0, 0) : new Thickness(0),
             };
             button.ContextMenu = CreateSheetTabContextMenu(tab);
-            button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
-            button.DoubleTapped += async (_, args) => await RenameSheetFromTabAsync(tab.Id, args);
+            button.PointerPressed += (_, args) => BeginSheetTabPointer(tab.Id, args);
             button.KeyDown += (_, args) => HandleSheetTabKeyDown(tab.Id, button, args);
             button.Click += (_, _) => SelectSheet(tab.Id);
             AutomationProperties.SetName(button, tab.Name);
@@ -11601,30 +11607,6 @@ public sealed partial class MainWindow : Window
         }
 
         return true;
-    }
-
-    private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args)
-    {
-        if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-            return;
-
-        var modifiers = args.KeyModifiers;
-        var selectRange = modifiers.HasFlag(KeyModifiers.Shift);
-        var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
-        if (!selectRange && !toggle)
-            return;
-
-        args.Handled = true;
-        SelectSheet(sheetId, selectRange, toggle);
-    }
-
-    private async Task RenameSheetFromTabAsync(SheetId sheetId, TappedEventArgs args)
-    {
-        args.Handled = true;
-        if (!SelectSheetForContextCommand(sheetId))
-            return;
-
-        await RenameActiveSheetAsync();
     }
 
     private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)
