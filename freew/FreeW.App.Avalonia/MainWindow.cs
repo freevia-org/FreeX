@@ -451,15 +451,17 @@ public sealed partial class MainWindow : Window
     /// Opens the Find &amp; Replace dialog (modeless). If an instance is already open it is
     /// brought to the front. Wired to <c>freew.find-replace-dialog</c> ribbon command and Ctrl+H.
     /// </summary>
-    internal void OpenFindReplaceDialog()
+    internal void OpenFindReplaceDialog(
+        FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
     {
         if (_findReplaceDialog is not null)
         {
+            _findReplaceDialog.ActivateFor(openMode);
             _findReplaceDialog.Activate();
             return;
         }
 
-        _findReplaceDialog = new FindReplaceDialog(_editor)
+        _findReplaceDialog = new FindReplaceDialog(_editor, openMode)
         {
             ScrollerRef = _scroller,
         };
@@ -1560,7 +1562,7 @@ public sealed partial class MainWindow : Window
             PreviousChange: () => StepRevision(-1),
             NextChange: () => StepRevision(1),
             ToggleRevealFormatting: ToggleRevealFormatting,
-            OpenFindReplaceDialog: OpenFindReplaceDialog,
+            OpenFindReplaceDialog: () => OpenFindReplaceDialog(),
             SetPrintLayout: () => SetViewMode(DocumentViewMode.PrintLayout),
             SetWebLayout:   () => SetViewMode(DocumentViewMode.WebLayout),
             SetDraftView:   () => SetViewMode(DocumentViewMode.Draft),
@@ -2520,8 +2522,8 @@ public sealed partial class MainWindow : Window
             case FreeWKeyboardCommand.SaveDocument: _ = SaveAsync(); break;
             case FreeWKeyboardCommand.SaveDocumentAs: _ = SaveAsAsync(); break;
             case FreeWKeyboardCommand.PrintDocument: _ = OpenPrintPreviewAsync(); break;
-            case FreeWKeyboardCommand.Find:
-            case FreeWKeyboardCommand.Replace: OpenFindReplaceDialog(); break;
+            case FreeWKeyboardCommand.Find: OpenFindReplaceDialog(FindReplaceDialogOpenMode.Find); break;
+            case FreeWKeyboardCommand.Replace: OpenFindReplaceDialog(FindReplaceDialogOpenMode.Replace); break;
             case FreeWKeyboardCommand.Cut: _ = CutAsync(); break;
             case FreeWKeyboardCommand.Copy: _ = CopyAsync(); break;
             case FreeWKeyboardCommand.Paste: _ = PasteAsync(); break;

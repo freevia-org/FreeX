@@ -16,6 +16,16 @@ public enum FindReplaceValidationError
     SearchTermRequired
 }
 
+/// <summary>
+/// Identifies the field that receives initial focus when the modeless Find &amp; Replace surface opens.
+/// Both desktop hosts consume this shared intent so Ctrl+F and Ctrl+H remain distinguishable.
+/// </summary>
+public enum FindReplaceDialogOpenMode
+{
+    Find,
+    Replace
+}
+
 public readonly record struct FindReplaceOptionChoice(
     FindReplaceOptionKind Kind,
     string Label);

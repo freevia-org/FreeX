@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Host.Editing;
@@ -29,10 +30,15 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly CheckBox _useWildcards = new() { Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.UseWildcards), Margin = new Thickness(0, 4, 0, 0) };
     private readonly ComboBox _goToTarget = new() { MinWidth = 220, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0) };
+    private FindReplaceDialogOpenMode _openMode;
 
-    public FindReplaceDialog(Window owner, DocumentView editor)
+    public FindReplaceDialog(
+        Window owner,
+        DocumentView editor,
+        FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
     {
         _editor = editor;
+        _openMode = openMode;
         Owner = owner;
         Title = "Find & Replace";
         Width = 420;
@@ -88,7 +94,17 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var statusHost = new Border { Margin = new Thickness(14, 0, 14, 12), Child = _status };
         outer.Children.Add(statusHost);
         Content = outer;
+
+        Loaded += (_, _) => ActivateFor(_openMode);
     }
+
+    internal void ActivateFor(FindReplaceDialogOpenMode openMode)
+    {
+        _openMode = openMode;
+        DialogFocus.FocusAndSelect(_openMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
+    }
+
+    internal FindReplaceDialogOpenMode OpenModeForTest => _openMode;
 
     // Track which text field was focused last so Special inserts into the right box.
     private TextBox _lastFocusedBox = null!;

@@ -86,12 +86,16 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
     };
 
     private TextBox _lastFocusedBox = null!;
+    private FindReplaceDialogOpenMode _openMode;
 
     // ── Construction ──────────────────────────────────────────────────────────
 
-    public FindReplaceDialog(DocumentView editor)
+    public FindReplaceDialog(
+        DocumentView editor,
+        FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+        _openMode = openMode;
 
         Title = "Find & Replace";
         Width = 440;
@@ -176,7 +180,17 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         {
             if (e.Key == Key.Escape) { Close(); e.Handled = true; }
         };
+
+        Opened += (_, _) => ActivateFor(_openMode);
     }
+
+    internal void ActivateFor(FindReplaceDialogOpenMode openMode)
+    {
+        _openMode = openMode;
+        (_openMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox).Focus();
+    }
+
+    internal FindReplaceDialogOpenMode OpenModeForTest => _openMode;
 
     private Button BuildSpecialButton()
     {

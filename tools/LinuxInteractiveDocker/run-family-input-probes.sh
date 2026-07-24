@@ -33,6 +33,16 @@ if [[ "$app" == "FreeW" ]]; then
         "editor-sentinel-copy"
         "editor-undo-restores-clipboard"
         "editor-redo-restores-clipboard"
+        "editor-cut-undo-restores"
+        "editor-paste-text-only"
+        "editor-find-open"
+        "editor-find-dismissal"
+        "editor-replace-open"
+        "editor-replace-dismissal"
+        "editor-reveal-formatting-open"
+        "editor-reveal-formatting-dismissal"
+        "editor-thesaurus-open"
+        "editor-thesaurus-dismissal"
         "editor-keyboard-context-open"
         "editor-keyboard-context-dismissal"
         "editor-pointer-context-open"
@@ -220,6 +230,17 @@ send_key() {
 send_active_key() {
     timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
         xdotool key --clearmodifiers --delay "$input_delay_ms" "$@"
+    sleep "$settle_seconds"
+}
+
+send_active_text() {
+    local text_value="$1" active_id
+    active_id="$(xdotool getactivewindow 2>/dev/null || true)"
+    if [[ -z "$active_id" ]]; then
+        return 1
+    fi
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool type --clearmodifiers --delay "$input_delay_ms" --window "$active_id" "$text_value"
     sleep "$settle_seconds"
 }
 
@@ -418,9 +439,9 @@ else
         "The probe cannot validate an unknown File surface."
 fi
 
-# FreeW-only physical editing evidence. FreeP deliberately retains the original
-# eight-row family baseline contract; these rows exercise the real FreeW
-# DocumentView and clipboard/context-menu paths without pretending the suite is
+# FreeW-only physical editing evidence. FreeP deliberately retains its exact
+# twenty-two-row family contract; these rows exercise the real FreeW DocumentView,
+# dialog, pane, clipboard, and context-menu paths without pretending the suite is
 # exhaustive.
 if [[ "$app" == "FreeW" ]]; then
     sentinel="FreeW-physical-editor-sentinel-r2"
@@ -535,6 +556,307 @@ if [[ "$app" == "FreeW" ]]; then
         record "editor-redo-restores-clipboard" "failed" "editor-redo-restore-proof.txt" \
             "Ctrl+Y did not restore the exact sentinel clipboard state."
     fi
+
+    cut_clipboard="$output/editor-cut-clipboard.txt"
+    cut_restore_clipboard="$output/editor-cut-restore-clipboard.txt"
+    cut_expected="$output/editor-cut-expected.txt"
+    cut_proof="$output/editor-cut-undo-restore-proof.txt"
+    printf '%s' "$sentinel" > "$cut_expected"
+    send_editor_key ctrl+a
+    capture "editor-before-cut.png"
+    editor_proof_top=$((Y + HEIGHT * 18 / 100))
+    editor_proof_height=$((HEIGHT * 55 / 100))
+    editor_proof_geometry="${WIDTH}x${editor_proof_height}+${X}+${editor_proof_top}"
+    capture_region "editor-before-cut.png" "editor-before-cut-document.png" "$editor_proof_geometry"
+    cut_sent=false
+    if send_editor_key ctrl+x; then
+        cut_sent=true
+    fi
+    sleep "$settle_seconds"
+    capture "editor-after-cut.png"
+    capture_region "editor-after-cut.png" "editor-after-cut-document.png" "$editor_proof_geometry"
+    if read_clipboard_bounded "$cut_clipboard" "$output/editor-cut-clipboard-error.txt"; then
+        cut_clipboard_ready=true
+    else
+        cut_clipboard_ready=false
+    fi
+    send_editor_key ctrl+z
+    capture "editor-after-cut-undo.png"
+    capture_region "editor-after-cut-undo.png" "editor-after-cut-undo-document.png" "$editor_proof_geometry"
+    send_editor_key ctrl+a
+    send_editor_key ctrl+c
+    if read_clipboard_bounded "$cut_restore_clipboard" "$output/editor-cut-restore-clipboard-error.txt"; then
+        cut_restore_ready=true
+    else
+        cut_restore_ready=false
+    fi
+    {
+        printf 'cut-sent=%s\n' "$cut_sent"
+        printf 'document-proof-geometry=%s\n' "$editor_proof_geometry"
+        printf 'before-cut-document=editor-before-cut-document.png\n'
+        printf 'after-cut-document=editor-after-cut-document.png\n'
+        printf 'after-cut-undo-document=editor-after-cut-undo-document.png\n'
+        printf 'expected=%s\n' "$sentinel"
+        printf 'cut-observed='; if $cut_clipboard_ready; then cat "$cut_clipboard"; fi; printf '\n'
+        printf 'restored-observed='; if $cut_restore_ready; then cat "$cut_restore_clipboard"; fi; printf '\n'
+        printf 'cut-exact-match='; if $cut_clipboard_ready && cmp -s "$cut_expected" "$cut_clipboard"; then printf 'true\n'; else printf 'false\n'; fi
+        printf 'restore-exact-match='; if $cut_restore_ready && cmp -s "$cut_expected" "$cut_restore_clipboard"; then printf 'true\n'; else printf 'false\n'; fi
+        printf 'cut-document-transition='; if screen_changed "$output/editor-before-cut-document.png" "$output/editor-after-cut-document.png" 100; then printf 'true\n'; else printf 'false\n'; fi
+        printf 'undo-document-transition='; if screen_changed "$output/editor-after-cut-document.png" "$output/editor-after-cut-undo-document.png" 100; then printf 'true\n'; else printf 'false\n'; fi
+        printf 'undo-document-restored='; if screen_matches "$output/editor-before-cut-document.png" "$output/editor-after-cut-undo-document.png" 500; then printf 'true\n'; else printf 'false\n'; fi
+    } > "$cut_proof"
+    cut_document_transition=false
+    cut_undo_transition=false
+    cut_document_restored=false
+    if screen_changed "$output/editor-before-cut-document.png" "$output/editor-after-cut-document.png" 100; then
+        cut_document_transition=true
+    fi
+    if screen_changed "$output/editor-after-cut-document.png" "$output/editor-after-cut-undo-document.png" 100; then
+        cut_undo_transition=true
+    fi
+    if screen_matches "$output/editor-before-cut-document.png" "$output/editor-after-cut-undo-document.png" 500; then
+        cut_document_restored=true
+    fi
+    if $cut_sent && $cut_clipboard_ready && $cut_restore_ready &&
+       cmp -s "$cut_expected" "$cut_clipboard" && cmp -s "$cut_expected" "$cut_restore_clipboard" &&
+       $cut_document_transition && $cut_undo_transition && $cut_document_restored; then
+        record "editor-cut-undo-restores" "passed" "editor-cut-undo-restore-proof.txt" \
+            "Ctrl+X copied the exact selected text to the X11 clipboard and Ctrl+Z restored the exact selection content."
+    else
+        record "editor-cut-undo-restores" "failed" "editor-cut-undo-restore-proof.txt" \
+            "The physical Ctrl+X plus Ctrl+Z sequence did not preserve exact clipboard and restored text evidence."
+    fi
+
+    paste_text_only="$output/editor-paste-text-only-source.txt"
+    paste_text_only_result="$output/editor-paste-text-only-result.txt"
+    paste_text_only_restore="$output/editor-paste-text-only-restore.txt"
+    paste_text_only_expected="$output/editor-paste-text-only-expected.txt"
+    paste_text_only_proof="$output/editor-paste-text-only-proof.txt"
+    paste_text_only_value="FreeW-physical-paste-text-only-r2"
+    printf '%s' "$paste_text_only_value" > "$paste_text_only"
+    printf '%s' "$paste_text_only_value" > "$paste_text_only_expected"
+    paste_text_only_sent=false
+    paste_text_only_owner=false
+    send_editor_key ctrl+a
+    if start_clipboard_owner "$paste_text_only" "$output/editor-paste-text-only-owner-error.txt"; then
+        paste_text_only_owner=true
+        if send_editor_key ctrl+shift+v; then
+            paste_text_only_sent=true
+        fi
+        stop_clipboard_owner
+    fi
+    capture "editor-after-paste-text-only.png"
+    send_editor_key ctrl+a
+    send_editor_key ctrl+c
+    if read_clipboard_bounded "$paste_text_only_result" "$output/editor-paste-text-only-result-error.txt"; then
+        paste_text_only_result_ready=true
+    else
+        paste_text_only_result_ready=false
+    fi
+    send_editor_key ctrl+z
+    capture "editor-after-paste-text-only-undo.png"
+    send_editor_key ctrl+a
+    send_editor_key ctrl+c
+    if read_clipboard_bounded "$paste_text_only_restore" "$output/editor-paste-text-only-restore-error.txt"; then
+        paste_text_only_restore_ready=true
+    else
+        paste_text_only_restore_ready=false
+    fi
+    {
+        printf 'clipboard-owner-started=%s\n' "$paste_text_only_owner"
+        printf 'ctrl-shift-v-sent=%s\n' "$paste_text_only_sent"
+        printf 'expected=%s\n' "$paste_text_only_value"
+        printf 'result-observed='; if $paste_text_only_result_ready; then cat "$paste_text_only_result"; fi; printf '\n'
+        printf 'restore-observed='; if $paste_text_only_restore_ready; then cat "$paste_text_only_restore"; fi; printf '\n'
+        printf 'result-exact-match='; if $paste_text_only_result_ready && cmp -s "$paste_text_only_expected" "$paste_text_only_result"; then printf 'true\n'; else printf 'false\n'; fi
+        printf 'restore-exact-sentinel='; if $paste_text_only_restore_ready && cmp -s "$cut_expected" "$paste_text_only_restore"; then printf 'true\n'; else printf 'false\n'; fi
+        printf 'semantic-distinction=plain-text-only-X11-clipboard-cannot-prove-rich-format-stripping\n'
+    } > "$paste_text_only_proof"
+    if $paste_text_only_owner && $paste_text_only_sent && $paste_text_only_result_ready &&
+       $paste_text_only_restore_ready && cmp -s "$paste_text_only_expected" "$paste_text_only_result" &&
+       cmp -s "$cut_expected" "$paste_text_only_restore"; then
+        record "editor-paste-text-only" "passed" "editor-paste-text-only-proof.txt" \
+            "Ctrl+Shift+V consumed an exact plain-text X11 clipboard and undo restored the sentinel; rich-format stripping is intentionally not claimed."
+    else
+        record "editor-paste-text-only" "failed" "editor-paste-text-only-proof.txt" \
+            "The physical Ctrl+Shift+V route did not produce exact plain-text result and restore evidence."
+    fi
+
+    run_find_replace_route() {
+        local id_prefix="$1" key="$2" marker="$3" route_label="$4"
+        local before="${id_prefix}-before.png" open="${id_prefix}-open.png"
+        local typed="${id_prefix}-typed.png" entered="${id_prefix}-entered.png"
+        local dismissed="${id_prefix}-dismissed.png"
+        local before_state="${id_prefix}-before-state.txt" open_state="${id_prefix}-open-state.txt"
+        local dismissed_state="${id_prefix}-dismissed-state.txt"
+        local expected="${id_prefix}-expected.txt" clipboard="${id_prefix}-clipboard.txt"
+        local proof="${id_prefix}-proof.txt"
+        local trigger_ready=true typed_ready=false clipboard_ready=false entry_ready=false
+        local baseline_count open_count dismissed_count active_dialog_window
+        printf '%s' "$marker" > "$output/$expected"
+
+        focus_app
+        click_pointer 1 "$editor_x" "$editor_y"
+        baseline_count="$(window_count)"
+        capture "$before"
+        capture_window_state "$before_state"
+        if ! send_editor_key "$key"; then
+            trigger_ready=false
+        fi
+        capture "$open"
+        capture_window_state "$open_state"
+        active_dialog_window="$(xdotool getactivewindow 2>/dev/null || true)"
+        open_count="$(window_count)"
+
+        if send_active_text "$marker"; then
+            typed_ready=true
+        fi
+        capture "$typed"
+        send_active_key ctrl+a || true
+        send_active_key ctrl+c || true
+        if read_clipboard_bounded "$clipboard" "$output/${id_prefix}-clipboard-error.txt"; then
+            clipboard_ready=true
+        fi
+
+        if [[ "$route_label" == "Find" ]]; then
+            send_active_key Return || true
+        else
+            send_active_key shift+Tab || true
+            send_active_text "${marker}-find" || true
+            send_active_key Return || true
+        fi
+        capture "$entered"
+        if screen_changed "$output/$typed" "$output/$entered" 40; then
+            entry_ready=true
+        fi
+
+        {
+            printf 'route=%s\n' "$route_label"
+            printf 'shortcut=%s\n' "$key"
+            printf 'marker=%s\n' "$marker"
+            printf 'before-screenshot=%s\n' "$before"
+            printf 'open-screenshot=%s\n' "$open"
+            printf 'typed-screenshot=%s\n' "$typed"
+            printf 'entered-screenshot=%s\n' "$entered"
+            printf 'active-dialog-window=%s\n' "$active_dialog_window"
+            printf 'baseline-window-count=%s\n' "$baseline_count"
+            printf 'open-window-count=%s\n' "$open_count"
+            printf 'trigger-ready=%s\n' "$trigger_ready"
+            printf 'typed-ready=%s\n' "$typed_ready"
+            printf 'clipboard-ready=%s\n' "$clipboard_ready"
+            printf 'clipboard-exact='; if $clipboard_ready && cmp -s "$output/$expected" "$output/$clipboard"; then printf 'true\n'; else printf 'false\n'; fi
+            printf 'route-entry-transition=%s\n' "$entry_ready"
+            printf 'separate-window='; if [[ -n "$active_dialog_window" && "$active_dialog_window" != "$window_id" && "$open_count" -gt "$baseline_count" ]]; then printf 'true\n'; else printf 'false\n'; fi
+            printf 'open-screenshot-changed='; if screen_changed "$output/$before" "$output/$open" 200; then printf 'true\n'; else printf 'false\n'; fi
+        } > "$output/$proof"
+        if $trigger_ready && $typed_ready && $clipboard_ready && $entry_ready &&
+           cmp -s "$output/$expected" "$output/$clipboard" &&
+           [[ -n "$active_dialog_window" && "$active_dialog_window" != "$window_id" ]] &&
+           (( open_count > baseline_count )) && screen_changed "$output/$before" "$output/$open" 200; then
+            record "${id_prefix}-open" "passed" "$proof" \
+                "$route_label shortcut opened the real Find & Replace window, typed an exact route marker into its initial field, and produced route-specific Enter evidence."
+        else
+            record "${id_prefix}-open" "failed" "$proof" \
+                "$route_label shortcut did not produce a separately evidenced initial-field route."
+        fi
+
+        send_active_key Escape || true
+        focus_app
+        capture "$dismissed"
+        capture_window_state "$dismissed_state"
+        dismissed_count="$(window_count)"
+        {
+            printf 'before-screenshot=%s\n' "$before"
+            printf 'open-screenshot=%s\n' "$open"
+            printf 'dismissed-screenshot=%s\n' "$dismissed"
+            printf 'before-state=%s\n' "$before_state"
+            printf 'open-state=%s\n' "$open_state"
+            printf 'dismissed-state=%s\n' "$dismissed_state"
+            printf 'baseline-window-count=%s\n' "$baseline_count"
+            printf 'dismissed-window-count=%s\n' "$dismissed_count"
+            printf 'returns-to-owner='; if active_window_is_owner && [[ "$dismissed_count" -eq "$baseline_count" ]]; then printf 'true\n'; else printf 'false\n'; fi
+            printf 'dismissed-returns-to-before='; if screen_matches "$output/$before" "$output/$dismissed" 200; then printf 'true\n'; else printf 'false\n'; fi
+        } >> "$output/$proof"
+        if active_window_is_owner && [[ "$dismissed_count" -eq "$baseline_count" ]] &&
+           screen_matches "$output/$before" "$output/$dismissed" 200; then
+            record "${id_prefix}-dismissal" "passed" "$proof" \
+                "Escape dismissed the $route_label Find & Replace route and restored the original FreeW owner window."
+        else
+            record "${id_prefix}-dismissal" "failed" "$proof" \
+                "Escape did not restore the original FreeW owner window after the $route_label route."
+        fi
+    }
+
+    run_side_pane_toggle_probe() {
+        local id_prefix="$1" key="$2" label="$3"
+        local before="${id_prefix}-before.png" open="${id_prefix}-open.png" dismissed="${id_prefix}-dismissed.png"
+        local before_pane="${id_prefix}-before-pane.png" open_pane="${id_prefix}-open-pane.png" dismissed_pane="${id_prefix}-dismissed-pane.png"
+        local proof="${id_prefix}-proof.txt" before_state="${id_prefix}-before-state.txt" open_state="${id_prefix}-open-state.txt"
+        local dismissed_state="${id_prefix}-dismissed-state.txt" trigger_ready=true open_ready=false dismissed_ready=false
+
+        focus_app
+        click_pointer 1 "$editor_x" "$editor_y"
+        capture "$before"
+        capture_region "$before" "$before_pane" "$pane_geometry"
+        capture_window_state "$before_state"
+        if ! send_editor_key "$key"; then
+            trigger_ready=false
+        fi
+        capture "$open"
+        capture_region "$open" "$open_pane" "$pane_geometry"
+        capture_window_state "$open_state"
+        if screen_changed "$output/$before_pane" "$output/$open_pane" 100; then
+            open_ready=true
+        fi
+
+        send_editor_key "$key" || true
+        capture "$dismissed"
+        capture_region "$dismissed" "$dismissed_pane" "$pane_geometry"
+        capture_window_state "$dismissed_state"
+        if screen_matches "$output/$before_pane" "$output/$dismissed_pane" 200; then
+            dismissed_ready=true
+        fi
+        {
+            printf 'label=%s\n' "$label"
+            printf 'shortcut=%s\n' "$key"
+            printf 'pane-geometry=%s\n' "$pane_geometry"
+            printf 'before-pane=%s\n' "$before_pane"
+            printf 'open-pane=%s\n' "$open_pane"
+            printf 'dismissed-pane=%s\n' "$dismissed_pane"
+            printf 'trigger-ready=%s\n' "$trigger_ready"
+            printf 'open-pane-transition=%s\n' "$open_ready"
+            printf 'dismissed-pane-restored=%s\n' "$dismissed_ready"
+            printf 'before-state=%s\n' "$before_state"
+            printf 'open-state=%s\n' "$open_state"
+            printf 'dismissed-state=%s\n' "$dismissed_state"
+        } > "$output/$proof"
+        if $trigger_ready && $open_ready; then
+            record "${id_prefix}-open" "passed" "$proof" \
+                "$label shortcut opened the real right-side pane; the calibrated pane crop changed under physical X11 input."
+        else
+            record "${id_prefix}-open" "failed" "$proof" \
+                "$label shortcut did not produce a gated right-side pane transition."
+        fi
+        if $trigger_ready && $dismissed_ready; then
+            record "${id_prefix}-dismissal" "passed" "$proof" \
+                "A second physical $label shortcut hid the pane and restored the calibrated pre-open crop."
+        else
+            record "${id_prefix}-dismissal" "failed" "$proof" \
+                "A second physical $label shortcut did not restore the calibrated pre-open pane crop."
+        fi
+    }
+
+    pane_width=260
+    [[ "$WIDTH" -lt 900 ]] && pane_width=220
+    pane_top=$((Y + 150))
+    pane_height=$((HEIGHT - 280))
+    [[ "$pane_height" -lt 180 ]] && pane_height=180
+    pane_geometry="${pane_width}x${pane_height}+$((X + WIDTH - pane_width))+${pane_top}"
+
+    run_find_replace_route "editor-find" ctrl+f "FreeW-physical-find-route-r2" Find
+    run_find_replace_route "editor-replace" ctrl+h "FreeW-physical-replace-route-r2" Replace
+    run_side_pane_toggle_probe "editor-reveal-formatting" shift+F1 "Reveal Formatting"
+    run_side_pane_toggle_probe "editor-thesaurus" shift+F7 "Thesaurus"
 
     run_editor_context_probe() {
         local id_prefix="$1" trigger="$2" before="$3" open="$4" dismissed="$5"

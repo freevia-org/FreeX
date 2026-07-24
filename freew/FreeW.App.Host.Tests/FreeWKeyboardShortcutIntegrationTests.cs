@@ -1,4 +1,6 @@
 using System.Windows.Input;
+using System.Windows;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
 
@@ -30,6 +32,24 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
         finally
         {
             window.Close();
+        }
+    }
+
+    [StaFact]
+    public void FindReplaceDialog_reuse_updates_open_mode_for_both_shortcuts()
+    {
+        var dialog = new FindReplaceDialog(null!, new FreeW.App.Host.Editing.DocumentView(), FindReplaceDialogOpenMode.Find);
+        try
+        {
+            dialog.ActivateFor(FindReplaceDialogOpenMode.Replace);
+            dialog.OpenModeForTest.Should().Be(FindReplaceDialogOpenMode.Replace);
+
+            dialog.ActivateFor(FindReplaceDialogOpenMode.Find);
+            dialog.OpenModeForTest.Should().Be(FindReplaceDialogOpenMode.Find);
+        }
+        finally
+        {
+            dialog.Close();
         }
     }
 

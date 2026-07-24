@@ -27,6 +27,16 @@ public sealed class LinuxFamilyInteractionToolTests
         probe.Should().Contain("editor-sentinel-copy");
         probe.Should().Contain("editor-undo-restores-clipboard");
         probe.Should().Contain("editor-redo-restores-clipboard");
+        probe.Should().Contain("editor-cut-undo-restores");
+        probe.Should().Contain("editor-paste-text-only");
+        probe.Should().Contain("editor-find-open");
+        probe.Should().Contain("editor-find-dismissal");
+        probe.Should().Contain("editor-replace-open");
+        probe.Should().Contain("editor-replace-dismissal");
+        probe.Should().Contain("editor-reveal-formatting-open");
+        probe.Should().Contain("editor-reveal-formatting-dismissal");
+        probe.Should().Contain("editor-thesaurus-open");
+        probe.Should().Contain("editor-thesaurus-dismissal");
         probe.Should().Contain("editor-keyboard-context-open");
         probe.Should().Contain("editor-pointer-context-open");
         probe.Should().Contain("slide-pane-new-slide-create");
@@ -94,9 +104,13 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("Length -le 0");
         runner.Should().Contain("exhaustive -ne $false");
         runner.Should().Contain("Run-FreeXLinuxInteractionValidation.ps1");
-        runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 22 } else { 15 }");
+        runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 22 } else { 25 }");
         runner.Should().Contain("slide-pane-delete-undo");
         runner.Should().Contain("editor-keyboard-context-dismissal");
+        runner.Should().Contain("editor-find-open");
+        runner.Should().Contain("editor-replace-open");
+        runner.Should().Contain("editor-reveal-formatting-open");
+        runner.Should().Contain("editor-thesaurus-open");
         runner.Should().Contain("durable failure manifest");
         runner.Should().Contain("probe-runner-failure.txt");
         runner.Should().Contain("screenshots/initial.png");
@@ -123,8 +137,8 @@ public sealed class LinuxFamilyInteractionToolTests
         freePContract.GetProperty("minItems").GetInt32().Should().Be(22);
         freePContract.GetProperty("maxItems").GetInt32().Should().Be(22);
         var freeWContract = root.GetProperty("allOf")[1].GetProperty("then").GetProperty("properties").GetProperty("results");
-        freeWContract.GetProperty("minItems").GetInt32().Should().Be(15);
-        freeWContract.GetProperty("maxItems").GetInt32().Should().Be(15);
+        freeWContract.GetProperty("minItems").GetInt32().Should().Be(25);
+        freeWContract.GetProperty("maxItems").GetInt32().Should().Be(25);
         root.GetProperty("allOf").GetArrayLength().Should().Be(2);
     }
 

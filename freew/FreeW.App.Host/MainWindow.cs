@@ -18,6 +18,7 @@ using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
@@ -315,7 +316,7 @@ public sealed class MainWindow : Window
             onRejectThisChange: RejectSelectedRevision,
             onPreviousChange: () => StepRevision(-1),
             onNextChange: () => StepRevision(+1),
-            onFindReplace: OpenFindReplace,
+            onFindReplace: () => OpenFindReplace(),
             onToggleRuler: ToggleRulers,
             isRulerVisible: () => _rulersVisible,
             onToggleMultiplePages: ToggleMultiplePages,
@@ -624,8 +625,8 @@ public sealed class MainWindow : Window
             case FreeWKeyboardCommand.SaveDocument: _file.Save(); break;
             case FreeWKeyboardCommand.SaveDocumentAs: _file.SaveAs(); break;
             case FreeWKeyboardCommand.PrintDocument: Print(); break;
-            case FreeWKeyboardCommand.Find:
-            case FreeWKeyboardCommand.Replace: OpenFindReplace(); break;
+            case FreeWKeyboardCommand.Find: OpenFindReplace(FindReplaceDialogOpenMode.Find); break;
+            case FreeWKeyboardCommand.Replace: OpenFindReplace(FindReplaceDialogOpenMode.Replace); break;
             case FreeWKeyboardCommand.Cut: ExecuteEditingCommand(ApplicationCommands.Cut); break;
             case FreeWKeyboardCommand.Copy: ExecuteEditingCommand(ApplicationCommands.Copy); break;
             case FreeWKeyboardCommand.Paste: ExecuteEditingCommand(ApplicationCommands.Paste); break;
@@ -3081,12 +3082,16 @@ public sealed class MainWindow : Window
         }
     }
 
-    private void OpenFindReplace()
+    private void OpenFindReplace(FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
     {
         if (_findDialog is null)
         {
-            _findDialog = new FindReplaceDialog(this, _editor);
+            _findDialog = new FindReplaceDialog(this, _editor, openMode);
             _findDialog.Closed += (_, _) => _findDialog = null;
+        }
+        else
+        {
+            _findDialog.ActivateFor(openMode);
         }
         _findDialog.Show();
         _findDialog.Activate();

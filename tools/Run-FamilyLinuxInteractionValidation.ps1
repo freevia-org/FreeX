@@ -132,6 +132,16 @@ function Assert-ManifestContract {
             "editor-sentinel-copy",
             "editor-undo-restores-clipboard",
             "editor-redo-restores-clipboard",
+            "editor-cut-undo-restores",
+            "editor-paste-text-only",
+            "editor-find-open",
+            "editor-find-dismissal",
+            "editor-replace-open",
+            "editor-replace-dismissal",
+            "editor-reveal-formatting-open",
+            "editor-reveal-formatting-dismissal",
+            "editor-thesaurus-open",
+            "editor-thesaurus-dismissal",
             "editor-keyboard-context-open",
             "editor-keyboard-context-dismissal",
             "editor-pointer-context-open",
@@ -160,7 +170,7 @@ function Assert-ManifestContract {
     if ($ids.Count -ne ($ids | Select-Object -Unique).Count) {
         throw "Manifest contains duplicate result IDs."
     }
-    $expectedResultCount = if ($App -eq "FreeP") { 22 } else { 15 }
+    $expectedResultCount = if ($App -eq "FreeP") { 22 } else { 25 }
     if ($results.Count -ne $expectedResultCount) {
         throw "$App family baseline must contain exactly $expectedResultCount result rows."
     }
@@ -302,6 +312,16 @@ try {
                 "editor-sentinel-copy",
                 "editor-undo-restores-clipboard",
                 "editor-redo-restores-clipboard",
+                "editor-cut-undo-restores",
+                "editor-paste-text-only",
+                "editor-find-open",
+                "editor-find-dismissal",
+                "editor-replace-open",
+                "editor-replace-dismissal",
+                "editor-reveal-formatting-open",
+                "editor-reveal-formatting-dismissal",
+                "editor-thesaurus-open",
+                "editor-thesaurus-dismissal",
                 "editor-keyboard-context-open",
                 "editor-keyboard-context-dismissal",
                 "editor-pointer-context-open",

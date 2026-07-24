@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -203,6 +204,27 @@ public sealed class RevealFormattingAndFindReplaceTests
 
         afterOn.Should().BeTrue();
         afterOff.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task FindReplaceDialog_reuse_updates_open_mode_for_both_shortcuts()
+    {
+        FindReplaceDialogOpenMode? afterReplace = null;
+        FindReplaceDialogOpenMode? afterFind = null;
+        var ran = await OnUiThread(() =>
+        {
+            var dialog = new FindReplaceDialog(new DocumentView(), FindReplaceDialogOpenMode.Find);
+            dialog.ActivateFor(FindReplaceDialogOpenMode.Replace);
+            afterReplace = dialog.OpenModeForTest;
+            dialog.ActivateFor(FindReplaceDialogOpenMode.Find);
+            afterFind = dialog.OpenModeForTest;
+        });
+
+        if (!ran)
+            return;
+
+        afterReplace.Should().Be(FindReplaceDialogOpenMode.Replace);
+        afterFind.Should().Be(FindReplaceDialogOpenMode.Find);
     }
 
 }
