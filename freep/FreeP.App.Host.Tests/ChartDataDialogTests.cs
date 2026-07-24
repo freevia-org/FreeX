@@ -185,6 +185,21 @@ public sealed class ChartDataDialogTests : IDisposable
         options.Height.Should().Be(20);
     }
 
+    [StaFact]
+    public void ChartDataTableOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartDataTableOptionsDialog(sess);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.ShowDataTable.Should().BeFalse();
+        options.ShowHorizontalBorder.Should().BeTrue();
+        options.ShowVerticalBorder.Should().BeTrue();
+        options.ShowOutlineBorder.Should().BeTrue();
+        options.ShowLegendKeys.Should().BeFalse();
+    }
+
     [Fact]
     public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {
@@ -238,6 +253,17 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().Contain("_planner.BuildCommitPlan()");
         source.Should().Contain("_editor.ApplyChartLayoutOptions");
         source.Should().NotContain("new SetChartLayoutOptionsCommand");
+    }
+
+    [Fact]
+    public void ChartDataTableOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDataTableOptionsDialog.cs");
+
+        source.Should().Contain("ChartDataTableOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChartDataTableOptions");
+        source.Should().NotContain("new SetChartDataTableOptionsCommand");
     }
 
     [Fact]

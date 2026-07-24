@@ -940,6 +940,49 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartDataTableOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.DataTable = new ChartDataTableSettings
+        {
+            ShowHorizontalBorder = true,
+            ShowVerticalBorder = false,
+            ShowOutlineBorder = true,
+            ShowLegendKeys = false,
+        };
+
+        bus.Execute(new SetChartDataTableOptionsCommand(
+            0,
+            id,
+            new ChartDataTableOptions(true, false, true, false, true)));
+
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.ShowHorizontalBorder.Should().BeFalse();
+        chart.DataTable.ShowVerticalBorder.Should().BeTrue();
+        chart.DataTable.ShowOutlineBorder.Should().BeFalse();
+        chart.DataTable.ShowLegendKeys.Should().BeTrue();
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var reloaded = PptxPackageReader.Read(stream);
+        var roundTripped = reloaded.Slides[0].Shapes[0].Chart!.DataTable;
+        roundTripped.Should().NotBeNull();
+        roundTripped!.ShowHorizontalBorder.Should().BeFalse();
+        roundTripped.ShowVerticalBorder.Should().BeTrue();
+        roundTripped.ShowOutlineBorder.Should().BeFalse();
+        roundTripped.ShowLegendKeys.Should().BeTrue();
+
+        bus.Undo();
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.ShowHorizontalBorder.Should().BeTrue();
+        chart.DataTable.ShowVerticalBorder.Should().BeFalse();
+        chart.DataTable.ShowOutlineBorder.Should().BeTrue();
+        chart.DataTable.ShowLegendKeys.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetChartAxisOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();

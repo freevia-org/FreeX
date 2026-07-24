@@ -284,6 +284,31 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ChartDataTableOptionsPlanner_UsesWorkingCopyAndBuildsOptions()
+    {
+        var chart = MakeChart();
+        chart.DataTable = new ChartDataTableSettings
+        {
+            ShowHorizontalBorder = true,
+            ShowVerticalBorder = false,
+            ShowOutlineBorder = true,
+            ShowLegendKeys = false,
+        };
+
+        var planner = ChartDataTableOptionsPlanner.FromChart(chart);
+        planner.SetShowDataTable(false);
+        planner.SetShowHorizontalBorder(false);
+        planner.SetShowVerticalBorder(true);
+        planner.SetShowOutlineBorder(false);
+        planner.SetShowLegendKeys(true);
+
+        planner.BuildCommitPlan().Should().Be(new ChartDataTableOptions(false, false, true, false, true));
+        chart.DataTable.Should().NotBeNull("the planner edits a working copy");
+        ChartDataTableOptionsPlanner.BuildSurfacePlan().CommandId
+            .Should().Be(ChartDataTableOptionsPlanner.CommandId);
+    }
+
+    [Fact]
     public void ChartAxisOptionsPlanner_UsesWorkingCopyAndBuildsScaleOptions()
     {
         var chart = MakeChart();
