@@ -18,6 +18,11 @@ namespace FreeW.Core.IO;
 /// </summary>
 public static class DocxReader
 {
+    private sealed class DuplicateDrawingIdentityMarker
+    {
+        public static readonly DuplicateDrawingIdentityMarker Instance = new();
+    }
+
     public static TextDocument Read(string path)
     {
         using var stream = File.OpenRead(path);
@@ -41,6 +46,8 @@ public static class DocxReader
         var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
         var altChunkRelationships = ReadAltChunkRelationships(archive);
         var (numbering, startOverrides) = ReadNumbering(archive, document);
+
+        MarkDuplicateDrawingIdentities(documentXml.Root);
 
         var body = documentXml.Root?.Element(W + "body");
         if (body is not null)
@@ -90,6 +97,22 @@ public static class DocxReader
         ReadPreservedParts(archive, document);
 
         return document;
+    }
+
+    private static void MarkDuplicateDrawingIdentities(XElement? root)
+    {
+        if (root is null)
+            return;
+
+        var claimedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var docPr in root.Descendants(Wp + "docPr"))
+        {
+            var id = docPr.Attribute("id")?.Value;
+            if (string.IsNullOrWhiteSpace(id) || claimedIds.Add(id))
+                continue;
+
+            docPr.Parent?.AddAnnotation(DuplicateDrawingIdentityMarker.Instance);
+        }
     }
 
     /// <summary>
@@ -2887,6 +2910,19 @@ public static class DocxReader
         if (smartArt is not null)
         {
             var smartArtRun = new Run(string.Empty) { SmartArt = smartArt, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            if (smartArt.IsWordSuppressedByDuplicateDrawingId
+                && preservedDrawingTarget is not null
+                && CapturePartLocalSmartArtDrawing(r, archive, preservedDrawingTarget, imageRelationships, documentRelationships: true) is { } preservedSmartArtDrawing)
+            {
+                // The model keeps the source inline extent for pagination, while the preserved payload owns
+                // serialization. Word keeps this malformed duplicate-id drawing in the package but suppresses
+                // its visual surface.
+                smartArtRun.PreservedDrawing = preservedSmartArtDrawing;
+            }
+            else
+            {
+                smartArt.IsWordSuppressedByDuplicateDrawingId = false;
+            }
             ApplyRevision(smartArtRun);
             paragraph.Runs.Add(smartArtRun);
             return;
@@ -4387,7 +4423,8 @@ public static class DocxReader
         XElement run,
         ZipArchive archive,
         TextDocument document,
-        IReadOnlyDictionary<string, string> partRelationshipTargets)
+        IReadOnlyDictionary<string, string> partRelationshipTargets,
+        bool documentRelationships = false)
     {
         var drawing = run.Element(W + "drawing");
         var relIds = drawing?.Descendants(Dgm + "relIds").FirstOrDefault();
@@ -4398,16 +4435,42 @@ public static class DocxReader
         var contentTypeDefaults = ReadContentTypeDefaults(archive);
         var references = new List<PreservedDrawingReference>();
 
+        string? RelationshipTypeFor(string partName)
+        {
+            if (!contentTypeOverrides.TryGetValue(partName, out var contentType))
+            {
+                var extension = partName.Contains('.') ? partName[(partName.LastIndexOf('.') + 1)..] : string.Empty;
+                contentTypeDefaults.TryGetValue(extension, out contentType);
+            }
+
+            return contentType switch
+            {
+                DiagramDataContentType => DiagramDataRelType,
+                DiagramLayoutContentType => DiagramLayoutRelType,
+                DiagramStyleContentType => DiagramStyleRelType,
+                DiagramColorsContentType => DiagramColorsRelType,
+                DiagramDrawingContentType => DiagramDrawingRelType,
+                _ => null
+            };
+        }
+
         void CaptureLocalRelationship(string relationshipId)
         {
             if (!partRelationshipTargets.TryGetValue(relationshipId, out var localPartPath))
                 return;
             var partName = "/" + localPartPath.TrimStart('/');
-            if (!CapturePreservedPart(archive, document, partName, contentTypeOverrides, contentTypeDefaults, relationshipType: null))
+            var relationshipType = RelationshipTypeFor(partName);
+            if (!CapturePreservedPart(
+                    archive,
+                    document,
+                    partName,
+                    contentTypeOverrides,
+                    contentTypeDefaults,
+                    relationshipType: documentRelationships ? relationshipType : null))
                 return;
             CaptureReferencedParts(archive, document, partName, contentTypeOverrides, contentTypeDefaults);
             if (!references.Any(reference => reference.OriginalRelId == relationshipId))
-                references.Add(new PreservedDrawingReference(relationshipId, partName));
+                references.Add(new PreservedDrawingReference(relationshipId, partName, relationshipType));
         }
 
         var dataRelationshipId = relIds.Attribute(R + "dm")?.Value;
@@ -4713,6 +4776,7 @@ public static class DocxReader
         var container = inline ?? anchor;
         if (container is null)
             return null;
+        var isWordSuppressedByDuplicateDrawingId = container.Annotation<DuplicateDrawingIdentityMarker>() is not null;
 
         var relIds = container.Descendants(Dgm + "relIds").FirstOrDefault();
         var dataRelId = relIds?.Attribute(R + "dm")?.Value;
@@ -4773,7 +4837,11 @@ public static class DocxReader
                 topLevel.Add(nodeById[id]);
 
         var kind = ReadSmartArtKind(relIds, relationships, archive);
-        var smartArt = new SmartArt { Kind = kind };
+        var smartArt = new SmartArt
+        {
+            Kind = kind,
+            IsWordSuppressedByDuplicateDrawingId = isWordSuppressedByDuplicateDrawingId
+        };
         ReadSmartArtGalleryIds(relIds, relationships, archive, smartArt);
         // Word's flat List/Process galleries may use a presentation scaffold that represents the visual
         // flow as a parent chain. The authored model remains a flat node list, so recover that shape here;

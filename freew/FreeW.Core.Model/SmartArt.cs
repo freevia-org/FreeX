@@ -116,6 +116,14 @@ public sealed class SmartArt
     /// </summary>
     public string? StyleId { get; set; }
 
+    /// <summary>
+    /// True only for an imported diagram whose <c>wp:docPr/@id</c> duplicates an earlier drawing identity.
+    /// Word suppresses that drawing's visible surface while retaining its inline extent and package payload.
+    /// FreeW keeps the extent for pagination and preserves the original drawing on save instead of rendering
+    /// a diagram Word does not show.
+    /// </summary>
+    public bool IsWordSuppressedByDuplicateDrawingId { get; set; }
+
     public SmartArt() { }
 
     /// <summary>

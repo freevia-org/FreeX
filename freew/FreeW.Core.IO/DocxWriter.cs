@@ -473,7 +473,7 @@ public static class DocxWriter
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
             {
-                if (run.SmartArt is { } smartArt)
+                if (run.PreservedDrawing is null && run.SmartArt is { } smartArt)
                     Add(smartArt);
                 if (run.DrawingGroup is { } group)
                     foreach (var groupedSmartArt in EnumerateDrawingGroupChildren(group).OfType<SmartArt>())
@@ -1331,7 +1331,7 @@ public static class DocxWriter
                     chartsByRun[run] = charts[nextChart++];
                 if (run.EmbeddedObject is not null)
                     embeddedByRun[run] = embeddedObjects[nextEmbedded++];
-                if (run.SmartArt is not null)
+                if (run.PreservedDrawing is null && run.SmartArt is not null)
                     smartArtsByRun[run] = smartArts[nextSmartArt++];
                 if (run.DrawingGroup is { } group)
                     foreach (var child in EnumerateDrawingGroupChildren(group))
@@ -4589,9 +4589,9 @@ public static class DocxWriter
 
     /// <summary>
     /// Re-emits a verbatim-preserved inline drawing (an unmodelled chart/chartex <c>w:drawing</c> captured on
-    /// read): the stored XML is reparsed and each reference's relationship id (the original <c>r:id</c>/
-    /// <c>r:embed</c> the drawing used) is re-pointed at the document relationship the writer freshly assigned to
-    /// the preserved chart part (<paramref name="preservedDrawingRelIds"/>: preserved part name →
+    /// read): the stored XML is reparsed and each Office relationship attribute that used the source id
+    /// (for example <c>r:id</c>, <c>r:embed</c>, or SmartArt's <c>r:dm</c>/<c>r:lo</c>) is re-pointed at
+    /// the document relationship the writer freshly assigned to the preserved part (<paramref name="preservedDrawingRelIds"/>: preserved part name →
     /// <c>rIdPreserved{N}</c>). The chart part's own satellites (media, colours, styles) keep their original
     /// part-local rels — those parts are preserved byte-for-byte — so only the document→chart hop is rewritten.
     /// </summary>
@@ -4607,12 +4607,9 @@ public static class DocxWriter
                 || !preservedDrawingRelIds.TryGetValue(reference.PreservedPartName, out var newRelId))
                 continue;
             foreach (var element in drawing.DescendantsAndSelf())
-            {
-                if (element.Attribute(R + "id")?.Value == reference.OriginalRelId)
-                    element.SetAttributeValue(R + "id", newRelId);
-                if (element.Attribute(R + "embed")?.Value == reference.OriginalRelId)
-                    element.SetAttributeValue(R + "embed", newRelId);
-            }
+                foreach (var attribute in element.Attributes().Where(attribute =>
+                             attribute.Name.Namespace == R && attribute.Value == reference.OriginalRelId))
+                    attribute.Value = newRelId;
         }
 
         return drawing;

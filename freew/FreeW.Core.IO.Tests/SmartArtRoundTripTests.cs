@@ -44,6 +44,36 @@ public class SmartArtRoundTripTests
         return stream.ToArray();
     }
 
+    private static byte[] WithDuplicateSmartArtDrawingIdentity(byte[] sourceBytes)
+    {
+        using var sourceStream = new MemoryStream(sourceBytes);
+        using var source = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+        var documentXml = EntryXml(sourceBytes, "word/document.xml");
+        var drawingIds = documentXml.Descendants(Wp + "docPr").ToList();
+        drawingIds.Should().HaveCount(2);
+        drawingIds[1].SetAttributeValue("id", drawingIds[0].Attribute("id")!.Value);
+
+        using var output = new MemoryStream();
+        using (var destination = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                var target = destination.CreateEntry(entry.FullName, CompressionLevel.Optimal);
+                using var targetStream = target.Open();
+                if (entry.FullName == "word/document.xml")
+                {
+                    documentXml.Save(targetStream);
+                    continue;
+                }
+
+                using var sourceEntryStream = entry.Open();
+                sourceEntryStream.CopyTo(targetStream);
+            }
+        }
+
+        return output.ToArray();
+    }
+
     private static XDocument EntryXml(byte[] docx, string entryPath)
     {
         using var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read);
@@ -251,6 +281,43 @@ public class SmartArtRoundTripTests
 
         drawingIds.Should().Equal("1", "2");
         drawingIds.Should().OnlyHaveUniqueItems("Word ignores drawings that reuse a document wp:docPr identity");
+    }
+
+    [Fact]
+    public void DuplicateSmartArtDocPrIdentity_PreservesPayloadAndInlineExtentWithoutRenderingTheDiagram()
+    {
+        var document = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(Chart.Create(ChartKind.Column, ["Q1"], [1.0])));
+        paragraph.Runs.Add(Run.FromSmartArt(SmartArt.Create(SmartArtKind.List, ["Plan", "Build"])));
+        document.Blocks.Add(paragraph);
+        var source = WithDuplicateSmartArtDrawingIdentity(WriteBytes(document));
+
+        var read = DocxReader.Read(new MemoryStream(source));
+        var runs = read.Paragraphs.Single().Runs;
+        var suppressedRun = runs.Single(run => run.SmartArt is not null);
+        suppressedRun.SmartArt!.IsWordSuppressedByDuplicateDrawingId.Should().BeTrue();
+        suppressedRun.SmartArt.WidthPt.Should().BeGreaterThan(0);
+        suppressedRun.SmartArt.HeightPt.Should().BeGreaterThan(0);
+        suppressedRun.PreservedDrawing.Should().NotBeNull();
+
+        var rewritten = WriteBytes(read);
+        var rewrittenDocument = EntryXml(rewritten, "word/document.xml");
+        rewrittenDocument.Descendants(Wp + "docPr").Select(docPr => docPr.Attribute("id")!.Value)
+            .Should().Equal("1", "1");
+        EntryXml(rewritten, "word/diagrams/data1.xml").ToString(SaveOptions.DisableFormatting)
+            .Should().Be(EntryXml(source, "word/diagrams/data1.xml").ToString(SaveOptions.DisableFormatting));
+        using (var rewrittenZip = new ZipArchive(new MemoryStream(rewritten), ZipArchiveMode.Read))
+        {
+            rewrittenZip.Entries.Where(entry => entry.FullName.StartsWith("word/diagrams/data", StringComparison.Ordinal))
+                .Select(entry => entry.FullName)
+                .Should().Equal("word/diagrams/data1.xml");
+        }
+
+        var secondRead = DocxReader.Read(new MemoryStream(rewritten));
+        var secondSuppressedRun = secondRead.Paragraphs.Single().Runs.Single(run => run.SmartArt is not null);
+        secondSuppressedRun.SmartArt!.IsWordSuppressedByDuplicateDrawingId.Should().BeTrue();
+        secondSuppressedRun.PreservedDrawing.Should().NotBeNull();
     }
 
     [Fact]
