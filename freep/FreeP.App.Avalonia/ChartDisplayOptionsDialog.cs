@@ -16,6 +16,12 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly TextBox _titleBox;
     private readonly ComboBox _legendCombo;
     private readonly CheckBox _valueLabelsCheck;
+    private readonly CheckBox _percentLabelsCheck;
+    private readonly CheckBox _categoryLabelsCheck;
+    private readonly CheckBox _seriesLabelsCheck;
+    private readonly CheckBox _legendKeysCheck;
+    private readonly TextBox _numberFormatBox;
+    private readonly TextBox _separatorBox;
     private readonly ComboBox _labelPositionCombo;
     private readonly CheckBox _categoryGridlinesCheck;
     private readonly CheckBox _valueGridlinesCheck;
@@ -48,6 +54,28 @@ internal sealed class ChartDisplayOptionsDialog : Window
             Content = surface.ValueLabelsLabel,
             IsChecked = _planner.ShowValueLabels,
         };
+        _percentLabelsCheck = new CheckBox
+        {
+            Content = surface.PercentLabelsLabel,
+            IsChecked = _planner.ShowPercentLabels,
+        };
+        _categoryLabelsCheck = new CheckBox
+        {
+            Content = surface.CategoryLabelsLabel,
+            IsChecked = _planner.ShowCategoryLabels,
+        };
+        _seriesLabelsCheck = new CheckBox
+        {
+            Content = surface.SeriesLabelsLabel,
+            IsChecked = _planner.ShowSeriesLabels,
+        };
+        _legendKeysCheck = new CheckBox
+        {
+            Content = surface.LegendKeysLabel,
+            IsChecked = _planner.ShowLegendKeys,
+        };
+        _numberFormatBox = new TextBox { Text = _planner.LabelNumberFormat, MinWidth = 150 };
+        _separatorBox = new TextBox { Text = _planner.LabelSeparator, MinWidth = 150 };
         _labelPositionCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions.Select(option => option.Label).ToArray(),
@@ -88,6 +116,12 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 MakeRow(surface.LegendLabel, _legendCombo),
                 MakeRow(surface.LabelPositionLabel, _labelPositionCombo),
                 _valueLabelsCheck,
+                _percentLabelsCheck,
+                _categoryLabelsCheck,
+                _seriesLabelsCheck,
+                _legendKeysCheck,
+                MakeRow(surface.NumberFormatLabel, _numberFormatBox),
+                MakeRow(surface.SeparatorLabel, _separatorBox),
                 _categoryGridlinesCheck,
                 _valueGridlinesCheck,
                 buttons,
@@ -107,11 +141,23 @@ internal sealed class ChartDisplayOptionsDialog : Window
         bool showValueLabels,
         DataLabelPosition labelPosition,
         bool categoryGridlines,
-        bool valueGridlines)
+        bool valueGridlines,
+        bool showPercentLabels = false,
+        bool showCategoryLabels = false,
+        bool showSeriesLabels = false,
+        bool showLegendKeys = false,
+        string? numberFormat = null,
+        string? separator = null)
     {
         _titleBox.Text = title;
         _legendCombo.SelectedIndex = FindLegendIndex(legend);
         _valueLabelsCheck.IsChecked = showValueLabels;
+        _percentLabelsCheck.IsChecked = showPercentLabels;
+        _categoryLabelsCheck.IsChecked = showCategoryLabels;
+        _seriesLabelsCheck.IsChecked = showSeriesLabels;
+        _legendKeysCheck.IsChecked = showLegendKeys;
+        _numberFormatBox.Text = numberFormat ?? string.Empty;
+        _separatorBox.Text = separator ?? string.Empty;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
         _categoryGridlinesCheck.IsChecked = categoryGridlines;
         _valueGridlinesCheck.IsChecked = valueGridlines;
@@ -131,9 +177,15 @@ internal sealed class ChartDisplayOptionsDialog : Window
             ? ChartDisplayOptionsPlanner.LegendOptions[legendIndex].Value
             : null);
         _planner.SetShowValueLabels(_valueLabelsCheck.IsChecked == true);
+        _planner.SetShowPercentLabels(_percentLabelsCheck.IsChecked == true);
+        _planner.SetShowCategoryLabels(_categoryLabelsCheck.IsChecked == true);
+        _planner.SetShowSeriesLabels(_seriesLabelsCheck.IsChecked == true);
+        _planner.SetShowLegendKeys(_legendKeysCheck.IsChecked == true);
         var labelIndex = _labelPositionCombo.SelectedIndex;
         if (labelIndex >= 0 && labelIndex < ChartDisplayOptionsPlanner.LabelPositionOptions.Count)
             _planner.SetLabelPosition(ChartDisplayOptionsPlanner.LabelPositionOptions[labelIndex].Value);
+        _planner.SetLabelNumberFormat(_numberFormatBox.Text);
+        _planner.SetLabelSeparator(_separatorBox.Text);
         _planner.SetCategoryGridlines(_categoryGridlinesCheck.IsChecked == true);
         _planner.SetValueGridlines(_valueGridlinesCheck.IsChecked == true);
     }

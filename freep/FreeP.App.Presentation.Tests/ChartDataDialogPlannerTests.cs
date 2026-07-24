@@ -264,13 +264,20 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetTitle("Revenue");
         planner.SetLegend(LegendPosition.Bottom);
         planner.SetShowValueLabels(false);
+        planner.SetShowPercentLabels(true);
+        planner.SetShowCategoryLabels(true);
+        planner.SetShowSeriesLabels(true);
+        planner.SetShowLegendKeys(true);
         planner.SetLabelPosition(DataLabelPosition.OutsideEnd);
+        planner.SetLabelNumberFormat("0.0%");
+        planner.SetLabelSeparator(" | ");
         planner.SetCategoryGridlines(false);
         planner.SetValueGridlines(true);
 
         var commit = planner.BuildCommitPlan();
         commit.Should().Be(new ChartDisplayOptions(
-            "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true));
+            "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
+            true, true, true, true, "0.0%", " | "));
         chart.Title.Should().Be("Existing", "the dialog planner is a working copy");
         ChartDisplayOptionsPlanner.BuildSurfacePlan().CommandId
             .Should().Be(ChartDisplayOptionsPlanner.CommandId);

@@ -5833,14 +5833,21 @@ public sealed class MainWindowHeadlessTests
                 true,
                 DataLabelPosition.OutsideEnd,
                 false,
-                true);
+                true,
+                true,
+                true,
+                true,
+                true,
+                "0.0%",
+                " | ");
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
 
         if (!ran) return;
         options.Should().Be(new ChartDisplayOptions(
-            "Revenue", LegendPosition.Bottom, true, DataLabelPosition.OutsideEnd, false, true));
+            "Revenue", LegendPosition.Bottom, true, DataLabelPosition.OutsideEnd, false, true,
+            true, true, true, true, "0.0%", " | "));
     }
 
     [Fact]

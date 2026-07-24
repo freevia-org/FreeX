@@ -855,13 +855,24 @@ public sealed class ChartDataCommandTests
                 true,
                 DataLabelPosition.OutsideEnd,
                 false,
-                true)));
+                true,
+                true,
+                true,
+                false,
+                true,
+                "0.0%",
+                " | ")));
 
         chart.Title.Should().Be("Revenue");
         chart.HasAutomaticTitle.Should().BeFalse();
         chart.Legend.Should().Be(LegendPosition.Bottom);
         chart.DataLabels!.ShowCategoryName.Should().BeTrue("existing label components are preserved");
         chart.DataLabels.ShowValue.Should().BeTrue();
+        chart.DataLabels.ShowPercent.Should().BeTrue();
+        chart.DataLabels.ShowSeriesName.Should().BeFalse();
+        chart.DataLabels.ShowLegendKey.Should().BeTrue();
+        chart.DataLabels.NumberFormat.Should().Be("0.0%");
+        chart.DataLabels.Separator.Should().Be(" | ");
         chart.DataLabels.Position.Should().Be(DataLabelPosition.OutsideEnd);
         chart.CategoryAxis.HasMajorGridlines.Should().BeFalse();
         chart.ValueAxis.HasMajorGridlines.Should().BeTrue();
@@ -874,6 +885,11 @@ public sealed class ChartDataCommandTests
         roundTripped.Title.Should().Be("Revenue");
         roundTripped.Legend.Should().Be(LegendPosition.Bottom);
         roundTripped.DataLabels!.ShowValue.Should().BeTrue();
+        roundTripped.DataLabels.ShowPercent.Should().BeTrue();
+        roundTripped.DataLabels.ShowCategoryName.Should().BeTrue();
+        roundTripped.DataLabels.ShowLegendKey.Should().BeTrue();
+        roundTripped.DataLabels.NumberFormat.Should().Be("0.0%");
+        roundTripped.DataLabels.Separator.Should().Be(" | ");
         roundTripped.CategoryAxis.HasMajorGridlines.Should().BeFalse();
         roundTripped.ValueAxis.HasMajorGridlines.Should().BeTrue();
 
@@ -883,9 +899,44 @@ public sealed class ChartDataCommandTests
         chart.Legend.Should().Be(LegendPosition.Right);
         chart.DataLabels!.ShowValue.Should().BeFalse();
         chart.DataLabels.ShowCategoryName.Should().BeTrue();
+        chart.DataLabels.ShowPercent.Should().BeFalse();
+        chart.DataLabels.ShowSeriesName.Should().BeFalse();
+        chart.DataLabels.ShowLegendKey.Should().BeFalse();
+        chart.DataLabels.NumberFormat.Should().Be("0.0");
+        chart.DataLabels.Separator.Should().BeNull();
         chart.DataLabels.Position.Should().Be(DataLabelPosition.Center);
         chart.CategoryAxis.HasMajorGridlines.Should().BeTrue();
         chart.ValueAxis.HasMajorGridlines.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetChartDisplayOptions_CreatesDataLabelsForNonValueComponents()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.DataLabels = null;
+
+        bus.Execute(new SetChartDisplayOptionsCommand(
+            0,
+            id,
+            new ChartDisplayOptions(
+                null,
+                null,
+                false,
+                DataLabelPosition.BestFit,
+                false,
+                false,
+                false,
+                true,
+                false,
+                false,
+                null,
+                " / ")));
+
+        chart.DataLabels.Should().NotBeNull();
+        chart.DataLabels!.ShowCategoryName.Should().BeTrue();
+        chart.DataLabels.ShowValue.Should().BeFalse();
+        chart.DataLabels.Separator.Should().Be(" / ");
     }
 
     [Fact]
