@@ -684,7 +684,7 @@ public sealed class MainWindowHeadlessTests
 
         charts.Controls.Select(control => control.CommandId.Value)
             .Last()
-            .Should().Be(ChartDataDialogPlanner.EditDataCommandId);
+            .Should().Be(ChartDataTableOptionsPlanner.CommandId);
         charts.Controls.Count(control =>
             control.CommandId.Value == ChartDataDialogPlanner.EditDataCommandId)
             .Should().Be(1);

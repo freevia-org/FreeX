@@ -131,6 +131,16 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.ThemeAccents)));
         registry.Register(SmartArtAuthoringPlanner.SingleAccentCommandId,
             new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.SingleAccent)));
+        registry.Register(SmartArtAuthoringPlanner.MonochromaticAccent2CommandId,
+            new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.MonochromaticAccent2)));
+        registry.Register(SmartArtAuthoringPlanner.MonochromaticAccent3CommandId,
+            new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.MonochromaticAccent3)));
+        registry.Register(SmartArtAuthoringPlanner.MonochromaticAccent4CommandId,
+            new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.MonochromaticAccent4)));
+        registry.Register(SmartArtAuthoringPlanner.MonochromaticAccent5CommandId,
+            new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.MonochromaticAccent5)));
+        registry.Register(SmartArtAuthoringPlanner.MonochromaticAccent6CommandId,
+            new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.MonochromaticAccent6)));
         registry.Register(SmartArtAuthoringPlanner.GrayscaleCommandId,
             new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.Grayscale)));
         registry.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
