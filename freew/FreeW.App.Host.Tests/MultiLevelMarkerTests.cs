@@ -220,4 +220,40 @@ public sealed class MultiLevelMarkerTests
             .Should().Equal("First", "Second");
         view.Model.Styles["Legal"].PreservedNumbering.Should().Be(new PreservedNumbering(2, 0));
     }
+
+    [StaFact]
+    public void PreservedNumbering_InTableCellAppearsAsViewOnlyMarkerAndContinuesBodySequence()
+    {
+        var document = new TextDocument();
+        document.Blocks.Clear();
+        document.Preserved.OriginalNumbering = XElement.Parse(
+            """
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum w:abstractNumId="10">
+                <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="Section %1."/></w:lvl>
+              </w:abstractNum>
+              <w:num w:numId="2"><w:abstractNumId w:val="10"/></w:num>
+            </w:numbering>
+            """);
+        document.Blocks.Add(new Paragraph("Before") { PreservedNumbering = new PreservedNumbering(2, 0) });
+        var table = new Table();
+        var row = new FreeW.Core.Model.TableRow();
+        var cell = new FreeW.Core.Model.TableCell();
+        cell.Paragraphs.Add(new Paragraph("Inside") { PreservedNumbering = new PreservedNumbering(2, 0) });
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+        document.Blocks.Add(new Paragraph("After") { PreservedNumbering = new PreservedNumbering(2, 0) });
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var rendered = new TextRange(view.Document.ContentStart, view.Document.ContentEnd).Text;
+        rendered.Should().Contain("Section I.");
+        rendered.Should().Contain("Section II.");
+        rendered.Should().Contain("Section III.");
+
+        view.CommitToModel();
+        view.Model.Blocks.OfType<Table>().Single().Rows.Single().Cells.Single().PlainText.Should().Be("Inside");
+    }
 }
