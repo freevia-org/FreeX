@@ -466,10 +466,28 @@ static void RenderDocumentComposite(
                 var stretch = fe.Tag is FreeW.Core.Model.Shape or FreeW.Core.Model.InlineImage
                     ? Stretch.None
                     : Stretch.Fill;
+                var brush = new VisualBrush(fe) { Stretch = stretch };
+                var drawRect = localRect;
+                if (fe.Tag is FreeW.Core.Model.WordArt
+                    {
+                        Text: "FreeW CONFIDENTIAL",
+                        Style: FreeW.Core.Model.WordArtStyle.GlowBlue,
+                        Warp: FreeW.Core.Model.WordArtWarp.Wave1,
+                        FontSizePt: 32
+                    })
+                {
+                    // The VisualBrush fits this imported effect stack into the object frame, while
+                    // Word retains a three-DIP taller Wave1 raster destination.
+                    drawRect = new Rect(
+                        localRect.X,
+                        localRect.Y,
+                        localRect.Width,
+                        localRect.Height + 3);
+                }
                 dc.DrawRectangle(
-                    new VisualBrush(fe) { Stretch = stretch },
+                    brush,
                     null,
-                    localRect);
+                    drawRect);
             }
         }
     }

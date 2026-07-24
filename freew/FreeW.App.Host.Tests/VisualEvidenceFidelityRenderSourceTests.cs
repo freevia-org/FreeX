@@ -14,6 +14,18 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void FidelityRender_CalibratesTheExactImportedGlowBlueWaveRasterFrame()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("Text: \"FreeW CONFIDENTIAL\",");
+        source.Should().Contain("Style: FreeW.Core.Model.WordArtStyle.GlowBlue,");
+        source.Should().Contain("Warp: FreeW.Core.Model.WordArtWarp.Wave1,");
+        source.Should().Contain("FontSizePt: 32");
+        source.Should().Contain("localRect.Height + 3");
+    }
+
+    [Fact]
     public void FidelityRender_EmitsSharedVisualEvidenceManifestAndTrustChecks()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
