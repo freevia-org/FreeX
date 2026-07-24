@@ -169,6 +169,27 @@ public sealed class DrawingObjectVisualPlannerTests
         plan.ZOrderIndex.Should().Be(9);
     }
 
+    [Fact]
+    public void WordArtPlan_AppliesOnlyAuthoredNormalAutoFitFontScale()
+    {
+        var normalAutoFit = new WordArt("Fit", WordArtStyle.GlowBlue, fontSizePt: 30)
+        {
+            TextFitMode = WordArtTextFitMode.NormalAutoFit,
+            NormalAutoFitFontScale = 85000
+        };
+        var noAutoFit = new WordArt("Fit", WordArtStyle.GlowBlue, fontSizePt: 30)
+        {
+            TextFitMode = WordArtTextFitMode.NoAutoFit,
+            NormalAutoFitFontScale = 85000
+        };
+
+        var normalPlan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(normalAutoFit);
+        var noAutoFitPlan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(noAutoFit);
+
+        normalPlan.WordArt.FontSizeDip.Should().BeApproximately(34, 0.01);
+        noAutoFitPlan.WordArt.FontSizeDip.Should().BeApproximately(40, 0.01);
+    }
+
     [Theory]
     [InlineData(WordArtStyle.GradientFill, DrawingObjectFillKind.Gradient, "none", "none")]
     [InlineData(WordArtStyle.Outline, DrawingObjectFillKind.Solid, "#2E2E2E", "none")]

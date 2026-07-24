@@ -461,6 +461,42 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingOverlay_AppliesAuthoredNormalAutoFitFontScale()
+    {
+        var wordArt = new WordArt("Auto fit", WordArtStyle.GlowBlue, 30)
+        {
+            Warp = WordArtWarp.Wave1,
+            TextFitMode = WordArtTextFitMode.NormalAutoFit,
+            NormalAutoFitFontScale = 85000,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 4
+            }
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Canvas>().Single();
+        root.Measure(new Size(180, 64));
+        root.Arrange(new Rect(0, 0, 180, 64));
+        root.UpdateLayout();
+
+        var glyphs = root.Children.OfType<TextBlock>().ToList();
+        glyphs.Should().HaveCount(wordArt.Text.Length);
+        glyphs.Should().OnlyContain(glyph => Math.Abs(glyph.FontSize - 34) < 0.01);
+    }
+
+    [StaFact]
     public void FloatingOverlay_UsesOuterOnlyGlowLayerForImportedWave1Signature()
     {
         var wordArt = new WordArt("FreeW CONFIDENTIAL", WordArtStyle.GlowBlue, 32)

@@ -641,11 +641,15 @@ public static class DrawingObjectVisualPlanner
     private static DrawingObjectWordArtPlan BuildWordArtPlan(WordArt wordArt)
     {
         var (fill, outline, _) = BuildWordArtStylePlan(wordArt.Style);
+        var normalAutoFitScale = wordArt.TextFitMode == WordArtTextFitMode.NormalAutoFit
+            && wordArt.NormalAutoFitFontScale is > 0
+            ? Math.Clamp(wordArt.NormalAutoFitFontScale.Value, 1000, 100000) / 100000d
+            : 1;
         return new DrawingObjectWordArtPlan(
             wordArt.Text,
             wordArt.Style,
             wordArt.Warp,
-            Math.Max(1, wordArt.FontSizePt * DipPerPoint),
+            Math.Max(1, wordArt.FontSizePt * DipPerPoint * normalAutoFitScale),
             fill,
             outline,
             false,

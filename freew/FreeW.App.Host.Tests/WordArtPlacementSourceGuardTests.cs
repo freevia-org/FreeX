@@ -15,7 +15,9 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("BuildWarpedDrawingWordArtVisual(");
         wpf.Should().Contain("if (wordArtPlan.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)");
         wpf.Should().Contain("CreateWordArtGlyphs(");
+        wpf.Should().Contain("Math.Max(8, wordArtPlan.FontSizeDip)");
         avalonia.Should().Contain("BuildFittedWordArtGlyphs(");
+        avalonia.Should().Contain("FontSizePt = plan.WordArt.FontSizeDip / PxPerPoint");
         wpf.Should().Contain("AddWarpedWordArtGlyph(");
         avalonia.Should().Contain("context.DrawText(glyph");
         wpf.Should().Contain("var isImportedGoldArchUp = wordArt is");
