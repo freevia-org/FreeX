@@ -348,6 +348,12 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Picture, FreePRibbonText.PictureCropInsetCommand.KeyTip);
             group.Medium(PictureCropAuthoringPlanner.ResetCommandId, FreePRibbonText.PictureCropResetCommand.Label,
                 RibbonCommandIconKind.Picture, FreePRibbonText.PictureCropResetCommand.KeyTip);
+            group.Medium(PictureColorEffectAuthoringPlanner.GrayscaleCommandId,
+                FreePRibbonText.PictureGrayscaleCommand.Label, RibbonCommandIconKind.Color,
+                FreePRibbonText.PictureGrayscaleCommand.KeyTip);
+            group.Medium(PictureColorEffectAuthoringPlanner.ResetCommandId,
+                FreePRibbonText.PictureEffectsResetCommand.Label, RibbonCommandIconKind.Delete,
+                FreePRibbonText.PictureEffectsResetCommand.KeyTip);
             group.Medium("freep.shape-rectangle", FreePRibbonText.ShapeRectangleLabel, RibbonCommandIconKind.Rectangle, FreePRibbonText.ShapeRectangleKeyTip);
             group.Medium("freep.shape-ellipse", FreePRibbonText.ShapeEllipseLabel, RibbonCommandIconKind.Ellipse, FreePRibbonText.ShapeEllipseKeyTip);
         });

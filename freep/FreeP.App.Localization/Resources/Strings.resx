@@ -523,6 +523,18 @@
   <data name="Ribbon_Command_PictureCropReset_KeyTip" xml:space="preserve">
     <value>CR</value>
   </data>
+  <data name="Ribbon_Command_PictureGrayscale_Label" xml:space="preserve">
+    <value>Grayscale</value>
+  </data>
+  <data name="Ribbon_Command_PictureGrayscale_KeyTip" xml:space="preserve">
+    <value>GS</value>
+  </data>
+  <data name="Ribbon_Command_PictureEffectsReset_Label" xml:space="preserve">
+    <value>Reset Effects</value>
+  </data>
+  <data name="Ribbon_Command_PictureEffectsReset_KeyTip" xml:space="preserve">
+    <value>ER</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>

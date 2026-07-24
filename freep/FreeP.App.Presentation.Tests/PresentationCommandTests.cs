@@ -317,6 +317,56 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SetPictureColorEffectsCommand_ApplyUndoRedo_PreservesCrop()
+    {
+        var (p, bus) = Make();
+        var picture = new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = [1, 2, 3] },
+            PictureFormat = new PictureFormat { CropLeft = 0.15, Brightness = 0.2 }
+        };
+        p.Slides[0].Shapes.Add(picture);
+
+        bus.Execute(new SetPictureColorEffectsCommand(
+            0, 1, new PictureColorEffectValues(true, null, null, null, null)));
+        picture.PictureFormat!.Grayscale.Should().BeTrue();
+        picture.PictureFormat.Brightness.Should().BeNull();
+        picture.PictureFormat.CropLeft.Should().BeApproximately(0.15, 0.0001);
+
+        bus.Undo();
+        picture.PictureFormat!.Grayscale.Should().BeFalse();
+        picture.PictureFormat.Brightness.Should().BeApproximately(0.2, 0.0001);
+        picture.PictureFormat.CropLeft.Should().BeApproximately(0.15, 0.0001);
+
+        bus.Redo();
+        picture.PictureFormat!.Grayscale.Should().BeTrue();
+        picture.PictureFormat.Brightness.Should().BeNull();
+    }
+
+    [Fact]
+    public void SetPictureColorEffectsCommand_Reset_RemovesFormatWhenPictureHasNoCrop()
+    {
+        var (p, bus) = Make();
+        var picture = new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = [1] },
+            PictureFormat = new PictureFormat { Grayscale = true, Contrast = -0.2 }
+        };
+        p.Slides[0].Shapes.Add(picture);
+
+        bus.Execute(new SetPictureColorEffectsCommand(0, 1, PictureColorEffectValues.Reset));
+        picture.PictureFormat.Should().BeNull();
+
+        bus.Undo();
+        picture.PictureFormat!.Grayscale.Should().BeTrue();
+        picture.PictureFormat.Contrast.Should().BeApproximately(-0.2, 0.0001);
+    }
+
+    [Fact]
     public void SetShapeGeometryAdjustmentCommand_SetsAndUndoRestoresMissingValue()
     {
         var (p, bus) = Make();

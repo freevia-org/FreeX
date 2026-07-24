@@ -93,6 +93,8 @@ public class RibbonEditorCompleteness5BTests
             .ToArray();
         Assert.Contains(PictureCropAuthoringPlanner.InsetCommandId, illustrationIds);
         Assert.Contains(PictureCropAuthoringPlanner.ResetCommandId, illustrationIds);
+        Assert.Contains(PictureColorEffectAuthoringPlanner.GrayscaleCommandId, illustrationIds);
+        Assert.Contains(PictureColorEffectAuthoringPlanner.ResetCommandId, illustrationIds);
 
         var (editor, presentation) = MakeSession();
         presentation.Slides[0].Shapes.Clear();
@@ -112,6 +114,12 @@ public class RibbonEditorCompleteness5BTests
         Assert.Equal(0.1, picture.PictureFormat.CropBottom);
 
         Exec(registry, PictureCropAuthoringPlanner.ResetCommandId);
+        Assert.Null(picture.PictureFormat);
+
+        Exec(registry, PictureColorEffectAuthoringPlanner.GrayscaleCommandId);
+        Assert.True(picture.PictureFormat!.Grayscale);
+
+        Exec(registry, PictureColorEffectAuthoringPlanner.ResetCommandId);
         Assert.Null(picture.PictureFormat);
     }
 
