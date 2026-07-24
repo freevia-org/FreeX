@@ -7617,6 +7617,69 @@ public sealed class WorkbookSessionTests
         session.CanUndo.Should().BeFalse();
     }
 
+    /// <summary>
+    /// R85 (view-window independence): zoom is per-window in Excel -- opening a second window on a
+    /// workbook (<see cref="WorkbookSession.CreateSiblingView"/>, e.g. View ▸ New Window) and zooming
+    /// one of them must not change what the other reports, even though both windows share the same
+    /// underlying <see cref="Sheet"/> instance (and therefore <see cref="Sheet.ZoomPercent"/>) for
+    /// save/round-trip purposes. Fails before the R85 fix because <c>WorkbookSession.ZoomPercent</c>
+    /// used to read <c>ActiveSheet.ZoomPercent</c> directly, so both views observed whichever window
+    /// zoomed most recently.
+    /// </summary>
+    [Fact]
+    public void R85_SetZoomPercent_DoesNotLeakAcrossSiblingViews()
+    {
+        var workbook = CreateWorkbook();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        var sibling = session.CreateSiblingView(viewportHeight: 240, viewportWidth: 320);
+        sibling.ZoomPercent.Should().Be(100);
+        session.ZoomPercent.Should().Be(100);
+
+        var result = session.SetZoomPercent(150);
+
+        result.Success.Should().BeTrue();
+        session.ZoomPercent.Should().Be(150);
+        sibling.ZoomPercent.Should().Be(100);
+
+        // And the reverse direction: the sibling zooming independently must not pull the original
+        // view along with it either.
+        var siblingResult = sibling.SetZoomPercent(75);
+
+        siblingResult.Success.Should().BeTrue();
+        sibling.ZoomPercent.Should().Be(75);
+        session.ZoomPercent.Should().Be(150);
+    }
+
+    /// <summary>
+    /// Sibling no-regression companion to <see cref="R85_SetZoomPercent_DoesNotLeakAcrossSiblingViews"/>:
+    /// per-view independence must not come at the cost of the actual workbook data (cell values)
+    /// still being shared across every open view of the same workbook, matching Excel (edits in one
+    /// window immediately appear in every other open window on the same workbook).
+    /// </summary>
+    [Fact]
+    public void R85_CommitCellText_IsSharedAcrossSiblingViews()
+    {
+        var workbook = CreateWorkbook();
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        var sibling = session.CreateSiblingView(viewportHeight: 240, viewportWidth: 320);
+        var a1 = new CellAddress(session.ActiveSheet.Id, 1, 1);
+        session.SelectCell(a1);
+
+        var result = session.CommitCellText("42");
+
+        result.Success.Should().BeTrue();
+        sibling.Workbook.GetSheet(a1.Sheet)!.GetCell(a1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(42);
+    }
+
     [Fact]
     public void FreezePanesAtActiveCell_SetsFrozenRowsAndColumnsClearsSplitRefreshesViewportAndUndo()
     {

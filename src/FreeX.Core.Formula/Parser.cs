@@ -957,6 +957,25 @@ public sealed class Parser
                 var openParen = Advance();
                 using var nesting = EnterNesting(openParen);
                 var expr = ParseExpression();
+
+                // R85-formula-areas-union: Excel's union operator groups multiple reference
+                // "areas" behind an extra set of parens, e.g. AREAS((A1:B2,D5,F1:F10)) = 3. A
+                // comma here means the caller is trying exactly that. FreeX's reference value
+                // model (RangeValue, see FreeX.Core.Model.ScalarValue) represents exactly one
+                // rectangular area tied to a single SheetName/StartRow/StartCol, with no
+                // multi-area variant, and RangeRefNode-shaped fast paths span 15+ files across
+                // the evaluator, FormulaRewriter's row/col-shift logic, and FormulaSerializer's
+                // round-trip -- adding a real multi-area AST node and value kind is a large,
+                // cross-cutting feature deliberately deferred rather than forced into a surgical
+                // fix. Detect the shape explicitly here (rather than falling through to the
+                // generic "expected )" message from Expect below) so the resulting #VALUE! --
+                // raised by FormulaEvaluator.Evaluate's top-level FormulaParseException handler,
+                // exactly like any other unparseable formula -- is a deliberate, documented
+                // decision instead of an accidental byproduct of a generic parse failure.
+                if (Current.Type == TokenType.Comma)
+                    throw new FormulaParseException(
+                        $"Union references ('(A1:B2,D5)' style) are not supported at position {Current.Position}");
+
                 Expect(TokenType.CloseParen);
                 return expr;
             }

@@ -162,6 +162,22 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ChartType_IsWorkingCopyStateAndReturnsInCommitPlan()
+    {
+        var planner = ChartDataDialogPlanner.FromChart(MakeChart());
+
+        planner.SelectedChartType.Should().Be(ChartType.ColumnClustered);
+        planner.SetChartType(ChartType.LineMarkers);
+
+        var commit = planner.BuildCommitPlan();
+
+        commit.ChartType.Should().Be(ChartType.LineMarkers);
+        planner.SetChartType(ChartType.Unknown);
+        planner.SelectedChartType.Should().Be(ChartType.LineMarkers,
+            "Unknown is not an editable chart type");
+    }
+
+    [Fact]
     public void BuildSurfacePlan_ExposesSharedDialogLabelsAndCommandId()
     {
         var plan = ChartDataDialogPlanner.BuildSurfacePlan();
@@ -175,8 +191,11 @@ public sealed class ChartDataDialogPlannerTests
         plan.AddCategoryLabel.Should().Be("+ Category");
         plan.RemoveCategoryLabel.Should().Be("- Category");
         plan.SwitchRowsAndColumnsLabel.Should().Be("Switch Row/Column");
+        plan.ChartTypeLabel.Should().Be("Chart Type");
         plan.OkLabel.Should().Be("OK");
         plan.CancelLabel.Should().Be("Cancel");
+        ChartDataDialogPlanner.ChartTypeOptions.Should().Contain(option =>
+            option.Value == ChartType.LineMarkers && option.Label == "Line with Markers");
     }
 
     [Fact]

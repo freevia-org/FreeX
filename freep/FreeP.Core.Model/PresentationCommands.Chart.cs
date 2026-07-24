@@ -373,13 +373,18 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
     private readonly List<string>      _newCategories;
     private readonly List<string>      _newSeriesNames;
     private readonly List<List<double?>> _newValues;   // [seriesIndex][categoryIndex], nulls = gaps
+    private readonly ChartType?        _newChartType;
 
     // Captured prior state (W6: nullable to preserve gaps; W8: full series list for styling).
     private List<string>        _oldCategories  = new();
     private List<string>        _oldSeriesNames = new();
     private List<List<double?>> _oldValues      = new();
+    private List<List<double?>> _oldXValues     = new();
+    private List<List<double?>> _oldBubbleSizes = new();
     private List<ChartSeries>   _oldSeries      = new();  // W8: snapshot for FillColor / PointColors
     private bool                _oldRegenerateWorkbookOnSave;
+    private ChartType            _oldChartType;
+    private ScatterStyle         _oldScatterStyle;
 
     /// <summary>
     /// Nullable-aware constructor — gaps (null entries) in <paramref name="values"/> are
@@ -390,13 +395,15 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
         uint shapeId,
         IEnumerable<string>             categories,
         IEnumerable<string>             seriesNames,
-        IEnumerable<IEnumerable<double?>> values)
+        IEnumerable<IEnumerable<double?>> values,
+        ChartType?                       chartType = null)
     {
         _slideIndex     = slideIndex;
         _shapeId        = shapeId;
         _newCategories  = categories.ToList();
         _newSeriesNames = seriesNames.ToList();
         _newValues      = values.Select(row => row.ToList()).ToList();
+        _newChartType   = chartType;
     }
 
     /// <summary>
@@ -408,9 +415,10 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
         uint shapeId,
         IEnumerable<string>              categories,
         IEnumerable<string>              seriesNames,
-        IEnumerable<IEnumerable<double>> values)
+        IEnumerable<IEnumerable<double>> values,
+        ChartType?                        chartType = null)
         : this(slideIndex, shapeId, categories, seriesNames,
-               values.Select(row => row.Select(v => (double?)v)))
+               values.Select(row => row.Select(v => (double?)v)), chartType)
     {
     }
 
@@ -429,11 +437,24 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
         _oldValues      = chart.Series
             .Select(s => s.Values.ToList())   // ToList() of List<double?> — nulls preserved
             .ToList();
+        _oldXValues = chart.Series
+            .Select(s => s.XValues.ToList())
+            .ToList();
+        _oldBubbleSizes = chart.Series
+            .Select(s => s.BubbleSizes.ToList())
+            .ToList();
         _oldSeries      = chart.Series.ToList();  // snapshot series references
         _oldRegenerateWorkbookOnSave = chart.RegenerateWorkbookOnSave;
+        _oldChartType = chart.ChartType;
+        _oldScatterStyle = chart.ScatterStyle;
 
         // Apply new state.
         ApplyForward(chart, _newCategories, _newSeriesNames, _newValues);
+        if (_newChartType.HasValue)
+        {
+            ApplyChartTypeTransition(chart, _oldChartType, _newChartType.Value);
+            chart.ChartType = _newChartType.Value;
+        }
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -446,7 +467,10 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
         // W6: Restore values with their original nullable shape (gaps stay null).
         // Also restore original Names — ApplyForward mutates Name in place.
         RestoreOriginal(chart, _oldCategories, _oldSeries, _oldSeriesNames, _oldValues);
+        RestoreSeriesCoordinates(chart, _oldXValues, _oldBubbleSizes);
         chart.RegenerateWorkbookOnSave = _oldRegenerateWorkbookOnSave;
+        chart.ChartType = _oldChartType;
+        chart.ScatterStyle = _oldScatterStyle;
     }
 
     // ── Forward apply: produce the new data, keeping existing series when possible ─
@@ -480,6 +504,65 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
             chart.Series[si].Values.Clear();
             for (int ci = 0; ci < catCount; ci++)
                 chart.Series[si].Values.Add(ci < vs.Count ? vs[ci] : null);
+        }
+    }
+
+    private static void ApplyChartTypeTransition(
+        ChartShape chart,
+        ChartType oldChartType,
+        ChartType newChartType)
+    {
+        bool oldScatterLike = oldChartType is ChartType.Scatter or ChartType.Bubble;
+        bool newScatterLike = newChartType is ChartType.Scatter or ChartType.Bubble;
+
+        if (newScatterLike)
+        {
+            foreach (var series in chart.Series)
+            {
+                int pointCount = Math.Max(series.Values.Count, chart.Categories.Count);
+                if (series.XValues.Count == 0)
+                {
+                    for (var index = 0; index < pointCount; index++)
+                        series.XValues.Add(index + 1.0);
+                }
+
+                if (newChartType == ChartType.Bubble && series.BubbleSizes.Count == 0)
+                {
+                    for (var index = 0; index < pointCount; index++)
+                        series.BubbleSizes.Add(1.0);
+                }
+            }
+
+            if (!oldScatterLike)
+                chart.ScatterStyle = ScatterStyle.LineMarker;
+            return;
+        }
+
+        if (oldScatterLike)
+        {
+            foreach (var series in chart.Series)
+            {
+                series.XValues.Clear();
+                series.BubbleSizes.Clear();
+            }
+        }
+    }
+
+    private static void RestoreSeriesCoordinates(
+        ChartShape chart,
+        List<List<double?>> oldXValues,
+        List<List<double?>> oldBubbleSizes)
+    {
+        for (var seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            var series = chart.Series[seriesIndex];
+            series.XValues.Clear();
+            if (seriesIndex < oldXValues.Count)
+                series.XValues.AddRange(oldXValues[seriesIndex]);
+
+            series.BubbleSizes.Clear();
+            if (seriesIndex < oldBubbleSizes.Count)
+                series.BubbleSizes.AddRange(oldBubbleSizes[seriesIndex]);
         }
     }
 
