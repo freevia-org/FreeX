@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -13,6 +14,7 @@ using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
+using FreeW.Core.IO;
 using FreeW.App.Host;
 using System.Diagnostics;
 using WpfParagraph = System.Windows.Documents.Paragraph;
@@ -1409,6 +1411,8 @@ public sealed class DocumentView : RichTextBox
             _model.Styles.TryAdd(id, style);
 
         var clones = DocumentMerge.CloneBlocks(source);
+        if (clones.Count == 0)
+            return;
 
         // Insert after the block the caret sits in (else at the end), keeping document order.
         var index = CaretBlockIndex() + 1;
@@ -1417,6 +1421,93 @@ public sealed class DocumentView : RichTextBox
 
         foreach (var block in clones)
             _commands.Execute(new InsertBlockCommand(index++, block));
+    }
+
+    /// <summary>
+    /// Replaces an empty editable body paragraph with parsed clipboard RTF, preserving source runs,
+    /// paragraphs, and tables. Rich paste at a partial paragraph or active selection continues through the
+    /// merge-formatting path until the model has a lossless inline-fragment splice operation.
+    /// </summary>
+    public void PasteKeepSourceFormatting()
+    {
+        string? rtf;
+        try
+        {
+            rtf = System.Windows.Clipboard.ContainsData(DataFormats.Rtf)
+                ? System.Windows.Clipboard.GetData(DataFormats.Rtf) as string
+                : null;
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            return;
+        }
+
+        if (TryReadRtfClipboardDocument(rtf, out var source)
+            && source is not null
+            && PasteKeepSourceFormatting(source))
+        {
+            return;
+        }
+
+        PasteFromClipboard();
+    }
+
+    // Test seam for the clipboard payload conversion. RTF clipboard text is ASCII control syntax plus
+    // source-encoded text; Latin-1 preserves each supplied code unit for RtfReader's code-page handling.
+    internal static bool TryReadRtfClipboardDocument(string? rtf, out TextDocument? document)
+    {
+        document = null;
+        if (string.IsNullOrWhiteSpace(rtf))
+            return false;
+
+        try
+        {
+            using var stream = new MemoryStream(Encoding.Latin1.GetBytes(rtf));
+            var parsed = RtfReader.Read(stream);
+            if (parsed.Blocks.Count == 0)
+                return false;
+
+            document = parsed;
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Testable rich-paste model operation. It deliberately accepts only a collapsed caret in an empty body
+    /// paragraph, because source blocks cannot be spliced losslessly into a partial destination paragraph.
+    /// </summary>
+    internal bool PasteKeepSourceFormatting(TextDocument source)
+    {
+        if (source is null
+            || source.Blocks.Count == 0
+            || !Selection.IsEmpty
+            || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+        {
+            return false;
+        }
+
+        CommitToModel();
+        var index = CaretBlockIndex();
+        if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph { PlainText.Length: 0 })
+            return false;
+
+        foreach (var (id, style) in source.Styles)
+            _model.Styles.TryAdd(id, style);
+
+        var clones = DocumentMerge.CloneBlocks(source);
+        if (clones.Count == 0)
+            return false;
+
+        _commands.Execute(new ReplaceBlocksCommand(index, 1, clones));
+        return true;
     }
 
     /// <summary>

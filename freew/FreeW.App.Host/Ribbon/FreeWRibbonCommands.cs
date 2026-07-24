@@ -1541,9 +1541,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.paragraph-dialog", new ParagraphDialogCommand(editor));
         registry.Register("freew.tabs-dialog", new TabsCommand(editor));
 
-        // Home > Clipboard: Paste Special opens a dialog listing the backed paste formats (Keep Source
-        // Formatting, Merge Formatting, Keep Text Only). Formats not feasible to parse (RTF, HTML) are
-        // omitted rather than faked. Wires to real System.Windows.Clipboard format checks.
+        // Home > Clipboard: Paste Special offers source-preserving RTF at an empty paragraph, plus
+        // merge-destination and text-only paths. It uses real System.Windows.Clipboard format checks.
         registry.Register("freew.paste-special", new PasteSpecialCommand(editor));
 
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
@@ -2217,9 +2216,8 @@ internal static class FreeWRibbonCommands
     }
 
     // Home > Clipboard > Paste Special: shows a list of backed paste formats and dispatches to the
-    // matching DocumentView method. "Keep Source Formatting" and "Merge Formatting" both map to
-    // PasteMergeFormatting in the current model (both yield match-destination); "Keep Text Only" maps to
-    // PastePlainText. Formats not feasible to parse (RTF, HTML) are omitted.
+    // matching DocumentView method. Keep Source Formatting imports clipboard RTF at an empty paragraph;
+    // Merge Formatting and Keep Text Only retain their destination/plain-text paths.
     private sealed class PasteSpecialCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -2231,10 +2229,13 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             switch (option.Value)
             {
+                case PasteSpecialOption.KeepSourceFormatting:
+                    editor.PasteKeepSourceFormatting();
+                    break;
                 case PasteSpecialOption.KeepTextOnly:
                     editor.PastePlainText();
                     break;
-                default: // KeepSourceFormatting and MergeFormatting both use merge-destination path
+                default:
                     editor.PasteMergeFormatting();
                     break;
             }

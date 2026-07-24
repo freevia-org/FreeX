@@ -274,6 +274,59 @@ public sealed class HomeDialogDepthTests
         values.Should().Contain(PasteSpecialOption.KeepTextOnly);
     }
 
+    [StaFact]
+    public void PasteKeepSourceFormatting_ParsesRtfRunsAndParagraphs()
+    {
+        const string rtf = @"{\rtf1\ansi\b Bold\b0  plain\par\i Second\i0}";
+
+        DocumentView.TryReadRtfClipboardDocument(rtf, out var source).Should().BeTrue();
+
+        var paragraphs = source!.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].PlainText.Should().Be("Bold plain");
+        paragraphs[0].Runs.Should().Contain(run => run.Text == "Bold" && run.Formatting.Bold);
+        paragraphs[1].PlainText.Should().Be("Second");
+        paragraphs[1].Runs.Should().Contain(run => run.Text == "Second" && run.Formatting.Italic);
+    }
+
+    [StaFact]
+    public void PasteKeepSourceFormatting_InsertsSourceBlocksAsOneUndoableEdit()
+    {
+        var destination = DocOfParagraphs(string.Empty);
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        var formatted = new Paragraph();
+        formatted.Runs.Add(new Run("Bold", new RunFormatting { Bold = true, ColorHex = "#AA0000" }));
+        formatted.Runs.Add(new Run(" normal"));
+        source.Blocks.Add(formatted);
+        source.Blocks.Add(new Paragraph("Second paragraph"));
+
+        var view = ViewWith(destination);
+
+        view.PasteKeepSourceFormatting(source).Should().BeTrue();
+        view.Model.Blocks.Should().HaveCount(2);
+        var inserted = view.Model.Blocks[0].Should().BeOfType<Paragraph>().Which;
+        inserted.Runs.Should().Contain(run => run.Text == "Bold"
+            && run.Formatting.Bold
+            && run.Formatting.ColorHex == "#AA0000");
+        view.Model.Blocks[1].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Second paragraph");
+
+        view.Undo();
+        view.Model.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().BeEmpty();
+    }
+
+    [StaFact]
+    public void PasteKeepSourceFormatting_DoesNotReplaceASelectedPartialParagraph()
+    {
+        var destination = DocOfParagraphs("Destination");
+        var source = DocOfParagraphs("Rich source");
+        var view = ViewWith(destination);
+        SelectAllParagraphs(view);
+
+        view.PasteKeepSourceFormatting(source).Should().BeFalse();
+        view.Model.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Destination");
+    }
+
     // ── 9. Multilevel list presets are defined ────────────────────────────────
 
     [Fact]
