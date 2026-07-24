@@ -38,6 +38,14 @@ public class RibbonEditorCompleteness5BTests
             editor,
             pickPictureBulletPayload: pickPictureBulletPayload);
 
+    private static RibbonCommandRegistry MakeSmartArtRegistry(
+        EditingSession editor,
+        Action<SmartArtLayoutPreset> onSmartArtLayoutPreset)
+        => FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            editor,
+            onSmartArtLayoutPreset: onSmartArtLayoutPreset);
+
     private static void Exec(RibbonCommandRegistry registry, string id,
         RibbonCommandContext? context = null)
     {
@@ -53,6 +61,25 @@ public class RibbonEditorCompleteness5BTests
     {
         var def = FreePRibbon.Build();
         Assert.Contains(def.Tabs, t => t.Id == "design");
+    }
+
+    [Fact]
+    public void SmartArtContinuousBlockProcess_IsDefinedAndRoutedByHost()
+    {
+        var definition = FreePRibbon.Build();
+        var layouts = definition.Tabs
+            .SelectMany(tab => tab.Groups)
+            .Single(group => group.Id == "smartart-layouts");
+        Assert.Contains(layouts.Controls,
+            control => control.CommandId.Value == SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId);
+
+        var (editor, _) = MakeSession();
+        SmartArtLayoutPreset? applied = null;
+        Exec(
+            MakeSmartArtRegistry(editor, preset => applied = preset),
+            SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId);
+
+        Assert.Equal(SmartArtLayoutPreset.ContinuousBlockProcess, applied);
     }
 
     [Fact]

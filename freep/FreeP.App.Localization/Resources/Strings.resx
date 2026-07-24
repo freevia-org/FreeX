@@ -664,6 +664,12 @@
   <data name="Ribbon_Command_SmartArtBasicProcess_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_SmartArtContinuousBlockProcess_Label" xml:space="preserve">
+    <value>Continuous Block Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtContinuousBlockProcess_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
   <data name="Ribbon_Command_SmartArtAlternatingProcess_Label" xml:space="preserve">
     <value>Alternating Process</value>
   </data>

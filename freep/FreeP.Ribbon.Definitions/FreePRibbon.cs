@@ -374,6 +374,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
                 FreePRibbonText.SmartArtBasicProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
                 FreePRibbonText.SmartArtBasicProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
+                FreePRibbonText.SmartArtContinuousBlockProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtContinuousBlockProcessCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
                 FreePRibbonText.SmartArtAlternatingProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
                 FreePRibbonText.SmartArtAlternatingProcessCommand.KeyTip);

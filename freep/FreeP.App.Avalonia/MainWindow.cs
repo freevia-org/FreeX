@@ -2087,6 +2087,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.Grayscale)));
         r.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicProcess)));
+        r.Register(SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousBlockProcess)));
         r.Register(SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AlternatingProcess)));
         r.Register(SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
