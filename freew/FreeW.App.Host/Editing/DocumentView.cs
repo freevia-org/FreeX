@@ -16006,6 +16006,7 @@ public sealed class DocumentView : RichTextBox
                 return;
 
             var countBy = Math.Max(1, page.LineNumberCountBy);
+            var startAt = Math.Max(1, page.LineNumberStartAt);
             var restartEachPage = page.LineNumberMode == LineNumberMode.RestartEachPage;
 
             // Page geometry used to (a) place numbers in the left margin and (b) approximate page resets.
@@ -16045,17 +16046,17 @@ public sealed class DocumentView : RichTextBox
                         var pageIndex = (int)Math.Floor((rect.Top - topY) / contentHeight);
                         var pageTop = topY + pageIndex * contentHeight;
                         var withinPage = (int)Math.Round((rect.Top - pageTop) / Math.Max(1, rect.Height));
-                        lineNumber = withinPage + 1;
+                        lineNumber = startAt + withinPage;
                     }
                     else
                     {
-                        lineNumber = lineIndex + 1;
+                        lineNumber = startAt + lineIndex;
                     }
 
                     // Word suppresses the glyph for marked paragraphs but the lines still increment the
                     // document sequence, so calculate lineNumber before this visibility check.
                     var suppressNumber = line.Paragraph?.Tag is ParagraphTag { SuppressLineNumbers: true };
-                    if (lineNumber % countBy == 0 && !suppressNumber && !rect.IsEmpty
+                    if ((lineNumber - startAt) % countBy == 0 && !suppressNumber && !rect.IsEmpty
                         && rect.Bottom >= bounds.Top && rect.Top <= bounds.Bottom)
                     {
                         DrawNumber(drawingContext, lineNumber, rect, gutterRight, pixelsPerDip);
