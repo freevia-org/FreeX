@@ -135,6 +135,12 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.SegmentedProcess)));
         registry.Register(SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ChevronProcess)));
+        registry.Register(SmartArtAuthoringPlanner.BasicChevronProcessLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicChevronProcess)));
+        registry.Register(SmartArtAuthoringPlanner.ClosedChevronProcessLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ClosedChevronProcess)));
+        registry.Register(SmartArtAuthoringPlanner.BendingProcessLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BendingProcess)));
         registry.Register(SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.AlternatingProcess)));
         registry.Register(SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
@@ -153,6 +159,10 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.GearCycle)));
         registry.Register(SmartArtAuthoringPlanner.TextCycleLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.TextCycle)));
+        registry.Register(SmartArtAuthoringPlanner.BlockCycleLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BlockCycle)));
+        registry.Register(SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.NonDirectionalCycle)));
         registry.Register(SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicBlockList)));
         registry.Register(SmartArtAuthoringPlanner.StackedListLayoutCommandId,

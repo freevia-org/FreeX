@@ -207,6 +207,9 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtContinuousBlockProcessCommand { get; } = new("Ribbon_Command_SmartArtContinuousBlockProcess_Label", "Ribbon_Command_SmartArtContinuousBlockProcess_KeyTip");
     public static RibbonText SmartArtSegmentedProcessCommand { get; } = new("Ribbon_Command_SmartArtSegmentedProcess_Label", "Ribbon_Command_SmartArtSegmentedProcess_KeyTip");
     public static RibbonText SmartArtChevronProcessCommand { get; } = new("Ribbon_Command_SmartArtChevronProcess_Label", "Ribbon_Command_SmartArtChevronProcess_KeyTip");
+    public static RibbonText SmartArtBasicChevronProcessCommand { get; } = new("Ribbon_Command_SmartArtBasicChevronProcess_Label", "Ribbon_Command_SmartArtBasicChevronProcess_KeyTip");
+    public static RibbonText SmartArtClosedChevronProcessCommand { get; } = new("Ribbon_Command_SmartArtClosedChevronProcess_Label", "Ribbon_Command_SmartArtClosedChevronProcess_KeyTip");
+    public static RibbonText SmartArtBendingProcessCommand { get; } = new("Ribbon_Command_SmartArtBendingProcess_Label", "Ribbon_Command_SmartArtBendingProcess_KeyTip");
     public static RibbonText SmartArtAlternatingProcessCommand { get; } = new("Ribbon_Command_SmartArtAlternatingProcess_Label", "Ribbon_Command_SmartArtAlternatingProcess_KeyTip");
     public static RibbonText SmartArtArrowRibbonCommand { get; } = new("Ribbon_Command_SmartArtArrowRibbon_Label", "Ribbon_Command_SmartArtArrowRibbon_KeyTip");
     public static RibbonText SmartArtCircleProcessCommand { get; } = new("Ribbon_Command_SmartArtCircleProcess_Label", "Ribbon_Command_SmartArtCircleProcess_KeyTip");
@@ -216,6 +219,8 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtBasicCycleCommand { get; } = new("Ribbon_Command_SmartArtBasicCycle_Label", "Ribbon_Command_SmartArtBasicCycle_KeyTip");
     public static RibbonText SmartArtGearCycleCommand { get; } = new("Ribbon_Command_SmartArtGearCycle_Label", "Ribbon_Command_SmartArtGearCycle_KeyTip");
     public static RibbonText SmartArtTextCycleCommand { get; } = new("Ribbon_Command_SmartArtTextCycle_Label", "Ribbon_Command_SmartArtTextCycle_KeyTip");
+    public static RibbonText SmartArtBlockCycleCommand { get; } = new("Ribbon_Command_SmartArtBlockCycle_Label", "Ribbon_Command_SmartArtBlockCycle_KeyTip");
+    public static RibbonText SmartArtNonDirectionalCycleCommand { get; } = new("Ribbon_Command_SmartArtNonDirectionalCycle_Label", "Ribbon_Command_SmartArtNonDirectionalCycle_KeyTip");
     public static RibbonText SmartArtBasicBlockListCommand { get; } = new("Ribbon_Command_SmartArtBasicBlockList_Label", "Ribbon_Command_SmartArtBasicBlockList_KeyTip");
     public static RibbonText SmartArtStackedListCommand { get; } = new("Ribbon_Command_SmartArtStackedList_Label", "Ribbon_Command_SmartArtStackedList_KeyTip");
     public static RibbonText SmartArtDescendingBlockListCommand { get; } = new("Ribbon_Command_SmartArtDescendingBlockList_Label", "Ribbon_Command_SmartArtDescendingBlockList_KeyTip");

@@ -2093,6 +2093,12 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.SegmentedProcess)));
         r.Register(SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ChevronProcess)));
+        r.Register(SmartArtAuthoringPlanner.BasicChevronProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicChevronProcess)));
+        r.Register(SmartArtAuthoringPlanner.ClosedChevronProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ClosedChevronProcess)));
+        r.Register(SmartArtAuthoringPlanner.BendingProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BendingProcess)));
         r.Register(SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AlternatingProcess)));
         r.Register(SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
@@ -2111,6 +2117,10 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.GearCycle)));
         r.Register(SmartArtAuthoringPlanner.TextCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TextCycle)));
+        r.Register(SmartArtAuthoringPlanner.BlockCycleLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BlockCycle)));
+        r.Register(SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.NonDirectionalCycle)));
         r.Register(SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicBlockList)));
         r.Register(SmartArtAuthoringPlanner.StackedListLayoutCommandId,

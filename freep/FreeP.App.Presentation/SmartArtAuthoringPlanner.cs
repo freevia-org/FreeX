@@ -21,6 +21,9 @@ public enum SmartArtLayoutPreset
     ContinuousBlockProcess,
     SegmentedProcess,
     ChevronProcess,
+    BasicChevronProcess,
+    ClosedChevronProcess,
+    BendingProcess,
     AlternatingProcess,
     ArrowRibbon,
     CircleProcess,
@@ -30,6 +33,8 @@ public enum SmartArtLayoutPreset
     BasicCycle,
     GearCycle,
     TextCycle,
+    BlockCycle,
+    NonDirectionalCycle,
     BasicBlockList,
     StackedList,
     DescendingBlockList,
@@ -91,6 +96,9 @@ public static class SmartArtAuthoringPlanner
     public const string ContinuousBlockProcessLayoutCommandId = "freep.smartart.layout.continuous-block-process";
     public const string SegmentedProcessLayoutCommandId = "freep.smartart.layout.segmented-process";
     public const string ChevronProcessLayoutCommandId = "freep.smartart.layout.chevron-process";
+    public const string BasicChevronProcessLayoutCommandId = "freep.smartart.layout.basic-chevron-process";
+    public const string ClosedChevronProcessLayoutCommandId = "freep.smartart.layout.closed-chevron-process";
+    public const string BendingProcessLayoutCommandId = "freep.smartart.layout.bending-process";
     public const string AlternatingProcessLayoutCommandId = "freep.smartart.layout.alternating-process";
     public const string ArrowRibbonLayoutCommandId = "freep.smartart.layout.arrow-ribbon";
     public const string CircleProcessLayoutCommandId = "freep.smartart.layout.circle-process";
@@ -100,6 +108,8 @@ public static class SmartArtAuthoringPlanner
     public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
     public const string GearCycleLayoutCommandId = "freep.smartart.layout.gear-cycle";
     public const string TextCycleLayoutCommandId = "freep.smartart.layout.text-cycle";
+    public const string BlockCycleLayoutCommandId = "freep.smartart.layout.block-cycle";
+    public const string NonDirectionalCycleLayoutCommandId = "freep.smartart.layout.non-directional-cycle";
     public const string BasicBlockListLayoutCommandId = "freep.smartart.layout.basic-block-list";
     public const string StackedListLayoutCommandId = "freep.smartart.layout.stacked-list";
     public const string DescendingBlockListLayoutCommandId = "freep.smartart.layout.descending-block-list";
@@ -227,6 +237,12 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.ChevronProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/chevronProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.BasicChevronProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/basicChevronProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.ClosedChevronProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/closedChevronProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.BendingProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.AlternatingProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.ArrowRibbon =>
@@ -245,6 +261,10 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/gearCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.TextCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/textCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.BlockCycle =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/blockCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.NonDirectionalCycle =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicBlockList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.StackedList =>

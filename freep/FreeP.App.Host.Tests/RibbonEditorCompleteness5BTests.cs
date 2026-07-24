@@ -93,8 +93,13 @@ public class RibbonEditorCompleteness5BTests
         {
             [SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId] = SmartArtLayoutPreset.SegmentedProcess,
             [SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId] = SmartArtLayoutPreset.ChevronProcess,
+            [SmartArtAuthoringPlanner.BasicChevronProcessLayoutCommandId] = SmartArtLayoutPreset.BasicChevronProcess,
+            [SmartArtAuthoringPlanner.ClosedChevronProcessLayoutCommandId] = SmartArtLayoutPreset.ClosedChevronProcess,
+            [SmartArtAuthoringPlanner.BendingProcessLayoutCommandId] = SmartArtLayoutPreset.BendingProcess,
             [SmartArtAuthoringPlanner.GearCycleLayoutCommandId] = SmartArtLayoutPreset.GearCycle,
             [SmartArtAuthoringPlanner.TextCycleLayoutCommandId] = SmartArtLayoutPreset.TextCycle,
+            [SmartArtAuthoringPlanner.BlockCycleLayoutCommandId] = SmartArtLayoutPreset.BlockCycle,
+            [SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId] = SmartArtLayoutPreset.NonDirectionalCycle,
         };
 
         foreach (var (commandId, preset) in expected)
