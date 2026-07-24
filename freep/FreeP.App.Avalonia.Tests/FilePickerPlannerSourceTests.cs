@@ -77,7 +77,8 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
         source.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
         source.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(FileText.OpenPickerTitle, plan.FileTypes)");
-        source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(\n                    FileText.SavePickerTitle,\n                    plan,\n                    showOverwritePrompt: true)");
+        source.Should().MatchRegex(
+            @"AvaloniaFilePickerSaveRequest\.FromSavePlan\(\s*FileText\.SavePickerTitle,\s*plan,\s*showOverwritePrompt:\s*true\s*\)");
         source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.PdfExportPickerTitle, plan)");
         source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(PresentationExportPlanner.NotesPagePdfExportPickerTitle, plan)");
         source.Should().Contain("SisterAppFileTextPlanner.Presentation");
