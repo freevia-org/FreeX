@@ -5892,9 +5892,10 @@ public sealed class DocumentView : RichTextBox
             }
             if (materialLayer is not null)
             {
-                materialLayer.Width = canvas.ActualWidth;
-                materialLayer.Height = canvas.ActualHeight + 6;
-                Canvas.SetTop(materialLayer, -5);
+                materialLayer.Width = canvas.ActualWidth + 1;
+                materialLayer.Height = canvas.ActualHeight + 10;
+                Canvas.SetLeft(materialLayer, -1);
+                Canvas.SetTop(materialLayer, -6);
             }
             ArrangeWarpedWordArtGlyphs(canvas, wordArt, foreground, fitTextToBounds);
         };

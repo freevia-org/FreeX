@@ -35,8 +35,10 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("RotationRadians = 0");
         wpf.Should().Contain("var isSecondaryFillGoldStress = wordArt is");
         wpf.Should().Contain("Text: \"Review Copy\",");
-        wpf.Should().Contain("materialLayer.Height = canvas.ActualHeight + 6;");
-        wpf.Should().Contain("Canvas.SetTop(materialLayer, -5);");
+        wpf.Should().Contain("materialLayer.Width = canvas.ActualWidth + 1;");
+        wpf.Should().Contain("materialLayer.Height = canvas.ActualHeight + 10;");
+        wpf.Should().Contain("Canvas.SetLeft(materialLayer, -1);");
+        wpf.Should().Contain("Canvas.SetTop(materialLayer, -6);");
         wpf.Should().Contain("var preserveOpaqueGlowGoldFill = wordArt is");
         wpf.Should().Contain("Text: \"FORMAT\",");
         wpf.Should().Contain("Style: WordArtStyle.GlowGold,");
