@@ -39,6 +39,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     private readonly CheckBox _widowControl;
     private readonly CheckBox _pageBreakBefore;
     private readonly CheckBox _suppressHyphens;
+    private readonly CheckBox _suppressLineNumbers;
     private readonly CheckBox _contextualSpacing;
     private readonly TextBlock _status = PageLayoutDialogChrome.Status();
 
@@ -66,6 +67,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         _widowControl = Check("Widow/orphan control", state.WidowControl);
         _pageBreakBefore = Check("Page break before", state.PageBreakBefore);
         _suppressHyphens = Check("Suppress auto-hyphenation", state.SuppressAutoHyphens);
+        _suppressLineNumbers = Check("Suppress line numbers", state.SuppressLineNumbers);
         _contextualSpacing = Check("Don't add space between paragraphs of the same style", state.ContextualSpacing);
 
         AutomationProperties.SetAutomationId(_left, "paragraph-left-indent");
@@ -129,14 +131,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         panel.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 8) });
         panel.Children.Add(new TextBlock { Text = "Formatting exceptions", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 5) });
         panel.Children.Add(_suppressHyphens);
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Note: 'Suppress line numbers' is not yet modelled.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = Brushes.Gray,
-            FontSize = 10,
-            Margin = new Thickness(0, 8, 0, 0),
-        });
+        panel.Children.Add(_suppressLineNumbers);
         return panel;
     }
 
@@ -155,6 +150,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
             _widowControl.IsChecked == true,
             _pageBreakBefore.IsChecked == true,
             _suppressHyphens.IsChecked == true,
+            _suppressLineNumbers.IsChecked == true,
             _contextualSpacing.IsChecked == true);
         if (!ParagraphBreaksDialogPlanner.TryBuildResult(input, DialogCulture, out var result, out var validation))
         {
@@ -188,6 +184,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
             result.WidowControl,
             result.PageBreakBefore,
             result.SuppressAutoHyphens,
+            result.SuppressLineNumbers,
             result.ContextualSpacing);
 
     public static async Task ShowAndApplyAsync(Window owner, DocumentView editor)
@@ -226,7 +223,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         foreach (var box in new[] { _left, _right, _specialAmount, _before, _after, _lineSpacing })
             AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_special, DialogChromeStyle);
-        foreach (var checkBox in new[] { _keepWithNext, _keepLinesTogether, _widowControl, _pageBreakBefore, _suppressHyphens, _contextualSpacing })
+        foreach (var checkBox in new[] { _keepWithNext, _keepLinesTogether, _widowControl, _pageBreakBefore, _suppressHyphens, _suppressLineNumbers, _contextualSpacing })
             AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);
         foreach (var button in this.GetVisualDescendants().OfType<Button>())
             AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 72, button.IsDefault);

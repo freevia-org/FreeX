@@ -3538,6 +3538,34 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void SuppressLineNumbers_RoundTripsExplicitOnAndOffPerParagraph()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("inherit"));
+        doc.Blocks.Add(new Paragraph("suppress")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                SuppressLineNumbers = true,
+                SuppressLineNumbersIsSet = true
+            }
+        });
+        doc.Blocks.Add(new Paragraph("explicit off")
+        {
+            Formatting = ParagraphFormatting.Default with { SuppressLineNumbersIsSet = true }
+        });
+
+        var result = RoundTrip(doc).Paragraphs.ToList();
+
+        result[0].Formatting.SuppressLineNumbers.Should().BeFalse();
+        result[0].Formatting.SuppressLineNumbersIsSet.Should().BeFalse();
+        result[1].Formatting.SuppressLineNumbers.Should().BeTrue();
+        result[1].Formatting.SuppressLineNumbersIsSet.Should().BeTrue();
+        result[2].Formatting.SuppressLineNumbers.Should().BeFalse();
+        result[2].Formatting.SuppressLineNumbersIsSet.Should().BeTrue();
+    }
+
+    [Fact]
     public void AutoHyphenation_EmitsSettingsPart_WithAutoHyphenationToggle()
     {
         var doc = new TextDocument();

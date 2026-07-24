@@ -89,7 +89,7 @@ public sealed class HomeDialogDepthTests
             leftPt: 18, rightPt: 18, firstLinePt: 12,
             spaceBeforePt: 6, spaceAfterPt: 8, lineSpacing: 1.5,
             keepWithNext: true, keepLinesTogether: true, widowControl: true,
-            pageBreakBefore: false, suppressAutoHyphens: true, contextualSpacing: true);
+            pageBreakBefore: false, suppressAutoHyphens: true, suppressLineNumbers: true, contextualSpacing: true);
 
         var para0 = view.Model.Blocks.OfType<Paragraph>().First();
         para0.Formatting.KeepWithNext.Should().BeTrue();
@@ -97,6 +97,8 @@ public sealed class HomeDialogDepthTests
         para0.Formatting.WidowControl.Should().BeTrue();
         para0.Formatting.PageBreakBefore.Should().BeFalse();
         para0.Formatting.SuppressAutoHyphens.Should().BeTrue();
+        para0.Formatting.SuppressLineNumbers.Should().BeTrue();
+        para0.Formatting.SuppressLineNumbersIsSet.Should().BeTrue();
         para0.Formatting.ContextualSpacing.Should().BeTrue();
         para0.Formatting.IndentLeftPt.Should().BeApproximately(18, 0.01);
         para0.Formatting.LineSpacing.Should().BeApproximately(1.5, 0.01);
@@ -113,7 +115,7 @@ public sealed class HomeDialogDepthTests
             leftPt: 0, rightPt: 0, firstLinePt: 0,
             spaceBeforePt: 0, spaceAfterPt: 8, lineSpacing: 1.15,
             keepWithNext: false, keepLinesTogether: false, widowControl: false,
-            pageBreakBefore: true, suppressAutoHyphens: false, contextualSpacing: false);
+            pageBreakBefore: true, suppressAutoHyphens: false, suppressLineNumbers: false, contextualSpacing: false);
 
         var para = view.Model.Blocks.OfType<Paragraph>().First();
         para.Formatting.PageBreakBefore.Should().BeTrue();
@@ -131,7 +133,7 @@ public sealed class HomeDialogDepthTests
             leftPt: 36, rightPt: 0, firstLinePt: 0,
             spaceBeforePt: 0, spaceAfterPt: 8, lineSpacing: 1.15,
             keepWithNext: true, keepLinesTogether: false, widowControl: false,
-            pageBreakBefore: false, suppressAutoHyphens: false, contextualSpacing: true);
+            pageBreakBefore: false, suppressAutoHyphens: false, suppressLineNumbers: false, contextualSpacing: true);
 
         view.Commands.Undo();
 

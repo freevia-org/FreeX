@@ -11546,6 +11546,7 @@ public sealed class DocumentView : Control
         bool widowControl,
         bool pageBreakBefore,
         bool suppressAutoHyphens,
+        bool suppressLineNumbers,
         bool contextualSpacing)
     {
         FormatSelectedParagraphs(formatting => formatting with
@@ -11565,6 +11566,8 @@ public sealed class DocumentView : Control
             WidowControl = widowControl,
             PageBreakBefore = pageBreakBefore,
             SuppressAutoHyphens = suppressAutoHyphens,
+            SuppressLineNumbers = suppressLineNumbers,
+            SuppressLineNumbersIsSet = true,
             ContextualSpacing = contextualSpacing
         });
     }

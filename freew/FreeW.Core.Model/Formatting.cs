@@ -492,6 +492,20 @@ public sealed record ParagraphFormatting
     public bool SuppressAutoHyphens { get; init; }
 
     /// <summary>
+    /// When true, Word omits line numbers alongside this paragraph
+    /// (<c>pPr/w:suppressLineNumbers</c>) while retaining the paragraph's place in the line-number
+    /// sequence. <see cref="SuppressLineNumbersIsSet"/> preserves an explicit off token so direct
+    /// paragraph formatting can override a style-level suppression.
+    /// </summary>
+    public bool SuppressLineNumbers { get; init; }
+
+    /// <summary>
+    /// True when the source paragraph explicitly carries <c>w:suppressLineNumbers</c>, including an
+    /// explicit off value. This distinguishes inherited/absent formatting from an authored override.
+    /// </summary>
+    public bool SuppressLineNumbersIsSet { get; init; }
+
+    /// <summary>
     /// Paragraph shading (background fill) as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no
     /// shading. Round-trips to docx as paragraph shading (<c>pPr/w:shd w:fill</c>), mirroring run
     /// <see cref="RunFormatting.HighlightColorHex"/>.

@@ -167,6 +167,7 @@ public sealed class ParagraphNoteDialogPlannerTests
             WidowControl = true,
             PageBreakBefore = true,
             SuppressAutoHyphens = true,
+            SuppressLineNumbers = true,
             ContextualSpacing = true
         };
 
@@ -184,6 +185,7 @@ public sealed class ParagraphNoteDialogPlannerTests
         state.WidowControl.Should().BeTrue();
         state.PageBreakBefore.Should().BeTrue();
         state.SuppressAutoHyphens.Should().BeTrue();
+        state.SuppressLineNumbers.Should().BeTrue();
         state.ContextualSpacing.Should().BeTrue();
 
         ParagraphBreaksDialogPlanner.TryBuildResult(
@@ -200,6 +202,7 @@ public sealed class ParagraphNoteDialogPlannerTests
                     WidowControl: true,
                     PageBreakBefore: false,
                     SuppressAutoHyphens: true,
+                    SuppressLineNumbers: true,
                     ContextualSpacing: true),
                 CultureInfo.InvariantCulture,
                 out var result,
@@ -219,6 +222,7 @@ public sealed class ParagraphNoteDialogPlannerTests
             WidowControl: true,
             PageBreakBefore: false,
             SuppressAutoHyphens: true,
+            SuppressLineNumbers: true,
             ContextualSpacing: true));
     }
 
@@ -239,6 +243,7 @@ public sealed class ParagraphNoteDialogPlannerTests
                     WidowControl: false,
                     PageBreakBefore: false,
                     SuppressAutoHyphens: false,
+                    SuppressLineNumbers: false,
                     ContextualSpacing: false),
                 CultureInfo.InvariantCulture,
                 out var result,

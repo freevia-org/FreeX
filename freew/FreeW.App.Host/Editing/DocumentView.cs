@@ -4254,7 +4254,7 @@ public sealed class DocumentView : RichTextBox
         double leftPt, double rightPt, double firstLinePt,
         double spaceBeforePt, double spaceAfterPt, double lineSpacing,
         bool keepWithNext, bool keepLinesTogether, bool widowControl,
-        bool pageBreakBefore, bool suppressAutoHyphens, bool contextualSpacing) =>
+        bool pageBreakBefore, bool suppressAutoHyphens, bool suppressLineNumbers, bool contextualSpacing) =>
         FormatSelectedModelParagraphs(f => f with
         {
             IndentLeftPt       = leftPt,
@@ -4269,6 +4269,8 @@ public sealed class DocumentView : RichTextBox
             WidowControlIsSet  = true,
             PageBreakBefore    = pageBreakBefore,
             SuppressAutoHyphens= suppressAutoHyphens,
+            SuppressLineNumbers = suppressLineNumbers,
+            SuppressLineNumbersIsSet = true,
             ContextualSpacing  = contextualSpacing,
         });
 
@@ -7060,7 +7062,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false);
 
     private sealed record RenderedTabStopSpan(
         ParagraphTabStopPlacementPlan Plan,
@@ -8824,6 +8826,8 @@ public sealed class DocumentView : RichTextBox
             borderNeedsTag ? paraFmt.Border : null,
             shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
             paraFmt.SuppressAutoHyphens,
+            paraFmt.SuppressLineNumbers,
+            paraFmt.SuppressLineNumbersIsSet,
             paragraph.SectionBreak,
             paragraph.DropCap,
             paraFmt.ListKind != ListKind.None ? paraFmt.ListKind : null,
@@ -15213,9 +15217,13 @@ public sealed class DocumentView : RichTextBox
         var keepLinesTogether = tag?.KeepLinesTogether ?? paragraph.KeepTogether;
         // SuppressAutoHyphens has no FlowDocument property either, so it rides on the Tag like WidowControl.
         var suppressAutoHyphens = paragraph.Tag is ParagraphTag { SuppressAutoHyphens: true };
+        var suppressLineNumbers = paragraph.Tag is ParagraphTag { SuppressLineNumbers: true };
+        var suppressLineNumbersIsSet = paragraph.Tag is ParagraphTag { SuppressLineNumbersIsSet: true };
         return ParagraphFormatting.Default with
         {
             SuppressAutoHyphens = suppressAutoHyphens,
+            SuppressLineNumbers = suppressLineNumbers,
+            SuppressLineNumbersIsSet = suppressLineNumbersIsSet,
             Alignment = FromWpfAlignment(paragraph.TextAlignment),
             // Right-to-left direction reads straight back off the WPF Paragraph's FlowDirection (set in
             // BuildParagraph), so an RTL paragraph survives an edit/commit cycle.
@@ -15371,6 +15379,10 @@ public sealed class DocumentView : RichTextBox
             return p with
             {
                 ContextualSpacing = p.ContextualSpacing ?? sp.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing,
+                SuppressLineNumbers = p.SuppressLineNumbersIsSet
+                    ? p.SuppressLineNumbers
+                    : sp.SuppressLineNumbersIsSet && sp.SuppressLineNumbers,
+                SuppressLineNumbersIsSet = p.SuppressLineNumbersIsSet || sp.SuppressLineNumbersIsSet,
                 Alignment = p.Alignment != d.Alignment ? p.Alignment : sp.Alignment,
                 // Space before/after cascade on the explicit flag, not value-vs-default: a read paragraph
                 // carries 0pt-after when it sets none, and 0 != the model's 8pt default would otherwise keep
@@ -16040,7 +16052,10 @@ public sealed class DocumentView : RichTextBox
                         lineNumber = lineIndex + 1;
                     }
 
-                    if (lineNumber % countBy == 0 && !rect.IsEmpty
+                    // Word suppresses the glyph for marked paragraphs but the lines still increment the
+                    // document sequence, so calculate lineNumber before this visibility check.
+                    var suppressNumber = line.Paragraph?.Tag is ParagraphTag { SuppressLineNumbers: true };
+                    if (lineNumber % countBy == 0 && !suppressNumber && !rect.IsEmpty
                         && rect.Bottom >= bounds.Top && rect.Top <= bounds.Bottom)
                     {
                         DrawNumber(drawingContext, lineNumber, rect, gutterRight, pixelsPerDip);

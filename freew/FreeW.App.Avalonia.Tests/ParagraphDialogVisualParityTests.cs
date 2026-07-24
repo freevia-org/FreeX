@@ -30,6 +30,7 @@ public sealed class ParagraphDialogVisualParityTests
             var after = Field<TextBox>(dialog, "_after");
             var lineSpacing = Field<TextBox>(dialog, "_lineSpacing");
             var special = Field<ComboBox>(dialog, "_special");
+            var suppressLineNumbers = Field<CheckBox>(dialog, "_suppressLineNumbers");
             var contextualSpacing = Field<CheckBox>(dialog, "_contextualSpacing");
             var buttons = dialog.GetLogicalDescendants()
                 .OfType<Button>()
@@ -50,6 +51,7 @@ public sealed class ParagraphDialogVisualParityTests
             after.Text.Should().Be(expected.SpaceAfterText);
             lineSpacing.Text.Should().Be(expected.LineSpacingText);
             special.SelectedIndex.Should().Be(expected.SpecialIndex);
+            suppressLineNumbers.IsChecked.Should().Be(expected.SuppressLineNumbers);
             contextualSpacing.IsChecked.Should().Be(expected.ContextualSpacing);
             AutomationProperties.GetAutomationId(left).Should().Be("paragraph-left-indent");
 

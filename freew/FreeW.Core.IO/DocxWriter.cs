@@ -2797,6 +2797,11 @@ public static class DocxWriter
                 new XElement(W + "ilvl", new XAttribute(W + "val", pn.Ilvl)),
                 new XElement(W + "numId", new XAttribute(W + "val", mappedNumId))));
         }
+        // An explicit off token is significant: it cancels a suppressing paragraph style.
+        if (f.SuppressLineNumbers)
+            pPr.Add(new XElement(W + "suppressLineNumbers"));
+        else if (f.SuppressLineNumbersIsSet)
+            pPr.Add(new XElement(W + "suppressLineNumbers", new XAttribute(W + "val", "0")));
         // Paragraph border (w:pBdr) — CT_PPrBase order: after numPr, before shd.
         // A box whose drawn edges are selected by the per-edge flags (all four = a box) with one shared
         // colour/width/line-style, analogous to w:tblBorders. A horizontal rule is the bottom-only case.

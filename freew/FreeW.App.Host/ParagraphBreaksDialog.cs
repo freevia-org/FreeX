@@ -80,6 +80,7 @@ internal static class ParagraphBreaksDialog
         var widowControlCheck = new CheckBox { Content = "Widow/orphan control", IsChecked = state.WidowControl, Margin = new Thickness(0, 0, 0, 6) };
         var pageBreakBeforeCheck = new CheckBox { Content = "Page break before", IsChecked = state.PageBreakBefore, Margin = new Thickness(0, 0, 0, 6) };
         var suppressHyphensCheck = new CheckBox { Content = "Suppress auto-hyphenation", IsChecked = state.SuppressAutoHyphens, Margin = new Thickness(0, 0, 0, 6) };
+        var suppressLineNumbersCheck = new CheckBox { Content = "Suppress line numbers", IsChecked = state.SuppressLineNumbers, Margin = new Thickness(0, 0, 0, 6) };
 
         var breaksPanel = new StackPanel { Margin = new Thickness(10) };
         breaksPanel.Children.Add(new TextBlock
@@ -100,14 +101,7 @@ internal static class ParagraphBreaksDialog
             Margin = new Thickness(0, 0, 0, 8)
         });
         breaksPanel.Children.Add(suppressHyphensCheck);
-        breaksPanel.Children.Add(new TextBlock
-        {
-            Text = "Note: 'Suppress line numbers' is not yet modelled.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = System.Windows.Media.Brushes.Gray,
-            FontSize = 10,
-            Margin = new Thickness(0, 8, 0, 0),
-        });
+        breaksPanel.Children.Add(suppressLineNumbersCheck);
 
         var tabs = new TabControl();
         tabs.Items.Add(new TabItem { Header = "Indents and Spacing", Content = new ScrollViewer { Content = indentsPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
@@ -128,6 +122,7 @@ internal static class ParagraphBreaksDialog
                 widowControlCheck.IsChecked == true,
                 pageBreakBeforeCheck.IsChecked == true,
                 suppressHyphensCheck.IsChecked == true,
+                suppressLineNumbersCheck.IsChecked == true,
                 contextualSpacingCheck.IsChecked == true);
 
             if (!ParagraphBreaksDialogPlanner.TryBuildResult(

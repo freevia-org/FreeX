@@ -2211,7 +2211,7 @@ internal static class FreeWRibbonCommands
                 result.LeftPt, result.RightPt, result.FirstLinePt,
                 result.SpaceBeforePt, result.SpaceAfterPt, result.LineSpacing,
                 result.KeepWithNext, result.KeepLinesTogether, result.WidowControl,
-                result.PageBreakBefore, result.SuppressAutoHyphens, result.ContextualSpacing);
+                result.PageBreakBefore, result.SuppressAutoHyphens, result.SuppressLineNumbers, result.ContextualSpacing);
         }
     }
 

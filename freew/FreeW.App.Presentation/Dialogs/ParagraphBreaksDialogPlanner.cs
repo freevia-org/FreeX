@@ -27,6 +27,7 @@ public sealed record ParagraphBreaksInitialState(
     bool WidowControl,
     bool PageBreakBefore,
     bool SuppressAutoHyphens,
+    bool SuppressLineNumbers,
     bool ContextualSpacing);
 
 public sealed record ParagraphBreaksDialogInput(
@@ -42,6 +43,7 @@ public sealed record ParagraphBreaksDialogInput(
     bool WidowControl,
     bool PageBreakBefore,
     bool SuppressAutoHyphens,
+    bool SuppressLineNumbers,
     bool ContextualSpacing);
 
 public sealed record ParagraphBreaksValidation(
@@ -60,6 +62,7 @@ public sealed record ParagraphBreaksDialogResult(
     bool WidowControl,
     bool PageBreakBefore,
     bool SuppressAutoHyphens,
+    bool SuppressLineNumbers,
     bool ContextualSpacing);
 
 public static class ParagraphBreaksDialogPlanner
@@ -94,6 +97,7 @@ public static class ParagraphBreaksDialogPlanner
             WidowControl: current.WidowControl,
             PageBreakBefore: current.PageBreakBefore,
             SuppressAutoHyphens: current.SuppressAutoHyphens,
+            SuppressLineNumbers: current.SuppressLineNumbers,
             ContextualSpacing: current.ContextualSpacing is true);
     }
 
@@ -160,6 +164,7 @@ public static class ParagraphBreaksDialogPlanner
             WidowControl: input.WidowControl,
             PageBreakBefore: input.PageBreakBefore,
             SuppressAutoHyphens: input.SuppressAutoHyphens,
+            SuppressLineNumbers: input.SuppressLineNumbers,
             ContextualSpacing: input.ContextualSpacing);
         return true;
     }
