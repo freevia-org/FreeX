@@ -2009,6 +2009,35 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_BackstageCustomRangeInput_RebuildsPrintPlanAndCarriesRangeToPrintAction()
+    {
+        var window = new MainWindow(
+            new FreePOptions(),
+            messageService: TestUserMessageService.DiscardUnsavedChanges,
+            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+        try
+        {
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+            window.Editor.InsertSlide();
+
+            window.ShowBackstageForTests();
+            window.ActivateBackstageEntryForTests("Print").Should().BeTrue();
+            window.ApplyBackstagePrintCustomRangeForTests("2,4").Should().BeTrue();
+
+            window.LastFilePrintBackstagePlanForTests.Should().NotBeNull();
+            window.LastFilePrintBackstagePlanForTests!.SelectedRange.Kind.Should().Be(PresentationSlideRangeKind.CustomRange);
+            window.LastFilePrintBackstagePlanForTests.SelectedRange.Request!.CustomRangeText.Should().Be("2,4");
+            window.LastFilePrintBackstagePlanForTests.PageCount.Should().Be(2);
+            window.LastFilePrintBackstagePlanForTests.CanBuildPackage.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_NotesPagePdfRequest_RecordsSharedRenderPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

@@ -224,6 +224,9 @@ public sealed partial class MainWindow : Window
     private TextBlock _printOptionsPaneMessage = null!;
     private StackPanel _printOptionsPaneRowsPanel = null!;
     private Button _printOptionsPaneExecuteButton = null!;
+    private TextBox? _printCustomRangeInput;
+    private Button? _printCustomRangeApplyButton;
+    private PresentationPrintRequest? _printOptionsPaneRequest;
     private readonly List<string> _printOptionsPaneRenderedOptionLines = new();
     private readonly List<string> _printOptionsPaneRenderedPreviewRows = new();
     private readonly List<string> _printOptionsPaneRenderedLayoutRows = new();
@@ -512,6 +515,17 @@ public sealed partial class MainWindow : Window
     internal IReadOnlyList<string> PrintOptionsPaneRenderedPreviewRows => _printOptionsPaneRenderedPreviewRows;
     internal IReadOnlyList<string> PrintOptionsPaneRenderedLayoutRows => _printOptionsPaneRenderedLayoutRows;
     internal IReadOnlyList<string> PrintOptionsPaneRenderedRangeRows => _printOptionsPaneRenderedRangeRows;
+    internal bool ApplyPrintCustomRangeForTests(string rangeText)
+    {
+        if (_printCustomRangeInput is null || _printCustomRangeApplyButton is null)
+            return false;
+
+        _printCustomRangeInput.Text = rangeText;
+        _printCustomRangeApplyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        return true;
+    }
+    internal bool ApplyBackstageCustomPrintRangeForTests(string rangeText) =>
+        _backstage.ApplyCustomPrintRangeForTests(rangeText);
     internal bool IsBackstageOpen => _backstage.IsOpen;
     internal string? CurrentBackstagePaneLabel => _backstage.CurrentPaneLabel;
     internal IReadOnlyList<SisterBackstageEntryPlan<Control>> BackstageEntries => _backstage.Entries;
@@ -1056,7 +1070,7 @@ public sealed partial class MainWindow : Window
         };
         _printOptionsPaneExecuteButton.Click += async (_, _) =>
         {
-            await ExecuteNativePrintHandoffAsync();
+            await ExecuteNativePrintHandoffAsync(_printOptionsPaneRequest);
         };
 
         var content = new StackPanel
@@ -2847,6 +2861,12 @@ public sealed partial class MainWindow : Window
         ExportNotesPagePdf: () => _ = FileExportNotesPagePdfAsync(),
         ExportImages: () => _ = FileExportImagesAsync(),
         GetPrintPlan: () => RefreshPrintBackstagePlan(),
+        GetPrintPlanForCustomRange: rangeText => RefreshPrintBackstagePlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    CustomRangeText: rangeText))),
         ExportVideo: () => _ = FileExportVideoAsync(),
         CanExportVideo: () => _nativeOutputCapabilities.Video.CanEncodeMp4);
 
@@ -3232,6 +3252,16 @@ public sealed partial class MainWindow : Window
     internal PresentationPrintBackstagePlan ShowPrintOptionsPane(PresentationPrintRequest? request = null)
     {
         var plan = RefreshPrintBackstagePlan(request);
+        _printOptionsPaneRequest = request ?? new PresentationPrintRequest(
+            plan.SelectedLayout.Layout.Layout,
+            plan.SelectedRange.Request,
+            plan.SelectedLayout.Layout.IsHandout ? plan.SelectedLayout.Layout.SlidesPerPage : null,
+            plan.PrintHiddenSlides,
+            plan.Options.Copies,
+            plan.Options.Collate,
+            plan.Options.ColorMode,
+            plan.Options.FrameSlides,
+            plan.Options.IncludeCommentsAndInkMarkup);
         RenderPrintOptionsPane(plan);
         _printOptionsPaneHost.IsVisible = true;
         return plan;
@@ -3344,6 +3374,44 @@ public sealed partial class MainWindow : Window
             _printOptionsPaneRenderedRangeRows.Add(row);
             AddPrintOptionsPaneChoice(row, choice.IsAvailable);
         }
+
+        AddPrintOptionsPaneSection("Custom range");
+        _printOptionsPaneRowsPanel.Children.Add(new TextBlock
+        {
+            Text = "Enter slide numbers and ranges, for example 2,4-6.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
+            Margin = new Thickness(0, 0, 0, 4),
+        });
+        _printCustomRangeInput = new TextBox
+        {
+            Text = plan.SelectedRange.Request?.CustomRangeText ?? string.Empty,
+            PlaceholderText = "e.g. 2,4-6",
+            MinWidth = 240,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        AutomationProperties.SetAutomationId(_printCustomRangeInput, "FreePPrintCustomRangeInput");
+        _printCustomRangeApplyButton = new Button
+        {
+            Content = "Apply range",
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(12, 6),
+        };
+        AutomationProperties.SetAutomationId(_printCustomRangeApplyButton, "FreePPrintCustomRangeApply");
+        _printCustomRangeApplyButton.Click += (_, _) =>
+        {
+            var text = _printCustomRangeInput.Text?.Trim() ?? string.Empty;
+            ShowPrintOptionsPane(string.IsNullOrWhiteSpace(text)
+                ? new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides)
+                : new PresentationPrintRequest(
+                    PresentationPrintLayoutKind.FullPageSlides,
+                    new PresentationSlideRangeRequest(
+                        PresentationSlideRangeKind.CustomRange,
+                        CustomRangeText: text)));
+        };
+        _printOptionsPaneRowsPanel.Children.Add(_printCustomRangeInput);
+        _printOptionsPaneRowsPanel.Children.Add(_printCustomRangeApplyButton);
 
         _printOptionsPaneRowsPanel.Children.Add(new TextBlock
         {

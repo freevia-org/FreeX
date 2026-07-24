@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.AppServices;
@@ -32,6 +33,9 @@ internal sealed class BackstageView : UserControl
 
     private readonly BackstageCallbacks _callbacks;
     private readonly AvaloniaBackstageFrame _frame;
+    private string? _customRangeText;
+    private TextBox? _customRangeInput;
+    private Button? _customRangeApplyButton;
 
     public BackstageView(BackstageCallbacks callbacks)
     {
@@ -88,6 +92,16 @@ internal sealed class BackstageView : UserControl
 
     internal bool HandleKey(Key key) => _frame.HandleKey(key);
 
+    internal bool ApplyCustomPrintRangeForTests(string rangeText)
+    {
+        if (_customRangeInput is null || _customRangeApplyButton is null)
+            return false;
+
+        _customRangeInput.Text = rangeText;
+        _customRangeApplyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        return true;
+    }
+
     private Control BuildInfoPane()
     {
         var presentation = _callbacks.GetPresentation();
@@ -129,7 +143,9 @@ internal sealed class BackstageView : UserControl
 
     private Control BuildPrintPane()
     {
-        var plan = _callbacks.GetPrintPlan();
+        var plan = _customRangeText is null
+            ? _callbacks.GetPrintPlan()
+            : _callbacks.GetPrintPlanForCustomRange(_customRangeText);
 
         var panel = CreatePane(maxWidth: 760);
         panel.Children.Add(AvaloniaBackstageChrome.CreateHeading(plan.Heading, PaneStyle));
@@ -154,6 +170,34 @@ internal sealed class BackstageView : UserControl
             (choice.Layout.DisplayName, choice.PackagePlan.LayoutSummary, choice.IsSelected, true)));
         AddPrintChoices(panel, "Slide Range", plan.RangeChoices.Select(choice =>
             (choice.DisplayName, choice.Description, choice.Kind == plan.SelectedRange.Kind, choice.IsAvailable)));
+
+        panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader("Custom Range", PaneStyle));
+        panel.Children.Add(AvaloniaBackstageChrome.CreateNote(
+            "Enter slide numbers and ranges, for example 2,4-6.",
+            PaneStyle));
+        _customRangeInput = new TextBox
+        {
+            Text = plan.SelectedRange.Request?.CustomRangeText ?? _customRangeText ?? string.Empty,
+            PlaceholderText = "e.g. 2,4-6",
+            MinWidth = 240,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        AutomationProperties.SetAutomationId(_customRangeInput, "FreePPrintCustomRangeInput");
+        _customRangeApplyButton = AvaloniaBackstageChrome.CreateActionButton(
+            new AvaloniaBackstageActionButtonSpec(
+                "Apply range",
+                "FreePPrintCustomRangeApply",
+                () =>
+                {
+                    var text = _customRangeInput.Text?.Trim() ?? string.Empty;
+                    _customRangeText = string.IsNullOrWhiteSpace(text) ? null : text;
+                    _frame.Show("Print");
+                })
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+            });
+        panel.Children.Add(_customRangeInput);
+        panel.Children.Add(_customRangeApplyButton);
 
         panel.Children.Add(AvaloniaBackstageChrome.CreateNote(
             plan.DisabledReason ?? plan.NativePrintHandoff.Reason,
