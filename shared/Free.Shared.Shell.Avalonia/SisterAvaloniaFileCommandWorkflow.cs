@@ -32,6 +32,7 @@ public sealed class SisterAvaloniaFileCommandWorkflow
     private readonly Func<string, Task<SaveChangesPrompt>> _promptSaveChangesAsync;
     private readonly Func<Task<bool>> _saveAsync;
     private readonly Func<string, Exception, Task> _showFileCommandErrorAsync;
+    private readonly Action? _restoreOwnerFocus;
     private readonly SemaphoreSlim _destructiveActionGate = new(1, 1);
 
     public SisterAvaloniaFileCommandWorkflow(
@@ -43,7 +44,8 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         Func<RecentFilesStore>? loadRecentFilesStore = null,
         Func<Task<bool>>? saveAsync = null,
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
-        Func<string, Exception, Task>? showFileCommandErrorAsync = null)
+        Func<string, Exception, Task>? showFileCommandErrorAsync = null,
+        Action? restoreOwnerFocus = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(titleSpec);
@@ -61,6 +63,7 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         _promptSaveChangesAsync = promptSaveChangesAsync ?? PromptSaveChangesAsync;
         _saveAsync = saveAsync ?? (() => Task.FromResult(save!()));
         _showFileCommandErrorAsync = showFileCommandErrorAsync ?? ShowFileCommandErrorCoreAsync;
+        _restoreOwnerFocus = restoreOwnerFocus;
         _workflow = new FileCommandWorkflow(
             maxRecentEntries,
             OnWorkflowChanged,
@@ -224,9 +227,12 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         }
         finally
         {
+            RestoreOwnerFocus();
             _destructiveActionGate.Release();
         }
     }
+
+    private void RestoreOwnerFocus() => _restoreOwnerFocus?.Invoke();
 
     private static bool ThrowSynchronousSaveUnavailable() =>
         throw new InvalidOperationException("This file workflow is configured for asynchronous save operations.");

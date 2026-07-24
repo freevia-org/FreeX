@@ -49,6 +49,22 @@ public sealed class PresentationFileDialogPlannerTests
     }
 
     [Theory]
+    [InlineData("deck", "deck.pptx", true)]
+    [InlineData("deck.fxp", "deck.fxp", true)]
+    [InlineData("deck.PPTX", "deck.PPTX", true)]
+    [InlineData("deck.txt", "", false)]
+    public void TryResolveSavePickerPath_UsesSupportedExtensionsAndDefault(
+        string path,
+        string expectedPath,
+        bool expectedSuccess)
+    {
+        var success = PresentationFileDialogPlanner.TryResolveSavePickerPath(path, out var resolvedPath);
+
+        success.Should().Be(expectedSuccess);
+        resolvedPath.Should().Be(expectedPath);
+    }
+
+    [Theory]
     [InlineData("deck.fxp", true)]
     [InlineData("deck.FXP", true)]
     [InlineData("deck.pptx", false)]

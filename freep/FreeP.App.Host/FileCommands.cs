@@ -146,7 +146,18 @@ internal sealed class FileCommands
     {
         var plan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan(_workflow.CurrentFileName);
         var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
-        return result.Chosen && SaveTo(result.FileName!);
+        if (!result.Chosen)
+            return false;
+
+        if (!PresentationFileDialogPlanner.TryResolveSavePickerPath(result.FileName!, out var resolvedPath))
+        {
+            ShowError(
+                "Could not save the presentation",
+                new InvalidDataException(PresentationFileDialogPlanner.UnsupportedSavePathMessage));
+            return false;
+        }
+
+        return SaveTo(resolvedPath);
     }
 
     /// <summary>

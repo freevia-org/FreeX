@@ -101,6 +101,9 @@ public sealed partial class MainWindow : Window
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
     private readonly AvaloniaPresentationClipboardService _clipboardService;
+    private Func<FileOpenPickerPlan, Task<string?>>? _openPickerOverrideForTests;
+    private Func<FileSavePickerPlan, Task<string?>>? _savePickerOverrideForTests;
+    private int _ownerFocusRestoreCount;
     private Task _clipboardOperation = Task.CompletedTask;
     private readonly FreePOptions _options;
 
@@ -266,6 +269,7 @@ public sealed partial class MainWindow : Window
     internal IReadOnlyList<Button> QuickAccessButtonsForTests => _quickAccessButtons;
     internal string StatusTextForTests => _statusText.Text ?? string.Empty;
     internal bool HasWindowIconForTests => Icon is not null;
+    internal int OwnerFocusRestoreCountForTests => _ownerFocusRestoreCount;
     internal void RaiseKeyDownForTests(KeyEventArgs args) => MainWindow_KeyDown(this, args);
     internal Task ClipboardOperationForTests => _clipboardOperation;
     internal int SlidePaneSlideItemCount => _slidePaneList.Items
@@ -587,7 +591,8 @@ public sealed partial class MainWindow : Window
             loadRecentFilesStore: loadRecentFilesStore,
             saveAsync: FileSaveAsync,
             promptSaveChangesAsync: promptSaveChangesAsync,
-            showFileCommandErrorAsync: showFileCommandErrorAsync);
+            showFileCommandErrorAsync: showFileCommandErrorAsync,
+            restoreOwnerFocus: RestoreOwnerFocus);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync("closing"),
             requestClose: Close,
@@ -711,6 +716,7 @@ public sealed partial class MainWindow : Window
 
     private void RestoreOwnerFocus()
     {
+        _ownerFocusRestoreCount++;
         Activate();
         Focus();
     }
@@ -2737,19 +2743,31 @@ public sealed partial class MainWindow : Window
             TryLoadPresentationFileAsync);
 
     internal Task<bool> FileOpenAsyncForTests() => FileOpenAsync();
+    internal Task<bool> FileSaveAsAsyncForTests() => FileSaveAsAsync();
+
+    internal void SetFilePickerOverridesForTests(
+        Func<FileOpenPickerPlan, Task<string?>>? openPicker,
+        Func<FileSavePickerPlan, Task<string?>>? savePicker)
+    {
+        _openPickerOverrideForTests = openPicker;
+        _savePickerOverrideForTests = savePicker;
+    }
 
     private static string ResolveDataFolderLabel() =>
         AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
 
     private async Task<string?> PromptOpenPathAsync()
     {
+        var plan = PresentationFileDialogPlanner.BuildOpenPickerPlan();
+        if (_openPickerOverrideForTests is { } pickerOverride)
+            return await pickerOverride(plan);
+
         if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.OpenCommand);
             return null;
         }
 
-        var plan = PresentationFileDialogPlanner.BuildOpenPickerPlan();
         using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerOpenRequest.FromDescriptors(FileText.OpenPickerTitle, plan.FileTypes));
@@ -2771,28 +2789,58 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> FileSaveAsAsync()
     {
-        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
+        try
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.SaveCommand);
+            var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(_fileWorkflow.CurrentFileName);
+            if (_savePickerOverrideForTests is { } pickerOverride)
+            {
+                var overriddenPath = await pickerOverride(plan);
+                if (overriddenPath is null)
+                    return false;
+
+                return await TrySavePickerPathAsync(overriddenPath);
+            }
+
+            if (!AvaloniaFilePickerService.CanSave(StorageProvider))
+            {
+                _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.SaveCommand);
+                return false;
+            }
+
+            using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+                StorageProvider,
+                AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, plan));
+
+            var path = file?.LocalPath;
+            if (path is null)
+            {
+                if (file is not null)
+                    _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.SaveCommand);
+
+                return false;
+            }
+
+            return await TrySavePickerPathAsync(path);
+        }
+        finally
+        {
+            RestoreOwnerFocus();
+        }
+    }
+
+    private async Task<bool> TrySavePickerPathAsync(string path)
+    {
+        if (!PresentationFileDialogPlanner.TryResolveSavePickerPath(path, out var resolvedPath))
+        {
+            var error = new InvalidDataException(PresentationFileDialogPlanner.UnsupportedSavePathMessage);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                SisterAppFileTextPlanner.SaveCommand,
+                error.Message);
+            await _fileWorkflow.ShowFileCommandErrorAsync("Could not save the presentation", error);
             return false;
         }
 
-        var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(_fileWorkflow.CurrentFileName);
-
-        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, plan));
-
-        var path = file?.LocalPath;
-        if (path is null)
-        {
-            if (file is not null)
-                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.SaveCommand);
-
-            return false;
-        }
-
-        return await TrySavePresentationFileAsync(path);
+        return await TrySavePresentationFileAsync(resolvedPath);
     }
 
     private async Task<bool> FileExportPdfAsync()
