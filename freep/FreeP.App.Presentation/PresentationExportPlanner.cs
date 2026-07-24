@@ -731,6 +731,15 @@ public static class PresentationExportPlanner
             VideoExportExtension,
             preferredFirstExtension: VideoExportExtension);
 
+    public static FileSaveDialogPlan BuildVideoExportDialogPlan(string? sourceName) =>
+        FileDialogRequestPlanner.BuildPerFormatSaveDialogPlan(
+            VideoFormats,
+            FileDialogRequestPlanner.BuildSuggestedSaveAsFileName(
+                sourceName,
+                FallbackPresentationName,
+                VideoExportExtension),
+            VideoExportExtension);
+
     public static PresentationBackstageExportPlan BuildBackstageExportPlan()
     {
         var formats = BuildFormatDescriptors();

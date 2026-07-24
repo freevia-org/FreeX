@@ -47,10 +47,8 @@ internal sealed class FileCommands
             "WPF print host",
             "Native printer handoff adapter is not wired in this host path yet.");
 
-    private static readonly PresentationVideoExportHandoffHostCapabilities VideoExportHostCapabilities =
-        PresentationVideoExportHandoffHostCapabilities.Deferred(
-            "WPF video export host",
-            "MP4 encoder, narration capture, and camera/media capture adapters are not wired in this host path yet.");
+    private readonly WpfVideoExportAdapter _videoExportAdapter;
+    private readonly PresentationVideoExportHandoffHostCapabilities _videoExportHostCapabilities;
 
     private static readonly FileOpenDialogPlan OpenDialogPlan =
         PresentationFileDialogPlanner.BuildOpenDialogPlan();
@@ -65,7 +63,9 @@ internal sealed class FileCommands
         IUserMessageService? messageService = null,
         Func<PresentationSlideRangeRequest?>? getImageExportRange = null,
         Func<int?>? getPrintCurrentSlideNumber = null,
-        Func<IReadOnlyList<int>?>? getPrintSelectedSlideNumbers = null)
+        Func<IReadOnlyList<int>?>? getPrintSelectedSlideNumbers = null,
+        WpfVideoEncoderCapability? videoEncoderCapability = null,
+        WpfVideoExportAdapter? videoExportAdapter = null)
     {
         _window = window;
         _getModel = getModel;
@@ -74,6 +74,11 @@ internal sealed class FileCommands
         _getImageExportRange = getImageExportRange ?? (() => null);
         _getPrintCurrentSlideNumber = getPrintCurrentSlideNumber ?? (() => null);
         _getPrintSelectedSlideNumbers = getPrintSelectedSlideNumbers ?? (() => null);
+        var resolvedVideoCapability = videoEncoderCapability ??
+            videoExportAdapter?.Capability ??
+            WpfVideoEncoderCapabilityDetector.Detect();
+        _videoExportAdapter = videoExportAdapter ?? new WpfVideoExportAdapter(resolvedVideoCapability);
+        _videoExportHostCapabilities = BuildVideoExportHostCapabilities(resolvedVideoCapability);
         _workflow = new SisterWpfFileCommandWorkflow(
             "FreeP",
             () => _options.RecentFilesCap,
@@ -100,6 +105,10 @@ internal sealed class FileCommands
     public PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
 
     public PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
+
+    public WpfVideoExportResult? LastVideoExportResult { get; private set; }
+
+    public bool CanExportVideo => _videoExportHostCapabilities.CanEncodeMp4;
 
     public PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor { get; private set; }
 
@@ -344,8 +353,8 @@ internal sealed class FileCommands
     }
 
     /// <summary>
-    /// Builds the shared PowerPoint-style video frame package. WPF owns native encoder/media integration
-    /// later; slide-range, quality, timing, narration intent, and MP4-deferred state stay shared.
+    /// Builds the shared PowerPoint-style video frame package. WPF supplies the slide raster callback;
+    /// native MP4 execution is performed by <see cref="ExportVideoAsync"/> when ffmpeg is available.
     /// </summary>
     public PresentationVideoFramePackage BuildVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
@@ -355,7 +364,7 @@ internal sealed class FileCommands
             WpfPresentationSlideImageRenderer.RenderSlideToPng);
         LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
             LastVideoFramePackage,
-            VideoExportHostCapabilities,
+            _videoExportHostCapabilities,
             _workflow.CurrentFileName);
         LastVideoExportHandoffPlan = LastVideoExecutionDescriptor.HandoffPlan;
         return LastVideoFramePackage;
@@ -367,7 +376,7 @@ internal sealed class FileCommands
     {
         LastVideoExportHandoffPlan = PresentationVideoFramePackageExecutor.BuildHandoffPlan(
             packagePlan,
-            hostCapabilities ?? VideoExportHostCapabilities);
+            hostCapabilities ?? _videoExportHostCapabilities);
         return LastVideoExportHandoffPlan;
     }
 
@@ -379,6 +388,71 @@ internal sealed class FileCommands
         var presentation = _getModel();
         return PresentationExportPlanner.BuildVideoExportPlan(request, presentation);
     }
+
+    /// <summary>
+    /// Executes the WPF video export command: checks the shared plan, prompts for an MP4 target,
+    /// materializes the shared frame package, and invokes the host ffmpeg adapter.
+    /// </summary>
+    public async Task<bool> ExportVideoAsync(PresentationVideoExportRequest? request = null)
+    {
+        if (!_videoExportHostCapabilities.CanEncodeMp4)
+        {
+            ShowError(
+                "Could not export the presentation video",
+                new InvalidOperationException(_videoExportHostCapabilities.UnavailableReason ??
+                    "No WPF MP4 encoder is available."));
+            return false;
+        }
+
+        var storyboard = PresentationExportPlanner.BuildVideoStoryboardPlan(request, _getModel());
+        if (storyboard.Segments.Count == 0)
+        {
+            ShowError(
+                "Could not export the presentation video",
+                new InvalidOperationException("Video export requires at least one slide."));
+            return false;
+        }
+
+        var savePlan = PresentationExportPlanner.BuildVideoExportDialogPlan(_workflow.CurrentFileName);
+        var result = WpfFileDialogService.ShowSaveDialog(_window, savePlan);
+        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
+            return false;
+
+        try
+        {
+            BuildVideoFramePackage(request);
+            LastVideoExportResult = await _videoExportAdapter.ExportAsync(
+                LastVideoFramePackage!,
+                result.FileName,
+                CancellationToken.None).ConfigureAwait(true);
+            if (!LastVideoExportResult.Succeeded && !LastVideoExportResult.Canceled &&
+                LastVideoExportResult.FailureReason is not null)
+            {
+                ShowError(
+                    "Could not export the presentation video",
+                    new InvalidOperationException(LastVideoExportResult.FailureReason));
+            }
+
+            return LastVideoExportResult.Succeeded;
+        }
+        catch (Exception ex)
+        {
+            LastVideoExportResult = WpfVideoExportResult.Failed(ex.Message, result.FileName);
+            ShowError("Could not export the presentation video", ex);
+            return false;
+        }
+    }
+
+    private static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(
+        WpfVideoEncoderCapability capability) =>
+        new(
+            "WPF video export host",
+            capability.CanEncodeMp4,
+            CanCaptureNarration: false,
+            CanCaptureCameraAndMedia: false,
+            capability.CanEncodeMp4
+                ? "Video-only ffmpeg export is available; narration and camera/media muxing are not implemented."
+                : capability.Reason);
 
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>
     public bool ConfirmCloseAllowed() => _workflow.ConfirmCloseAllowed();

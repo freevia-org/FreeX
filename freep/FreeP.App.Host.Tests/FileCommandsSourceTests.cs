@@ -36,6 +36,8 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("PresentationVideoFramePackageExecutor.BuildHandoffPlan(");
         source.Should().Contain("public PresentationVideoFramePackage BuildVideoFramePackage(");
         source.Should().Contain("public PresentationVideoExportHandoffPlan BuildVideoExportHandoffPlan(");
+        source.Should().Contain("public async Task<bool> ExportVideoAsync(");
+        source.Should().Contain("WpfVideoExportAdapter");
         source.Should().Contain("LastVideoFramePackage");
         source.Should().Contain("LastVideoExportHandoffPlan");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
@@ -72,6 +74,18 @@ public sealed class FileCommandsSourceTests
         source.Should().NotContain("UserMessageButtons.Ok");
         source.Should().NotContain("new OpenFileDialog");
         source.Should().NotContain("new SaveFileDialog");
+    }
+
+    [Fact]
+    public void MainWindow_ExecutesVideoExportInsteadOfOnlyRefreshingTheFramePackage()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.cs"));
+
+        source.Should().Contain("ExportVideo: () => _ = _file.ExportVideoAsync(),");
     }
 
     [Fact]

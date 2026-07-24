@@ -101,6 +101,17 @@ public sealed class PresentationFileDialogPlannerTests
     }
 
     [Fact]
+    public void VideoExportDialogPlan_UsesMp4DefaultAndSourceName()
+    {
+        var plan = PresentationExportPlanner.BuildVideoExportDialogPlan("Quarterly Review.pptx");
+
+        plan.SuggestedFileName.Should().Be("Quarterly Review.mp4");
+        plan.DefaultExtensionWithDot.Should().Be(".mp4");
+        plan.DefaultExtensionWithoutDot.Should().Be("mp4");
+        plan.Filter.Should().Contain("MPEG-4 videos (*.mp4)|*.mp4");
+    }
+
+    [Fact]
     public void ExportPlanner_DefinesSharedBackstageAndCommandDescriptors()
     {
         var formats = PresentationExportPlanner.BuildFormatDescriptors();

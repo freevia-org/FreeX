@@ -174,7 +174,9 @@ internal sealed class BackstageView : UserControl
         var fixedLayoutAdditionalActions = plan.FixedLayoutActions
             .Where(action => action.CommandId != PresentationExportPlanner.PdfExportCommandId);
         var additionalGroups = fixedLayoutAdditionalActions
-            .Concat(plan.DeferredActions.Where(action => action.IsEnabled))
+            .Concat(plan.DeferredActions.Where(action =>
+                action.IsEnabled ||
+                (action.Format == PresentationExportFormat.Video && _actions.CanExportVideo())))
             .GroupBy(action => action.Format is PresentationExportFormat.NotesPagePdf
                 ? plan.FixedLayoutGroupHeading
                 : plan.DeferredGroupHeading)
@@ -270,6 +272,7 @@ internal sealed record BackstageActions(
     Action ExportImages,
     Action PlanPrint,
     Action ExportVideo,
+    Func<bool> CanExportVideo,
     Func<FreePOptions> CurrentOptions,
     Action OnClosed,
     Func<string> DataFolder);

@@ -474,7 +474,8 @@ public sealed partial class MainWindow : Window
             ExportNotesPagePdf: () => _file.ExportNotesPagePdf(),
             ExportImages: () => _file.ExportImages(),
             PlanPrint: () => RefreshPrintBackstagePlan(),
-            ExportVideo: () => RefreshVideoFramePackage(),
+            ExportVideo: () => _ = _file.ExportVideoAsync(),
+            CanExportVideo: () => _file.CanExportVideo,
             CurrentOptions: () => _options,
             OnClosed: () => { },
             DataFolder: ResolveDataFolderLabel));
