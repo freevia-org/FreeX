@@ -330,6 +330,7 @@ public static class FreePRibbon
             group.Medium(ChartSeriesOptionsPlanner.CommandId, FreePRibbonText.ChartSeriesOptionsLabel, RibbonCommandIconKind.Effects, FreePRibbonText.ChartSeriesOptionsKeyTip);
             group.Medium(ChartPointOptionsPlanner.CommandId, FreePRibbonText.ChartPointOptionsLabel, RibbonCommandIconKind.Effects, FreePRibbonText.ChartPointOptionsKeyTip);
             group.Medium(ChartLayoutOptionsPlanner.CommandId, FreePRibbonText.ChartLayoutOptionsLabel, RibbonCommandIconKind.ChartTitle, FreePRibbonText.ChartLayoutOptionsKeyTip);
+            group.Medium(ChartDataTableOptionsPlanner.CommandId, FreePRibbonText.ChartDataTableOptionsLabel, RibbonCommandIconKind.ChartColumn, FreePRibbonText.ChartDataTableOptionsKeyTip);
         });
         tab.Group("links", FreePRibbonText.LinksGroupLabel, FreePRibbonText.LinksGroupKeyTip, 92, group =>
         {

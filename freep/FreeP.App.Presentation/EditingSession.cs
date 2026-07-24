@@ -1926,6 +1926,19 @@ public sealed class EditingSession
             options));
     }
 
+    /// <summary>Applies chart data-table visibility and border options as one undo step.</summary>
+    public void ApplyChartDataTableOptions(ChartDataTableOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return;
+
+        Bus.Execute(new SetChartDataTableOptionsCommand(
+            _currentSlideIndex,
+            _selectedShapeIds[0],
+            options));
+    }
+
     /// <summary>Applies one chart axis options edit as a single undo step.</summary>
     public void ApplyChartAxisOptions(ChartAxisOptions options)
     {

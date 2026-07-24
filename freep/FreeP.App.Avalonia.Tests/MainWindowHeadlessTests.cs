@@ -1916,6 +1916,7 @@ public sealed class MainWindowHeadlessTests
         var foundSeries = false;
         var foundPoint = false;
         var foundLayout = false;
+        var foundDataTable = false;
         var before = -1;
         var after = -1;
 
@@ -1929,6 +1930,7 @@ public sealed class MainWindowHeadlessTests
             foundSeries = registry.TryGet(ChartSeriesOptionsPlanner.CommandId, out _);
             foundPoint = registry.TryGet(ChartPointOptionsPlanner.CommandId, out _);
             foundLayout = registry.TryGet(ChartLayoutOptionsPlanner.CommandId, out _);
+            foundDataTable = registry.TryGet(ChartDataTableOptionsPlanner.CommandId, out _);
 
             before = window.Editor.CurrentSlide!.Shapes.Count;
             command!.Execute(RibbonCommandContext.Empty);
@@ -1941,6 +1943,7 @@ public sealed class MainWindowHeadlessTests
         foundSeries.Should().BeTrue("the Avalonia chart-series command must be registered");
         foundPoint.Should().BeTrue("the Avalonia chart-point command must be registered");
         foundLayout.Should().BeTrue("the Avalonia chart-layout command must be registered");
+        foundDataTable.Should().BeTrue("the Avalonia chart-data-table command must be registered");
         after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
     }
 
@@ -5848,6 +5851,26 @@ public sealed class MainWindowHeadlessTests
         options.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, true, DataLabelPosition.OutsideEnd, false, true,
             true, true, true, true, "0.0%", " | "));
+    }
+
+    [Fact]
+    public async Task ChartDataTableOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartDataTableOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartDataTableOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(true, false, true, false, true);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().Be(new ChartDataTableOptions(true, false, true, false, true));
     }
 
     [Fact]
