@@ -93,7 +93,7 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
                 if (_disposed || generation != _generation || cancellationToken.IsCancellationRequested
                     || _pendingCompletion is null)
                 {
-                    process.Dispose();
+                    StopAndDisposeProcess(process);
                     return;
                 }
 
@@ -135,6 +135,11 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
         if (process is null)
             return;
 
+        StopAndDisposeProcess(process);
+    }
+
+    private static void StopAndDisposeProcess(ISpeechProcess process)
+    {
         try
         {
             if (!process.HasExited)
@@ -146,7 +151,14 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
         }
         finally
         {
-            process.Dispose();
+            try
+            {
+                process.Dispose();
+            }
+            catch (Exception)
+            {
+                // Cleanup is best-effort and must not make Stop/Dispose crash the host.
+            }
         }
     }
 
@@ -275,8 +287,21 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
         void Kill();
     }
 
-    private sealed class ProcessSpeechRunner : ISpeechProcessRunner
+    internal sealed class ProcessSpeechRunner : ISpeechProcessRunner
     {
+        private readonly Func<ProcessStartInfo, Action, IPlatformSpeechProcess> _processFactory;
+
+        public ProcessSpeechRunner()
+            : this((startInfo, onExited) => new PlatformSpeechProcess(startInfo, onExited))
+        {
+        }
+
+        internal ProcessSpeechRunner(
+            Func<ProcessStartInfo, Action, IPlatformSpeechProcess> processFactory)
+        {
+            _processFactory = processFactory ?? throw new ArgumentNullException(nameof(processFactory));
+        }
+
         public ISpeechProcess Start(SpeechBackend backend, string text, Action onExited)
         {
             var startInfo = new ProcessStartInfo
@@ -289,30 +314,59 @@ public sealed class AvaloniaSpeechEngine : ISpeechEngine, IDisposable
             foreach (var argument in backend.Arguments)
                 startInfo.ArgumentList.Add(argument);
 
-            var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-            process.Exited += (_, _) => onExited();
-            if (!process.Start())
+            var process = _processFactory(startInfo, onExited);
+            try
             {
-                process.Dispose();
-                throw new InvalidOperationException("The speech process could not be started.");
-            }
+                if (!process.Start())
+                    throw new InvalidOperationException("The speech process could not be started.");
 
-            if (backend.WriteTextToStandardInput)
+                if (backend.WriteTextToStandardInput)
+                    process.WriteStandardInput(text);
+
+                return process;
+            }
+            catch
             {
-                process.StandardInput.Write(text);
-                process.StandardInput.Close();
+                // Start may have created the child before reporting an error, and stdin can fail after a
+                // successful launch. In either case this runner owns the exact process and must reap it.
+                StopAndDisposeProcess(process);
+                throw;
             }
-
-            return new SpeechProcess(process);
         }
     }
 
-    private sealed class SpeechProcess(Process process) : ISpeechProcess
+    internal interface IPlatformSpeechProcess : ISpeechProcess
     {
-        public bool HasExited => process.HasExited;
+        bool Start();
+        void WriteStandardInput(string text);
+    }
 
-        public void Kill() => process.Kill(entireProcessTree: true);
+    private sealed class PlatformSpeechProcess : IPlatformSpeechProcess
+    {
+        private readonly Process _process;
 
-        public void Dispose() => process.Dispose();
+        public PlatformSpeechProcess(ProcessStartInfo startInfo, Action onExited)
+        {
+            _process = new Process
+            {
+                StartInfo = startInfo,
+                EnableRaisingEvents = true,
+            };
+            _process.Exited += (_, _) => onExited();
+        }
+
+        public bool Start() => _process.Start();
+
+        public bool HasExited => _process.HasExited;
+
+        public void WriteStandardInput(string text)
+        {
+            _process.StandardInput.Write(text);
+            _process.StandardInput.Close();
+        }
+
+        public void Kill() => _process.Kill(entireProcessTree: true);
+
+        public void Dispose() => _process.Dispose();
     }
 }

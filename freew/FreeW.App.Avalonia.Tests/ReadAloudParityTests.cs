@@ -24,7 +24,7 @@ public sealed class ReadAloudParityTests
     public async Task Avalonia_caret_mapping_matches_Wpf_for_blank_and_table_blocks()
     {
         var index = -1;
-        var ran = await OnUiThread(() =>
+        await OnUiThread(() =>
         {
             var document = TextDocument.CreateEmpty();
             document.Blocks.Clear();
@@ -48,9 +48,6 @@ public sealed class ReadAloudParityTests
             view.MoveCaretToBlockForTest(3, 0);
             index = view.ReadAloudStartSegmentIndex();
         });
-
-        if (!ran)
-            return;
 
         // The caret is in the final paragraph: First + Cell one + Cell two have already been passed.
         index.Should().Be(3);
@@ -189,6 +186,58 @@ public sealed class ReadAloudParityTests
     }
 
     [Fact]
+    public void Avalonia_process_runner_reaps_started_child_when_standard_input_fails()
+    {
+        var process = new FailingInputProcess();
+        var runner = new AvaloniaSpeechEngine.ProcessSpeechRunner((_, _) => process);
+        using var engine = new AvaloniaSpeechEngine(
+            _ => new AvaloniaSpeechEngine.SpeechBackend(
+                "fake",
+                [],
+                WriteTextToStandardInput: true),
+            _ => { },
+            runner);
+
+        engine.SpeakAsync("pending", () => { });
+
+        process.WasStarted.Should().BeTrue();
+        process.WasKilled.Should().BeTrue();
+        process.WasDisposed.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Avalonia_process_engine_reaps_child_when_stop_or_dispose_wins_during_start(bool dispose)
+    {
+        var process = new RecordingProcess();
+        var runner = new BlockingProcessRunner(process);
+        var engine = new AvaloniaSpeechEngine(
+            _ => new AvaloniaSpeechEngine.SpeechBackend("fake", []),
+            _ => { },
+            runner);
+        var speakTask = Task.Run(() => engine.SpeakAsync("pending", () => { }));
+
+        try
+        {
+            await runner.StartEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            if (dispose)
+                engine.Dispose();
+            else
+                engine.Stop();
+        }
+        finally
+        {
+            runner.AllowReturn.Set();
+            await speakTask;
+        }
+
+        process.WasKilled.Should().BeTrue();
+        process.WasDisposed.Should().BeTrue();
+        engine.Dispose();
+    }
+
+    [Fact]
     public void MainWindow_wires_read_aloud_callbacks_and_lifecycle_guards()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
@@ -200,18 +249,8 @@ public sealed class ReadAloudParityTests
         source.Should().Contain("_editor.ReadAloudStartSegmentIndex()");
     }
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    private static Task OnUiThread(Action action) =>
+        Session.Dispatch(action, CancellationToken.None);
 
     private static RibbonHostCallbacks NoopCallbacks() =>
         new(
@@ -282,12 +321,51 @@ public sealed class ReadAloudParityTests
         public void Complete() => Process.Completion?.Invoke();
     }
 
+    private sealed class BlockingProcessRunner(RecordingProcess process)
+        : AvaloniaSpeechEngine.ISpeechProcessRunner
+    {
+        public TaskCompletionSource<bool> StartEntered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ManualResetEventSlim AllowReturn { get; } = new();
+
+        public AvaloniaSpeechEngine.ISpeechProcess Start(
+            AvaloniaSpeechEngine.SpeechBackend backend,
+            string text,
+            Action onExited)
+        {
+            process.Completion = onExited;
+            StartEntered.TrySetResult(true);
+            AllowReturn.Wait();
+            return process;
+        }
+    }
+
     private sealed class RecordingProcess : AvaloniaSpeechEngine.ISpeechProcess
     {
         public Action? Completion { get; set; }
         public bool WasKilled { get; private set; }
         public bool WasDisposed { get; private set; }
         public bool HasExited => WasKilled;
+        public void Kill() => WasKilled = true;
+        public void Dispose() => WasDisposed = true;
+    }
+
+    private sealed class FailingInputProcess : AvaloniaSpeechEngine.IPlatformSpeechProcess
+    {
+        public bool WasStarted { get; private set; }
+        public bool WasKilled { get; private set; }
+        public bool WasDisposed { get; private set; }
+        public bool HasExited => WasKilled;
+
+        public bool Start()
+        {
+            WasStarted = true;
+            return true;
+        }
+
+        public void WriteStandardInput(string text) =>
+            throw new IOException("Simulated stdin failure.");
+
         public void Kill() => WasKilled = true;
         public void Dispose() => WasDisposed = true;
     }
