@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -508,23 +509,31 @@ public partial class App : Application
     /// content comparison). We therefore scope the path-based key to the originating session the
     /// same way the name-based key already is below (see M9), by also keying on the
     /// "recovery-{processId}-{launchTag}-" prefix embedded in every snapshot's file name (see
-    /// MainWindow.Autosave.cs's AttachAutosaveService). Candidates from the SAME process launch
-    /// that share a path are still merged (that is the legitimate "New Window" sibling-snapshot
-    /// case this method exists to collapse — every sibling window of one document shares its
-    /// launch scope); candidates for the same path from DIFFERENT launches are kept as distinct
-    /// candidates and are each offered to the user by <see cref="OfferStartupRecovery"/> instead
-    /// of one being silently deleted.
+    /// MainWindow.Autosave.cs's AttachAutosaveService).
+    /// <para>
+    /// Same launch scope + same path is still NOT sufficient proof of a genuine "New Window"
+    /// sibling pair, though: File &gt; Open has no "already open elsewhere" check (see
+    /// MainWindow.Backstage.cs's OpenFileAsync), so the SAME running process can just as easily
+    /// have two ordinary, fully INDEPENDENT windows over the same saved path (opened via two
+    /// separate File &gt; Open actions), each with its own unrelated unsaved edits. Blindly merging
+    /// on launch scope + path alone would silently destroy one of those windows' edits with zero
+    /// content comparison — R82-services-autosave-recovery-5-1. We therefore also require the
+    /// sidecar's <see cref="AutosaveSidecar.DocumentId"/> (populated from
+    /// <c>IAutosaveWorkbookSource.DocumentId</c>, i.e. the in-memory <c>Workbook.Id</c>) to match:
+    /// genuine "New Window" siblings share the exact same Workbook instance and therefore the same
+    /// DocumentId, while two independent windows each get their own freshly created/deserialized
+    /// Workbook and therefore different DocumentIds. Candidates whose DocumentId is missing (e.g. a
+    /// snapshot written by a build that predates this field) are never treated as provably the same
+    /// document — see <see cref="GetDocumentIdentityComponent"/>.
+    /// </para>
     /// <para>
     /// An unsaved workbook has no file path. Its <see cref="AutosaveSidecar.DisplayName"/> is
     /// almost always the compile-time constant <c>WorkbookFactory.DefaultWorkbookName</c>
     /// ("Book1") for every never-touched fresh launch, so display name alone is NOT a reliable
     /// document identity — two unrelated crashed processes that both still had their untouched
     /// default workbook would otherwise collide on "name:Book1" and one would be silently deleted
-    /// (see M9). We therefore scope the name-based key to the originating session the same way.
-    /// Candidates from the SAME process launch that share a display name are still merged (that is
-    /// the legitimate "New Window" sibling-snapshot case this method exists to collapse);
-    /// candidates from DIFFERENT launches that merely happen to share a name are always treated as
-    /// distinct documents.
+    /// (see M9). We therefore scope the name-based key to the originating session and DocumentId
+    /// the same way as the path-based key above.
     /// </para>
     /// <para>
     /// Candidates that have neither a path nor a name (should not normally happen) each get their
@@ -534,13 +543,33 @@ public partial class App : Application
     private static string GetDocumentIdentityKey(AutosaveRecoveryCandidate candidate)
     {
         if (!string.IsNullOrWhiteSpace(candidate.Sidecar.OriginalFilePath))
-            return "path:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.OriginalFilePath;
+        {
+            return "path:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.OriginalFilePath
+                + ":" + GetDocumentIdentityComponent(candidate);
+        }
 
         if (!string.IsNullOrWhiteSpace(candidate.Sidecar.DisplayName))
-            return "name:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.DisplayName;
+        {
+            return "name:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.DisplayName
+                + ":" + GetDocumentIdentityComponent(candidate);
+        }
 
         return "snapshot:" + candidate.SnapshotPath;
     }
+
+    /// <summary>
+    /// The DocumentId contribution to <see cref="GetDocumentIdentityKey"/>. When the sidecar
+    /// carries a <see cref="AutosaveSidecar.DocumentId"/> (every snapshot written by this build
+    /// does), it is authoritative proof of whether two candidates share the same underlying
+    /// Workbook instance. When it is missing (a snapshot from a build predating this field), the
+    /// candidate's own snapshot path is used instead so it is NEVER treated as provably the same
+    /// document as another candidate and silently merged/deleted — better to keep (and offer) an
+    /// extra candidate than to silently destroy an unrelated window's unsaved edits.
+    /// </summary>
+    private static string GetDocumentIdentityComponent(AutosaveRecoveryCandidate candidate) =>
+        string.IsNullOrWhiteSpace(candidate.Sidecar.DocumentId)
+            ? "unknown:" + candidate.SnapshotPath
+            : candidate.Sidecar.DocumentId;
 
     /// <summary>
     /// Extracts the "{processId}-{launchTag}" scope from a snapshot's file name, e.g.
@@ -583,6 +612,20 @@ public partial class App : Application
             return DateTimeOffset.MinValue;
         }
     }
+
+    /// <summary>
+    /// Formats a candidate's autosave timestamp for display in the startup recovery prompt
+    /// (R82-services-autosave-recovery-5-3: Excel's Document Recovery pane always shows "last
+    /// autosaved at HH:MM" next to each recovered file; FreeX's prompt previously never surfaced
+    /// this at all, leaving the user unable to judge how fresh/stale an offered snapshot is, or to
+    /// tell two same-named candidates apart by recency). Reuses
+    /// <see cref="GetCandidateTimestamp"/>'s parse-with-fallback-to-file-mtime logic so the
+    /// displayed value matches exactly what dedup/ordering already use, converts it to local time
+    /// (the sidecar stores UTC), and formats it with the current UI culture so the punctuation and
+    /// ordering match the rest of the localized prompt.
+    /// </summary>
+    private static string FormatRecoveryTimestampForDisplay(AutosaveRecoveryCandidate candidate) =>
+        GetCandidateTimestamp(candidate).ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
 
     /// <summary>
     /// Drops any candidate whose ORIGINAL on-disk file was saved more recently than the crash
@@ -682,22 +725,28 @@ public partial class App : Application
             {
                 var candidate = candidates[i];
                 var displayName = candidate.Sidecar.DisplayName;
+                var timestampText = FormatRecoveryTimestampForDisplay(candidate);
 
                 // Build the prompt. When multiple candidates remain we mention how many are
-                // outstanding so the user is not surprised by repeated dialogs.
+                // outstanding so the user is not surprised by repeated dialogs. Every variant
+                // also carries the autosave timestamp (R82-services-autosave-recovery-5-3) so the
+                // user can judge how fresh/stale the offered snapshot is before deciding — the
+                // extra format argument is appended after the existing ones, so a satellite
+                // translation that has not yet picked up the new placeholder still formats
+                // correctly (unused trailing args are not an error for string.Format).
                 string prompt;
                 var remaining = candidates.Count - i;
                 if (remaining > 1)
                 {
                     prompt = string.IsNullOrWhiteSpace(displayName)
-                        ? UiText.Format("Startup_RecoveryPromptMultiple", remaining)
-                        : UiText.Format("Startup_RecoveryPromptNamedMultiple", displayName, remaining);
+                        ? UiText.Format("Startup_RecoveryPromptMultiple", remaining, timestampText)
+                        : UiText.Format("Startup_RecoveryPromptNamedMultiple", displayName, remaining, timestampText);
                 }
                 else
                 {
                     prompt = string.IsNullOrWhiteSpace(displayName)
-                        ? UiText.Get("Startup_RecoveryPrompt")
-                        : UiText.Format("Startup_RecoveryPromptNamed", displayName);
+                        ? UiText.Format("Startup_RecoveryPrompt", timestampText)
+                        : UiText.Format("Startup_RecoveryPromptNamed", displayName, timestampText);
                 }
 
                 var accepted = AskStartupYesNo(

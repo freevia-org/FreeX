@@ -87,6 +87,24 @@ public partial class MainWindow
         // the bounding box of every selected area — for the common single-area case that bounding
         // box IS `range` itself, so behavior is unchanged.
         var areas = GetCurrentSelectionRanges(range);
+
+        // R82-commands-cutcopy-clipboard-5-1: real Excel refuses a Cut on ANY multi-area
+        // (Ctrl+click) selection outright, and refuses a Copy unless every area shares the same
+        // rows (they combine side-by-side) or the same columns (they combine stacked) --
+        // MultiRangeCopyPlanner already encodes this exact rule for the Avalonia shell's
+        // WorkbookSession.TryCopySelectedRangeText/TryCutSelectedRangeText. Reject BEFORE touching
+        // the OS clipboard or the internal clipboard/marquee state, so a rejected attempt leaves
+        // whatever was already copied/cut untouched, matching Excel's "That command cannot be
+        // used on multiple selections" behavior instead of silently copying a nonsensical
+        // bounding-box marquee.
+        if (areas.Count > 1 && (isCut || !MultiRangeCopyPlanner.TryPlan(areas, out _)))
+        {
+            ShowCommandError(
+                new CommandOutcome(false, CreateMultiRangeClipboardError(isCut ? "Cut" : "Copy")),
+                isCut ? "Cut" : "Copy");
+            return;
+        }
+
         var boundingRange = GetSelectionBoundingRange(areas, range);
         var sheet = _workbook.GetSheet(_currentSheetId);
 
@@ -156,6 +174,19 @@ public partial class MainWindow
         {
             for (uint r = area.Start.Row; r <= area.End.Row; r++)
             {
+                // R82-commands-cutcopy-clipboard-5-2: real Excel implicitly restricts copying a
+                // FILTERED range to its VISIBLE rows only -- rows hidden by AutoFilter are never
+                // reproduced at the paste destination -- but never applies this restriction to a
+                // plain manually-hidden or group-collapsed row (those DO get copied). Sheet's own
+                // IsRowFilterHidden (as opposed to the broader IsRowEffectivelyHidden, which folds
+                // every hiding mechanism together) exists precisely to preserve that distinction.
+                // Skipping the row here leaves its addresses absent from clipCells, exactly like
+                // the "gap" cells between disjoint multi-area copies above -- PasteCommandFactory's
+                // internal-paste path already never writes to a destination cell whose source
+                // address is missing from this list.
+                if (sheet is not null && sheet.IsRowFilterHidden(r))
+                    continue;
+
                 for (uint c = area.Start.Col; c <= area.End.Col; c++)
                 {
                     var addr = new CellAddress(_currentSheetId, r, c);
@@ -174,6 +205,44 @@ public partial class MainWindow
             text,
             isCut,
             areas.Count > 1 ? areas : null);
+    }
+
+    /// <summary>Matches the phrasing of WorkbookSession's (Avalonia-facing) identical
+    /// CreateMultiRangeClipboardError helper, kept as a separate literal here rather than shared
+    /// since that helper is a private instance member of WorkbookSession.</summary>
+    private static string CreateMultiRangeClipboardError(string operation) =>
+        operation + " does not support multiple selected ranges yet.";
+
+    /// <summary>
+    /// R82-commands-cutcopy-clipboard-5-3: real Excel invalidates the OS clipboard once a
+    /// Cut-then-Paste move completes -- the marching ants disappear and any further Ctrl+V is a
+    /// no-op. Without this, the TSV/HTML payload <see cref="SetClipboardDataWithRetry"/> placed on
+    /// the real OS clipboard during the original Ctrl+X stays there untouched even after
+    /// <c>_internalClipboard</c> is cleared below, so <c>ExecutePaste</c>'s external-clipboard
+    /// fallback (<see cref="TryGetClipboardText"/>/<see cref="TryGetClipboardHtml"/>) would happily
+    /// paste that same cut content a second time. Best-effort: a transiently locked clipboard just
+    /// leaves the stale cut text in place, matching how the other clipboard helpers in this file
+    /// already treat OS-clipboard access as fallible.
+    /// </summary>
+    private static void InvalidateOsClipboardAfterCutMove()
+    {
+        const int attempts = 20;
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                System.Windows.Clipboard.Clear();
+                return;
+            }
+            catch (ExternalException) when (attempt < attempts)
+            {
+                Thread.Sleep(50);
+            }
+            catch
+            {
+                return;
+            }
+        }
     }
 
     private static void SetClipboardDataWithRetry(DataObject data, string text)
@@ -516,7 +585,10 @@ public partial class MainWindow
                         preserveClipboardVisual,
                         expandToSelectedRange: expandPasteToSelectedRange);
                     if (clip.IsCut)
+                    {
                         _internalClipboard = null;
+                        InvalidateOsClipboardAfterCutMove();
+                    }
                 };
                 if (mode != PasteMode.Formats)
                 {
@@ -530,7 +602,10 @@ public partial class MainWindow
                     preserveClipboardVisual,
                     expandToSelectedRange: expandPasteToSelectedRange);
                 if (clip.IsCut)
+                {
                     _internalClipboard = null;
+                    InvalidateOsClipboardAfterCutMove();
+                }
                 UpdateViewport();
                 RefreshToolbar();
                 return;
@@ -1074,7 +1149,10 @@ public partial class MainWindow
         InvalidateNavigationCachesIfManual();
         CompletePasteSelection(clip.SourceRange, default, preserveClipboardVisual);
         if (clip.IsCut)
+        {
             _internalClipboard = null;
+            InvalidateOsClipboardAfterCutMove();
+        }
         UpdateViewport();
         RefreshToolbar();
     }

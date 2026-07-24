@@ -248,11 +248,17 @@ internal static partial class XlsxPivotTableReader
         var calculatedFieldsElement = root.Element(workbookNs + "calculatedFields");
         var calculatedFields = ReadPivotCalculatedFields(calculatedFieldsElement, workbookNs, pivotCache);
         var calculatedFieldNamesByIndex = ReadPivotCalculatedFieldNamesByIndex(calculatedFieldsElement, workbookNs, pivotCache);
-        var valueFilters = ReadPivotValueFilters(root.Element(workbookNs + "valueFilters"), workbookNs)
-            .Concat(ReadNativePivotValueFilters(nativeFiltersElement, workbookNs))
+        // R82-io-pivot-layout-5-2: native-format entries first, then any FreeX-invented-format entries --
+        // going forward, XlsxPivotTableWriter.cs only ever falls back to the invented <valueFilters>/
+        // <labelFilters> shape for the handful of kinds with no real ST_PivotFilterType token at all
+        // (AboveAverage/BelowAverage value filters), so this keeps a mixed native+invented list in the
+        // same relative order a fresh save's own iteration order produces (native kinds first, in their
+        // original order, with any non-representable kind appended after).
+        var valueFilters = ReadNativePivotValueFilters(nativeFiltersElement, workbookNs)
+            .Concat(ReadPivotValueFilters(root.Element(workbookNs + "valueFilters"), workbookNs))
             .ToList();
-        var labelFilters = ReadPivotLabelFilters(root.Element(workbookNs + "labelFilters"), workbookNs)
-            .Concat(ReadNativePivotLabelFilters(nativeFiltersElement, workbookNs))
+        var labelFilters = ReadNativePivotLabelFilters(nativeFiltersElement, workbookNs)
+            .Concat(ReadPivotLabelFilters(root.Element(workbookNs + "labelFilters"), workbookNs))
             .ToList();
         var sorts = ReadPivotSorts(root.Element(workbookNs + "pivotSorts"), workbookNs)
             .Concat(ReadNativePivotFieldSorts(root.Element(workbookNs + "pivotFields"), workbookNs))

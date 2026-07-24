@@ -184,12 +184,16 @@ public sealed partial class NativeJsonAdapter
     private static CellBorder ToCellBorder(CellBorderDto? border) =>
         border is null
             ? default
-            : new CellBorder(NativeJsonValueSanitizer.ValidEnumOrDefault(border.Style, BorderStyle.None), border.Color);
+            : new CellBorder(
+                NativeJsonValueSanitizer.ValidEnumOrDefault(border.Style, BorderStyle.None),
+                border.Color,
+                NativeJsonColorMapper.ToThemeColorReference(border.ThemeColor));
 
     private static CellBorderDto FromCellBorder(CellBorder border) => new()
     {
         Style = NativeJsonValueSanitizer.ValidEnumOrDefault(border.Style, BorderStyle.None),
-        Color = border.Color
+        Color = border.Color,
+        ThemeColor = NativeJsonColorMapper.FromThemeColorReference(border.ThemeColor)
     };
 
     private static CellGradientFill? ToCellGradientFill(CellGradientFillDto? dto)
@@ -350,7 +354,8 @@ public sealed partial class NativeJsonAdapter
         }
 
         private static bool BorderEquals(CellBorderDto? x, CellBorderDto? y) =>
-            ReferenceEquals(x, y) || (x is not null && y is not null && x.Style == y.Style && x.Color == y.Color);
+            ReferenceEquals(x, y) || (x is not null && y is not null && x.Style == y.Style && x.Color == y.Color
+                && x.ThemeColor?.Slot == y.ThemeColor?.Slot && x.ThemeColor?.Tint == y.ThemeColor?.Tint);
 
         private static void AddBorderHash(ref HashCode hash, CellBorderDto? border)
         {
@@ -362,6 +367,8 @@ public sealed partial class NativeJsonAdapter
 
             hash.Add(border.Style);
             hash.Add(border.Color);
+            hash.Add(border.ThemeColor?.Slot);
+            hash.Add(border.ThemeColor?.Tint);
         }
 
         private static bool DictionaryEquals(IReadOnlyDictionary<string, string>? x, IReadOnlyDictionary<string, string>? y)

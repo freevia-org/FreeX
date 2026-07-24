@@ -147,4 +147,52 @@ public sealed partial class FormulaAuditingServiceTests
         issue.Description.Should().Contain("data validation rule");
         issue.Description.Should().Contain("whole number from 1 to 10");
     }
+
+    // R82-calc-name-blank-precedent: a sheet-scoped defined name shadows a same-named
+    // workbook-global name on its own sheet (real Excel resolves the unqualified reference
+    // to the sheet-scoped definition). The blank-precedent error-check must resolve the name
+    // with sheet-scope-first lookup, matching CollectReferences (used by Trace Precedents),
+    // rather than the workbook-global-only 2-arg TryGetNamedRange overload.
+    [Fact]
+    public void FindFormulaErrorIssues_ReturnsFormulaRefersToBlankCellsForSheetScopedNamedRangeTargetingBlankCell()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var b1 = new CellAddress(sheet1.Id, 1, 2);
+        sheet1.SetCell(b1, BlankValue.Instance);
+
+        // "Foo" is ONLY sheet-scoped to Sheet1, pointing at the blank B1. There is no
+        // workbook-global "Foo" at all, which is the ordinary case for a sheet-local name.
+        wb.DefineNamedRange("Foo", new GridRange(b1, b1), metadata: null, sheet1.Id);
+
+        var formulaAddress = new CellAddress(sheet1.Id, 1, 3);
+        sheet1.SetCell(formulaAddress, Cell.FromFormula("SUM(Foo)"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet1.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.FormulaRefersToBlankCellsErrorCode).Subject;
+
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Cell.Should().Be("C1");
+        issue.FormulaText.Should().Be("=SUM(Foo)");
+        issue.Description.Should().Contain("blank cells");
+    }
+
+    // No-regression sibling: same sheet-scoped name, but the target cell is non-blank, so no
+    // blank-precedent issue should be raised.
+    [Fact]
+    public void FindFormulaErrorIssues_DoesNotFlagSheetScopedNamedRangeWhenTargetIsNotBlank()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var b1 = new CellAddress(sheet1.Id, 1, 2);
+        sheet1.SetCell(b1, new NumberValue(42));
+
+        wb.DefineNamedRange("Foo", new GridRange(b1, b1), metadata: null, sheet1.Id);
+
+        var formulaAddress = new CellAddress(sheet1.Id, 1, 3);
+        sheet1.SetCell(formulaAddress, Cell.FromFormula("SUM(Foo)"));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet1.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.FormulaRefersToBlankCellsErrorCode);
+    }
 }

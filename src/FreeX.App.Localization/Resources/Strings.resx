@@ -10659,7 +10659,7 @@ Saved PDF file:&#xD;
     <value>Clear All</value>
   </data>
   <data name="Startup_RecoveryPromptMultiple" xml:space="preserve">
-    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. There are {0} workbook(s) remaining to review. Would you like to restore this workbook?</value>
+    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. There are {0} workbook(s) remaining to review. Would you like to restore this workbook? (Last autosaved: {1})</value>
   </data>
   <data name="MainWindow_Content_Line" xml:space="preserve">
     <value>Line</value>
@@ -12149,7 +12149,7 @@ Saved PDF file:&#xD;
     <value>Table/_Range:</value>
   </data>
   <data name="Startup_RecoveryPromptNamedMultiple" xml:space="preserve">
-    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. There are {1} workbook(s) remaining to review. Would you like to restore this workbook?</value>
+    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. There are {1} workbook(s) remaining to review. Would you like to restore this workbook? (Last autosaved: {2})</value>
   </data>
   <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
     <value>Apply a filter before using Reapply.</value>
@@ -17088,7 +17088,7 @@ Continue saving?</value>
     <value>Format Y Axis</value>
   </data>
   <data name="Startup_RecoveryPrompt" xml:space="preserve">
-    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>
+    <value>FreeX found autosaved recovery files from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook? (Last autosaved: {0})</value>
   </data>
   <data name="DataTable_MissingInputMessage" xml:space="preserve">
     <value>Enter either a row input cell or a column input cell.</value>
@@ -18687,7 +18687,7 @@ and {0} more.</value>
     <value>Pages: _From:</value>
   </data>
   <data name="Startup_RecoveryPromptNamed" xml:space="preserve">
-    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook?</value>
+    <value>FreeX found an autosaved recovery file for "{0}" from a previous session that ended unexpectedly. Would you like to restore the unsaved workbook? (Last autosaved: {1})</value>
   </data>
   <data name="MainWindow_TooltipTitle_AccountingNumberFormat" xml:space="preserve">
     <value>Accounting Number Format</value>

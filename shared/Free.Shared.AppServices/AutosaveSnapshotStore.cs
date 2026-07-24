@@ -20,6 +20,16 @@ public sealed class AutosaveSidecar
 
     [JsonPropertyName("snapshotId")]
     public string? SnapshotId { get; set; }
+
+    /// <summary>
+    /// Optional stable identity of the in-memory document instance that produced this snapshot
+    /// (e.g. FreeX's <c>Workbook.Id</c>). See <see cref="IAutosaveSnapshotSource.DocumentId"/> for
+    /// why this exists — it lets crash-recovery dedup distinguish genuine multi-window siblings
+    /// over one shared document from independent documents that merely share a saved file path.
+    /// Null for apps/sources that do not supply one.
+    /// </summary>
+    [JsonPropertyName("documentId")]
+    public string? DocumentId { get; set; }
 }
 
 /// <summary>

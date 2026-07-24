@@ -72,6 +72,7 @@ public static partial class XlsxChartPartReader
             foreach (var series in plotChart.Elements(ChartNs + "ser"))
             {
                 var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
+                XlsxChartSeriesRangeReader.CaptureSeriesRoundTripMetadata(series, seriesIndex, result);
                 hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
@@ -152,6 +153,7 @@ public static partial class XlsxChartPartReader
             foreach (var series in lineChart.Elements(ChartNs + "ser"))
             {
                 var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
+                XlsxChartSeriesRangeReader.CaptureSeriesRoundTripMetadata(series, seriesIndex, result);
                 hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))

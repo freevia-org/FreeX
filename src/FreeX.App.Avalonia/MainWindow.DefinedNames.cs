@@ -400,18 +400,16 @@ public sealed partial class MainWindow
             // being rejected — Excel's Define Name dialog accepts both equally.
             var isRange = TryParseDefinedNameRange(refersToText, out var range);
 
-            // Renaming an existing name: remove the old entry first so it does not linger alongside the new one.
-            if (seed is not null && !string.Equals(seed.Name, name, StringComparison.OrdinalIgnoreCase))
-            {
-                var seedScopeSheetId = DefinedNamesShellGlue.ResolveScopeSheetId(_session.Workbook, seed.ScopeLabel);
-                var removeResult = _session.ExecuteReviewCommand(
-                    DefinedNamesShellGlue.BuildDeleteCommand(seed.Name, seedScopeSheetId));
-                if (!removeResult.Success)
-                {
-                    ShowWarning(removeResult.ErrorMessage ?? UiText.Format("InsertLoc_CouldNotRenameName", seed.Name));
-                    return;
-                }
-            }
+            // NOTE: renaming an existing name intentionally does NOT remove the old entry first
+            // (this used to call BuildDeleteCommand for the seed's old name before defining the new
+            // one). FreeX resolves names in formulas by literal text (e.g. =SUM(Revenue)), and
+            // nothing rewrites referencing formulas old-name -> new-name on rename; removing the old
+            // entry here would turn every such formula into #NAME? the instant the rename is
+            // applied. Leaving the old entry in place means a rename creates a second, orphaned name
+            // alongside the new one (visible/deletable from Name Manager like any other name) - a
+            // lesser, cosmetic bug compared to silently breaking live formulas. This matches the WPF
+            // host's NamedRangeDialog.DefineOrUpdateName, which deliberately makes the same choice
+            // (see its comment for the full rationale).
 
             var result = isRange
                 ? _session.ExecuteReviewCommand(DefinedNamesShellGlue.BuildDefineCommand(draft, range))

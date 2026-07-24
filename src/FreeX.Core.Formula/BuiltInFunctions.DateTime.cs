@@ -109,22 +109,29 @@ public static partial class BuiltInFunctions
         if (year < 0 || year > 9999) return ErrorValue.Num;
         try
         {
-            var dt = new DateTime(year, 1, 1)
-                .AddMonths(month - 1)
-                .AddDays(day - 1);
+            // Resolve month rollover against the *effective* year/month first (e.g. year=1901,
+            // month=-10 rolls back to Feb 1900) before adding the day offset. The 1900
+            // phantom-leap-day corrections below must key off this effective year/month, not
+            // the raw `year`/`month` arguments, or a rollover that lands in Jan/Feb 1900 from a
+            // different literal year (e.g. DATE(1901,-10,29)) misses the correction entirely.
+            var monthAnchor = new DateTime(year, 1, 1).AddMonths(month - 1);
+            int effectiveYear = monthAnchor.Year;
+            int effectiveMonth = monthAnchor.Month;
+            var dt = monthAnchor.AddDays(day - 1);
             double serial = DateToSerial(dt, uses1904DateSystem);
             if (serial < (uses1904DateSystem ? 0 : 1)) return ErrorValue.Num;
-            if (!uses1904DateSystem && year == 1900 && month >= 3 && dt < new DateTime(1900, 3, 1))
+            if (!uses1904DateSystem && effectiveYear == 1900 && effectiveMonth >= 3 && dt < new DateTime(1900, 3, 1))
                 return new NumberValue(serial + 1);
-            if (!uses1904DateSystem && year == 1900 && month == 3 && day == 0)
+            if (!uses1904DateSystem && effectiveYear == 1900 && effectiveMonth == 3 && day == 0)
                 return new NumberValue(60);
-            // Requested month < 3 (Jan/Feb of 1900) but the constructed date rolled forward
-            // on/after the phantom leap-day boundary (e.g. DATE(1900,2,30) real-rolls to
-            // Mar 2): the raw serial already counts one real day too many for the boundary
-            // it crossed, so subtract 1. This must fire for ANY dt >= Mar 1, 1900 (not just
-            // an exact match), so DATE(1900,2,30)=61 and DATE(1900,2,31)=62 as well as the
+            // Requested effective month < 3 (Jan/Feb of 1900) but the constructed date rolled
+            // forward on/after the phantom leap-day boundary (e.g. DATE(1900,2,30) real-rolls to
+            // Mar 2, or DATE(1901,-10,29) rolls back to an effective Feb 1900 that then rolls
+            // forward past it): the raw serial already counts one real day too many for the
+            // boundary it crossed, so subtract 1. This must fire for ANY dt >= Mar 1, 1900 (not
+            // just an exact match), so DATE(1900,2,30)=61 and DATE(1900,2,31)=62 as well as the
             // exact DATE(1900,2,29)=60 case.
-            if (!uses1904DateSystem && year == 1900 && month < 3 && dt >= new DateTime(1900, 3, 1))
+            if (!uses1904DateSystem && effectiveYear == 1900 && effectiveMonth < 3 && dt >= new DateTime(1900, 3, 1))
                 return new NumberValue(serial - 1);
             return new NumberValue(serial);
         }
@@ -520,6 +527,17 @@ public static partial class BuiltInFunctions
             MonthYearDateValueCulture,
             DateTimeStyles.None,
             out dt);
+
+    /// <summary>
+    /// Recognizes Excel's fictitious 1900 leap-day literal ("2/29/1900", "02/29/1900", or
+    /// "1900-02-29", optionally followed by a time-of-day) in typed/pasted text and maps it to
+    /// serial 60, the same way DATEVALUE/TIMEVALUE already do. .NET's <see cref="DateTime"/>
+    /// cannot represent that date directly (1900 is not a real leap year), so this is the entry
+    /// point non-formula callers (e.g. live cell entry in CellEntryParser) should use instead of
+    /// falling through to a plain DateTime.TryParse, which always fails for this literal.
+    /// </summary>
+    public static bool TryParseExcelFakeLeapDayText(string text, out double serial) =>
+        TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out serial);
 
     private static bool TryParseExcelFakeLeapDayValueText(string text, CultureInfo culture, out double serial)
     {

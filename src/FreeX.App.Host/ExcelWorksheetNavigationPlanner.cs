@@ -60,6 +60,9 @@ public static class ExcelWorksheetNavigationPlanner
     public static CellAddress GetCtrlEndCell(Sheet? sheet, SheetId sheetId)
         => FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, sheetId);
 
+    public static CellAddress GetHomeTarget(Sheet? sheet, SheetId sheetId, CellAddress current, bool ctrlHeld, bool endMode)
+        => FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.GetHomeTarget(sheet, sheetId, current, ctrlHeld, endMode);
+
     internal static ExcelWorksheetNavigationModifiers MapModifiers(ModifierKeys modifiers)
     {
         var mapped = ExcelWorksheetNavigationModifiers.None;

@@ -181,7 +181,7 @@ internal static partial class XlsxChartXmlWriter
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
-                new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
+                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
                 txElement,
                 chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
                     ? ToSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs)
@@ -196,7 +196,8 @@ internal static partial class XlsxChartXmlWriter
                 ToAdditionalTrendlinesXml(chart, seriesIndex),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToAdditionalErrorBarsXml(chart, seriesIndex),
-                ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs, categoryCache),
+                ToVerbatimMultiLevelCategoryXml(chart, seriesIndex)
+                    ?? ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs, categoryCache),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", valueRange),
@@ -285,6 +286,26 @@ internal static partial class XlsxChartXmlWriter
 
     private static ChartSeriesVerbatimFormulas? GetVerbatimFormulas(ChartModel chart, int seriesIndex) =>
         chart.VerbatimSeriesFormulas?.FirstOrDefault(f => f.SeriesIndex == seriesIndex);
+
+    /// <summary>
+    /// R82-io-chart-series-5-1: returns the explicit &lt;c:order&gt; captured for this series (see
+    /// <see cref="ChartModel.SeriesOrderOverrides"/>), falling back to the recomputed positional
+    /// <paramref name="seriesIndex"/> — Excel's ordinary case, where order == idx.
+    /// </summary>
+    private static int GetSeriesOrder(ChartModel chart, int seriesIndex) =>
+        chart.SeriesOrderOverrides.LastOrDefault(o => o.SeriesIndex == seriesIndex)?.Order ?? seriesIndex;
+
+    /// <summary>
+    /// R82-io-chart-series-5-2: re-emits a series' captured &lt;c:cat&gt; verbatim when it was a
+    /// &lt;c:multiLvlStrRef&gt; (grouped/multi-level category axis) in the source file — see
+    /// <see cref="ChartModel.MultiLevelCategoryXml"/>. Returns null when no such capture exists for
+    /// this series, so the caller falls back to the ordinary computed &lt;c:cat&gt;.
+    /// </summary>
+    private static XElement? ToVerbatimMultiLevelCategoryXml(ChartModel chart, int seriesIndex) =>
+        chart.MultiLevelCategoryXml
+            .LastOrDefault(entry => entry.SeriesIndex == seriesIndex) is { } entry
+            ? TryParseChartXml(entry.RawXml)
+            : null;
 
     /// <summary>
     /// R53-io-chart-series-order-3-2: reads a strip's current worksheet values so numRef/strRef
@@ -450,7 +471,7 @@ internal static partial class XlsxChartXmlWriter
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
-                new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
+                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
                 txElement,
                 ToScatterSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs),
@@ -572,7 +593,7 @@ internal static partial class XlsxChartXmlWriter
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
-                new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
+                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
                 txElement,
                 ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
@@ -641,12 +662,13 @@ internal static partial class XlsxChartXmlWriter
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
-                new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
+                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
                 txElement,
                 ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
-                ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs, categoryCache),
+                ToVerbatimMultiLevelCategoryXml(chart, seriesIndex)
+                    ?? ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs, categoryCache),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", valueRange),
@@ -686,9 +708,10 @@ internal static partial class XlsxChartXmlWriter
 
     /// <summary>
     /// Emits one <c>&lt;c:dPt&gt;</c> element per data point that needs a per-point override —
-    /// either an exploded-slice distance or an explicit per-point fill color
-    /// (<see cref="ChartModel.PointFillColors"/>). Child element order follows CT_DPt: idx,
-    /// then explosion, then spPr.
+    /// an exploded-slice distance, an explicit per-point fill color
+    /// (<see cref="ChartModel.PointFillColors"/>), or a per-point marker override
+    /// (<see cref="ChartModel.PointMarkerFormats"/>, R82-io-chart-series-5-3). Child element order
+    /// follows CT_DPt: idx, then marker, then explosion, then spPr.
     /// </summary>
     private static IEnumerable<XElement> ToDataPointsXml(
         ChartModel chart,
@@ -718,11 +741,15 @@ internal static partial class XlsxChartXmlWriter
             .Where(point => point.SeriesIndex == seriesIndex)
             .Select(point => point.PointIndex)
             .Concat(explodedPoints.Keys)
+            .Concat(chart.PointMarkerFormats
+                .Where(point => point.SeriesIndex == seriesIndex)
+                .Select(point => point.PointIndex))
             .Distinct()
             .OrderBy(index => index);
 
         foreach (var pointIndex in pointIndexes)
         {
+            var marker = ToPointMarkerXml(chart, seriesIndex, pointIndex, chartNs, drawingNs);
             var explosion = explodedPoints.TryGetValue(pointIndex, out var distance)
                 ? new XElement(chartNs + "explosion",
                     new XAttribute("val", Math.Clamp((int)Math.Round(distance * 100), 0, 50)))
@@ -731,9 +758,52 @@ internal static partial class XlsxChartXmlWriter
 
             yield return new XElement(chartNs + "dPt",
                 new XElement(chartNs + "idx", new XAttribute("val", pointIndex)),
+                marker,
                 explosion,
                 spPr);
         }
+    }
+
+    /// <summary>
+    /// R82-io-chart-series-5-3: builds a data point's &lt;c:marker&gt; override from
+    /// <see cref="ChartModel.PointMarkerFormats"/> (Format Data Point &gt; Marker Options), mirroring
+    /// <see cref="ToSeriesMarkerXml"/>'s series-level shape. Returns null when this point has no
+    /// captured marker override.
+    /// </summary>
+    private static XElement? ToPointMarkerXml(
+        ChartModel chart,
+        int seriesIndex,
+        int pointIndex,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        if (!ChartTypeSupport.SupportsSeriesMarkers(chart.Type))
+            return null;
+
+        var format = chart.PointMarkerFormats.LastOrDefault(item =>
+            item.SeriesIndex == seriesIndex && item.PointIndex == pointIndex);
+        if (format is null)
+            return null;
+
+        var shapeProperties = ToShapeProperties(
+            chartNs,
+            drawingNs,
+            format.FillThemeColor,
+            format.FillColor,
+            format.BorderThemeColor,
+            format.BorderColor,
+            format.BorderThickness);
+        if (format.MarkerStyle is null && format.MarkerSize is null && shapeProperties is null)
+            return null;
+
+        return new XElement(chartNs + "marker",
+            format.MarkerStyle is { } markerStyle
+                ? new XElement(chartNs + "symbol", new XAttribute("val", ToXlsxMarkerStyle(markerStyle)))
+                : null,
+            format.MarkerSize is { } markerSize
+                ? new XElement(chartNs + "size", new XAttribute("val", Math.Clamp((int)Math.Round(markerSize), 1, 30)))
+                : null,
+            shapeProperties);
     }
 
     private static XElement? ToPointShapeProperties(

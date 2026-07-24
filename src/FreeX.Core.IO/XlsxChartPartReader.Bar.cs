@@ -49,6 +49,7 @@ public static partial class XlsxChartPartReader
                 var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
                 // Record the declaration order (legend-position order) — see ChartModel.SeriesPlotOrder.
                 result.SeriesPlotOrder.Add(seriesIndex);
+                XlsxChartSeriesRangeReader.CaptureSeriesRoundTripMetadata(series, seriesIndex, result);
                 hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
@@ -92,6 +93,7 @@ public static partial class XlsxChartPartReader
             {
                 var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
                 result.SeriesPlotOrder.Add(seriesIndex);
+                XlsxChartSeriesRangeReader.CaptureSeriesRoundTripMetadata(series, seriesIndex, result);
                 hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
@@ -130,6 +132,7 @@ public static partial class XlsxChartPartReader
             {
                 var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
                 result.SeriesPlotOrder.Add(seriesIndex);
+                XlsxChartSeriesRangeReader.CaptureSeriesRoundTripMetadata(series, seriesIndex, result);
                 hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
                 // Scatter series uses xVal/yVal; read their ranges as category/value ranges
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series, "tx", "xVal", "yVal"))
@@ -269,6 +272,7 @@ public static partial class XlsxChartPartReader
             {
                 var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
                 result.SeriesPlotOrder.Add(seriesIndex);
+                XlsxChartSeriesRangeReader.CaptureSeriesRoundTripMetadata(series, seriesIndex, result);
                 hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))

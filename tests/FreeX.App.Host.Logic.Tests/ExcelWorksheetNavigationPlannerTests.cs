@@ -425,6 +425,62 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
             $"FindDataBoundary sparse blank navigation repeated {repetitions}x: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
     }
 
+    // ── R82-app-keyboard-nav-5-2 ("End, Home" jumps to the last used cell) ──────────────────
+
+    [Fact]
+    public void GetHomeTarget_EndModeActive_JumpsToLastUsedCellLikeCtrlEnd()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 50, 26), new NumberValue(1)); // Z50
+        var current = new CellAddress(SheetId, 2, 2); // B2, far from the used range's end.
+
+        ExcelWorksheetNavigationPlanner.GetHomeTarget(sheet, SheetId, current, ctrlHeld: false, endMode: true)
+            .Should()
+            .Be(new CellAddress(SheetId, 50, 26),
+                "'End, Home' must reproduce Ctrl+End -- the last used cell on the worksheet -- " +
+                "not a plain Home to column A of the current row");
+    }
+
+    [Fact]
+    public void GetHomeTarget_EndModeActive_IgnoresCtrlHeldAndFreeze()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.FrozenRows = 2;
+        sheet.FrozenCols = 3;
+        sheet.SetCell(new CellAddress(SheetId, 50, 26), new NumberValue(1));
+        var current = new CellAddress(SheetId, 2, 2);
+
+        ExcelWorksheetNavigationPlanner.GetHomeTarget(sheet, SheetId, current, ctrlHeld: true, endMode: true)
+            .Should()
+            .Be(new CellAddress(SheetId, 50, 26));
+    }
+
+    // Sibling no-regression: without END mode, Home/Ctrl+Home behavior is unchanged.
+    [Fact]
+    public void GetHomeTarget_EndModeInactive_PlainHomeMovesToColumnAOfCurrentRow()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 50, 26), new NumberValue(1));
+        var current = new CellAddress(SheetId, 7, 9);
+
+        ExcelWorksheetNavigationPlanner.GetHomeTarget(sheet, SheetId, current, ctrlHeld: false, endMode: false)
+            .Should()
+            .Be(new CellAddress(SheetId, 7, 1));
+    }
+
+    [Fact]
+    public void GetHomeTarget_EndModeInactive_CtrlHeldWithFrozenPanesJumpsToFirstUnfrozenCell()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.FrozenRows = 2;
+        sheet.FrozenCols = 3;
+        var current = new CellAddress(SheetId, 50, 26);
+
+        ExcelWorksheetNavigationPlanner.GetHomeTarget(sheet, SheetId, current, ctrlHeld: true, endMode: false)
+            .Should()
+            .Be(new CellAddress(SheetId, 3, 4));
+    }
+
     [Fact]
     public void GetCtrlEndCell_UsesBottomRightUsedCellOrA1ForEmptySheets()
     {

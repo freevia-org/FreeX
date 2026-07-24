@@ -14,6 +14,12 @@ namespace FreeX.App.Host.Tests;
 /// into two disconnected MainWindow/WorkbookRef instances, silently forking what was one shared,
 /// dirtied workbook. App.DeduplicateCandidatesByDocument collapses same-document candidates down
 /// to the single newest snapshot before OfferStartupRecovery ever offers them.
+///
+/// Since R82-services-autosave-recovery-5-1, "same document" additionally requires a matching
+/// <see cref="AutosaveSidecar.DocumentId"/> (not just launch scope + path/name) — two ordinary,
+/// independent windows opened on the same path from the same process launch are NOT siblings and
+/// must not be merged, so the fixtures below that represent genuine "New Window" siblings supply
+/// a shared DocumentId to prove that relationship.
 /// </summary>
 public sealed class CrashRecoverySharedWorkbookDedupTests
 {
@@ -44,7 +50,8 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
         string snapshotId,
         string? originalFilePath,
         string? displayName,
-        DateTimeOffset timestamp)
+        DateTimeOffset timestamp,
+        string? documentId = null)
     {
         var snapshotPath = store.GetSnapshotPath(snapshotId);
         var sidecarPath = store.GetSidecarPath(snapshotId);
@@ -54,7 +61,8 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
             OriginalFilePath = originalFilePath,
             DisplayName = displayName,
             TimestampUtc = timestamp.ToString("O"),
-            SnapshotId = snapshotId
+            SnapshotId = snapshotId,
+            DocumentId = documentId
         };
         File.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
         return new AutosaveRecoveryCandidate(snapshotPath, sidecarPath, sidecar);
@@ -80,9 +88,11 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
 
         // Two "New Window" siblings viewing the same saved document produce two snapshots that
         // share OriginalFilePath/DisplayName (per AutosaveService.WorkbookSnapshotSource) but have
-        // distinct per-window snapshot ids/files.
-        var older = WriteCandidate(store, "recovery-1-w0", @"C:\Users\alice\Book1.fxl", "Book1", now.AddMinutes(-1));
-        var newer = WriteCandidate(store, "recovery-1-w1", @"C:\Users\alice\Book1.fxl", "Book1", now);
+        // distinct per-window snapshot ids/files. They DO share the same DocumentId, though — both
+        // windows wrap the SAME Workbook instance (see IAutosaveWorkbookSource.DocumentId) — which
+        // is what makes them provably the same document (R82-services-autosave-recovery-5-1).
+        var older = WriteCandidate(store, "recovery-1-w0", @"C:\Users\alice\Book1.fxl", "Book1", now.AddMinutes(-1), documentId: "shared-book1-workbook-id");
+        var newer = WriteCandidate(store, "recovery-1-w1", @"C:\Users\alice\Book1.fxl", "Book1", now, documentId: "shared-book1-workbook-id");
 
         var deduped = InvokeDeduplicate([older, newer]);
 
@@ -120,9 +130,10 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
         var now = DateTimeOffset.UtcNow;
 
         // An unsaved shared workbook has no OriginalFilePath yet; DisplayName is the fallback
-        // identity signal for "New Window" siblings of the same never-saved document.
-        var older = WriteCandidate(store, "recovery-3-w0", originalFilePath: null, displayName: "Book2", now.AddMinutes(-1));
-        var newer = WriteCandidate(store, "recovery-3-w1", originalFilePath: null, displayName: "Book2", now);
+        // identity signal for "New Window" siblings of the same never-saved document, and they
+        // share the same DocumentId for the same reason as the saved-path case above.
+        var older = WriteCandidate(store, "recovery-3-w0", originalFilePath: null, displayName: "Book2", now.AddMinutes(-1), documentId: "shared-book2-workbook-id");
+        var newer = WriteCandidate(store, "recovery-3-w1", originalFilePath: null, displayName: "Book2", now, documentId: "shared-book2-workbook-id");
 
         var deduped = InvokeDeduplicate([older, newer]);
 
@@ -138,8 +149,8 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
-        var older = WriteCandidate(store, "recovery-4-w0", @"C:\Users\alice\Book1.fxl", "Book1", now.AddMinutes(-1));
-        var newer = WriteCandidate(store, "recovery-4-w1", @"c:\users\alice\book1.fxl", "Book1", now);
+        var older = WriteCandidate(store, "recovery-4-w0", @"C:\Users\alice\Book1.fxl", "Book1", now.AddMinutes(-1), documentId: "shared-book1-workbook-id");
+        var newer = WriteCandidate(store, "recovery-4-w1", @"c:\users\alice\book1.fxl", "Book1", now, documentId: "shared-book1-workbook-id");
 
         var deduped = InvokeDeduplicate([older, newer]);
 

@@ -21224,21 +21224,30 @@ public partial class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("groupBy=\"numberRange\"");
             pivotXml.ToString().Should().Contain("groupStart=\"0\"");
             pivotXml.ToString().Should().Contain("groupInterval=\"10\"");
+            // R82-io-pivot-layout-5-2: every value/label filter kind that has a real ST_PivotFilterType
+            // token now goes through the native <filters>/<filter> shape (fld/type/stringValue1/
+            // stringValue2/iMeasureFld, plus a required nested <autoFilter> filler) instead of the
+            // invented <valueFilters>/<labelFilters>/<pivotSorts> elements, which aren't part of
+            // CT_pivotTableDefinition's content model at all and made real Excel repair/drop the
+            // workbook. AboveAverage has no real representation in this mechanism (see
+            // ToNativePivotValueFilterKindText), so it alone still falls back to the old <valueFilters>
+            // shape purely so FreeX's own round-trip doesn't lose the setting.
             pivotXml.ToString().Should().Contain("valueFilters");
-            pivotXml.ToString().Should().Contain("type=\"top\"");
-            pivotXml.ToString().Should().Contain("type=\"greaterThan\"");
-            pivotXml.ToString().Should().Contain("type=\"lessThanOrEqual\"");
-            pivotXml.ToString().Should().Contain("type=\"between\"");
+            pivotXml.ToString().Should().Contain("type=\"count\"");
+            pivotXml.ToString().Should().Contain("type=\"valueGreaterThan\"");
+            pivotXml.ToString().Should().Contain("type=\"valueLessThanOrEqual\"");
+            pivotXml.ToString().Should().Contain("type=\"valueBetween\"");
             pivotXml.ToString().Should().Contain("type=\"aboveAverage\"");
-            pivotXml.ToString().Should().Contain("field=\"1\"");
-            pivotXml.ToString().Should().Contain("comparisonValue=\"25\"");
-            pivotXml.ToString().Should().Contain("comparisonValue2=\"100\"");
-            pivotXml.ToString().Should().Contain("labelFilters");
-            pivotXml.ToString().Should().Contain("contains");
-            pivotXml.ToString().Should().Contain("between");
-            pivotXml.ToString().Should().Contain("value2=\"West\"");
-            pivotXml.ToString().Should().Contain("pivotSorts");
-            pivotXml.ToString().Should().Contain("direction=\"descending\"");
+            pivotXml.ToString().Should().Contain("fld=\"1\"");
+            pivotXml.ToString().Should().Contain("stringValue1=\"25\"");
+            pivotXml.ToString().Should().Contain("stringValue2=\"100\"");
+            pivotXml.ToString().Should().Contain("<filters ", "the merged native filters collection must be present");
+            pivotXml.ToString().Should().Contain("type=\"captionContains\"");
+            pivotXml.ToString().Should().Contain("type=\"captionBetween\"");
+            pivotXml.ToString().Should().Contain("stringValue2=\"West\"");
+            pivotXml.ToString().Should().NotContain("pivotSorts");
+            pivotXml.ToString().Should().Contain("sortType=\"descending\"");
+            pivotXml.ToString().Should().Contain("autoSortScope");
             // OOXML grand-total attributes are rowGrandTotals / colGrandTotals (no showGrandTotals).
             pivotXml.ToString().Should().Contain("rowGrandTotals=\"0\"");
             pivotXml.ToString().Should().Contain("colGrandTotals=\"1\"");
@@ -21309,8 +21318,13 @@ public partial class FileAdapterSmokeTests
         loadedPivot.CalculatedFields.Should().ContainSingle().Which.Should().Be(new PivotCalculatedFieldModel("Revenue", "Amount*2"));
         loadedPivot.CalculatedItems.Should().ContainSingle().Which.Should().Be(new PivotCalculatedItemModel(0, "East + West", "East+West"));
         loadedPivot.ValueFilters.Should().HaveCount(5);
-        loadedPivot.ValueFilters[0].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.Top, 3));
-        loadedPivot.ValueFilters[1].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 25));
+        // R82-io-pivot-layout-5-2: CT_PivotFilter's "fld" attribute is REQUIRED per the real schema
+        // (confirmed via OpenXmlValidator -- omitting it errors "required attribute 'fld' is missing"),
+        // so a filter whose model never recorded a SourceFieldIndex now round-trips as 0 rather than
+        // null; the old invented <valueFilters> shape could omit the (non-schema) "field" attribute
+        // entirely and read null back, which is no longer possible once real Excel has to accept the file.
+        loadedPivot.ValueFilters[0].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.Top, 3, SourceFieldIndex: 0));
+        loadedPivot.ValueFilters[1].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 25, SourceFieldIndex: 0));
         loadedPivot.ValueFilters[2].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.LessThanOrEqual, ComparisonValue: 100, SourceFieldIndex: 1));
         loadedPivot.ValueFilters[3].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.Between, ComparisonValue: 25, ComparisonValue2: 100, SourceFieldIndex: 0));
         loadedPivot.ValueFilters[4].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.AboveAverage, SourceFieldIndex: 0));

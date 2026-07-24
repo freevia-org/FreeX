@@ -8,7 +8,7 @@ public static partial class BuiltInFunctions
     // Phase A2 – CONVERT(number, from_unit, to_unit)
     // ════════════════════════════════════════════════════════════════════════
 
-    private enum UnitCategory { Weight, Distance, Time, Pressure, Force, Energy, Power, Area, Volume, Speed, Information, Temperature }
+    private enum UnitCategory { Weight, Distance, Time, Pressure, Force, Energy, Power, Area, Volume, Speed, Information, Temperature, Magnetism }
 
     private static readonly Dictionary<string, (UnitCategory Cat, double Factor)> ConvertUnits = BuildConvertUnits();
 
@@ -125,7 +125,8 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Area, "yd2", 0.836127);
         Add(UnitCategory.Area, "yd^2", 0.836127);
         Add(UnitCategory.Area, "ha", 10000);
-        Add(UnitCategory.Area, "acre", 4046.856);
+        Add(UnitCategory.Area, "us_acre", 4046.8726099);
+        Add(UnitCategory.Area, "uk_acre", 4046.8564224);
 
         // Volume (base = liter)
         Add(UnitCategory.Volume, "l", 1);
@@ -137,6 +138,9 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Volume, "pt", 0.473176);
         Add(UnitCategory.Volume, "qt", 0.946353);
         Add(UnitCategory.Volume, "gal", 3.785412);
+        Add(UnitCategory.Volume, "uk_pt", 0.568261);
+        Add(UnitCategory.Volume, "uk_qt", 1.1365225);
+        Add(UnitCategory.Volume, "uk_gal", 4.54609);
         Add(UnitCategory.Volume, "m3", 1000);
         Add(UnitCategory.Volume, "m^3", 1000);
         Add(UnitCategory.Volume, "mi3", 4168181825441);
@@ -159,6 +163,10 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Speed, "mph", 0.44704);
         Add(UnitCategory.Speed, "kn", 0.514444);
         Add(UnitCategory.Speed, "admkn", 6080.0 * 0.3048 / 3600);
+
+        // Magnetism (base = tesla)
+        Add(UnitCategory.Magnetism, "T", 1);
+        Add(UnitCategory.Magnetism, "ga", 0.0001);
 
         // Information (base = bit)
         Add(UnitCategory.Information, "bit", 1);

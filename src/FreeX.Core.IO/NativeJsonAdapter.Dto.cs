@@ -17,6 +17,14 @@ public sealed partial class NativeJsonAdapter
         public string Name { get; set; } = "";
         public WorkbookThemeDto? Theme { get; set; }
         public bool Uses1904DateSystem { get; set; }
+        // R82-services-autosave-recovery-5-2: carries Workbook.HasVbaProjectPackage across a .fxl
+        // round-trip (autosave/crash-recovery snapshots go through this adapter exclusively) so a
+        // recovered macro-enabled workbook still reports itself as macro-enabled. The actual
+        // xl/vbaProject.bin bytes live only in XlsxFileAdapter's SourcePackages side-table (never
+        // part of the Workbook model), so they still cannot survive an .fxl round-trip -- this flag
+        // is the one piece of macro state that IS part of the model and was being silently dropped.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool HasVbaProjectPackage { get; set; }
         public bool? ShowSheetTabs { get; set; }
         public int? SheetTabRatio { get; set; }
         public int? FirstVisibleSheetIndex { get; set; }
@@ -944,6 +952,8 @@ public sealed partial class NativeJsonAdapter
     {
         public BorderStyle Style { get; set; }
         public CellColor Color { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ThemeColorReferenceDto? ThemeColor { get; set; }
     }
 
     // Internal (not private): exposed as a property type on the now-internal CellStyleDto (P26).

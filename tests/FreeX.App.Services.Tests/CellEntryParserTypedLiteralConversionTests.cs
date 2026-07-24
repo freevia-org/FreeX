@@ -122,4 +122,42 @@ public sealed class CellEntryParserTypedLiteralConversionTests
 
         cell.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("1/1/1850");
     }
+
+    // R82-formula-datetime-serial-5-2: Excel's fictitious 1900 leap day ("2/29/1900" /
+    // "1900-02-29") cannot be represented as a real .NET DateTime (1900 is not a leap year), so
+    // typing it directly into a cell must still resolve to serial 60 - matching DATEVALUE's
+    // already-existing special-case for the same literal - instead of falling through to text.
+    [Fact]
+    public void CreateCell_ConvertsSlashFormFakeLeapDayLiteralToSerial60()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var cell = CellEntryParser.CreateCell("2/29/1900", Anchor, useR1C1ReferenceStyle: false);
+
+        cell.Value.Should().BeOfType<DateTimeValue>().Which.Value.Should().Be(60);
+    }
+
+    [Fact]
+    public void CreateCell_ConvertsIsoFormFakeLeapDayLiteralToSerial60()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var cell = CellEntryParser.CreateCell("1900-02-29", Anchor, useR1C1ReferenceStyle: false);
+
+        cell.Value.Should().BeOfType<DateTimeValue>().Which.Value.Should().Be(60);
+    }
+
+    // Sibling: the real (non-phantom) leap day immediately before it, Feb 28 1900, must keep
+    // parsing via the ordinary DateTime-based path (serial 59), unaffected by the new
+    // fake-leap-day special-case.
+    [Fact]
+    public void CreateCell_StillConvertsOrdinaryDayBeforeFakeLeapDayViaNormalDatePath()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var cell = CellEntryParser.CreateCell("2/28/1900", Anchor, useR1C1ReferenceStyle: false);
+
+        cell.Value.Should().BeOfType<DateTimeValue>()
+            .Which.ToDateTime().Should().Be(new DateTime(1900, 2, 28));
+    }
 }

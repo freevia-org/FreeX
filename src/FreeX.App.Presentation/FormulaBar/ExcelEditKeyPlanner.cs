@@ -97,7 +97,13 @@ public static class ExcelEditKeyPlanner
             : ExcelEditKeyIntent.None;
     }
 
-    private static CellAddress GetEnterTarget(CellAddress current, bool reverse, FormulaEditorEnterDirection direction)
+    /// <summary>
+    /// Computes the active-cell target for a plain (non-Ctrl) Enter keypress, honoring the
+    /// configured "After pressing Enter, move selection" direction and its Shift-reversal --
+    /// shared by both the in-edit commit path (<see cref="GetIntent"/>) and ready-mode Enter on
+    /// an already-selected, non-edited cell.
+    /// </summary>
+    public static CellAddress GetEnterTarget(CellAddress current, bool reverse, FormulaEditorEnterDirection direction)
     {
         var effectiveDirection = reverse
             ? direction switch

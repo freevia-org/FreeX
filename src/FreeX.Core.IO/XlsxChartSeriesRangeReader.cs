@@ -13,6 +13,30 @@ internal static class XlsxChartSeriesRangeReader
             ? index
             : fallback;
 
+    public static int ReadSeriesOrder(XElement series, int fallback) =>
+        int.TryParse(ElementByLocalName(series, "order")?.Attribute("val")?.Value, out var order)
+            ? order
+            : fallback;
+
+    /// <summary>
+    /// R82-io-chart-series-5: captures per-series round-trip metadata the writer cannot recompute
+    /// positionally — an explicit &lt;c:order&gt; that diverges from &lt;c:idx&gt; (see
+    /// <see cref="ChartModel.SeriesOrderOverrides"/>), and a &lt;c:cat&gt; container built from
+    /// &lt;c:multiLvlStrRef&gt; (see <see cref="ChartModel.MultiLevelCategoryXml"/>). Safe to call
+    /// for every series regardless of chart family: a series with no &lt;c:cat&gt; (Scatter/Bubble)
+    /// simply captures nothing for the category half.
+    /// </summary>
+    public static void CaptureSeriesRoundTripMetadata(XElement series, int seriesIndex, ChartModel chart)
+    {
+        var order = ReadSeriesOrder(series, seriesIndex);
+        if (order != seriesIndex)
+            chart.SeriesOrderOverrides.Add(new ChartSeriesOrderOverride(seriesIndex, order));
+
+        var cat = ElementByLocalName(series, "cat");
+        if (cat is not null && cat.Elements().Any(e => e.Name.LocalName == "multiLvlStrRef"))
+            chart.MultiLevelCategoryXml.Add(new ChartSeriesRawXmlEntry(seriesIndex, cat.ToString(SaveOptions.DisableFormatting)));
+    }
+
     public static bool UsesSecondaryValueAxis(XElement? plotArea, XElement plotChart)
     {
         if (plotArea is null)

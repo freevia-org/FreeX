@@ -166,7 +166,12 @@ public static partial class FormulaAuditingService
                        RangeContainsBlankPrecedent(workbook, rangeSheet.Id, rangeRef);
 
             case NamedRangeNode namedRange:
-                return workbook.TryGetNamedRange(namedRange.Name, out var range) &&
+                // Sheet-scope-first: mirrors CollectReferences's NamedRangeNode handling above —
+                // a sheet-scoped named FORMULA of the same name shadows a workbook-global named
+                // RANGE, and sheet-scoped named RANGES must be resolved via the 3-arg,
+                // scope-aware overload rather than the workbook-global-only 2-arg one.
+                return !workbook.ScopedNamedFormulas.ContainsKey((namedRange.Name, hostSheetId)) &&
+                       workbook.TryGetNamedRange(namedRange.Name, hostSheetId, out var range) &&
                        RangeContainsBlankPrecedent(workbook, range);
 
             case StructuredReferenceNode structured:

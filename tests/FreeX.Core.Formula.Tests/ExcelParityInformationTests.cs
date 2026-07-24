@@ -136,6 +136,32 @@ public sealed class ExcelParityInformationTests
     }
 
     [Fact]
+    public void Type_SingleCellRangeSyntax_ReturnsUnderlyingValueTypeNotArrayCode()
+    {
+        // A1:A1 collapses to exactly one cell, so it must behave like the bare reference =TYPE(A1)
+        // -- not report array code 64 -- even though it's spelled with range syntax.
+        var sheet = Sheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(5));
+
+        _eval.Evaluate("=TYPE(A1:A1)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Type_SingleCellNamedRange_ReturnsUnderlyingValueTypeNotArrayCode()
+    {
+        // A named range that resolves to a single cell (a very common "named constant" pattern,
+        // e.g. TaxRate) must report the type of its underlying value, not array code 64.
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(5));
+        wb.DefineNamedRange("TaxRate", new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 2, 2)));
+
+        _eval.Evaluate("=TYPE(TaxRate)", sheet, wb).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Na_Type_N_Cell_Info_ReturnExcelCompatibleScalarValues()
     {
         _eval.Evaluate("=NA()", Sheet()).Should().Be(ErrorValue.NA);

@@ -333,9 +333,11 @@ internal static partial class XlsxPivotTableWriter
             ToPivotPageFieldsXml(pivot.PageFields, pivotCache, workbookNs),
             ToPivotDataFieldsXml(pivot.DataFields, calculatedFieldIndexes, workbookNs, numberFormatIdMap),
             ToPivotCalculatedItemsXml(pivot.CalculatedItems, workbookNs),
-            ToPivotValueFiltersXml(pivot.ValueFilters, workbookNs),
-            ToPivotLabelFiltersXml(pivot.LabelFilters, workbookNs),
-            ToPivotSortsXml(pivot.Sorts, workbookNs),
+            // R82-io-pivot-layout-5-2: CT_pivotTableDefinition's real child sequence (verified via
+            // OpenXmlValidator against the OpenXml SDK's own PivotTableDefinition property order) places
+            // pivotTableStyleInfo BEFORE filters -- the OLD code emitted the (also-invented) valueFilters/
+            // labelFilters/pivotSorts elements before pivotTableStyleInfo, which is backwards even setting
+            // aside those elements not being real CT_pivotTableDefinition children at all.
             new XElement(workbookNs + "pivotTableStyleInfo",
                 new XAttribute("name", string.IsNullOrWhiteSpace(pivot.StyleName) ? "PivotStyleLight16" : pivot.StyleName),
                 new XAttribute("showRowHeaders", pivot.ShowRowHeaders ? "1" : "0"),
@@ -343,6 +345,18 @@ internal static partial class XlsxPivotTableWriter
                 new XAttribute("showRowStripes", pivot.ShowRowStripes ? "1" : "0"),
                 new XAttribute("showColStripes", pivot.ShowColumnStripes ? "1" : "0"),
                 new XAttribute("showLastColumn", "1")),
+            // R82-io-pivot-layout-5-2: AboveAverage/BelowAverage value filters have no representation in
+            // the real <filters> mechanism at all (see ToNativePivotValueFilterKindText) -- reuse the
+            // FreeX-authored <valueFilters> shape (unchanged, still used by XlsxFileAdapter.
+            // SavePostProcessing.cs's RewritePreservedPivotValueAndLabelFilters on the preserved-part save
+            // path) purely so those two kinds still round-trip through FreeX itself.
+            ToPivotValueFiltersXml(pivot.ValueFilters.Where(filter => filter.Kind is PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage).ToList(), workbookNs),
+            // R82-io-pivot-layout-5-2: every other value-filter kind, plus every label-filter kind, now
+            // goes through the REAL <filters>/<filter> shape instead of the invented <valueFilters>/
+            // <labelFilters> elements ToPivotValueFiltersXml/ToPivotLabelFiltersXml above and below emit
+            // (those two functions are kept only for the AboveAverage/BelowAverage fallback and the
+            // preserved-part patch path, respectively).
+            ToPivotFiltersXml(pivot.ValueFilters, pivot.LabelFilters, workbookNs),
             FreeXPivotTableExtension(pivot, workbookNs)));
     }
 
@@ -449,6 +463,13 @@ internal static partial class XlsxPivotTableWriter
                     pivot.ColumnFields.Any(field => field.SourceFieldIndex == index) ? "axisCol" :
                     pivot.PageFields.Any(field => field.SourceFieldIndex == index) ? "axisPage" :
                     null;
+                // R82-io-pivot-layout-5-2: a row/column field's sort order is expressed on the
+                // CT_PivotField ITSELF (sortType + an autoSortScope child identifying the driving data
+                // field for a value sort) -- NOT the invented top-level <pivotSorts> element ToPivotSortsXml
+                // below emits, which isn't part of CT_pivotTableDefinition's content model at all. Only
+                // meaningful for an axis field; a sort recorded against a filter/page field (which the UI
+                // never allows) is dropped rather than emitted somewhere schema-invalid.
+                var sort = isAxisField ? pivot.Sorts.LastOrDefault(s => s.FieldIndex == index) : null;
                 return new XElement(
                     workbookNs + "pivotField",
                     axisValue is not null ? new XAttribute("axis", axisValue) : null,
@@ -494,13 +515,45 @@ internal static partial class XlsxPivotTableWriter
                     ToOptionalBoolAttribute("dragToPage", metadataField?.DragToPage),
                     ToOptionalBoolAttribute("dragToData", metadataField?.DragToData),
                     ToOptionalBoolAttribute("showDropDowns", metadataField?.ShowDropDowns),
+                    sort is not null ? new XAttribute("sortType", sort.Direction == PivotSortDirection.Descending ? "descending" : "ascending") : null,
                     ToPivotFieldItemsXml(metadataField, pivotCache, index, workbookNs),
+                    // CT_PivotField declares autoSortScope BEFORE its extLst (PivotFieldExtensionList) --
+                    // must come after <items> and before the x14 fillDownLabels extension below.
+                    sort is { Target: PivotSortTarget.Value } ? ToPivotFieldAutoSortScopeXml(sort.DataFieldIndex, workbookNs) : null,
                     // R60-io-pivot-layout-6-1: emit the real x14 fillDownLabels extension (the private
                     // fx:tableProps repeatItemLabels attribute below is kept only for FreeX's own
                     // back-compat round-trip; it is not real OOXML and real Excel never reads it).
                     isAxisField && pivot.RepeatItemLabels ? ToX14FillDownLabelsExtension(workbookNs) : null);
             }));
     }
+
+    // ECMA-376's CT_Reference "field" attribute is an xsd:unsignedInt; the special sentinel Excel uses to
+    // mark "this reference identifies the Values/data axis, not an ordinary row/column field" is -2 in its
+    // unsigned wire form. Mirrors XlsxPivotTableReader.FiltersAndSorts.cs's
+    // PivotFieldDataAxisReferenceValue (duplicated locally because that constant is private there).
+    private const string PivotFieldDataAxisReferenceValue = "4294967294";
+
+    // R82-io-pivot-layout-5-2: writes the REAL OOXML shape for "sort by a data field's value" -- a
+    // <pivotField>'s own <autoSortScope><pivotArea><references><reference field="{sentinel}"><x v="N"/>
+    // identifying which data field drives the order. Verified schema-valid via OpenXmlValidator; mirrors
+    // XlsxPivotTableReader.FiltersAndSorts.cs's ReadAutoSortScopeDataFieldIndex, which already parses this
+    // exact shape back.
+    private static XElement ToPivotFieldAutoSortScopeXml(int dataFieldIndex, XNamespace workbookNs) =>
+        new(workbookNs + "autoSortScope",
+            new XElement(
+                workbookNs + "pivotArea",
+                new XAttribute("type", "normal"),
+                new XAttribute("dataOnly", "0"),
+                new XAttribute("labelOnly", "1"),
+                new XAttribute("outline", "0"),
+                new XAttribute("fieldPosition", "0"),
+                new XElement(
+                    workbookNs + "references",
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        workbookNs + "reference",
+                        new XAttribute("field", PivotFieldDataAxisReferenceValue),
+                        new XElement(workbookNs + "x", new XAttribute("v", dataFieldIndex.ToString(CultureInfo.InvariantCulture)))))));
 
     // R54-io-pivot-filter-3-3: a manual per-item filter (unchecked values in a field's filter dropdown --
     // PivotFieldModel.SelectedItems) was previously dropped entirely for a brand-new pivot table's first
@@ -554,7 +607,11 @@ internal static partial class XlsxPivotTableWriter
             .Concat(pivot.PageFields)
             .LastOrDefault(field => field.SourceFieldIndex == sourceFieldIndex);
 
-    private static XElement? ToPivotFieldCollectionXml(string elementName, IReadOnlyList<PivotFieldModel> fields, XNamespace workbookNs) =>
+    // Internal (not private): also called from XlsxFileAdapter.SavePostProcessing.cs's
+    // RewritePreservedPivotFieldAxes to regenerate the rowFields/colFields containers on the
+    // hasSourcePackage (preserved-part) save path when a field moves between Row/Column/Filter areas
+    // (R82-io-pivot-layout-5-1), where this class's own Save() never runs.
+    internal static XElement? ToPivotFieldCollectionXml(string elementName, IReadOnlyList<PivotFieldModel> fields, XNamespace workbookNs) =>
         fields.Count == 0
             ? null
             : new XElement(
@@ -564,7 +621,9 @@ internal static partial class XlsxPivotTableWriter
                     workbookNs + "field",
                     new XAttribute("x", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)))));
 
-    private static XElement? ToPivotPageFieldsXml(
+    // Internal (not private): sibling of ToPivotFieldCollectionXml above, also called from
+    // RewritePreservedPivotFieldAxes to regenerate the pageFields container (R82-io-pivot-layout-5-1).
+    internal static XElement? ToPivotPageFieldsXml(
         IReadOnlyList<PivotFieldModel> fields,
         PivotCacheModel? pivotCache,
         XNamespace workbookNs) =>
@@ -765,17 +824,112 @@ internal static partial class XlsxPivotTableWriter
                     new XAttribute("value", filter.Value),
                     string.IsNullOrWhiteSpace(filter.Value2) ? null : new XAttribute("value2", filter.Value2))));
 
-    private static XElement? ToPivotSortsXml(IReadOnlyList<PivotSortModel> sorts, XNamespace workbookNs) =>
-        sorts.Count == 0
+    // R82-io-pivot-layout-5-2: the REAL OOXML shape for pivot value/label filters is a single
+    // CT_PivotFilters <filters> collection of CT_PivotFilter <filter> elements (fld/iMeasureFld identify
+    // the target field(s), type is a real ST_PivotFilterType token, stringValue1/stringValue2 carry the
+    // comparison operand(s)) -- NOT the invented top-level <valueFilters>/<labelFilters> elements
+    // ToPivotValueFiltersXml/ToPivotLabelFiltersXml above emit, which aren't declared anywhere in
+    // CT_pivotTableDefinition's content model and make real Excel repair/drop the workbook. Verified
+    // schema-valid via OpenXmlValidator (FileFormatVersions.Microsoft365); mirrors
+    // XlsxPivotTableReader.FiltersAndSorts.cs's ReadNativePivotValueFilters/ReadNativePivotLabelFilters,
+    // which already parse this exact shape back.
+    private static XElement? ToPivotFiltersXml(
+        IReadOnlyList<PivotValueFilterModel> valueFilters,
+        IReadOnlyList<PivotLabelFilterModel> labelFilters,
+        XNamespace workbookNs)
+    {
+        var filterElements = new List<XElement>();
+        var nextId = 0;
+
+        foreach (var filter in valueFilters)
+        {
+            var nativeType = ToNativePivotValueFilterKindText(filter.Kind);
+            if (nativeType is null)
+                continue; // AboveAverage/BelowAverage: no real ST_PivotFilterType token -- see the converter.
+
+            filterElements.Add(new XElement(
+                workbookNs + "filter",
+                new XAttribute("fld", (filter.SourceFieldIndex ?? 0).ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("type", nativeType),
+                new XAttribute("id", (nextId++).ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("iMeasureFld", filter.DataFieldIndex.ToString(CultureInfo.InvariantCulture)),
+                filter.ComparisonValue is null ? null : new XAttribute("stringValue1", FormatInvariant(filter.ComparisonValue.Value)),
+                filter.ComparisonValue2 is null ? null : new XAttribute("stringValue2", FormatInvariant(filter.ComparisonValue2.Value)),
+                ToPivotValueFilterAutoFilterFillerXml(filter, workbookNs)));
+        }
+
+        foreach (var filter in labelFilters)
+        {
+            filterElements.Add(new XElement(
+                workbookNs + "filter",
+                new XAttribute("fld", filter.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("type", ToNativePivotLabelFilterKindText(filter.Kind)),
+                new XAttribute("id", (nextId++).ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("stringValue1", filter.Value),
+                string.IsNullOrWhiteSpace(filter.Value2) ? null : new XAttribute("stringValue2", filter.Value2),
+                ToPivotLabelFilterAutoFilterFillerXml(filter, workbookNs)));
+        }
+
+        return filterElements.Count == 0
             ? null
             : new XElement(
-                workbookNs + "pivotSorts",
-                new XAttribute("count", sorts.Count.ToString(CultureInfo.InvariantCulture)),
-                sorts.Select(sort => new XElement(
-                    workbookNs + "pivotSort",
-                    new XAttribute("target", sort.Target == PivotSortTarget.Label ? "label" : "value"),
-                    new XAttribute("direction", sort.Direction == PivotSortDirection.Descending ? "descending" : "ascending"),
-                    new XAttribute("dataField", sort.DataFieldIndex.ToString(CultureInfo.InvariantCulture)),
-                    new XAttribute("field", sort.FieldIndex.ToString(CultureInfo.InvariantCulture)))));
+                workbookNs + "filters",
+                new XAttribute("count", filterElements.Count.ToString(CultureInfo.InvariantCulture)),
+                filterElements);
+    }
 
+    // CT_PivotFilter declares <autoFilter> as a REQUIRED child (confirmed via OpenXmlValidator against
+    // the real schema -- omitting it produces "incomplete content" errors). FreeX's own reader
+    // (ReadNativePivotValueFilters) never looks inside it; all criteria are read straight off the
+    // <filter>'s own attributes above. Emitting the real <top10>/<customFilters> shape here (rather than
+    // an arbitrary placeholder) means a real-Excel user who reopens the filter dialog afterwards sees
+    // sensible pre-filled criteria instead of nonsense.
+    private static XElement ToPivotValueFilterAutoFilterFillerXml(PivotValueFilterModel filter, XNamespace workbookNs)
+    {
+        var filterColumn = new XElement(workbookNs + "filterColumn", new XAttribute("colId", "0"));
+        if (filter.Kind is PivotValueFilterKind.Top or PivotValueFilterKind.Bottom)
+        {
+            // Real ST_PivotFilterType has no separate "bottom" token (see ToNativePivotValueFilterKindText)
+            // -- direction lives on <top10>'s own "top" attribute (schema default true = Top).
+            filterColumn.Add(new XElement(
+                workbookNs + "top10",
+                new XAttribute("val", filter.Count.ToString(CultureInfo.InvariantCulture)),
+                filter.Kind == PivotValueFilterKind.Bottom ? new XAttribute("top", "0") : null));
+        }
+        else
+        {
+            var isRange = filter.Kind is PivotValueFilterKind.Between or PivotValueFilterKind.NotBetween;
+            var customFilters = new XElement(
+                workbookNs + "customFilters",
+                isRange ? new XAttribute("and", filter.Kind == PivotValueFilterKind.Between ? "1" : "0") : null);
+            customFilters.Add(new XElement(
+                workbookNs + "customFilter",
+                new XAttribute("operator", ToPivotComparisonAutoFilterOperator(filter.Kind)),
+                filter.ComparisonValue is null ? null : new XAttribute("val", FormatInvariant(filter.ComparisonValue.Value))));
+            if (isRange && filter.ComparisonValue2 is not null)
+            {
+                customFilters.Add(new XElement(
+                    workbookNs + "customFilter",
+                    new XAttribute("operator", filter.Kind == PivotValueFilterKind.Between ? "lessThanOrEqual" : "greaterThan"),
+                    new XAttribute("val", FormatInvariant(filter.ComparisonValue2.Value))));
+            }
+
+            filterColumn.Add(customFilters);
+        }
+
+        return new XElement(workbookNs + "autoFilter", filterColumn);
+    }
+
+    // Sibling of ToPivotValueFilterAutoFilterFillerXml, for label (caption) filters.
+    private static XElement ToPivotLabelFilterAutoFilterFillerXml(PivotLabelFilterModel filter, XNamespace workbookNs)
+    {
+        var customFilters = new XElement(workbookNs + "customFilters");
+        customFilters.Add(new XElement(
+            workbookNs + "customFilter",
+            new XAttribute("operator", "equal"),
+            new XAttribute("val", filter.Value)));
+        return new XElement(
+            workbookNs + "autoFilter",
+            new XElement(workbookNs + "filterColumn", new XAttribute("colId", "0"), customFilters));
+    }
 }

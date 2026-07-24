@@ -18,6 +18,14 @@ namespace FreeX.App.Avalonia.Tests;
 /// (MainWindow.KeyLock.cs, wired from BuildStatusBar/MainWindow_KeyDownAsync/RefreshShell) via the
 /// production KeyDown handler seam, asserting on the indicator TextBlocks' live visibility rather
 /// than a source-string proxy.
+///
+/// R82-meta-3 added an OS-toggle-state resync (see MainWindow.KeyLock.cs) that runs at construction,
+/// so these tests -- which want to isolate the pure key-down-tracked behavior these were written to
+/// cover -- force <see cref="MainWindow.KeyLockOsToggleStateOverrideForTest"/> to null-for-every-key
+/// (the "no OS query available" signal) before constructing each window. Without this, a test run on
+/// a machine whose real Num Lock happens to be physically on would see the resync pick that up and
+/// the NUM LOCK assertions below would flake against real hardware state instead of testing the
+/// key-tracked toggle logic these tests target.
 /// </summary>
 [Collection("AvaloniaHeadless")]
 public sealed class R80_KeyLockIndicatorAvaloniaConsumptionTests
@@ -30,14 +38,23 @@ public sealed class R80_KeyLockIndicatorAvaloniaConsumptionTests
     {
         await Session.Dispatch(() =>
         {
-            var window = new MainWindow([]);
+            MainWindow.KeyLockOsToggleStateOverrideForTest = _ => null;
+            try
+            {
+                var window = new MainWindow([]);
 
-            window.IsCapsLockIndicatorVisibleForTest.Should().BeFalse(
-                "no key has been toggled yet, so the CAPS LOCK indicator must start hidden");
-            window.IsNumLockIndicatorVisibleForTest.Should().BeFalse(
-                "no key has been toggled yet, so the NUM LOCK indicator must start hidden");
+                window.IsCapsLockIndicatorVisibleForTest.Should().BeFalse(
+                    "no key has been toggled yet, so the CAPS LOCK indicator must start hidden");
+                window.IsNumLockIndicatorVisibleForTest.Should().BeFalse(
+                    "no key has been toggled yet, so the NUM LOCK indicator must start hidden");
 
-            window.Close();
+                window.Close();
+            }
+            finally
+            {
+                MainWindow.KeyLockOsToggleStateOverrideForTest = null;
+            }
+
             return true;
         }, CancellationToken.None);
     }
@@ -47,21 +64,30 @@ public sealed class R80_KeyLockIndicatorAvaloniaConsumptionTests
     {
         await Session.Dispatch(async () =>
         {
-            var window = new MainWindow([]);
+            MainWindow.KeyLockOsToggleStateOverrideForTest = _ => null;
+            try
+            {
+                var window = new MainWindow([]);
 
-            // Failing before the fix: the Avalonia shell had no StatusCapsLockText-equivalent control
-            // and no KeyLockIndicatorPlanner consumption at all, so this property did not exist.
-            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.CapsLock });
-            window.IsCapsLockIndicatorVisibleForTest.Should().BeTrue(
-                "toggling Caps Lock on must reveal the status-bar indicator, matching the WPF host");
-            window.IsNumLockIndicatorVisibleForTest.Should().BeFalse(
-                "toggling Caps Lock must not affect the independent NUM LOCK indicator");
+                // Failing before the fix: the Avalonia shell had no StatusCapsLockText-equivalent control
+                // and no KeyLockIndicatorPlanner consumption at all, so this property did not exist.
+                await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.CapsLock });
+                window.IsCapsLockIndicatorVisibleForTest.Should().BeTrue(
+                    "toggling Caps Lock on must reveal the status-bar indicator, matching the WPF host");
+                window.IsNumLockIndicatorVisibleForTest.Should().BeFalse(
+                    "toggling Caps Lock must not affect the independent NUM LOCK indicator");
 
-            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.CapsLock });
-            window.IsCapsLockIndicatorVisibleForTest.Should().BeFalse(
-                "a second Caps Lock key-down toggles the physical key back off, so the indicator must hide again");
+                await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.CapsLock });
+                window.IsCapsLockIndicatorVisibleForTest.Should().BeFalse(
+                    "a second Caps Lock key-down toggles the physical key back off, so the indicator must hide again");
 
-            window.Close();
+                window.Close();
+            }
+            finally
+            {
+                MainWindow.KeyLockOsToggleStateOverrideForTest = null;
+            }
+
             return true;
         }, CancellationToken.None);
     }
@@ -72,18 +98,27 @@ public sealed class R80_KeyLockIndicatorAvaloniaConsumptionTests
     {
         await Session.Dispatch(async () =>
         {
-            var window = new MainWindow([]);
-            var sheet = window.Session.Workbook.AddSheet("CleanFixture");
-            window.Session.SelectSheet(sheet.Id);
+            MainWindow.KeyLockOsToggleStateOverrideForTest = _ => null;
+            try
+            {
+                var window = new MainWindow([]);
+                var sheet = window.Session.Workbook.AddSheet("CleanFixture");
+                window.Session.SelectSheet(sheet.Id);
 
-            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.A });
+                await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.A });
 
-            window.IsCapsLockIndicatorVisibleForTest.Should().BeFalse(
-                "an ordinary letter key-down must not toggle the CAPS LOCK indicator");
-            window.IsNumLockIndicatorVisibleForTest.Should().BeFalse(
-                "an ordinary letter key-down must not toggle the NUM LOCK indicator");
+                window.IsCapsLockIndicatorVisibleForTest.Should().BeFalse(
+                    "an ordinary letter key-down must not toggle the CAPS LOCK indicator");
+                window.IsNumLockIndicatorVisibleForTest.Should().BeFalse(
+                    "an ordinary letter key-down must not toggle the NUM LOCK indicator");
 
-            window.Close();
+                window.Close();
+            }
+            finally
+            {
+                MainWindow.KeyLockOsToggleStateOverrideForTest = null;
+            }
+
             return true;
         }, CancellationToken.None);
     }

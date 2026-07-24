@@ -192,6 +192,27 @@ public static class ExcelWorksheetNavigationPlanner
     }
 
     /// <summary>
+    /// Home's target cell. Excel's Ctrl+Home jumps to the top-left cell of the *scrollable*
+    /// region -- the first unfrozen row/column -- rather than always to A1 once panes are frozen;
+    /// plain Home (no Ctrl) moves to column A of the current row regardless of freeze
+    /// (R52-render-scroll-viewport-nav-3-1). When End's sticky mode is active, "End, Home"
+    /// reproduces Ctrl+End instead -- jumping to the last used cell on the worksheet -- matching
+    /// how "End, &lt;arrow&gt;" reproduces Ctrl+&lt;arrow&gt; (R82-app-keyboard-nav-5-2).
+    /// </summary>
+    public static CellAddress GetHomeTarget(Sheet? sheet, SheetId sheetId, CellAddress current, bool ctrlHeld, bool endMode)
+    {
+        if (endMode)
+            return GetCtrlEndCell(sheet, sheetId);
+
+        if (!ctrlHeld)
+            return new CellAddress(sheetId, current.Row, 1u);
+
+        var firstUnfrozenRow = (sheet?.FrozenRows ?? 0) + 1;
+        var firstUnfrozenCol = (sheet?.FrozenCols ?? 0) + 1;
+        return new CellAddress(sheetId, firstUnfrozenRow, firstUnfrozenCol);
+    }
+
+    /// <summary>
     /// When <paramref name="from"/> (the cell that was just being edited) belongs to a merged
     /// region and the plain +1/-1 step in <paramref name="next"/> still lands inside that same
     /// merge, advances past the merge's far edge in the direction of travel instead. Without this,

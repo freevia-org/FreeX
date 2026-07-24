@@ -922,14 +922,25 @@ public partial class MainWindow
                                   : AdjustTargetPastMerge(sheet, current,
                                         new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, FreeX.Core.Model.CellAddress.MaxCol))),
 
+            // Home target, including the "End, Home" -> Ctrl+End jump (R82-app-keyboard-nav-5-2).
+            // GetHomeNavigationTarget reads _endMode; it must be called here, before that flag is
+            // cleared below.
             Key.Home     => GetHomeNavigationTarget(sheet, current, ctrlHeld),
             Key.End      => ctrlHeld ? ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, _currentSheetId) : null,
             Key.PageUp   => new CellAddress(_currentSheetId, (uint)Math.Max(1, (int)current.Row - pageSize), current.Col),
             Key.PageDown => new CellAddress(_currentSheetId, (uint)Math.Min(1_048_576, current.Row + (uint)pageSize), current.Col),
 
-            Key.Enter => AdjustTargetPastMerge(sheet, current, shiftHeld
-                ? new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col)
-                : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, FreeX.Core.Model.CellAddress.MaxRow), current.Col)),
+            // Ready-mode Enter (pressed on an already-selected, non-edited cell) must honor the
+            // "After pressing Enter, move selection" option -- both its enable/disable flag and
+            // its configured direction -- the same as the in-edit commit path
+            // (ExcelEditKeyPlanner.GetEnterTarget via MainWindow.Editing.cs), instead of always
+            // hardcoding Down/Up (R82-app-keyboard-nav-5-1).
+            Key.Enter => _options.MoveSelectionAfterEnter
+                ? AdjustTargetPastMerge(sheet, current, ExcelEditKeyPlanner.GetEnterTarget(
+                    current,
+                    shiftHeld,
+                    FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection)))
+                : current,
             Key.Tab   => AdjustTargetPastMerge(sheet, current, shiftHeld
                 ? new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)
                 : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, FreeX.Core.Model.CellAddress.MaxCol))),
@@ -1479,16 +1490,11 @@ public partial class MainWindow
     // Excel's Ctrl+Home jumps to the top-left cell of the *scrollable* region -- the first
     // unfrozen row/column -- rather than always to A1 once panes are frozen; plain Home (no
     // Ctrl) still moves to column A of the current row regardless of freeze
-    // (R52-render-scroll-viewport-nav-3-1).
-    private CellAddress GetHomeNavigationTarget(Sheet? sheet, CellAddress current, bool ctrlHeld)
-    {
-        if (!ctrlHeld)
-            return new CellAddress(_currentSheetId, current.Row, 1u);
-
-        var firstUnfrozenRow = (sheet?.FrozenRows ?? 0) + 1;
-        var firstUnfrozenCol = (sheet?.FrozenCols ?? 0) + 1;
-        return new CellAddress(_currentSheetId, firstUnfrozenRow, firstUnfrozenCol);
-    }
+    // (R52-render-scroll-viewport-nav-3-1). When End's sticky mode is active, "End, Home"
+    // reproduces Ctrl+End instead -- the last used cell on the worksheet -- matching how
+    // "End, <arrow>" reproduces Ctrl+<arrow> (R82-app-keyboard-nav-5-2).
+    private CellAddress GetHomeNavigationTarget(Sheet? sheet, CellAddress current, bool ctrlHeld) =>
+        ExcelWorksheetNavigationPlanner.GetHomeTarget(sheet, _currentSheetId, current, ctrlHeld, _endMode);
 
     private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
     {

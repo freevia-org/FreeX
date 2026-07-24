@@ -21,7 +21,19 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue TypeFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        return args[0] switch
+        var value = args[0];
+
+        // A RangeValue that resolves to exactly one cell -- a single-cell named range, or the
+        // explicit A1:A1 syntax -- behaves exactly like a bare cell reference (=TYPE(A1)) in Excel:
+        // it is not "an array", so TYPE must report the underlying value's own type, not 64. Only a
+        // genuine multi-cell reference (still 64 -- see Type_ReturnsArrayCodeForRangeReferences) or
+        // an actual array constant/array-returning result is "array" type 64. Gated on
+        // RangeValue.IsSheetReference so a 1x1 array constant (e.g. ={5}, IsSheetReference false by
+        // construction -- see FormulaEvaluator.EvaluateArrayConstant) still correctly reports 64.
+        if (value is RangeValue { IsSheetReference: true, RowCount: 1, ColCount: 1 } single)
+            value = single.Cells[0, 0];
+
+        return value switch
         {
             ErrorValue => new NumberValue(16),
             RangeValue => new NumberValue(64),

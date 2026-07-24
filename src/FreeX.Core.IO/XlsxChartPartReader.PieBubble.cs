@@ -43,6 +43,7 @@ public static partial class XlsxChartPartReader
             }
 
             var modelSeriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, seriesIndex);
+            XlsxChartSeriesRangeReader.CaptureSeriesRoundTripMetadata(series, modelSeriesIndex, result);
             if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, modelSeriesIndex, out var format))
                 result.SeriesFormats.Add(format);
 
@@ -129,6 +130,7 @@ public static partial class XlsxChartPartReader
         foreach (var series in bubbleChart.Elements(ChartNs + "ser"))
         {
             var modelSeriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, seriesIndex);
+            XlsxChartSeriesRangeReader.CaptureSeriesRoundTripMetadata(series, modelSeriesIndex, result);
             hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
             foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series, "tx", "xVal", "yVal", "bubbleSize"))
             {

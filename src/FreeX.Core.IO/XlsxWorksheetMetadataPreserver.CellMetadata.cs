@@ -525,6 +525,20 @@ internal static partial class XlsxWorksheetMetadataPreserver
         List<(XElement SourceCell, SourceCellNativeMetadata NativeMetadata, string OldAddress)>? unmatchedSourceCells = null;
         HashSet<string>? sourceAddresses = null;
 
+        // R82-io-cell-rich-metadata-5-1: a row/column DELETE only shrinks the sheet -- it never frees
+        // up a brand-new address the way an INSERT does -- so a middle-row delete leaves every
+        // surviving shifted-up cell's OLD address still valid in the target sheet, just now holding a
+        // DIFFERENT cell's content. CellValueMatchesCapturedNativeMetadata's t/formula/value equality
+        // guard cannot catch this when the shifted-in cell happens to serialize identically to the one
+        // that used to live there -- which is exactly what happens for a column of rich-value
+        // placeholder cells (Stocks/Geography/IMAGE(), all t="e"/<v>#VALUE!</v> regardless of which
+        // distinct entity their vm/cm points to). Count how many native-metadata-bearing source cells
+        // share each (type, formula, value) signature; when more than one does, a same-address hit is
+        // ambiguous and must not be trusted unless the target sheet has the exact same number of cells
+        // sharing that signature (computed lazily below, only once an ambiguous signature is seen).
+        Dictionary<CellSignature, int>? sourceRichValueSignatureCounts = null;
+        Dictionary<CellSignature, int>? targetSignatureCounts = null;
+
         foreach (var sourceCell in sourceSheetData.Descendants(workbookNs + "c"))
         {
             var address = sourceCell.Attribute("r")?.Value;
@@ -547,8 +561,22 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 continue;
             }
 
-            if (MergeCellNativeMetadataPair(sourceCell, targetCell, nativeMetadata, targetArchive, workbookNs, ref targetSharedStrings))
+            sourceRichValueSignatureCounts ??= BuildRichValueSignatureCounts(sourceSheetData, workbookNs);
+            if (sourceRichValueSignatureCounts.Count > 0)
+                targetSignatureCounts ??= BuildCellSignatureCounts(targetCellsByAddress, workbookNs);
+
+            if (MergeCellNativeMetadataPair(
+                    sourceCell,
+                    targetCell,
+                    nativeMetadata,
+                    targetArchive,
+                    workbookNs,
+                    ref targetSharedStrings,
+                    sourceRichValueSignatureCounts,
+                    targetSignatureCounts))
+            {
                 changed = true;
+            }
         }
 
         if (unmatchedSourceCells is { Count: > 0 } && targetCellsByAddress is { Count: > 0 })
@@ -566,6 +594,44 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
+    }
+
+    // Counts native-metadata source cells that carry a vm/cm rich-value attribute, grouped by their
+    // (type, formula, value) signature -- the same signature CellValueMatchesCapturedNativeMetadata
+    // already compares. A count greater than 1 means the direct-address match below cannot assume
+    // address stability: multiple source cells serialize identically, so a delete-shift could have
+    // moved a different one of them into this exact address.
+    private static Dictionary<CellSignature, int> BuildRichValueSignatureCounts(XElement sourceSheetData, XNamespace workbookNs)
+    {
+        var counts = new Dictionary<CellSignature, int>();
+        foreach (var cell in sourceSheetData.Descendants(workbookNs + "c"))
+        {
+            if (!cell.Attributes().Any(IsRichValueMetadataAttribute))
+                continue;
+
+            var signature = GetCellSignature(cell, workbookNs);
+            counts[signature] = counts.TryGetValue(signature, out var count) ? count + 1 : 1;
+        }
+
+        return counts;
+    }
+
+    // Counts every target cell by (type, formula, value) signature, regardless of whether it carries
+    // any native metadata -- used to check whether an ambiguous source signature's cell count is still
+    // the same in the target sheet (no delete/insert disturbed that group) before trusting a
+    // same-address rich-value reattachment.
+    private static Dictionary<CellSignature, int> BuildCellSignatureCounts(
+        IReadOnlyDictionary<string, XElement> targetCellsByAddress,
+        XNamespace workbookNs)
+    {
+        var counts = new Dictionary<CellSignature, int>();
+        foreach (var cell in targetCellsByAddress.Values)
+        {
+            var signature = GetCellSignature(cell, workbookNs);
+            counts[signature] = counts.TryGetValue(signature, out var count) ? count + 1 : 1;
+        }
+
+        return counts;
     }
 
     // Shift-aware fallback: pairs each still-unmatched source cell to an unclaimed target cell at
@@ -624,13 +690,19 @@ internal static partial class XlsxWorksheetMetadataPreserver
             var pairCount = Math.Min(sortedSources.Count, sortedCandidates.Count);
             for (var i = 0; i < pairCount; i++)
             {
+                // This pairing is already order-disambiguated among unclaimed cells (never a direct-
+                // address hit), so the ambiguous-signature-count guard below is unnecessary here --
+                // pass null to leave CellValueMatchesCapturedNativeMetadata's ordinary equality check
+                // as the only gate, exactly as before this fix.
                 if (MergeCellNativeMetadataPair(
                         sortedSources[i].SourceCell,
                         sortedCandidates[i].Cell,
                         sortedSources[i].NativeMetadata,
                         targetArchive,
                         workbookNs,
-                        ref targetSharedStrings))
+                        ref targetSharedStrings,
+                        sourceRichValueSignatureCounts: null,
+                        targetSignatureCounts: null))
                 {
                     changed = true;
                 }
@@ -646,7 +718,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
         SourceCellNativeMetadata nativeMetadata,
         ZipArchive targetArchive,
         XNamespace workbookNs,
-        ref IReadOnlyList<string>? targetSharedStrings)
+        ref IReadOnlyList<string>? targetSharedStrings,
+        IReadOnlyDictionary<CellSignature, int>? sourceRichValueSignatureCounts = null,
+        IReadOnlyDictionary<CellSignature, int>? targetSignatureCounts = null)
     {
         var changed = false;
 
@@ -667,7 +741,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 // reattaching the stale vm/cm would point the edited cell at metadata describing its
                 // old value. Drop vm/cm on any mismatch; every other native attribute is unaffected.
                 if (IsRichValueMetadataAttribute(attribute) &&
-                    !CellValueMatchesCapturedNativeMetadata(sourceCell, targetCell, workbookNs))
+                    !CellValueMatchesCapturedNativeMetadata(
+                        sourceCell, targetCell, workbookNs, sourceRichValueSignatureCounts, targetSignatureCounts))
                 {
                     continue;
                 }
@@ -755,7 +830,23 @@ internal static partial class XlsxWorksheetMetadataPreserver
     // True when sourceCell's t/formula/<v> -- the cell state the source's vm/cm metadata was captured
     // against -- still match targetCell's. Guards against reattaching stale rich-value metadata (vm/cm)
     // to a cell whose value, type, or formula changed since the source snapshot was taken.
-    private static bool CellValueMatchesCapturedNativeMetadata(XElement sourceCell, XElement targetCell, XNamespace workbookNs)
+    //
+    // R82-io-cell-rich-metadata-5-1: sourceRichValueSignatureCounts/targetSignatureCounts (both null
+    // outside the direct-address main loop -- see MergeWorksheetCellNativeMetadata) additionally guard
+    // against a false match caused by a row/column DELETE. Rich-value placeholder cells all serialize
+    // identically (t="e", no formula, <v>#VALUE!</v>) regardless of which distinct entity their vm/cm
+    // points to, so when several such cells share this exact signature, a same-address hit alone cannot
+    // prove the target cell is really the SAME cell rather than a same-signature sibling shifted up into
+    // this address by a delete. Only trust the match when the target sheet has exactly as many cells
+    // sharing that signature as the source did -- a mismatch means a delete (or insert) disturbed this
+    // group, and reattaching a guess would risk cross-binding the wrong rich-value entity, so the
+    // metadata is safely left off instead.
+    private static bool CellValueMatchesCapturedNativeMetadata(
+        XElement sourceCell,
+        XElement targetCell,
+        XNamespace workbookNs,
+        IReadOnlyDictionary<CellSignature, int>? sourceRichValueSignatureCounts = null,
+        IReadOnlyDictionary<CellSignature, int>? targetSignatureCounts = null)
     {
         if (!string.Equals(sourceCell.Attribute("t")?.Value, targetCell.Attribute("t")?.Value, StringComparison.Ordinal))
             return false;
@@ -774,10 +865,26 @@ internal static partial class XlsxWorksheetMetadataPreserver
             return false;
         }
 
-        return string.Equals(
-            sourceCell.Element(workbookNs + "v")?.Value,
-            targetCell.Element(workbookNs + "v")?.Value,
-            StringComparison.Ordinal);
+        if (!string.Equals(
+                sourceCell.Element(workbookNs + "v")?.Value,
+                targetCell.Element(workbookNs + "v")?.Value,
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (sourceRichValueSignatureCounts is not null && targetSignatureCounts is not null)
+        {
+            var signature = GetCellSignature(sourceCell, workbookNs);
+            if (sourceRichValueSignatureCounts.TryGetValue(signature, out var sourceCount) && sourceCount > 1)
+            {
+                targetSignatureCounts.TryGetValue(signature, out var targetCount);
+                if (targetCount != sourceCount)
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     private static SourceCellNativeMetadata GetSourceCellNativeMetadata(XElement sourceCell, XNamespace workbookNs)

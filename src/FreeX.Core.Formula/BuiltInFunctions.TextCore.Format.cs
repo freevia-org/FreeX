@@ -152,6 +152,29 @@ public static partial class BuiltInFunctions
         string format = (useCommas ? "N" : "F") + displayDecimals;
         string text = rounded.ToString(format, CultureInfo.CurrentCulture);
 
+        // A tiny negative input that rounds to zero at the requested precision (e.g.
+        // FIXED(-0.001,2)) re-acquires IEEE double negative zero when RoundWithExcelDigits'
+        // decimal result is cast back to double, and .NET's "F"/"N" formats render that with a
+        // leading sign. Excel never displays a bare negative sign on a value that rounds to zero
+        // -- same class of guard as NumberFormatter's IsNegativeZeroRepresentation/IsAllZeroText
+        // (NumberFormatter.cs:807/826). Callers that already pass a non-negative value (e.g.
+        // DOLLAR's Math.Abs'd input) can never hit `value < 0`, so this only strips an
+        // auto-generated sign, never an author/caller-intended one.
+        if (value < 0)
+        {
+            string negativeSign = CultureInfo.CurrentCulture.NumberFormat.NegativeSign;
+            if (text.StartsWith(negativeSign, StringComparison.Ordinal))
+            {
+                string magnitudeText = text[negativeSign.Length..];
+                bool hasNonZeroDigit = false;
+                foreach (char c in magnitudeText)
+                {
+                    if (char.IsDigit(c) && c != '0') { hasNonZeroDigit = true; break; }
+                }
+                if (!hasNonZeroDigit) text = magnitudeText;
+            }
+        }
+
         // Excel honors the full requested decimal count even past .NET's 99-digit "N"/"F" cap
         // (e.g. FIXED(1,100) shows "1." followed by 100 zeros). The value has no further
         // significant digits beyond what RoundWithExcelDigits/the "F99" text already produced

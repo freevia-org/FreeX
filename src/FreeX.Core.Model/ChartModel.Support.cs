@@ -339,6 +339,35 @@ public sealed record ChartPointFillFormat(
 }
 
 /// <summary>
+/// An explicit &lt;c:order&gt; value captured for a series whose order diverges from its idx.
+/// See <see cref="ChartModel.SeriesOrderOverrides"/> for the round-trip rationale.
+/// </summary>
+public sealed record ChartSeriesOrderOverride(int SeriesIndex, int Order);
+
+/// <summary>
+/// Per-data-point marker override for a Line/Scatter data point, read from a &lt;c:dPt&gt;'s
+/// &lt;c:marker&gt; child (Format Data Point &gt; Marker Options). See
+/// <see cref="ChartModel.PointMarkerFormats"/> for the round-trip rationale.
+/// </summary>
+public sealed record ChartPointMarkerFormat(
+    int SeriesIndex,
+    int PointIndex,
+    ChartMarkerStyle? MarkerStyle = null,
+    double? MarkerSize = null,
+    CellColor? FillColor = null,
+    WorkbookThemeColorReference? FillThemeColor = null,
+    CellColor? BorderColor = null,
+    WorkbookThemeColorReference? BorderThemeColor = null,
+    double? BorderThickness = null)
+{
+    public CellColor? ResolveFillColor(WorkbookTheme theme) =>
+        FillThemeColor?.Resolve(theme) ?? FillColor;
+
+    public CellColor? ResolveBorderColor(WorkbookTheme theme) =>
+        BorderThemeColor?.Resolve(theme) ?? BorderColor;
+}
+
+/// <summary>
 /// A literal data-label string supplied by a chart's "Value From Cells" feature
 /// (OOXML <c>c15:datalabelsRange</c> under a series' <c>extLst</c>). The cached text
 /// (e.g. <c>"👍 10%"</c>) is what Excel displays for the point, independent of the

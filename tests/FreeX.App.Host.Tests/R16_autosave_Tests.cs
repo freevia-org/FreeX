@@ -157,7 +157,8 @@ public sealed class R16_autosave_Tests
         string snapshotId,
         string? originalFilePath,
         string? displayName,
-        DateTimeOffset timestamp)
+        DateTimeOffset timestamp,
+        string? documentId = null)
     {
         var snapshotPath = store.GetSnapshotPath(snapshotId);
         var sidecarPath = store.GetSidecarPath(snapshotId);
@@ -167,7 +168,8 @@ public sealed class R16_autosave_Tests
             OriginalFilePath = originalFilePath,
             DisplayName = displayName,
             TimestampUtc = timestamp.ToString("O"),
-            SnapshotId = snapshotId
+            SnapshotId = snapshotId,
+            DocumentId = documentId
         };
         File.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
         return new AutosaveRecoveryCandidate(snapshotPath, sidecarPath, sidecar);
@@ -214,15 +216,77 @@ public sealed class R16_autosave_Tests
     }
 
     [Fact]
-    public void Deduplicate_SamePathFromSameLaunchScope_StillCollapsesToNewest()
+    public void Deduplicate_SamePathFromSameLaunchScope_SameDocumentId_StillCollapsesToNewest()
     {
         using var temp = new RecoveryTempDirectory();
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
         // Two "New Window" siblings from the SAME crashed session/launch ("1001") over the same
-        // saved document — this is the legitimate same-document, same-session case that must
-        // still collapse to a single (newest) snapshot, exactly as before this fix.
+        // saved document — proved by sharing the same DocumentId (both windows wrap the SAME
+        // Workbook instance; see IAutosaveWorkbookSource.DocumentId) — is the legitimate
+        // same-document, same-session case that must still collapse to a single (newest)
+        // snapshot.
+        var older = WriteCandidate(
+            store, "recovery-1001-w0", @"C:\Users\alice\Report.fxl", "Report", now.AddMinutes(-1),
+            documentId: "shared-report-workbook-id");
+        var newer = WriteCandidate(
+            store, "recovery-1001-w1", @"C:\Users\alice\Report.fxl", "Report", now,
+            documentId: "shared-report-workbook-id");
+
+        var deduped = InvokeDeduplicate([older, newer]);
+
+        deduped.Should().ContainSingle(
+            "sibling windows of the same document (same DocumentId) from the same crashed session still represent one document");
+        deduped[0].SnapshotPath.Should().Be(newer.SnapshotPath);
+        File.Exists(older.SnapshotPath).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Deduplicate_SamePathFromSameLaunchScope_DifferentDocumentId_KeepsBothInsteadOfDeleting()
+    {
+        // R82-services-autosave-recovery-5-1: File > Open has no "already open elsewhere" check
+        // (MainWindow.Backstage.cs's OpenFileAsync), so the SAME running process/launch can have
+        // TWO ORDINARY, INDEPENDENT windows over the same saved path (opened via two separate
+        // File > Open actions), each with its own unrelated unsaved edits and its own Workbook
+        // instance (different DocumentId). Before the fix, GetDocumentIdentityKey keyed purely on
+        // launch scope + path, so these collapsed to one and DeduplicateCandidatesByDocument
+        // silently deleted the older window's snapshot — permanently destroying its unsaved edits
+        // with zero content comparison. They must now be kept as distinct candidates and both
+        // offered, exactly like the different-launch-scope case above.
+        using var temp = new RecoveryTempDirectory();
+        var store = new AutosaveSnapshotStore(temp.Path);
+        var now = DateTimeOffset.UtcNow;
+
+        var windowA = WriteCandidate(
+            store, "recovery-1001-a1b2c3d4-w0", @"C:\Users\alice\Budget.fxl", "Budget", now.AddMinutes(-1),
+            documentId: "window-a-workbook-id");
+        var windowB = WriteCandidate(
+            store, "recovery-1001-a1b2c3d4-w1", @"C:\Users\alice\Budget.fxl", "Budget", now,
+            documentId: "window-b-workbook-id");
+
+        var deduped = InvokeDeduplicate([windowA, windowB]);
+
+        deduped.Should().HaveCount(2,
+            "two independent windows that merely happen to share a path/launch scope hold unrelated " +
+            "unsaved edits and must both be offered, not silently merged");
+        File.Exists(windowA.SnapshotPath).Should().BeTrue(
+            "the older independent window's snapshot must not be destructively deleted just because " +
+            "a newer snapshot for the same path exists from the same launch");
+        File.Exists(windowB.SnapshotPath).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Deduplicate_SamePathFromSameLaunchScope_MissingDocumentId_KeepsBothInsteadOfDeleting()
+    {
+        // No-regression sibling: a snapshot written by a build that predates the DocumentId field
+        // (or any other source that never populates it) must never be treated as provably the same
+        // document as another candidate purely on launch scope + path — GetDocumentIdentityComponent
+        // falls back to the (unique) snapshot path in that case, so these are kept distinct too.
+        using var temp = new RecoveryTempDirectory();
+        var store = new AutosaveSnapshotStore(temp.Path);
+        var now = DateTimeOffset.UtcNow;
+
         var older = WriteCandidate(
             store, "recovery-1001-w0", @"C:\Users\alice\Report.fxl", "Report", now.AddMinutes(-1));
         var newer = WriteCandidate(
@@ -230,9 +294,9 @@ public sealed class R16_autosave_Tests
 
         var deduped = InvokeDeduplicate([older, newer]);
 
-        deduped.Should().ContainSingle(
-            "sibling windows of the same document from the same crashed session still represent one document");
-        deduped[0].SnapshotPath.Should().Be(newer.SnapshotPath);
-        File.Exists(older.SnapshotPath).Should().BeFalse();
+        deduped.Should().HaveCount(2,
+            "candidates with no DocumentId are never provably the same document, so they must not be merged");
+        File.Exists(older.SnapshotPath).Should().BeTrue();
+        File.Exists(newer.SnapshotPath).Should().BeTrue();
     }
 }

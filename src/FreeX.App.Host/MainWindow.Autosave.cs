@@ -27,6 +27,11 @@ public partial class MainWindow : IAutosaveWorkbookSource
     string IAutosaveWorkbookSource.DisplayName => _workbook.Name;
     bool IAutosaveWorkbookSource.IsWorkbookDirty => _workbookDirty;
     int IAutosaveWorkbookSource.WorkbookDirtyGeneration => _workbookDirtyGeneration;
+    // Workbook.Id is per-instance (assigned fresh in the Workbook constructor), so windows that
+    // share the SAME Workbook instance (View > New Window siblings — see AdoptSharedWorkbook in
+    // MainWindow.MultiWindow.cs) report the same DocumentId, while independent windows opened on
+    // the same file path each get their own freshly-deserialized Workbook and a different one.
+    string IAutosaveWorkbookSource.DocumentId => _workbook.Id.Value.ToString();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 

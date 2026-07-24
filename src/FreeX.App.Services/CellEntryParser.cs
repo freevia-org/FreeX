@@ -1,5 +1,6 @@
 using System.Globalization;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -65,6 +66,16 @@ public static class CellEntryParser
         if (TryParseMixedFraction(text, out var fractionValue))
         {
             return new NumberValue(fractionValue);
+        }
+
+        // Excel's fictitious 1900 leap day ("2/29/1900" / "1900-02-29") cannot be represented as
+        // a real .NET DateTime (1900 is not a leap year), so it must be special-cased directly
+        // to serial 60 before the general DateTime-based parse below - which would otherwise
+        // fail for this literal and leave the cell as plain text. Mirrors the same special-case
+        // already applied to DATEVALUE()/TIMEVALUE() in BuiltInFunctions.
+        if (BuiltInFunctions.TryParseExcelFakeLeapDayText(text, out var fakeLeapDaySerial))
+        {
+            return new DateTimeValue(fakeLeapDaySerial);
         }
 
         if (TryParseCurrentCultureDate(text, out var dateTime))

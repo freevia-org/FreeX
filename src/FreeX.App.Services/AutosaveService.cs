@@ -14,6 +14,18 @@ public interface IAutosaveWorkbookSource
     string DisplayName { get; }
     bool IsWorkbookDirty { get; }
     int WorkbookDirtyGeneration { get; }
+
+    /// <summary>
+    /// Stable identity of the in-memory <see cref="Model.Workbook"/> instance this source wraps
+    /// (i.e. <c>Workbook.Id</c>). Two windows sharing the SAME identity are genuine Excel
+    /// "New Window" siblings over one shared document (see MainWindow.MultiWindow.cs's
+    /// AdoptSharedWorkbook); two windows with DIFFERENT identities are independent documents even
+    /// when they happen to share a saved file path (e.g. the same file opened twice via File &gt;
+    /// Open into two unrelated windows). Crash-recovery dedup (App.xaml.cs's
+    /// GetDocumentIdentityKey) uses this to tell the two cases apart so it never silently deletes
+    /// an unrelated window's unsaved snapshot.
+    /// </summary>
+    string DocumentId { get; }
 }
 
 /// <summary>
@@ -117,6 +129,7 @@ public sealed class AutosaveService : IDisposable
         public string DisplayName => _source.DisplayName;
         public bool IsDirty => _source.IsWorkbookDirty;
         public int DirtyGeneration => _source.WorkbookDirtyGeneration;
+        public string? DocumentId => _source.DocumentId;
 
         public void WriteSnapshot(string snapshotPath)
         {

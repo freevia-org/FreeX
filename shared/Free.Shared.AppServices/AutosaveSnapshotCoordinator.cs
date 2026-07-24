@@ -29,6 +29,16 @@ public interface IAutosaveSnapshotSource
     /// dispatcher/UI thread. May throw — the engine treats failures as best-effort no-ops.
     /// </summary>
     void WriteSnapshot(string snapshotPath);
+
+    /// <summary>
+    /// Optional stable identity of the in-memory document instance producing this snapshot (e.g.
+    /// FreeX's <c>Workbook.Id</c>). Lets crash-recovery dedup tell apart genuine multi-window
+    /// siblings over one shared document (same id) from independent documents that merely happen
+    /// to share a saved file path (different ids) — see FreeX's App.xaml.cs
+    /// GetDocumentIdentityKey. Defaulted to <c>null</c> so existing implementations (FreeW/FreeP)
+    /// need no changes; apps that do not supply an identity simply opt out of that distinction.
+    /// </summary>
+    string? DocumentId => null;
 }
 
 /// <summary>
@@ -148,7 +158,8 @@ public sealed class AutosaveSnapshotCoordinator
                 OriginalFilePath = source.OriginalFilePath,
                 DisplayName = source.DisplayName,
                 TimestampUtc = DateTimeOffset.UtcNow.ToString("O"),
-                SnapshotId = _snapshotId
+                SnapshotId = _snapshotId,
+                DocumentId = source.DocumentId
             };
             AtomicFileWriter.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
 

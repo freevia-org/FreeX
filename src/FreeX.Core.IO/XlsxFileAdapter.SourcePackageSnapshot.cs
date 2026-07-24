@@ -8929,17 +8929,26 @@ public sealed partial class XlsxFileAdapter
             cell.Element(worksheetNs + "is")?.Remove();
 
             // A rich value (linked data type, IMAGE()-produced value, etc.) propagated onto a formula
-            // cell is stored as a vm/cm attribute indexing into xl/metadata.xml's
-            // valueMetadata/cellMetadata, describing exactly the cached <t>/<v> this rewrite is about to
-            // replace. This helper is only ever invoked (via RewriteFormulaCachedCellValue /
-            // RewriteFormulaTextAndCachedCellValue) when the formula's cached value -- or the formula
-            // text itself -- has actually changed, so any existing vm/cm is now stale and must be
-            // dropped to avoid the fast patch-save path silently reattaching mismatched rich-value
-            // metadata to the cell's new value. Mirrors the RewriteLiteralCellValue guard above and the
-            // full-save CellValueMatchesCapturedNativeMetadata guard in
-            // XlsxWorksheetMetadataPreserver.CellMetadata.cs.
+            // cell is stored as a vm attribute (optionally paired with a cm attribute for the same
+            // binding) indexing into xl/metadata.xml's valueMetadata/cellMetadata, describing exactly
+            // the cached <t>/<v> this rewrite is about to replace. This helper is only ever invoked
+            // (via RewriteFormulaCachedCellValue / RewriteFormulaTextAndCachedCellValue) when the
+            // formula's cached value -- or the formula text itself -- has actually changed, so any
+            // existing vm is now stale and must be dropped to avoid the fast patch-save path silently
+            // reattaching mismatched rich-value metadata to the cell's new value. Mirrors the
+            // RewriteLiteralCellValue guard above and the full-save CellValueMatchesCapturedNativeMetadata
+            // guard in XlsxWorksheetMetadataPreserver.CellMetadata.cs.
+            //
+            // R82-io-cell-rich-metadata-5-2: cm alone (no vm) is a DIFFERENT metadataType -- most
+            // commonly an XLDAPR dynamic-array marker, which describes the FORMULA's nature (it
+            // spills) rather than its cached value, so it stays valid across an ordinary
+            // recalculation and must not be stripped just because the cached value changed. Only drop
+            // cm when it accompanies vm, i.e. when it is genuinely part of the same value-dependent
+            // rich-value binding being invalidated here.
+            var hadValueMetadataIndex = cell.Attribute("vm") is not null;
             cell.Attribute("vm")?.Remove();
-            cell.Attribute("cm")?.Remove();
+            if (hadValueMetadataIndex)
+                cell.Attribute("cm")?.Remove();
 
             switch (value)
             {

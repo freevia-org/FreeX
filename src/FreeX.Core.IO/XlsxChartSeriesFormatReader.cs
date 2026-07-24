@@ -183,23 +183,93 @@ internal static class XlsxChartSeriesFormatReader
 
             var spPr = dPt.Element(ChartNs + "spPr");
             var solidFill = spPr?.Element(DrawingNs + "solidFill");
-            if (solidFill is null)
-                continue;
+            if (solidFill is not null)
+            {
+                CellColor? fillColor = null;
+                WorkbookThemeColorReference? fillThemeColor = null;
+                if (XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+                    fillThemeColor = themeColor;
+                else if (XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+                    fillColor = color;
 
-            CellColor? fillColor = null;
-            WorkbookThemeColorReference? fillThemeColor = null;
-            if (XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
-                fillThemeColor = themeColor;
-            else if (XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
-                fillColor = color;
+                if (fillColor is not null || fillThemeColor is not null)
+                {
+                    chart.PointFillColors.RemoveAll(existing =>
+                        existing.SeriesIndex == seriesIndex && existing.PointIndex == pointIndex);
+                    chart.PointFillColors.Add(new ChartPointFillFormat(seriesIndex, pointIndex, fillColor, fillThemeColor));
+                }
+            }
 
-            if (fillColor is null && fillThemeColor is null)
-                continue;
-
-            chart.PointFillColors.RemoveAll(existing =>
-                existing.SeriesIndex == seriesIndex && existing.PointIndex == pointIndex);
-            chart.PointFillColors.Add(new ChartPointFillFormat(seriesIndex, pointIndex, fillColor, fillThemeColor));
+            // R82-io-chart-series-5-3: a dPt's own <c:marker> (Format Data Point > Marker Options)
+            // is independent of its <c:spPr> fill above — a point can carry ONLY a marker override
+            // (no fill override) and must still round-trip instead of being silently dropped.
+            ApplyPointMarkerOverride(dPt, seriesIndex, pointIndex, chart);
         }
+    }
+
+    /// <summary>
+    /// R82-io-chart-series-5-3: reads a &lt;c:dPt&gt;'s &lt;c:marker&gt; child (per-point marker
+    /// symbol/size/fill/border override) into <see cref="ChartModel.PointMarkerFormats"/>. Mirrors
+    /// the series-level marker reading in <see cref="TryReadSeriesLine"/>.
+    /// </summary>
+    private static void ApplyPointMarkerOverride(XElement dPt, int seriesIndex, int pointIndex, ChartModel chart)
+    {
+        var marker = dPt.Element(ChartNs + "marker");
+        if (marker is null)
+            return;
+
+        var markerStyle = marker.Element(ChartNs + "symbol") is { } symbolElement
+            ? FromXlsxMarkerStyle(symbolElement.Attribute("val")?.Value)
+            : (ChartMarkerStyle?)null;
+        double? markerSize = null;
+        if (int.TryParse(marker.Element(ChartNs + "size")?.Attribute("val")?.Value, out var size))
+            markerSize = Math.Clamp(size, 1, 30);
+
+        var markerShapeProperties = marker.Element(ChartNs + "spPr");
+        CellColor? fillColor = null;
+        WorkbookThemeColorReference? fillThemeColor = null;
+        var markerFill = markerShapeProperties?.Element(DrawingNs + "solidFill");
+        if (markerFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(markerFill, DrawingNs, out var markerThemeColor))
+            fillThemeColor = markerThemeColor;
+        else if (markerFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(markerFill, DrawingNs, out var markerColor))
+            fillColor = markerColor;
+
+        var markerLine = markerShapeProperties?.Element(DrawingNs + "ln");
+        CellColor? borderColor = null;
+        WorkbookThemeColorReference? borderThemeColor = null;
+        var markerLineFill = markerLine?.Element(DrawingNs + "solidFill");
+        if (markerLineFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(markerLineFill, DrawingNs, out var borderTheme))
+            borderThemeColor = borderTheme;
+        else if (markerLineFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(markerLineFill, DrawingNs, out var border))
+            borderColor = border;
+
+        double? borderThickness = null;
+        if (int.TryParse(markerLine?.Attribute("w")?.Value, out var markerLineEmus))
+            borderThickness = Math.Clamp(markerLineEmus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+
+        if (markerStyle is null &&
+            markerSize is null &&
+            fillColor is null &&
+            fillThemeColor is null &&
+            borderColor is null &&
+            borderThemeColor is null &&
+            borderThickness is null)
+        {
+            return;
+        }
+
+        chart.PointMarkerFormats.RemoveAll(existing =>
+            existing.SeriesIndex == seriesIndex && existing.PointIndex == pointIndex);
+        chart.PointMarkerFormats.Add(new ChartPointMarkerFormat(
+            seriesIndex,
+            pointIndex,
+            MarkerStyle: markerStyle,
+            MarkerSize: markerSize,
+            FillColor: fillColor,
+            FillThemeColor: fillThemeColor,
+            BorderColor: borderColor,
+            BorderThemeColor: borderThemeColor,
+            BorderThickness: borderThickness));
     }
 
     private static ChartMarkerStyle FromXlsxMarkerStyle(string? value) =>

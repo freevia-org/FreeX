@@ -590,6 +590,35 @@ public sealed class ChartModel
     public List<ChartSeriesVerbatimFormulas>? VerbatimSeriesFormulas { get; set; }
 
     /// <summary>
+    /// R82-io-chart-series-5-1: explicit &lt;c:order&gt; values captured for a series whose order
+    /// diverges from its &lt;c:idx&gt; — Excel keeps idx as a series' stable identity but order as
+    /// the actual plot/legend display sequence, and the two commonly diverge after the user
+    /// reorders series (Chart Design &gt; Select Data &gt; Move Up/Down) or deletes a middle series
+    /// (idx keeps a gap, order stays contiguous). Empty/no entry for a series means order == idx,
+    /// the ordinary case. The writer re-emits the captured order instead of always recomputing it
+    /// positionally as == idx.
+    /// </summary>
+    public List<ChartSeriesOrderOverride> SeriesOrderOverrides { get; set; } = [];
+
+    /// <summary>
+    /// R82-io-chart-series-5-2: verbatim &lt;c:cat&gt; XML captured for a series whose category
+    /// container is a &lt;c:multiLvlStrRef&gt; (Excel's grouped/multi-level category axis, e.g. an
+    /// outer "Region" level over an inner "City" level) — there is no positional-strip equivalent
+    /// for this shape, so it is preserved verbatim (keyed by series index) rather than rebuilt as a
+    /// flat &lt;c:strRef&gt;/&lt;c:numRef&gt;, which would silently discard the outer grouping level.
+    /// </summary>
+    public List<ChartSeriesRawXmlEntry> MultiLevelCategoryXml { get; set; } = [];
+
+    /// <summary>
+    /// R82-io-chart-series-5-3: per-data-point marker overrides (Format Data Point &gt; Marker
+    /// Options — e.g. highlighting a single Line/Scatter point with its own symbol/size/fill/border
+    /// while the rest of the series uses the series-level marker), read from a &lt;c:dPt&gt;'s
+    /// &lt;c:marker&gt; child. Distinct from <see cref="PointFillColors"/>, which only models a
+    /// dPt's &lt;c:spPr&gt; fill — a point whose ONLY override is its marker has no entry there.
+    /// </summary>
+    public List<ChartPointMarkerFormat> PointMarkerFormats { get; set; } = [];
+
+    /// <summary>
     /// Embedded series data extracted from <c>&lt;c:numCache&gt;</c> / <c>&lt;c:strCache&gt;</c>
     /// elements in the chart XML. Populated when the series data range formula is an
     /// unresolvable named range (e.g. <c>Sheet1!rngMyData</c>). When non-null and non-empty,

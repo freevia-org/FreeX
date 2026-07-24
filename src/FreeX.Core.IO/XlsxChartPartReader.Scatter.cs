@@ -29,6 +29,7 @@ public static partial class XlsxChartPartReader
             foreach (var series in scatterChart.Elements(ChartNs + "ser"))
             {
                 var modelSeriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
+                XlsxChartSeriesRangeReader.CaptureSeriesRoundTripMetadata(series, modelSeriesIndex, result);
                 hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
                 foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series, "tx", "xVal", "yVal"))
                 {

@@ -225,6 +225,13 @@ public static class ConditionalFormatManageModel
         var updated = rules.ToList();
         var changed = updated[index].Clone();
         changed.AppliesTo = range;
+        // The Applies-To editor only ever supplies a single resolved range (it has no UI for
+        // multi-area applies-to), so a stale AdditionalRanges from the original rule — copied
+        // verbatim by Clone() — must be dropped here, or the rule keeps silently applying to a
+        // second area that the user never re-selected and can't even see in the edit box.
+        // Mirrors the WPF host's ManageConditionalFormatsDialog Applies-To LostFocus handler,
+        // which clears AdditionalRanges the same way when a new single-range text is committed.
+        changed.AdditionalRanges = null;
         updated[index] = changed;
         Reprioritize(updated);
         return updated;

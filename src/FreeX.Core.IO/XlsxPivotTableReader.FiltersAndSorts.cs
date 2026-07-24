@@ -52,14 +52,14 @@ internal static partial class XlsxPivotTableReader
             .Elements(workbookNs + "filter")
             .Select(filter =>
             {
-                var kind = ReadNativePivotValueFilterKind(filter.Attribute("type")?.Value);
+                var kind = ReadNativePivotValueFilterKind(filter, workbookNs);
                 if (kind is null)
                     return null;
 
                 return new PivotValueFilterModel(
                     XlsxXmlAttributeReader.ReadIntAttribute(filter, "iMeasureFld") ?? XlsxXmlAttributeReader.ReadIntAttribute(filter, "dataField") ?? 0,
                     kind.Value,
-                    XlsxXmlAttributeReader.ReadIntAttribute(filter, "count") ?? XlsxXmlAttributeReader.ReadIntAttribute(filter, "val") ?? (kind.Value is PivotValueFilterKind.Top or PivotValueFilterKind.Bottom ? 10 : 0),
+                    XlsxXmlAttributeReader.ReadIntAttribute(filter, "count") ?? XlsxXmlAttributeReader.ReadIntAttribute(filter, "val") ?? ReadNativeTopFilterCount(filter, workbookNs) ?? (kind.Value is PivotValueFilterKind.Top or PivotValueFilterKind.Bottom ? 10 : 0),
                     ReadNativePivotFilterDoubleValue(filter, "stringValue1", "value1", "val"),
                     ReadNativePivotFilterDoubleValue(filter, "stringValue2", "value2"),
                     XlsxXmlAttributeReader.ReadIntAttribute(filter, "fld") ?? XlsxXmlAttributeReader.ReadIntAttribute(filter, "field"));
@@ -67,6 +67,21 @@ internal static partial class XlsxPivotTableReader
             .Where(filter => filter is not null)
             .Select(filter => filter!)
             .ToList();
+    }
+
+    // R82-io-pivot-layout-5-2: the real <filter>'s nested <autoFilter><filterColumn><top10 val="N"/>
+    // (written by XlsxPivotTableWriter.cs's ToPivotValueFilterAutoFilterFillerXml) is where an actual
+    // Excel-authored Top-10 filter's count genuinely lives -- CT_PivotFilter itself has no "count"/"val"
+    // attribute at all (confirmed via reflection against the OpenXml SDK), so the flat-attribute reads
+    // above are FreeX-authored-only fallbacks that never match a real Excel file.
+    private static int? ReadNativeTopFilterCount(XElement filter, XNamespace workbookNs)
+    {
+        var top10 = filter.Element(workbookNs + "autoFilter")?
+            .Element(workbookNs + "filterColumn")?
+            .Element(workbookNs + "top10");
+        return top10 is not null && XlsxXmlAttributeReader.ReadDoubleAttribute(top10, "val") is { } value
+            ? (int)value
+            : null;
     }
 
     private static List<PivotLabelFilterModel> ReadNativePivotLabelFilters(XElement? filtersElement, XNamespace workbookNs)
@@ -123,10 +138,18 @@ internal static partial class XlsxPivotTableReader
         PivotLabelFilterKind.YearToDate,
     ];
 
-    private static PivotValueFilterKind? ReadNativePivotValueFilterKind(string? value) =>
-        value?.Trim().ToLowerInvariant() switch
+    // R82-io-pivot-layout-5-2: real ST_PivotFilterType has no separate "bottom" token at all -- a
+    // count/percent/sum ("Top 10"-style) filter's direction lives on the nested
+    // <autoFilter><filterColumn><top10 top="0|1"/></filterColumn></autoFilter>'s own "top" attribute
+    // (schema default true = Top), written by XlsxPivotTableWriter.cs's
+    // ToPivotValueFilterAutoFilterFillerXml. "topcount"/"bottomcount"/"top"/"bottom" are kept for
+    // back-compat with files saved by FreeX's own earlier (non-native) writer output.
+    private static PivotValueFilterKind? ReadNativePivotValueFilterKind(XElement filter, XNamespace workbookNs) =>
+        filter.Attribute("type")?.Value?.Trim().ToLowerInvariant() switch
         {
-            "count" or "topcount" or "top" => PivotValueFilterKind.Top,
+            "count" or "percent" or "sum" or "topcount" or "top" => ReadNativeTopFilterIsBottom(filter, workbookNs)
+                ? PivotValueFilterKind.Bottom
+                : PivotValueFilterKind.Top,
             "bottomcount" or "bottom" => PivotValueFilterKind.Bottom,
             "valueequal" or "valueequals" => PivotValueFilterKind.Equals,
             "valuenotequal" or "valuedoesnotequal" => PivotValueFilterKind.DoesNotEqual,
@@ -138,6 +161,16 @@ internal static partial class XlsxPivotTableReader
             "valuenotbetween" => PivotValueFilterKind.NotBetween,
             _ => null
         };
+
+    // See ReadNativePivotValueFilterKind's comment -- an absent <top10> or an absent/true "top" attribute
+    // both mean Top (the schema default); only an explicit top="0" means Bottom.
+    private static bool ReadNativeTopFilterIsBottom(XElement filter, XNamespace workbookNs)
+    {
+        var top10 = filter.Element(workbookNs + "autoFilter")?
+            .Element(workbookNs + "filterColumn")?
+            .Element(workbookNs + "top10");
+        return top10 is not null && !XlsxXmlAttributeReader.ReadBoolAttribute(top10, "top", defaultValue: true);
+    }
 
     private static PivotLabelFilterKind? ReadNativePivotLabelFilterKind(string? value) =>
         value?.Trim().ToLowerInvariant() switch

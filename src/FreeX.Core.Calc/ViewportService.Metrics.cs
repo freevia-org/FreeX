@@ -254,6 +254,44 @@ public sealed partial class ViewportService
         return combined;
     }
 
+    /// <summary>
+    /// Counts the entries in <paramref name="rows"/> that represent a genuinely on-screen,
+    /// scrollable row: past the frozen boundary AND with nonzero height. This intentionally
+    /// excludes the zero-height placeholder entries <see cref="PrependScrolledPastMergeAnchorRows"/>
+    /// materializes for a merge anchor that has scrolled above the window -- those placeholders
+    /// exist purely so the merge's still-visible remainder keeps drawing (see that method's doc
+    /// comment) and occupy zero pixels, so they are not actual on-screen rows. A naive count of
+    /// every <c>Row &gt; frozenRows</c> entry (regardless of height) would inflate the scrollbar's
+    /// ViewportSize/LargeChange and the Page Up/Down jump distance by one row per placeholder
+    /// whenever the viewport has scrolled into a tall merge.
+    /// </summary>
+    public static int CountScrollableRows(IReadOnlyList<RowMetric> rows, uint frozenRows)
+    {
+        var count = 0;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            if (row.Row > frozenRows && row.Height > 0)
+                count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>Column counterpart of <see cref="CountScrollableRows"/>.</summary>
+    public static int CountScrollableColumns(IReadOnlyList<ColMetric> columns, uint frozenCols)
+    {
+        var count = 0;
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var column = columns[i];
+            if (column.Col > frozenCols && column.Width > 0)
+                count++;
+        }
+
+        return count;
+    }
+
     private static double SumRowHeights(IReadOnlyList<RowMetric> rows)
     {
         double height = 0;

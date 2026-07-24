@@ -394,11 +394,19 @@ public sealed partial class XlsxFileAdapter
         // verbatim. Rewrite ONLY the page/report-filter selection and the manual item-filter (per-item
         // hidden flags) on those preserved parts in place from the model, so an in-app edit to either
         // survives save; mirrors the P7 slicer/timeline selection rewrite immediately below. Must run
-        // after PreserveSourcePackageParts (the parts must already be at their final path). Axis
-        // reassignment (moving a field between Rows/Columns/Filters) needs a structural rewrite of
-        // pivotFields/rowFields/colFields/pageFields together and is intentionally out of scope here.
+        // after PreserveSourcePackageParts (the parts must already be at their final path).
         if (featurePlan.HasPivotTables)
         {
+            // R82-io-pivot-layout-5-1: must run BEFORE RewritePivotTableFilterState/RewritePivotTableLayoutState
+            // below -- moving a field between Rows/Columns/Filters (ConfigurePivotTableLayoutCommand) only
+            // mutates PivotTableModel.RowFields/ColumnFields/PageFields in memory; nothing else on this
+            // source-package save path regenerates the preserved part's <rowFields>/<colFields>/<pageFields>
+            // containers or each <pivotField>'s own axis attribute from the CURRENT model, so the move
+            // silently reverted to its pre-edit area on reload. This IS the structural rewrite the older
+            // comment here used to say was "intentionally out of scope."
+            packageStream.Position = 0;
+            RewritePivotTableFieldAxes(packageStream, workbook);
+
             packageStream.Position = 0;
             RewritePivotTableFilterState(packageStream, workbook);
 
@@ -521,6 +529,172 @@ public sealed partial class XlsxFileAdapter
             packageStream.Position = 0;
             XlsxDrawingSchemaNormalizer.NormalizePackage(packageStream);
         }
+    }
+
+    // R82-io-pivot-layout-5-1: rewrites which axis (Row/Column/Filter) each field is assigned to on a
+    // PRESERVED pivotTableDefinition part -- sibling of RewritePivotTableFilterState/
+    // RewritePivotTableLayoutState below, gated the same way (matches a pivot table to its model purely
+    // via PivotTableModel.PackagePart; a brand-new pivot table added since Load() has no PackagePart yet
+    // and is intentionally skipped -- it needs a fully regenerated part, not a patch of one that doesn't
+    // exist yet). Moving a field between Rows/Columns/Filters (ConfigurePivotTableLayoutCommand) only
+    // mutates PivotTableModel.RowFields/ColumnFields/PageFields in memory; nothing else on this
+    // hasSourcePackage save path regenerates the preserved part's <rowFields>/<colFields>/<pageFields>
+    // containers or each <pivotField>'s own axis attribute from the CURRENT model.
+    private static void RewritePivotTableFieldAxes(Stream packageStream, Workbook workbook)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+
+        var cachesById = new Dictionary<int, PivotCacheModel>();
+        foreach (var cache in workbook.PivotCaches)
+        {
+            if (cache.CacheId > 0)
+                cachesById[cache.CacheId] = cache;
+        }
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var pivot in sheet.PivotTables)
+            {
+                if (string.IsNullOrWhiteSpace(pivot.PackagePart))
+                    continue;
+
+                var pivotPath = XlsxPackagePath.NormalizePackagePath(pivot.PackagePart);
+                var entry = archive.GetEntry(pivotPath);
+                if (entry is null)
+                    continue;
+
+                var pivotXml = XlsxPackageXmlEditor.LoadXml(entry);
+                var root = pivotXml.Root;
+                if (root is null || root.Name != workbookNs + "pivotTableDefinition")
+                    continue;
+
+                cachesById.TryGetValue(pivot.CacheId, out var cache);
+                if (RewritePreservedPivotFieldAxes(root, pivot, cache, workbookNs))
+                    XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, pivotXml);
+            }
+        }
+    }
+
+    // Reads the SourceFieldIndex list a preserved <rowFields>/<colFields> container currently encodes,
+    // skipping the x="-2" "Σ Values" pseudo-field marker (PivotTableModel never represents that marker as
+    // a real field -- see XlsxPivotTableReader.Fields.cs's ReadPivotFieldIndexes for the matching read
+    // path), so this compares like-for-like against PivotFieldModel.SourceFieldIndex.
+    private static List<int> ReadPreservedPivotFieldCollectionIndexes(XElement? fieldsElement, XNamespace workbookNs) =>
+        fieldsElement?
+            .Elements(workbookNs + "field")
+            .Select(field => XlsxXmlAttributeReader.ReadIntAttribute(field, "x"))
+            .Where(index => index is not null && index.Value != -2)
+            .Select(index => index!.Value)
+            .ToList()
+        ?? [];
+
+    // Sibling of ReadPreservedPivotFieldCollectionIndexes, for the preserved <pageFields> container.
+    private static List<int> ReadPreservedPivotPageFieldIndexes(XElement? fieldsElement, XNamespace workbookNs) =>
+        fieldsElement?
+            .Elements(workbookNs + "pageField")
+            .Select(field => XlsxXmlAttributeReader.ReadIntAttribute(field, "fld"))
+            .Where(index => index is not null)
+            .Select(index => index!.Value)
+            .ToList()
+        ?? [];
+
+    // Rewrites, in place, ONLY what actually differs from the preserved XML: each affected <pivotField>'s
+    // own axis attribute, plus a wholesale regeneration of the <rowFields>/<colFields>/<pageFields>
+    // containers themselves (membership AND order both matter, so there is no cheaper in-place patch that
+    // preserves byte-stability the way the item-filter/page-selection rewrites above do). Fields whose
+    // SourceFieldIndex is beyond the preserved part's existing <pivotFields> range are left untouched --
+    // that only happens for a field newly introduced to an axis that never had ANY field in the original
+    // file, which needs the same full regeneration a brand-new pivot table does, not a patch.
+    private static bool RewritePreservedPivotFieldAxes(
+        XElement root,
+        PivotTableModel pivot,
+        PivotCacheModel? cache,
+        XNamespace workbookNs)
+    {
+        var desiredRowIndexes = pivot.RowFields.Select(field => field.SourceFieldIndex).ToList();
+        var desiredColumnIndexes = pivot.ColumnFields.Select(field => field.SourceFieldIndex).ToList();
+        var desiredPageIndexes = pivot.PageFields.Select(field => field.SourceFieldIndex).ToList();
+
+        var existingRowIndexes = ReadPreservedPivotFieldCollectionIndexes(root.Element(workbookNs + "rowFields"), workbookNs);
+        var existingColumnIndexes = ReadPreservedPivotFieldCollectionIndexes(root.Element(workbookNs + "colFields"), workbookNs);
+        var existingPageIndexes = ReadPreservedPivotPageFieldIndexes(root.Element(workbookNs + "pageFields"), workbookNs);
+
+        if (existingRowIndexes.SequenceEqual(desiredRowIndexes) &&
+            existingColumnIndexes.SequenceEqual(desiredColumnIndexes) &&
+            existingPageIndexes.SequenceEqual(desiredPageIndexes))
+        {
+            return false;
+        }
+
+        var pivotFieldsElement = root.Element(workbookNs + "pivotFields");
+        if (pivotFieldsElement is not null)
+        {
+            var pivotFieldElements = pivotFieldsElement.Elements(workbookNs + "pivotField").ToList();
+            for (var index = 0; index < pivotFieldElements.Count; index++)
+            {
+                var desiredAxis =
+                    desiredRowIndexes.Contains(index) ? "axisRow" :
+                    desiredColumnIndexes.Contains(index) ? "axisCol" :
+                    desiredPageIndexes.Contains(index) ? "axisPage" :
+                    null;
+
+                var element = pivotFieldElements[index];
+                if (string.Equals(element.Attribute("axis")?.Value, desiredAxis, StringComparison.Ordinal))
+                    continue;
+
+                if (desiredAxis is null)
+                    element.Attribute("axis")?.Remove();
+                else
+                    element.SetAttributeValue("axis", desiredAxis);
+            }
+        }
+
+        ReplacePreservedPivotFieldContainer(root, workbookNs, "rowFields", XlsxPivotTableWriter.ToPivotFieldCollectionXml("rowFields", pivot.RowFields, workbookNs));
+        ReplacePreservedPivotFieldContainer(root, workbookNs, "colFields", XlsxPivotTableWriter.ToPivotFieldCollectionXml("colFields", pivot.ColumnFields, workbookNs));
+        ReplacePreservedPivotFieldContainer(root, workbookNs, "pageFields", XlsxPivotTableWriter.ToPivotPageFieldsXml(pivot.PageFields, cache, workbookNs));
+
+        return true;
+    }
+
+    // Canonical CT_pivotTableDefinition child order for the rowFields/colFields/pageFields containers and
+    // everything that can legitimately follow them in a part this codebase writes or preserves -- used to
+    // find the correct insertion point when a container needs to be newly added (or removed) because a
+    // field moved onto (or off of) an axis that had no field on it at all in the original file.
+    private static readonly string[] PivotFieldContainerCanonicalOrder =
+    [
+        "rowFields", "colFields", "pageFields", "dataFields", "calculatedItems",
+        "valueFilters", "labelFilters", "filters", "pivotSorts", "pivotTableStyleInfo", "extLst",
+    ];
+
+    private static void ReplacePreservedPivotFieldContainer(XElement root, XNamespace workbookNs, string elementName, XElement? newElement)
+    {
+        var existing = root.Element(workbookNs + elementName);
+        if (newElement is null)
+        {
+            existing?.Remove();
+            return;
+        }
+
+        if (existing is not null)
+        {
+            existing.ReplaceWith(newElement);
+            return;
+        }
+
+        var startIndex = Array.IndexOf(PivotFieldContainerCanonicalOrder, elementName) + 1;
+        XElement? anchor = null;
+        for (var i = startIndex; i < PivotFieldContainerCanonicalOrder.Length; i++)
+        {
+            anchor = root.Element(workbookNs + PivotFieldContainerCanonicalOrder[i]);
+            if (anchor is not null)
+                break;
+        }
+
+        if (anchor is not null)
+            anchor.AddBeforeSelf(newElement);
+        else
+            root.Add(newElement);
     }
 
     // P8 (R44-io-pivot-filter-page-3-1): rewrites just the page/report-filter selection and the manual

@@ -23,6 +23,7 @@ public sealed class AutosaveServiceTests
         public string DisplayName { get; }
         public bool IsWorkbookDirty { get; set; }
         public int WorkbookDirtyGeneration { get; set; }
+        public string DocumentId => Workbook.Id.Value.ToString();
     }
 
     [Fact]

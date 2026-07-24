@@ -138,6 +138,51 @@ public sealed class ConditionalFormatManageWorkingCopyTests
         source.Single().AppliesTo.Should().Be(originalRange, "changing the applies-to range in the working copy must not touch the source rule");
     }
 
+    // ── R82-app-dialog-parity-5-2: ApplyRangeInWorkingCopy must clear stale AdditionalRanges ──
+
+    [Fact]
+    public void ApplyRangeInWorkingCopy_ClearsStaleAdditionalRanges_WhenReplacingWithASingleNewRange()
+    {
+        // Rule's "Applies to" originally spanned two non-contiguous areas: A1:A5 (AppliesTo) and
+        // C1:C5 (AdditionalRanges). The Avalonia Applies-To editor only ever supplies ONE resolved
+        // range (it has no multi-area UI and the box doesn't even display AdditionalRanges), so
+        // retyping a single new range must replace the WHOLE applies-to, not just its primary area —
+        // otherwise C1:C5 keeps silently getting the conditional format even though the user never
+        // re-selected it and can't see it in the edit box.
+        var sheet = SheetId();
+        var rule = RuleAt(sheet, 0, 0, 4, 0); // A1:A5
+        rule.AdditionalRanges = [RangeAt(sheet, 0, 2, 4, 2)]; // C1:C5
+        var source = new List<ConditionalFormat> { rule };
+        var newRange = RangeAt(sheet, 0, 1, 4, 1); // B1:B5
+
+        var result = ConditionalFormatManageModel.ApplyRangeInWorkingCopy(source, rule.Id, newRange);
+
+        result.Should().NotBeNull();
+        var updated = result!.Single();
+        updated.AppliesTo.Should().Be(newRange);
+        updated.AdditionalRanges.Should().BeNull(
+            "a retyped single-range Applies-To must drop any stale multi-area remainder, matching " +
+            "Excel and the WPF host's Applies-To LostFocus handler");
+    }
+
+    [Fact]
+    public void ApplyRangeInWorkingCopy_WithNoAdditionalRanges_LeavesAdditionalRangesNull()
+    {
+        // No-regression sibling: the ordinary single-area case (no AdditionalRanges to begin with)
+        // must keep working exactly as before — AdditionalRanges simply stays null.
+        var sheet = SheetId();
+        var rule = RuleAt(sheet, 0, 0, 4, 0);
+        var source = new List<ConditionalFormat> { rule };
+        var newRange = RangeAt(sheet, 0, 1, 4, 1);
+
+        var result = ConditionalFormatManageModel.ApplyRangeInWorkingCopy(source, rule.Id, newRange);
+
+        result.Should().NotBeNull();
+        var updated = result!.Single();
+        updated.AppliesTo.Should().Be(newRange);
+        updated.AdditionalRanges.Should().BeNull();
+    }
+
     [Fact]
     public void AddToWorkingCopy_DoesNotMutateSourceList()
     {

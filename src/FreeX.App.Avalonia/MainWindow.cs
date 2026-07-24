@@ -430,6 +430,9 @@ public sealed partial class MainWindow : Window
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
     private int _sheetGridBuildCount;
+    // R82-render-scroll-viewport-5-1: test-only counter proving a pure viewport pan (scrollbar drag /
+    // mouse wheel) no longer rebuilds the sheet-tab strip -- see RefreshShellForViewportPan.
+    private int _sheetTabsBuildCount;
     // The active cell's Border from the most recent BuildSheetGrid pass. Cells are plain Borders
     // rebuilt on every RefreshShell (see CreateInteractiveCellBorder), so this is refreshed each
     // pass and used to move REAL keyboard focus onto the active cell (see MoveFocusToActiveCellBorder)
@@ -777,6 +780,9 @@ public sealed partial class MainWindow : Window
 
     internal int SheetGridBuildCountForTest => _sheetGridBuildCount;
 
+    /// <summary>Test-only counter of <see cref="BuildSheetTabs"/> calls (see RefreshShellForViewportPan).</summary>
+    internal int SheetTabsBuildCountForTest => _sheetTabsBuildCount;
+
     /// <summary>
     /// Test-only driver that reproduces a full mouse cell-selection drag from <paramref name="anchor"/>
     /// (the pressed cell) to <paramref name="cursor"/>, then the release. It mirrors the real gesture:
@@ -1119,6 +1125,16 @@ public sealed partial class MainWindow : Window
         TextInput += MainWindow_TextInput;
         Closing += MainWindow_Closing;
         WindowRegistry.Register(this);
+        // R82-meta-3: pick up the real OS CAPS LOCK/NUM LOCK toggle state (where a query is available)
+        // before the first render, so the indicator isn't wrongly hidden just because the physical key
+        // was already toggled on before this window ever existed -- see MainWindow.KeyLock.cs. Resynced
+        // again on every Activated below (the "toggled while another window had focus" case).
+        ResyncKeyLockToggleStateFromOs();
+        Activated += (_, _) =>
+        {
+            ResyncKeyLockToggleStateFromOs();
+            RefreshKeyLockIndicators();
+        };
         RefreshShell(_session.StartupStatus);
     }
 
@@ -4051,6 +4067,39 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// R82-render-scroll-viewport-5-1: lightweight refresh for a PURE viewport pan (a mouse-wheel notch
+    /// or a scrollbar-drag tick that only changes which rows/cols are visible). RefreshShell's full pass
+    /// also rebuilds the sheet-tab strip, the cell-address/formula-bar readouts, every format-toggle
+    /// button, the status-bar model, the pivot field pane/contextual tab, the save button, and the
+    /// ribbon's toggle states -- none of which a pan can affect, since panning never moves the active
+    /// cell or selection. Re-running that whole chain on EVERY scroll tick (as both
+    /// WorksheetScrollBar_ValueChanged and SheetScrollViewer_PointerWheelChanged used to, via an
+    /// unconditional RefreshShell("Ready")) was pure per-tick overhead layered on top of BuildSheetGrid's
+    /// own per-cell control allocation cost (BuildSheetGrid itself still rebuilds the grid content on
+    /// every call -- Avalonia has no container-recycling viewport here yet -- but this at least stops
+    /// also tearing down and rebuilding everything else around it on every notch of a continuous scroll).
+    /// Keeps only the work a pan actually needs: rebuild the grid content, restore grid focus, resync the
+    /// formula-reference highlight overlay (BuildSheetGrid unconditionally clears it), reset the status
+    /// text/foreground, refresh the key-lock indicators, and resync the scrollbar thumbs/ranges.
+    /// </summary>
+    private void RefreshShellForViewportPan(string status)
+    {
+        var gridHadFocus = IsGridFocused();
+
+        _sheetGridHost.Content = BuildSheetGrid();
+        if (gridHadFocus)
+            MoveFocusToActiveCellBorder();
+
+        RefreshFormulaReferenceHighlights();
+        RefreshKeyLockIndicators();
+        _statusText.Text = status;
+        _statusText.Foreground = ShouldUseWarningStatusColor(status)
+            ? Brush(143, 74, 18)
+            : StatusBarForeground;
+        UpdateViewportScrollBars();
+    }
+
+    /// <summary>
     /// True when the currently focused element is <see cref="_sheetGridHost"/> itself or one of its
     /// descendants (i.e. a previous active-cell Border) — meaning the user is actively navigating
     /// the worksheet grid rather than editing the formula bar/inline editor or interacting with a
@@ -4292,6 +4341,7 @@ public sealed partial class MainWindow : Window
 
     private Control BuildSheetTabs()
     {
+        _sheetTabsBuildCount++;
         var panel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -25698,7 +25748,7 @@ public sealed partial class MainWindow : Window
         var step = GetWheelScrollLinesPerNotch();
         if (_session.PanViewport(rowDelta * step, colDelta * step))
         {
-            RefreshShell("Ready");
+            RefreshShellForViewportPan("Ready");
             BroadcastScrollOffsetToSideBySidePartner();
         }
 
@@ -25778,7 +25828,7 @@ public sealed partial class MainWindow : Window
             _horizontalWorksheetScrollBar.Value);
         if (_session.SetViewportOrigin(topRow, leftCol))
         {
-            RefreshShell("Ready");
+            RefreshShellForViewportPan("Ready");
             BroadcastScrollOffsetToSideBySidePartner();
         }
     }
