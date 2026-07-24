@@ -56,6 +56,39 @@ public enum TableCellNavigationDirection
     Previous,
 }
 
+public enum TableCellEditKeyboardKey
+{
+    Other,
+    Escape,
+    Tab,
+    B,
+    I,
+    U,
+}
+
+[Flags]
+public enum TableCellEditKeyboardModifiers
+{
+    None = 0,
+    Control = 1,
+    Shift = 2,
+    Alt = 4,
+    Platform = 8,
+}
+
+public enum TableCellEditKeyboardAction
+{
+    None,
+    Cancel,
+    Navigate,
+    ToggleTextFormat,
+}
+
+public readonly record struct TableCellEditKeyboardPlan(
+    TableCellEditKeyboardAction Action,
+    TableCellNavigationDirection? NavigationDirection = null,
+    TableCellTextFormatKind? TextFormatKind = null);
+
 public enum TableCellNavigationStatus
 {
     Ready,
@@ -587,6 +620,41 @@ public static class TableCellEditPlanner
             target.Row,
             target.Col,
             direction);
+    }
+
+    public static TableCellEditKeyboardPlan PlanKeyboard(
+        TableCellEditKeyboardKey key,
+        TableCellEditKeyboardModifiers modifiers)
+    {
+        if (key == TableCellEditKeyboardKey.Escape)
+            return new(TableCellEditKeyboardAction.Cancel);
+
+        if (key == TableCellEditKeyboardKey.Tab &&
+            (modifiers & (TableCellEditKeyboardModifiers.Control |
+                          TableCellEditKeyboardModifiers.Alt |
+                          TableCellEditKeyboardModifiers.Platform)) == 0)
+        {
+            return new(
+                TableCellEditKeyboardAction.Navigate,
+                (modifiers & TableCellEditKeyboardModifiers.Shift) != 0
+                    ? TableCellNavigationDirection.Previous
+                    : TableCellNavigationDirection.Next);
+        }
+
+        if ((modifiers & TableCellEditKeyboardModifiers.Control) != 0)
+        {
+            var formatKind = key switch
+            {
+                TableCellEditKeyboardKey.B => TableCellTextFormatKind.Bold,
+                TableCellEditKeyboardKey.I => TableCellTextFormatKind.Italic,
+                TableCellEditKeyboardKey.U => TableCellTextFormatKind.Underline,
+                _ => (TableCellTextFormatKind?)null,
+            };
+            if (formatKind is { } resolvedKind)
+                return new(TableCellEditKeyboardAction.ToggleTextFormat, TextFormatKind: resolvedKind);
+        }
+
+        return new(TableCellEditKeyboardAction.None);
     }
 
     public static InCanvasEditorTextSelection PlanInitialSelection(TextBody? body)

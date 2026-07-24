@@ -132,6 +132,48 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void PlanKeyboard_MatchesWpfTableCellEditingSemantics()
+    {
+        TableCellEditPlanner.PlanKeyboard(
+                TableCellEditKeyboardKey.Escape,
+                TableCellEditKeyboardModifiers.Control)
+            .Action.Should().Be(TableCellEditKeyboardAction.Cancel);
+
+        TableCellEditPlanner.PlanKeyboard(
+                TableCellEditKeyboardKey.Tab,
+                TableCellEditKeyboardModifiers.None)
+            .Should().Be(new TableCellEditKeyboardPlan(
+                TableCellEditKeyboardAction.Navigate,
+                TableCellNavigationDirection.Next));
+        TableCellEditPlanner.PlanKeyboard(
+                TableCellEditKeyboardKey.Tab,
+                TableCellEditKeyboardModifiers.Shift)
+            .Should().Be(new TableCellEditKeyboardPlan(
+                TableCellEditKeyboardAction.Navigate,
+                TableCellNavigationDirection.Previous));
+
+        TableCellEditPlanner.PlanKeyboard(
+                TableCellEditKeyboardKey.Tab,
+                TableCellEditKeyboardModifiers.Control)
+            .Action.Should().Be(TableCellEditKeyboardAction.None);
+        TableCellEditPlanner.PlanKeyboard(
+                TableCellEditKeyboardKey.Tab,
+                TableCellEditKeyboardModifiers.Platform)
+            .Action.Should().Be(TableCellEditKeyboardAction.None);
+
+        TableCellEditPlanner.PlanKeyboard(
+                TableCellEditKeyboardKey.B,
+                TableCellEditKeyboardModifiers.Control | TableCellEditKeyboardModifiers.Shift)
+            .Should().Be(new TableCellEditKeyboardPlan(
+                TableCellEditKeyboardAction.ToggleTextFormat,
+                TextFormatKind: TableCellTextFormatKind.Bold));
+        TableCellEditPlanner.PlanKeyboard(
+                TableCellEditKeyboardKey.U,
+                TableCellEditKeyboardModifiers.None)
+            .Action.Should().Be(TableCellEditKeyboardAction.None);
+    }
+
+    [Fact]
     public void BeginEdit_MixedRichRuns_ReturnsRendererNeutralRichTextPlan()
     {
         var presentation = Presentation.CreateEmpty();

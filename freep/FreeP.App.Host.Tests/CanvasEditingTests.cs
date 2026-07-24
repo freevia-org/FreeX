@@ -103,6 +103,8 @@ public sealed class CanvasEditingTests
         source.Should().Contain("TableCellEditPlanner.PlanNavigation");
         source.Should().Contain("TryNavigateActiveTableCell");
         source.Should().Contain("RichTextBox");
+        source.Should().Contain("TableCellEditPlanner.PlanKeyboard");
+        source.Should().Contain("ToTableCellEditKeyboardModifiers");
         source.Should().Contain("ExecuteCellFormattingCommand(EditingCommands.ToggleBold)");
         source.Should().Contain("ApplyWithPreservedSelection");
         source.Should().Contain("_cellTextBox.Selection.Select(selectionStart, selectionEnd)");

@@ -1091,10 +1091,8 @@ public sealed class SlideCanvasAvaloniaTests
     {
         EditingSession? editor = null;
         SlideShape? shape = null;
-        AvaloniaInCanvasTextEditor? textEditor = null;
-        global::Avalonia.Controls.Canvas? overlay = null;
 
-        await Run(() =>
+        await Session.Dispatch(async () =>
         {
             var presentation = MakePresentation(pres =>
             {
@@ -1107,23 +1105,45 @@ public sealed class SlideCanvasAvaloniaTests
             editor = new EditingSession(presentation, bus);
             editor.Select(shape!.Id);
             var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
-            overlay = new global::Avalonia.Controls.Canvas();
-            textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var window = new Window
+            {
+                Width = 320,
+                Height = 180,
+                Content = overlay,
+            };
+            window.Show();
+            window.Measure(new Size(320, 180));
+            window.Arrange(new Rect(0, 0, 320, 180));
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
 
-            textEditor.ActivateCellEdit(shape.Id, 0, 1);
-            var box = RichInput(overlay);
-            box.Text = "Edited Anchor";
+            try
+            {
+                textEditor.ActivateCellEdit(shape.Id, 0, 1);
+                await DrainInputAsync();
+                textEditor.IsEditorFocused.Should().BeTrue(
+                    "a rooted table-cell editor must own keyboard input over the canvas gesture layer");
+                var box = RichInput(overlay);
+                box.Text = "Edited Anchor";
 
-            textEditor.TryNavigateActiveTableCell(TableCellNavigationDirection.Next).Should().BeTrue();
+                textEditor.TryNavigateActiveTableCell(TableCellNavigationDirection.Next).Should().BeTrue();
+                await DrainInputAsync();
 
-            editor.ActiveTableCell.Should().Be((0, 2));
-            shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Edited Anchor");
-            RichInput(overlay).Text.Should().Be("Right");
-        });
+                editor.ActiveTableCell.Should().Be((0, 2));
+                shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Edited Anchor");
+                RichInput(overlay).Text.Should().Be("Right");
+                textEditor.IsEditorFocused.Should().BeTrue(
+                    "Tab navigation must transfer keyboard ownership to the reopened table-cell editor");
+                textEditor.IsCellEditActive.Should().BeTrue();
+                textEditor.ActiveTableShapeId.Should().Be(shape.Id);
+                overlay.Children.OfType<AvaloniaRichTextEditor>().Should().ContainSingle();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
 
-        textEditor!.IsCellEditActive.Should().BeTrue();
-        textEditor.ActiveTableShapeId.Should().Be(shape!.Id);
-        overlay!.Children.OfType<AvaloniaRichTextEditor>().Should().ContainSingle();
         editor!.CanUndo.Should().BeTrue();
     }
 

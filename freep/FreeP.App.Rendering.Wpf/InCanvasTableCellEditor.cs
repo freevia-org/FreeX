@@ -393,7 +393,11 @@ public sealed class InCanvasTableCellEditor
 
     private void OnCellTextBoxKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
+        var plan = TableCellEditPlanner.PlanKeyboard(
+            ToTableCellEditKeyboardKey(e.Key),
+            ToTableCellEditKeyboardModifiers(e.KeyboardDevice.Modifiers));
+
+        if (plan.Action == TableCellEditKeyboardAction.Cancel)
         {
             CancelCellEdit();
             e.Handled = true;
@@ -402,21 +406,60 @@ public sealed class InCanvasTableCellEditor
 
     private void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Tab &&
-            (e.KeyboardDevice.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows)) == 0)
+        var plan = TableCellEditPlanner.PlanKeyboard(
+            ToTableCellEditKeyboardKey(e.Key),
+            ToTableCellEditKeyboardModifiers(e.KeyboardDevice.Modifiers));
+
+        if (plan.Action == TableCellEditKeyboardAction.Navigate &&
+            plan.NavigationDirection is { } direction)
         {
-            var direction = (e.KeyboardDevice.Modifiers & ModifierKeys.Shift) != 0
-                ? TableCellNavigationDirection.Previous
-                : TableCellNavigationDirection.Next;
             if (TryNavigateActiveTableCell(direction))
                 e.Handled = true;
             return;
         }
 
-        if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0) return;
-        if (e.Key == Key.B) { ApplyBold();      e.Handled = true; }
-        else if (e.Key == Key.I) { ApplyItalic();    e.Handled = true; }
-        else if (e.Key == Key.U) { ApplyUnderline(); e.Handled = true; }
+        if (plan.Action == TableCellEditKeyboardAction.ToggleTextFormat &&
+            plan.TextFormatKind is { } kind)
+        {
+            switch (kind)
+            {
+                case TableCellTextFormatKind.Bold:
+                    ApplyBold();
+                    break;
+                case TableCellTextFormatKind.Italic:
+                    ApplyItalic();
+                    break;
+                case TableCellTextFormatKind.Underline:
+                    ApplyUnderline();
+                    break;
+            }
+            e.Handled = true;
+        }
+    }
+
+    private static TableCellEditKeyboardKey ToTableCellEditKeyboardKey(Key key) => key switch
+    {
+        Key.Escape => TableCellEditKeyboardKey.Escape,
+        Key.Tab => TableCellEditKeyboardKey.Tab,
+        Key.B => TableCellEditKeyboardKey.B,
+        Key.I => TableCellEditKeyboardKey.I,
+        Key.U => TableCellEditKeyboardKey.U,
+        _ => TableCellEditKeyboardKey.Other,
+    };
+
+    private static TableCellEditKeyboardModifiers ToTableCellEditKeyboardModifiers(
+        ModifierKeys modifiers)
+    {
+        var result = TableCellEditKeyboardModifiers.None;
+        if ((modifiers & ModifierKeys.Control) != 0)
+            result |= TableCellEditKeyboardModifiers.Control;
+        if ((modifiers & ModifierKeys.Shift) != 0)
+            result |= TableCellEditKeyboardModifiers.Shift;
+        if ((modifiers & ModifierKeys.Alt) != 0)
+            result |= TableCellEditKeyboardModifiers.Alt;
+        if ((modifiers & ModifierKeys.Windows) != 0)
+            result |= TableCellEditKeyboardModifiers.Platform;
+        return result;
     }
 
     // ── Cell highlight overlay ─────────────────────────────────────────────────

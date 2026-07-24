@@ -6895,7 +6895,8 @@ public sealed partial class MainWindow : Window
         if (_gestureHandler is not null)
         {
             // Skip if text editor is active (keys go into the TextBox).
-            if (_textEditor is { IsActive: true }) return;
+            if (_textEditor is { IsActive: true } || _textEditor?.IsEditorFocused == true)
+                return;
 
             if (_gestureHandler.HandleKeyDown(e.Key, e.KeyModifiers))
             {

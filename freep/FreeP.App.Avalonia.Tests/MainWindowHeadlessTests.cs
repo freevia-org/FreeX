@@ -424,6 +424,21 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public void MainWindow_sources_keep_focused_table_text_editing_out_of_canvas_keyboard_routes()
+    {
+        var mainWindow = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var editor = File.ReadAllText(FindRepoFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaInCanvasTextEditor.cs"));
+
+        mainWindow.Should().Contain("_textEditor?.IsEditorFocused == true");
+        editor.Should().Contain("_cellTextBox?.InputBox.IsFocused == true");
+        editor.Should().Contain("TableCellEditPlanner.PlanKeyboard");
+        editor.Should().Contain("ToTableCellEditKeyboardModifiers");
+    }
+
+    [Fact]
     public void FreeP_hosts_link_the_same_canonical_owned_icon_family()
     {
         var ico = FindRepoFile("shared", "Free.Shared.Shell", "Resources", "FreeP.ico");

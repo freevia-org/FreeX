@@ -38,8 +38,10 @@ public sealed class AvaloniaInCanvasTextEditor
     /// <summary>The id of the shape currently being edited, or 0 if not active.</summary>
     public uint ActiveShapeId => _editingShapeId;
 
-    /// <summary>True when the active editor owns keyboard focus.</summary>
-    public bool IsEditorFocused => _textBox?.InputBox.IsFocused == true;
+    /// <summary>True when either in-canvas text editor owns keyboard focus.</summary>
+    public bool IsEditorFocused =>
+        _textBox?.InputBox.IsFocused == true ||
+        _cellTextBox?.InputBox.IsFocused == true;
 
     /// <summary>The text selected by the active editor.</summary>
     public string SelectedText => _textBox is null
@@ -572,32 +574,49 @@ public sealed class AvaloniaInCanvasTextEditor
 
     private void OnCellTextBoxKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
-        {
-            CancelCellEdit();
-            e.Handled = true;
-            return;
-        }
+        var plan = TableCellEditPlanner.PlanKeyboard(
+            ToTableCellEditKeyboardKey(e.Key),
+            ToTableCellEditKeyboardModifiers(e.KeyModifiers));
 
-        if (e.Key == Key.Tab &&
-            (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) == 0)
+        switch (plan.Action)
         {
-            var direction = (e.KeyModifiers & KeyModifiers.Shift) != 0
-                ? TableCellNavigationDirection.Previous
-                : TableCellNavigationDirection.Next;
-            if (TryNavigateActiveTableCell(direction))
+            case TableCellEditKeyboardAction.Cancel:
+                CancelCellEdit();
                 e.Handled = true;
-            return;
+                break;
+            case TableCellEditKeyboardAction.Navigate when plan.NavigationDirection is { } direction:
+                if (TryNavigateActiveTableCell(direction))
+                    e.Handled = true;
+                break;
+            case TableCellEditKeyboardAction.ToggleTextFormat when plan.TextFormatKind is { } kind:
+                e.Handled = TryApplyActiveTableCellTextFormat(kind);
+                break;
         }
+    }
 
-        if ((e.KeyModifiers & KeyModifiers.Control) != 0)
-            e.Handled = e.Key switch
-            {
-                Key.B => TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold),
-                Key.I => TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic),
-                Key.U => TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline),
-                _ => false,
-            };
+    private static TableCellEditKeyboardKey ToTableCellEditKeyboardKey(Key key) => key switch
+    {
+        Key.Escape => TableCellEditKeyboardKey.Escape,
+        Key.Tab => TableCellEditKeyboardKey.Tab,
+        Key.B => TableCellEditKeyboardKey.B,
+        Key.I => TableCellEditKeyboardKey.I,
+        Key.U => TableCellEditKeyboardKey.U,
+        _ => TableCellEditKeyboardKey.Other,
+    };
+
+    private static TableCellEditKeyboardModifiers ToTableCellEditKeyboardModifiers(
+        KeyModifiers modifiers)
+    {
+        var result = TableCellEditKeyboardModifiers.None;
+        if ((modifiers & KeyModifiers.Control) != 0)
+            result |= TableCellEditKeyboardModifiers.Control;
+        if ((modifiers & KeyModifiers.Shift) != 0)
+            result |= TableCellEditKeyboardModifiers.Shift;
+        if ((modifiers & KeyModifiers.Alt) != 0)
+            result |= TableCellEditKeyboardModifiers.Alt;
+        if ((modifiers & KeyModifiers.Meta) != 0)
+            result |= TableCellEditKeyboardModifiers.Platform;
+        return result;
     }
 
     private void RefreshTableCellHighlight()
