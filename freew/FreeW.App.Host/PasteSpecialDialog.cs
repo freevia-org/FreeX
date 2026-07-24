@@ -11,8 +11,8 @@ namespace FreeW.App.Host;
 /// <item>"Keep Source Formatting" and "Merge Formatting" are always offered when the clipboard has text.</item>
 /// <item>"Keep Text Only" (plain text) is always offered when the clipboard has text.</item>
 /// </list>
-/// Additional clipboard formats (Rich Text, HTML) are not yet parsed by FreeW's model, so they are
-/// omitted rather than faked. The dialog returns the chosen <see cref="PasteSpecialOption"/>, or null if
+/// Keep Source Formatting imports clipboard RTF at an empty body paragraph; other positions retain the
+/// merge-formatting text path. The dialog returns the chosen <see cref="PasteSpecialOption"/>, or null if
 /// cancelled or the clipboard has no usable content.
 /// </summary>
 internal static class PasteSpecialDialog
