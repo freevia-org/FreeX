@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -149,6 +150,11 @@ public sealed class DocumentView : RichTextBox
     // (w:lnNumType), or null when line numbering is off. Like the page-break overlay it is an
     // AdornerLayer overlay, never part of the FlowDocument content, and recomputed on relayout.
     private LineNumberAdorner? _lineNumberAdorner;
+
+    // Word-style freeform vertex handles. They are transient chrome on the editor's AdornerLayer,
+    // while all geometry mutations continue through the document command bus.
+    private ShapeEditPointsAdorner? _shapeEditPointsAdorner;
+    private ShapeEditPointsTarget? _shapeEditPointsTarget;
 
     // Transparent Canvas placed as a sibling in the same Grid cell as this editor by the host
     // (MainWindow). Floats above the editor so floating images render and hit-test on top of the text.
@@ -2211,17 +2217,46 @@ public sealed class DocumentView : RichTextBox
     public void BeginShapeEditPoints()
     {
         CommitToModel();
-        var (_, _, shape) = SelectedShapeLocation();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        // Ensure the shape has been converted to freeform.
+
         if (!shape.HasCustomGeometry)
-            ConvertSelectedShapeToFreeform();
-        // TODO: show interactive drag-handle overlay for edit points (W25 scope limitation:
-        // interactive point-dragging requires an adorner layer not yet in DocumentView).
-        DialogMessageHelper.ShowInfo(
-            System.Windows.Window.GetWindow(this),
-            "Shape converted to freeform. Drag edit points by re-applying 'Edit Points' when the adorner layer is available.",
-            "Edit Points");
+        {
+            CustomGeometry poly = shape.Kind switch
+            {
+                ShapeKind.Ellipse => CustomGeometry.EllipsePoly(),
+                ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
+                _ => CustomGeometry.RectanglePoly(),
+            };
+            _commands.Execute(new SetShapeCustomGeometryCommand(blockIndex, runIndex, poly));
+        }
+
+        _shapeEditPointsTarget = new ShapeEditPointsTarget(blockIndex, runIndex, shape);
+        SyncShapeEditPointsAdorner();
+    }
+
+    internal int ActiveShapeEditPointHandleCount => _shapeEditPointsAdorner?.HandleCount ?? 0;
+
+    internal bool MoveActiveShapeEditPoint(int segmentIndex, long x, long y)
+    {
+        if (_shapeEditPointsTarget is not { } target || !IsCurrentShapeEditPointsTarget(target))
+            return false;
+
+        MoveShapeEditPoint(target, segmentIndex, x, y);
+        return true;
+    }
+
+    private void MoveShapeEditPoint(ShapeEditPointsTarget target, int segmentIndex, long x, long y)
+    {
+        if (!IsCurrentShapeEditPointsTarget(target))
+            return;
+
+        _commands.Execute(new MoveShapeEditPointCommand(
+            target.BlockIndex,
+            target.RunIndex,
+            segmentIndex,
+            x,
+            y));
     }
 
     /// <summary>
@@ -4610,6 +4645,7 @@ public sealed class DocumentView : RichTextBox
         SyncLineNumberAdorner();
         SyncChangeBarAdorner();
         SyncPageGridlinesAdorner();
+        SyncShapeEditPointsAdorner();
         SyncFloatingObjectsCanvas();
     }
 
@@ -4924,6 +4960,59 @@ public sealed class DocumentView : RichTextBox
     // or has not yet computed a result. Tests can force a computation by calling PaginationEngine.Compute
     // directly; this seam is for verifying that the adorner's cache matches the engine's output.
     internal DocumentPagination? GetPageBreakAdornerPagination() => _pageBreakAdorner?._pagination;
+
+    private void SyncShapeEditPointsAdorner()
+    {
+        if (_shapeEditPointsTarget is not { } target || !IsCurrentShapeEditPointsTarget(target))
+        {
+            RemoveShapeEditPointsAdorner();
+            _shapeEditPointsTarget = null;
+            return;
+        }
+
+        var layer = AdornerLayer.GetAdornerLayer(this);
+        if (layer is null)
+        {
+            Loaded -= OnLoadedSyncShapeEditPoints;
+            Loaded += OnLoadedSyncShapeEditPoints;
+            return;
+        }
+
+        if (_shapeEditPointsAdorner is null)
+        {
+            _shapeEditPointsAdorner = new ShapeEditPointsAdorner(this, target);
+            layer.Add(_shapeEditPointsAdorner);
+        }
+
+        _shapeEditPointsAdorner.InvalidateArrange();
+        _shapeEditPointsAdorner.InvalidateVisual();
+    }
+
+    private void OnLoadedSyncShapeEditPoints(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedSyncShapeEditPoints;
+        SyncShapeEditPointsAdorner();
+    }
+
+    private void RemoveShapeEditPointsAdorner()
+    {
+        if (_shapeEditPointsAdorner is null)
+            return;
+
+        if (AdornerLayer.GetAdornerLayer(this) is { } layer)
+            layer.Remove(_shapeEditPointsAdorner);
+        _shapeEditPointsAdorner.Dispose();
+        _shapeEditPointsAdorner = null;
+    }
+
+    private bool IsCurrentShapeEditPointsTarget(ShapeEditPointsTarget target) =>
+        target.BlockIndex >= 0
+        && target.BlockIndex < _model.Blocks.Count
+        && _model.Blocks[target.BlockIndex] is ModelParagraph paragraph
+        && target.RunIndex >= 0
+        && target.RunIndex < paragraph.Runs.Count
+        && ReferenceEquals(paragraph.Runs[target.RunIndex].Shape, target.Shape)
+        && target.Shape.HasCustomGeometry;
 
     // Add, remove, or refresh the line-number overlay to match the model's LineNumberMode. Mirrors
     // SyncPageBreakAdorner: the overlay shows when the document enables line numbering and is removed when
@@ -15273,23 +15362,187 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    private sealed record ShapeEditPointsTarget(int BlockIndex, int RunIndex, Shape Shape);
+
+    /// <summary>
+    /// Interactive freeform vertex handles. The handles only preview their position while dragging;
+    /// releasing one commits a single model command so Ctrl+Z has Word-like one-drag granularity.
+    /// </summary>
+    private sealed class ShapeEditPointsAdorner : Adorner, IDisposable
+    {
+        private const double HandleSize = 10;
+
+        private readonly DocumentView _view;
+        private readonly ShapeEditPointsTarget _target;
+        private readonly List<(int SegmentIndex, Thumb Handle)> _handles = [];
+        private Rect _lastShapeBounds = Rect.Empty;
+
+        public ShapeEditPointsAdorner(DocumentView view, ShapeEditPointsTarget target) : base(view)
+        {
+            _view = view;
+            _target = target;
+            IsHitTestVisible = true;
+            BuildHandles();
+            _view.LayoutUpdated += OnViewLayoutUpdated;
+        }
+
+        public int HandleCount => _handles.Count;
+
+        public void Dispose() => _view.LayoutUpdated -= OnViewLayoutUpdated;
+
+        protected override int VisualChildrenCount => _handles.Count;
+
+        protected override Visual GetVisualChild(int index) => _handles[index].Handle;
+
+        protected override Size MeasureOverride(Size constraint)
+        {
+            foreach (var (_, handle) in _handles)
+                handle.Measure(new Size(HandleSize, HandleSize));
+            return constraint;
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            if (!TryGetShapeBounds(out var origin, out var width, out var height))
+            {
+                foreach (var (_, handle) in _handles)
+                    handle.Arrange(Rect.Empty);
+                _lastShapeBounds = Rect.Empty;
+                return finalSize;
+            }
+
+            var geometry = _target.Shape.CustomGeometry!;
+            _lastShapeBounds = new Rect(origin, new Size(width, height));
+            foreach (var (segmentIndex, handle) in _handles)
+            {
+                var point = geometry.Segments[segmentIndex].Point!;
+                var x = origin.X + point.X / (double)geometry.Width * width;
+                var y = origin.Y + point.Y / (double)geometry.Height * height;
+                handle.Arrange(new Rect(
+                    x - HandleSize / 2,
+                    y - HandleSize / 2,
+                    HandleSize,
+                    HandleSize));
+            }
+
+            return finalSize;
+        }
+
+        private void BuildHandles()
+        {
+            var geometry = _target.Shape.CustomGeometry!;
+            for (var segmentIndex = 0; segmentIndex < geometry.Segments.Count; segmentIndex++)
+            {
+                if (geometry.Segments[segmentIndex].Point is null)
+                    continue;
+
+                var index = segmentIndex;
+                var handle = new Thumb
+                {
+                    Width = HandleSize,
+                    Height = HandleSize,
+                    Background = Brushes.White,
+                    BorderBrush = Brushes.DodgerBlue,
+                    BorderThickness = new Thickness(1),
+                    Cursor = Cursors.Cross,
+                    Focusable = false,
+                    ToolTip = "Drag edit point"
+                };
+
+                CustomPoint? dragStart = null;
+                var dragX = 0.0;
+                var dragY = 0.0;
+                handle.DragStarted += (_, _) =>
+                {
+                    dragStart = _target.Shape.CustomGeometry?.Segments[index].Point;
+                    dragX = 0;
+                    dragY = 0;
+                    handle.RenderTransform = new TranslateTransform();
+                };
+                handle.DragDelta += (_, e) =>
+                {
+                    if (handle.RenderTransform is TranslateTransform transform)
+                    {
+                        dragX += e.HorizontalChange;
+                        dragY += e.VerticalChange;
+                        transform.X = dragX;
+                        transform.Y = dragY;
+                    }
+                };
+                handle.DragCompleted += (_, _) =>
+                {
+                    handle.RenderTransform = null;
+                    if (dragStart is null || !TryGetShapeBounds(out var origin, out var width, out var height))
+                        return;
+
+                    var geometry = _target.Shape.CustomGeometry;
+                    if (geometry is null)
+                        return;
+
+                    var startX = origin.X + dragStart.X / (double)geometry.Width * width;
+                    var startY = origin.Y + dragStart.Y / (double)geometry.Height * height;
+                    var x = Math.Clamp((long)Math.Round((startX + dragX - origin.X) * geometry.Width / width), 0, geometry.Width);
+                    var y = Math.Clamp((long)Math.Round((startY + dragY - origin.Y) * geometry.Height / height), 0, geometry.Height);
+                    _view.MoveShapeEditPoint(_target, index, x, y);
+                };
+
+                _handles.Add((index, handle));
+                AddVisualChild(handle);
+            }
+        }
+
+        private void OnViewLayoutUpdated(object? sender, EventArgs e)
+        {
+            if (TryGetShapeBounds(out var origin, out var width, out var height))
+            {
+                var current = new Rect(origin, new Size(width, height));
+                if (current != _lastShapeBounds)
+                    InvalidateArrange();
+            }
+        }
+
+        private bool TryGetShapeBounds(out Point origin, out double width, out double height)
+        {
+            origin = default;
+            width = 0;
+            height = 0;
+            var element = FindRenderedShapeVisual(_view, _target.Shape);
+            if (element is null || element.ActualWidth <= 0 || element.ActualHeight <= 0)
+                return false;
+
+            try
+            {
+                origin = element.TransformToAncestor(_view).Transform(new Point(0, 0));
+                width = element.ActualWidth;
+                height = element.ActualHeight;
+                return double.IsFinite(origin.X) && double.IsFinite(origin.Y);
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
+        private static FrameworkElement? FindRenderedShapeVisual(DependencyObject root, Shape shape)
+        {
+            if (root is FrameworkElement element && ReferenceEquals(element.Tag, shape))
+                return element;
+
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var found = FindRenderedShapeVisual(VisualTreeHelper.GetChild(root, i), shape);
+                if (found is not null)
+                    return found;
+            }
+
+            return null;
+        }
+    }
+
     /// <summary>
     /// Draws the faint "— Page N —" break markers down the Print-Layout editing surface, so the user
-    /// perceives where the single continuous flow would break across printed pages.
-    ///
-    /// APPROXIMATION: the editable surface is one continuous WPF flow (see the limitation note on
-    /// <see cref="ApplyPageChrome"/>), so there are no real per-page boxes to read. Instead we anchor at
-    /// the top of the first laid-out content line (its character rectangle) and step downward by the page's
-    /// printable content height (<see cref="PageLayout.ContentAreaDip"/>, the same page geometry the print
-    /// path uses), drawing a marker at each multiple. This assumes uniform content flow: it does not model
-    /// per-block keep-together rules, explicit page breaks, tables that straddle a boundary, or differing
-    /// first-page geometry, so a marker can land a line or two away from where the printed page would
-    /// actually break. It is a low-key visual cue, not an exact pagination — Print Preview remains the
-    /// authoritative paginated view. Markers past the end of the content are not drawn.
-    ///
-    /// Coordinates: the adorner shares the editor's content coordinate space (it adorns the same element),
-    /// and the editor's <see cref="DocumentView.LayoutTransform"/> zoom scales the adorner with it, so the
-    /// markers track the text under zoom without extra math. Painting is clipped to the visible surface.
+    /// perceives where the single continuous flow would break across printed pages. This is a low-key
+    /// visual cue rather than exact pagination; Print Preview remains authoritative.
     /// </summary>
     private sealed class PageBreakAdorner : Adorner
     {
