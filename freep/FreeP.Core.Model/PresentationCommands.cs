@@ -204,6 +204,42 @@ public sealed class MoveSlideCommand : IPresentationCommand
 // SHAPE COMMANDS — helpers
 // ════════════════════════════════════════════════════════════════════════════════
 
+/// <summary>Sets whether a slide is skipped during slide-show playback.</summary>
+public sealed class SetSlideHiddenCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly bool _newValue;
+    private bool _oldValue;
+
+    public SetSlideHiddenCommand(int slideIndex, bool hidden)
+    {
+        _slideIndex = slideIndex;
+        _newValue = hidden;
+    }
+
+    public string Label => _newValue ? "Hide Slide" : "Show Slide";
+
+    public bool HasEffect(Presentation p) =>
+        _slideIndex >= 0 &&
+        _slideIndex < p.Slides.Count &&
+        p.Slides[_slideIndex].IsHidden != _newValue;
+
+    public void Apply(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+            return;
+
+        _oldValue = p.Slides[_slideIndex].IsHidden;
+        p.Slides[_slideIndex].IsHidden = _newValue;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (_slideIndex >= 0 && _slideIndex < p.Slides.Count)
+            p.Slides[_slideIndex].IsHidden = _oldValue;
+    }
+}
+
 /// <summary>
 /// Sets the title metadata for a slide. Revert restores the previous title.
 /// </summary>

@@ -138,6 +138,7 @@ public enum SlidePaneActionKind
     InsertAfterSlide,
     DuplicateSlide,
     DeleteSlide,
+    ToggleHiddenSlide,
     MoveSlide,
 }
 
@@ -156,7 +157,8 @@ public sealed record SlidePaneActionPlan(
     string Text,
     int SourceSlideIndex,
     int TargetSlideIndex,
-    bool IsEnabled);
+    bool IsEnabled,
+    bool IsChecked = false);
 
 public static class SlidePanePlanner
 {
@@ -164,6 +166,8 @@ public static class SlidePanePlanner
     public const string NewSlideMenuText = "New Slide";
     public const string DuplicateSlideMenuText = "Duplicate Slide";
     public const string DeleteSlideMenuText = "Delete Slide";
+    public const string HideSlideMenuText = "Hide Slide";
+    public const string ShowSlideMenuText = "Show Slide";
     public const double DefaultThumbnailWidth = 150.0;
     public const double DefaultThumbnailHeight = DefaultThumbnailWidth * 9.0 / 16.0;
     public const double DefaultItemPadding = 8.0;
@@ -393,6 +397,23 @@ public static class SlidePanePlanner
         ];
     }
 
+    public static SlidePaneActionPlan BuildHiddenSlideAction(
+        IReadOnlyList<Slide> slides,
+        int slideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+
+        var isValid = IsValidSlideIndex(slides.Count, slideIndex);
+        var isHidden = isValid && slides[slideIndex].IsHidden;
+        return new SlidePaneActionPlan(
+            SlidePaneActionKind.ToggleHiddenSlide,
+            isHidden ? ShowSlideMenuText : HideSlideMenuText,
+            slideIndex,
+            slideIndex,
+            isValid,
+            isHidden);
+    }
+
     public static SlidePaneBottomAffordancePlan BuildBottomNewSlideAffordance(
         int slideCount,
         int currentSlideIndex)
@@ -601,6 +622,10 @@ public static class SlidePanePlanner
                 editor.SelectSlide(action.SourceSlideIndex);
                 editor.DeleteCurrentSlide();
                 return true;
+
+            case SlidePaneActionKind.ToggleHiddenSlide:
+                editor.SelectSlide(action.SourceSlideIndex);
+                return editor.ToggleCurrentSlideHidden();
 
             case SlidePaneActionKind.MoveSlide:
                 editor.SelectSlide(action.SourceSlideIndex);

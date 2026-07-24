@@ -47,6 +47,7 @@ public sealed class FreePShellInteractionCatalogTests
             "separator",
             "NewSlide:New Slide:enabled:unchecked",
             "DuplicateSlide:Duplicate Slide:enabled:unchecked",
+            "ToggleHiddenSlide:Hide Slide:enabled:unchecked",
             "separator",
             "DeleteSlide:Delete Slide:disabled:unchecked");
 

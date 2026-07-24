@@ -1065,6 +1065,32 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_context_hide_slide_routes_through_shared_planner_and_undo()
+    {
+        var hidden = false;
+        var restored = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            hidden = window.TryApplySlidePaneContextAction(0, SlidePaneActionKind.ToggleHiddenSlide);
+            var hiddenSlide = window.Editor.Presentation.Slides[0];
+            var menu = window.BuildSlidePaneContextMenuForTests(0);
+            var showEntry = menu.Items
+                .OfType<MenuItem>()
+                .Single(item => Equals(item.Tag, FreePContextMenuCommand.ToggleHiddenSlide));
+
+            restored = showEntry.IsChecked && showEntry.Header?.ToString() == SlidePanePlanner.ShowSlideMenuText;
+            window.Editor.Undo();
+            restored &= !hiddenSlide.IsHidden;
+        });
+
+        if (!ran) return;
+        hidden.Should().BeTrue("the slide-pane action should hide the selected slide");
+        restored.Should().BeTrue("the same action state should show the slide and undo should restore it");
+    }
+
+    [Fact]
     public async Task SlidePane_context_delete_respects_shared_delete_enablement()
     {
         var deletedSingleSlide = true;

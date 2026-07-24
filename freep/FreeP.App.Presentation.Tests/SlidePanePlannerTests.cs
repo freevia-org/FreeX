@@ -426,6 +426,34 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void BuildHiddenSlideAction_ReflectsHideAndShowState()
+    {
+        var slides = new[] { new Slide(), new Slide { IsHidden = true } };
+
+        var hide = SlidePanePlanner.BuildHiddenSlideAction(slides, 0);
+        hide.Kind.Should().Be(SlidePaneActionKind.ToggleHiddenSlide);
+        hide.Text.Should().Be(SlidePanePlanner.HideSlideMenuText);
+        hide.IsEnabled.Should().BeTrue();
+        hide.IsChecked.Should().BeFalse();
+
+        var show = SlidePanePlanner.BuildHiddenSlideAction(slides, 1);
+        show.Text.Should().Be(SlidePanePlanner.ShowSlideMenuText);
+        show.IsEnabled.Should().BeTrue();
+        show.IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryApplyAction_ToggleHidden_UsesSharedSelectionAndCommandRouting()
+    {
+        var editor = CreateEditingSession(2);
+        var action = SlidePanePlanner.BuildHiddenSlideAction(editor.Presentation.Slides, 1);
+
+        SlidePanePlanner.TryApplyAction(editor, action).Should().BeTrue();
+        editor.CurrentSlideIndex.Should().Be(1);
+        editor.CurrentSlide!.IsHidden.Should().BeTrue();
+    }
+
+    [Fact]
     public void BuildBottomNewSlideAffordance_ProjectsVisibleSharedInsertAction()
     {
         var plan = SlidePanePlanner.BuildBottomNewSlideAffordance(

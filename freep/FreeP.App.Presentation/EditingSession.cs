@@ -248,6 +248,23 @@ public sealed class EditingSession
         ClampCurrentSlide();
     }
 
+    /// <summary>Sets whether a slide is skipped by slide-show playback.</summary>
+    public bool SetSlideHidden(int slideIndex, bool isHidden)
+    {
+        if (slideIndex < 0 || slideIndex >= Presentation.Slides.Count)
+            return false;
+
+        Bus.Execute(new SetSlideHiddenCommand(slideIndex, isHidden));
+        return Presentation.Slides[slideIndex].IsHidden == isHidden;
+    }
+
+    /// <summary>Toggles the current slide's hidden/show state.</summary>
+    public bool ToggleCurrentSlideHidden()
+    {
+        var slide = CurrentSlide;
+        return slide is not null && SetSlideHidden(_currentSlideIndex, !slide.IsHidden);
+    }
+
     /// <summary>Navigates to the slide at <paramref name="index"/> and clears selection.</summary>
     public void SelectSlide(int index)
     {

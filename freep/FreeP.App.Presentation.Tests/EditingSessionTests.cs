@@ -122,6 +122,21 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void ToggleCurrentSlideHidden_IsUndoableAndRedoable()
+    {
+        var sess = Make();
+
+        sess.ToggleCurrentSlideHidden().Should().BeTrue();
+        sess.CurrentSlide!.IsHidden.Should().BeTrue();
+
+        sess.Undo();
+        sess.CurrentSlide!.IsHidden.Should().BeFalse();
+
+        sess.Redo();
+        sess.CurrentSlide!.IsHidden.Should().BeTrue();
+    }
+
+    [Fact]
     public void SelectSlide_ChangesCurrentSlide()
     {
         var sess = Make(2);

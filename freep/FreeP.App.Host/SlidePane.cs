@@ -426,16 +426,20 @@ public sealed class SlidePane : Border
     {
         if (command is FreePContextMenuCommand.NewSlide or
             FreePContextMenuCommand.DuplicateSlide or
-            FreePContextMenuCommand.DeleteSlide)
+            FreePContextMenuCommand.DeleteSlide or
+            FreePContextMenuCommand.ToggleHiddenSlide)
         {
             var kind = command switch
             {
                 FreePContextMenuCommand.NewSlide => SlidePaneActionKind.InsertAfterSlide,
                 FreePContextMenuCommand.DuplicateSlide => SlidePaneActionKind.DuplicateSlide,
-                _ => SlidePaneActionKind.DeleteSlide,
+                FreePContextMenuCommand.DeleteSlide => SlidePaneActionKind.DeleteSlide,
+                _ => SlidePaneActionKind.ToggleHiddenSlide,
             };
-            var action = SlidePanePlanner.BuildContextActions(_editor.Presentation.Slides.Count, slideIndex)
-                .Single(candidate => candidate.Kind == kind);
+            var action = kind == SlidePaneActionKind.ToggleHiddenSlide
+                ? SlidePanePlanner.BuildHiddenSlideAction(_editor.Presentation.Slides, slideIndex)
+                : SlidePanePlanner.BuildContextActions(_editor.Presentation.Slides.Count, slideIndex)
+                    .Single(candidate => candidate.Kind == kind);
             SlidePanePlanner.TryApplyAction(_editor, action);
             return;
         }

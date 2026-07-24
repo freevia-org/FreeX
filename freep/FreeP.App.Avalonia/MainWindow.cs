@@ -6110,8 +6110,10 @@ public sealed partial class MainWindow : Window
 
     internal bool TryApplySlidePaneContextAction(int slideIndex, SlidePaneActionKind kind)
     {
-        var action = SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex)
-            .FirstOrDefault(candidate => candidate.Kind == kind);
+        var action = kind == SlidePaneActionKind.ToggleHiddenSlide
+            ? SlidePanePlanner.BuildHiddenSlideAction(_presentation.Slides, slideIndex)
+            : SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex)
+                .FirstOrDefault(candidate => candidate.Kind == kind);
 
         return action is not null && SlidePanePlanner.TryApplyAction(Editor, action);
     }
@@ -6168,13 +6170,15 @@ public sealed partial class MainWindow : Window
     {
         if (command is FreePContextMenuCommand.NewSlide or
             FreePContextMenuCommand.DuplicateSlide or
-            FreePContextMenuCommand.DeleteSlide)
+            FreePContextMenuCommand.DeleteSlide or
+            FreePContextMenuCommand.ToggleHiddenSlide)
         {
             var kind = command switch
             {
                 FreePContextMenuCommand.NewSlide => SlidePaneActionKind.InsertAfterSlide,
                 FreePContextMenuCommand.DuplicateSlide => SlidePaneActionKind.DuplicateSlide,
-                _ => SlidePaneActionKind.DeleteSlide,
+                FreePContextMenuCommand.DeleteSlide => SlidePaneActionKind.DeleteSlide,
+                _ => SlidePaneActionKind.ToggleHiddenSlide,
             };
             TryApplySlidePaneContextAction(slideIndex, kind);
             return;

@@ -128,6 +128,7 @@ public enum FreePContextMenuCommand
     NewSlide,
     DuplicateSlide,
     DeleteSlide,
+    ToggleHiddenSlide,
     RenameSection,
     RemoveSection,
     RemoveAllSections,
@@ -166,6 +167,7 @@ public static class FreePContextMenuCatalog
 
         var addSection = SlideSectionPlanner.BuildSlideContextActions(slides, sections, slideIndex).Single();
         var slideActions = SlidePanePlanner.BuildContextActions(slides.Count, slideIndex);
+        var hiddenAction = SlidePanePlanner.BuildHiddenSlideAction(slides, slideIndex);
 
         return
         [
@@ -173,6 +175,8 @@ public static class FreePContextMenuCatalog
             FreePContextMenuEntryPlan.Separator(),
             Command(FreePContextMenuCommand.NewSlide, slideActions[0].Text, slideActions[0].IsEnabled),
             Command(FreePContextMenuCommand.DuplicateSlide, slideActions[1].Text, slideActions[1].IsEnabled),
+            Command(FreePContextMenuCommand.ToggleHiddenSlide, hiddenAction.Text, hiddenAction.IsEnabled,
+                isCheckable: true, isChecked: hiddenAction.IsChecked),
             FreePContextMenuEntryPlan.Separator(),
             Command(FreePContextMenuCommand.DeleteSlide, slideActions[2].Text, slideActions[2].IsEnabled),
         ];
@@ -209,6 +213,8 @@ public static class FreePContextMenuCatalog
     private static FreePContextMenuEntryPlan Command(
         FreePContextMenuCommand command,
         string text,
-        bool isEnabled) =>
-        new(FreePContextMenuEntryKind.Command, command, text, isEnabled);
+        bool isEnabled,
+        bool isCheckable = false,
+        bool isChecked = false) =>
+        new(FreePContextMenuEntryKind.Command, command, text, isEnabled, isCheckable, isChecked);
 }

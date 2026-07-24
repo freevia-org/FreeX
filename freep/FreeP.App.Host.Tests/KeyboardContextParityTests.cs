@@ -88,6 +88,12 @@ public sealed class KeyboardContextParityTests
             .Single(item => Equals(item.Tag, FreePContextMenuCommand.DuplicateSlide))
             .RaiseEvent(new System.Windows.RoutedEventArgs(MenuItem.ClickEvent));
         presentation.Slides.Should().HaveCount(before + 1);
+
+        var hiddenMenu = pane.BuildSlideContextMenuForTests(0);
+        hiddenMenu.Items.OfType<MenuItem>()
+            .Single(item => Equals(item.Tag, FreePContextMenuCommand.ToggleHiddenSlide))
+            .RaiseEvent(new System.Windows.RoutedEventArgs(MenuItem.ClickEvent));
+        presentation.Slides[0].IsHidden.Should().BeTrue();
     }
 
     private static void AssertMenuMatches(
