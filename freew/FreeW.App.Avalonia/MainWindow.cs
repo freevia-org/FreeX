@@ -90,6 +90,7 @@ public sealed partial class MainWindow : Window
     private readonly RevealFormattingPane _revealPane;
     private readonly NotesPane _notesPane;
     private readonly ThesaurusPane _thesaurusPane;
+    private readonly OutlineView _outlineView;
     private Control? _ribbonControl;
     private IRibbonCommandRegistry? _ribbonRegistry;
     private bool _ribbonKeyTipsVisible;
@@ -119,6 +120,8 @@ public sealed partial class MainWindow : Window
     private bool _updatingZoomSlider;
     private bool _readMode;
     private bool _pagedEditMode;
+    private bool _pagedEditModeBeforeOutline;
+    private bool _outlineMode;
     private DocumentViewMode _viewModeBeforeReadMode = DocumentViewMode.PrintLayout;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
@@ -187,6 +190,7 @@ public sealed partial class MainWindow : Window
         _revealPane = new RevealFormattingPane(_editor);
         _notesPane = new NotesPane(_editor);
         _thesaurusPane = new ThesaurusPane(_editor);
+        _outlineView = new OutlineView(_editor);
 
         var ribbon = BuildRibbon();
         var statusBar = BuildStatusBar();
@@ -234,6 +238,7 @@ public sealed partial class MainWindow : Window
         _editor.DocumentChanged += () => { if (_revealPane.IsVisible) _revealPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_notesPane.IsVisible) _notesPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_thesaurusPane.IsVisible) _thesaurusPane.Refresh(); };
+        _editor.DocumentChanged += () => { if (_outlineMode) _outlineView.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
         _editor.CaretMoved += UpdateStatus;
         _editor.CaretMoved += () => { if (_thesaurusPane.IsVisible) _thesaurusPane.Refresh(); };
@@ -354,6 +359,7 @@ public sealed partial class MainWindow : Window
     internal ReviewBalloonsPane ReviewBalloonsPane => _reviewBalloonsPane;
     internal bool RibbonKeyTipsVisibleForTest => _ribbonKeyTipsVisible;
     internal Control? RibbonControlForTest => _ribbonControl;
+    internal IRibbonCommandRegistry? RibbonRegistryForTests => _ribbonRegistry;
     internal bool HasWindowIconForTests => Icon is not null;
     internal Border TitleBarForTests => _titleBar;
     internal IReadOnlyList<Button> QuickAccessButtonsForTests => _quickAccessButtons;
@@ -390,6 +396,10 @@ public sealed partial class MainWindow : Window
     internal Vector SideToSidePreviewOffsetForTests => new(_sideToSidePlannedHorizontalOffsetDip, 0);
     internal Control? WorkspaceContentForTests => _workspace.Child as Control;
     internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
+    internal bool IsOutlineModeActiveForTests => _outlineMode;
+    internal bool IsWorkspaceShowingOutline => ReferenceEquals(_workspace.Child, _outlineView);
+    internal OutlineView OutlineViewForTests => _outlineView;
+    internal void ToggleOutlineViewForTests() => ToggleOutlineView();
 
     /// <summary>
     /// Show or hide the navigation pane and refresh its heading list when making it visible.
@@ -1203,6 +1213,9 @@ public sealed partial class MainWindow : Window
 
     private void ApplyViewDepthPlan(FreeWViewDepthPlan plan, bool updateStatus = true)
     {
+        if (_outlineMode)
+            LeaveOutlineView(restorePriorView: false);
+
         switch (plan.SurfaceKind)
         {
             case FreeWViewDepthSurfaceKind.LiveEditor:
@@ -1551,6 +1564,8 @@ public sealed partial class MainWindow : Window
             SetPrintLayout: () => SetViewMode(DocumentViewMode.PrintLayout),
             SetWebLayout:   () => SetViewMode(DocumentViewMode.WebLayout),
             SetDraftView:   () => SetViewMode(DocumentViewMode.Draft),
+            SetOutlineView: ToggleOutlineView,
+            IsOutlineViewActive: () => _outlineMode,
             OpenFontDialog:      () => _ = OpenFontDialogAsync(),
             OpenParagraphDialog: () => _ = OpenParagraphDialogAsync(),
             OpenPageSetupDialog: () => _ = OpenPageSetupDialogAsync(),
@@ -2296,8 +2311,47 @@ public sealed partial class MainWindow : Window
         return button;
     }
 
+    // View > Outline swaps the live editor surface for the dedicated outline control. The underlying
+    // DocumentView remains alive so leaving Outline restores the exact prior editor/view state.
+    private void ToggleOutlineView()
+    {
+        if (_outlineMode)
+        {
+            LeaveOutlineView();
+            return;
+        }
+
+        if (_viewDepthPlan.Mode != FreeWViewDepthMode.LiveEditor)
+            ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
+
+        _pagedEditModeBeforeOutline = _pagedEditMode;
+        _pagedEditMode = false;
+        _outlineMode = true;
+        _workspace.Child = _outlineView;
+        _outlineView.Refresh();
+        UpdateViewModeButtons();
+        UpdateStatus();
+    }
+
+    private void LeaveOutlineView(bool restorePriorView = true)
+    {
+        if (!_outlineMode)
+            return;
+
+        _outlineMode = false;
+        _pagedEditMode = restorePriorView && _pagedEditModeBeforeOutline;
+        if (_liveWorkspaceContent is not null)
+            _workspace.Child = _liveWorkspaceContent;
+        UpdateViewModeButtons();
+        UpdateStatus();
+        _editor.Focus();
+    }
+
     private void SetViewMode(DocumentViewMode mode)
     {
+        if (_outlineMode)
+            LeaveOutlineView(restorePriorView: false);
+
         if (_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive)
             ApplyViewDepthPlan(FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), updateStatus: false);
 
@@ -2312,9 +2366,9 @@ public sealed partial class MainWindow : Window
     private void UpdateViewModeButtons()
     {
         var mode = _editor.ViewMode;
-        ApplyStatusToggleState(_printLayoutSwitch, !_pagedEditMode && mode == DocumentViewMode.PrintLayout);
-        ApplyStatusToggleState(_webLayoutSwitch, !_pagedEditMode && mode == DocumentViewMode.WebLayout);
-        ApplyStatusToggleState(_draftSwitch, !_pagedEditMode && mode == DocumentViewMode.Draft);
+        ApplyStatusToggleState(_printLayoutSwitch, !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.PrintLayout);
+        ApplyStatusToggleState(_webLayoutSwitch, !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.WebLayout);
+        ApplyStatusToggleState(_draftSwitch, !_outlineMode && !_pagedEditMode && mode == DocumentViewMode.Draft);
         ApplyStatusToggleState(_pagedEditSwitch, _pagedEditMode);
     }
 
@@ -2331,6 +2385,9 @@ public sealed partial class MainWindow : Window
 
     private void TogglePagedEditView()
     {
+        if (_outlineMode)
+            LeaveOutlineView(restorePriorView: false);
+
         if (_pagedEditMode)
         {
             _pagedEditMode = false;

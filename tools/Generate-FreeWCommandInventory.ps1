@@ -140,6 +140,8 @@ internal static class FreeWCommandInventory
             "Routes the Previous Change command to the host-owned Reviewing Pane navigation callback in both shells."),
         ["freew.next-change"] = ReviewChangeNavigationEvidence(
             "Routes the Next Change command to the host-owned Reviewing Pane navigation callback in both shells."),
+        ["freew.outline-view"] = OutlineViewEvidence(
+            "Shows a dedicated outline surface with shared-model rows, level filtering, first-line mode, caret navigation, undoable heading actions, and mutually exclusive production view-mode transitions in both shells."),
         ["freew.new-comment"] = ProtectionHistoryEvidence(
             "Creates a comment under comments-only protection and keeps the classified comment-history entry undoable and redoable in both shells."),
         ["freew.reply-comment"] = ProtectionHistoryEvidence(
@@ -621,6 +623,16 @@ internal static class FreeWCommandInventory
             wpfTest: "FreeWRibbonParityTests.ReviewTrackingAndChanges_CommandRoutesExecuteBackedActions",
             avaloniaPath: "freew/FreeW.App.Avalonia.Tests/ReviewChangeNavigationTests.cs",
             avaloniaTest: "ReviewChangeNavigationTests.Production_MainWindow_step_opens_hidden_pane_and_navigates");
+
+    private static CommandBehaviorEvidence OutlineViewEvidence(string summary) =>
+        ReviewEvidence(
+            evidenceId: "freew.outline-view.shared-behavior",
+            slice: "Outline view",
+            summary: summary,
+            wpfPath: "freew/FreeW.App.Host.Tests/OutlineViewTests.cs",
+            wpfTest: "OutlineViewTests.Entering_ShowsHeadingsAndBodyInStructureOrder",
+            avaloniaPath: "freew/FreeW.App.Avalonia.Tests/OutlineViewParityTests.cs",
+            avaloniaTest: "OutlineViewParityTests.Production_outline_callback_swaps_workspace_and_is_mutually_exclusive_with_view_modes");
 
     private static CommandBehaviorEvidence StatisticsEvidence(string summary) =>
         ReviewEvidence(

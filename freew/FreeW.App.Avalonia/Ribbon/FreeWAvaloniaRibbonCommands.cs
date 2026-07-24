@@ -466,8 +466,10 @@ internal static class FreeWAvaloniaRibbonCommands
         var printLayoutCommand = new ActionRibbonCommand(callbacks.SetPrintLayout);
         var webLayoutCommand = new ActionRibbonCommand(callbacks.SetWebLayout);
         var draftViewCommand = new ActionRibbonCommand(callbacks.SetDraftView);
+        // Outline is a distinct host surface. A host that does not provide it must not silently
+        // route the command to Draft; production MainWindow supplies the real toggle and state query.
         var outlineViewCommand = new ToggleActionCommand(
-            callbacks.SetOutlineView ?? callbacks.SetDraftView,
+            callbacks.SetOutlineView ?? (() => { }),
             callbacks.IsOutlineViewActive ?? (() => false));
         var pagedEditViewCommand = new ToggleActionCommand(
             callbacks.TogglePagedEditView ?? callbacks.SetPrintLayout,

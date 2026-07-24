@@ -684,6 +684,24 @@ public sealed class DocumentView : Control
 
     public void DemoteHeading(int blockIndex) => ShiftHeadingStyle(blockIndex, OutlineTools.Demote);
 
+    /// <summary>Sets the selected paragraph directly to Heading 1, matching WPF Outline.</summary>
+    public void PromoteHeadingToHeading1(int blockIndex) =>
+        ShiftHeadingStyle(blockIndex, _ => "Heading1");
+
+    /// <summary>
+    /// Sets a paragraph to an explicit outline level through the undoable document command bus.
+    /// Level -1 is body text, level 0 is Title, and positive levels map to HeadingN.
+    /// </summary>
+    public void SetHeadingLevel(int blockIndex, int level)
+    {
+        var styleId = level < 0
+            ? "Normal"
+            : level == 0
+                ? "Title"
+                : $"Heading{Math.Min(level, OutlineTools.MaxHeadingLevel)}";
+        ShiftHeadingStyle(blockIndex, _ => styleId);
+    }
+
     private void ShiftHeadingStyle(int blockIndex, Func<string?, string?> shift)
     {
         if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count || _doc.Blocks[blockIndex] is not Paragraph paragraph)
