@@ -2080,6 +2080,16 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.Grayscale)));
         r.Register(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicProcess)));
+        r.Register(SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.AlternatingProcess)));
+        r.Register(SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ArrowRibbon)));
+        r.Register(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.CircleProcess)));
+        r.Register(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.FunnelProcess)));
+        r.Register(SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalProcess)));
         r.Register(SmartArtAuthoringPlanner.VerticalBoxListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBoxList)));
         r.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
@@ -2088,6 +2098,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicBlockList)));
         r.Register(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StackedList)));
+        r.Register(SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.DescendingBlockList)));
         r.Register(SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicPyramid)));
         r.Register(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
@@ -2096,6 +2108,12 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicMatrix)));
         r.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicVenn)));
+        r.Register(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialVenn)));
+        r.Register(SmartArtAuthoringPlanner.TargetListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.TargetList)));
+        r.Register(SmartArtAuthoringPlanner.StackedVennLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StackedVenn)));
         r.Register(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicHierarchy)));
         r.Register(SmartArtAuthoringPlanner.SimpleQuickStyleCommandId,

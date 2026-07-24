@@ -14,14 +14,23 @@ public sealed class SmartArtEditingPlannerTests
 
     [Theory]
     [InlineData(SmartArtLayoutPreset.BasicProcess, "basicProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.AlternatingProcess, "alternatingProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.ArrowRibbon, "arrowRibbon", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.CircleProcess, "circleProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.FunnelProcess, "funnelProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.VerticalProcess, "verticalProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, "verticalBoxList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, "basicCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicBlockList, "basicBlockList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.StackedList, "stackedList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.DescendingBlockList, "descendingBlockList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicPyramid, "basicPyramid", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, "radialCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicMatrix, "basicMatrix", SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, "basicVenn", SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.RadialVenn, "radialVenn", SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.TargetList, "targetList", SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.StackedVenn, "stackedVenn", SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicHierarchy, "basicHierarchy", SmartArtFamily.Hierarchy)]
     public void ApplyLayoutPreset_UpdatesLiveModelAndNativeLayoutPart(
         SmartArtLayoutPreset preset,

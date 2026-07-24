@@ -374,6 +374,21 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicProcessLayoutCommandId,
                 FreePRibbonText.SmartArtBasicProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
                 FreePRibbonText.SmartArtBasicProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
+                FreePRibbonText.SmartArtAlternatingProcessCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtAlternatingProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
+                FreePRibbonText.SmartArtArrowRibbonCommand.Label, RibbonCommandIconKind.ArrowRight,
+                FreePRibbonText.SmartArtArrowRibbonCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
+                FreePRibbonText.SmartArtCircleProcessCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtCircleProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
+                FreePRibbonText.SmartArtFunnelProcessCommand.Label, RibbonCommandIconKind.Rectangle,
+                FreePRibbonText.SmartArtFunnelProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
+                FreePRibbonText.SmartArtVerticalProcessCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtVerticalProcessCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.VerticalBoxListLayoutCommandId,
                 FreePRibbonText.SmartArtVerticalBoxListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtVerticalBoxListCommand.KeyTip);
@@ -386,6 +401,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
                 FreePRibbonText.SmartArtStackedListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtStackedListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
+                FreePRibbonText.SmartArtDescendingBlockListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtDescendingBlockListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
                 FreePRibbonText.SmartArtBasicPyramidCommand.Label, RibbonCommandIconKind.Rectangle,
                 FreePRibbonText.SmartArtBasicPyramidCommand.KeyTip);
@@ -398,6 +416,15 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 FreePRibbonText.SmartArtBasicVennCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtBasicVennCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,
+                FreePRibbonText.SmartArtRadialVennCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtRadialVennCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.TargetListLayoutCommandId,
+                FreePRibbonText.SmartArtTargetListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtTargetListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.StackedVennLayoutCommandId,
+                FreePRibbonText.SmartArtStackedVennCommand.Label, RibbonCommandIconKind.Effects,
+                FreePRibbonText.SmartArtStackedVennCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
                 FreePRibbonText.SmartArtBasicHierarchyCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtBasicHierarchyCommand.KeyTip);
