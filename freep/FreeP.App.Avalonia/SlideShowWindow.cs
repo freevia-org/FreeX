@@ -316,6 +316,8 @@ public sealed class SlideShowWindow : Window
 
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
     internal IReadOnlyList<SlideShowMediaShapePlan> ActiveMediaPlansForTest => _mediaController.Active;
+    internal string? ActiveMediaCaptionForTest(uint shapeId) => _mediaController.CaptionTextForTest(shapeId);
+    internal void RefreshMediaCaptionsForTest() => _mediaController.RefreshCaptionsForTest();
     internal SlideShowMediaClickPlan LastMediaClickForTest => _mediaController.LastClick;
     internal MediaPlaybackBackendAvailability? MediaPlaybackAvailabilityForTest => _mediaController.Availability;
     internal MediaPlaybackFailure? LastMediaPlaybackFailureForTest => _mediaController.LastFailure;
@@ -760,12 +762,19 @@ public sealed class SlideShowWindow : Window
 
         PrepareAnimationOverlay(slide);
 
+        var captionTracks = PresentationMediaTranscriptPlanner
+            .BuildTranscriptPlan(_presentation)
+            .Tracks
+            .Where(track => track.SlideIndex == CurrentPresentationSlideIndex)
+            .ToArray();
+
         _mediaController.EnterSlide(
             slide,
             _slideDipW,
             _slideDipH,
             _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW,
-            _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH);
+            _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH,
+            captionTracks);
 
         if (plan.Transition is { } t)
             PlayTransition(slide, t);

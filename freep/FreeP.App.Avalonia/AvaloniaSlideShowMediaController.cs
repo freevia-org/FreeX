@@ -1,5 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Threading;
 using LibVLCSharp.Avalonia;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
@@ -19,11 +22,15 @@ internal sealed class AvaloniaSlideShowMediaController
         public required uint ShapeId { get; init; }
         public required IMediaPlaybackSession Session { get; init; }
         public VideoView? VideoView { get; init; }
+        public PresentationMediaTranscriptTrackDescriptor? CaptionTrack { get; init; }
+        public Border? CaptionHost { get; init; }
+        public TextBlock? CaptionText { get; init; }
     }
 
     private readonly Panel _overlay;
     private readonly IMediaPlaybackBackendFactory _backendFactory;
     private readonly List<MediaSlot> _slots = new();
+    private readonly DispatcherTimer _captionTimer;
     private IMediaPlaybackBackend? _backend;
     private IMediaPlaybackSession? _transitionSoundSession;
     private IReadOnlyList<SlideShowMediaShapePlan> _active = Array.Empty<SlideShowMediaShapePlan>();
@@ -34,12 +41,22 @@ internal sealed class AvaloniaSlideShowMediaController
     {
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
         _backendFactory = backendFactory ?? new LibVlcMediaPlaybackBackendFactory();
+        _captionTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(100),
+        };
+        _captionTimer.Tick += (_, _) => UpdateCaptions();
     }
 
     public IReadOnlyList<SlideShowMediaShapePlan> Active => _active;
     public MediaPlaybackBackendAvailability? Availability { get; private set; }
     public MediaPlaybackFailure? LastFailure { get; private set; }
     public SlideShowMediaClickPlan LastClick { get; private set; } = SlideShowMediaClickPlan.NotMedia;
+
+    internal string? CaptionTextForTest(uint shapeId) =>
+        _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.CaptionText?.Text;
+
+    internal void RefreshCaptionsForTest() => UpdateCaptions();
 
     public void SetCanvasBounds(double canvasW, double canvasH)
     {
@@ -52,7 +69,8 @@ internal sealed class AvaloniaSlideShowMediaController
         double slideDipW,
         double slideDipH,
         double canvasW,
-        double canvasH)
+        double canvasH,
+        IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? captionTracks = null)
     {
         ArgumentNullException.ThrowIfNull(slide);
         SetCanvasBounds(canvasW, canvasH);
@@ -88,11 +106,23 @@ internal sealed class AvaloniaSlideShowMediaController
                         plan.Bounds);
                 }
 
+                var captionTrack = captionTracks?.FirstOrDefault(track =>
+                    track.ShapeId == shape.Id && track.HasTranscript);
+                Border? captionHost = null;
+                TextBlock? captionText = null;
+                if (captionTrack is not null)
+                {
+                    (captionHost, captionText) = CreateCaptionView(plan.Bounds);
+                }
+
                 _slots.Add(new MediaSlot
                 {
                     ShapeId = shape.Id,
                     Session = session,
                     VideoView = view,
+                    CaptionTrack = captionTrack,
+                    CaptionHost = captionHost,
+                    CaptionText = captionText,
                 });
                 session.Play();
             }
@@ -104,6 +134,9 @@ internal sealed class AvaloniaSlideShowMediaController
                     ex);
             }
         }
+
+        _captionTimer.IsEnabled = _slots.Any(slot => slot.CaptionTrack is not null);
+        UpdateCaptions();
     }
 
     public bool TryHandleClick(
@@ -216,6 +249,50 @@ internal sealed class AvaloniaSlideShowMediaController
         return view;
     }
 
+    private (Border Host, TextBlock Text) CreateCaptionView(LayoutRect bounds)
+    {
+        var text = new TextBlock
+        {
+            Foreground = Brushes.White,
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 4),
+        };
+        var height = Math.Clamp(bounds.Height * 0.2, 36, 86);
+        var host = new Border
+        {
+            Background = Brushes.Black,
+            Opacity = 0.82,
+            Width = Math.Max(1, bounds.Width),
+            Height = height,
+            Child = text,
+            IsVisible = false,
+            IsHitTestVisible = false,
+            ZIndex = 10,
+        };
+        Canvas.SetLeft(host, bounds.X);
+        Canvas.SetTop(host, Math.Max(bounds.Y, bounds.Y + bounds.Height - height));
+        _overlay.Children.Add(host);
+        return (host, text);
+    }
+
+    private void UpdateCaptions()
+    {
+        foreach (var slot in _slots)
+        {
+            if (slot.CaptionHost is null || slot.CaptionText is null)
+                continue;
+
+            var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
+                slot.CaptionTrack,
+                slot.Session.Position);
+            slot.CaptionText.Text = cue?.Text ?? string.Empty;
+            slot.CaptionHost.IsVisible = cue is not null;
+        }
+    }
+
     private void TeardownPlayback()
     {
         foreach (var slot in _slots)
@@ -225,8 +302,11 @@ internal sealed class AvaloniaSlideShowMediaController
             slot.Session.Dispose();
             if (slot.VideoView is not null)
                 _overlay.Children.Remove(slot.VideoView);
+            if (slot.CaptionHost is not null)
+                _overlay.Children.Remove(slot.CaptionHost);
         }
         _slots.Clear();
+        _captionTimer.Stop();
 
         _transitionSoundSession?.Dispose();
         _transitionSoundSession = null;
