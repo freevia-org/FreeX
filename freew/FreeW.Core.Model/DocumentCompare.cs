@@ -26,10 +26,12 @@ public enum CompareShowChangesIn
 /// default — all change types are tracked. When a flag is <c>false</c> the corresponding kind of
 /// difference is silently excluded from the output (no revision marks for it).
 /// <para>
-/// <see cref="Insertions"/>, <see cref="Deletions"/>, <see cref="CaseChanges"/>, and
-/// <see cref="Whitespace"/> affect FreeW's current word-level diff engine. The remaining flags
-/// (<see cref="Moves"/>, <see cref="Comments"/>, <see cref="Formatting"/>) are stored so the dialog can
-/// persist them and are passed through to any future engine extension.
+/// <see cref="Insertions"/>, <see cref="Deletions"/>, <see cref="CaseChanges"/>,
+/// <see cref="Whitespace"/>, and <see cref="Formatting"/> affect FreeW's current comparison engine.
+/// Formatting revisions are emitted when a paragraph's text and run boundaries are unchanged, so each
+/// revised run can retain a precise previous-format snapshot. The remaining flags
+/// (<see cref="Moves"/>, <see cref="Comments"/>) are stored so the dialog can persist them and are
+/// passed through to any future engine extension.
 /// </para>
 /// </summary>
 public sealed class CompareSettings
@@ -46,7 +48,10 @@ public sealed class CompareSettings
     /// <summary>Track comment changes (not yet implemented). Default: <c>true</c>.</summary>
     public bool Comments { get; init; } = true;
 
-    /// <summary>Track formatting changes (not yet implemented). Default: <c>true</c>.</summary>
+    /// <summary>
+    /// Track format-only changes in text-identical paragraphs. FreeW emits native run-format revisions
+    /// when corresponding runs retain the same text boundaries. Default: <c>true</c>.
+    /// </summary>
     public bool Formatting { get; init; } = true;
 
     /// <summary>Track case changes as differences. Default: <c>true</c>.</summary>
@@ -96,8 +101,9 @@ public static class DocumentCompare
     /// <see cref="CompareSettings.Insertions"/> and/or <see cref="CompareSettings.Deletions"/> false will
     /// suppress the corresponding revision marks in the output. Disabling
     /// <see cref="CompareSettings.CaseChanges"/> and/or <see cref="CompareSettings.Whitespace"/> ignores only
-    /// those differences while preserving revised text in the result. The remaining settings are stored for
-    /// round-trip but do not yet affect the word-level diff engine.
+    /// those differences while preserving revised text in the result. When <see cref="CompareSettings.Formatting"/>
+    /// is enabled, format-only changes in text-identical paragraphs become native run-format revisions.
+    /// The remaining settings are stored for round-trip but do not yet affect the word-level diff engine.
     /// </summary>
     public static TextDocument Compare(
         TextDocument original,
@@ -155,7 +161,12 @@ public static class DocumentCompare
                 // Resolve the gap that precedes this anchor against the original paragraphs sitting between
                 // the previous anchor and this one, then copy the anchor (identical text) through unchanged.
                 ResolveGap(anchorOriginalIndex);
-                result.Blocks.Add(ClonePlain(revisedParagraph));
+                result.Blocks.Add(ClonePlainWithFormatRevisions(
+                    originalParagraphs[anchorOriginalIndex],
+                    revisedParagraph,
+                    author,
+                    dateXml,
+                    settings));
                 prevOriginalAnchor = anchorOriginalIndex;
             }
             else
@@ -479,6 +490,41 @@ public static class DocumentCompare
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRun(run));
+        return clone;
+    }
+
+    // A paragraph-level LCS anchor has matching comparison text. When the source text and run boundaries
+    // are also exact, preserve the revised appearance and mark only format differences with w:rPrChange.
+    // Mixed text-and-formatting edits stay on the word-diff path, where there is no unambiguous source run
+    // snapshot for a formatting revision.
+    private static Paragraph ClonePlainWithFormatRevisions(
+        Paragraph original,
+        Paragraph revised,
+        string author,
+        string? dateXml,
+        CompareSettings settings)
+    {
+        var clone = ClonePlain(revised);
+        if (!settings.Formatting
+            || !string.Equals(original.PlainText, revised.PlainText, StringComparison.Ordinal)
+            || original.Runs.Count != revised.Runs.Count)
+            return clone;
+
+        for (var index = 0; index < revised.Runs.Count; index++)
+        {
+            var originalRun = original.Runs[index];
+            var revisedRun = revised.Runs[index];
+            if (originalRun.Text.Length == 0
+                || !string.Equals(originalRun.Text, revisedRun.Text, StringComparison.Ordinal)
+                || Equals(originalRun.Formatting, revisedRun.Formatting))
+                continue;
+
+            clone.Runs[index].FormatRevision = new FormatRevision(
+                originalRun.Formatting,
+                author,
+                dateXml);
+        }
+
         return clone;
     }
 

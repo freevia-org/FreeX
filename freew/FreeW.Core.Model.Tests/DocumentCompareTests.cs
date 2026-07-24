@@ -316,6 +316,59 @@ public class DocumentCompareTests
     }
 
     [Fact]
+    public void Compare_FormatOnlyRunChange_TracksPreviousFormatting()
+    {
+        var original = new TextDocument();
+        var originalParagraph = new Paragraph();
+        originalParagraph.Runs.Add(new Run("plain"));
+        originalParagraph.Runs.Add(new Run(" keeps its format", new RunFormatting { Italic = true }));
+        original.Blocks.Add(originalParagraph);
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("plain", new RunFormatting { Bold = true }));
+        revisedParagraph.Runs.Add(new Run(" keeps its format", new RunFormatting { Italic = true }));
+        revised.Blocks.Add(revisedParagraph);
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+        var runs = result.Paragraphs.Single().Runs;
+
+        runs[0].Formatting.Bold.Should().BeTrue();
+        runs[0].FormatRevision.Should().Be(new FormatRevision(RunFormatting.Default, Author, DateXml));
+        runs[1].FormatRevision.Should().BeNull();
+        TrackChanges.HasRevisions(result).Should().BeTrue();
+
+        TrackChanges.RejectAll(result);
+        result.Paragraphs.Single().Runs[0].Formatting.Bold.Should().BeFalse();
+        TrackChanges.HasRevisions(result).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Compare_FormatOnlyRunChange_CanBeSuppressed()
+    {
+        var original = new TextDocument();
+        var originalParagraph = new Paragraph();
+        originalParagraph.Runs.Add(new Run("format me"));
+        original.Blocks.Add(originalParagraph);
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("format me", new RunFormatting { Underline = true }));
+        revised.Blocks.Add(revisedParagraph);
+
+        var result = DocumentCompare.Compare(
+            original,
+            revised,
+            Author,
+            DateXml,
+            new CompareSettings { Formatting = false });
+
+        result.Paragraphs.Single().Runs.Single().Formatting.Underline.Should().BeTrue();
+        result.Paragraphs.Single().Runs.Single().FormatRevision.Should().BeNull();
+        TrackChanges.HasRevisions(result).Should().BeFalse();
+    }
+
+    [Fact]
     public void Compare_CopiesRevisedPreservedPackageSafetyShell()
     {
         var original = DocWith("baseline review text");

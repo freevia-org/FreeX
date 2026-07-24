@@ -252,6 +252,34 @@ public class CompareRevisionRoundTripTests
     }
 
     [Fact]
+    public void Compare_FormatOnlyChange_RoundTrips_AsRPrChange_AndCanBeRejected()
+    {
+        var original = new TextDocument();
+        var originalParagraph = new Paragraph();
+        originalParagraph.Runs.Add(new Run("format me"));
+        original.Blocks.Add(originalParagraph);
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("format me", new RunFormatting { Bold = true }));
+        revised.Blocks.Add(revisedParagraph);
+
+        var compared = DocumentCompare.Compare(original, revised, Author, DateXml);
+        var xdoc = DocumentXDoc(compared);
+        var formatChange = xdoc.Descendants(W + "rPrChange").Should().ContainSingle().Subject;
+        formatChange.Attribute(W + "author")!.Value.Should().Be(Author);
+        formatChange.Attribute(W + "date")!.Value.Should().Be(DateXml);
+
+        var reloaded = RoundTrip(compared);
+        var run = reloaded.Paragraphs.Single().Runs.Single();
+        run.Formatting.Bold.Should().BeTrue();
+        run.FormatRevision.Should().Be(new FormatRevision(RunFormatting.Default, Author, DateXml));
+
+        TrackChanges.RejectAll(reloaded);
+        reloaded.Paragraphs.Single().Runs.Single().Formatting.Bold.Should().BeFalse();
+    }
+
+    [Fact]
     public void Compare_RevisionList_After_RoundTrip_EnumeratesAllEntries()
     {
         // "hello world" → "hello earth": one deletion ("world") and one insertion ("earth").
