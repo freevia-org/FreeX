@@ -25,6 +25,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationExportPlanner.NotesPagePdfExportCommandId");
         source.Should().Contain("PresentationExportPlanner.ImageExportCommandId");
         source.Should().Contain("PresentationExportPlanner.VideoExportCommandId");
+        source.Should().Contain("new ActionRibbonCommand(() => _ = FileExportVideoAsync())");
         source.Should().Contain("PresentationExportPlanner.PrintCommandId");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildNotesPagePdfExportPlan(");

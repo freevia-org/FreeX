@@ -2424,9 +2424,11 @@ public sealed class MainWindowHeadlessTests
             var registry = window.BuildCommandRegistry();
             found = registry.TryGet(PresentationExportPlanner.VideoExportCommandId, out var video);
 
-            video!.Execute(RibbonCommandContext.Empty);
+            // The ribbon command is the real MP4 export route. Keep the package-only
+            // inspection explicit so this test remains headless and does not open a picker.
+            video.Should().NotBeNull();
+            videoPackage = window.RefreshVideoFramePackage();
             videoPlan = window.LastVideoExportPlan;
-            videoPackage = window.LastVideoFramePackage;
             videoHandoff = window.LastVideoExportHandoffPlan;
             videoDescriptor = window.LastVideoExecutionDescriptor;
         });
@@ -2478,6 +2480,32 @@ public sealed class MainWindowHeadlessTests
         videoPlan.Storyboard.TotalDuration.Should().Be(videoPlan.EstimatedDuration);
         videoPlan.CanExecute.Should().BeFalse();
         videoPlan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+    }
+
+    [Fact]
+    public async Task Video_export_plan_reports_native_encoder_readiness()
+    {
+        PresentationVideoExportPlan? plan = null;
+        var capabilities = new LinuxNativeOutputCapabilities(
+            LinuxNativePrintCapability.Unavailable("no queue"),
+            new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                nativeOutputCapabilities: capabilities,
+                videoExportAdapter: new RecordingVideoAdapter(capabilities.Video));
+            window.Editor.InsertSlide();
+            plan = window.RefreshVideoExportPlan();
+        });
+
+        if (!ran) return;
+        plan.Should().NotBeNull();
+        plan!.IsImplemented.Should().BeTrue();
+        plan.CanExecute.Should().BeTrue();
+        plan.DisabledReason.Should().BeNull();
     }
 
     [Fact]

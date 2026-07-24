@@ -1855,7 +1855,7 @@ public sealed partial class MainWindow : Window
         r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
         r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() => ShowPrintOptionsPane()));
-        r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => RefreshVideoFramePackage()));
+        r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => _ = FileExportVideoAsync()));
 
         // Slide navigation/management
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
@@ -3353,6 +3353,17 @@ public sealed partial class MainWindow : Window
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
     {
         LastVideoExportPlan = PresentationExportPlanner.BuildVideoExportPlan(request, _presentation);
+        if (_nativeOutputCapabilities.Video.CanEncodeMp4)
+        {
+            var hasSlides = LastVideoExportPlan.SlideRange.SlideNumbers.Count > 0;
+            LastVideoExportPlan = LastVideoExportPlan with
+            {
+                IsImplemented = true,
+                CanExecute = hasSlides,
+                DisabledReason = hasSlides ? null : LastVideoExportPlan.DisabledReason,
+            };
+        }
+
         _statusText.Text = LastVideoExportPlan.DisabledReason ?? "Video export planned";
         return LastVideoExportPlan;
     }
