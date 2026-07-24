@@ -30,6 +30,7 @@ public sealed class ParagraphDialogVisualParityTests
             var after = Field<TextBox>(dialog, "_after");
             var lineSpacing = Field<TextBox>(dialog, "_lineSpacing");
             var special = Field<ComboBox>(dialog, "_special");
+            var contextualSpacing = Field<CheckBox>(dialog, "_contextualSpacing");
             var buttons = dialog.GetLogicalDescendants()
                 .OfType<Button>()
                 .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
@@ -49,6 +50,7 @@ public sealed class ParagraphDialogVisualParityTests
             after.Text.Should().Be(expected.SpaceAfterText);
             lineSpacing.Text.Should().Be(expected.LineSpacingText);
             special.SelectedIndex.Should().Be(expected.SpecialIndex);
+            contextualSpacing.IsChecked.Should().Be(expected.ContextualSpacing);
             AutomationProperties.GetAutomationId(left).Should().Be("paragraph-left-indent");
 
             buttons.Select(button => button.Content?.ToString()).Should().Equal(LocalizedUiText.Ok, LocalizedUiText.Cancel);

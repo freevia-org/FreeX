@@ -166,7 +166,8 @@ public sealed class ParagraphNoteDialogPlannerTests
             KeepLinesTogether = true,
             WidowControl = true,
             PageBreakBefore = true,
-            SuppressAutoHyphens = true
+            SuppressAutoHyphens = true,
+            ContextualSpacing = true
         };
 
         var state = ParagraphBreaksDialogPlanner.BuildInitialState(current, CultureInfo.InvariantCulture);
@@ -183,6 +184,7 @@ public sealed class ParagraphNoteDialogPlannerTests
         state.WidowControl.Should().BeTrue();
         state.PageBreakBefore.Should().BeTrue();
         state.SuppressAutoHyphens.Should().BeTrue();
+        state.ContextualSpacing.Should().BeTrue();
 
         ParagraphBreaksDialogPlanner.TryBuildResult(
                 new ParagraphBreaksDialogInput(
@@ -197,7 +199,8 @@ public sealed class ParagraphNoteDialogPlannerTests
                     KeepLinesTogether: false,
                     WidowControl: true,
                     PageBreakBefore: false,
-                    SuppressAutoHyphens: true),
+                    SuppressAutoHyphens: true,
+                    ContextualSpacing: true),
                 CultureInfo.InvariantCulture,
                 out var result,
                 out var validation)
@@ -215,7 +218,8 @@ public sealed class ParagraphNoteDialogPlannerTests
             KeepLinesTogether: false,
             WidowControl: true,
             PageBreakBefore: false,
-            SuppressAutoHyphens: true));
+            SuppressAutoHyphens: true,
+            ContextualSpacing: true));
     }
 
     [Fact]
@@ -234,7 +238,8 @@ public sealed class ParagraphNoteDialogPlannerTests
                     KeepLinesTogether: false,
                     WidowControl: false,
                     PageBreakBefore: false,
-                    SuppressAutoHyphens: false),
+                    SuppressAutoHyphens: false,
+                    ContextualSpacing: false),
                 CultureInfo.InvariantCulture,
                 out var result,
                 out var validation)

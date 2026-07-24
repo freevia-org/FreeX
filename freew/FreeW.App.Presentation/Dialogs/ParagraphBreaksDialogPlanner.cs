@@ -26,7 +26,8 @@ public sealed record ParagraphBreaksInitialState(
     bool KeepLinesTogether,
     bool WidowControl,
     bool PageBreakBefore,
-    bool SuppressAutoHyphens);
+    bool SuppressAutoHyphens,
+    bool ContextualSpacing);
 
 public sealed record ParagraphBreaksDialogInput(
     string? LeftText,
@@ -40,7 +41,8 @@ public sealed record ParagraphBreaksDialogInput(
     bool KeepLinesTogether,
     bool WidowControl,
     bool PageBreakBefore,
-    bool SuppressAutoHyphens);
+    bool SuppressAutoHyphens,
+    bool ContextualSpacing);
 
 public sealed record ParagraphBreaksValidation(
     ParagraphBreaksDialogField Field,
@@ -57,7 +59,8 @@ public sealed record ParagraphBreaksDialogResult(
     bool KeepLinesTogether,
     bool WidowControl,
     bool PageBreakBefore,
-    bool SuppressAutoHyphens);
+    bool SuppressAutoHyphens,
+    bool ContextualSpacing);
 
 public static class ParagraphBreaksDialogPlanner
 {
@@ -90,7 +93,8 @@ public static class ParagraphBreaksDialogPlanner
             KeepLinesTogether: current.KeepLinesTogether,
             WidowControl: current.WidowControl,
             PageBreakBefore: current.PageBreakBefore,
-            SuppressAutoHyphens: current.SuppressAutoHyphens);
+            SuppressAutoHyphens: current.SuppressAutoHyphens,
+            ContextualSpacing: current.ContextualSpacing is true);
     }
 
     public static bool IsSpecialAmountEnabled(int specialIndex) =>
@@ -155,7 +159,8 @@ public static class ParagraphBreaksDialogPlanner
             KeepLinesTogether: input.KeepLinesTogether,
             WidowControl: input.WidowControl,
             PageBreakBefore: input.PageBreakBefore,
-            SuppressAutoHyphens: input.SuppressAutoHyphens);
+            SuppressAutoHyphens: input.SuppressAutoHyphens,
+            ContextualSpacing: input.ContextualSpacing);
         return true;
     }
 

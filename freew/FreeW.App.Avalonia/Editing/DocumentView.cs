@@ -11442,7 +11442,8 @@ public sealed class DocumentView : Control
         bool keepLinesTogether,
         bool widowControl,
         bool pageBreakBefore,
-        bool suppressAutoHyphens)
+        bool suppressAutoHyphens,
+        bool contextualSpacing)
     {
         FormatSelectedParagraphs(formatting => formatting with
         {
@@ -11460,7 +11461,8 @@ public sealed class DocumentView : Control
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
             PageBreakBefore = pageBreakBefore,
-            SuppressAutoHyphens = suppressAutoHyphens
+            SuppressAutoHyphens = suppressAutoHyphens,
+            ContextualSpacing = contextualSpacing
         });
     }
 
