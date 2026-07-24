@@ -59,6 +59,8 @@ public sealed class LinuxFamilyInteractionToolTests
         probe.Should().Contain("slide-pane-stable-band=thumbnail-area-below-ribbon-above-button-and-status");
         probe.Should().Contain("FAMILY_X11_POINTER_TIMEOUT_SECONDS");
         probe.Should().Contain("FAMILY_X11_CLIPBOARD_TIMEOUT_SECONDS");
+        probe.Should().Contain("FAMILY_X11_TEXT_ENTRY_MARGIN_MS");
+        probe.Should().Contain("FAMILY_X11_TEXT_CLEANUP_TIMEOUT_SECONDS");
         probe.Should().Contain("timeout --foreground --kill-after=1s");
         probe.Should().Contain("xclip -selection clipboard -o");
         probe.Should().Contain("xclip -silent -selection clipboard -in");
@@ -72,6 +74,26 @@ public sealed class LinuxFamilyInteractionToolTests
         probe.Should().Contain("family-x11-results.json");
         probe.Should().NotContain("FreeX-specific");
         probe.Should().NotContain("run-freex-input-probes.sh");
+    }
+
+    [Fact]
+    public void FamilyProbeBoundsLongTextEntryAndReleasesKeysAfterFailure()
+    {
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-family-input-probes.sh"));
+        var start = probe.IndexOf("send_active_text()", StringComparison.Ordinal);
+        var end = probe.IndexOf("send_editor_key()", start, StringComparison.Ordinal);
+
+        start.Should().BeGreaterThanOrEqualTo(0);
+        end.Should().BeGreaterThan(start);
+        var textEntry = probe[start..end];
+
+        textEntry.Should().Contain("text_length=\"${#text_value}\"");
+        textEntry.Should().Contain("text_budget_ms");
+        textEntry.Should().Contain("text_timeout_seconds");
+        textEntry.Should().Contain("release_active_text_keys \"$active_id\" \"$text_value\"");
+        textEntry.Should().NotContain("\"$pointer_timeout_seconds\"");
+        probe.Should().Contain("xdotool keyup --window \"$active_id\" \"$key_name\"");
     }
 
     [Fact]

@@ -8,6 +8,8 @@ input_delay_ms="${FAMILY_X11_INPUT_DELAY_MS:-160}"
 settle_seconds="${FAMILY_X11_SETTLE_SECONDS:-0.45}"
 pointer_timeout_seconds="${FAMILY_X11_POINTER_TIMEOUT_SECONDS:-3}"
 clipboard_timeout_seconds="${FAMILY_X11_CLIPBOARD_TIMEOUT_SECONDS:-3}"
+text_entry_margin_ms="${FAMILY_X11_TEXT_ENTRY_MARGIN_MS:-5000}"
+text_cleanup_timeout_seconds="${FAMILY_X11_TEXT_CLEANUP_TIMEOUT_SECONDS:-1}"
 app="${FAMILY_APP:?FAMILY_APP is required (FreeW or FreeP)}"
 window_pattern="${FAMILY_WINDOW_PATTERN:?FAMILY_WINDOW_PATTERN is required}"
 tab_key="${FAMILY_TAB_KEY:?FAMILY_TAB_KEY is required}"
@@ -233,14 +235,41 @@ send_active_key() {
     sleep "$settle_seconds"
 }
 
+release_active_text_keys() {
+    local active_id="$1" text_value="$2" character key_name index
+    for key_name in ctrl shift alt super meta; do
+        timeout --foreground --kill-after=1s "$text_cleanup_timeout_seconds" \
+            xdotool keyup --window "$active_id" "$key_name" >/dev/null 2>&1 || true
+    done
+    for ((index = 0; index < ${#text_value}; index++)); do
+        character="${text_value:index:1}"
+        case "$character" in
+            [[:alnum:]]) key_name="$character" ;;
+            -) key_name=minus ;;
+            _) key_name=underscore ;;
+            ' ') key_name=space ;;
+            *) continue ;;
+        esac
+        timeout --foreground --kill-after=1s "$text_cleanup_timeout_seconds" \
+            xdotool keyup --window "$active_id" "$key_name" >/dev/null 2>&1 || true
+    done
+}
+
 send_active_text() {
-    local text_value="$1" active_id
+    local text_value="$1" active_id text_length text_budget_ms text_timeout_seconds
     active_id="$(xdotool getactivewindow 2>/dev/null || true)"
     if [[ -z "$active_id" ]]; then
         return 1
     fi
-    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
-        xdotool type --clearmodifiers --delay "$input_delay_ms" --window "$active_id" "$text_value"
+    text_length="${#text_value}"
+    text_budget_ms=$((text_length * input_delay_ms + text_entry_margin_ms))
+    text_timeout_seconds=$(( (text_budget_ms + 999) / 1000 ))
+    (( text_timeout_seconds < 1 )) && text_timeout_seconds=1
+    if ! timeout --foreground --kill-after=1s "$text_timeout_seconds" \
+        xdotool type --clearmodifiers --delay "$input_delay_ms" --window "$active_id" "$text_value"; then
+        release_active_text_keys "$active_id" "$text_value"
+        return 1
+    fi
     sleep "$settle_seconds"
 }
 
