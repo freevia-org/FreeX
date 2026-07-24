@@ -5260,7 +5260,7 @@ public sealed class DocumentView : RichTextBox
                 // Word's visible TextBox surface includes three DIPs more of the right/bottom
                 // material edge than WPF's Border raster for this imported source signature.
                 visual.Width += 3;
-                visual.Height += 3;
+                visual.Height += 4;
             }
 
             Canvas.SetLeft(visual, snapshot.Rect.XDip);

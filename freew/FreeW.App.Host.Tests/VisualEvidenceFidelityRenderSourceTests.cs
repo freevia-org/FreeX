@@ -60,7 +60,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FillColorHex: \"#E2F0D9\",");
         source.Should().Contain("OutlineColorHex: \"#70AD47\",");
         source.Should().Contain("visual.Width += 3;");
-        source.Should().Contain("visual.Height += 3;");
+        source.Should().Contain("visual.Height += 4;");
         source.Should().Contain("topDip -= 1;");
     }
 
