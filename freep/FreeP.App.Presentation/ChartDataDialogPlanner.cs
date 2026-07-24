@@ -106,6 +106,7 @@ public sealed record ChartDataDialogSurfacePlan(
     string RemoveSeriesLabel,
     string AddCategoryLabel,
     string RemoveCategoryLabel,
+    string SwitchRowsAndColumnsLabel,
     string OkLabel,
     string CancelLabel);
 
@@ -130,6 +131,7 @@ public sealed class ChartDataDialogPlanner
     public const string RemoveSeriesLabel = "- Series";
     public const string AddCategoryLabel = "+ Category";
     public const string RemoveCategoryLabel = "- Category";
+    public const string SwitchRowsAndColumnsLabel = "Switch Row/Column";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
     public const string InvalidNumericValueMessage = "Enter a valid number or leave the value blank.";
@@ -159,6 +161,7 @@ public sealed class ChartDataDialogPlanner
             RemoveSeriesLabel,
             AddCategoryLabel,
             RemoveCategoryLabel,
+            SwitchRowsAndColumnsLabel,
             OkLabel,
             CancelLabel);
     }
@@ -221,6 +224,11 @@ public sealed class ChartDataDialogPlanner
     public void RemoveLastCategory()
     {
         _grid.RemoveLastCategory();
+    }
+
+    public void SwitchRowsAndColumns()
+    {
+        _grid.SwitchRowsAndColumns();
     }
 
     public ChartDataDialogTableProjection BuildTableProjection()

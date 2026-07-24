@@ -65,6 +65,13 @@ internal sealed class ChartDataDialog : Window
         return _planner.BuildCommitPlan();
     }
 
+    internal void SwitchRowsAndColumnsForTests()
+    {
+        FlushTextBoxEdits();
+        _planner.SwitchRowsAndColumns();
+        RebuildTable();
+    }
+
     private Control BuildContent()
     {
         var root = new Grid();
@@ -85,6 +92,7 @@ internal sealed class ChartDataDialog : Window
                 new Border { Width = 12 },
                 MakeToolbarButton(_surface.AddCategoryLabel, OnAddCategory),
                 MakeToolbarButton(_surface.RemoveCategoryLabel, OnRemoveCategory),
+                MakeToolbarButton(_surface.SwitchRowsAndColumnsLabel, OnSwitchRowsAndColumns),
             },
         };
 
@@ -229,6 +237,15 @@ internal sealed class ChartDataDialog : Window
     {
         FlushTextBoxEdits();
         _planner.RemoveLastCategory();
+        RebuildTable();
+    }
+
+    private void OnSwitchRowsAndColumns()
+    {
+        if (!TryFlushTextBoxEdits())
+            return;
+
+        _planner.SwitchRowsAndColumns();
         RebuildTable();
     }
 
