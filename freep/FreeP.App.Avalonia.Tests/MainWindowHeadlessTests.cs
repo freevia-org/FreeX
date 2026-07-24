@@ -5074,6 +5074,8 @@ public sealed class MainWindowHeadlessTests
             {
                 SmartArtAuthoringPlanner.AlternatingProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.ContinuousBlockProcessLayoutCommandId,
+                SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId,
+                SmartArtAuthoringPlanner.ChevronProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
                 SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
@@ -5083,6 +5085,8 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
+                SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
+                SmartArtAuthoringPlanner.TextCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialVennLayoutCommandId,

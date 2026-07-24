@@ -19,6 +19,8 @@ public enum SmartArtLayoutPreset
 {
     BasicProcess,
     ContinuousBlockProcess,
+    SegmentedProcess,
+    ChevronProcess,
     AlternatingProcess,
     ArrowRibbon,
     CircleProcess,
@@ -26,6 +28,8 @@ public enum SmartArtLayoutPreset
     VerticalProcess,
     VerticalBoxList,
     BasicCycle,
+    GearCycle,
+    TextCycle,
     BasicBlockList,
     StackedList,
     DescendingBlockList,
@@ -85,6 +89,8 @@ public static class SmartArtAuthoringPlanner
     public const string GrayscaleCommandId = "freep.smartart.colors.grayscale";
     public const string BasicProcessLayoutCommandId = "freep.smartart.layout.basic-process";
     public const string ContinuousBlockProcessLayoutCommandId = "freep.smartart.layout.continuous-block-process";
+    public const string SegmentedProcessLayoutCommandId = "freep.smartart.layout.segmented-process";
+    public const string ChevronProcessLayoutCommandId = "freep.smartart.layout.chevron-process";
     public const string AlternatingProcessLayoutCommandId = "freep.smartart.layout.alternating-process";
     public const string ArrowRibbonLayoutCommandId = "freep.smartart.layout.arrow-ribbon";
     public const string CircleProcessLayoutCommandId = "freep.smartart.layout.circle-process";
@@ -92,6 +98,8 @@ public static class SmartArtAuthoringPlanner
     public const string VerticalProcessLayoutCommandId = "freep.smartart.layout.vertical-process";
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
     public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
+    public const string GearCycleLayoutCommandId = "freep.smartart.layout.gear-cycle";
+    public const string TextCycleLayoutCommandId = "freep.smartart.layout.text-cycle";
     public const string BasicBlockListLayoutCommandId = "freep.smartart.layout.basic-block-list";
     public const string StackedListLayoutCommandId = "freep.smartart.layout.stacked-list";
     public const string DescendingBlockListLayoutCommandId = "freep.smartart.layout.descending-block-list";
@@ -215,6 +223,10 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.ContinuousBlockProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.SegmentedProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.ChevronProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/chevronProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.AlternatingProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.ArrowRibbon =>
@@ -229,6 +241,10 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.GearCycle =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/gearCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.TextCycle =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/textCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicBlockList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.StackedList =>
