@@ -1939,6 +1939,19 @@ public sealed class EditingSession
             options));
     }
 
+    /// <summary>Applies one chart-series formatting edit as a single undo step.</summary>
+    public void ApplyChartSeriesOptions(ChartSeriesOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return;
+
+        Bus.Execute(new SetChartSeriesOptionsCommand(
+            _currentSlideIndex,
+            _selectedShapeIds[0],
+            options));
+    }
+
     /// <summary>
     /// Non-nullable overload for callers that already work with <c>double</c> sequences (no gaps).
     /// </summary>

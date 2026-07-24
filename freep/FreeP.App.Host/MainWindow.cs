@@ -422,6 +422,7 @@ public sealed partial class MainWindow : Window
             onEditChartData:    () => OpenChartDataDialog(),
             onEditChartOptions: () => OpenChartDisplayOptionsDialog(),
             onEditChartAxisOptions: () => OpenChartAxisOptionsDialog(),
+            onEditChartSeriesOptions: () => OpenChartSeriesOptionsDialog(),
             getSlideCanvas:     () => SlideCanvas,
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
             onCustomSlideSize:  () => OpenSlideSizeDialog(),
@@ -3603,6 +3604,16 @@ public sealed partial class MainWindow : Window
         if (Editor.SelectedChart is null) return;
 
         var dialog = new ChartAxisOptionsDialog(Editor);
+        if (IsVisible)
+            dialog.Owner = this;
+        dialog.ShowDialog();
+    }
+
+    internal void OpenChartSeriesOptionsDialog()
+    {
+        if (Editor.SelectedChart is null) return;
+
+        var dialog = new ChartSeriesOptionsDialog(Editor);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();

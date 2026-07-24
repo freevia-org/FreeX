@@ -104,7 +104,8 @@ internal static class FreePRibbonCommands
         Action<SmartArtLayoutPreset>? onSmartArtLayoutPreset = null,
         Action<SmartArtQuickStylePreset>? onSmartArtQuickStylePreset = null,
         Action?             onEditChartOptions = null,
-        Action?             onEditChartAxisOptions = null)
+        Action?             onEditChartAxisOptions = null,
+        Action?             onEditChartSeriesOptions = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -400,6 +401,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onEditChartOptions?.Invoke()));
         registry.Register(ChartAxisOptionsPlanner.CommandId,
             new ActionRibbonCommand(() => onEditChartAxisOptions?.Invoke()));
+        registry.Register(ChartSeriesOptionsPlanner.CommandId,
+            new ActionRibbonCommand(() => onEditChartSeriesOptions?.Invoke()));
 
         // ── Wave 11A: Hyperlinks ──────────────────────────────────────────────────
 
