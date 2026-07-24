@@ -120,6 +120,43 @@ public sealed class PresentationPrintBackstagePlannerTests
     }
 
     [Fact]
+    public void Build_PreservesCustomRangeInputInSelectedBackstageChoice()
+    {
+        var plan = PresentationPrintBackstagePlanner.Build(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    CustomRangeText: "2,4-5")),
+            slideCount: 6);
+
+        plan.SelectedRange.Kind.Should().Be(PresentationSlideRangeKind.CustomRange);
+        plan.SelectedRange.DisplayName.Should().Be("Slides 2, 4, 5");
+        plan.SelectedRange.Request.Should().NotBeNull();
+        plan.SelectedRange.Request!.CustomRangeText.Should().Be("2,4-5");
+        plan.SelectedRange.IsAvailable.Should().BeTrue();
+        plan.PageCount.Should().Be(3);
+    }
+
+    [Fact]
+    public void Build_InvalidCustomRangeExposesValidationInBackstagePlan()
+    {
+        var plan = PresentationPrintBackstagePlanner.Build(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.FullPageSlides,
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    CustomRangeText: "2,9")),
+            slideCount: 6);
+
+        plan.SelectedRange.Kind.Should().Be(PresentationSlideRangeKind.CustomRange);
+        plan.SelectedRange.IsAvailable.Should().BeFalse();
+        plan.SelectedRange.Request!.CustomRangeText.Should().Be("2,9");
+        plan.CanBuildPackage.Should().BeFalse();
+        plan.DisabledReason.Should().Be("Slide '9' is outside slides 1-6.");
+    }
+
+    [Fact]
     public void Build_WithDeferredHostCapabilitiesKeepsPackageReadyButDefersNativeDialog()
     {
         var plan = PresentationPrintBackstagePlanner.Build(

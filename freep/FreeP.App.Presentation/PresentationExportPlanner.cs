@@ -77,7 +77,13 @@ public sealed record PresentationSlideRangeRequest(
     int? CurrentSlideNumber = null,
     int? StartSlideNumber = null,
     int? EndSlideNumber = null,
-    IReadOnlyList<int>? SelectedSlideNumbers = null);
+    IReadOnlyList<int>? SelectedSlideNumbers = null,
+    string? CustomRangeText = null);
+
+public sealed record PresentationSlideRangeParseResult(
+    bool IsValid,
+    IReadOnlyList<int> SlideNumbers,
+    string? ErrorMessage);
 
 public sealed record PresentationPrintRequest(
     PresentationPrintLayoutKind Layout,
@@ -93,7 +99,9 @@ public sealed record PresentationPrintRequest(
 public sealed record PresentationSlideRangePlan(
     PresentationSlideRangeKind Kind,
     IReadOnlyList<int> SlideNumbers,
-    string DisplayName);
+    string DisplayName,
+    string? CustomRangeText = null,
+    string? ValidationMessage = null);
 
 public sealed record PresentationPrintPlan(
     string CommandId,
@@ -382,7 +390,9 @@ public static class PresentationExportPlanner
                 FormatRangeDisplayName(
                     plan.SlideRange.Kind,
                     visibleNumbers,
-                    presentation.Slides.Count)),
+                    presentation.Slides.Count),
+                plan.SlideRange.CustomRangeText,
+                plan.SlideRange.ValidationMessage),
         };
     }
 
@@ -671,6 +681,7 @@ public static class PresentationExportPlanner
     {
         var count = Math.Max(0, slideCount);
         request ??= new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides);
+        PresentationSlideRangeParseResult? parsedCustomRange = null;
 
         var numbers = request.Kind switch
         {
@@ -678,17 +689,93 @@ public static class PresentationExportPlanner
                 ? []
                 : [ClampSlideNumber(request.CurrentSlideNumber ?? 1, count)],
             PresentationSlideRangeKind.SelectedSlides => NormalizeSelectedSlides(request.SelectedSlideNumbers, count),
-            PresentationSlideRangeKind.CustomRange => NormalizeCustomRange(
-                request.StartSlideNumber,
-                request.EndSlideNumber,
-                count),
+            PresentationSlideRangeKind.CustomRange => request.CustomRangeText is null
+                ? NormalizeCustomRange(request.StartSlideNumber, request.EndSlideNumber, count)
+                : (parsedCustomRange = ParseCustomSlideRange(request.CustomRangeText, count)).SlideNumbers,
             _ => BuildAllSlides(count),
         };
+
+        var validationMessage = parsedCustomRange?.ErrorMessage;
 
         return new PresentationSlideRangePlan(
             request.Kind,
             numbers,
-            FormatRangeDisplayName(request.Kind, numbers, count));
+            validationMessage is null
+                ? FormatRangeDisplayName(request.Kind, numbers, count)
+                : "Invalid custom range",
+            request.CustomRangeText,
+            validationMessage);
+    }
+
+    public static PresentationSlideRangeParseResult ParseCustomSlideRange(
+        string? rangeText,
+        int slideCount)
+    {
+        var count = Math.Max(0, slideCount);
+        if (string.IsNullOrWhiteSpace(rangeText))
+        {
+            return new(
+                IsValid: false,
+                SlideNumbers: [],
+                "Enter one or more slide numbers, for example 1,3-5.");
+        }
+
+        if (count == 0)
+        {
+            return new(
+                IsValid: false,
+                SlideNumbers: [],
+                "No slides are available for the custom range.");
+        }
+
+        var numbers = new List<int>();
+        var seen = new HashSet<int>();
+        foreach (var rawToken in rangeText.Replace('\u2013', '-').Split(',', ';'))
+        {
+            var token = rawToken.Trim();
+            if (token.Length == 0)
+                return InvalidCustomRange("Custom ranges cannot contain empty entries.");
+
+            var separator = token.IndexOf('-');
+            if (separator >= 0)
+            {
+                if (separator == 0 || separator == token.Length - 1 ||
+                    token.IndexOf('-', separator + 1) >= 0 ||
+                    !int.TryParse(token[..separator].Trim(), System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture, out var start) ||
+                    !int.TryParse(token[(separator + 1)..].Trim(), System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture, out var end))
+                {
+                    return InvalidCustomRange($"Invalid slide range '{token}'. Use entries such as 3-5.");
+                }
+
+                if (start < 1 || end > count || start > end)
+                    return InvalidCustomRange($"Slide range '{token}' is outside slides 1-{count}.");
+
+                for (var number = start; number <= end; number++)
+                {
+                    if (seen.Add(number))
+                        numbers.Add(number);
+                }
+
+                continue;
+            }
+
+            if (!int.TryParse(token, System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out var slideNumber) ||
+                slideNumber < 1 || slideNumber > count)
+            {
+                return InvalidCustomRange($"Slide '{token}' is outside slides 1-{count}.");
+            }
+
+            if (seen.Add(slideNumber))
+                numbers.Add(slideNumber);
+        }
+
+        return new(IsValid: true, numbers, ErrorMessage: null);
+
+        static PresentationSlideRangeParseResult InvalidCustomRange(string message) =>
+            new(IsValid: false, SlideNumbers: [], message);
     }
 
     public static FileSaveDialogPlan BuildPdfExportDialogPlan(string? sourceName) =>
