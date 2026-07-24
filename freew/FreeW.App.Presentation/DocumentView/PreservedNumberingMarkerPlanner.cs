@@ -17,19 +17,39 @@ public static class PreservedNumberingMarkerPlanner
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        if (document.Preserved.OriginalNumbering is not { } numbering)
-            return Empty;
-
-        var definitions = ReadDefinitions(numbering);
-        if (definitions.Count == 0)
-            return Empty;
-
-        var counters = new Dictionary<int, int[]>();
+        var paragraphMarkers = BuildByParagraph(document);
         var result = new Dictionary<int, PreservedNumberingMarkerPlan>();
         for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
         {
-            if (document.Blocks[blockIndex] is not Paragraph paragraph
-                || paragraph.Formatting.ListKind != ListKind.None
+            if (document.Blocks[blockIndex] is Paragraph paragraph
+                && paragraphMarkers.TryGetValue(paragraph, out var marker))
+                result[blockIndex] = marker;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Produces the same display-only markers keyed by their model paragraph. Unlike the legacy
+    /// top-level index map, this includes paragraphs inside table cells so Word numbering continues
+    /// through ordinary body and table content in document order.
+    /// </summary>
+    public static IReadOnlyDictionary<Paragraph, PreservedNumberingMarkerPlan> BuildByParagraph(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        if (document.Preserved.OriginalNumbering is not { } numbering)
+            return EmptyByParagraph;
+
+        var definitions = ReadDefinitions(numbering);
+        if (definitions.Count == 0)
+            return EmptyByParagraph;
+
+        var counters = new Dictionary<int, int[]>();
+        var result = new Dictionary<Paragraph, PreservedNumberingMarkerPlan>();
+        foreach (var paragraph in EnumerateParagraphs(document))
+        {
+            if (paragraph.Formatting.ListKind != ListKind.None
                 || !TryResolveNumbering(document, paragraph, out var preserved)
                 || !definitions.TryGetValue(preserved.NumId, out var definition))
             {
@@ -49,10 +69,29 @@ public static class PreservedNumberingMarkerPlanner
 
             var marker = FormatMarker(levelDefinition.LevelText, definition, state, level);
             if (!string.IsNullOrEmpty(marker))
-                result[blockIndex] = new PreservedNumberingMarkerPlan(marker, level);
+                result[paragraph] = new PreservedNumberingMarkerPlan(marker, level);
         }
 
         return result;
+    }
+
+    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
+    {
+        foreach (var block in document.Blocks)
+        {
+            if (block is Paragraph paragraph)
+            {
+                yield return paragraph;
+                continue;
+            }
+
+            if (block is not Table table)
+                continue;
+
+            foreach (var cell in table.Rows.SelectMany(row => row.Cells))
+            foreach (var cellParagraph in cell.Paragraphs)
+                yield return cellParagraph;
+        }
     }
 
     private static bool TryResolveNumbering(
@@ -195,6 +234,9 @@ public static class PreservedNumberingMarkerPlanner
 
     private static IReadOnlyDictionary<int, PreservedNumberingMarkerPlan> Empty { get; } =
         new Dictionary<int, PreservedNumberingMarkerPlan>();
+
+    private static IReadOnlyDictionary<Paragraph, PreservedNumberingMarkerPlan> EmptyByParagraph { get; } =
+        new Dictionary<Paragraph, PreservedNumberingMarkerPlan>();
 
     private sealed record NumberingDefinition(IReadOnlyDictionary<int, NumberingLevelDefinition> Levels);
 

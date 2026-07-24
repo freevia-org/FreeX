@@ -76,6 +76,31 @@ public sealed class PreservedNumberingMarkerPlannerTests
         PreservedNumberingMarkerPlanner.Build(document).Should().BeEmpty();
     }
 
+    [Fact]
+    public void BuildByParagraph_ContinuesPreservedNumberingThroughTableCells()
+    {
+        var document = CreateDocument();
+        var before = new Paragraph("Before") { PreservedNumbering = new PreservedNumbering(2, 0) };
+        var inside = new Paragraph("Inside") { PreservedNumbering = new PreservedNumbering(2, 0) };
+        var after = new Paragraph("After") { PreservedNumbering = new PreservedNumbering(2, 0) };
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(inside);
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+
+        document.Blocks.Add(before);
+        document.Blocks.Add(table);
+        document.Blocks.Add(after);
+
+        var byParagraph = PreservedNumberingMarkerPlanner.BuildByParagraph(document);
+        byParagraph[before].Text.Should().Be("Section I.");
+        byParagraph[inside].Text.Should().Be("Section II.");
+        byParagraph[after].Text.Should().Be("Section III.");
+        PreservedNumberingMarkerPlanner.Build(document)[2].Text.Should().Be("Section III.");
+    }
+
     private static TextDocument CreateDocument()
     {
         var document = new TextDocument();

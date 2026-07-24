@@ -8136,6 +8136,7 @@ public sealed class DocumentView : RichTextBox
         var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
             cell => (cell.RowIndex, cell.CellIndex),
             cell => cell.EffectiveFill);
+        var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.BuildByParagraph(document);
 
         DocumentTableCellEffectiveFillPlan EffectiveFillFor(int rowIndex, int cellIndex) =>
             cellEffectiveFills.TryGetValue((rowIndex, cellIndex), out var fillPlan)
@@ -8260,7 +8261,8 @@ public sealed class DocumentView : RichTextBox
                         document,
                         vAlign,
                         rowHeightPx,
-                        cellBorderPlan)));
+                        cellBorderPlan,
+                        preservedNumberingMarkers)));
                 }
                 else if (rowHeightPx is not null)
                 {
@@ -8271,7 +8273,8 @@ public sealed class DocumentView : RichTextBox
                         document,
                         vAlign,
                         rowHeightPx,
-                        cellBorderPlan)));
+                        cellBorderPlan,
+                        preservedNumberingMarkers)));
                 }
                 else if (modelCell.TextDirection != CellTextDirection.Horizontal)
                 {
@@ -8285,7 +8288,7 @@ public sealed class DocumentView : RichTextBox
                         RenderTransformOrigin = new Point(0.5, 0.5),
                         RenderTransform = new RotateTransform(angle)
                     };
-                    foreach (var block in BuildTableCellParagraphs(modelCell, document))
+                    foreach (var block in BuildTableCellParagraphs(modelCell, document, preservedNumberingMarkers))
                     {
                         // Keep each paragraph in a nested FlowDocument so its margins survive rotation.
                         var nested = new System.Windows.Controls.RichTextBox
@@ -8313,7 +8316,7 @@ public sealed class DocumentView : RichTextBox
                     {
                         VerticalAlignment = wpfVAlign
                     };
-                    foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document))
+                    foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document, preservedNumberingMarkers))
                     {
                         var nestedRtb = new System.Windows.Controls.RichTextBox
                         {
@@ -8335,7 +8338,7 @@ public sealed class DocumentView : RichTextBox
                 }
                 else
                 {
-                    foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document))
+                    foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document, preservedNumberingMarkers))
                         wpfCell.Blocks.Add(paraBlock);
                 }
                 wpfRow.Cells.Add(wpfCell);
@@ -8365,7 +8368,10 @@ public sealed class DocumentView : RichTextBox
     // Word suppresses the shared before/after spacing only for adjacent paragraphs in the same
     // cell that resolve to the same contextual style. Keep this sequence local to the cell: table
     // boundaries and the rotated TextBlock path have different layout ownership.
-    private static IReadOnlyList<WpfParagraph> BuildTableCellParagraphs(ModelTableCell cell, TextDocument document)
+    private static IReadOnlyList<WpfParagraph> BuildTableCellParagraphs(
+        ModelTableCell cell,
+        TextDocument document,
+        IReadOnlyDictionary<ModelParagraph, PreservedNumberingMarkerPlan> preservedNumberingMarkers)
     {
         var modelParagraphs = cell.Paragraphs.Count > 0
             ? cell.Paragraphs
@@ -8376,7 +8382,13 @@ public sealed class DocumentView : RichTextBox
 
         foreach (var modelParagraph in modelParagraphs)
         {
-            var wpfParagraph = BuildParagraph(modelParagraph, document, inTableCell: true);
+            var wpfParagraph = BuildParagraph(
+                modelParagraph,
+                document,
+                inTableCell: true,
+                preservedNumberingMarker: preservedNumberingMarkers.TryGetValue(modelParagraph, out var marker)
+                    ? marker.Text
+                    : null);
             if (previousModelParagraph is not null
                 && previousWpfParagraph is not null
                 && SuppressesContextualSpacing(previousModelParagraph, modelParagraph, document))
@@ -8426,7 +8438,8 @@ public sealed class DocumentView : RichTextBox
         TextDocument document,
         TableCellVerticalAlignment verticalAlignment,
         double? minHeightPx,
-        TableCellBorderVisualPlan borderPlan)
+        TableCellBorderVisualPlan borderPlan,
+        IReadOnlyDictionary<ModelParagraph, PreservedNumberingMarkerPlan> preservedNumberingMarkers)
     {
         var grid = new System.Windows.Controls.Grid();
         if (minHeightPx is { } minHeight)
@@ -8456,7 +8469,7 @@ public sealed class DocumentView : RichTextBox
         }
         else
         {
-            foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document))
+            foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document, preservedNumberingMarkers))
             {
                 stack.Children.Add(new System.Windows.Controls.RichTextBox
                 {

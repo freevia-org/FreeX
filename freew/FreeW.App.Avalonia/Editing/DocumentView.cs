@@ -5301,6 +5301,7 @@ public sealed class DocumentView : Control
         var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
             cell => (cell.RowIndex, cell.CellIndex),
             cell => cell.EffectiveFill);
+        var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.BuildByParagraph(_doc);
 
         DocumentTableCellEffectiveFillPlan EffectiveFillFor(int rowIndex, int cellIndex) =>
             cellEffectiveFills.TryGetValue((rowIndex, cellIndex), out var fillPlan)
@@ -5384,7 +5385,7 @@ public sealed class DocumentView : Control
             // AV-TBL: carry the TableCell model reference and actual column index so we can emit
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
             // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
-            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W)> Chars)>> CellParas, RunFormatting Fmt)>();
+            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W)> Chars)>> CellParas, List<double> MarkerInsets, RunFormatting Fmt)>();
             var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var col = 0;
             for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
@@ -5407,15 +5408,21 @@ public sealed class DocumentView : Control
                 // BE2: wrap each cell paragraph independently so multi-paragraph cells render on
                 // separate visual lines instead of collapsing onto one line via a '\n' glyph.
                 var innerW = Math.Max(10, cellWidth - 2 * pad);
-                var cellParas = cell.Paragraphs.Count > 0
-                    ? cell.Paragraphs.Select(p => WrapCellLines(p.PlainText, fmt, innerW)).ToList()
-                    : new List<List<(double Height, List<(char Ch, double W)> Chars)>> { WrapCellLines(string.Empty, fmt, innerW) };
+                var cellParagraphs = cell.Paragraphs.Count > 0
+                    ? cell.Paragraphs
+                    : [new Paragraph()];
+                var markerInsets = cellParagraphs.Select(paragraph =>
+                    preservedNumberingMarkers.TryGetValue(paragraph, out var marker)
+                        ? Build(marker.Text, fmt).WidthIncludingTrailingWhitespace + 6
+                        : 0d).ToList();
+                var cellParas = cellParagraphs.Select((paragraph, paragraphIndex) =>
+                    WrapCellLines(paragraph.PlainText, fmt, Math.Max(10, innerW - markerInsets[paragraphIndex]))).ToList();
                 var lines = cellParas.SelectMany(pl => pl).ToList(); // flattened for height calc
                 var cellHeight = lines.Sum(l => l.Height) + 2 * pad;
                 if (cellHeight > rowHeight)
                     rowHeight = cellHeight;
 
-                measured.Add((cell, cellIndex, col, span, cellParas, fmt));
+                measured.Add((cell, cellIndex, col, span, cellParas, markerInsets, fmt));
                 col += span;
             }
 
@@ -5426,7 +5433,7 @@ public sealed class DocumentView : Control
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
             var rowColLeft = ColumnLeftFor(rowContentY);
 
-            foreach (var (cellModel, cellIndex, startCol, span, cellParas, fmt) in measured)
+            foreach (var (cellModel, cellIndex, startCol, span, cellParas, markerInsets, fmt) in measured)
             {
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
@@ -5489,10 +5496,18 @@ public sealed class DocumentView : Control
                 {
                     var paraLines = cellParas[pIdx];
                     var paraCharOffset = 0;
+                    var markerInset = markerInsets[pIdx];
+                    if (cellModel.Paragraphs.Count > pIdx
+                        && preservedNumberingMarkers.TryGetValue(cellModel.Paragraphs[pIdx], out var preservedMarker))
+                    {
+                        // Markers are visual chrome, so they reserve the first-line leading space but
+                        // are not added to editable table-cell character offsets.
+                        _markers.Add((cellX + pad, ty, preservedMarker.Text, fmt));
+                    }
 
                     foreach (var (lineHeight, chars) in paraLines)
                     {
-                        var tx = cellX + pad;
+                        var tx = cellX + pad + markerInset;
                         foreach (var (ch, w) in chars)
                         {
                             _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, fmt, ch,
