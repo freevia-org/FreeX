@@ -18,6 +18,7 @@ public sealed partial class MainWindow
     private Point _sheetTabDragStart;
     private int? _sheetTabDragPendingToIndex;
     private IPointer? _sheetTabDragPointer;
+    private SheetId? _sheetTabModifierClickSuppressionId;
     private bool _activateSheetDialogOpenOrPending;
 
     private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)
@@ -42,9 +43,8 @@ public sealed partial class MainWindow
             return;
         }
 
-        var selectRange = args.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        var toggle = args.KeyModifiers.HasFlag(KeyModifiers.Control) || args.KeyModifiers.HasFlag(KeyModifiers.Meta);
-        SelectSheet(sheetId, selectRange, toggle);
+        if (BeginSheetTabPointer(sheetId, args.KeyModifiers))
+            args.Handled = true;
 
         ClearSheetTabDragState();
         _sheetTabDragId = sheetId;
@@ -55,6 +55,15 @@ public sealed partial class MainWindow
         _sheetTabsHost.PointerReleased += SheetTabDragPointerReleased;
         _sheetTabsHost.PointerCaptureLost += SheetTabDragPointerCaptureLost;
         args.Pointer.Capture(_sheetTabsHost);
+    }
+
+    private bool BeginSheetTabPointer(SheetId sheetId, KeyModifiers modifiers)
+    {
+        var selectRange = modifiers.HasFlag(KeyModifiers.Shift);
+        var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
+        SelectSheet(sheetId, selectRange, toggle);
+        _sheetTabModifierClickSuppressionId = selectRange || toggle ? sheetId : null;
+        return selectRange || toggle;
     }
 
     private void SheetTabDragPointerMoved(object? sender, PointerEventArgs args)
@@ -73,6 +82,8 @@ public sealed partial class MainWindow
         var current = args.GetPosition(_sheetTabsHost);
         if (Math.Abs(current.X - _sheetTabDragStart.X) < SheetTabDragThreshold)
             return;
+
+        _sheetTabModifierClickSuppressionId = null;
 
         var target = FindSheetTabDragTarget(current, draggedId);
         if (target is not { } dragTarget)
@@ -102,7 +113,26 @@ public sealed partial class MainWindow
         // Detach before Capture(null); Avalonia can synchronously raise PointerCaptureLost while
         // releasing capture, and re-entering this method would leave the drag state half-cleared.
         CommitSheetTabDragDrop();
+        _sheetTabModifierClickSuppressionId = null;
         ClearSheetTabDragState(releasePointer: false);
+    }
+
+    private void CompleteSheetTabClick(SheetId sheetId)
+    {
+        if (_sheetTabModifierClickSuppressionId == sheetId)
+        {
+            _sheetTabModifierClickSuppressionId = null;
+            return;
+        }
+
+        _sheetTabModifierClickSuppressionId = null;
+        SelectSheet(sheetId);
+    }
+
+    internal void RaiseSheetTabModifierClickForTest(SheetId sheetId, KeyModifiers modifiers)
+    {
+        BeginSheetTabPointer(sheetId, modifiers);
+        CompleteSheetTabClick(sheetId);
     }
 
     private void CommitSheetTabDragDrop()

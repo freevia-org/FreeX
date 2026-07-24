@@ -1989,8 +1989,6 @@ public sealed partial class MainWindow : Window
         _sheetTabsScroller.Width = hasOverflow
             ? maxTabsViewportWidth
             : Math.Max(0, Math.Min(contentWidth, maxTabsViewportWidth));
-        var activeIndex = FindActiveSheetTabIndex();
-
         _sheetTabLeftNavButton.IsVisible = hasOverflow;
         _sheetTabRightNavButton.IsVisible = hasOverflow;
         _sheetTabLeftNavButton.IsEnabled = hasOverflow;
@@ -4421,9 +4419,13 @@ public sealed partial class MainWindow : Window
                 Margin = tab.IsActive ? new Thickness(0, -1, 0, 0) : new Thickness(0),
             };
             button.ContextMenu = CreateSheetTabContextMenu(tab);
-            button.PointerPressed += (_, args) => BeginSheetTabPointer(tab.Id, args);
+            button.AddHandler(
+                InputElement.PointerPressedEvent,
+                (_, args) => BeginSheetTabPointer(tab.Id, args),
+                RoutingStrategies.Tunnel,
+                handledEventsToo: true);
             button.KeyDown += (_, args) => HandleSheetTabKeyDown(tab.Id, button, args);
-            button.Click += (_, _) => SelectSheet(tab.Id);
+            button.Click += (_, _) => CompleteSheetTabClick(tab.Id);
             AutomationProperties.SetName(button, tab.Name);
             AutomationProperties.SetHelpText(button, SheetTabContextHelpText);
             panel.Children.Add(button);

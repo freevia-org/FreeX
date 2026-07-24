@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Input;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -81,6 +81,36 @@ public sealed class SheetTabContextCommandGroupPreservationTests
                 changed.Should().BeTrue();
                 window.Session.ActiveSheet.Id.Should().Be(charts.Id);
                 window.Session.IsWorkbookGrouped.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(KeyModifiers.Control)]
+    [InlineData(KeyModifiers.Shift)]
+    public async Task ModifierPointerClick_PreservesTheGroupThroughTheButtonClick(KeyModifiers modifier)
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var workbook = window.Session.Workbook;
+                var first = workbook.Sheets[0];
+                var details = workbook.AddSheet("Details");
+                window.Session.SelectSheet(first.Id);
+
+                window.RaiseSheetTabModifierClickForTest(details.Id, modifier);
+
+                window.Session.ActiveSheet.Id.Should().Be(details.Id);
+                window.Session.IsWorkbookGrouped.Should().BeTrue(
+                    "the modifier press must suppress the tab's ordinary Click selection");
+                window.Session.IsSheetInActiveGroupSelection(first.Id).Should().BeTrue();
+                window.Session.IsSheetInActiveGroupSelection(details.Id).Should().BeTrue();
             }
             finally
             {
