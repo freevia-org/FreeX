@@ -39,6 +39,17 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void DocumentView_UsesAPageRelativeFigureForTheImportedWatermarkBackingTextBox()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("PlainText: \"watermark backing layer\",");
+        source.Should().Contain("return BuildFloatingShapeWrapFigure(marker, run, shape);");
+        source.Should().Contain("VerticalAnchor = FigureVerticalAnchor.ParagraphTop");
+        source.Should().Contain("WPF's zero-height Floater moves the owning paragraph");
+    }
+
+    [Fact]
     public void FidelityRender_EmitsSharedVisualEvidenceManifestAndTrustChecks()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));

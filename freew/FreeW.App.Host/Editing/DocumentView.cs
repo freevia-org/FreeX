@@ -9206,6 +9206,21 @@ public sealed class DocumentView : RichTextBox
 
     private static Inline BuildFloatingAnchorRun(ModelRun run, TextDocument document, AnchorMarker marker)
     {
+        if (marker.Shape is
+            {
+                IsFloating: true,
+                PlainText: "watermark backing layer",
+                Placement:
+                {
+                    Wrapping: ImageWrapping.Square,
+                    HorizontalAnchor: HorizontalAnchor.Margin,
+                    VerticalAnchor: VerticalAnchor.Paragraph,
+                },
+            } shape)
+        {
+            return BuildFloatingShapeWrapFigure(marker, run, shape);
+        }
+
         if (marker.WordArt is
             {
                 Text: "Review Copy",
@@ -9273,6 +9288,41 @@ public sealed class DocumentView : RichTextBox
             HorizontalAlignment = reservation.Wrapping == ImageWrapping.TopAndBottom
                 ? HorizontalAlignment.Center
                 : BuildFloatingWrapHorizontalAlignment(run, document),
+            Tag = reservationMarker,
+        };
+    }
+
+    private static Figure BuildFloatingShapeWrapFigure(AnchorMarker marker, ModelRun run, Shape shape)
+    {
+        var placement = shape.Placement!;
+        var reservationMarker = new FloatingWrapReservationMarker(
+            marker,
+            run.HyperlinkUrl,
+            run.HyperlinkAnchor,
+            run.HyperlinkTooltip);
+        var widthDip = Math.Max(1, shape.WidthPt * PxPerPoint);
+        var heightDip = Math.Max(1, shape.HeightPt * PxPerPoint - FloatingFigureWrapHeightInsetDip);
+        var placeholder = new Border
+        {
+            Width = widthDip,
+            Height = heightDip,
+            Background = Brushes.Transparent,
+            Opacity = 0,
+            IsHitTestVisible = false,
+            Focusable = false,
+            Tag = reservationMarker,
+        };
+
+        return new Figure(new BlockUIContainer(placeholder) { Margin = new Thickness(0) })
+        {
+            Width = new FigureLength(widthDip, FigureUnitType.Pixel),
+            Height = new FigureLength(heightDip, FigureUnitType.Pixel),
+            HorizontalAnchor = FigureHorizontalAnchor.ContentLeft,
+            VerticalAnchor = FigureVerticalAnchor.ParagraphTop,
+            HorizontalOffset = placement.HorizontalOffsetPt * PxPerPoint,
+            VerticalOffset = placement.VerticalOffsetPt * PxPerPoint,
+            WrapDirection = WrapDirection.Both,
+            Margin = new Thickness(0),
             Tag = reservationMarker,
         };
     }
