@@ -511,6 +511,18 @@
   <data name="Ribbon_Command_Picture_Label" xml:space="preserve">
     <value>Picture</value>
   </data>
+  <data name="Ribbon_Command_PictureCropInset_Label" xml:space="preserve">
+    <value>Crop Inset</value>
+  </data>
+  <data name="Ribbon_Command_PictureCropInset_KeyTip" xml:space="preserve">
+    <value>CI</value>
+  </data>
+  <data name="Ribbon_Command_PictureCropReset_Label" xml:space="preserve">
+    <value>Reset Crop</value>
+  </data>
+  <data name="Ribbon_Command_PictureCropReset_KeyTip" xml:space="preserve">
+    <value>CR</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>

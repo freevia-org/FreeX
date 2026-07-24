@@ -820,8 +820,29 @@ public sealed class MainWindowHeadlessTests
         linkIds.Should().Contain("freep.insert-link", "Insert Link command required");
         linkIds.Should().Contain("freep.remove-link", "Remove Link command required");
         illustrationIds.Should().Contain("freep.picture", "Picture command required");
+        illustrationIds.Should().Contain(PictureCropAuthoringPlanner.InsetCommandId, "Crop Inset command required");
+        illustrationIds.Should().Contain(PictureCropAuthoringPlanner.ResetCommandId, "Reset Crop command required");
         illustrationIds.Should().Contain("freep.shape-rectangle", "Rectangle command required");
         illustrationIds.Should().Contain("freep.shape-ellipse", "Ellipse command required");
+    }
+
+    [Fact]
+    public async Task Ribbon_picture_crop_commands_are_registered()
+    {
+        var insetFound = false;
+        var resetFound = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            insetFound = registry.TryGet(PictureCropAuthoringPlanner.InsetCommandId, out _);
+            resetFound = registry.TryGet(PictureCropAuthoringPlanner.ResetCommandId, out _);
+        });
+
+        if (!ran) return;
+        insetFound.Should().BeTrue();
+        resetFound.Should().BeTrue();
     }
 
     [Fact]

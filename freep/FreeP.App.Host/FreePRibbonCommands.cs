@@ -127,6 +127,12 @@ internal static class FreePRibbonCommands
         // ── Insert shapes ────────────────────────────────────────────────────────
 
         RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true, onTablePicker);
+        registry.Register(
+            PictureCropAuthoringPlanner.InsetCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Inset())));
+        registry.Register(
+            PictureCropAuthoringPlanner.ResetCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Reset())));
         RegisterHeaderFooterCommands(registry, editor, onHeaderFooter);
         registry.Register(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
             new ActionRibbonCommand(() => onSmartArtColorPreset?.Invoke(SmartArtColorPreset.ThemeAccents)));

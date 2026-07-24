@@ -83,6 +83,39 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void PictureCropCommands_AreDefinedAndRouteThroughSharedSession()
+    {
+        var definition = FreePRibbon.Build();
+        var illustrationIds = definition.Tabs
+            .Single(tab => tab.Id == "insert")
+            .Groups.Single(group => group.Id == "illustrations")
+            .Controls.Select(control => control.CommandId.Value)
+            .ToArray();
+        Assert.Contains(PictureCropAuthoringPlanner.InsetCommandId, illustrationIds);
+        Assert.Contains(PictureCropAuthoringPlanner.ResetCommandId, illustrationIds);
+
+        var (editor, presentation) = MakeSession();
+        presentation.Slides[0].Shapes.Clear();
+        var picture = new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = [1, 2, 3] }
+        };
+        presentation.Slides[0].Shapes.Add(picture);
+        editor.SelectSlide(0);
+        editor.Select(1);
+        var registry = MakeRegistry(editor);
+
+        Exec(registry, PictureCropAuthoringPlanner.InsetCommandId);
+        Assert.Equal(0.1, picture.PictureFormat!.CropLeft);
+        Assert.Equal(0.1, picture.PictureFormat.CropBottom);
+
+        Exec(registry, PictureCropAuthoringPlanner.ResetCommandId);
+        Assert.Null(picture.PictureFormat);
+    }
+
+    [Fact]
     public void SmartArtExtendedLayouts_AreDefinedAndRoutedByHost()
     {
         var definition = FreePRibbon.Build();
