@@ -631,7 +631,7 @@ public static class DocxWriter
             // discovery order. We therefore reserve indices 1 (default) and 2 (even) for the final section.
             void AddPart(bool isHeader, HeaderFooterType type, HeaderFooter? content)
             {
-                var watermark = isHeader ? page.EffectiveWatermark : null;
+                var watermark = isHeader ? ResolveWordVisibleWatermark(page) : null;
                 var hasWatermark = watermark is not null;
                 if ((content is null || content.IsEmpty) && !hasWatermark)
                     return;
@@ -713,6 +713,21 @@ public static class DocxWriter
                 AddSlot(section, section.HeadersFooters, section.Page, legacyFinal: false);
 
         return parts;
+    }
+
+    // A custom FreeW text-watermark property is editable metadata, not a Word-visible watermark by
+    // itself. Keep the distinction on save: an imported package with no VML shape must not gain one.
+    // Explicit disabled VML remains materialized because its retained source payload is authoritative.
+    private static WatermarkOptions? ResolveWordVisibleWatermark(PageSettings page)
+    {
+        var watermark = page.EffectiveWatermark;
+        if (watermark is not { IsPicture: false, NativeVmlTextPathEnabled: false })
+            return watermark;
+
+        return !string.IsNullOrWhiteSpace(watermark.NativeVmlTextPathXml)
+            || !string.IsNullOrWhiteSpace(watermark.NativeVmlTextShapeTypeXml)
+            ? watermark
+            : null;
     }
 
     /// <summary>
