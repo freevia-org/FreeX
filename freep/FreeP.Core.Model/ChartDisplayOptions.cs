@@ -16,4 +16,6 @@ public sealed record ChartDisplayOptions(
     bool ShowSeriesLabels = false,
     bool ShowLegendKeys = false,
     string? LabelNumberFormat = null,
-    string? LabelSeparator = null);
+    string? LabelSeparator = null,
+    int? BarGapWidthPercent = null,
+    int? BarOverlapPercent = null);

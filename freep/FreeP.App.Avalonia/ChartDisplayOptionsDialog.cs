@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -25,6 +26,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly ComboBox _labelPositionCombo;
     private readonly CheckBox _categoryGridlinesCheck;
     private readonly CheckBox _valueGridlinesCheck;
+    private readonly TextBox _barGapWidthBox;
+    private readonly TextBox _barOverlapBox;
 
     internal ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -92,6 +95,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
             Content = surface.ValueGridlinesLabel,
             IsChecked = _planner.ValueGridlines,
         };
+        _barGapWidthBox = new TextBox { Text = Format(_planner.BarGapWidthPercent), MinWidth = 150 };
+        _barOverlapBox = new TextBox { Text = Format(_planner.BarOverlapPercent), MinWidth = 150 };
 
         var buttons = new StackPanel
         {
@@ -124,6 +129,9 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 MakeRow(surface.SeparatorLabel, _separatorBox),
                 _categoryGridlinesCheck,
                 _valueGridlinesCheck,
+                MakeRow(surface.BarGapWidthLabel, _barGapWidthBox),
+                MakeRow(surface.BarOverlapLabel, _barOverlapBox),
+                new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
                 buttons,
             },
         };
@@ -147,7 +155,9 @@ internal sealed class ChartDisplayOptionsDialog : Window
         bool showSeriesLabels = false,
         bool showLegendKeys = false,
         string? numberFormat = null,
-        string? separator = null)
+        string? separator = null,
+        int? barGapWidthPercent = null,
+        int? barOverlapPercent = null)
     {
         _titleBox.Text = title;
         _legendCombo.SelectedIndex = FindLegendIndex(legend);
@@ -161,6 +171,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
         _categoryGridlinesCheck.IsChecked = categoryGridlines;
         _valueGridlinesCheck.IsChecked = valueGridlines;
+        _barGapWidthBox.Text = Format(barGapWidthPercent);
+        _barOverlapBox.Text = Format(barOverlapPercent);
     }
 
     private void OnOk()
@@ -188,6 +200,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _planner.SetLabelSeparator(_separatorBox.Text);
         _planner.SetCategoryGridlines(_categoryGridlinesCheck.IsChecked == true);
         _planner.SetValueGridlines(_valueGridlinesCheck.IsChecked == true);
+        _planner.SetBarGapWidthPercent(ParseOptionalPercent(_barGapWidthBox.Text, "Bar gap width", 0, 500));
+        _planner.SetBarOverlapPercent(ParseOptionalPercent(_barOverlapBox.Text, "Bar overlap", -100, 100));
     }
 
     private static Control MakeRow(string label, Control control)
@@ -224,4 +238,14 @@ internal sealed class ChartDisplayOptionsDialog : Window
         Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == position).index);
+
+    private static string Format(int? value) => value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static int? ParseOptionalPercent(string? text, string surface, int minimum, int maximum)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value >= minimum && value <= maximum)
+            return value;
+        throw new FormatException($"{surface} must be a whole number from {minimum} to {maximum}, or blank.");
+    }
 }

@@ -13,6 +13,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
     private ChartDataLabels? _oldDataLabels;
     private bool _oldCategoryGridlines;
     private bool _oldValueGridlines;
+    private int? _oldBarGapWidthPercent;
+    private int? _oldBarOverlapPercent;
 
     public SetChartDisplayOptionsCommand(
         int slideIndex,
@@ -38,12 +40,16 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         _oldDataLabels = CloneDataLabels(chart.DataLabels);
         _oldCategoryGridlines = chart.CategoryAxis.HasMajorGridlines;
         _oldValueGridlines = chart.ValueAxis.HasMajorGridlines;
+        _oldBarGapWidthPercent = chart.BarGapWidthPercent;
+        _oldBarOverlapPercent = chart.BarOverlapPercent;
 
         chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
         chart.HasAutomaticTitle = false;
         chart.Legend = _newOptions.Legend;
         chart.CategoryAxis.HasMajorGridlines = _newOptions.CategoryGridlines;
         chart.ValueAxis.HasMajorGridlines = _newOptions.ValueGridlines;
+        chart.BarGapWidthPercent = Normalize(_newOptions.BarGapWidthPercent, 0, 500);
+        chart.BarOverlapPercent = Normalize(_newOptions.BarOverlapPercent, -100, 100);
 
         if (chart.DataLabels is not null)
         {
@@ -92,6 +98,8 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
         chart.DataLabels = CloneDataLabels(_oldDataLabels);
         chart.CategoryAxis.HasMajorGridlines = _oldCategoryGridlines;
         chart.ValueAxis.HasMajorGridlines = _oldValueGridlines;
+        chart.BarGapWidthPercent = _oldBarGapWidthPercent;
+        chart.BarOverlapPercent = _oldBarOverlapPercent;
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -119,4 +127,7 @@ public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
                     FontFamily = source.TextStyle.FontFamily,
                 },
         };
+
+    private static int? Normalize(int? value, int minimum, int maximum) =>
+        value is null ? null : Math.Clamp(value.Value, minimum, maximum);
 }

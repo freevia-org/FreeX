@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
@@ -22,6 +23,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly ComboBox _labelPositionCombo;
     private readonly CheckBox _categoryGridlinesCheck;
     private readonly CheckBox _valueGridlinesCheck;
+    private readonly TextBox _barGapWidthBox;
+    private readonly TextBox _barOverlapBox;
 
     public ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -90,6 +93,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             Content = surface.ValueGridlinesLabel,
             IsChecked = _planner.ValueGridlines,
         };
+        _barGapWidthBox = new TextBox { Text = Format(_planner.BarGapWidthPercent), MinWidth = 160 };
+        _barOverlapBox = new TextBox { Text = Format(_planner.BarOverlapPercent), MinWidth = 160 };
 
         var buttons = new StackPanel
         {
@@ -117,6 +122,9 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(MakeRow(surface.SeparatorLabel, _separatorBox));
         content.Children.Add(_categoryGridlinesCheck);
         content.Children.Add(_valueGridlinesCheck);
+        content.Children.Add(MakeRow(surface.BarGapWidthLabel, _barGapWidthBox));
+        content.Children.Add(MakeRow(surface.BarOverlapLabel, _barOverlapBox));
+        content.Children.Add(new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
     }
@@ -148,6 +156,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetLabelSeparator(_separatorBox.Text);
         _planner.SetCategoryGridlines(_categoryGridlinesCheck.IsChecked == true);
         _planner.SetValueGridlines(_valueGridlinesCheck.IsChecked == true);
+        _planner.SetBarGapWidthPercent(ParseOptionalPercent(_barGapWidthBox.Text, "Bar gap width", 0, 500));
+        _planner.SetBarOverlapPercent(ParseOptionalPercent(_barOverlapBox.Text, "Bar overlap", -100, 100));
     }
 
     private static StackPanel MakeRow(string label, Control control)
@@ -171,4 +181,14 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == position).index);
+
+    private static string Format(int? value) => value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static int? ParseOptionalPercent(string? text, string surface, int minimum, int maximum)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value >= minimum && value <= maximum)
+            return value;
+        throw new FormatException($"{surface} must be a whole number from {minimum} to {maximum}, or blank.");
+    }
 }
