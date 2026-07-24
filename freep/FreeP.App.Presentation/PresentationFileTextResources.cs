@@ -6,6 +6,12 @@ namespace FreeP.App.Compositor;
 public static class PresentationFileTextResources
 {
     public static string PictureFileTypeName => Loc.Get("File_PictureFileTypeName");
+    public static string VideoFileTypeName => Loc.Get("File_VideoFileTypeName");
+    public static string AudioFileTypeName => Loc.Get("File_AudioFileTypeName");
+    public static string InsertVideoCommand => Loc.Get("File_InsertVideoCommand");
+    public static string InsertVideoPickerTitle => Loc.Get("File_InsertVideoPickerTitle");
+    public static string InsertAudioCommand => Loc.Get("File_InsertAudioCommand");
+    public static string InsertAudioPickerTitle => Loc.Get("File_InsertAudioPickerTitle");
 
     public static SisterAppFileTextSpec Presentation => new(
         OpenPickerTitle: Loc.Get("File_OpenPresentationPickerTitle"),

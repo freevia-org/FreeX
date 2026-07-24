@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Windows;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
@@ -451,6 +452,25 @@ internal static class FreePRibbonCommands
                 continue;
             }
 
+            if (plan.RequiresMediaPayload)
+            {
+                if (!includePictureCommand)
+                {
+                    continue;
+                }
+
+                var isVideo = plan.CommandId == SlideObjectInsertionPlanner.VideoCommandId;
+                registry.Register(plan.CommandId, new ActionRibbonCommand(() =>
+                {
+                    var payload = TryPickMediaPayload(isVideo);
+                    if (payload is not null)
+                    {
+                        SlideObjectInsertionPlanner.Apply(editor, plan, mediaPayload: payload);
+                    }
+                }));
+                continue;
+            }
+
             registry.Register(plan.CommandId, new ActionRibbonCommand(() =>
                 SlideObjectInsertionPlanner.Apply(editor, plan)));
         }
@@ -472,6 +492,35 @@ internal static class FreePRibbonCommands
         {
             var bytes = System.IO.File.ReadAllBytes(result.FileName);
             return SlideObjectInsertionPlanner.CreatePicturePayload(bytes, result.FileName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static SlideObjectMediaPayload? TryPickMediaPayload(bool isVideo)
+    {
+        var result = WpfFileDialogService.ShowOpenDialog(
+            owner: null,
+            filter: isVideo
+                ? $"{PresentationFileTextResources.VideoFileTypeName}|*.mp4;*.mov;*.avi;*.wmv;*.m4v|All files|*.*"
+                : $"{PresentationFileTextResources.AudioFileTypeName}|*.mp3;*.m4a;*.wav;*.wma|All files|*.*",
+            title: isVideo
+                ? PresentationFileTextResources.InsertVideoPickerTitle
+                : PresentationFileTextResources.InsertAudioPickerTitle);
+
+        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
+        {
+            return null;
+        }
+
+        try
+        {
+            return SlideObjectInsertionPlanner.CreateMediaPayload(
+                File.ReadAllBytes(result.FileName),
+                result.FileName,
+                isVideo);
         }
         catch
         {

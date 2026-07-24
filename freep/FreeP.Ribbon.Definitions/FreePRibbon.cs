@@ -292,6 +292,8 @@ public static class FreePRibbon
         tab.Group("illustrations", FreePRibbonText.IllustrationsGroupLabel, FreePRibbonText.IllustrationsGroupKeyTip, 90, group =>
         {
             group.Large("freep.picture", FreePRibbonText.PictureLabel, RibbonCommandIconKind.Picture, FreePRibbonText.PictureKeyTip);
+            group.Medium("freep.video", FreePRibbonText.VideoLabel, RibbonCommandIconKind.Picture, FreePRibbonText.VideoKeyTip);
+            group.Medium("freep.audio", FreePRibbonText.AudioLabel, RibbonCommandIconKind.Picture, FreePRibbonText.AudioKeyTip);
             group.Medium("freep.shape-rectangle", FreePRibbonText.ShapeRectangleLabel, RibbonCommandIconKind.Rectangle, FreePRibbonText.ShapeRectangleKeyTip);
             group.Medium("freep.shape-ellipse", FreePRibbonText.ShapeEllipseLabel, RibbonCommandIconKind.Ellipse, FreePRibbonText.ShapeEllipseKeyTip);
         });

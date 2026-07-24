@@ -1189,4 +1189,16 @@
   <data name="File_PictureFileTypeName" xml:space="preserve">
     <value>Images</value>
   </data>
+  <data name="Ribbon_Command_Video_Label" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="Ribbon_Command_Video_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Command_Audio_Label" xml:space="preserve">
+    <value>Audio</value>
+  </data>
+  <data name="Ribbon_Command_Audio_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
 </root>

@@ -67,6 +67,16 @@ public sealed partial class MainWindow : Window
             PresentationFileTextResources.PictureFileTypeName,
             ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg", "*.wmf", "*.emf"],
             ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml", "image/x-wmf", "image/x-emf"]);
+    private static readonly FilePickerFileType VideoFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            PresentationFileTextResources.VideoFileTypeName,
+            ["*.mp4", "*.mov", "*.avi", "*.wmv", "*.m4v"],
+            ["video/mp4", "video/quicktime", "video/x-msvideo", "video/x-ms-wmv", "video/x-m4v"]);
+    private static readonly FilePickerFileType AudioFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            PresentationFileTextResources.AudioFileTypeName,
+            ["*.mp3", "*.m4a", "*.wav", "*.wma"],
+            ["audio/mpeg", "audio/mp4", "audio/wav", "audio/x-ms-wma"]);
 
     private static readonly (string CommandId, Action<EditingSession> Execute)[] ArrangeCommandRoutes =
     [
@@ -2025,6 +2035,13 @@ public sealed partial class MainWindow : Window
                 continue;
             }
 
+            if (plan.RequiresMediaPayload)
+            {
+                var isVideo = plan.CommandId == SlideObjectInsertionPlanner.VideoCommandId;
+                r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertMediaFromFileAsync(isVideo)));
+                continue;
+            }
+
             r.Register(plan.CommandId, new ActionRibbonCommand(() =>
                 SlideObjectInsertionPlanner.Apply(Editor, plan)));
         }
@@ -2568,6 +2585,54 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
+        }
+    }
+
+    private async Task InsertMediaFromFileAsync(bool isVideo)
+    {
+        var command = isVideo
+            ? PresentationFileTextResources.InsertVideoCommand
+            : PresentationFileTextResources.InsertAudioCommand;
+        var pickerTitle = isVideo
+            ? PresentationFileTextResources.InsertVideoPickerTitle
+            : PresentationFileTextResources.InsertAudioPickerTitle;
+
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(command);
+            return;
+        }
+
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                pickerTitle,
+                [isVideo ? VideoFileType : AudioFileType]));
+
+        if (file is null)
+            return;
+
+        try
+        {
+            await using var source = await file.OpenReadAsync();
+            using var memory = new MemoryStream();
+            await source.CopyToAsync(memory);
+
+            var payload = SlideObjectInsertionPlanner.CreateMediaPayload(memory.ToArray(), file.Name, isVideo);
+            var plan = isVideo
+                ? SlideObjectInsertionPlanner.VideoCommandId
+                : SlideObjectInsertionPlanner.AudioCommandId;
+            var added = SlideObjectInsertionPlanner.ApplyCommand(
+                Editor,
+                plan,
+                mediaPayload: payload);
+
+            if (added is not null)
+                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(command, ex.Message);
         }
     }
 

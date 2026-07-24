@@ -779,6 +779,41 @@ public sealed class EditingSession
         return shape;
     }
 
+    /// <summary>
+    /// Creates and inserts an embedded audio or video shape onto the current slide.
+    /// The media bytes are retained by the model and written by the native PPTX package
+    /// writer; playback remains a host concern.
+    /// </summary>
+    public SlideShape InsertMedia(
+        byte[] mediaBytes,
+        bool isVideo,
+        string contentType)
+    {
+        ArgumentNullException.ThrowIfNull(mediaBytes);
+        if (mediaBytes.Length == 0)
+            throw new ArgumentException("Media payload cannot be empty.", nameof(mediaBytes));
+
+        var (x, y, cx, cy) = DefaultShapeBounds();
+        var shape = new SlideShape
+        {
+            Id = NextShapeId(),
+            Name = isVideo ? "Video" : "Audio",
+            Kind = SlideShapeKind.Media,
+            OffsetXEmu = x,
+            OffsetYEmu = y,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            Media = new MediaInfo
+            {
+                IsVideo = isVideo,
+                Bytes = mediaBytes.ToArray(),
+                ContentType = contentType,
+            },
+        };
+        AddShape(shape);
+        return shape;
+    }
+
     // ── Clipboard — shapes ────────────────────────────────────────────────────────
 
     /// <summary>

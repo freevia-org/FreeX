@@ -28,6 +28,12 @@
   <data name="File_InsertedFormat" xml:space="preserve"><value>Inserted {0}</value></data>
   <data name="File_InsertPictureCommand" xml:space="preserve"><value>Insert picture</value></data>
   <data name="File_InsertPicturePickerTitle" xml:space="preserve"><value>Insert Picture</value></data>
+  <data name="File_VideoFileTypeName" xml:space="preserve"><value>Video files</value></data>
+  <data name="File_AudioFileTypeName" xml:space="preserve"><value>Audio files</value></data>
+  <data name="File_InsertVideoCommand" xml:space="preserve"><value>Insert video</value></data>
+  <data name="File_InsertVideoPickerTitle" xml:space="preserve"><value>Insert Video</value></data>
+  <data name="File_InsertAudioCommand" xml:space="preserve"><value>Insert audio</value></data>
+  <data name="File_InsertAudioPickerTitle" xml:space="preserve"><value>Insert Audio</value></data>
   <data name="File_OpenCommand" xml:space="preserve"><value>Open</value></data>
   <data name="File_OpenedFormat" xml:space="preserve"><value>Opened {0}</value></data>
   <data name="File_SaveAsTitleFormat" xml:space="preserve"><value>Save as {0}</value></data>

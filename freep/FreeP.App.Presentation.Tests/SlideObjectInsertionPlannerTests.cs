@@ -23,6 +23,8 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.RectangleCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.EllipseCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.PictureCommandId, SlideObjectInsertionKind.Picture)]
+    [InlineData(SlideObjectInsertionPlanner.VideoCommandId, SlideObjectInsertionKind.Media)]
+    [InlineData(SlideObjectInsertionPlanner.AudioCommandId, SlideObjectInsertionKind.Media)]
     [InlineData(SlideObjectInsertionPlanner.Table3x3CommandId, SlideObjectInsertionKind.Table)]
     [InlineData(SlideObjectInsertionPlanner.Table2x2CommandId, SlideObjectInsertionKind.Table)]
     [InlineData(SlideObjectInsertionPlanner.Table4x4CommandId, SlideObjectInsertionKind.Table)]
@@ -124,6 +126,66 @@ public sealed class SlideObjectInsertionPlannerTests
         added.Picture.Should().NotBeNull();
         added.Picture!.Bytes.Should().Equal(1, 2, 3);
         added.Picture.ContentType.Should().Be("image/jpeg");
+    }
+
+    [Theory]
+    [InlineData(SlideObjectInsertionPlanner.VideoCommandId, true, "clip.mp4", "video/mp4")]
+    [InlineData(SlideObjectInsertionPlanner.AudioCommandId, false, "narration.wav", "audio/wav")]
+    public void ApplyCommand_MediaWithPayload_InsertsEmbeddedMedia(
+        string commandId,
+        bool isVideo,
+        string fileName,
+        string expectedContentType)
+    {
+        var editor = MakeSession();
+        var payload = SlideObjectInsertionPlanner.CreateMediaPayload(
+            new byte[] { 9, 8, 7 },
+            fileName,
+            isVideo);
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            commandId,
+            mediaPayload: payload);
+
+        added.Should().NotBeNull();
+        added!.Kind.Should().Be(SlideShapeKind.Media);
+        added.Media.Should().NotBeNull();
+        added.Media!.IsVideo.Should().Be(isVideo);
+        added.Media.ContentType.Should().Be(expectedContentType);
+        added.Media.Bytes.Should().Equal(9, 8, 7);
+    }
+
+    [Theory]
+    [InlineData("clip.mp4", true, "video/mp4")]
+    [InlineData("clip.mov", true, "video/quicktime")]
+    [InlineData("narration.mp3", false, "audio/mpeg")]
+    [InlineData("narration.m4a", false, "audio/mp4")]
+    [InlineData("unknown", true, "video/mp4")]
+    [InlineData("unknown", false, "audio/mpeg")]
+    public void InferMediaContentType_MapsCommonExtensions(
+        string fileName,
+        bool isVideo,
+        string expectedContentType)
+    {
+        SlideObjectInsertionPlanner.InferMediaContentType(fileName, isVideo)
+            .Should()
+            .Be(expectedContentType);
+    }
+
+    [Fact]
+    public void ApplyCommand_MediaWithoutPayload_IsNoOp()
+    {
+        var editor = MakeSession();
+        var before = editor.CurrentSlide!.Shapes.Count;
+
+        SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.VideoCommandId)
+            .Should()
+            .BeNull();
+
+        editor.CurrentSlide.Shapes.Should().HaveCount(before);
     }
 
     [Theory]

@@ -137,6 +137,10 @@ internal static class FreePRibbonText
     public static string IllustrationsGroupKeyTip => Get("Ribbon_Group_Illustrations_KeyTip");
     public static string PictureLabel => Get("Ribbon_Command_Picture_Label");
     public static string PictureKeyTip => Get("Ribbon_Command_Picture_KeyTip");
+    public static string VideoLabel => Get("Ribbon_Command_Video_Label");
+    public static string VideoKeyTip => Get("Ribbon_Command_Video_KeyTip");
+    public static string AudioLabel => Get("Ribbon_Command_Audio_Label");
+    public static string AudioKeyTip => Get("Ribbon_Command_Audio_KeyTip");
     public static string ShapeRectangleLabel => Get("Ribbon_Command_ShapeRectangle_Label");
     public static string ShapeRectangleKeyTip => Get("Ribbon_Command_ShapeRectangle_KeyTip");
     public static string ShapeEllipseLabel => Get("Ribbon_Command_ShapeEllipse_Label");

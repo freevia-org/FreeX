@@ -351,6 +351,22 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void InsertMedia_AddsEmbeddedVideoAndIsUndoable()
+    {
+        var sess = Make();
+        var shape = sess.InsertMedia(new byte[] { 1, 2, 3 }, true, "video/mp4");
+
+        shape.Kind.Should().Be(SlideShapeKind.Media);
+        shape.Media!.IsVideo.Should().BeTrue();
+        sess.CurrentSlide!.Shapes.Should().ContainSingle();
+
+        sess.Undo();
+        sess.CurrentSlide.Shapes.Should().BeEmpty();
+        sess.Redo();
+        sess.CurrentSlide.Shapes.Should().ContainSingle();
+    }
+
+    [Fact]
     public void InsertDefaultRectangle_AddsRectangle()
     {
         var sess  = Make();

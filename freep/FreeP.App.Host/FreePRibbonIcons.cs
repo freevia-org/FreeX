@@ -45,6 +45,8 @@ internal static class FreePRibbonIcons
             // Insert
             ["freep.text-box"] = RibbonCommandIconKind.TextBox,
             ["freep.picture"] = RibbonCommandIconKind.Picture,
+            ["freep.video"] = RibbonCommandIconKind.Picture,
+            ["freep.audio"] = RibbonCommandIconKind.Picture,
             ["freep.shape-rectangle"] = RibbonCommandIconKind.Rectangle,
             ["freep.shape-ellipse"] = RibbonCommandIconKind.Ellipse,
 
