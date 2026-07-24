@@ -428,6 +428,12 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
                 FreePRibbonText.SmartArtBasicHierarchyCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtBasicHierarchyCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.HorizontalHierarchyLayoutCommandId,
+                FreePRibbonText.SmartArtHorizontalHierarchyCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtHorizontalHierarchyCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.OrgChartLayoutCommandId,
+                FreePRibbonText.SmartArtOrgChartCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtOrgChartCommand.KeyTip);
         });
         tab.Group("smartart-styles", FreePRibbonText.SmartArtStylesGroup.Label, FreePRibbonText.SmartArtStylesGroup.KeyTip, 80, group =>
         {

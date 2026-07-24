@@ -772,6 +772,18 @@
   <data name="Ribbon_Command_SmartArtBasicHierarchy_KeyTip" xml:space="preserve">
     <value>H</value>
   </data>
+  <data name="Ribbon_Command_SmartArtHorizontalHierarchy_Label" xml:space="preserve">
+    <value>Horizontal Hierarchy</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtHorizontalHierarchy_KeyTip" xml:space="preserve">
+    <value>H</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtOrgChart_Label" xml:space="preserve">
+    <value>Organization Chart</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtOrgChart_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
   <data name="Ribbon_Group_SmartArtStyles_Label" xml:space="preserve">
     <value>SmartArt Styles</value>
   </data>
