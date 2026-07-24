@@ -711,12 +711,40 @@ public sealed class ChartSmartArtContextualTabTests
             view.SelectFloating(bi, ri);
 
             var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
-            registry.TryGet(new RibbonCommandId("freew.smartart-colors-mono-grey"), out var cmd);
+            registry.TryGet(new RibbonCommandId("freew.smartart-colors-mono1"), out var cmd);
             cmd!.Execute(RibbonCommandContext.Empty);
             after = ((Paragraph)doc.Blocks[0]).Runs[ri].SmartArt!.ColorSchemeId;
         });
         if (!ran) return;
-        after.Should().Be("mono-grey", "smartart-colors-mono-grey must set the scheme id");
+        after.Should().Be("mono1", "smartart-colors-mono1 must set the SmartArt scheme id");
+    }
+
+    [Fact]
+    public async Task SmartArt_color_catalog_commands_apply_each_shared_scheme()
+    {
+        var applied = new List<string>();
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingSmartArt();
+            var smartArt = ((Paragraph)doc.Blocks[bi]).Runs[ri].SmartArt!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+            foreach (var scheme in SmartArtColorScheme.Catalog)
+            {
+                registry.TryGet(new RibbonCommandId($"freew.smartart-colors-{scheme.Id}"), out var command)
+                    .Should().BeTrue();
+                command!.Execute(RibbonCommandContext.Empty);
+                smartArt.ColorSchemeId.Should().Be(scheme.Id);
+                applied.Add(scheme.Id);
+            }
+        });
+
+        if (!ran) return;
+        applied.Should().Equal(SmartArtColorScheme.Catalog.Select(scheme => scheme.Id));
     }
 
     [Fact]
@@ -746,6 +774,10 @@ public sealed class ChartSmartArtContextualTabTests
         layouts.Menu.Items.Select(item => item.CommandId!.Value)
             .Should().Equal(SmartArtLayoutPreset.Catalog.Select(preset =>
                 new RibbonCommandId($"freew.smartart-layout-{preset.Id}")));
+        var colors = tab.FindGroup("smartart-styles")!.Controls.OfType<RibbonDropdown>().Single();
+        colors.Menu.Items.Select(item => item.CommandId!.Value)
+            .Should().Equal(SmartArtColorScheme.Catalog.Select(scheme =>
+                new RibbonCommandId($"freew.smartart-colors-{scheme.Id}")));
     }
 
     [Fact]
@@ -924,7 +956,7 @@ public sealed class ChartSmartArtContextualTabTests
             {
                 "freew.chart-type-bar", "freew.chart-style-3", "freew.chart-colors-colorful2",
                 "freew.chart-toggle-legend", "freew.chart-edit-data", "freew.chart-size",
-                "freew.smartart-layout-cycle", "freew.smartart-colors-mono-blue",
+                "freew.smartart-layout-cycle", "freew.smartart-colors-mono1",
             })
             {
                 registry.TryGet(new RibbonCommandId(id), out var cmd);

@@ -289,11 +289,11 @@ internal static class FreeWAvaloniaRibbonDefinition
             .ToArray());
 
     /// <summary>
-    /// AV-CHARTTAB: SmartArt Design &gt; Change Colors dropdown — reuses the chart colour-scheme catalog
-    /// (the same six-colour palettes). Command ids are <c>freew.smartart-colors-&lt;id&gt;</c>.
+    /// AV-CHARTTAB: SmartArt Design &gt; Change Colors dropdown. SmartArt native color-scheme ids differ
+    /// from chart color-scheme ids. Command ids are <c>freew.smartart-colors-&lt;id&gt;</c>.
     /// </summary>
     private static RibbonMenu BuildSmartArtColorsMenu() =>
-        new(ChartColorScheme.Catalog
+        new(SmartArtColorScheme.Catalog
             .Select(s => new RibbonMenuItem(s.Name, new RibbonCommandId($"freew.smartart-colors-{s.Id}")))
             .ToArray());
 
