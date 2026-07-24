@@ -79,6 +79,31 @@ public class WordArtRoundTripTests
     }
 
     [Fact]
+    public void FloatingWordArtTransform_RoundTripsAndEmitsDrawingMlAttributes()
+    {
+        var wordArt = new WordArt("FreeW", WordArtStyle.GlowBlue, 30)
+        {
+            WidthPt = 93,
+            HeightPt = 48,
+            RotationAngle = 45,
+            FlipH = true,
+            FlipV = true,
+            Placement = new FloatingPlacement { Wrapping = ImageWrapping.InFront }
+        };
+
+        var document = DocumentWith(wordArt);
+        var xfrm = WriteDocumentXml(document).Descendants(Wps + "spPr").Single().Element(A + "xfrm")!;
+        var read = RoundTrippedWordArt(document);
+
+        xfrm.Attribute("rot")!.Value.Should().Be("2700000");
+        xfrm.Attribute("flipH")!.Value.Should().Be("1");
+        xfrm.Attribute("flipV")!.Value.Should().Be("1");
+        read.RotationAngle.Should().Be(45);
+        read.FlipH.Should().BeTrue();
+        read.FlipV.Should().BeTrue();
+    }
+
+    [Fact]
     public void FillBlue_EmitsSolidFillOnShapeProperties()
     {
         var xml = WriteDocumentXml(DocumentWith(WordArt.Create("Solid", WordArtStyle.FillBlue)));

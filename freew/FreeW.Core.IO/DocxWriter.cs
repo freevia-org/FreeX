@@ -4135,10 +4135,17 @@ public static class DocxWriter
         var name = $"WordArt{(uint)docPrId}";
 
         // A plain text-box rect carries the WordArt; the decorative effects live on the run's a:rPr.
-        var spPr = new XElement(Wps + "spPr",
-            new XElement(A + "xfrm",
+        var wordArtXfrm = new XElement(A + "xfrm",
                 new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
-                new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
+                new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy)));
+        if (wordArt.RotationAngle != 0)
+            wordArtXfrm.Add(new XAttribute("rot", (long)Math.Round(wordArt.RotationAngle * 60000)));
+        if (wordArt.FlipH)
+            wordArtXfrm.Add(new XAttribute("flipH", "1"));
+        if (wordArt.FlipV)
+            wordArtXfrm.Add(new XAttribute("flipV", "1"));
+        var spPr = new XElement(Wps + "spPr",
+            wordArtXfrm,
             new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
                 new XElement(A + "avLst")));
         foreach (var effect in WordArtShapeProperties(wordArt.Style))

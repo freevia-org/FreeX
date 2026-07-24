@@ -100,6 +100,27 @@ public sealed class DocumentViewFloatingSelectionTests
         return (doc, 0, 1);
     }
 
+    private static (TextDocument Doc, int BlockIdx, int RunIdx) MakeDocWithFloatingWordArt()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Body text.", RunFormatting.Default));
+        var wordArt = new WordArt("Transform", WordArtStyle.GlowBlue, 36)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 36,
+                ZOrderIndex = 1,
+            },
+        };
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { WordArt = wordArt });
+        doc.Blocks.Add(para);
+        return (doc, 0, 1);
+    }
+
     private static TextDocument MakeDocWithFloatingImageAndShape()
     {
         var doc = TextDocument.CreateEmpty();
@@ -441,6 +462,38 @@ public sealed class DocumentViewFloatingSelectionTests
         if (!ran) return;
         Assert.Equal(45,  angleAfter);
         Assert.Equal(0.0, angleReverted);
+    }
+
+    [Fact]
+    public async Task RotateAndFlipSelectedFloating_updates_wordart_transform_and_is_undoable()
+    {
+        double angleAfter = 0, angleReverted = 0;
+        bool flipAfter = false, flipReverted = true;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingWordArt();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.RotateSelectedFloating(45);
+            view.FlipSelectedFloating(horizontal: true);
+            var wordArt = ((Paragraph)doc.Blocks[bi]).Runs[ri].WordArt!;
+            angleAfter = wordArt.RotationAngle;
+            flipAfter = wordArt.FlipH;
+
+            view.Undo();
+            view.Undo();
+            angleReverted = wordArt.RotationAngle;
+            flipReverted = wordArt.FlipH;
+        });
+        if (!ran) return;
+
+        Assert.Equal(45, angleAfter);
+        Assert.True(flipAfter);
+        Assert.Equal(0.0, angleReverted);
+        Assert.False(flipReverted);
     }
 
     [Fact]

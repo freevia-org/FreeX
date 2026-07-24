@@ -260,9 +260,9 @@ public static class DrawingObjectVisualPlanner
             snapshot.Wrapping,
             snapshot.ZOrderIndex,
             snapshot.BehindText,
-            RotationAngle: 0,
-            FlipH: false,
-            FlipV: false,
+            RotationAngle: wordArt.RotationAngle,
+            FlipH: wordArt.FlipH,
+            FlipV: wordArt.FlipV,
             GeometryKind: null,
             CustomGeometry: null,
             Fill: DrawingObjectFillPlan.None,
@@ -528,7 +528,7 @@ public static class DrawingObjectVisualPlanner
     private static DocumentFloatingObjectSnapshot ChildSnapshot(
         DocumentFloatingObjectSnapshot groupSnapshot,
         DocumentFloatingGroupChildSnapshot childSnapshot,
-        WordArt _) =>
+        WordArt wordArt) =>
         new(
             DocumentFloatingObjectKind.WordArt,
             groupSnapshot.BlockIndex,
@@ -536,7 +536,10 @@ public static class DrawingObjectVisualPlanner
             childSnapshot.Rect,
             groupSnapshot.BehindText,
             groupSnapshot.ZOrderIndex,
-            groupSnapshot.Wrapping);
+            groupSnapshot.Wrapping,
+            wordArt.RotationAngle,
+            wordArt.FlipH,
+            wordArt.FlipV);
 
     private static DocumentFloatingObjectSnapshot ChildSnapshot(
         DocumentFloatingObjectSnapshot groupSnapshot,

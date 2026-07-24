@@ -103,6 +103,15 @@ public sealed class WordArt
     public double? WidthPt { get; set; }
     public double? HeightPt { get; set; }
 
+    /// <summary>DrawingML rotation in degrees, applied about the WordArt bounds centre.</summary>
+    public double RotationAngle { get; set; }
+
+    /// <summary>Whether the WordArt is mirrored horizontally about its bounds centre.</summary>
+    public bool FlipH { get; set; }
+
+    /// <summary>Whether the WordArt is mirrored vertically about its bounds centre.</summary>
+    public bool FlipV { get; set; }
+
     /// <summary>
     /// Accessibility description (maps onto <c>wp:docPr/@descr</c>). Null means no alt text.
     /// Mirrors <see cref="InlineImage.AltText"/> and <see cref="Shape.AltText"/>.

@@ -1199,7 +1199,10 @@ public static class DocumentViewLayoutPlanner
                     EstimateWordArtHeightPt(wordArt),
                     defaultWidthPt: 72,
                     defaultHeightPt: 40,
-                    wordArtPlacement);
+                    wordArtPlacement,
+                    wordArt.RotationAngle,
+                    wordArt.FlipH,
+                    wordArt.FlipV);
             }
             else if (run.SmartArt is { IsFloating: true, Placement: { } smartArtPlacement } smartArt)
             {

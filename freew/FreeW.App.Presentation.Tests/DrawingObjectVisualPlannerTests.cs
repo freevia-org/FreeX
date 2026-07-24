@@ -59,6 +59,34 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
+    public void WordArtPlan_UsesTheWordArtCentreTransform()
+    {
+        var wordArt = new WordArt("Transform", WordArtStyle.GlowBlue, 36)
+        {
+            RotationAngle = 30,
+            FlipH = true,
+            FlipV = true,
+            Placement = new FloatingPlacement { Wrapping = ImageWrapping.InFront }
+        };
+
+        var plan = DrawingObjectVisualPlanner.BuildVisualPlan(
+            wordArt,
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.WordArt,
+                BlockIndex: 0,
+                RunIndex: 1,
+                new DocumentFloatRect(10, 20, 200, 96),
+                BehindText: false,
+                ZOrderIndex: 7,
+                ImageWrapping.InFront));
+
+        plan.Kind.Should().Be(DrawingObjectVisualKind.WordArt);
+        plan.RotationAngle.Should().Be(30);
+        plan.FlipH.Should().BeTrue();
+        plan.FlipV.Should().BeTrue();
+    }
+
+    [Fact]
     public void ShapePlan_NormalizesEffectIntentForThinHostRenderers()
     {
         var shape = new Shape(ShapeKind.Ellipse, widthPt: 90, heightPt: 45, fillColorHex: "#00AA11")

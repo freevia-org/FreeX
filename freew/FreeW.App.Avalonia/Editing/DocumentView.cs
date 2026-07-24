@@ -7292,7 +7292,7 @@ public sealed class DocumentView : Control
     /// FlipH || FlipV</c>, flip-then-rotate about the rect centre). Only <see cref="InlineImage"/> and
     /// <see cref="Shape"/> carry rotation/flip today; every other floating kind (Chart/WordArt/SmartArt/
     /// Group) has none, so they fall back to the identity (0, false, false) — same as an unrotated image
-    /// or shape.
+    /// shape. Drawing groups and WordArt use the same centre transform contract.
     /// </summary>
     private (double Angle, bool FlipH, bool FlipV) GetFloatRotation(int blockIndex, int runIndex, string kind)
     {
@@ -7305,6 +7305,7 @@ public sealed class DocumentView : Control
         {
             "Image" when run.Image is { } img => (img.RotationAngle, img.FlipH, img.FlipV),
             "Shape" when run.Shape is { } shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
+            "WordArt" when run.WordArt is { } wordArt => (wordArt.RotationAngle, wordArt.FlipH, wordArt.FlipV),
             "Group" when run.DrawingGroup is { } group => (group.RotationAngle, group.FlipH, group.FlipV),
             _ => (0, false, false),
         };
@@ -8321,7 +8322,7 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Rotate/flip the selected floating object (Images and Shapes only; other kinds are no-ops).
+    /// Rotate the selected floating object when its model route carries a transform.
     /// Undoable. No-op when nothing is selected.
     /// </summary>
     public void RotateSelectedFloating(double angleDeg)
@@ -8336,16 +8337,18 @@ public sealed class DocumentView : Control
         else if (run.Shape is { } shape)
             _bus.Execute(new SetShapeRotationCommand(sel.BlockIndex, sel.RunIndex,
                 angleDeg, shape.FlipH, shape.FlipV));
+        else if (run.WordArt is { IsFloating: true } wordArt)
+            _bus.Execute(new SetFloatingRotationCommand(sel.BlockIndex, sel.RunIndex,
+                angleDeg, wordArt.FlipH, wordArt.FlipV));
         else if (run.DrawingGroup is { } group)
             _bus.Execute(new SetFloatingRotationCommand(sel.BlockIndex, sel.RunIndex,
                 angleDeg, group.FlipH, group.FlipV));
-        // Chart/SmartArt/WordArt/Group don't carry rotation — ignore.
         InvalidateLayoutAndVisual();
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
     }
 
     /// <summary>
-    /// Flip the selected floating object horizontally or vertically (Images and Shapes only).
+    /// Flip the selected floating object horizontally or vertically when its model route supports it.
     /// Undoable. No-op when nothing is selected or the type doesn't support flip.
     /// </summary>
     public void FlipSelectedFloating(bool horizontal)
@@ -8365,6 +8368,12 @@ public sealed class DocumentView : Control
             var newFH = horizontal ? !shape.FlipH : shape.FlipH;
             var newFV = horizontal ? shape.FlipV : !shape.FlipV;
             _bus.Execute(new SetShapeRotationCommand(sel.BlockIndex, sel.RunIndex, shape.RotationAngle, newFH, newFV));
+        }
+        else if (run.WordArt is { IsFloating: true } wordArt)
+        {
+            var newFH = horizontal ? !wordArt.FlipH : wordArt.FlipH;
+            var newFV = horizontal ? wordArt.FlipV : !wordArt.FlipV;
+            _bus.Execute(new SetFloatingRotationCommand(sel.BlockIndex, sel.RunIndex, wordArt.RotationAngle, newFH, newFV));
         }
         else if (run.DrawingGroup is { } group)
         {
@@ -15929,6 +15938,9 @@ public sealed class DocumentView : Control
         public string       WarpHint = "none";
         public string       StyleSummary = string.Empty;
         public DrawingObjectEffectsPlan Effects = DrawingObjectEffectsPlan.None;
+        public double       RotationAngle;
+        public bool         FlipH;
+        public bool         FlipV;
     }
 
     private sealed class FloatingSmartArtData
@@ -16004,6 +16016,9 @@ public sealed class DocumentView : Control
             WarpHint = plan.WordArt?.WarpHint ?? "none",
             StyleSummary = plan.WordArt?.StyleSummary ?? string.Empty,
             Effects = plan.Effects,
+            RotationAngle = plan.RotationAngle,
+            FlipH = plan.FlipH,
+            FlipV = plan.FlipV,
         };
 
     private static FloatingWordArtData BuildInlineWordArtData(
@@ -16351,6 +16366,19 @@ public sealed class DocumentView : Control
         if (string.IsNullOrEmpty(wd.Text)) return;
 
         var rect = wd.Rect;
+        IDisposable? transformState = null;
+        if (wd.RotationAngle != 0 || wd.FlipH || wd.FlipV)
+        {
+            var cx = rect.X + rect.Width / 2;
+            var cy = rect.Y + rect.Height / 2;
+            var matrix = Matrix.Identity * Matrix.CreateTranslation(-cx, -cy);
+            if (wd.FlipH) matrix = matrix * new Matrix(-1, 0, 0, 1, 0, 0);
+            if (wd.FlipV) matrix = matrix * new Matrix(1, 0, 0, -1, 0, 0);
+            if (wd.RotationAngle != 0) matrix = matrix * Matrix.CreateRotation(wd.RotationAngle * Math.PI / 180.0);
+            transformState = context.PushTransform(matrix * Matrix.CreateTranslation(cx, cy));
+        }
+        try
+        {
         DrawFloatingWordArtEffects(context, wd, rect);
 
         if (BuildWordArtFillBrush(wd.Fill) is { } fillBrush)
@@ -16378,7 +16406,6 @@ public sealed class DocumentView : Control
                 context.DrawText(ft, new Point(tx, ty));
             }
         }
-
         // For styles with an outline, draw the text a second time with a contrasting colour offset by 1px
         // to simulate an outline effect (poor-man's outline — Avalonia has no DrawTextOutline API).
         if (wd.Outline.IsVisible && !string.IsNullOrEmpty(wd.Outline.ColorHex))
@@ -16396,6 +16423,11 @@ public sealed class DocumentView : Control
                     context.DrawText(outlineFt, new Point(tx + 1, ty + 1));
                 }
             }
+        }
+        }
+        finally
+        {
+            transformState?.Dispose();
         }
     }
 

@@ -385,6 +385,38 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingOverlay_AppliesWordArtCentreRotationAndFlips()
+    {
+        var wordArt = new WordArt("Transform", WordArtStyle.GlowBlue, 28)
+        {
+            RotationAngle = 30,
+            FlipH = true,
+            FlipV = true,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+            },
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Border>().Single();
+        var transforms = root.RenderTransform.Should().BeOfType<TransformGroup>().Subject;
+
+        transforms.Children.OfType<ScaleTransform>().Single().ScaleX.Should().Be(-1);
+        transforms.Children.OfType<ScaleTransform>().Single().ScaleY.Should().Be(-1);
+        transforms.Children.OfType<RotateTransform>().Single().Angle.Should().Be(30);
+    }
+
+    [StaFact]
     public void FloatingOverlay_RendersWarpedWordArtWithContrastingTextAndFill()
     {
         var wordArt = new WordArt("FreeW CONFIDENTIAL", WordArtStyle.GlowBlue, 28)

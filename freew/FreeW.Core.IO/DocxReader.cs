@@ -3609,6 +3609,15 @@ public static class DocxReader
         wordArt.WidthPt = EmuToPoints(wordArtExtent?.Attribute("cx")?.Value);
         wordArt.HeightPt = EmuToPoints(wordArtExtent?.Attribute("cy")?.Value);
 
+        var wordArtXfrm = wsp!.Element(Wps + "spPr")?.Element(A + "xfrm");
+        if (wordArtXfrm is not null)
+        {
+            if (wordArtXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, out var rotEmu))
+                wordArt.RotationAngle = rotEmu / 60000.0;
+            wordArt.FlipH = wordArtXfrm.Attribute("flipH")?.Value is "1" or "true";
+            wordArt.FlipV = wordArtXfrm.Attribute("flipV")?.Value is "1" or "true";
+        }
+
         // Alt text: wp:docPr/@descr on the inline or anchor drawing.
         var waDocPrDescr = container!.Element(Wp + "docPr")?.Attribute("descr")?.Value;
         if (!string.IsNullOrEmpty(waDocPrDescr))
