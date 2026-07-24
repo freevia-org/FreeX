@@ -113,6 +113,7 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().Contain("_planner.BuildCommitPlan(ReadCategoryEditsFromGrid())");
         source.Should().Contain("_planner.AddSeries()");
         source.Should().Contain("_planner.AddCategory()");
+        source.Should().Contain("_planner.SwitchRowsAndColumns()");
         source.Should().Contain("ChartDataDialogPlanner.FormatCellValue(");
         source.Should().Contain("ChartDataDialogPlanner.ParseCellValue(");
         source.Should().NotContain("private readonly List<string>       _categories");

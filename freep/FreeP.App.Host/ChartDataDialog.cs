@@ -14,7 +14,7 @@ namespace FreeP.App.Host;
 ///
 /// Layout:
 ///   ┌────────────────────────────────────────────────────┐
-///   │  [Add Series] [Remove Series]  [Add Cat] [Remove Cat] │
+///   │  [Add Series] [Remove Series]  [Add Cat] [Remove Cat] [Switch Row/Column] │
 ///   ├──────────┬─────────────┬─────────────────────────────┤
 ///   │ Category │  Series 1   │  Series 2  │  …             │
 ///   ├──────────┼─────────────┼────────────┤                │
@@ -47,6 +47,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly Button   _removeSeriesBtn;
     private readonly Button   _addCatBtn;
     private readonly Button   _removeCatBtn;
+    private readonly Button   _switchRowsAndColumnsBtn;
     private readonly TextBlock _validationText = new();
 
     // ── Construction ──────────────────────────────────────────────────────────────
@@ -79,6 +80,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _removeSeriesBtn = MakeToolbarButton("- Series",    OnRemoveSeries);
         _addCatBtn       = MakeToolbarButton("+ Category",  OnAddCategory);
         _removeCatBtn    = MakeToolbarButton("- Category",  OnRemoveCategory);
+        _switchRowsAndColumnsBtn = MakeToolbarButton("Switch Row/Column", OnSwitchRowsAndColumns);
 
         var toolbar = new WrapPanel { Margin = new Thickness(4, 4, 4, 2) };
         toolbar.Children.Add(_addSeriesBtn);
@@ -86,6 +88,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         toolbar.Children.Add(new Separator { Width = 12, Visibility = Visibility.Hidden });
         toolbar.Children.Add(_addCatBtn);
         toolbar.Children.Add(_removeCatBtn);
+        toolbar.Children.Add(_switchRowsAndColumnsBtn);
 
         // ── DataGrid ──────────────────────────────────────────────────────────────
         _grid = new DataGrid
@@ -241,6 +244,15 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void OnRemoveCategory()
     {
         _planner.RemoveLastCategory();
+        RebuildGrid();
+    }
+
+    private void OnSwitchRowsAndColumns()
+    {
+        if (!TryCommitPendingEdit())
+            return;
+
+        _planner.SwitchRowsAndColumns();
         RebuildGrid();
     }
 

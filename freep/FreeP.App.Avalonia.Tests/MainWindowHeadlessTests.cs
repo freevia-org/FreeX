@@ -5784,6 +5784,7 @@ public sealed class MainWindowHeadlessTests
             seriesColumns = dialog.RenderedSeriesColumnCount;
             categoryRows = dialog.RenderedCategoryRowCount;
             valueCells = dialog.RenderedValueCellCount;
+            dialog.SwitchRowsAndColumnsForTests();
             commit = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -5794,10 +5795,11 @@ public sealed class MainWindowHeadlessTests
         categoryRows.Should().Be(3);
         valueCells.Should().Be(6);
         commit.Should().NotBeNull();
-        commit!.Categories.Should().Equal("Q1", "Q2", "Q3");
-        commit.SeriesNames.Should().Equal("Series 1", "Series 2");
-        commit.Values[0].Should().Equal(new double?[] { 4.3, 2.5, 3.5 });
-        commit.Values[1].Should().Equal(new double?[] { 2.4, 4.4, 1.8 });
+        commit!.Categories.Should().Equal("Series 1", "Series 2");
+        commit.SeriesNames.Should().Equal("Q1", "Q2", "Q3");
+        commit.Values[0].Should().Equal(new double?[] { 4.3, 2.4 });
+        commit.Values[1].Should().Equal(new double?[] { 2.5, 4.4 });
+        commit.Values[2].Should().Equal(new double?[] { 3.5, 1.8 });
     }
 
     [Fact]
