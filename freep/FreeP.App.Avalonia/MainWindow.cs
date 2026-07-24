@@ -333,6 +333,7 @@ public sealed partial class MainWindow : Window
     internal SmartArtTextPaneApplyResult? LastSmartArtTextPaneApplyResult { get; private set; }
     internal SmartArtNodeEditResult? LastSmartArtTextPaneEditResult { get; private set; }
     internal SmartArtTextPaneKeyboardRoute? LastSmartArtTextPaneKeyboardRoute { get; private set; }
+    internal SmartArtColorApplyResult? LastSmartArtColorApplyResult { get; private set; }
     internal SmartArtDataPartRewriteResult? LastSmartArtDataPartRewriteResult { get; private set; }
     internal SmartArtDrawingCacheRegenerationResult? LastSmartArtDrawingCacheRegenerationResult { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
@@ -2057,6 +2058,12 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.DateTime)));
         r.Register(HeaderFooterCommandPlanner.SlideNumberCommandId,
             new ActionRibbonCommand(() => OpenHeaderFooterDialog(HeaderFooterCommandFocus.SlideNumber)));
+        r.Register(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.ThemeAccents)));
+        r.Register(SmartArtAuthoringPlanner.SingleAccentCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.SingleAccent)));
+        r.Register(SmartArtAuthoringPlanner.GrayscaleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtColorPreset(SmartArtColorPreset.Grayscale)));
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
@@ -5009,6 +5016,43 @@ public sealed partial class MainWindow : Window
 
         RefreshSmartArtTextPane();
         return LastSmartArtTextPaneApplyResult!;
+    }
+
+    internal SmartArtColorApplyResult ApplySmartArtColorPresetForTests(SmartArtColorPreset preset) =>
+        ApplySmartArtColorPreset(preset);
+
+    private SmartArtColorApplyResult ApplySmartArtColorPreset(SmartArtColorPreset preset)
+    {
+        var smartArtShape = GetSelectedSmartArtShape();
+        if (smartArtShape is null)
+        {
+            LastSmartArtColorApplyResult = SmartArtAuthoringPlanner.ApplyColorPreset(
+                null, preset, ResolveCurrentSlideTheme());
+            return LastSmartArtColorApplyResult;
+        }
+
+        Editor.EditSmartArt(smartArtShape.Id, smartArt =>
+        {
+            LastSmartArtColorApplyResult = SmartArtAuthoringPlanner.ApplyColorPreset(
+                smartArt,
+                preset,
+                ResolveCurrentSlideTheme(),
+                Editor.CurrentSlide?.ColorMapOverride);
+            if (LastSmartArtColorApplyResult is not { Applied: true })
+                return false;
+
+            CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
+            return true;
+        });
+
+        if (LastSmartArtColorApplyResult is { Applied: true })
+        {
+            _fileWorkflow.MarkDirty();
+            RefreshCanvas();
+            UpdateStatus();
+        }
+
+        return LastSmartArtColorApplyResult!;
     }
 
     internal SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRouteForTests(

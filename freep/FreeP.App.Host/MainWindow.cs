@@ -208,6 +208,7 @@ public sealed partial class MainWindow : Window
     internal SmartArtTextPaneApplyResult? LastSmartArtTextPaneApplyResult { get; private set; }
     internal SmartArtNodeEditResult? LastSmartArtTextPaneEditResult { get; private set; }
     internal SmartArtTextPaneKeyboardRoute? LastSmartArtTextPaneKeyboardRoute { get; private set; }
+    internal SmartArtColorApplyResult? LastSmartArtColorApplyResult { get; private set; }
     internal SmartArtDataPartRewriteResult? LastSmartArtDataPartRewriteResult { get; private set; }
     internal SmartArtDrawingCacheRegenerationResult? LastSmartArtDrawingCacheRegenerationResult { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
@@ -443,7 +444,8 @@ public sealed partial class MainWindow : Window
             applyViewShowState: ApplyPresentationViewShowState,
             getViewZoomState:   () => _viewZoomState,
             applyViewZoomState: ApplyPresentationViewZoomState,
-            onCustomShows:      () => OpenCustomShowDialog());
+            onCustomShows:      () => OpenCustomShowDialog(),
+            onSmartArtColorPreset: preset => ApplySmartArtColorPreset(preset));
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -2224,6 +2226,43 @@ public sealed partial class MainWindow : Window
 
         RefreshSmartArtTextPane();
         return LastSmartArtTextPaneApplyResult!;
+    }
+
+    internal SmartArtColorApplyResult ApplySmartArtColorPresetForTests(SmartArtColorPreset preset) =>
+        ApplySmartArtColorPreset(preset);
+
+    private SmartArtColorApplyResult ApplySmartArtColorPreset(SmartArtColorPreset preset)
+    {
+        var smartArtShape = GetSelectedSmartArtShape();
+        if (smartArtShape is null)
+        {
+            LastSmartArtColorApplyResult = SmartArtAuthoringPlanner.ApplyColorPreset(
+                null, preset, ResolveCurrentSlideTheme());
+            return LastSmartArtColorApplyResult;
+        }
+
+        Editor.EditSmartArt(smartArtShape.Id, smartArt =>
+        {
+            LastSmartArtColorApplyResult = SmartArtAuthoringPlanner.ApplyColorPreset(
+                smartArt,
+                preset,
+                ResolveCurrentSlideTheme(),
+                Editor.CurrentSlide?.ColorMapOverride);
+            if (LastSmartArtColorApplyResult is not { Applied: true })
+                return false;
+
+            CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
+            return true;
+        });
+
+        if (LastSmartArtColorApplyResult is { Applied: true })
+        {
+            _file.MarkDirty();
+            RefreshCanvas();
+            UpdateTitle();
+        }
+
+        return LastSmartArtColorApplyResult!;
     }
 
     internal SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRouteForTests(

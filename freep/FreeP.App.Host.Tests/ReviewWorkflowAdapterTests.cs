@@ -1779,6 +1779,33 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_SmartArtColorPreset_UsesNativePartAndUndoBus()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var shape = MakeSmartArtShape();
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+            var before = shape.SmartArt!.Parts["ppt/diagrams/colors1.xml"].Bytes.ToArray();
+
+            var result = window.ApplySmartArtColorPresetForTests(SmartArtColorPreset.Grayscale);
+
+            result.Applied.Should().BeTrue();
+            shape.SmartArt.Parts["ppt/diagrams/colors1.xml"].Bytes.Should().NotEqual(before);
+            shape.SmartArt.Colors!.Palette.Should().HaveCount(2);
+            window.Editor.Undo();
+            shape.SmartArt.Parts["ppt/diagrams/colors1.xml"].Bytes.Should().Equal(before);
+            window.Editor.Redo();
+            shape.SmartArt.Parts["ppt/diagrams/colors1.xml"].Bytes.Should().NotEqual(before);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_TablePickerRequest_ShowsPickerAndAppliesChoice()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
@@ -2073,6 +2100,12 @@ public sealed class ReviewWorkflowAdapterTests
             PartPath = "ppt/diagrams/drawing1.xml",
             ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
             Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+        smartArt.Parts["ppt/diagrams/colors1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/colors1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:colorsDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><dgm:styleLbl name=\"node0\"><dgm:fillClrLst><a:schemeClr val=\"accent1\"/><a:schemeClr val=\"accent2\"/></dgm:fillClrLst></dgm:styleLbl></dgm:colorsDef>")
         };
 
         return new SlideShape
