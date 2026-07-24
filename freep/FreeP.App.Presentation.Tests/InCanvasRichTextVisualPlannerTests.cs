@@ -94,6 +94,42 @@ public sealed class InCanvasRichTextVisualPlannerTests
     }
 
     [Fact]
+    public void Create_ProjectsBulletMarkersSeparatelyFromEditableText()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "\u25AA",
+            Runs = { new Run { Text = "Alpha", FontFamily = "Arial", FontSizePt = 12 } },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.RomanUcPeriod,
+            AutoNumStartAt = 3,
+            Runs = { new Run { Text = "Beta", Color = new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33)) } },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.RomanUcPeriod,
+            Runs = { new Run { Text = "Gamma" } },
+        });
+
+        var plan = InCanvasRichTextVisualPlanner.Create(body);
+
+        plan.PlainText.Should().Be("Alpha\nBeta\nGamma");
+        plan.Paragraphs.Select(paragraph => paragraph.BulletText)
+            .Should().Equal("\u25AA", "III.", "IV.");
+        plan.Paragraphs[0].BulletFontFamily.Should().Be("Arial");
+        plan.Paragraphs[0].BulletFontSizePt.Should().Be(12);
+        plan.Paragraphs[1].BulletColor!.Resolved.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        plan.Paragraphs.Select(paragraph => (paragraph.GlobalStart, paragraph.GlobalEnd))
+            .Should().Equal((0, 5), (6, 10), (11, 16));
+    }
+
+    [Fact]
     public void Create_HonorsWpfAuthorityParagraphSpacingWithoutIntroducingIndent()
     {
         var body = new TextBody();
