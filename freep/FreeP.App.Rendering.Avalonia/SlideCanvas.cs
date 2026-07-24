@@ -26,8 +26,10 @@ namespace FreeP.App.Rendering.Avalonia;
 ///   canvas.SlideIndex    = 0;
 ///   // The control invalidates itself and repaints on the next layout cycle.
 ///
-/// The control is viewer-only — interactive editing adorners are deferred to Wave 14C.
-/// The slide is scaled uniformly to fit the control's available size (letterboxed).
+/// The control owns rendering and coordinate transforms; the host attaches
+/// <see cref="AvaloniaCanvasGestureHandler"/> and <see cref="SelectionAdornerLayer"/>
+/// for interactive editing. The slide is scaled uniformly to fit the control's
+/// available size (letterboxed).
 /// </summary>
 public sealed class SlideCanvas : Control
 {
