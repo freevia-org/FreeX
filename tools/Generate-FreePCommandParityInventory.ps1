@@ -1718,6 +1718,7 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-smartart-text-pane-cache-authoring-2026-07-14.md",
                 "docs/parity/freep-smartart-data-part-authoring-2026-07-14.md",
                 "docs/parity/freep-smartart-cache-regeneration-authoring-2026-07-14.md",
+                "docs/parity/freep-smartart-edit-session-package-refresh-2026-07-24.md",
                 "docs/parity/freep-smartart-text-pane-hosts-2026-07-14.md"
             ],
             Verification:
@@ -1728,7 +1729,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/ReviewWorkflowAdapterTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared text-pane outline rows now rebuild the SmartArt model transactionally, preserve stable ids and bounded picture payloads, feed the existing native data-part plus drawing-cache regeneration paths, map bounded Enter/Ctrl+Enter/Tab/Shift+Tab/Alt+Shift+Up/Down keyboard routes to shared SmartArt edit intents, and expose matching thin WPF/Avalonia host text-pane controls. PowerPoint-authored authoring baselines, richer assistant/org-chart editing nuance, broader picture/media-backed cache regeneration, exact PowerPoint layout/style/color regeneration, and PowerPoint-authoritative visual baselines remain deferred.")
+            RemainingWork: "Shared text-pane outline rows now rebuild the SmartArt model transactionally, preserve stable ids and bounded picture payloads, feed the existing native data-part plus drawing-cache regeneration paths, and the shared EditingSession layout/Quick Style/Change Colors routes now refresh those package/cache payloads before commit. Bounded Enter/Ctrl+Enter/Tab/Shift+Tab/Alt+Shift+Up/Down keyboard routes and matching thin WPF/Avalonia host text-pane controls remain covered. PowerPoint-authored authoring baselines, richer assistant/org-chart editing nuance, broader picture/media-backed cache regeneration, exact PowerPoint layout/style/color semantics, and PowerPoint-authoritative visual baselines remain deferred.")
       ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
