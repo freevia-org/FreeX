@@ -382,6 +382,18 @@
   <data name="File_PdfExportCommand" xml:space="preserve">
     <value>PDF export</value>
   </data>
+  <data name="File_XpsFileTypeName" xml:space="preserve">
+    <value>XPS document</value>
+  </data>
+  <data name="File_ExportXpsPickerTitle" xml:space="preserve">
+    <value>Export to XPS</value>
+  </data>
+  <data name="File_XpsExportCommand" xml:space="preserve">
+    <value>XPS export</value>
+  </data>
+  <data name="File_XpsExportedStatusFormat" xml:space="preserve">
+    <value>Exported XPS: {0}</value>
+  </data>
   <data name="File_PdfExportedStatusFormat" xml:space="preserve">
     <value>Exported PDF ({0} {1}, {2}): {3}</value>
   </data>

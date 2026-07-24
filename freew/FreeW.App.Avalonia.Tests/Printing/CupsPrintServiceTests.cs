@@ -89,6 +89,77 @@ public sealed class CupsPrintServiceTests
     }
 
     [Fact]
+    public async Task DiscoverAsync_UnsupportedBackendIsReportedWithoutInvokingCommands()
+    {
+        var runner = new FakeProcessRunner();
+
+        var result = await new CupsPrintService(runner, isSupportedOverride: false).DiscoverAsync();
+
+        result.Status.Should().Be(PrinterDiscoveryStatus.Unavailable);
+        result.Printers.Should().BeEmpty();
+        runner.Invocations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DiscoverAsync_CommandFailureIsReportedAsUnavailable()
+    {
+        var runner = new FakeProcessRunner(new ProcessResult(1, "", "lpstat: not found"));
+
+        var result = await new CupsPrintService(runner, isSupportedOverride: true).DiscoverAsync();
+
+        result.Status.Should().Be(PrinterDiscoveryStatus.Unavailable);
+        result.Message.Should().Contain("lpstat");
+        runner.Invocations.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task SubmitAsync_LpFailureIsReportedWithoutClaimingSuccess()
+    {
+        var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-print-{Guid.NewGuid():N}.pdf");
+        await File.WriteAllBytesAsync(pdfPath, [0x25, 0x50, 0x44, 0x46]);
+        try
+        {
+            var runner = new FakeProcessRunner(
+                new ProcessResult(0, "printer Office is idle.\n", ""),
+                new ProcessResult(0, "system default destination: Office\n", ""),
+                new ProcessResult(1, "", "lp: backend rejected job"));
+
+            var result = await new CupsPrintService(runner, isSupportedOverride: true)
+                .SubmitAsync(pdfPath, new PrintSelection());
+
+            result.Status.Should().Be(PrintSubmissionStatus.Failed);
+            result.Succeeded.Should().BeFalse();
+            result.Message.Should().Contain("backend rejected");
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitAsync_CancellationDuringLpIsReportedWithoutClaimingSuccess()
+    {
+        var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-print-{Guid.NewGuid():N}.pdf");
+        await File.WriteAllBytesAsync(pdfPath, [0x25, 0x50, 0x44, 0x46]);
+        try
+        {
+            var runner = new CancellingSubmitProcessRunner();
+            var result = await new CupsPrintService(runner, isSupportedOverride: true)
+                .SubmitAsync(pdfPath, new PrintSelection(), CancellationToken.None);
+
+            result.Status.Should().Be(PrintSubmissionStatus.Cancelled);
+            result.Succeeded.Should().BeFalse();
+            runner.Invocations.Select(invocation => invocation.FileName)
+                .Should().Equal("lpstat", "lpstat", "lp");
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
     public async Task SubmitAsync_CancellationIsReportedBeforeSpooling()
     {
         var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-print-{Guid.NewGuid():N}.pdf");
@@ -133,6 +204,25 @@ public sealed class CupsPrintServiceTests
             if (_cancellation)
                 throw new OperationCanceledException(cancellationToken);
             return Task.FromResult(_results.Dequeue());
+        }
+    }
+
+    private sealed class CancellingSubmitProcessRunner : IProcessRunner
+    {
+        private int _callCount;
+
+        public List<ProcessInvocation> Invocations { get; } = [];
+
+        public Task<ProcessResult> RunAsync(ProcessInvocation invocation, CancellationToken cancellationToken = default)
+        {
+            Invocations.Add(invocation);
+            _callCount++;
+            if (_callCount == 3)
+                throw new OperationCanceledException(cancellationToken);
+
+            return Task.FromResult(_callCount == 1
+                ? new ProcessResult(0, "printer Office is idle.\n", "")
+                : new ProcessResult(0, "system default destination: Office\n", ""));
         }
     }
 }

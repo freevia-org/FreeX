@@ -43,6 +43,9 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("FileText.OpenPickerTitle");
         source.Should().Contain("FileText.SavePickerTitle");
         source.Should().Contain("FreeWFileTextResources.ExportPdfPickerTitle");
+        source.Should().Contain("FreeWFileTextResources.ExportXpsPickerTitle");
+        source.Should().Contain("showOverwritePrompt: true");
+        source.Should().Contain("ExportAtomicWriter.ReplaceTarget(");
         source.Should().Contain("InsertDialogTextResources.TextFromFilePickerTitle");
         source.Should().Contain("SisterAppFileTextPlanner.FormatUnsupportedFileType(");
         source.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");

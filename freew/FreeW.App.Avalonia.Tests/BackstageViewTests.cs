@@ -226,7 +226,7 @@ public class BackstageViewTests
         source.Should().Contain("BackstageViewTextResources.EvidenceRequirementsLabel");
         source.Should().Contain("FormatPrintEvidenceRequirement");
         source.Should().Contain("var printCapability = _callbacks.DirectPrintCapability");
-        source.Should().Contain("print: _callbacks.Print");
+        source.Should().Contain("print: printCapability.IsAvailable && _callbacks.Print");
         source.Should().Contain("directPrintCapability: printCapability");
         source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
         source.Should().Contain("new AvaloniaBackstageFrame(");
@@ -449,15 +449,12 @@ public class BackstageViewTests
         callbacks.GetCurrentOptions().Should().NotBeNull();
         callbacks.GetDataFolder().Should().NotBeNullOrWhiteSpace();
         callbacks.DirectPrintCapability.Should().NotBeNull();
-        callbacks.DirectPrintCapability!.IsAvailable.Should().Be(
-            OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
-        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            callbacks.Print.Should().NotBeNull();
-        else
-            callbacks.Print.Should().BeNull();
+        callbacks.DirectPrintCapability!.IsAvailable.Should().BeFalse(
+            "printer discovery has not completed before the shell is opened");
+        callbacks.Print.Should().BeNull();
         callbacks.GetDocument().Should().NotBeNull();
         callbacks.PrintPreview.Should().NotBeNull();
-        callbacks.ExportXps.Should().BeNull("XPS remains WPF-only");
+        callbacks.ExportXps.Should().NotBeNull("Avalonia has a portable XPS writer");
         callbacks.EditProperties.Should().NotBeNull();
         callbacks.Save.Should().NotBeNull();
         callbacks.SaveCopy.Should().NotBeNull();

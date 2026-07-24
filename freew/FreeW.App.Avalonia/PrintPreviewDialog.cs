@@ -96,10 +96,12 @@ internal sealed class PrintPreviewDialog : Window
             Margin = new Thickness(0),
         };
 
+        var canDirectPrint = _directPrintCapability.IsAvailable && _directPrint is not null;
+        var usePdfFallback = !canDirectPrint && _createPdf is not null;
         var printButton = new Button
         {
-            Content = _directPrintCapability.IsAvailable ? "Print" : BackstageViewTextResources.CreatePdfLabel,
-            IsEnabled = _directPrintCapability.IsAvailable ? _directPrint is not null : _createPdf is not null,
+            Content = canDirectPrint ? "Print" : BackstageViewTextResources.CreatePdfLabel,
+            IsEnabled = canDirectPrint || usePdfFallback,
             Margin = new Thickness(12, 8, 6, 8),
             Padding = new Thickness(14, 6),
         };
@@ -109,10 +111,16 @@ internal sealed class PrintPreviewDialog : Window
             _directPrintCapability.IsAvailable
                 ? _directPrintCapability.ActionDescription
                 : _directPrintCapability.DeferredNote ?? _directPrintCapability.ActionDescription);
-        if (_directPrintCapability.IsAvailable && _directPrint is not null)
-            printButton.Click += async (_, _) => await _directPrint();
-        else if (!_directPrintCapability.IsAvailable && _createPdf is not null)
-            printButton.Click += async (_, _) => await _createPdf();
+        if (canDirectPrint)
+        {
+            var directPrint = _directPrint!;
+            printButton.Click += async (_, _) => await directPrint();
+        }
+        else if (usePdfFallback)
+        {
+            var createPdf = _createPdf!;
+            printButton.Click += async (_, _) => await createPdf();
+        }
         DockPanel.SetDock(printButton, Dock.Left);
         toolbar.Children.Add(printButton);
 

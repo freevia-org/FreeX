@@ -24,7 +24,7 @@ public sealed class PrintLifecycleTests
             callbacks.DirectPrintCapability.Should().NotBeNull();
             callbacks.DirectPrintCapability!.IsAvailable.Should().BeFalse();
             callbacks.Print.Should().BeNull();
-            callbacks.ExportXps.Should().BeNull("XPS is WPF-only");
+            callbacks.ExportXps.Should().NotBeNull("Avalonia uses the portable XPS writer");
         }, CancellationToken.None);
     }
 
@@ -64,6 +64,28 @@ public sealed class PrintLifecycleTests
         }, CancellationToken.None);
 
         dialogCalls.Should().Be(1);
+        restoreCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task MainWindow_NoPrintersDisablesDirectPrintAndReportsPdfFallback()
+    {
+        var restoreCalls = 0;
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateWindow(
+                new FakePrintService(isSupported: true, discoveryStatus: PrinterDiscoveryStatus.NoPrinters),
+                restorePrintOwnerFocus: _ => restoreCalls++);
+
+            await window.PrintAsync();
+
+            var callbacks = window.BuildBackstageCallbacks();
+            callbacks.DirectPrintCapability!.IsAvailable.Should().BeFalse();
+            callbacks.Print.Should().BeNull();
+            window.PrintStatusForTests.Should().Contain("No printers");
+            window.PrintStatusForTests.Should().Contain("Create PDF");
+        }, CancellationToken.None);
+
         restoreCalls.Should().Be(1);
     }
 

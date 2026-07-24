@@ -271,7 +271,9 @@ internal sealed class BackstageView : Window
         var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
             _callbacks.DisplayName,
             _callbacks.GetPageSettings(),
-            print: _callbacks.Print is { } print ? DismissThen(print) : null,
+            print: printCapability.IsAvailable && _callbacks.Print is { } print
+                ? DismissThen(print)
+                : null,
             printPreview: _callbacks.PrintPreview is null
                 ? null
                 : () =>

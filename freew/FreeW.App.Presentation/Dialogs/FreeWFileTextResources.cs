@@ -10,6 +10,9 @@ public static class FreeWFileTextResources
     public static string TextFromFileTypeName => Loc.Get("File_TextFromFileTypeName");
     public static string ExportPdfPickerTitle => Loc.Get("File_ExportPdfPickerTitle");
     public static string PdfExportCommand => Loc.Get("File_PdfExportCommand");
+    public static string XpsFileTypeName => Loc.Get("File_XpsFileTypeName");
+    public static string ExportXpsPickerTitle => Loc.Get("File_ExportXpsPickerTitle");
+    public static string XpsExportCommand => Loc.Get("File_XpsExportCommand");
     public static string InsertTextCommand => Loc.Get("File_InsertTextCommand");
     public static string NewWindowCommand => Loc.Get("File_NewWindowCommand");
 
@@ -41,4 +44,7 @@ public static class FreeWFileTextResources
         var pages = pageCount == 1 ? Loc.Get("File_PageSingular") : Loc.Get("File_PagePlural");
         return Loc.Format("File_PdfExportedStatusFormat", pageCount, pages, backend, fileName);
     }
+
+    public static string FormatXpsExported(string path) =>
+        Loc.Format("File_XpsExportedStatusFormat", path);
 }
