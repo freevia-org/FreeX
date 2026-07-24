@@ -315,6 +315,18 @@ public static class FreePRibbon
             group.Large("freep.slide-size-4x3", FreePRibbonText.SlideSizeStandardCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeStandardCommand.KeyTip);
             group.Medium("freep.slide-size-custom", FreePRibbonText.SlideSizeCustomCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeCustomCommand.KeyTip);
         });
+        tab.Group("smartart-colors", FreePRibbonText.SmartArtColorsGroup.Label, FreePRibbonText.SmartArtColorsGroup.KeyTip, 80, group =>
+        {
+            group.Medium(SmartArtAuthoringPlanner.ThemeAccentsCommandId,
+                FreePRibbonText.SmartArtThemeAccentsCommand.Label, RibbonCommandIconKind.Color,
+                FreePRibbonText.SmartArtThemeAccentsCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.SingleAccentCommandId,
+                FreePRibbonText.SmartArtSingleAccentCommand.Label, RibbonCommandIconKind.Fill,
+                FreePRibbonText.SmartArtSingleAccentCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.GrayscaleCommandId,
+                FreePRibbonText.SmartArtGrayscaleCommand.Label, RibbonCommandIconKind.Clear,
+                FreePRibbonText.SmartArtGrayscaleCommand.KeyTip);
+        });
     }
 
     private static void AddTransitionGroups(RibbonTabBuilder tab, FreePRibbonProfile profile)
