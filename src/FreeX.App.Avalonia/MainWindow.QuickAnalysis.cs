@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -21,9 +22,8 @@ public sealed partial class MainWindow
     /// <summary>
     /// Opens the Quick Analysis popup for the current multi-cell selection. The UI-free
     /// <see cref="QuickAnalysisShellRequestPlanner"/> plans selection support, grouped display items,
-    /// shell actions, and hover metadata. Each item is rendered as a native button; the few items
-    /// without a shell command (PivotTable, running/percent totals) stay visible but report that they are
-    /// not yet available.
+    /// shell actions, and hover metadata. Each item is rendered as a native button and dispatched through
+    /// the existing dialog and command paths shared with the rest of the Avalonia shell.
     /// </summary>
     private Task ShowQuickAnalysisDialogAsync()
     {
@@ -34,7 +34,7 @@ public sealed partial class MainWindow
         var request = QuickAnalysisShellRequestPlanner.Build(
             _session.ActiveSheet,
             selection,
-            QuickAnalysisShellCapabilities.DirectApplyLimited);
+            QuickAnalysisShellCapabilities.DialogBacked);
         var openPlan = QuickAnalysisShellOpenPlanner.Plan(request);
         if (!openPlan.CanOpen || openPlan.Selection is not { } range)
         {
@@ -128,10 +128,17 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(button, item.AutomationId);
         ToolTip.SetTip(button, item.ToolTip);
-        button.Click += (_, _) =>
+        button.Click += async (_, _) =>
         {
             flyout.Hide();
-            ApplyQuickAnalysisItem(item);
+            try
+            {
+                await ApplyQuickAnalysisItemAsync(item);
+            }
+            catch (Exception exception)
+            {
+                ShowEditIssue(exception.Message);
+            }
         };
         return button;
     }
@@ -165,12 +172,11 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Executes a chosen Quick Analysis item by routing it to the matching existing shell command
-    /// path. Conditional-format presets reuse the preset command path, Totals reuse AutoSum, Sparklines
-    /// reuse the sparkline insert command, Charts reuse the add-chart command, Tables reuse the create-table
-    /// command; the remaining deferred suggestions (PivotTable, running/percent totals) report a status note
-    /// without changing the workbook.
+    /// path. Conditional-format dialogs and clear reuse the existing editor/command paths, Totals reuse the
+    /// shared edit planner, Sparklines reuse the sparkline insert command, Charts reuse the add-chart command,
+    /// Tables reuse the create-table command, and PivotTables reuse the existing create dialog.
     /// </summary>
-    private void ApplyQuickAnalysisItem(QuickAnalysisShellItemPlan item)
+    private async Task ApplyQuickAnalysisItemAsync(QuickAnalysisShellItemPlan item)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
@@ -178,14 +184,24 @@ public sealed partial class MainWindow
         var operation = QuickAnalysisHostOperationPlanner.Plan(item);
         switch (operation.Kind)
         {
+            case QuickAnalysisHostOperationKind.OpenConditionalFormatDialog
+                when operation.ConditionalFormat is { } conditionalFormat:
+                await ShowQuickAnalysisConditionalFormatDialogAsync(conditionalFormat);
+                break;
+
             case QuickAnalysisHostOperationKind.ApplyConditionalFormat
                 when operation.ConditionalFormatPreset is { } preset:
                 ApplyConditionalFormatPreset(preset);
                 break;
 
+            case QuickAnalysisHostOperationKind.ClearConditionalFormatting:
+                ClearConditionalFormatsFromSelection();
+                break;
+
             case QuickAnalysisHostOperationKind.InsertAggregateTotalFormula
-                when operation.TotalFunction is { } function:
-                InsertAutoSumFormula(function);
+                or QuickAnalysisHostOperationKind.InsertPercentTotalFormula
+                or QuickAnalysisHostOperationKind.InsertRunningTotalFormula:
+                InsertQuickAnalysisTotalFormulas(operation);
                 break;
 
             case QuickAnalysisHostOperationKind.InsertSparkline
@@ -197,14 +213,53 @@ public sealed partial class MainWindow
                 InsertChartFromSelection(chartType);
                 break;
 
+            case QuickAnalysisHostOperationKind.OpenChartPicker:
+                if (await ShowChartTypePickerAsync(ChartType.Column) is { } pickedChartType)
+                    InsertChartFromSelection(pickedChartType);
+                break;
+
             case QuickAnalysisHostOperationKind.CreateTable:
-                _ = InsertTableFromSelectionAsync();
+                await InsertTableFromSelectionAsync();
+                break;
+
+            case QuickAnalysisHostOperationKind.CreatePivotTable:
+                await ShowInsertPivotTableDialogAsync();
                 break;
 
             case QuickAnalysisHostOperationKind.Deferred:
                 RefreshShell(operation.DeferredNote ?? UiText.Get("TableLoc_QaSuggestionNotAvailable"));
                 break;
         }
+    }
+
+    private async Task ShowQuickAnalysisConditionalFormatDialogAsync(
+        QuickAnalysisConditionalFormatCommand command)
+    {
+        var seed = QuickAnalysisConditionalFormatDialogPlanner.Plan(command);
+        var built = await ShowConditionalFormatRuleEditorAsync(seed);
+        if (built is null)
+            return;
+
+        RunConditionalFormatCommand(
+            ConditionalFormatRuleBuilder.ToApplyCommand(_session.ActiveSheet.Id, built),
+            UiText.Format("InsertLoc_CfAppliedRule", FormatRangeReference(built.AppliesTo)));
+    }
+
+    private void InsertQuickAnalysisTotalFormulas(QuickAnalysisHostOperation operation)
+    {
+        var range = _session.SelectedRange;
+        if (!QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits))
+            return;
+
+        var result = _session.ExecuteReviewCommand(new EditCellsCommand(_session.ActiveSheet.Id, edits));
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? operation.TotalCommandTitle ?? "Quick Analysis total failed.");
+            return;
+        }
+
+        _session.SelectCell(edits[^1].Address);
+        RefreshShell(operation.TotalCommandTitle ?? "Quick Analysis Total");
     }
 
     /// <summary>

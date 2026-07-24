@@ -22,6 +22,7 @@ public sealed class QuickAnalysisHostOperationPlannerTests
         var operation = Plan("format.lessthan", QuickAnalysisShellCapabilities.DialogBacked);
 
         operation.Kind.Should().Be(QuickAnalysisHostOperationKind.OpenConditionalFormatDialog);
+        operation.ConditionalFormat.Should().Be(QuickAnalysisConditionalFormatCommand.LessThan);
         operation.ConditionalFormatDialogTitle.Should().Be("Less Than");
     }
 

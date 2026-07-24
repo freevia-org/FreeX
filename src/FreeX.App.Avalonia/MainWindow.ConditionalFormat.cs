@@ -11,6 +11,7 @@ using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -34,6 +35,7 @@ public sealed partial class MainWindow
         (CfRuleType.DataBar, "Data Bar"),
         (CfRuleType.ColorScale, "Color Scale"),
         (CfRuleType.ContainsText, "Text Contains"),
+        (CfRuleType.DateOccurring, "Date Occurring"),
         (CfRuleType.DuplicateValues, "Duplicate Values"),
         (CfRuleType.UniqueValues, "Unique Values"),
         (CfRuleType.AboveAverage, "Above Average"),
@@ -261,6 +263,14 @@ public sealed partial class MainWindow
         Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe) =>
         ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, launchSmokeProbe);
 
+    private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
+        QuickAnalysisConditionalFormatDialogSeed seed) =>
+        ShowConditionalFormatRuleEditorAsync(
+            existingRule: null,
+            startRuleType: seed.RuleType,
+            launchSmokeProbe: null,
+            initialSeed: seed);
+
     /// <summary>
     /// The compact rule editor: a rule-type dropdown plus per-type fields shown/hidden from
     /// <see cref="ConditionalFormatRuleSchema"/>, with inline validation from <c>Validate</c>. A preset
@@ -270,7 +280,8 @@ public sealed partial class MainWindow
     private async Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
         ConditionalFormat? existingRule,
         CfRuleType? startRuleType,
-        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe)
+        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe,
+        QuickAnalysisConditionalFormatDialogSeed? initialSeed = null)
     {
         ConditionalFormat? result = null;
         var range = existingRule?.AppliesTo ?? _session.SelectedRange;
@@ -543,8 +554,20 @@ public sealed partial class MainWindow
             }
         }
 
+        if (existingRule is null && initialSeed is { } seed)
+            ApplyConditionalFormatDialogSeed(
+                seed,
+                ruleTypeBox,
+                operatorBox,
+                value1Box,
+                value2Box,
+                textBox,
+                rankBox,
+                percentBox,
+                topBottomBox);
+
         // Pre-select a starting rule type for new rules (e.g. the ribbon's "New Formula Rule…").
-        if (existingRule is null && startRuleType is { } seedType)
+        if (existingRule is null && initialSeed is null && startRuleType is { } seedType)
         {
             var seedIndex = ConditionalFormatRuleTypeChoices.ToList().FindIndex(c => c.Type == seedType);
             if (seedIndex >= 0)
@@ -852,6 +875,33 @@ public sealed partial class MainWindow
             midColorBox.Text = preset.MidColor;
         if (!string.IsNullOrWhiteSpace(preset.MaxColor))
             maxColorBox.Text = preset.MaxColor;
+    }
+
+    private static void ApplyConditionalFormatDialogSeed(
+        QuickAnalysisConditionalFormatDialogSeed seed,
+        ComboBox ruleTypeBox,
+        ComboBox operatorBox,
+        TextBox value1Box,
+        TextBox value2Box,
+        TextBox textBox,
+        TextBox rankBox,
+        CheckBox percentBox,
+        ComboBox topBottomBox)
+    {
+        var ruleTypeIndex = ConditionalFormatRuleTypeChoices.ToList().FindIndex(choice => choice.Type == seed.RuleType);
+        if (ruleTypeIndex >= 0)
+            ruleTypeBox.SelectedIndex = ruleTypeIndex;
+
+        var operatorIndex = ConditionalFormatOperatorChoices.ToList().FindIndex(choice => choice.Op == seed.Operator);
+        if (operatorIndex >= 0)
+            operatorBox.SelectedIndex = operatorIndex;
+
+        value1Box.Text = seed.Value1 ?? string.Empty;
+        value2Box.Text = seed.Value2 ?? string.Empty;
+        textBox.Text = seed.Text ?? seed.DateOccurringPeriod ?? string.Empty;
+        rankBox.Text = seed.TopBottomRank.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        percentBox.IsChecked = seed.TopBottomPercent;
+        topBottomBox.SelectedIndex = seed.IsTop ? 0 : 1;
     }
 
     private static string FormatRgb(RgbColor color) =>

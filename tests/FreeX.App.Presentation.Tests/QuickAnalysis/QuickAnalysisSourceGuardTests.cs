@@ -33,6 +33,18 @@ public sealed class QuickAnalysisSourceGuardTests
 
         AssertShellUsesSharedQuickAnalysisPlanning(hostSource);
         AssertShellUsesSharedQuickAnalysisPlanning(avaloniaSource);
+        avaloniaSource.Should().Contain("QuickAnalysisShellCapabilities.DialogBacked");
+        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
+        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.ClearConditionalFormatting");
+        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.OpenChartPicker");
+        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.InsertPercentTotalFormula");
+        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.InsertRunningTotalFormula");
+        avaloniaSource.Should().Contain("QuickAnalysisHostOperationKind.CreatePivotTable");
+        avaloniaSource.Should().Contain("try");
+        avaloniaSource.Should().Contain("catch (Exception exception)");
+        avaloniaSource.Should().Contain("ShowEditIssue(exception.Message)");
+        avaloniaSource.Should().Contain("QuickAnalysisConditionalFormatDialogPlanner.Plan(command)");
+        avaloniaSource.Should().Contain("ShowConditionalFormatRuleEditorAsync(seed)");
         shellSources.Should().NotContain("QuickAnalysisSelectionReader.Describe(sheet, range)");
         shellSources.Should().NotContain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
         shellSources.Should().NotContain("QuickAnalysisPlanner.BuildDisplayModel(");

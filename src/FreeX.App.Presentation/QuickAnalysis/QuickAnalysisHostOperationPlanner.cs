@@ -28,6 +28,7 @@ public enum QuickAnalysisHostOperationKind
 public sealed record QuickAnalysisHostOperation(
     QuickAnalysisHostOperationKind Kind,
     QuickAnalysisCommandRoute Route,
+    QuickAnalysisConditionalFormatCommand? ConditionalFormat = null,
     ConditionalFormatPreset? ConditionalFormatPreset = null,
     string? ConditionalFormatDialogTitle = null,
     ChartType? ChartType = null,
@@ -37,6 +38,48 @@ public sealed record QuickAnalysisHostOperation(
     SparklineKind? SparklineKind = null,
     string? SparklineDialogKind = null,
     string? DeferredNote = null);
+
+public sealed record QuickAnalysisConditionalFormatDialogSeed(
+    CfRuleType RuleType,
+    CfOperator Operator = CfOperator.Equal,
+    string? Value1 = null,
+    string? Value2 = null,
+    string? Text = null,
+    string? DateOccurringPeriod = null,
+    int TopBottomRank = 10,
+    bool TopBottomPercent = false,
+    bool IsTop = true);
+
+public static class QuickAnalysisConditionalFormatDialogPlanner
+{
+    public static QuickAnalysisConditionalFormatDialogSeed Plan(
+        QuickAnalysisConditionalFormatCommand command) =>
+        command switch
+        {
+            QuickAnalysisConditionalFormatCommand.DataBar => new(CfRuleType.DataBar),
+            QuickAnalysisConditionalFormatCommand.ColorScale => new(CfRuleType.ColorScale),
+            QuickAnalysisConditionalFormatCommand.IconSet => new(CfRuleType.IconSet),
+            QuickAnalysisConditionalFormatCommand.GreaterThan => new(CfRuleType.CellValue, CfOperator.GreaterThan),
+            QuickAnalysisConditionalFormatCommand.LessThan => new(CfRuleType.CellValue, CfOperator.LessThan),
+            QuickAnalysisConditionalFormatCommand.Between => new(CfRuleType.CellValue, CfOperator.Between),
+            QuickAnalysisConditionalFormatCommand.EqualTo => new(CfRuleType.CellValue, CfOperator.Equal),
+            QuickAnalysisConditionalFormatCommand.TextContains => new(CfRuleType.ContainsText, Text: string.Empty),
+            QuickAnalysisConditionalFormatCommand.DateOccurring => new(
+                CfRuleType.DateOccurring,
+                DateOccurringPeriod: "Today"),
+            QuickAnalysisConditionalFormatCommand.DuplicateValues => new(CfRuleType.DuplicateValues),
+            QuickAnalysisConditionalFormatCommand.Top10Items => new(CfRuleType.Top10),
+            QuickAnalysisConditionalFormatCommand.Top10Percent => new(CfRuleType.Top10, TopBottomPercent: true),
+            QuickAnalysisConditionalFormatCommand.Bottom10Items => new(CfRuleType.Top10, IsTop: false),
+            QuickAnalysisConditionalFormatCommand.Bottom10Percent => new(
+                CfRuleType.Top10,
+                TopBottomPercent: true,
+                IsTop: false),
+            QuickAnalysisConditionalFormatCommand.AboveAverage => new(CfRuleType.AboveAverage),
+            QuickAnalysisConditionalFormatCommand.BelowAverage => new(CfRuleType.AboveAverage, IsTop: false),
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, "Unsupported conditional-format command.")
+        };
+}
 
 public static class QuickAnalysisHostOperationPlanner
 {
@@ -51,6 +94,7 @@ public static class QuickAnalysisHostOperationPlanner
                 new QuickAnalysisHostOperation(
                     QuickAnalysisHostOperationKind.OpenConditionalFormatDialog,
                     action.Route,
+                    ConditionalFormat: action.ConditionalFormat,
                     ConditionalFormatDialogTitle: action.ConditionalFormatDialogTitle),
 
             QuickAnalysisShellActionKind.ApplyConditionalFormat =>
