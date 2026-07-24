@@ -2074,6 +2074,7 @@ public sealed partial class MainWindow : Window
         r.Register(ChartDisplayOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDisplayOptionsDialog));
         r.Register(ChartAxisOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAxisOptionsDialog));
         r.Register(ChartSeriesOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartSeriesOptionsDialog));
+        r.Register(ChartPointOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPointOptionsDialog));
         r.Register("freep.insert-link", new ActionRibbonCommand(OpenHyperlinkDialog));
         r.Register("freep.remove-link", new ActionRibbonCommand(() => Editor.RemoveShapeHyperlink()));
         r.Register(HeaderFooterCommandPlanner.HeaderFooterCommandId,
@@ -2854,6 +2855,21 @@ public sealed partial class MainWindow : Window
             return;
 
         var dialog = new ChartSeriesOptionsDialog(Editor);
+        if (IsVisible)
+        {
+            _ = dialog.ShowDialog<bool?>(this);
+            return;
+        }
+
+        dialog.Show();
+    }
+
+    internal void OpenChartPointOptionsDialog()
+    {
+        if (Editor.SelectedChart is null)
+            return;
+
+        var dialog = new ChartPointOptionsDialog(Editor);
         if (IsVisible)
         {
             _ = dialog.ShowDialog<bool?>(this);

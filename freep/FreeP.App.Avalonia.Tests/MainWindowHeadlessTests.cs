@@ -1914,6 +1914,7 @@ public sealed class MainWindowHeadlessTests
         var found = false;
         var foundAxis = false;
         var foundSeries = false;
+        var foundPoint = false;
         var before = -1;
         var after = -1;
 
@@ -1925,6 +1926,7 @@ public sealed class MainWindowHeadlessTests
             found.Should().BeTrue("the Avalonia chart-data command must be registered");
             foundAxis = registry.TryGet(ChartAxisOptionsPlanner.CommandId, out _);
             foundSeries = registry.TryGet(ChartSeriesOptionsPlanner.CommandId, out _);
+            foundPoint = registry.TryGet(ChartPointOptionsPlanner.CommandId, out _);
 
             before = window.Editor.CurrentSlide!.Shapes.Count;
             command!.Execute(RibbonCommandContext.Empty);
@@ -1935,6 +1937,7 @@ public sealed class MainWindowHeadlessTests
         found.Should().BeTrue("the Avalonia chart-data command must be registered");
         foundAxis.Should().BeTrue("the Avalonia chart-axis command must be registered");
         foundSeries.Should().BeTrue("the Avalonia chart-series command must be registered");
+        foundPoint.Should().BeTrue("the Avalonia chart-point command must be registered");
         after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
     }
 
@@ -5885,6 +5888,33 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         options.Should().Be(new ChartSeriesOptions(
             0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8));
+    }
+
+    [Fact]
+    public async Task ChartPointOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartPointOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartPointOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(0, 0, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        options!.SeriesIndex.Should().Be(0);
+        options.PointIndex.Should().Be(0);
+        options.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        options.StrokeColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        options.StrokeWidthPt.Should().Be(1.5);
+        options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
+        options.MarkerSizePt.Should().Be(7);
     }
 
     [Fact]
