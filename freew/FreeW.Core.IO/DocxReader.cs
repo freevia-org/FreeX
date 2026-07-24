@@ -3569,8 +3569,10 @@ public static class DocxReader
     /// Reads inline WordArt from a run, if present: a w:drawing/wp:inline/.../wps:wsp text box whose single
     /// run's a:rPr (== w:rPr, since the same w:r is used) carries DrawingML text effects (a:solidFill,
     /// a:gradFill, a:ln or a:effectLst). Recovers the text, the font size (w:sz in half-points) and infers
-    /// the <see cref="WordArtStyle"/> preset from which effect is present. Returns null when the drawing is a
-    /// plain shape (no text effects) or not a wsp at all, so the ordinary shape/image paths keep working.
+    /// the <see cref="WordArtStyle"/> preset from which effect is present. A native DrawingML text warp is
+    /// itself a WordArt marker even when Word has no gallery fill/effect payload, so a warped text box is
+    /// recovered as the default style instead of being downgraded to an ordinary shape. Returns null when the
+    /// drawing is a plain, unwarped shape or not a wsp at all, so the ordinary shape/image paths keep working.
     ///
     /// SIMPLIFICATION: the preset is inferred from the *kind* of effect present (gradient → GradientFill,
     /// outline → Outline, shadow → Shadow, else FillBlue), not from exact colour values — colours are fixed
@@ -3593,16 +3595,21 @@ public static class DocxReader
         var docPrName = container!.Element(Wp + "docPr")?.Attribute("name")?.Value
             ?? wsp!.Element(Wps + "cNvPr")?.Attribute("name")?.Value
             ?? string.Empty;
+        var bodyPrEl = wsp!.Element(Wps + "bodyPr");
+        var warpToken = bodyPrEl?.Element(A + "prstTxWarp")?.Attribute("prst")?.Value;
+        var hasTextWarp = !string.IsNullOrWhiteSpace(warpToken);
         var hasWordArtMarker = docPrName.StartsWith("WordArt", StringComparison.Ordinal)
-            || docPrName.StartsWith("GroupChild:WordArt:", StringComparison.Ordinal);
+            || docPrName.StartsWith("GroupChild:WordArt:", StringComparison.Ordinal)
+            || hasTextWarp;
         var style = rPr is null ? null : InferWordArtStyle(rPr);
         if (style is null && hasWordArtMarker && wsp!.Element(Wps + "spPr") is { } spPr)
             style = InferWordArtStyle(spPr);
-        if (rPr is null || style is null)
+        style ??= hasTextWarp ? WordArtStyle.FillBlue : null;
+        if (style is null)
             return null;
 
         var text = string.Concat(txbxContent.Descendants(W + "t").Select(t => t.Value));
-        var fontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value) ?? 36;
+        var fontSizePt = HalfPointsToPoints(rPr?.Element(W + "sz")?.Attribute(W + "val")?.Value) ?? 36;
 
         var wordArt = new WordArt(text, style.Value, fontSizePt);
         var wordArtExtent = container.Element(Wp + "extent");
@@ -3624,8 +3631,6 @@ public static class DocxReader
             wordArt.AltText = waDocPrDescr;
 
         // Warp: a:prstTxWarp/@prst inside wps:bodyPr (W24).
-        var bodyPrEl = wsp?.Element(Wps + "bodyPr");
-        var warpToken = bodyPrEl?.Element(A + "prstTxWarp")?.Attribute("prst")?.Value;
         wordArt.Warp = WarpFromToken(warpToken);
 
         if (anchor is not null)

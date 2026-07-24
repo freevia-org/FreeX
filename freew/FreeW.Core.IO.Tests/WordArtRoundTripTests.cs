@@ -36,6 +36,26 @@ public class WordArtRoundTripTests
         return XDocument.Load(entry);
     }
 
+    private static TextDocument ReadWithDocumentXmlMutation(TextDocument document, Action<XDocument> mutate)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/document.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            mutate(xml);
+            entry.Delete();
+            using var writer = new StreamWriter(zip.CreateEntry("word/document.xml").Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     private static TextDocument DocumentWith(WordArt wordArt)
     {
         var doc = new TextDocument();
@@ -286,6 +306,31 @@ public class WordArtRoundTripTests
         var warpEl = xml.Descendants(A + "prstTxWarp").FirstOrDefault();
         warpEl.Should().NotBeNull("Warp=ArchUp must emit a:prstTxWarp");
         warpEl!.Attribute("prst")!.Value.Should().Be("textArchUp");
+    }
+
+    [Fact]
+    public void NativeWarpWithoutGalleryEffects_ReadsAsDefaultWordArt()
+    {
+        var source = new WordArt("Native warp", WordArtStyle.GlowBlue, 28)
+        {
+            Warp = WordArtWarp.Wave2
+        };
+
+        var read = ReadWithDocumentXmlMutation(DocumentWith(source), xml =>
+        {
+            var wsp = xml.Descendants(Wps + "wsp").Single();
+            wsp.Element(Wps + "spPr")!.Elements()
+                .Where(element => element.Name != A + "xfrm" && element.Name != A + "prstGeom")
+                .Remove();
+            xml.Descendants(Wp + "docPr").Single().SetAttributeValue("name", "Native drawing text box");
+        });
+
+        var wordArt = read.Paragraphs.Single().Runs.Single().WordArt;
+        wordArt.Should().NotBeNull();
+        wordArt!.Text.Should().Be("Native warp");
+        wordArt.Style.Should().Be(WordArtStyle.FillBlue);
+        wordArt.FontSizePt.Should().Be(28);
+        wordArt.Warp.Should().Be(WordArtWarp.Wave2);
     }
 
     [Fact]
