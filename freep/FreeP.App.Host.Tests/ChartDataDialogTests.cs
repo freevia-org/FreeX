@@ -168,6 +168,23 @@ public sealed class ChartDataDialogTests : IDisposable
         options.MarkerSizePt.Should().Be(7);
     }
 
+    [StaFact]
+    public void ChartLayoutOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartLayoutOptionsDialog(sess);
+        dialog.SetOptionsForTests(ChartLayoutTarget.PlotArea, "inner", ChartManualLayoutMode.Edge, ChartManualLayoutMode.Factor, ChartManualLayoutMode.Factor, ChartManualLayoutMode.Edge, 12, 0.1, 0.8, 20);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.Target.Should().Be(ChartLayoutTarget.PlotArea);
+        options.LayoutTarget.Should().Be("inner");
+        options.XMode.Should().Be(ChartManualLayoutMode.Edge);
+        options.HeightMode.Should().Be(ChartManualLayoutMode.Edge);
+        options.X.Should().Be(12);
+        options.Height.Should().Be(20);
+    }
+
     [Fact]
     public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {
@@ -210,6 +227,17 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().Contain("_planner.BuildCommitPlan()");
         source.Should().Contain("_editor.ApplyChartPointOptions");
         source.Should().NotContain("new SetChartPointOptionsCommand");
+    }
+
+    [Fact]
+    public void ChartLayoutOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartLayoutOptionsDialog.cs");
+
+        source.Should().Contain("ChartLayoutOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChartLayoutOptions");
+        source.Should().NotContain("new SetChartLayoutOptionsCommand");
     }
 
     [Fact]

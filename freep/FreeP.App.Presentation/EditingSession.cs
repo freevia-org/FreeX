@@ -1965,6 +1965,19 @@ public sealed class EditingSession
             options));
     }
 
+    /// <summary>Applies one plot-area or legend layout edit as a single undo step.</summary>
+    public void ApplyChartLayoutOptions(ChartLayoutOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return;
+
+        Bus.Execute(new SetChartLayoutOptionsCommand(
+            _currentSlideIndex,
+            _selectedShapeIds[0],
+            options));
+    }
+
     /// <summary>
     /// Non-nullable overload for callers that already work with <c>double</c> sequences (no gaps).
     /// </summary>
