@@ -46,7 +46,9 @@ public sealed partial class MainWindow
     private const string PrintPreviewDefaultPrinterName = "Windows print dialog";
 
     private static readonly ITextMeasurer PrintPreviewTextMeasurer = new AvaloniaTextMeasurer();
-    private static readonly IBrush PrintPreviewSurfaceBackground = Brush(82, 86, 92);
+    // WPF DocumentViewer keeps the area around the paper white; matching it avoids a large
+    // non-content color delta in the paired Print Preview capture.
+    private static readonly IBrush PrintPreviewSurfaceBackground = Brushes.White;
     private static AvaloniaCompactDialogChromeStyle PrintPreviewChromeStyle =>
         new(FormulaBarFontFamily) { ButtonPadding = new Thickness(6, 1) };
     private static readonly PrintSettingsTextResolver PrintPreviewSettingsTextResolver = new(
@@ -834,7 +836,7 @@ public sealed partial class MainWindow
             return new TextBlock
             {
                 Text = UiText.Get("ShellLoc_PageCouldNotRender"),
-                Foreground = Brushes.White,
+                Foreground = Brush(92, 92, 92),
                 HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };

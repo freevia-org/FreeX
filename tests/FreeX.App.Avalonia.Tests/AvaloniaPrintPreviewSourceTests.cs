@@ -53,6 +53,16 @@ public sealed class AvaloniaPrintPreviewSourceTests
     }
 
     [Fact]
+    public void PrintPreview_MatchesWpfDocumentViewerWhiteSurface()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PrintPreview.cs"));
+
+        source.Should().Contain("private static readonly IBrush PrintPreviewSurfaceBackground = Brushes.White;");
+        source.Should().NotContain("PrintPreviewSurfaceBackground = Brush(82, 86, 92)");
+        source.Should().Contain("Foreground = Brush(92, 92, 92)");
+    }
+
+    [Fact]
     public void ParityCapture_UsesTheSharedPrintPreviewFixtureInsteadOfLiveWorksheetPagination()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
