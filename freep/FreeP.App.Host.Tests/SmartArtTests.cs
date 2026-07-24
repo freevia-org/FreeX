@@ -675,11 +675,15 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.BasicHierarchy, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.HorizontalHierarchy, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.OrgChart, SmartArtFamily.Hierarchy)]
+    [InlineData(SmartArtLayoutPreset.PictureCaptionList, SmartArtFamily.List)]
     public void SmartArtLayoutPreset_PersistsNativeLayoutAndRereads(
         SmartArtLayoutPreset preset,
         SmartArtFamily expectedFamily)
     {
-        var sourcePath = MakeSmartArtPptx(["One", "Two"]);
+        var sourcePath = MakeSmartArtPptx(
+            ["One", "Two"],
+            pictureCaptionList: preset == SmartArtLayoutPreset.PictureCaptionList,
+            includeNodeImage: preset == SmartArtLayoutPreset.PictureCaptionList);
         var savedPath = Path.Combine(_tempDir, $"smartart-layout-{preset}.pptx");
         var presentation = PptxPackageReader.Read(sourcePath);
         var smartArt = presentation.Slides[0].Shapes

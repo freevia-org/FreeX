@@ -434,6 +434,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.OrgChartLayoutCommandId,
                 FreePRibbonText.SmartArtOrgChartCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtOrgChartCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.PictureCaptionListLayoutCommandId,
+                FreePRibbonText.SmartArtPictureCaptionListCommand.Label, RibbonCommandIconKind.Picture,
+                FreePRibbonText.SmartArtPictureCaptionListCommand.KeyTip);
         });
         tab.Group("smartart-styles", FreePRibbonText.SmartArtStylesGroup.Label, FreePRibbonText.SmartArtStylesGroup.KeyTip, 80, group =>
         {

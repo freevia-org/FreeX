@@ -1367,14 +1367,17 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia consume ordinary shared picture and caption shape ops emitted by the SmartArt layout planner; no renderer-local SmartArt policy",
             EvidenceDocs:
             [
-                "docs/parity/freep-smartart-picture-caption-list-2026-07-07.md"
+                "docs/parity/freep-smartart-picture-caption-list-2026-07-07.md",
+                "docs/parity/freep-smartart-picture-caption-authoring-20260724.md"
             ],
             Verification:
             [
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
-                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+                "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "pictureCaptionList now uses a bounded shared live-layout path only when reader-imported node images are deterministically mapped one-to-one from the cached diagram drawing. Missing or ambiguous image mapping keeps cached drawing fallback. PowerPoint-authored visual baselines, broader SmartArt picture layouts, and SmartArt authoring/editing remain deferred."),
+            RemainingWork: "pictureCaptionList now supports bounded shared live layout plus an undoable authoring command when every node has image bytes. Missing or ambiguous image mapping keeps cached drawing fallback. PowerPoint-authored visual baselines, broader SmartArt picture layouts, and richer image-payload authoring remain deferred."),
         new(
             EvidenceId: "freep.smartart.basic-cycle",
             Area: "SmartArt basic cycle live layout",

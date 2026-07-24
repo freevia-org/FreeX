@@ -5053,6 +5053,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.BasicHierarchyLayoutCommandId,
                 SmartArtAuthoringPlanner.HorizontalHierarchyLayoutCommandId,
                 SmartArtAuthoringPlanner.OrgChartLayoutCommandId,
+                SmartArtAuthoringPlanner.PictureCaptionListLayoutCommandId,
             })
             {
                 registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be registered");
