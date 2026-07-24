@@ -2668,7 +2668,8 @@ public sealed partial class MainWindow : Window
     private async Task OpenPasteSpecialAsync()
     {
         var text = await TryGetClipboardTextAsync();
-        if (PasteText.Normalize(text).Length == 0)
+        var source = await TryGetClipboardRtfDocumentAsync();
+        if (PasteText.Normalize(text).Length == 0 && source is null)
         {
             _status.Text = "Clipboard does not contain text.";
             return;
@@ -2678,9 +2679,13 @@ public sealed partial class MainWindow : Window
         if (option is null)
             return;
 
-        var pasted = option.Value == PasteSpecialOption.KeepTextOnly
-            ? _editor.PastePlainText(text)
-            : _editor.PasteMergeFormatting(text);
+        var pasted = option.Value switch
+        {
+            PasteSpecialOption.KeepTextOnly => _editor.PastePlainText(text),
+            PasteSpecialOption.KeepSourceFormatting when source is not null =>
+                _editor.PasteKeepSourceFormatting(source) || _editor.PasteMergeFormatting(text),
+            _ => _editor.PasteMergeFormatting(text),
+        };
         if (!pasted)
             _status.Text = "Clipboard does not contain text.";
     }
@@ -2690,6 +2695,33 @@ public sealed partial class MainWindow : Window
         if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
             return null;
         return await clipboard.TryGetTextAsync();
+    }
+
+    private async Task<TextDocument?> TryGetClipboardRtfDocumentAsync()
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+            return null;
+
+        try
+        {
+            using var data = await clipboard.TryGetDataAsync();
+            var rtf = data is null
+                ? null
+                : await data.TryGetValueAsync(DataFormat.CreateStringPlatformFormat("Rich Text Format"));
+            return DocumentView.TryReadRtfClipboardDocument(rtf, out var document) ? document : null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            return null;
+        }
     }
 
     private async Task OpenAsync()
