@@ -1752,6 +1752,11 @@ public sealed class ReviewWorkflowAdapterTests
             shape.SmartArt.FallbackShapes.Should().NotBeEmpty();
             window.IsDirty.Should().BeTrue();
 
+            window.Editor.Undo();
+            shape.SmartArt.Data!.Nodes[0].Text.Should().Be("Plan");
+            window.Editor.Redo();
+            shape.SmartArt.Data.Nodes[0].Text.Should().Be("Discover");
+
             var addSibling = window.ApplySmartArtTextPaneKeyboardRouteForTests(
                 SmartArtTextPaneShortcutKey.Enter,
                 SmartArtTextPaneShortcutModifiers.None,

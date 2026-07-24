@@ -103,6 +103,32 @@ public sealed class EditingSession
             ? Presentation.Slides[_currentSlideIndex]
             : null;
 
+    /// <summary>
+    /// Prepares and commits one SmartArt edit through the shared undo bus. The callback receives
+    /// an isolated payload, so callers can run planner mutations and regenerate its package/cache
+    /// state without exposing a partially edited model to the canvas.
+    /// </summary>
+    public bool EditSmartArt(uint shapeId, Func<SmartArtShape, bool> edit)
+    {
+        if (CurrentSlide is null || edit is null)
+            return false;
+
+        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate =>
+            candidate.Id == shapeId &&
+            candidate.Kind == SlideShapeKind.SmartArt &&
+            candidate.SmartArt is not null);
+        if (shape?.SmartArt is null)
+            return false;
+
+        var before = SlideCloner.CloneSmartArt(shape.SmartArt);
+        var after = SlideCloner.CloneSmartArt(shape.SmartArt);
+        if (!edit(after))
+            return false;
+
+        Bus.Execute(new ReplaceSmartArtCommand(_currentSlideIndex, shapeId, before, after));
+        return true;
+    }
+
     // ── Selection ─────────────────────────────────────────────────────────────────
 
     /// <summary>The set of selected shape ids on the current slide.</summary>

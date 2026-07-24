@@ -4768,6 +4768,11 @@ public sealed class MainWindowHeadlessTests
             dataPart = window.LastSmartArtDataPartRewriteResult;
             drawingCache = window.LastSmartArtDrawingCacheRegenerationResult;
 
+            window.Editor.Undo();
+            smartArt!.Data!.Nodes[0].Text.Should().Be("Plan");
+            window.Editor.Redo();
+            smartArt.Data.Nodes[0].Text.Should().Be("Discover");
+
             addSibling = window.ApplySmartArtTextPaneKeyboardRouteForTests(
                 SmartArtTextPaneShortcutKey.Enter,
                 SmartArtTextPaneShortcutModifiers.None,
