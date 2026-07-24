@@ -302,7 +302,8 @@ public static class AvaloniaCompactDialogChrome
 
     public static void ApplyGroupBox(
         GroupBox groupBox,
-        AvaloniaCompactDialogChromeStyle? style = null)
+        AvaloniaCompactDialogChromeStyle? style = null,
+        IBrush? borderBrush = null)
     {
         ArgumentNullException.ThrowIfNull(groupBox);
         style ??= WindowsStyle;
@@ -310,7 +311,7 @@ public static class AvaloniaCompactDialogChrome
         groupBox.FontFamily = style.FontFamily;
         groupBox.FontSize = style.FontSize;
         groupBox.Foreground = Brushes.Black;
-        groupBox.BorderBrush = GroupBoxBorderBrush;
+        groupBox.BorderBrush = borderBrush ?? GroupBoxBorderBrush;
         groupBox.BorderThickness = new Thickness(1);
         groupBox.HeaderTemplate = new FuncDataTemplate<object>((header, _) => new TextBlock
         {
