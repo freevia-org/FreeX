@@ -37,7 +37,8 @@ public sealed class FileLifecycleTests : IDisposable
             loaded => model = loaded,
             () => changes++,
             loadRecentFilesStore: () => RecentFilesStore.Load(recentStorePath),
-            messageService: messages);
+            messageService: messages,
+            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
         return (window, file, () => model, () => changes, messages);
     }
 
@@ -206,7 +207,7 @@ public sealed class FileLifecycleTests : IDisposable
         file.LastNativePrintHandoffPlan.SuggestedTempFileName.Should().Be("Presentation-print.pdf");
         file.LastNativePrintHandoffPlan.SuggestedDocumentName.Should().Be("Presentation");
         file.LastNativePrintHandoffPlan.SuggestedPrintJobName.Should().Be("Presentation - Notes Pages - Slide 1, 1 page");
-        file.LastNativePrintHandoffPlan.Reason.Should().Contain("Native printer handoff adapter is not wired");
+        file.LastNativePrintHandoffPlan.Reason.Should().Contain("Test printer handoff deferred");
         file.LastPrintExecutionDescriptor.Should().NotBeNull();
         file.LastPrintExecutionDescriptor!.PackagePlan.Should().BeSameAs(package.Plan);
         file.LastPrintExecutionDescriptor.HandoffPlan.Should().BeSameAs(file.LastNativePrintHandoffPlan);

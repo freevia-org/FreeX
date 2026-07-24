@@ -346,7 +346,8 @@ public sealed partial class MainWindow : Window
     public MainWindow(
         FreePOptions options,
         ApplicationOptionsStore<FreePOptions>? optionsStore = null,
-        IUserMessageService? messageService = null)
+        IUserMessageService? messageService = null,
+        WpfNativePrintCapability? nativePrintCapability = null)
     {
         _options = options ?? new FreePOptions();
         _messageService = messageService;
@@ -388,7 +389,8 @@ public sealed partial class MainWindow : Window
             _options,
             messageService: _messageService,
             getImageExportRange: BuildCurrentSlideImageExportRange,
-            getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1);
+            getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
+            nativePrintCapability: nativePrintCapability);
 
         // Title bar.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
@@ -473,6 +475,7 @@ public sealed partial class MainWindow : Window
             ExportPdf: () => _file.ExportPdf(),
             ExportNotesPagePdf: () => _file.ExportNotesPagePdf(),
             ExportImages: () => _file.ExportImages(),
+            Print: request => _file.Print(request),
             PlanPrint: () => RefreshPrintBackstagePlan(),
             ExportVideo: () => _ = _file.ExportVideoAsync(),
             CanExportVideo: () => _file.CanExportVideo,

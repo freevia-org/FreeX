@@ -1864,7 +1864,10 @@ public sealed class ReviewWorkflowAdapterTests
     [StaFact]
     public void MainWindow_PrintBackstageRequest_RecordsSharedPlanWithoutPackageExecution()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        var window = new MainWindow(
+            new FreePOptions(),
+            messageService: TestUserMessageService.DiscardUnsavedChanges,
+            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
         try
         {
             window.Editor.InsertSlide();
@@ -1897,7 +1900,7 @@ public sealed class ReviewWorkflowAdapterTests
             plan.NativePrintHandoff.IsPackageReady.Should().BeTrue();
             plan.NativePrintHandoff.RequiresHostHandoff.Should().BeTrue();
             plan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeFalse();
-            plan.NativePrintHandoff.Reason.Should().Contain("Native printer handoff adapter is not wired");
+            plan.NativePrintHandoff.Reason.Should().Contain("Test printer handoff deferred");
         }
         finally
         {

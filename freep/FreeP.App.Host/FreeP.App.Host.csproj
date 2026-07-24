@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
     <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
     <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />

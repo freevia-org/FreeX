@@ -42,10 +42,7 @@ internal sealed class FileCommands
     private readonly Func<int?> _getPrintCurrentSlideNumber;
     private readonly Func<IReadOnlyList<int>?> _getPrintSelectedSlideNumbers;
 
-    private static readonly PresentationNativePrintHandoffHostCapabilities NativePrintHostCapabilities =
-        PresentationNativePrintHandoffHostCapabilities.Deferred(
-            "WPF print host",
-            "Native printer handoff adapter is not wired in this host path yet.");
+    private readonly PresentationNativePrintHandoffHostCapabilities _nativePrintHostCapabilities;
 
     private readonly WpfVideoExportAdapter _videoExportAdapter;
     private readonly PresentationVideoExportHandoffHostCapabilities _videoExportHostCapabilities;
@@ -65,7 +62,8 @@ internal sealed class FileCommands
         Func<int?>? getPrintCurrentSlideNumber = null,
         Func<IReadOnlyList<int>?>? getPrintSelectedSlideNumbers = null,
         WpfVideoEncoderCapability? videoEncoderCapability = null,
-        WpfVideoExportAdapter? videoExportAdapter = null)
+        WpfVideoExportAdapter? videoExportAdapter = null,
+        WpfNativePrintCapability? nativePrintCapability = null)
     {
         _window = window;
         _getModel = getModel;
@@ -74,6 +72,12 @@ internal sealed class FileCommands
         _getImageExportRange = getImageExportRange ?? (() => null);
         _getPrintCurrentSlideNumber = getPrintCurrentSlideNumber ?? (() => null);
         _getPrintSelectedSlideNumbers = getPrintSelectedSlideNumbers ?? (() => null);
+        var resolvedPrintCapability = nativePrintCapability ?? WpfNativePrintCapabilityDetector.Detect();
+        _nativePrintHostCapabilities = resolvedPrintCapability.CanPrint
+            ? PresentationNativePrintHandoffHostCapabilities.Available("WPF print host")
+            : PresentationNativePrintHandoffHostCapabilities.Deferred(
+                "WPF print host",
+                resolvedPrintCapability.Reason);
         var resolvedVideoCapability = videoEncoderCapability ??
             videoExportAdapter?.Capability ??
             WpfVideoEncoderCapabilityDetector.Detect();
@@ -101,6 +105,8 @@ internal sealed class FileCommands
     public PresentationNativePrintHandoffPlan? LastNativePrintHandoffPlan { get; private set; }
 
     public PresentationPrintOutputPackageExecutionDescriptor? LastPrintExecutionDescriptor { get; private set; }
+
+    public bool CanPrint => _nativePrintHostCapabilities.CanOpenNativePrintDialog;
 
     public PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
 
@@ -307,7 +313,7 @@ internal sealed class FileCommands
             WpfRasterPdfWriter.WriteToBytes);
         LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
             LastPrintOutputPackage,
-            NativePrintHostCapabilities,
+            _nativePrintHostCapabilities,
             _workflow.CurrentFileName);
         LastNativePrintHandoffPlan = LastPrintExecutionDescriptor.HandoffPlan;
         return LastPrintOutputPackage;
@@ -322,7 +328,7 @@ internal sealed class FileCommands
     {
         LastNativePrintHandoffPlan = PresentationPrintOutputPackageExecutor.BuildNativePrintHandoffPlan(
             packagePlan,
-            hostCapabilities ?? NativePrintHostCapabilities,
+            hostCapabilities ?? _nativePrintHostCapabilities,
             _workflow.CurrentFileName);
         return LastNativePrintHandoffPlan;
     }
@@ -347,9 +353,45 @@ internal sealed class FileCommands
             presentation,
             _getPrintCurrentSlideNumber(),
             _getPrintSelectedSlideNumbers(),
-            NativePrintHostCapabilities,
+            _nativePrintHostCapabilities,
             _workflow.CurrentFileName);
         return LastPrintBackstagePlan;
+    }
+
+    /// <summary>
+    /// Executes the selected PowerPoint-style print layout through the WPF native printer dialog.
+    /// The shared layout plan owns page selection; WPF owns only raster-page preparation and printer submission.
+    /// </summary>
+    public bool Print(PresentationPrintRequest? request = null)
+    {
+        if (!CanPrint)
+        {
+            ShowError(
+                "Could not print the presentation",
+                new InvalidOperationException(_nativePrintHostCapabilities.UnavailableReason ??
+                    "No native WPF printer is available."));
+            return false;
+        }
+
+        var normalizedRequest = request ?? new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides);
+        try
+        {
+            BuildPrintOutputPackage(normalizedRequest);
+            if (LastPrintExecutionDescriptor?.Validation.IsValid != true)
+                throw new InvalidOperationException(
+                    LastPrintExecutionDescriptor?.DisabledReason ??
+                    PresentationPrintOutputPackageExecutor.InvalidPackageReason);
+
+            return WpfPresentationPrintService.ShowPrintDialogAndPrint(
+                _getModel(),
+                normalizedRequest,
+                _window);
+        }
+        catch (Exception ex)
+        {
+            ShowError("Could not print the presentation", ex);
+            return false;
+        }
     }
 
     /// <summary>

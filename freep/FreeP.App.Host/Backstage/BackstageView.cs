@@ -148,6 +148,31 @@ internal sealed class BackstageView : UserControl
             Margin = new Thickness(0, 8, 0, 0)
         });
 
+        panel.Children.Add(Kit.SubHeading("Print"));
+        foreach (var choice in plan.LayoutChoices)
+        {
+            var printRequest = new PresentationPrintRequest(
+                choice.Layout.Layout,
+                HandoutSlidesPerPage: choice.Layout.SlidesPerPage);
+            var printButton = new Button
+            {
+                Content = $"Print {choice.Layout.DisplayName}",
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, 0, 8),
+                Padding = new Thickness(12, 6, 12, 6),
+                IsEnabled = choice.PackagePlan.CanBuildPackage && plan.NativePrintHandoff.CanOpenNativePrintDialog,
+                ToolTip = plan.NativePrintHandoff.CanOpenNativePrintDialog
+                    ? choice.PackagePlan.LayoutSummary
+                    : plan.NativePrintHandoff.Reason,
+            };
+            printButton.Click += (_, _) =>
+            {
+                _backstage.Hide();
+                _actions.Print(printRequest);
+            };
+            panel.Children.Add(printButton);
+        }
+
         return Kit.Scroll(panel);
     }
 
@@ -270,6 +295,7 @@ internal sealed record BackstageActions(
     Action ExportPdf,
     Action ExportNotesPagePdf,
     Action ExportImages,
+    Action<PresentationPrintRequest> Print,
     Action PlanPrint,
     Action ExportVideo,
     Func<bool> CanExportVideo,
