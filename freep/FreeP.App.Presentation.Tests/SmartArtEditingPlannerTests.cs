@@ -61,6 +61,63 @@ public sealed class SmartArtEditingPlannerTests
         result.Message.Should().Contain("native layout definition");
     }
 
+    [Theory]
+    [InlineData(SmartArtQuickStylePreset.Simple, "simple1", "Simple")]
+    [InlineData(SmartArtQuickStylePreset.Moderate, "moderate1", "Moderate")]
+    [InlineData(SmartArtQuickStylePreset.Intense, "intense1", "Intense")]
+    public void ApplyQuickStylePreset_UpdatesMetadataAndNativeStylePart(
+        SmartArtQuickStylePreset preset,
+        string expectedId,
+        string expectedTitle)
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan")),
+            QuickStyle = new SmartArtQuickStyleMetadata { UniqueId = "old-style", Title = "Old" },
+        };
+        var stylePart = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/quickStyle1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:styleDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" uniqueId=\"old-style\"><dgm:title val=\"Old\" /></dgm:styleDef>")
+        };
+        smartArt.Parts[stylePart.PartPath] = stylePart;
+
+        var result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset);
+
+        result.Applied.Should().BeTrue();
+        result.StyleUniqueId.Should().EndWith($"/quickstyle/{expectedId}");
+        smartArt.QuickStyle!.UniqueId.Should().Be(result.StyleUniqueId);
+        smartArt.QuickStyle.Title.Should().Be(expectedTitle);
+        var root = XDocument.Parse(Encoding.UTF8.GetString(stylePart.Bytes)).Root!;
+        root.Attribute("uniqueId")!.Value.Should().Be(result.StyleUniqueId);
+        root.Element(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram") + "title")!
+            .Attribute("val")!.Value.Should().Be(expectedTitle);
+    }
+
+    [Fact]
+    public void ApplyQuickStylePreset_CreatesMissingNativeStylePart()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"))
+        };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, SmartArtQuickStylePreset.Intense);
+
+        result.Applied.Should().BeTrue();
+        result.PartPath.Should().NotBeNull();
+        smartArt.DiagramRelIds.Should().ContainKey("qs");
+        smartArt.Parts[result.PartPath!].ContentType.Should().Contain("diagramStyle");
+    }
+
     [Fact]
     public void ChangeText_UpdatesTargetNodeAndLiveLayoutText()
     {

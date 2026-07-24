@@ -2084,6 +2084,12 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBoxList)));
         r.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicCycle)));
+        r.Register(SmartArtAuthoringPlanner.SimpleQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Simple)));
+        r.Register(SmartArtAuthoringPlanner.ModerateQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Moderate)));
+        r.Register(SmartArtAuthoringPlanner.IntenseQuickStyleCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Intense)));
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
@@ -5098,6 +5104,9 @@ public sealed partial class MainWindow : Window
     internal SmartArtLayoutApplyResult ApplySmartArtLayoutPresetForTests(SmartArtLayoutPreset preset) =>
         ApplySmartArtLayoutPreset(preset);
 
+    internal SmartArtQuickStyleApplyResult ApplySmartArtQuickStylePresetForTests(SmartArtQuickStylePreset preset) =>
+        ApplySmartArtQuickStylePreset(preset);
+
     private SmartArtLayoutApplyResult ApplySmartArtLayoutPreset(SmartArtLayoutPreset preset)
     {
         var smartArtShape = GetSelectedSmartArtShape();
@@ -5123,6 +5132,33 @@ public sealed partial class MainWindow : Window
         }
 
         return result ?? new SmartArtLayoutApplyResult(false, "No SmartArt layout was changed.", null, null, SmartArtFamily.Unknown);
+    }
+
+    private SmartArtQuickStyleApplyResult ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset preset)
+    {
+        var smartArtShape = GetSelectedSmartArtShape();
+        if (smartArtShape is null)
+            return SmartArtAuthoringPlanner.ApplyQuickStylePreset(null, preset);
+
+        SmartArtQuickStyleApplyResult? result = null;
+        Editor.EditSmartArt(smartArtShape.Id, smartArt =>
+        {
+            result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset);
+            if (result is not { Applied: true })
+                return false;
+
+            CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
+            return true;
+        });
+
+        if (result is { Applied: true })
+        {
+            _fileWorkflow.MarkDirty();
+            RefreshCanvas();
+            UpdateStatus();
+        }
+
+        return result ?? new SmartArtQuickStyleApplyResult(false, "No SmartArt Quick Style was changed.", null, null);
     }
 
     private SmartArtColorApplyResult ApplySmartArtColorPreset(SmartArtColorPreset preset)
