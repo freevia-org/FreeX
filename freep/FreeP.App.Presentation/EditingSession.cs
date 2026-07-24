@@ -556,6 +556,32 @@ public sealed class EditingSession
         return count;
     }
 
+    /// <summary>Sets color effects on one picture and records one undoable edit.</summary>
+    public bool SetPictureColorEffects(uint shapeId, PictureColorEffectValues values)
+    {
+        if (CurrentSlide is null)
+            return false;
+
+        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        if (shape?.Kind != SlideShapeKind.Picture)
+            return false;
+
+        Bus.Execute(new SetPictureColorEffectsCommand(_currentSlideIndex, shapeId, values));
+        return true;
+    }
+
+    /// <summary>Applies one picture color-effect edit to every selected picture.</summary>
+    public int SetSelectedPictureColorEffects(PictureColorEffectValues values)
+    {
+        var count = 0;
+        foreach (var id in _selectedShapeIds)
+        {
+            if (SetPictureColorEffects(id, values))
+                count++;
+        }
+        return count;
+    }
+
     /// <summary>Sets fill on all selected shapes.</summary>
     public void SetSelectedFill(ShapeFill? fill)
     {

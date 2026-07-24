@@ -179,6 +179,8 @@ internal static class FreePRibbonText
     public static string PictureKeyTip => Get("Ribbon_Command_Picture_KeyTip");
     public static RibbonText PictureCropInsetCommand { get; } = new("Ribbon_Command_PictureCropInset_Label", "Ribbon_Command_PictureCropInset_KeyTip");
     public static RibbonText PictureCropResetCommand { get; } = new("Ribbon_Command_PictureCropReset_Label", "Ribbon_Command_PictureCropReset_KeyTip");
+    public static RibbonText PictureGrayscaleCommand { get; } = new("Ribbon_Command_PictureGrayscale_Label", "Ribbon_Command_PictureGrayscale_KeyTip");
+    public static RibbonText PictureEffectsResetCommand { get; } = new("Ribbon_Command_PictureEffectsReset_Label", "Ribbon_Command_PictureEffectsReset_KeyTip");
     public static string VideoLabel => Get("Ribbon_Command_Video_Label");
     public static string VideoKeyTip => Get("Ribbon_Command_Video_KeyTip");
     public static string AudioLabel => Get("Ribbon_Command_Audio_Label");

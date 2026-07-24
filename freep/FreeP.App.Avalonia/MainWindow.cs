@@ -2079,6 +2079,12 @@ public sealed partial class MainWindow : Window
         r.Register(
             PictureCropAuthoringPlanner.ResetCommandId,
             new ActionRibbonCommand(() => Editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Reset())));
+        r.Register(
+            PictureColorEffectAuthoringPlanner.GrayscaleCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedPictureColorEffects(PictureColorEffectAuthoringPlanner.Grayscale())));
+        r.Register(
+            PictureColorEffectAuthoringPlanner.ResetCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedPictureColorEffects(PictureColorEffectAuthoringPlanner.Reset())));
 
         r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
         r.Register(ChartDisplayOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDisplayOptionsDialog));

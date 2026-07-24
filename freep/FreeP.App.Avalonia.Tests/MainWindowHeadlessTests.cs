@@ -822,6 +822,8 @@ public sealed class MainWindowHeadlessTests
         illustrationIds.Should().Contain("freep.picture", "Picture command required");
         illustrationIds.Should().Contain(PictureCropAuthoringPlanner.InsetCommandId, "Crop Inset command required");
         illustrationIds.Should().Contain(PictureCropAuthoringPlanner.ResetCommandId, "Reset Crop command required");
+        illustrationIds.Should().Contain(PictureColorEffectAuthoringPlanner.GrayscaleCommandId, "Grayscale command required");
+        illustrationIds.Should().Contain(PictureColorEffectAuthoringPlanner.ResetCommandId, "Reset Effects command required");
         illustrationIds.Should().Contain("freep.shape-rectangle", "Rectangle command required");
         illustrationIds.Should().Contain("freep.shape-ellipse", "Ellipse command required");
     }
@@ -831,6 +833,8 @@ public sealed class MainWindowHeadlessTests
     {
         var insetFound = false;
         var resetFound = false;
+        var grayscaleFound = false;
+        var effectsResetFound = false;
 
         var ran = await OnUiThread(() =>
         {
@@ -838,11 +842,15 @@ public sealed class MainWindowHeadlessTests
             var registry = window.BuildCommandRegistry();
             insetFound = registry.TryGet(PictureCropAuthoringPlanner.InsetCommandId, out _);
             resetFound = registry.TryGet(PictureCropAuthoringPlanner.ResetCommandId, out _);
+            grayscaleFound = registry.TryGet(PictureColorEffectAuthoringPlanner.GrayscaleCommandId, out _);
+            effectsResetFound = registry.TryGet(PictureColorEffectAuthoringPlanner.ResetCommandId, out _);
         });
 
         if (!ran) return;
         insetFound.Should().BeTrue();
         resetFound.Should().BeTrue();
+        grayscaleFound.Should().BeTrue();
+        effectsResetFound.Should().BeTrue();
     }
 
     [Fact]

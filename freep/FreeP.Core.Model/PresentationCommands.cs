@@ -746,6 +746,116 @@ public sealed class SetPictureCropCommand : IPresentationCommand
     }
 }
 
+/// <summary>Sets the authored color effects on a picture without changing its crop or frame.</summary>
+public sealed class SetPictureColorEffectsCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly PictureColorEffectValues _values;
+    private bool _captured;
+    private bool _hadFormat;
+    private PictureColorEffectValues _oldValues;
+
+    public SetPictureColorEffectsCommand(
+        int slideIndex,
+        uint shapeId,
+        PictureColorEffectValues values)
+    {
+        Validate(values);
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _values = values;
+    }
+
+    public string Label => "Picture Color Effects";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.Kind != SlideShapeKind.Picture)
+            return false;
+
+        return ReadValues(shape.PictureFormat) != _values;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.Kind != SlideShapeKind.Picture)
+            return;
+
+        if (!_captured)
+        {
+            _captured = true;
+            _hadFormat = shape.PictureFormat is not null;
+            _oldValues = ReadValues(shape.PictureFormat);
+        }
+
+        if (shape.PictureFormat is null)
+        {
+            if (_values == PictureColorEffectValues.Reset)
+                return;
+            shape.PictureFormat = new PictureFormat();
+        }
+
+        shape.PictureFormat.Grayscale = _values.Grayscale;
+        shape.PictureFormat.BiLevelThreshold = _values.BiLevelThreshold;
+        shape.PictureFormat.Brightness = _values.Brightness;
+        shape.PictureFormat.Contrast = _values.Contrast;
+        shape.PictureFormat.AlphaModPct = _values.AlphaModPct;
+
+        if (!shape.PictureFormat.HasCrop && !shape.PictureFormat.HasColorEffect)
+            shape.PictureFormat = null;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.Kind != SlideShapeKind.Picture || !_captured)
+            return;
+
+        if (shape.PictureFormat is null)
+        {
+            if (!_hadFormat)
+                return;
+            shape.PictureFormat = new PictureFormat();
+        }
+
+        shape.PictureFormat.Grayscale = _oldValues.Grayscale;
+        shape.PictureFormat.BiLevelThreshold = _oldValues.BiLevelThreshold;
+        shape.PictureFormat.Brightness = _oldValues.Brightness;
+        shape.PictureFormat.Contrast = _oldValues.Contrast;
+        shape.PictureFormat.AlphaModPct = _oldValues.AlphaModPct;
+        if (!shape.PictureFormat.HasCrop && !shape.PictureFormat.HasColorEffect)
+            shape.PictureFormat = null;
+    }
+
+    private static PictureColorEffectValues ReadValues(PictureFormat? format) => format is null
+        ? PictureColorEffectValues.Reset
+        : new(
+            format.Grayscale,
+            format.BiLevelThreshold,
+            format.Brightness,
+            format.Contrast,
+            format.AlphaModPct);
+
+    private static void Validate(PictureColorEffectValues values)
+    {
+        if (values.BiLevelThreshold is { } threshold &&
+            (double.IsNaN(threshold) || threshold < 0 || threshold > 1))
+            throw new ArgumentOutOfRangeException(nameof(values), "Bi-level threshold must be between 0 and 1.");
+        if (values.Brightness is { } brightness &&
+            (double.IsNaN(brightness) || brightness < -1 || brightness > 1))
+            throw new ArgumentOutOfRangeException(nameof(values), "Brightness must be between -1 and 1.");
+        if (values.Contrast is { } contrast &&
+            (double.IsNaN(contrast) || contrast < -1 || contrast > 1))
+            throw new ArgumentOutOfRangeException(nameof(values), "Contrast must be between -1 and 1.");
+        if (values.AlphaModPct is { } alpha &&
+            (double.IsNaN(alpha) || alpha < 0 || alpha > 1))
+            throw new ArgumentOutOfRangeException(nameof(values), "Alpha must be between 0 and 1.");
+    }
+}
+
 /// <summary>
 /// Sets one DrawingML preset-geometry adjustment on a shape.
 /// A missing value removes the authored adjustment and restores the preset default.
