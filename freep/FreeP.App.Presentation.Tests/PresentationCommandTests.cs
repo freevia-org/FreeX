@@ -297,6 +297,31 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SetCustomGeometryPointCommand_ApplyUndoAndRedoPreservesVertex()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 10, Y: 20));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 90, Y: 20));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        shape.CustomGeometry.Add(path);
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetCustomGeometryPointCommand(0, 1, 0, 1, 60, 70));
+        path.Segments[1].X.Should().Be(60);
+        path.Segments[1].Y.Should().Be(70);
+
+        bus.Undo();
+        path.Segments[1].X.Should().Be(90);
+        path.Segments[1].Y.Should().Be(20);
+
+        bus.Redo();
+        path.Segments[1].X.Should().Be(60);
+        path.Segments[1].Y.Should().Be(70);
+    }
+
+    [Fact]
     public void RotateShapeCommand_Apply_SetsRotation()
     {
         var (p, bus) = Make();

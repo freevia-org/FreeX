@@ -97,6 +97,42 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
+    public void Build_CustomGeometry_ExposesMoveAndLineVertices()
+    {
+        var shape = MakeCustomTriangle();
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.CanEdit.Should().BeTrue();
+        plan.Handles.Should().HaveCount(3);
+        plan.Handles.Select(handle => handle.Name)
+            .Should().Equal("custom:0:0", "custom:0:1", "custom:0:2");
+        plan.Handles[0].PositionDip.Should().Be(new LayoutPoint(30, 30));
+        plan.Handles[1].PositionDip.Should().Be(new LayoutPoint(190, 30));
+        plan.Handles[2].PositionDip.Should().Be(new LayoutPoint(110, 120));
+    }
+
+    [Fact]
+    public void BuildMutationPlan_CustomGeometry_MapsPointerToPathUnits()
+    {
+        var shape = MakeCustomTriangle();
+
+        var plan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape,
+            Bounds,
+            "custom:0:1",
+            new LayoutPoint(150, 70));
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.CustomPoint.Should().NotBeNull();
+        plan.CustomPoint!.PathIndex.Should().Be(0);
+        plan.CustomPoint.SegmentIndex.Should().Be(1);
+        plan.CustomPoint.X.Should().BeApproximately(70, 0.001);
+        plan.CustomPoint.Y.Should().BeApproximately(50, 0.001);
+        plan.Value.Should().BeNull();
+    }
+
+    [Fact]
     public void Build_NonChordPreset_ReportsUnsupportedWithoutInventingHandles()
     {
         var shape = new SlideShape
@@ -111,5 +147,23 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
         plan.CanEdit.Should().BeFalse();
         plan.Handles.Should().BeEmpty();
         plan.DisabledReason.Should().Be(ShapeGeometryAdjustmentPlanner.UnsupportedShapeMessage);
+    }
+
+    private static SlideShape MakeCustomTriangle()
+    {
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 10, Y: 10));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 90, Y: 10));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 50, Y: 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Triangle,
+        };
+        shape.CustomGeometry.Add(path);
+        return shape;
     }
 }
