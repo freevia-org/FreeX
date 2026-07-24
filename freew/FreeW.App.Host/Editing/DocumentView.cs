@@ -4762,6 +4762,11 @@ public sealed class DocumentView : RichTextBox
     public RestrictEditingEnforcementDecision GetRestrictEditingDecision(RestrictEditingOperationKind operation) =>
         RestrictEditingPolicy.DecisionFor(operation);
 
+    public RestrictEditingEnforcementDecision GetRestrictEditingHistoryDecision(
+        RestrictEditingOperationKind historyOperation,
+        DocumentCommandMutationKind? mutationKind) =>
+        RestrictEditingPolicy.DecisionForHistory(historyOperation, mutationKind);
+
     private bool AllowsRestrictEditingOperation(RestrictEditingOperationKind operation) =>
         RestrictEditingPolicy.Allows(operation);
 

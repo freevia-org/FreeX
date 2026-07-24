@@ -239,6 +239,17 @@ public sealed class DocumentViewProtectionTests
             view.SetSelectionRangePublic(0, 0, 0, 5);
             view.SetProtection(ProtectionMode.CommentsOnly);
             view.NewComment("note");
+            view.GetRestrictEditingHistoryDecision(
+                    RestrictEditingOperationKind.HistoryUndo,
+                    DocumentCommandMutationKind.Comment)
+                .Should().Match<RestrictEditingEnforcementDecision>(decision =>
+                    decision.Operation == RestrictEditingOperationKind.HistoryUndo
+                    && decision.IsAllowed
+                    && decision.BlockReason == RestrictEditingBlockReason.None);
+            view.GetRestrictEditingHistoryDecision(
+                    RestrictEditingOperationKind.HistoryUndo,
+                    DocumentCommandMutationKind.BodyText)
+                .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
 
             canUndoCommentHistory = view.CanUndo;
             view.Undo();

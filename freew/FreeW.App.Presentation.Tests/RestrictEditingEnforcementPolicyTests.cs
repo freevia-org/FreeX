@@ -132,10 +132,21 @@ public sealed class RestrictEditingEnforcementPolicyTests
     {
         var policy = Policy(ProtectionMode.CommentsOnly);
 
+        RestrictEditingEnforcementPolicy.ClassifyHistoryMutation(
+                RestrictEditingOperationKind.HistoryUndo,
+                DocumentCommandMutationKind.Comment)
+            .Should().Be(RestrictEditingOperationKind.CommentInsert);
+        RestrictEditingEnforcementPolicy.ClassifyHistoryMutation(
+                RestrictEditingOperationKind.HistoryRedo,
+                DocumentCommandMutationKind.Comment)
+            .Should().Be(RestrictEditingOperationKind.CommentInsert);
+
         policy.DecisionForHistory(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.Comment)
             .IsAllowed.Should().BeTrue();
         policy.DecisionForHistory(RestrictEditingOperationKind.HistoryRedo, DocumentCommandMutationKind.Comment)
             .IsAllowed.Should().BeTrue();
+        policy.DecisionForHistory(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.Comment)
+            .Operation.Should().Be(RestrictEditingOperationKind.HistoryUndo);
         policy.DecisionForHistory(RestrictEditingOperationKind.HistoryUndo, DocumentCommandMutationKind.BodyText)
             .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
         policy.DecisionForHistory(RestrictEditingOperationKind.HistoryRedo, DocumentCommandMutationKind.BodyFormatting)
@@ -144,6 +155,22 @@ public sealed class RestrictEditingEnforcementPolicyTests
             .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
         policy.DecisionForHistory(RestrictEditingOperationKind.HistoryRedo, mutationKind: null)
             .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
+    }
+
+    [Theory]
+    [InlineData(DocumentCommandMutationKind.BodyText, RestrictEditingOperationKind.BodyTextEdit)]
+    [InlineData(DocumentCommandMutationKind.BodyFormatting, RestrictEditingOperationKind.BodyFormatting)]
+    [InlineData(DocumentCommandMutationKind.Comment, RestrictEditingOperationKind.CommentInsert)]
+    [InlineData(DocumentCommandMutationKind.FormField, RestrictEditingOperationKind.FormFieldEdit)]
+    [InlineData(DocumentCommandMutationKind.Mixed, RestrictEditingOperationKind.HistoryUndo)]
+    public void History_mutation_classification_is_explicit_and_host_neutral(
+        DocumentCommandMutationKind mutationKind,
+        RestrictEditingOperationKind expectedOperation)
+    {
+        RestrictEditingEnforcementPolicy.ClassifyHistoryMutation(
+                RestrictEditingOperationKind.HistoryUndo,
+                mutationKind)
+            .Should().Be(expectedOperation);
     }
 
     [Fact]

@@ -74,6 +74,29 @@ public readonly record struct RestrictEditingEnforcementPolicy(
         DecisionFor(RestrictEditingOperationKind.HistoryUndo).IsBlocked
         || DecisionFor(RestrictEditingOperationKind.HistoryRedo).IsBlocked;
 
+    /// <summary>
+    /// Classifies the mutation at the top of an undo/redo stack into the
+    /// protection operation it represents. Both document hosts use this same
+    /// mapping so comments-only history remains a shared policy decision.
+    /// </summary>
+    public static RestrictEditingOperationKind ClassifyHistoryMutation(
+        RestrictEditingOperationKind historyOperation,
+        DocumentCommandMutationKind? mutationKind)
+    {
+        if (historyOperation is not RestrictEditingOperationKind.HistoryUndo
+            and not RestrictEditingOperationKind.HistoryRedo)
+            throw new ArgumentOutOfRangeException(nameof(historyOperation), historyOperation, "Expected an undo/redo history operation.");
+
+        return mutationKind switch
+        {
+            DocumentCommandMutationKind.BodyText => RestrictEditingOperationKind.BodyTextEdit,
+            DocumentCommandMutationKind.BodyFormatting => RestrictEditingOperationKind.BodyFormatting,
+            DocumentCommandMutationKind.Comment => RestrictEditingOperationKind.CommentInsert,
+            DocumentCommandMutationKind.FormField => RestrictEditingOperationKind.FormFieldEdit,
+            _ => historyOperation
+        };
+    }
+
     public RestrictEditingEnforcementDecision DecisionFor(RestrictEditingOperationKind operation)
     {
         if (IsMarkedAsFinal)
@@ -103,17 +126,7 @@ public readonly record struct RestrictEditingEnforcementPolicy(
         if (mutationKind is null)
             return DecisionFor(historyOperation);
 
-        if (mutationKind == DocumentCommandMutationKind.Mixed)
-            return DecisionFor(historyOperation);
-
-        var effectiveOperation = mutationKind switch
-        {
-            DocumentCommandMutationKind.BodyText => RestrictEditingOperationKind.BodyTextEdit,
-            DocumentCommandMutationKind.BodyFormatting => RestrictEditingOperationKind.BodyFormatting,
-            DocumentCommandMutationKind.Comment => RestrictEditingOperationKind.CommentInsert,
-            DocumentCommandMutationKind.FormField => RestrictEditingOperationKind.FormFieldEdit,
-            _ => historyOperation
-        };
+        var effectiveOperation = ClassifyHistoryMutation(historyOperation, mutationKind);
 
         var decision = DecisionFor(effectiveOperation);
         return decision with { Operation = historyOperation };

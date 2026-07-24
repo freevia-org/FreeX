@@ -113,6 +113,17 @@ public sealed class ProtectionEnforcementTests
         view.SetProtection(ProtectionMode.CommentsOnly);
         view.InsertComment("review", "Ann", "A");
         view.Model.Comments.Should().HaveCount(1);
+        view.GetRestrictEditingHistoryDecision(
+                RestrictEditingOperationKind.HistoryUndo,
+                DocumentCommandMutationKind.Comment)
+            .Should().Match<RestrictEditingEnforcementDecision>(decision =>
+                decision.Operation == RestrictEditingOperationKind.HistoryUndo
+                && decision.IsAllowed
+                && decision.BlockReason == RestrictEditingBlockReason.None);
+        view.GetRestrictEditingHistoryDecision(
+                RestrictEditingOperationKind.HistoryUndo,
+                DocumentCommandMutationKind.BodyText)
+            .BlockReason.Should().Be(RestrictEditingBlockReason.CommentsOnly);
 
         view.CanUndo.Should().BeTrue();
         view.Undo();

@@ -409,6 +409,11 @@ public sealed class DocumentView : Control
         _bus.CanRedo && AllowsRestrictEditingHistoryOperation(
             RestrictEditingOperationKind.HistoryRedo,
             _bus.NextRedoMutationKind);
+
+    public RestrictEditingEnforcementDecision GetRestrictEditingHistoryDecision(
+        RestrictEditingOperationKind historyOperation,
+        DocumentCommandMutationKind? mutationKind) =>
+        RestrictEditingPolicy.DecisionForHistory(historyOperation, mutationKind);
     public bool SpellCheckEnabled { get; private set; } = true;
     public IReadOnlyList<string> CustomDictionaryWords => _customDictionary.Words;
 
