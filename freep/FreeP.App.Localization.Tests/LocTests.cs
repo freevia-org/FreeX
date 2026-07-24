@@ -258,6 +258,8 @@ public sealed class LocTests
             "Ribbon_Command_ArrangeGroup_KeyTip",
             "Ribbon_Command_ArrangeUngroup_Label",
             "Ribbon_Command_ArrangeUngroup_KeyTip",
+            "Ribbon_Command_ArrangeEditPoints_Label",
+            "Ribbon_Command_ArrangeEditPoints_KeyTip",
             "Ribbon_Command_ArrangeBringToFront_Label",
             "Ribbon_Command_ArrangeBringToFront_KeyTip",
             "Ribbon_Command_ArrangeBringForward_Label",

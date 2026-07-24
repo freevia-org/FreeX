@@ -427,6 +427,7 @@ public sealed partial class MainWindow : Window
             onEditChartLayoutOptions: () => OpenChartLayoutOptionsDialog(),
             onEditChartDataTableOptions: () => OpenChartDataTableOptionsDialog(),
             getSlideCanvas:     () => SlideCanvas,
+            onEditPoints:       () => SlideCanvas.SetEditPointsMode(!SlideCanvas.EditPointsEnabled),
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
             onCustomSlideSize:  () => OpenSlideSizeDialog(),
             onLayoutPicker:     () => OpenLayoutPicker(),

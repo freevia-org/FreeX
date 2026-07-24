@@ -189,6 +189,7 @@ internal static class FreePRibbonText
     public static RibbonText ArrangeGroup { get; } = new("Ribbon_Group_Arrange_Label", "Ribbon_Group_Arrange_KeyTip");
     public static RibbonText ArrangeGroupCommand { get; } = new("Ribbon_Command_ArrangeGroup_Label", "Ribbon_Command_ArrangeGroup_KeyTip");
     public static RibbonText ArrangeUngroupCommand { get; } = new("Ribbon_Command_ArrangeUngroup_Label", "Ribbon_Command_ArrangeUngroup_KeyTip");
+    public static RibbonText ArrangeEditPointsCommand { get; } = new("Ribbon_Command_ArrangeEditPoints_Label", "Ribbon_Command_ArrangeEditPoints_KeyTip");
     public static RibbonText ArrangeBringToFrontCommand { get; } = new("Ribbon_Command_ArrangeBringToFront_Label", "Ribbon_Command_ArrangeBringToFront_KeyTip");
     public static RibbonText ArrangeBringForwardCommand { get; } = new("Ribbon_Command_ArrangeBringForward_Label", "Ribbon_Command_ArrangeBringForward_KeyTip");
     public static RibbonText ArrangeSendBackwardCommand { get; } = new("Ribbon_Command_ArrangeSendBackward_Label", "Ribbon_Command_ArrangeSendBackward_KeyTip");

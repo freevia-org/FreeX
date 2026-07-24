@@ -2045,6 +2045,7 @@ public sealed partial class MainWindow : Window
         {
             r.Register(route.CommandId, new ActionRibbonCommand(() => route.Execute(Editor)));
         }
+        r.Register("freep.arrange.edit-points", new EditPointsToggleCommand(_slideCanvas));
 
         // Insert objects/text
         foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
@@ -7943,6 +7944,16 @@ public sealed partial class MainWindow : Window
     {
         var dialog = new CustomShowDialog(this);
         await dialog.ShowDialog(this);
+    }
+
+    private sealed class EditPointsToggleCommand(SlideCanvas canvas) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            canvas.SetEditPointsMode(!canvas.EditPointsEnabled);
+
+        public RibbonCommandState GetState() => new(
+            IsEnabled: true,
+            IsChecked: canvas.EditPointsEnabled);
     }
 
     private sealed class ViewShowToggleCommand : IRibbonStatefulCommand

@@ -70,6 +70,7 @@ internal static class FreePRibbonCommands
         Action?             onStartFromCurrent = null,
         Action?             onEditChartData    = null,
         Func<SlideCanvas?>? getSlideCanvas     = null,
+        Action?             onEditPoints       = null,
         Action?             onCustomSlideSize  = null,
         OsClipboardService? osClipboard        = null,
         Action?             onInsertLink       = null,
@@ -440,6 +441,10 @@ internal static class FreePRibbonCommands
 
         registry.Register("freep.arrange.ungroup",
             new ActionRibbonCommand(() => editor.UngroupSelected()));
+
+        registry.Register("freep.arrange.edit-points",
+            new EditorToggleCommand(stateStore, "freep.arrange.edit-points",
+                () => onEditPoints?.Invoke(), initialChecked: true));
 
         registry.Register("freep.arrange.bring-to-front",
             new ActionRibbonCommand(() => editor.BringToFront()));
@@ -1029,11 +1034,16 @@ internal static class FreePRibbonCommands
         private readonly Action _toggle;
         private bool _checked;
 
-        public EditorToggleCommand(RibbonStateStore stateStore, RibbonCommandId id, Action toggle)
+        public EditorToggleCommand(
+            RibbonStateStore stateStore,
+            RibbonCommandId id,
+            Action toggle,
+            bool initialChecked = false)
         {
             _stateStore = stateStore;
             _id         = id;
             _toggle     = toggle;
+            _checked    = initialChecked;
         }
 
         public void Execute(RibbonCommandContext context)

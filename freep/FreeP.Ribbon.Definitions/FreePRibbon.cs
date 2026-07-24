@@ -232,6 +232,8 @@ public static class FreePRibbon
             FreePRibbonText.ArrangeGroupCommand.KeyTip);
         group.Medium("freep.arrange.ungroup", FreePRibbonText.ArrangeUngroupCommand.Label, RibbonCommandIconKind.Ungroup,
             FreePRibbonText.ArrangeUngroupCommand.KeyTip);
+        group.IconToggle("freep.arrange.edit-points", FreePRibbonText.ArrangeEditPointsCommand.Label,
+            RibbonCommandIconKind.Diamond, FreePRibbonText.ArrangeEditPointsCommand.KeyTip);
         group.Separator();
         group.Medium("freep.arrange.bring-to-front", FreePRibbonText.ArrangeBringToFrontCommand.Label,
             RibbonCommandIconKind.ArrowUp, FreePRibbonText.ArrangeBringToFrontCommand.KeyTip);
