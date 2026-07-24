@@ -19,6 +19,13 @@ public sealed class SheetTabPointerMechanicsSourceTests
         source.Should().Contain("SelectSheetForContextCommand(sheetId)");
         source.Should().Contain("if (args.ClickCount >= 2)");
         source.Should().Contain("_ = RenameActiveSheetAsync();");
+
+        var pointerMove = source[
+            source.IndexOf("private void SheetTabDragPointerMoved", StringComparison.Ordinal)..
+            source.IndexOf("private void SheetTabDragPointerReleased", StringComparison.Ordinal)];
+        pointerMove.Should().Contain("if (!point.Properties.IsLeftButtonPressed)");
+        pointerMove.Should().Contain("CompleteSheetTabPointerRelease();");
+        pointerMove.Should().NotContain("CommitSheetTabDragDrop();");
     }
 
     [Fact]

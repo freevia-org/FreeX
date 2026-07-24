@@ -13,6 +13,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.SheetUI;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FreeX.App.Host.Tests;
@@ -462,7 +463,7 @@ public sealed class MainWindowSheetTabKeyboardTests
             source.IndexOf("private void SheetTab_MouseMove", StringComparison.Ordinal)];
         var captureHelper = source[
             source.IndexOf("private void CaptureSheetTabMouseForDrag", StringComparison.Ordinal)..
-            source.IndexOf("private static int CalculateSheetTabDragToIndex", StringComparison.Ordinal)];
+            source.IndexOf("private SheetTabDragTarget? FindSheetTabDragTarget", StringComparison.Ordinal)];
         var mouseMove = source[
             source.IndexOf("private void SheetTab_MouseMove", StringComparison.Ordinal)..
             source.IndexOf("private void SheetTab_MouseLeftButtonUp", StringComparison.Ordinal)];
@@ -547,7 +548,8 @@ public sealed class MainWindowSheetTabKeyboardTests
 
         mouseMove.Should().Contain("SystemParameters.MinimumHorizontalDragDistance");
         mouseMove.Should().Contain("FindSheetTabDragTarget(current, draggedId, e.OriginalSource as System.Windows.DependencyObject)");
-        mouseMove.Should().Contain("CalculateSheetTabDragToIndex(fromIndex, targetIndex, insertAfterTarget)");
+        mouseMove.Should().Contain("SheetTabPointerPlanner.CalculateDropIndex(fromIndex, targetIndex, insertAfterTarget)");
+        source.Should().NotContain("CalculateSheetTabDragToIndex");
         mouseMove.Should().Contain("_dragSheetTabPendingToIndex = toIndex;");
         mouseMove.Should().NotContain("new MoveSheetCommand(fromIndex, toIndex)");
         source.Should().Contain("SheetTabsControl.InputHitTest(position)");
@@ -628,11 +630,7 @@ public sealed class MainWindowSheetTabKeyboardTests
         bool insertAfterTarget,
         int expectedToIndex)
     {
-        var method = typeof(MainWindow)
-            .GetMethod("CalculateSheetTabDragToIndex", BindingFlags.Static | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "CalculateSheetTabDragToIndex");
-
-        var toIndex = (int)method.Invoke(null, [fromIndex, targetIndex, insertAfterTarget])!;
+        var toIndex = SheetTabPointerPlanner.CalculateDropIndex(fromIndex, targetIndex, insertAfterTarget);
 
         toIndex.Should().Be(expectedToIndex);
     }

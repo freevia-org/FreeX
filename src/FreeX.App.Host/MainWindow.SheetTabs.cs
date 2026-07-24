@@ -180,7 +180,7 @@ public partial class MainWindow
         var fromIndex = FindWorkbookSheetIndex(draggedId);
         var targetIndex = FindWorkbookSheetIndex(dragTarget.Tab.Id);
         var insertAfterTarget = current.X >= dragTarget.Bounds.Left + dragTarget.Bounds.Width / 2.0;
-        var toIndex = CalculateSheetTabDragToIndex(fromIndex, targetIndex, insertAfterTarget);
+        var toIndex = SheetTabPointerPlanner.CalculateDropIndex(fromIndex, targetIndex, insertAfterTarget);
         if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
             return;
 
@@ -233,17 +233,6 @@ public partial class MainWindow
 
         if (sender is UIElement fallbackElement)
             fallbackElement.CaptureMouse();
-    }
-
-    private static int CalculateSheetTabDragToIndex(int fromIndex, int targetIndex, bool insertAfterTarget)
-    {
-        if (fromIndex < 0 || targetIndex < 0)
-            return -1;
-
-        var insertBeforeIndex = insertAfterTarget ? targetIndex + 1 : targetIndex;
-        return fromIndex < insertBeforeIndex
-            ? insertBeforeIndex - 1
-            : insertBeforeIndex;
     }
 
     private SheetTabDragTarget? FindSheetTabDragTarget(Point position, SheetId draggedId, DependencyObject? fallbackHit)

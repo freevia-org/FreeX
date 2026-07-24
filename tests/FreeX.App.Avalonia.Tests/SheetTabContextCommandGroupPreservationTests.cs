@@ -118,4 +118,32 @@ public sealed class SheetTabContextCommandGroupPreservationTests
             }
         }, CancellationToken.None);
     }
+
+    [Theory]
+    [InlineData(KeyModifiers.Control)]
+    [InlineData(KeyModifiers.Shift)]
+    public async Task ModifierPointerRelease_ClearsSuppressionBeforeLaterKeyboardActivation(KeyModifiers modifier)
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var workbook = window.Session.Workbook;
+                var first = workbook.Sheets[0];
+                var details = workbook.AddSheet("Details");
+                window.Session.SelectSheet(first.Id);
+
+                window.RaiseSheetTabModifierReleaseThenKeyboardClickForTest(details.Id, modifier);
+
+                window.Session.ActiveSheet.Id.Should().Be(details.Id);
+                window.Session.IsWorkbookGrouped.Should().BeFalse(
+                    "pointer release must not leave suppression that swallows a later keyboard Click");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
 }

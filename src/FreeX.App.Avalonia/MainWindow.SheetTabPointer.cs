@@ -74,8 +74,7 @@ public sealed partial class MainWindow
         var point = args.GetCurrentPoint(_sheetTabsHost);
         if (!point.Properties.IsLeftButtonPressed)
         {
-            CommitSheetTabDragDrop();
-            ClearSheetTabDragState();
+            CompleteSheetTabPointerRelease();
             return;
         }
 
@@ -104,8 +103,14 @@ public sealed partial class MainWindow
         if (_sheetTabDragPointer is not null && args.Pointer != _sheetTabDragPointer)
             return;
 
+        CompleteSheetTabPointerRelease();
+    }
+
+    private void CompleteSheetTabPointerRelease()
+    {
         CommitSheetTabDragDrop();
         ClearSheetTabDragState();
+        _sheetTabModifierClickSuppressionId = null;
     }
 
     private void SheetTabDragPointerCaptureLost(object? sender, PointerCaptureLostEventArgs args)
@@ -132,6 +137,13 @@ public sealed partial class MainWindow
     internal void RaiseSheetTabModifierClickForTest(SheetId sheetId, KeyModifiers modifiers)
     {
         BeginSheetTabPointer(sheetId, modifiers);
+        CompleteSheetTabClick(sheetId);
+    }
+
+    internal void RaiseSheetTabModifierReleaseThenKeyboardClickForTest(SheetId sheetId, KeyModifiers modifiers)
+    {
+        BeginSheetTabPointer(sheetId, modifiers);
+        CompleteSheetTabPointerRelease();
         CompleteSheetTabClick(sheetId);
     }
 
