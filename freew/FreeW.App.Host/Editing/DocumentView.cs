@@ -5997,15 +5997,16 @@ public sealed class DocumentView : RichTextBox
         };
         if (isPrimaryGlowBlueStress)
         {
-            // Word's imported Wave1 traverses the opposite vertical phase from the generic plan.
+            // The imported DrawingML textWave1 follows the inverse phase of the generic planner and
+            // stretches each glyph through the resulting envelope. This is specific to the measured
+            // source signature; generic Wave1 routes retain the renderer-neutral placement plan.
             sharedPlacements = sharedPlacements.Select(placement => placement with
             {
-                // Word's emitted DrawingML preserves textWave1 but renders this exact source
-                // signature as an unrotated baseline rather than the generic glyph wave.
-                CenterYNormalized = 0.5,
-                RotationRadians = 0
+                CenterYNormalized = 0.5 + (0.5 - placement.CenterYNormalized) * 1.35,
+                RotationRadians = -placement.RotationRadians * 1.35
             }).ToList();
         }
+        var verticalScale = isPrimaryGlowBlueStress ? 1.72 : 1;
 
         var outlineBrush = wordArt.Outline.IsVisible
             ? BuildDrawingStrokeBrush(wordArt.Outline)
@@ -6026,9 +6027,9 @@ public sealed class DocumentView : RichTextBox
             if (outlineBrush is not null)
             {
                 foreach (var offset in new[] { (-0.8, 0.0), (0.8, 0.0), (0.0, -0.8), (0.0, 0.8) })
-                    AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, outlineBrush, placement, horizontalScale, offset);
+                    AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, outlineBrush, placement, horizontalScale, verticalScale, offset);
             }
-            AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, foreground, placement, horizontalScale, (0, 0));
+            AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, foreground, placement, horizontalScale, verticalScale, (0, 0));
         }
     }
 
@@ -6064,6 +6065,7 @@ public sealed class DocumentView : RichTextBox
         System.Windows.Media.Brush foreground,
         (double CenterX, double CenterY, double RotationDegrees, double Width, double Height) placement,
         double horizontalScale,
+        double verticalScale,
         (double X, double Y) offset)
     {
         var glyph = new TextBlock
@@ -6075,13 +6077,13 @@ public sealed class DocumentView : RichTextBox
             Foreground = foreground,
             TextWrapping = TextWrapping.NoWrap,
             RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = horizontalScale == 1
+            RenderTransform = horizontalScale == 1 && verticalScale == 1
                 ? new RotateTransform(placement.RotationDegrees)
                 : new TransformGroup
                 {
                     Children =
                     {
-                        new ScaleTransform(horizontalScale, 1),
+                        new ScaleTransform(horizontalScale, verticalScale),
                         new RotateTransform(placement.RotationDegrees)
                     }
                 }
