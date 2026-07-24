@@ -28,6 +28,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
     private readonly CheckBox _valueGridlinesCheck;
     private readonly TextBox _barGapWidthBox;
     private readonly TextBox _barOverlapBox;
+    private readonly ComboBox _displayBlanksCombo;
 
     internal ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -97,6 +98,12 @@ internal sealed class ChartDisplayOptionsDialog : Window
         };
         _barGapWidthBox = new TextBox { Text = Format(_planner.BarGapWidthPercent), MinWidth = 150 };
         _barOverlapBox = new TextBox { Text = Format(_planner.BarOverlapPercent), MinWidth = 150 };
+        _displayBlanksCombo = new ComboBox
+        {
+            ItemsSource = ChartDisplayOptionsPlanner.DisplayBlanksOptions.Select(option => option.Label).ToArray(),
+            SelectedIndex = FindDisplayBlanksIndex(_planner.DisplayBlanksAs),
+            MinWidth = 150,
+        };
 
         var buttons = new StackPanel
         {
@@ -131,6 +138,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
                 _valueGridlinesCheck,
                 MakeRow(surface.BarGapWidthLabel, _barGapWidthBox),
                 MakeRow(surface.BarOverlapLabel, _barOverlapBox),
+                MakeRow(surface.DisplayBlanksAsLabel, _displayBlanksCombo),
                 new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 },
                 buttons,
             },
@@ -157,7 +165,8 @@ internal sealed class ChartDisplayOptionsDialog : Window
         string? numberFormat = null,
         string? separator = null,
         int? barGapWidthPercent = null,
-        int? barOverlapPercent = null)
+        int? barOverlapPercent = null,
+        ChartDisplayBlanksAs? displayBlanksAs = null)
     {
         _titleBox.Text = title;
         _legendCombo.SelectedIndex = FindLegendIndex(legend);
@@ -173,6 +182,7 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _valueGridlinesCheck.IsChecked = valueGridlines;
         _barGapWidthBox.Text = Format(barGapWidthPercent);
         _barOverlapBox.Text = Format(barOverlapPercent);
+        _displayBlanksCombo.SelectedIndex = FindDisplayBlanksIndex(displayBlanksAs);
     }
 
     private void OnOk()
@@ -202,6 +212,9 @@ internal sealed class ChartDisplayOptionsDialog : Window
         _planner.SetValueGridlines(_valueGridlinesCheck.IsChecked == true);
         _planner.SetBarGapWidthPercent(ParseOptionalPercent(_barGapWidthBox.Text, "Bar gap width", 0, 500));
         _planner.SetBarOverlapPercent(ParseOptionalPercent(_barOverlapBox.Text, "Bar overlap", -100, 100));
+        var blanksIndex = _displayBlanksCombo.SelectedIndex;
+        if (blanksIndex >= 0 && blanksIndex < ChartDisplayOptionsPlanner.DisplayBlanksOptions.Count)
+            _planner.SetDisplayBlanksAs(ChartDisplayOptionsPlanner.DisplayBlanksOptions[blanksIndex].Value);
     }
 
     private static Control MakeRow(string label, Control control)
@@ -238,6 +251,11 @@ internal sealed class ChartDisplayOptionsDialog : Window
         Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == position).index);
+
+    private static int FindDisplayBlanksIndex(ChartDisplayBlanksAs? value) =>
+        Math.Max(0, ChartDisplayOptionsPlanner.DisplayBlanksOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == value).index);
 
     private static string Format(int? value) => value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
 

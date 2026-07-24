@@ -114,6 +114,7 @@ public sealed class ChartDataDialogTests : IDisposable
         dialog.Should().NotBeNull();
         options.Title.Should().Be("Existing");
         options.Legend.Should().Be(LegendPosition.Right);
+        options.DisplayBlanksAs.Should().BeNull();
     }
 
     [StaFact]

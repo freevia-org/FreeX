@@ -18,4 +18,5 @@ public sealed record ChartDisplayOptions(
     string? LabelNumberFormat = null,
     string? LabelSeparator = null,
     int? BarGapWidthPercent = null,
-    int? BarOverlapPercent = null);
+    int? BarOverlapPercent = null,
+    ChartDisplayBlanksAs? DisplayBlanksAs = null);

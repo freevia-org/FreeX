@@ -25,6 +25,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly CheckBox _valueGridlinesCheck;
     private readonly TextBox _barGapWidthBox;
     private readonly TextBox _barOverlapBox;
+    private readonly ComboBox _displayBlanksCombo;
 
     public ChartDisplayOptionsDialog(EditingSession editor)
     {
@@ -37,7 +38,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
         Title = surface.Title;
         Width = ChartDisplayOptionsPlanner.DefaultDialogWidth;
-        Height = ChartDisplayOptionsPlanner.DefaultDialogHeight;
+        Height = ChartDisplayOptionsPlanner.DefaultDialogHeight + 40;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
@@ -95,6 +96,13 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         };
         _barGapWidthBox = new TextBox { Text = Format(_planner.BarGapWidthPercent), MinWidth = 160 };
         _barOverlapBox = new TextBox { Text = Format(_planner.BarOverlapPercent), MinWidth = 160 };
+        _displayBlanksCombo = new ComboBox
+        {
+            ItemsSource = ChartDisplayOptionsPlanner.DisplayBlanksOptions,
+            DisplayMemberPath = nameof(ChartDisplayBlanksOption.Label),
+            MinWidth = 160,
+            SelectedIndex = FindDisplayBlanksIndex(_planner.DisplayBlanksAs),
+        };
 
         var buttons = new StackPanel
         {
@@ -124,6 +132,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         content.Children.Add(_valueGridlinesCheck);
         content.Children.Add(MakeRow(surface.BarGapWidthLabel, _barGapWidthBox));
         content.Children.Add(MakeRow(surface.BarOverlapLabel, _barOverlapBox));
+        content.Children.Add(MakeRow(surface.DisplayBlanksAsLabel, _displayBlanksCombo));
         content.Children.Add(new TextBlock { Text = surface.PlotHint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -158,6 +167,8 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _planner.SetValueGridlines(_valueGridlinesCheck.IsChecked == true);
         _planner.SetBarGapWidthPercent(ParseOptionalPercent(_barGapWidthBox.Text, "Bar gap width", 0, 500));
         _planner.SetBarOverlapPercent(ParseOptionalPercent(_barOverlapBox.Text, "Bar overlap", -100, 100));
+        if (_displayBlanksCombo.SelectedItem is ChartDisplayBlanksOption blanks)
+            _planner.SetDisplayBlanksAs(blanks.Value);
     }
 
     private static StackPanel MakeRow(string label, Control control)
@@ -181,6 +192,11 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         Math.Max(0, ChartDisplayOptionsPlanner.LabelPositionOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == position).index);
+
+    private static int FindDisplayBlanksIndex(ChartDisplayBlanksAs? value) =>
+        ChartDisplayOptionsPlanner.DisplayBlanksOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == value).index;
 
     private static string Format(int? value) => value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
 
