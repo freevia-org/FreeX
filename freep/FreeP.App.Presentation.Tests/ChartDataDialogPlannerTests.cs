@@ -59,6 +59,21 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void SwitchRowsAndColumns_TransposesLabelsAndValuesWhilePreservingGaps()
+    {
+        var planner = ChartDataDialogPlanner.FromChart(MakeChart());
+
+        planner.SwitchRowsAndColumns();
+
+        planner.CategoriesForCommit().Should().Equal("Sales", "Budget");
+        planner.SeriesNamesForCommit().Should().Equal("Q1", "Q2", "Q3");
+        planner.ValuesForCommit()[0].Should().Equal(new double?[] { 1.0, 4.0 });
+        planner.ValuesForCommit()[1].Should().Equal(new double?[] { 2.0, null });
+        planner.ValuesForCommit()[2].Should().Equal(new double?[] { 3.0, 6.0 });
+        planner.ValuesForCommit().Should().AllSatisfy(values => values.Count.Should().Be(2));
+    }
+
+    [Fact]
     public void RemoveLastSeriesAndCategory_AreNoOpsWhenEmpty()
     {
         var chart = new ChartShape();
@@ -159,6 +174,7 @@ public sealed class ChartDataDialogPlannerTests
         plan.RemoveSeriesLabel.Should().Be("- Series");
         plan.AddCategoryLabel.Should().Be("+ Category");
         plan.RemoveCategoryLabel.Should().Be("- Category");
+        plan.SwitchRowsAndColumnsLabel.Should().Be("Switch Row/Column");
         plan.OkLabel.Should().Be("OK");
         plan.CancelLabel.Should().Be("Cancel");
     }

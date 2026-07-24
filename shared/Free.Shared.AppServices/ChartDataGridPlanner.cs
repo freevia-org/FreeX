@@ -113,6 +113,43 @@ public sealed class ChartDataGridPlanner
         }
     }
 
+    /// <summary>
+    /// Transposes the chart data matrix, making the current series names the category
+    /// labels and the current category labels the new series names.
+    /// </summary>
+    public void SwitchRowsAndColumns()
+    {
+        var oldCategories = _categories.ToList();
+        var oldSeriesNames = _seriesNames.ToList();
+        var oldValues = _values
+            .Select(values => values.ToList())
+            .ToList();
+
+        _categories.Clear();
+        _categories.AddRange(oldSeriesNames);
+
+        _seriesNames.Clear();
+        _seriesNames.AddRange(oldCategories);
+
+        _values.Clear();
+        for (var newSeriesIndex = 0; newSeriesIndex < oldCategories.Count; newSeriesIndex++)
+        {
+            var values = new List<double?>(oldSeriesNames.Count);
+            for (var newCategoryIndex = 0; newCategoryIndex < oldSeriesNames.Count; newCategoryIndex++)
+            {
+                values.Add(
+                    newCategoryIndex < oldValues.Count &&
+                    newSeriesIndex < oldValues[newCategoryIndex].Count
+                        ? oldValues[newCategoryIndex][newSeriesIndex]
+                        : null);
+            }
+
+            _values.Add(values);
+        }
+
+        EnsureRectangular();
+    }
+
     public void ApplyCategoryEdits(IEnumerable<ChartDataGridCategoryEdit> categoryEdits)
     {
         ArgumentNullException.ThrowIfNull(categoryEdits);
