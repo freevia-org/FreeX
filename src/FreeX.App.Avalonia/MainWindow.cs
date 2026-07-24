@@ -13683,6 +13683,9 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(okButton, "GoToSpecialOkButton");
         ApplyDialogButtonChrome(okButton, width: 72, isDefault: true);
+        okButton.Height = 18;
+        okButton.MinHeight = 18;
+        okButton.MaxHeight = 18;
 
         var cancelButton = new Button
         {
@@ -13693,6 +13696,9 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(cancelButton, "GoToSpecialCancelButton");
         ApplyDialogButtonChrome(cancelButton, width: 72);
+        cancelButton.Height = 18;
+        cancelButton.MinHeight = 18;
+        cancelButton.MaxHeight = 18;
 
         void RefreshValueTypeState()
         {
@@ -13758,7 +13764,7 @@ public sealed partial class MainWindow : Window
         {
             Orientation = Orientation.Horizontal,
             Spacing = 16,
-            Margin = new Thickness(8, 0, 8, 0),
+            Margin = new Thickness(8, 6, 8, 1),
             Children =
             {
                 numbersBox,
@@ -13773,7 +13779,7 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 10, 30, 47),
             Children =
             {
                 okButton,
@@ -13783,7 +13789,7 @@ public sealed partial class MainWindow : Window
 
         var content = new StackPanel
         {
-            Margin = new Thickness(12),
+            Margin = new Thickness(12, 16, 30, 0),
             Children =
             {
                 new TextBlock
@@ -13795,8 +13801,8 @@ public sealed partial class MainWindow : Window
                 new GroupBox
                 {
                     Header = "Go To Special",
-                    Margin = new Thickness(0, 0, 0, 16),
-                    Padding = new Thickness(8, 0, 8, 0),
+                    Margin = new Thickness(0, 0, 0, 10),
+                    Padding = new Thickness(8, 6, 8, 2),
                     Content = choiceGrid,
                 },
                 new GroupBox

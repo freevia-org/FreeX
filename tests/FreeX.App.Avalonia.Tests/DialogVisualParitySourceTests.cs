@@ -22,8 +22,13 @@ public sealed class DialogVisualParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("numbersBox.Opacity = enabled ? 1 : 0.7;");
-        source.Should().Contain("Margin = new Thickness(8, 0, 8, 0),");
+        source.Should().Contain("Margin = new Thickness(8, 6, 8, 1),");
         source.Should().Contain("Margin = new Thickness(0, 0, 12, 1),");
+        source.Should().Contain("Margin = new Thickness(12, 16, 30, 0),");
+        source.Should().Contain("Margin = new Thickness(0, 10, 30, 47),");
+        source.Should().Contain("Padding = new Thickness(8, 6, 8, 2),");
+        source.Should().Contain("okButton.Height = 18;");
+        source.Should().Contain("cancelButton.Height = 18;");
         source.Should().Contain("var root = new DockPanel { Margin = new Thickness(0) };");
         source.Should().Contain("DockPanel.SetDock(buttonRow, Dock.Bottom);");
     }

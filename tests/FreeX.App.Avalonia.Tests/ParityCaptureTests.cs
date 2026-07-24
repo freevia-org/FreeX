@@ -1,4 +1,5 @@
 using System.IO;
+using System.Buffers.Binary;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -392,6 +393,48 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
+    public async Task CaptureParitySurfaces_CapturesGoToSpecialAtFixedSizeWithoutClipping()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-parity-capture-go-to-special-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                window.Show();
+                window.Measure(new global::Avalonia.Size(1120, 720));
+                window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+                window.UpdateLayout();
+
+                var results = await window.CaptureParitySurfacesAsync(
+                    outputDirectory,
+                    targetSurfaceId: "dialog.GoToSpecial");
+
+                results.Should().ContainSingle();
+                var dialog = results.Single();
+                dialog.Id.Should().Be("dialog.GoToSpecial");
+                dialog.Captured.Should().BeTrue(dialog.Note);
+                AssertCapturedPng(outputDirectory, dialog);
+
+                var pngPath = Path.Combine(outputDirectory, dialog.PngFileName);
+                new FileInfo(pngPath).Length.Should().BeGreaterThan(2_048,
+                    "the Go To Special capture should contain the rendered controls");
+                ReadPngDimensions(pngPath).Should().Be((430, 438),
+                    "the fixed-size dialog client area should be captured without edge clipping");
+
+                window.Close();
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
     public async Task CaptureParitySurfaces_CapturesChartStyleCatalogDialog()
     {
         var outputDirectory = Path.Combine(
@@ -432,6 +475,14 @@ public sealed class ParityCaptureTests
             .Should().BeGreaterThan(0, $"{result.PngFileName} should not be empty for captured surface {result.Id}");
         ParityCaptureOutputGuard.ValidatePngOutput(pngPath)
             .Should().BeNull($"{result.PngFileName} should be valid PNG evidence for captured surface {result.Id}");
+    }
+
+    private static (int Width, int Height) ReadPngDimensions(string path)
+    {
+        var header = File.ReadAllBytes(path).AsSpan(0, 24);
+        return (
+            BinaryPrimitives.ReadInt32BigEndian(header[16..20]),
+            BinaryPrimitives.ReadInt32BigEndian(header[20..24]));
     }
 
     private static void TryDeleteDirectory(string path)
