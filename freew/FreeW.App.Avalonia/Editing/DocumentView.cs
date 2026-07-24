@@ -16294,8 +16294,8 @@ public sealed class DocumentView : Control
         // Resolved page-space sub-rect for this child (group origin + child offset).
         public Rect Rect;
         public int ChildIndex;
-        // What kind of child: Image, Shape, Chart, WordArt, SmartArt.
-        public enum ChildKind { Image, Shape, Chart, WordArt, SmartArt }
+        // What kind of child: Image, Shape, Chart, WordArt, SmartArt, Group.
+        public enum ChildKind { Image, Shape, Chart, WordArt, SmartArt, Group }
         public ChildKind Kind;
         // Reused data structs (only the relevant one is non-null):
         public Bitmap?           Bitmap;    // Image
@@ -16303,6 +16303,7 @@ public sealed class DocumentView : Control
         public FloatingChartData? Chart;    // Chart
         public FloatingWordArtData? WordArt; // WordArt
         public FloatingSmartArtData? SmartArt; // SmartArt
+        public FloatingGroupData? Group; // Nested group
     }
 
     private sealed class FloatingGroupData
@@ -16459,6 +16460,22 @@ public sealed class DocumentView : Control
                 case DocumentFloatingObjectKind.SmartArt when child is SmartArt smartArt:
                     childData.Kind = FloatingGroupChildData.ChildKind.SmartArt;
                     childData.SmartArt = BuildFloatingSmartArtData(smartArt, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    break;
+
+                case DocumentFloatingObjectKind.Group when child is FreeW.Core.Model.DrawingGroup nestedGroup:
+                    childData.Kind = FloatingGroupChildData.ChildKind.Group;
+                    childData.Group = BuildFloatingGroupData(nestedGroup,
+                        new DocumentFloatingObjectSnapshot(
+                            DocumentFloatingObjectKind.Group,
+                            snapshot.BlockIndex,
+                            snapshot.RunIndex,
+                            childSnapshot.Rect,
+                            snapshot.BehindText,
+                            snapshot.ZOrderIndex,
+                            snapshot.Wrapping,
+                            nestedGroup.RotationAngle,
+                            nestedGroup.FlipH,
+                            nestedGroup.FlipV));
                     break;
 
                 default:
@@ -17282,6 +17299,10 @@ public sealed class DocumentView : Control
 
                 case FloatingGroupChildData.ChildKind.SmartArt when child.SmartArt is { } sasd:
                     DrawFloatingSmartArt(context, sasd);
+                    break;
+
+                case FloatingGroupChildData.ChildKind.Group when child.Group is { } nestedGroup:
+                    DrawFloatingGroup(context, nestedGroup);
                     break;
             }
         }

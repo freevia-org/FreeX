@@ -446,6 +446,7 @@ public static class DrawingObjectVisualPlanner
                 Chart chart => BuildVisualPlan(chart, ChildSnapshot(snapshot, childSnapshot, chart)),
                 WordArt wordArt => BuildVisualPlan(wordArt, ChildSnapshot(snapshot, childSnapshot, wordArt)),
                 SmartArt smartArt => BuildVisualPlan(smartArt, ChildSnapshot(snapshot, childSnapshot, smartArt)),
+                DrawingGroup nestedGroup => BuildVisualPlan(nestedGroup, ChildSnapshot(snapshot, childSnapshot, nestedGroup)),
                 _ => null
             };
 
@@ -554,6 +555,22 @@ public static class DrawingObjectVisualPlanner
             groupSnapshot.BehindText,
             groupSnapshot.ZOrderIndex,
             groupSnapshot.Wrapping);
+
+    private static DocumentFloatingObjectSnapshot ChildSnapshot(
+        DocumentFloatingObjectSnapshot groupSnapshot,
+        DocumentFloatingGroupChildSnapshot childSnapshot,
+        DrawingGroup group) =>
+        new(
+            DocumentFloatingObjectKind.Group,
+            groupSnapshot.BlockIndex,
+            groupSnapshot.RunIndex,
+            childSnapshot.Rect,
+            groupSnapshot.BehindText,
+            groupSnapshot.ZOrderIndex,
+            groupSnapshot.Wrapping,
+            group.RotationAngle,
+            group.FlipH,
+            group.FlipV);
 
     private static DrawingObjectGeometryKind ToGeometryKind(ShapeKind kind) =>
         kind switch

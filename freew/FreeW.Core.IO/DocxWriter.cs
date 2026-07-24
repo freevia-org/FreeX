@@ -365,7 +365,7 @@ public static class DocxWriter
                 if (run.Chart is { } chart)
                     Add(chart);
                 if (run.DrawingGroup is { } group)
-                    foreach (var groupedChart in group.Children.OfType<Chart>())
+                    foreach (var groupedChart in EnumerateDrawingGroupChildren(group).OfType<Chart>())
                         Add(groupedChart);
             }
 
@@ -476,7 +476,7 @@ public static class DocxWriter
                 if (run.SmartArt is { } smartArt)
                     Add(smartArt);
                 if (run.DrawingGroup is { } group)
-                    foreach (var groupedSmartArt in group.Children.OfType<SmartArt>())
+                    foreach (var groupedSmartArt in EnumerateDrawingGroupChildren(group).OfType<SmartArt>())
                         Add(groupedSmartArt);
             }
 
@@ -553,7 +553,7 @@ public static class DocxWriter
                 if (run.Image is { } image)
                     Add(image);
                 if (run.DrawingGroup is { } group)
-                    foreach (var groupedImage in group.Children.OfType<InlineImage>())
+                    foreach (var groupedImage in EnumerateDrawingGroupChildren(group).OfType<InlineImage>())
                         Add(groupedImage);
             }
 
@@ -567,6 +567,17 @@ public static class DocxWriter
                 (uint)index));
         }
         return images;
+    }
+
+    private static IEnumerable<object> EnumerateDrawingGroupChildren(DrawingGroup group)
+    {
+        foreach (var child in group.Children)
+        {
+            yield return child;
+            if (child is DrawingGroup nestedGroup)
+                foreach (var nestedChild in EnumerateDrawingGroupChildren(nestedGroup))
+                    yield return nestedChild;
+        }
     }
 
     /// <summary>
@@ -1323,7 +1334,7 @@ public static class DocxWriter
                 if (run.SmartArt is not null)
                     smartArtsByRun[run] = smartArts[nextSmartArt++];
                 if (run.DrawingGroup is { } group)
-                    foreach (var child in group.Children)
+                    foreach (var child in EnumerateDrawingGroupChildren(group))
                     {
                         if (child is InlineImage image)
                             imagesByGroupChild[image] = images[nextImage++];
@@ -4742,6 +4753,7 @@ public static class DocxWriter
                 Chart c => "GroupChild:Chart:" + c.Kind,
                 SmartArt => "GroupChild:SmartArt",
                 WordArt wa => "GroupChild:WordArt:" + wa.Style,
+                DrawingGroup => "GroupChild:Group",
                 _ => "GroupChild:Unknown"
             };
 
@@ -4755,6 +4767,8 @@ public static class DocxWriter
                     => BuildDrawingGroupGraphicFrameChild(BuildChartGraphic(chartPart), xfrm, childName, ids),
                 SmartArt smartArt when drawings.GroupSmartArts?.TryGetValue(smartArt, out var smartArtPart) == true
                     => BuildDrawingGroupGraphicFrameChild(BuildSmartArtGraphic(smartArtPart), xfrm, childName, ids),
+                DrawingGroup nestedGroup => BuildNestedDrawingGroupChild(
+                    nestedGroup, xfrm, drawings, hyperlinks, preservedNumbering, restartOverrides),
                 _ => BuildDrawingGroupPlaceholderChild(xfrm, new XElement(Wp + "docPr",
                     new XAttribute("id", ids.NextShapeDrawingId()),
                     new XAttribute("name", childName)))
@@ -4796,6 +4810,30 @@ public static class DocxWriter
                 wgp));
 
         return BuildAnchorContainer(cx, cy, docPr, graphic, group.Placement);
+    }
+
+    private static XElement BuildNestedDrawingGroupChild(
+        DrawingGroup group,
+        XElement xfrm,
+        RunDrawings drawings,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        PreservedNumberingPlan? preservedNumbering,
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides)
+    {
+        // Nested groups share the normal group child payload pipeline; only their group transform is local
+        // to the parent rather than being a document anchor.
+        var nested = new XElement(BuildDrawingGroupDrawing(group, drawings, hyperlinks, preservedNumbering, restartOverrides)
+            .Descendants(Wpg + "wgp")
+            .Single());
+        var nestedXfrm = nested.Element(Wpg + "grpSpPr")?.Element(A + "xfrm");
+        if (nestedXfrm is null)
+            return nested;
+
+        var localOff = xfrm.Element(A + "off");
+        var localExt = xfrm.Element(A + "ext");
+        nestedXfrm.Element(A + "off")?.ReplaceWith(localOff is null ? new XElement(A + "off") : new XElement(localOff));
+        nestedXfrm.Element(A + "ext")?.ReplaceWith(localExt is null ? new XElement(A + "ext") : new XElement(localExt));
+        return nested;
     }
 
     private static XElement BuildDrawingGroupShapeChild(

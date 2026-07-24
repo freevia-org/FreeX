@@ -183,6 +183,30 @@ public sealed class DrawingGroupRoundTripTests
         return group;
     }
 
+    private static DrawingGroup NestedGroup()
+    {
+        var inner = new DrawingGroup
+        {
+            WidthPt = 90,
+            HeightPt = 48,
+            RotationAngle = 15,
+            FlipH = true
+        };
+        inner.Children.Add(new Shape(ShapeKind.Ellipse, 30, 24, "#70AD47"));
+        inner.ChildOffsets.Add((6, 8));
+        inner.Children.Add(new WordArt("Inner", WordArtStyle.GlowGold, 18));
+        inner.ChildOffsets.Add((42, 12));
+        inner.Children.Add(new InlineImage(Png(), 18, 18));
+        inner.ChildOffsets.Add((66, 24));
+
+        var outer = new DrawingGroup { WidthPt = 180, HeightPt = 96 };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((12, 18));
+        outer.Children.Add(new Shape(ShapeKind.Rectangle, 54, 36, "#4472C4"));
+        outer.ChildOffsets.Add((108, 24));
+        return outer;
+    }
+
     private static TextDocument DocumentWith(DrawingGroup grp)
     {
         var doc = new TextDocument();
@@ -493,6 +517,30 @@ public sealed class DrawingGroupRoundTripTests
         read.RotationAngle.Should().BeApproximately(45, 0.001);
         read.FlipH.Should().BeTrue();
         read.FlipV.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DrawingGroup_NestedGroup_RoundTripsLocalTransformAndRichChildren()
+    {
+        var document = DocumentWith(NestedGroup());
+        var xml = DocXml(document);
+        xml.Descendants(Wpg + "wgp").Should().HaveCount(2, "nested groups remain native wpg:wgp payloads");
+
+        var recovered = RoundTrip(document);
+        var outer = ((Paragraph)recovered.Blocks[0]).Runs.Single().DrawingGroup!;
+        outer.Children.Should().HaveCount(2);
+        outer.ChildOffsets[0].X.Should().BeApproximately(12, 0.1);
+        outer.ChildOffsets[0].Y.Should().BeApproximately(18, 0.1);
+
+        var inner = outer.Children[0].Should().BeOfType<DrawingGroup>().Subject;
+        inner.WidthPt.Should().BeApproximately(90, 0.1);
+        inner.HeightPt.Should().BeApproximately(48, 0.1);
+        inner.RotationAngle.Should().BeApproximately(15, 0.001);
+        inner.FlipH.Should().BeTrue();
+        inner.Children.Should().HaveCount(3);
+        inner.Children[0].Should().BeOfType<Shape>().Which.FillColorHex.Should().Be("#70AD47");
+        inner.Children[1].Should().BeOfType<WordArt>().Which.Text.Should().Be("Inner");
+        inner.Children[2].Should().BeOfType<InlineImage>().Which.Bytes.Should().Equal(Png());
     }
 
     [Fact]
