@@ -103,6 +103,32 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void CustomGeometryVertexInsertAndDelete_RouteThroughUndoableSession()
+    {
+        var session = Make();
+        var shape = MakeShape(1);
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 100, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 50, Y: 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        shape.CustomGeometry.Add(path);
+        session.CurrentSlide!.Shapes.Add(shape);
+
+        session.TryInsertCustomGeometryPoint(1, "custom:0:1").Should().BeTrue();
+        path.Segments.Should().HaveCount(5);
+        session.Bus.Undo();
+        path.Segments.Should().HaveCount(4);
+        session.Bus.Redo();
+        path.Segments.Should().HaveCount(5);
+
+        session.TryDeleteCustomGeometryPoint(1, "custom:0:2").Should().BeTrue();
+        path.Segments.Should().HaveCount(4);
+        session.Bus.Undo();
+        path.Segments.Should().HaveCount(5);
+    }
+
+    [Fact]
     public void ApplySmartArtLayout_RefreshesNativeDataAndDrawingCacheThroughSharedSession()
     {
         var (session, _) = MakeSmartArtSession();

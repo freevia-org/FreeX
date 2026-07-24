@@ -350,6 +350,37 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void CustomGeometryPointCommands_ApplyUndoAndRedoInsertAndDelete()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 100, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 50, Y: 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        shape.CustomGeometry.Add(path);
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new InsertCustomGeometryPointCommand(0, 1, 0, 1, 75, 50));
+        path.Segments.Should().HaveCount(5);
+        path.Segments[2].X.Should().Be(75);
+        path.Segments[2].Y.Should().Be(50);
+        bus.Undo();
+        path.Segments.Should().HaveCount(4);
+        bus.Redo();
+        path.Segments.Should().HaveCount(5);
+
+        bus.Execute(new DeleteCustomGeometryPointCommand(0, 1, 0, 2));
+        path.Segments.Should().HaveCount(4);
+        bus.Undo();
+        path.Segments.Should().HaveCount(5);
+        path.Segments[2].X.Should().Be(75);
+        bus.Redo();
+        path.Segments.Should().HaveCount(4);
+    }
+
+    [Fact]
     public void RotateShapeCommand_Apply_SetsRotation()
     {
         var (p, bus) = Make();
