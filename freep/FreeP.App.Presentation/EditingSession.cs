@@ -803,9 +803,9 @@ public sealed class EditingSession
     public TextBody? CurrentSlideNotes => CurrentSlide?.Notes;
 
     /// <summary>
-    /// Replaces the speaker notes on the current slide with a plain-text string.
-    /// Wraps the text in a single-paragraph, single-run TextBody. Pass null or empty to clear notes.
-    /// This operation is undoable.
+    /// Replaces the speaker notes on the current slide with plain text. Each explicit line break
+    /// becomes a separate paragraph so the notes pane does not flatten authored structure on save.
+    /// Pass null or empty to clear notes. This operation is undoable.
     /// </summary>
     public void SetCurrentSlideNotesText(string? text)
     {
@@ -815,9 +815,17 @@ public sealed class EditingSession
         if (!string.IsNullOrEmpty(text))
         {
             body = new TextBody();
-            var para = new Paragraph();
-            para.Runs.Add(new Run { Text = text });
-            body.Paragraphs.Add(para);
+            var lines = text
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .Split('\n', StringSplitOptions.None);
+            foreach (var line in lines)
+            {
+                var para = new Paragraph();
+                if (line.Length > 0)
+                    para.Runs.Add(new Run { Text = line });
+                body.Paragraphs.Add(para);
+            }
         }
 
         Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, body));

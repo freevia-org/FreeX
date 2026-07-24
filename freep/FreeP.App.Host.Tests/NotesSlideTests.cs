@@ -271,6 +271,28 @@ public sealed class NotesSlideTests : IDisposable
     }
 
     [Fact]
+    public void EditingSession_SetCurrentSlideNotesText_PreservesParagraphBreaksThroughRoundTrip()
+    {
+        var session = MakeSession();
+        session.SetCurrentSlideNotesText("First point.\r\n\r\nSecond point.");
+
+        var notes = session.CurrentSlideNotes;
+        notes.Should().NotBeNull();
+        notes!.Paragraphs.Should().HaveCount(3);
+        notes.Paragraphs[0].Runs.Single().Text.Should().Be("First point.");
+        notes.Paragraphs[1].Runs.Should().BeEmpty();
+        notes.Paragraphs[2].Runs.Single().Text.Should().Be("Second point.");
+
+        var path = WriteToPptx(session.Presentation);
+        var reloaded = PptxPackageReader.Read(path).Slides[0].Notes;
+        reloaded.Should().NotBeNull();
+        reloaded!.Paragraphs.Should().HaveCount(3);
+        reloaded.Paragraphs[0].Runs.Single().Text.Should().Be("First point.");
+        reloaded.Paragraphs[1].Runs.Should().BeEmpty();
+        reloaded.Paragraphs[2].Runs.Single().Text.Should().Be("Second point.");
+    }
+
+    [Fact]
     public void EditingSession_SetCurrentSlideNotesText_IsUndoable()
     {
         var session = MakeSession();
