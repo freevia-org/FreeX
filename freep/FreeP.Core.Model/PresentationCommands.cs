@@ -706,6 +706,11 @@ public sealed class SetPictureCropCommand : IPresentationCommand
         shape.PictureFormat.CropTop = _top;
         shape.PictureFormat.CropRight = _right;
         shape.PictureFormat.CropBottom = _bottom;
+        if (_left == 0 && _top == 0 && _right == 0 && _bottom == 0 &&
+            !shape.PictureFormat.HasColorEffect)
+        {
+            shape.PictureFormat = null;
+        }
     }
 
     public void Revert(Presentation presentation)

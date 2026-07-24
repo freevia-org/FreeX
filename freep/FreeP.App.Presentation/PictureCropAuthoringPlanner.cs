@@ -17,6 +17,9 @@ public readonly record struct PictureCropValues(
 /// </summary>
 public static class PictureCropAuthoringPlanner
 {
+    public const string InsetCommandId = "freep.picture.crop-inset";
+    public const string ResetCommandId = "freep.picture.crop-reset";
+
     public static bool TryPlan(
         double left,
         double top,

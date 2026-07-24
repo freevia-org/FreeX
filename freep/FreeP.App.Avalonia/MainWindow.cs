@@ -2073,6 +2073,13 @@ public sealed partial class MainWindow : Window
                 SlideObjectInsertionPlanner.Apply(Editor, plan)));
         }
 
+        r.Register(
+            PictureCropAuthoringPlanner.InsetCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Inset())));
+        r.Register(
+            PictureCropAuthoringPlanner.ResetCommandId,
+            new ActionRibbonCommand(() => Editor.SetSelectedPictureCrop(PictureCropAuthoringPlanner.Reset())));
+
         r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
         r.Register(ChartDisplayOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDisplayOptionsDialog));
         r.Register(ChartAxisOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAxisOptionsDialog));

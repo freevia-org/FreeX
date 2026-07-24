@@ -344,6 +344,10 @@ public static class FreePRibbon
             group.Large("freep.picture", FreePRibbonText.PictureLabel, RibbonCommandIconKind.Picture, FreePRibbonText.PictureKeyTip);
             group.Medium("freep.video", FreePRibbonText.VideoLabel, RibbonCommandIconKind.Picture, FreePRibbonText.VideoKeyTip);
             group.Medium("freep.audio", FreePRibbonText.AudioLabel, RibbonCommandIconKind.Picture, FreePRibbonText.AudioKeyTip);
+            group.Medium(PictureCropAuthoringPlanner.InsetCommandId, FreePRibbonText.PictureCropInsetCommand.Label,
+                RibbonCommandIconKind.Picture, FreePRibbonText.PictureCropInsetCommand.KeyTip);
+            group.Medium(PictureCropAuthoringPlanner.ResetCommandId, FreePRibbonText.PictureCropResetCommand.Label,
+                RibbonCommandIconKind.Picture, FreePRibbonText.PictureCropResetCommand.KeyTip);
             group.Medium("freep.shape-rectangle", FreePRibbonText.ShapeRectangleLabel, RibbonCommandIconKind.Rectangle, FreePRibbonText.ShapeRectangleKeyTip);
             group.Medium("freep.shape-ellipse", FreePRibbonText.ShapeEllipseLabel, RibbonCommandIconKind.Ellipse, FreePRibbonText.ShapeEllipseKeyTip);
         });
