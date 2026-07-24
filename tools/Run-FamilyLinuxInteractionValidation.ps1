@@ -42,6 +42,8 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$manifestEvidenceHelper = Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1"
+$null = . $manifestEvidenceHelper
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-family-input-probes.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/family-x11-validation.schema.json"
@@ -83,99 +85,6 @@ function Invoke-External {
     } finally {
         Pop-Location
     }
-}
-
-function Wait-ForManifestEvidence {
-    param(
-        [Parameter(Mandatory = $true)][string]$ManifestPath,
-        [Parameter(Mandatory = $true)][string]$EvidenceDirectory,
-        [int]$TimeoutSeconds = 15,
-        [int]$PollMilliseconds = 250
-    )
-
-    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
-    $lastMissing = @()
-    $lastReadError = $null
-    $previousCompleteSizeSignature = $null
-    $lastSizeState = @()
-    do {
-        try {
-            $manifest = Get-Content -LiteralPath $ManifestPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-            $lastReadError = $null
-        } catch {
-            $manifest = $null
-            $lastReadError = $_.Exception.ToString()
-            $lastMissing = @([IO.Path]::GetFileName($ManifestPath))
-            $lastSizeState = @("manifest-unreadable")
-            $previousCompleteSizeSignature = $null
-        }
-
-        if ($null -eq $manifest) {
-            if ([DateTime]::UtcNow -ge $deadline) {
-                break
-            }
-            Start-Sleep -Milliseconds $PollMilliseconds
-            continue
-        }
-
-        $references = @(
-            @($manifest.results | ForEach-Object { $_.evidence }) |
-                ForEach-Object { [string]$_ }
-            @($manifest.screenshots | ForEach-Object { $_.name }) |
-                ForEach-Object { [string]$_ }
-        ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
-
-        $lastSizeState = @($references | ForEach-Object {
-                $path = Join-Path $EvidenceDirectory $_
-                if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-                    "$_=MISSING"
-                    return
-                }
-                $length = (Get-Item -LiteralPath $path -ErrorAction SilentlyContinue).Length
-                if ($length -le 0) {
-                    "$_=EMPTY"
-                    return
-                }
-                "$_=$length"
-            }) | Sort-Object
-        $lastMissing = @($lastSizeState | ForEach-Object {
-                if ($_ -match "^(.*)=(MISSING|EMPTY)$") {
-                    $Matches[1]
-                }
-            })
-        $completeSizeSignature = [string]::Join("|", $lastSizeState)
-        if ($lastMissing.Count -eq 0) {
-            if ($completeSizeSignature -eq $previousCompleteSizeSignature) {
-                return
-            }
-            $previousCompleteSizeSignature = $completeSizeSignature
-        } else {
-            $previousCompleteSizeSignature = $null
-        }
-
-        if ([DateTime]::UtcNow -ge $deadline) {
-            break
-        }
-        Start-Sleep -Milliseconds $PollMilliseconds
-    } while ($true)
-
-    $diagnosticName = "evidence-settle-timeout.txt"
-    $diagnosticPath = Join-Path $EvidenceDirectory $diagnosticName
-    @(
-        "Manifest evidence did not become visible and non-empty before the bounded settle timeout.",
-        "manifest=$ManifestPath",
-        "evidence-directory=$EvidenceDirectory",
-        "timeout-seconds=$TimeoutSeconds",
-        "poll-milliseconds=$PollMilliseconds",
-        "missing-or-empty-count=$($lastMissing.Count)",
-        "missing-or-empty-paths:",
-        $lastMissing | ForEach-Object { Join-Path $EvidenceDirectory $_ },
-        "last-observed-size-state:",
-        $lastSizeState,
-        "last-manifest-read-error:",
-        $(if ($null -eq $lastReadError) { "<none>" } else { $lastReadError })
-    ) | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
-    throw "Manifest evidence did not settle within $TimeoutSeconds seconds. Durable diagnostics: $diagnosticPath. Missing or empty references: $([string]::Join(', ', $lastMissing))"
 }
 
 function Assert-ManifestContract {
@@ -261,6 +170,7 @@ function Assert-ManifestContract {
         throw "Manifest summary does not match its result rows."
     }
 
+    $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
     foreach ($result in $results) {
         if ($result.category -ne "physical-x11-smoke" -or
             $result.evidenceLevel -ne "physical-x11-input" -or
@@ -268,22 +178,22 @@ function Assert-ManifestContract {
             throw "Result '$($result.id)' is missing physical evidence metadata."
         }
         foreach ($evidence in @($result.evidence)) {
-            $evidencePath = Join-Path $EvidenceDirectory ([string]$evidence)
-            if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf)) {
+            $evidenceName = [string]$evidence
+            if (-not $fileMap.ContainsKey($evidenceName)) {
                 throw "Result '$($result.id)' references missing evidence '$evidence'."
             }
-            if ((Get-Item -LiteralPath $evidencePath).Length -le 0) {
+            if ($fileMap[$evidenceName].Length -le 0) {
                 throw "Result '$($result.id)' references empty evidence '$evidence'."
             }
         }
     }
 
     foreach ($screenshot in @($manifest.screenshots)) {
-        $screenshotPath = Join-Path $EvidenceDirectory ([string]$screenshot.name)
-        if (-not (Test-Path -LiteralPath $screenshotPath -PathType Leaf)) {
+        $screenshotName = [string]$screenshot.name
+        if (-not $fileMap.ContainsKey($screenshotName)) {
             throw "Manifest references missing screenshot '$($screenshot.name)'."
         }
-        if ((Get-Item -LiteralPath $screenshotPath).Length -le 0) {
+        if ($fileMap[$screenshotName].Length -le 0) {
             throw "Manifest references empty screenshot '$($screenshot.name)'."
         }
     }

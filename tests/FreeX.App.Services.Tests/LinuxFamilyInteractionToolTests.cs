@@ -1,3 +1,6 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 
@@ -57,18 +60,24 @@ public sealed class LinuxFamilyInteractionToolTests
     {
         var runner = File.ReadAllText(RepositoryFileLocator.Find(
             "tools", "Run-FamilyLinuxInteractionValidation.ps1"));
+        var evidenceHelper = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "ManifestEvidence.ps1"));
+        var source = runner + Environment.NewLine + evidenceHelper;
 
         runner.Should().Contain("[ValidateSet(\"FreeW\", \"FreeP\")]");
         runner.Should().Contain("Assert-ManifestContract");
-        runner.Should().Contain("Wait-ForManifestEvidence");
-        runner.Should().Contain("Start-Sleep -Milliseconds $PollMilliseconds");
-        runner.Should().Contain("evidence-settle-timeout.txt");
-        runner.Should().Contain("Missing or empty references");
-        runner.Should().Contain("ConvertFrom-Json -ErrorAction Stop");
-        runner.Should().Contain("last-manifest-read-error:");
-        runner.Should().Contain("previousCompleteSizeSignature");
-        runner.Should().Contain("last-observed-size-state:");
-        runner.Should().Contain("completeSizeSignature -eq $previousCompleteSizeSignature");
+        source.Should().Contain("Wait-ForManifestEvidence");
+        source.Should().Contain("Start-Sleep -Milliseconds $PollMilliseconds");
+        source.Should().Contain("evidence-settle-timeout.txt");
+        source.Should().Contain("Manifest evidence did not settle within");
+        source.Should().Contain("ConvertFrom-Json -ErrorAction Stop");
+        source.Should().Contain("last-manifest-read-error:");
+        source.Should().Contain("previousCompleteSizeSignature");
+        source.Should().Contain("last-observed-size-state:");
+        source.Should().Contain("completeSizeSignature -eq $previousCompleteSizeSignature");
+        source.Should().Contain("Get-ChildItem -LiteralPath $EvidenceDirectory -File");
+        source.Should().NotContain("Test-Path -LiteralPath $path");
+        source.Should().NotContain("Get-Item -LiteralPath $path");
         runner.Should().Contain("family-x11-validation.schema.json");
         runner.Should().Contain("contractValidation");
         runner.Should().Contain("parameters.fileKey");
@@ -141,4 +150,78 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("FileSurface = \"top-level-backstage-window\"");
         runner.Should().Contain("FileSurface = \"in-window-backstage-overlay\"");
     }
+
+    [Fact]
+    public void ManifestEvidenceSettle_UsesDirectChildMapForLongEvidencePaths()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var powershell = ResolvePowerShellExecutable();
+        powershell.Should().NotBeNull("the long-path evidence regression requires PowerShell");
+
+        using var temporary = new TestTemporaryDirectory();
+        var evidenceDirectory = Path.Combine(temporary.Path, new string('a', 150));
+        Directory.CreateDirectory(evidenceDirectory);
+        var evidenceName = new string('b', 130) + ".proof.txt";
+        File.WriteAllText(Path.Combine(evidenceDirectory, evidenceName), "proof", Encoding.UTF8);
+
+        var manifestPath = Path.Combine(temporary.Path, "family-x11-results.json");
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(new
+        {
+            results = new[] { new { evidence = new[] { evidenceName } } },
+            screenshots = Array.Empty<object>()
+        }), Encoding.UTF8);
+
+        var helperPath = RepositoryFileLocator.Find("tools", "LinuxInteractiveDocker", "ManifestEvidence.ps1");
+        var command = $". '{EscapePowerShell(helperPath)}'; Wait-ForManifestEvidence -ManifestPath '{EscapePowerShell(manifestPath)}' -EvidenceDirectory '{EscapePowerShell(evidenceDirectory)}' -TimeoutSeconds 3 -PollMilliseconds 50; 'settled'";
+        var result = RunPowerShellCommand(powershell!, command);
+
+        result.ExitCode.Should().Be(0, result.Output);
+        result.Output.Should().Contain("settled");
+    }
+
+    private static string EscapePowerShell(string value) => value.Replace("'", "''", StringComparison.Ordinal);
+
+    private static ProbeResult RunPowerShellCommand(string executable, string command)
+    {
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = executable,
+            ArgumentList = { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command },
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        });
+        process.Should().NotBeNull();
+        var output = process!.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        process.WaitForExit(10000).Should().BeTrue("the evidence regression must remain bounded");
+        return new ProbeResult(process.ExitCode, output);
+    }
+
+    private static string? ResolvePowerShellExecutable()
+    {
+        foreach (var candidate in new[] { "pwsh.exe", "powershell.exe" })
+        {
+            try
+            {
+                using var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = candidate,
+                    Arguments = "-NoProfile -NonInteractive -Command \"exit 0\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+                if (process is not null && process.WaitForExit(5000) && process.HasExited)
+                    return candidate;
+            }
+            catch (Win32Exception)
+            {
+            }
+        }
+        return null;
+    }
+
+    private sealed record ProbeResult(int ExitCode, string Output);
 }
