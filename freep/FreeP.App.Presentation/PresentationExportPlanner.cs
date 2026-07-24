@@ -262,6 +262,11 @@ public static class PresentationExportPlanner
         new FileDialogFormatDescriptor(PdfExportExtension, "PDF documents"),
     ];
 
+    private static readonly IReadOnlyList<FileDialogFormatDescriptor> VideoFormats =
+    [
+        new FileDialogFormatDescriptor(VideoExportExtension, "MPEG-4 videos"),
+    ];
+
     public static IReadOnlyList<PresentationExportFormatDescriptor> BuildFormatDescriptors() =>
     [
         new(
@@ -644,6 +649,17 @@ public static class PresentationExportPlanner
             FallbackPresentationName,
             PdfExportExtension,
             preferredFirstExtension: PdfExportExtension);
+
+    public static FileSavePickerPlan BuildVideoExportPickerPlan(string? sourceName) =>
+        FileDialogRequestPlanner.BuildSavePickerPlan(
+            VideoFormats,
+            FileDialogRequestPlanner.BuildSuggestedSaveAsFileName(
+                sourceName,
+                FallbackPresentationName,
+                VideoExportExtension),
+            FallbackPresentationName,
+            VideoExportExtension,
+            preferredFirstExtension: VideoExportExtension);
 
     public static PresentationBackstageExportPlan BuildBackstageExportPlan()
     {

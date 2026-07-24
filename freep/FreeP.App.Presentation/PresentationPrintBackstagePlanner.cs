@@ -119,7 +119,7 @@ public static class PresentationPrintBackstagePlanner
 
         return new PresentationPrintBackstagePlan(
             "Print",
-            "Choose a PowerPoint-style print layout and slide range. Native printer selection remains a host handoff after a printable package is built.",
+            "Choose a PowerPoint-style print layout and slide range. The host will open a print dialog or submit the package directly to its native printer queue when supported.",
             layouts,
             ranges,
             BuildOutputOptionChoices(printPlan.Options),
@@ -172,7 +172,7 @@ public static class PresentationPrintBackstagePlanner
                 "copies",
                 "Copies",
                 copiesLabel,
-                "Set the number of copies from 1 to 999 before handing the package to the native printer dialog.",
+                "Set the number of copies from 1 to 999 before handing the package to the native printer host.",
                 IsSelected: true,
                 IsAvailable: true),
             new(

@@ -21,4 +21,5 @@ internal sealed record BackstageCallbacks(
     Action ExportNotesPagePdf,
     Action ExportImages,
     Func<PresentationPrintBackstagePlan> GetPrintPlan,
-    Action ExportVideo);
+    Action ExportVideo,
+    Func<bool> CanExportVideo);

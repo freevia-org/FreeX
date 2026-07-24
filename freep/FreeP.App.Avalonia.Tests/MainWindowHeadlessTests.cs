@@ -19,6 +19,7 @@ using Free.Shared.Shell.Avalonia;
 using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Avalonia.Smoke;
+using FreeP.App.Recording;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 
@@ -86,6 +87,150 @@ public sealed class MainWindowHeadlessTests
         // An empty Presentation created by Presentation.CreateEmpty() has at least one slide.
         slideCount.Should().BeGreaterThanOrEqualTo(1,
             "a freshly created empty presentation contains at least one slide");
+    }
+
+    [Fact]
+    public async Task Native_output_detection_is_deferred_until_the_background_start_hook()
+    {
+        var detectorCalls = 0;
+        var detectorCompleted = new TaskCompletionSource<LinuxNativeOutputCapabilities>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        MainWindow? window = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                nativeOutputCapabilityDetector: () =>
+                {
+                    Interlocked.Increment(ref detectorCalls);
+                    var result = new LinuxNativeOutputCapabilities(
+                        new LinuxNativePrintCapability(true, "lp", "office", "ready"),
+                        new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
+                    detectorCompleted.TrySetResult(result);
+                    return result;
+                });
+            detectorCalls.Should().Be(0);
+            window.NativeOutputDetectionStartedForTests.Should().BeFalse();
+        });
+
+        if (!ran) return;
+        window!.StartNativeOutputCapabilityDetectionForTests();
+        await detectorCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        detectorCalls.Should().Be(1);
+        window.NativeOutputDetectionStartedForTests.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Native_print_handoff_uses_a_ready_direct_submission_without_claiming_a_dialog()
+    {
+        var printAdapter = new RecordingPrintAdapter();
+        LinuxNativePrintResult? result = null;
+        MainWindow? window = null;
+        Task<LinuxNativePrintResult>? printTask = null;
+        var capabilities = new LinuxNativeOutputCapabilities(
+            new LinuxNativePrintCapability(true, "lp", "office", "ready"),
+            LinuxVideoEncoderCapability.Unavailable("no encoder"));
+
+        var ran = await OnUiThread(() =>
+        {
+            window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                nativeOutputCapabilities: capabilities,
+                nativePrintAdapter: printAdapter,
+                videoExportAdapter: new RecordingVideoAdapter(capabilities.Video),
+                printOutputPackageFactory: _ => BuildTestPrintPackage());
+        });
+
+        if (!ran) return;
+        PresentationNativePrintHandoffPlan? handoff = null;
+        var planRan = await OnUiThread(() =>
+        {
+            handoff = window!.RefreshNativePrintHandoffPlan();
+            printTask = window.ExecuteNativePrintHandoffAsync();
+        });
+        if (!planRan) return;
+        handoff!.CanOpenNativePrintDialog.Should().BeFalse();
+        handoff.CanSubmitToNativePrinter.Should().BeTrue();
+        result = await printTask!;
+        result.Succeeded.Should().BeTrue(result.FailureReason);
+        printAdapter.PdfBytes.Should().NotBeNullOrEmpty();
+        printAdapter.PdfBytes!.AsSpan().StartsWith("%PDF-"u8).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Video_picker_cancel_and_non_local_selection_are_honest_and_successful_capability_adds_video_action()
+    {
+        var output = Path.Combine(Path.GetTempPath(), $"freep-host-video-{Guid.NewGuid():N}.mp4");
+        var capabilities = new LinuxNativeOutputCapabilities(
+            LinuxNativePrintCapability.Unavailable("no queue"),
+            new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
+        var videoAdapter = new RecordingVideoAdapter(capabilities.Video);
+        try
+        {
+            MainWindow? window = null;
+            var ran = await OnUiThread(() =>
+            {
+                window = new MainWindow(
+                    Array.Empty<string>(),
+                    loadRecentFilesStore: null,
+                    nativeOutputCapabilities: capabilities,
+                    nativePrintAdapter: new RecordingPrintAdapter(),
+                    videoExportAdapter: videoAdapter,
+                    videoFramePackageFactory: _ => BuildTestVideoPackage());
+            });
+            if (!ran) return;
+
+            window!.VideoPickerOverrideForTests = _ =>
+                Task.FromResult<MainWindow.VideoPickerSelectionForTests?>(null);
+            Task<bool>? videoTask = null;
+            var cancelRan = await OnUiThread(() => videoTask = window.FileExportVideoAsyncForTests());
+            if (!cancelRan) return;
+            (await videoTask!).Should().BeFalse();
+
+            window.VideoPickerOverrideForTests = _ =>
+                Task.FromResult<MainWindow.VideoPickerSelectionForTests?>(
+                    new MainWindow.VideoPickerSelectionForTests(null));
+            var nonLocalRan = await OnUiThread(() => videoTask = window.FileExportVideoAsyncForTests());
+            if (!nonLocalRan) return;
+            (await videoTask!).Should().BeFalse();
+            window.StatusTextForTests.Should().Contain("not available as a local path");
+
+            window.VideoPickerOverrideForTests = _ =>
+                Task.FromResult<MainWindow.VideoPickerSelectionForTests?>(
+                    new MainWindow.VideoPickerSelectionForTests(output));
+            var successRan = await OnUiThread(() => videoTask = window.FileExportVideoAsyncForTests());
+            if (!successRan) return;
+            (await videoTask!).Should().BeTrue();
+            videoAdapter.Package.Should().NotBeNull();
+
+            window.ShowBackstageForTests();
+            window.ActivateBackstageEntryForTests("Export").Should().BeTrue();
+            window.GetLogicalDescendants()
+                .OfType<Button>()
+                .Select(AutomationProperties.GetAutomationId)
+                .Should()
+                .Contain("BackstageExport_freepfileexportvideo");
+        }
+        finally
+        {
+            if (File.Exists(output)) File.Delete(output);
+        }
+
+        var disabledRan = await OnUiThread(() =>
+        {
+            var disabled = new MainWindow(Array.Empty<string>());
+            disabled.ShowBackstageForTests();
+            disabled.ActivateBackstageEntryForTests("Export").Should().BeTrue();
+            disabled.GetLogicalDescendants()
+                .OfType<Button>()
+                .Select(AutomationProperties.GetAutomationId)
+                .Should()
+                .NotContain("BackstageExport_freepfileexportvideo");
+        });
+        if (!disabledRan) return;
     }
 
     [Fact]
@@ -2041,7 +2186,7 @@ public sealed class MainWindowHeadlessTests
         printPlan.NativePrintHandoff.IsPackageReady.Should().BeTrue();
         printPlan.NativePrintHandoff.RequiresHostHandoff.Should().BeTrue();
         printPlan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeFalse();
-        printPlan.NativePrintHandoff.Reason.Should().Contain("Native printer handoff adapter is not wired");
+        printPlan.NativePrintHandoff.Reason.Should().Contain("Native output capability detection is pending");
         printPlan.LayoutChoices.Select(choice => choice.Layout.SlidesPerPage).Should().Equal(1, 1, 1, 2, 3, 4, 6, 9);
         printPlan.RangeChoices.Select(choice => choice.Kind).Should().Contain(PresentationSlideRangeKind.CurrentSlide);
     }
@@ -2134,7 +2279,7 @@ public sealed class MainWindowHeadlessTests
         renderedOptionLines.Where(line => line.StartsWith("Selected:", StringComparison.Ordinal))
             .Should()
             .Equal(
-                "Selected: Copies: 3 copies\nSet the number of copies from 1 to 999 before handing the package to the native printer dialog.",
+                "Selected: Copies: 3 copies\nSet the number of copies from 1 to 999 before handing the package to the native printer host.",
                 "Selected: Collation: Uncollated\nPrint all copies of each page before moving to the next page.",
                 "Selected: Color: Pure Black and White\nUse a high-contrast black-and-white print intent.",
                 "Selected: Content: Print hidden slides\nInclude hidden slides in the normalized print range.",
@@ -5321,6 +5466,60 @@ public sealed class MainWindowHeadlessTests
 
     private static string FindRepoFile(params string[] parts) =>
         Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"), Path.Combine(parts));
+
+    private sealed class RecordingPrintAdapter : ILinuxNativePrintHandoffAdapter
+    {
+        public LinuxNativePrintCapability Capability { get; } =
+            new(true, "lp", "office", "ready");
+        public byte[]? PdfBytes { get; private set; }
+
+        public Task<LinuxNativePrintResult> PrintAsync(
+            byte[] pdfBytes,
+            string documentName,
+            CancellationToken cancellationToken = default)
+        {
+            PdfBytes = pdfBytes;
+            return Task.FromResult(LinuxNativePrintResult.Success(0));
+        }
+    }
+
+    private static PresentationPrintOutputPackage BuildTestPrintPackage() =>
+        PresentationPrintOutputPackageExecutor.BuildPackage(
+            Presentation.CreateEmpty(),
+            new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides),
+            static (_, _, _, _) => EvenTwoByTwoPng,
+            static _ => Encoding.ASCII.GetBytes("%PDF-1.7\n%%EOF"));
+
+    private static PresentationVideoFramePackage BuildTestVideoPackage() =>
+        PresentationVideoFramePackageExecutor.BuildPackage(
+            Presentation.CreateEmpty(),
+            new PresentationVideoExportRequest(
+                Quality: PresentationVideoQualityKind.Standard,
+                SecondsPerSlide: 0.2,
+                IncludeNarration: false),
+            static (_, _, _, _) => EvenTwoByTwoPng);
+
+    private static readonly byte[] EvenTwoByTwoPng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAB0lEQVRj+M/AAEMAzJWb4gAAAABJRU5ErkJggg==");
+
+    private sealed class RecordingVideoAdapter(LinuxVideoEncoderCapability capability)
+        : ILinuxVideoExportAdapter
+    {
+        public LinuxVideoEncoderCapability Capability { get; } = capability;
+        public PresentationVideoFramePackage? Package { get; private set; }
+
+        public Task<LinuxVideoExportResult> ExportAsync(
+            PresentationVideoFramePackage package,
+            string outputPath,
+            CancellationToken cancellationToken = default)
+        {
+            Package = package;
+            return Task.FromResult(LinuxVideoExportResult.Success(
+                outputPath,
+                Capability.EncoderName ?? "test-encoder",
+                package.Bytes.LongLength));
+        }
+    }
 
 
     private static void AssertBefore(string source, string first, string second)

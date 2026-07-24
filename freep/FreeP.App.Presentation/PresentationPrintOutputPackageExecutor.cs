@@ -90,13 +90,18 @@ public enum PresentationNativePrintHandoffStatus
 public sealed record PresentationNativePrintHandoffHostCapabilities(
     string HostName,
     bool CanOpenNativePrintDialog,
-    string? UnavailableReason)
+    string? UnavailableReason,
+    bool CanSubmitToNativePrinter = false)
 {
     public static PresentationNativePrintHandoffHostCapabilities Available(string hostName) =>
         new(hostName, CanOpenNativePrintDialog: true, UnavailableReason: null);
 
     public static PresentationNativePrintHandoffHostCapabilities Deferred(string hostName, string unavailableReason) =>
         new(hostName, CanOpenNativePrintDialog: false, unavailableReason);
+
+    public static PresentationNativePrintHandoffHostCapabilities NativePrinterSubmissionAvailable(
+        string hostName) =>
+        new(hostName, CanOpenNativePrintDialog: false, UnavailableReason: null, CanSubmitToNativePrinter: true);
 }
 
 public sealed record PresentationNativePrintHandoffPlan(
@@ -108,6 +113,7 @@ public sealed record PresentationNativePrintHandoffPlan(
     bool IsPackageReady,
     bool CanOpenNativePrintDialog,
     bool RequiresHostHandoff,
+    bool CanSubmitToNativePrinter,
     PresentationPrintOutputPackageRoute Route,
     int PageCount,
     string ContentType,
@@ -223,6 +229,7 @@ public static class PresentationPrintOutputPackageExecutor
             isPackageReady,
             isPackageReady && hostCapabilities.CanOpenNativePrintDialog,
             isPackageReady,
+            isPackageReady && hostCapabilities.CanSubmitToNativePrinter,
             packagePlan.Route,
             packagePlan.PageCount,
             packagePlan.ContentType,
@@ -376,7 +383,7 @@ public static class PresentationPrintOutputPackageExecutor
         if (!packagePlan.CanBuildPackage || packagePlan.PageCount == 0)
             return PresentationNativePrintHandoffStatus.NoSlides;
 
-        return hostCapabilities.CanOpenNativePrintDialog
+        return hostCapabilities.CanOpenNativePrintDialog || hostCapabilities.CanSubmitToNativePrinter
             ? PresentationNativePrintHandoffStatus.PackageReadyHostHandoffRequired
             : PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost;
     }

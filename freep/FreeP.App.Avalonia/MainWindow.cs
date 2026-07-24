@@ -22,6 +22,7 @@ using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
 using FreeP.App.Avalonia.Backstage;
 using FreeP.App.Compositor;
+using FreeP.App.Recording;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -61,16 +62,6 @@ public sealed partial class MainWindow : Window
 {
     private const string DefaultTitle = "FreeP";
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
-    private static readonly PresentationNativePrintHandoffHostCapabilities NativePrintHostCapabilities =
-        PresentationNativePrintHandoffHostCapabilities.Deferred(
-            "Avalonia print host",
-            "Native printer handoff adapter is not wired in this host path yet.");
-
-    private static readonly PresentationVideoExportHandoffHostCapabilities VideoExportHostCapabilities =
-        PresentationVideoExportHandoffHostCapabilities.Deferred(
-            "Avalonia video export host",
-            "MP4 encoder, narration capture, and camera/media capture adapters are not wired in this host path yet.");
-
     private static readonly FilePickerFileType PictureFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
             PresentationFileTextResources.PictureFileTypeName,
@@ -103,9 +94,20 @@ public sealed partial class MainWindow : Window
     private readonly AvaloniaPresentationClipboardService _clipboardService;
     private Func<FileOpenPickerPlan, Task<string?>>? _openPickerOverrideForTests;
     private Func<FileSavePickerPlan, Task<string?>>? _savePickerOverrideForTests;
+    internal Func<FileSavePickerPlan, Task<VideoPickerSelectionForTests?>>? VideoPickerOverrideForTests { get; set; }
     private int _ownerFocusRestoreCount;
     private Task _clipboardOperation = Task.CompletedTask;
     private readonly FreePOptions _options;
+    private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
+    private ILinuxNativePrintHandoffAdapter _nativePrintAdapter;
+    private ILinuxVideoExportAdapter _videoExportAdapter;
+    private PresentationNativePrintHandoffHostCapabilities _nativePrintHostCapabilities;
+    private PresentationVideoExportHandoffHostCapabilities _videoExportHostCapabilities;
+    private readonly Func<LinuxNativeOutputCapabilities>? _nativeOutputCapabilityDetector;
+    private readonly Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? _printOutputPackageFactory;
+    private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackage>? _videoFramePackageFactory;
+    private bool _nativeOutputDetectionStarted;
+    private CancellationTokenSource? _nativeOutputCancellation;
 
     // ── Editing session ────────────────────────────────────────────────────────
 
@@ -211,6 +213,7 @@ public sealed partial class MainWindow : Window
     private TextBlock _printOptionsPaneHeading = null!;
     private TextBlock _printOptionsPaneMessage = null!;
     private StackPanel _printOptionsPaneRowsPanel = null!;
+    private Button _printOptionsPaneExecuteButton = null!;
     private readonly List<string> _printOptionsPaneRenderedOptionLines = new();
     private readonly List<string> _printOptionsPaneRenderedPreviewRows = new();
     private readonly List<string> _printOptionsPaneRenderedLayoutRows = new();
@@ -350,6 +353,12 @@ public sealed partial class MainWindow : Window
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
     internal PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor { get; private set; }
+    internal LinuxNativePrintResult? LastNativePrintResult { get; private set; }
+    internal LinuxVideoExportResult? LastVideoExportResult { get; private set; }
+    internal bool NativeOutputDetectionStartedForTests => _nativeOutputDetectionStarted;
+    internal PresentationNativePrintHandoffHostCapabilities NativePrintHostCapabilitiesForTests => _nativePrintHostCapabilities;
+    internal PresentationVideoExportHandoffHostCapabilities VideoExportHostCapabilitiesForTests => _videoExportHostCapabilities;
+    internal void StartNativeOutputCapabilityDetectionForTests() => StartNativeOutputCapabilityDetection();
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -515,7 +524,13 @@ public sealed partial class MainWindow : Window
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
         IPresentationSystemClipboard? systemClipboard = null,
-        IPresentationClipboardShapeRenderer? clipboardRenderer = null)
+        IPresentationClipboardShapeRenderer? clipboardRenderer = null,
+        LinuxNativeOutputCapabilities? nativeOutputCapabilities = null,
+        ILinuxNativePrintHandoffAdapter? nativePrintAdapter = null,
+        ILinuxVideoExportAdapter? videoExportAdapter = null,
+        Func<LinuxNativeOutputCapabilities>? nativeOutputCapabilityDetector = null,
+        Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? printOutputPackageFactory = null,
+        Func<PresentationVideoExportRequest?, PresentationVideoFramePackage>? videoFramePackageFactory = null)
     {
         Title = DefaultTitle;
         Width = 1280;
@@ -526,6 +541,16 @@ public sealed partial class MainWindow : Window
         ApplyWindowIcon();
         _options = options ?? new FreePOptions();
         _options.Normalize();
+        _nativeOutputCapabilities = nativeOutputCapabilities ??
+            LinuxNativeOutputCapabilities.Unavailable("Native output capability detection is pending.");
+        _nativePrintAdapter = nativePrintAdapter ?? new LinuxNativePrintHandoffAdapter(_nativeOutputCapabilities.Print);
+        _videoExportAdapter = videoExportAdapter ?? new LinuxVideoExportAdapter(_nativeOutputCapabilities.Video);
+        _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_nativeOutputCapabilities.Print);
+        _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
+        _nativeOutputCapabilityDetector = nativeOutputCapabilityDetector ??
+            (nativeOutputCapabilities is null ? static () => new LinuxNativeOutputCapabilityDetector().Detect() : null);
+        _printOutputPackageFactory = printOutputPackageFactory;
+        _videoFramePackageFactory = videoFramePackageFactory;
         _clipboardService = new AvaloniaPresentationClipboardService(
             systemClipboard ?? new AvaloniaPresentationSystemClipboard(
                 () => TopLevel.GetTopLevel(this)?.Clipboard),
@@ -712,6 +737,9 @@ public sealed partial class MainWindow : Window
                 "Could not open the presentation",
                 error);
         }
+
+        if (_nativeOutputCapabilityDetector is not null)
+            Opened += (_, _) => StartNativeOutputCapabilityDetection();
     }
 
     private void RestoreOwnerFocus()
@@ -736,6 +764,34 @@ public sealed partial class MainWindow : Window
         {
             // An unsupported desktop icon must not prevent the presentation from opening.
         }
+    }
+
+    private void StartNativeOutputCapabilityDetection()
+    {
+        if (_nativeOutputDetectionStarted || _nativeOutputCapabilityDetector is null)
+            return;
+
+        _nativeOutputDetectionStarted = true;
+        _ = Task.Run(_nativeOutputCapabilityDetector).ContinueWith(
+            task =>
+            {
+                if (task.IsCanceled || task.IsFaulted)
+                    return;
+
+                Dispatcher.UIThread.Post(() =>
+                {
+                    _nativeOutputCapabilities = task.Result;
+                    _nativePrintAdapter = new LinuxNativePrintHandoffAdapter(_nativeOutputCapabilities.Print);
+                    _videoExportAdapter = new LinuxVideoExportAdapter(_nativeOutputCapabilities.Video);
+                    _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_nativeOutputCapabilities.Print);
+                    _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
+                    if (_printOptionsPaneHost?.IsVisible == true)
+                        RenderPrintOptionsPane(RefreshPrintBackstagePlan());
+                });
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
     }
 
     private static IBrush ResolveThemeBrush(string key, IBrush fallback)
@@ -977,6 +1033,18 @@ public sealed partial class MainWindow : Window
         {
             Orientation = Orientation.Vertical,
         };
+        _printOptionsPaneExecuteButton = new Button
+        {
+            Content = "Print",
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MinWidth = 88,
+            Margin = new Thickness(0, 16, 0, 0),
+            IsEnabled = false,
+        };
+        _printOptionsPaneExecuteButton.Click += async (_, _) =>
+        {
+            await ExecuteNativePrintHandoffAsync();
+        };
 
         var content = new StackPanel
         {
@@ -988,6 +1056,7 @@ public sealed partial class MainWindow : Window
                 _printOptionsPaneHeading,
                 _printOptionsPaneMessage,
                 _printOptionsPaneRowsPanel,
+                _printOptionsPaneExecuteButton,
             },
         };
 
@@ -2704,7 +2773,8 @@ public sealed partial class MainWindow : Window
         ExportNotesPagePdf: () => _ = FileExportNotesPagePdfAsync(),
         ExportImages: () => _ = FileExportImagesAsync(),
         GetPrintPlan: () => RefreshPrintBackstagePlan(),
-        ExportVideo: () => RefreshVideoFramePackage());
+        ExportVideo: () => _ = FileExportVideoAsync(),
+        CanExportVideo: () => _nativeOutputCapabilities.Video.CanEncodeMp4);
 
     private Control? _backstageRestoreFocus;
 
@@ -3046,14 +3116,15 @@ public sealed partial class MainWindow : Window
 
     internal PresentationPrintOutputPackage RefreshPrintOutputPackage(PresentationPrintRequest? request = null)
     {
-        LastPrintOutputPackage = PresentationPrintOutputPackageExecutor.BuildPackage(
-            _presentation,
-            request,
-            SlideRenderer.RenderToBytes,
-            SkiaRasterPdfWriter.WriteToBytes);
+        LastPrintOutputPackage = _printOutputPackageFactory?.Invoke(request) ??
+            PresentationPrintOutputPackageExecutor.BuildPackage(
+                _presentation,
+                request,
+                SlideRenderer.RenderToBytes,
+                SkiaRasterPdfWriter.WriteToBytes);
         LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
             LastPrintOutputPackage,
-            NativePrintHostCapabilities,
+            _nativePrintHostCapabilities,
             suggestedBaseFileName: _fileWorkflow.CurrentFileName);
         LastNativePrintHandoffPlan = LastPrintExecutionDescriptor.HandoffPlan;
         _statusText.Text = LastPrintOutputPackage.Plan.DisabledReason ??
@@ -3076,7 +3147,7 @@ public sealed partial class MainWindow : Window
             _presentation,
             Editor.CurrentSlideIndex + 1,
             request?.SlideRange?.SelectedSlideNumbers,
-            NativePrintHostCapabilities,
+            _nativePrintHostCapabilities,
             _fileWorkflow.CurrentFileName);
         LastNativePrintHandoffPlan = LastPrintBackstagePlan.NativePrintHandoff;
         _statusText.Text = LastPrintBackstagePlan.DisabledReason ??
@@ -3090,6 +3161,42 @@ public sealed partial class MainWindow : Window
         RenderPrintOptionsPane(plan);
         _printOptionsPaneHost.IsVisible = true;
         return plan;
+    }
+
+    internal async Task<LinuxNativePrintResult> ExecuteNativePrintHandoffAsync(
+        PresentationPrintRequest? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        RefreshPrintOutputPackage(request);
+        var package = LastPrintOutputPackage;
+        if (package is null)
+        {
+            LastNativePrintResult = LinuxNativePrintResult.Failed("Printable package was not built.");
+            return LastNativePrintResult;
+        }
+
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _nativeOutputCancellation = linkedCancellation;
+        try
+        {
+            LastNativePrintResult = await _nativePrintAdapter.PrintAsync(
+                package.Bytes,
+                LastNativePrintHandoffPlan?.SuggestedPrintJobName ?? "FreeP presentation",
+                linkedCancellation.Token).ConfigureAwait(true);
+        }
+        finally
+        {
+            if (ReferenceEquals(_nativeOutputCancellation, linkedCancellation))
+                _nativeOutputCancellation = null;
+        }
+        _statusText.Text = LastNativePrintResult.StatusText;
+        if (!LastNativePrintResult.Succeeded && !LastNativePrintResult.Canceled &&
+            LastNativePrintResult.FailureReason is not null)
+        {
+            _statusText.Text = $"{LastNativePrintResult.StatusText}: {LastNativePrintResult.FailureReason}";
+        }
+
+        return LastNativePrintResult;
     }
 
     internal void HidePrintOptionsPane()
@@ -3172,6 +3279,9 @@ public sealed partial class MainWindow : Window
             Foreground = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70)),
             Margin = new Thickness(0, 8, 0, 0),
         });
+        _printOptionsPaneExecuteButton.IsEnabled =
+            plan.NativePrintHandoff.CanOpenNativePrintDialog ||
+            plan.NativePrintHandoff.CanSubmitToNativePrinter;
     }
 
     private void AddPrintOptionsPaneSection(string text)
@@ -3247,21 +3357,138 @@ public sealed partial class MainWindow : Window
         return LastVideoExportPlan;
     }
 
+    internal Task<bool> FileExportVideoAsyncForTests() => FileExportVideoAsync();
+
+    private async Task<bool> FileExportVideoAsync()
+    {
+        if (!_nativeOutputCapabilities.Video.CanEncodeMp4)
+        {
+            _statusText.Text = _nativeOutputCapabilities.Video.Reason;
+            return false;
+        }
+
+        if (VideoPickerOverrideForTests is null && !AvaloniaFilePickerService.CanSave(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                FileText,
+                PresentationExportPlanner.VideoExportCommandText);
+            return false;
+        }
+
+        var plan = PresentationExportPlanner.BuildVideoExportPickerPlan(_fileWorkflow.CurrentFileName);
+        string? path;
+        var wasSelected = false;
+        if (VideoPickerOverrideForTests is { } pickerOverride)
+        {
+            var selection = await pickerOverride(plan);
+            if (selection is null)
+                return false;
+            wasSelected = true;
+            path = selection.LocalPath;
+        }
+        else
+        {
+            using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+                StorageProvider,
+                AvaloniaFilePickerSaveRequest.FromSavePlan(
+                    PresentationExportPlanner.VideoExportPickerTitle,
+                    plan,
+                    showOverwritePrompt: true));
+            wasSelected = file is not null;
+            path = file?.LocalPath;
+        }
+        if (path is null)
+        {
+            if (wasSelected)
+                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
+                    FileText,
+                    PresentationExportPlanner.VideoExportCommandText);
+            return false;
+        }
+
+        var result = await ExecuteVideoExportAsync(path);
+        return result.Succeeded;
+    }
+
     internal PresentationVideoFramePackage RefreshVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
-        LastVideoFramePackage = PresentationVideoFramePackageExecutor.BuildPackage(
-            _presentation,
-            request,
-            SlideRenderer.RenderToBytes);
+        LastVideoFramePackage = _videoFramePackageFactory?.Invoke(request) ??
+            PresentationVideoFramePackageExecutor.BuildPackage(
+                _presentation,
+                request,
+                SlideRenderer.RenderToBytes);
         LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
         LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
             LastVideoFramePackage,
-            VideoExportHostCapabilities,
+            _videoExportHostCapabilities,
             _fileWorkflow.CurrentFileName);
         LastVideoExportHandoffPlan = LastVideoExecutionDescriptor.HandoffPlan;
         _statusText.Text = LastVideoExportHandoffPlan.StatusText;
         return LastVideoFramePackage;
     }
+
+    internal async Task<LinuxVideoExportResult> ExecuteVideoExportAsync(
+        string outputPath,
+        PresentationVideoExportRequest? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        RefreshVideoFramePackage(request);
+        var package = LastVideoFramePackage;
+        if (package is null)
+        {
+            LastVideoExportResult = LinuxVideoExportResult.Failed("Video frame package was not built.", outputPath);
+            return LastVideoExportResult;
+        }
+
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _nativeOutputCancellation = linkedCancellation;
+        try
+        {
+            LastVideoExportResult = await _videoExportAdapter.ExportAsync(
+                package,
+                outputPath,
+                linkedCancellation.Token).ConfigureAwait(true);
+        }
+        finally
+        {
+            if (ReferenceEquals(_nativeOutputCancellation, linkedCancellation))
+                _nativeOutputCancellation = null;
+        }
+        _statusText.Text = LastVideoExportResult.StatusText;
+        if (!LastVideoExportResult.Succeeded && !LastVideoExportResult.Canceled &&
+            LastVideoExportResult.FailureReason is not null)
+        {
+            _statusText.Text = $"{LastVideoExportResult.StatusText}: {LastVideoExportResult.FailureReason}";
+        }
+
+        return LastVideoExportResult;
+    }
+
+    internal void CancelNativeOutputForTests() =>
+        _nativeOutputCancellation?.Cancel();
+
+    internal sealed record VideoPickerSelectionForTests(string? LocalPath);
+
+    private static PresentationNativePrintHandoffHostCapabilities BuildNativePrintHostCapabilities(
+        LinuxNativePrintCapability capability) =>
+        capability.CanPrint
+            ? PresentationNativePrintHandoffHostCapabilities.NativePrinterSubmissionAvailable(
+                "Avalonia Linux print host")
+            : PresentationNativePrintHandoffHostCapabilities.Deferred(
+                "Avalonia Linux print host",
+                capability.Reason);
+
+    private static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(
+        LinuxVideoEncoderCapability capability) =>
+        new(
+            "Avalonia Linux video export host",
+            capability.CanEncodeMp4,
+            CanCaptureNarration: false,
+            CanCaptureCameraAndMedia: false,
+            capability.CanEncodeMp4
+                ? "Video-only ffmpeg export is available; narration and camera/media muxing are not implemented."
+                : capability.Reason);
 
     private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)
     {

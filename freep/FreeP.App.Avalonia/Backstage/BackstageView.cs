@@ -173,7 +173,23 @@ internal sealed class BackstageView : UserControl
             PaneStyle,
             margin: new Thickness(0, 0, 0, 8)));
         AddExportGroup(panel, plan.FixedLayoutGroupHeading, plan.FixedLayoutActions);
-        AddExportGroup(panel, plan.DeferredGroupHeading, plan.DeferredActions.Where(action => action.IsEnabled));
+        var deferredActions = plan.DeferredActions
+            .Where(action => action.IsEnabled)
+            .ToList();
+        if (_callbacks.CanExportVideo() &&
+            deferredActions.All(action => action.CommandId != PresentationExportPlanner.VideoExportCommandId))
+        {
+            var video = PresentationExportPlanner.BuildFormatDescriptors()
+                .Single(descriptor => descriptor.Format == PresentationExportFormat.Video);
+            deferredActions.Add(new PresentationBackstageExportActionPlan(
+                video.Format,
+                video.CommandId,
+                video.DisplayName,
+                video.Description,
+                IsEnabled: true));
+        }
+
+        AddExportGroup(panel, plan.DeferredGroupHeading, deferredActions);
         return panel;
     }
 
