@@ -466,7 +466,8 @@ internal sealed class FileCommands
             LastVideoExportResult = await _videoExportAdapter.ExportAsync(
                 LastVideoFramePackage!,
                 result.FileName,
-                CancellationToken.None).ConfigureAwait(true);
+                CancellationToken.None,
+                _getModel().RecordingMediaArtifacts).ConfigureAwait(true);
             if (!LastVideoExportResult.Succeeded && !LastVideoExportResult.Canceled &&
                 LastVideoExportResult.FailureReason is not null)
             {
@@ -493,7 +494,7 @@ internal sealed class FileCommands
             CanCaptureNarration: false,
             CanCaptureCameraAndMedia: false,
             capability.CanEncodeMp4
-                ? "Video-only ffmpeg export is available; narration and camera/media muxing are not implemented."
+                ? "FFmpeg video export and persisted narration muxing are available; live narration capture and camera/media muxing are not implemented."
                 : capability.Reason);
 
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>

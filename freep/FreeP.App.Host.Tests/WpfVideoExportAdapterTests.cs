@@ -60,13 +60,61 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
         File.Exists(output).Should().BeFalse();
     }
 
-    private static PresentationVideoFramePackage BuildPackage() =>
+    [Fact]
+    public async Task Export_MuxesPersistedNarrationAtItsSlideStartTime()
+    {
+        var output = Path.Combine(_tempDirectory, "narrated.mp4");
+        var runner = new SuccessfulVideoProcessRunner(output);
+        var adapter = new WpfVideoExportAdapter(
+            new WpfVideoEncoderCapability(true, "ffmpeg.exe", "libx264", "ready"),
+            runner);
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Add(new Slide
+        {
+            LayoutId = presentation.Layouts[0].Id,
+            Title = "Slide 2",
+        });
+        var narrationBytes = Encoding.ASCII.GetBytes("test narration payload");
+        var artifact = new PresentationRecordingMediaArtifact(
+            PresentationRecordingMediaArtifactKind.NarrationAudio,
+            SlideIndex: 1,
+            SuggestedFileName: "slide-2.wav",
+            ContentType: "audio/wav",
+            PackagePath: "ppt/media/freep-recordings/wpf/slide-1.wav",
+            ContentLengthBytes: narrationBytes.Length,
+            ContentSha256: "test-sha",
+            DurationMs: 200,
+            CapturedByHost: "test",
+            StatusText: "captured",
+            PayloadBytes: narrationBytes);
+
+        var result = await adapter.ExportAsync(
+            BuildPackage(presentation, includeNarration: true),
+            output,
+            CancellationToken.None,
+            [artifact]);
+
+        result.Succeeded.Should().BeTrue(result.FailureReason);
+        result.MuxedNarrationTrackCount.Should().Be(1);
+        result.StatusText.Should().Contain("narration");
+        runner.Arguments.Should().Contain("-filter_complex");
+        runner.Arguments.Should().Contain(argument => argument.Contains("adelay=1000:all=1", StringComparison.Ordinal));
+        runner.Arguments.Should().ContainInOrder("-map", "0:v:0", "-map", "[aout]");
+        runner.Arguments.Should().NotContain("-an");
+    }
+
+    private static PresentationVideoFramePackage BuildPackage(bool includeNarration = false) =>
+        BuildPackage(Presentation.CreateEmpty(), includeNarration);
+
+    private static PresentationVideoFramePackage BuildPackage(
+        Presentation presentation,
+        bool includeNarration = false) =>
         PresentationVideoFramePackageExecutor.BuildPackage(
-            Presentation.CreateEmpty(),
+            presentation,
             new PresentationVideoExportRequest(
                 Quality: PresentationVideoQualityKind.Standard,
                 SecondsPerSlide: 0.2,
-                IncludeNarration: false),
+                IncludeNarration: includeNarration),
             static (_, _, _, _) => EvenTwoByTwoPng);
 
     private static readonly byte[] EvenTwoByTwoPng = Convert.FromBase64String(
