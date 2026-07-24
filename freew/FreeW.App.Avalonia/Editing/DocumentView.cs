@@ -16273,6 +16273,7 @@ public sealed class DocumentView : Control
     {
         public Rect             Rect;
         public bool             BehindText;
+        public bool             IsWordSuppressedByDuplicateDrawingId;
         public int              ZOrder;
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
@@ -16391,6 +16392,7 @@ public sealed class DocumentView : Control
         {
             Rect = rect,
             BehindText = behindText,
+            IsWordSuppressedByDuplicateDrawingId = smartArt.IsWordSuppressedByDuplicateDrawingId,
             ZOrder = zOrder,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
@@ -16928,6 +16930,9 @@ public sealed class DocumentView : Control
     /// </summary>
     private void DrawFloatingSmartArt(DrawingContext context, FloatingSmartArtData sd)
     {
+        if (sd.IsWordSuppressedByDuplicateDrawingId)
+            return;
+
         var rect = sd.Rect;
 
         // Frame.

@@ -12539,6 +12539,17 @@ public sealed class DocumentView : RichTextBox
     {
         var widthPx = smartArt.WidthPt * PxPerPoint;
         var heightPx = smartArt.HeightPt * PxPerPoint;
+        if (smartArt.IsWordSuppressedByDuplicateDrawingId)
+        {
+            return new InlineUIContainer(new Border
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Background = Brushes.Transparent,
+                Tag = smartArt
+            }) { BaselineAlignment = BaselineAlignment.Bottom };
+        }
+
         var strokeThickness = EffectLineThickness(effectSet);
 
         var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
