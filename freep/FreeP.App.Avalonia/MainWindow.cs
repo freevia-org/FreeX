@@ -3448,7 +3448,8 @@ public sealed partial class MainWindow : Window
             LastVideoExportResult = await _videoExportAdapter.ExportAsync(
                 package,
                 outputPath,
-                linkedCancellation.Token).ConfigureAwait(true);
+                linkedCancellation.Token,
+                _presentation.RecordingMediaArtifacts).ConfigureAwait(true);
         }
         finally
         {
@@ -3484,10 +3485,12 @@ public sealed partial class MainWindow : Window
         new(
             "Avalonia Linux video export host",
             capability.CanEncodeMp4,
-            CanCaptureNarration: false,
+            CanCaptureNarration: capability.CanCaptureNarration,
             CanCaptureCameraAndMedia: false,
             capability.CanEncodeMp4
-                ? "Video-only ffmpeg export is available; narration and camera/media muxing are not implemented."
+                ? capability.CanCaptureNarration
+                    ? "ffmpeg video export and persisted narration muxing are available; camera/media muxing is not implemented."
+                    : "Video-only ffmpeg export is available; narration capture is unavailable and camera/media muxing is not implemented."
                 : capability.Reason);
 
     private void RegisterReviewWorkflowCommands(RibbonCommandRegistry registry)

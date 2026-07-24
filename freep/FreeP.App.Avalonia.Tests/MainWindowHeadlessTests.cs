@@ -5537,7 +5537,8 @@ public sealed class MainWindowHeadlessTests
         public Task<LinuxVideoExportResult> ExportAsync(
             PresentationVideoFramePackage package,
             string outputPath,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            IReadOnlyList<PresentationRecordingMediaArtifact>? mediaArtifacts = null)
         {
             Package = package;
             return Task.FromResult(LinuxVideoExportResult.Success(

@@ -1,4 +1,5 @@
 using System.Text;
+using FreeP.App.Compositor;
 
 namespace FreeP.App.Recording.Tests;
 
@@ -163,6 +164,57 @@ public sealed class LinuxNativeOutputTests
     }
 
     [Fact]
+    public async Task Linux_ffmpeg_export_muxes_persisted_narration_at_its_slide_start_time()
+    {
+        var output = Path.Combine(Path.GetTempPath(), $"freep-narrated-video-{Guid.NewGuid():N}.mp4");
+        var runner = new CapturingVideoProcessRunner(output);
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Add(new Slide
+        {
+            LayoutId = presentation.Layouts[0].Id,
+            Title = "Slide 2",
+        });
+        var narrationBytes = Encoding.ASCII.GetBytes("test narration payload");
+        var artifact = new PresentationRecordingMediaArtifact(
+            PresentationRecordingMediaArtifactKind.NarrationAudio,
+            SlideIndex: 1,
+            SuggestedFileName: "slide-2.wav",
+            ContentType: "audio/wav",
+            PackagePath: "ppt/media/freep-recordings/avalonia/slide-1.wav",
+            ContentLengthBytes: narrationBytes.Length,
+            ContentSha256: "test-sha",
+            DurationMs: 200,
+            CapturedByHost: "test",
+            StatusText: "captured",
+            PayloadBytes: narrationBytes);
+
+        try
+        {
+            var result = await new LinuxVideoExportAdapter(
+                new LinuxVideoEncoderCapability(true, "ffmpeg", "libx264", true, "ready"),
+                runner)
+                .ExportAsync(
+                    BuildPackage(presentation, includeNarration: true),
+                    output,
+                    CancellationToken.None,
+                    [artifact]);
+
+            result.Succeeded.Should().BeTrue(result.FailureReason);
+            result.MuxedNarrationTrackCount.Should().Be(1);
+            result.StatusText.Should().Contain("narration");
+            runner.Arguments.Should().Contain("-filter_complex");
+            runner.Arguments.Should().Contain(argument => argument.Contains("adelay=1000:all=1", StringComparison.Ordinal));
+            runner.Arguments.Should().ContainInOrder("-map", "0:v:0", "-map", "[aout]");
+            runner.Arguments.Should().NotContain("-an");
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
     public async Task Video_export_cancellation_removes_partial_output_after_runner_is_cancelled()
     {
         var output = Path.Combine(Path.GetTempPath(), $"freep-cancelled-video-{Guid.NewGuid():N}.mp4");
@@ -216,6 +268,17 @@ public sealed class LinuxNativeOutputTests
     private static readonly byte[] EvenTwoByTwoPng = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAB0lEQVRj+M/AAEMAzJWb4gAAAABJRU5ErkJggg==");
 
+    private static PresentationVideoFramePackage BuildPackage(
+        Presentation presentation,
+        bool includeNarration) =>
+        PresentationVideoFramePackageExecutor.BuildPackage(
+            presentation,
+            new PresentationVideoExportRequest(
+                Quality: PresentationVideoQualityKind.Standard,
+                SecondsPerSlide: 0.2,
+                IncludeNarration: includeNarration),
+            static (_, _, _, _) => EvenTwoByTwoPng);
+
     private sealed class BlockingProcessRunner(string outputPath) : ILinuxNativeProcessRunner
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -250,6 +313,21 @@ public sealed class LinuxNativeOutputTests
         {
             await File.WriteAllTextAsync(outputPath, "not an mp4", cancellationToken);
             return new LinuxNativeProcessResult(0, string.Empty, string.Empty, false);
+        }
+    }
+
+    private sealed class CapturingVideoProcessRunner(string outputPath) : ILinuxNativeProcessRunner
+    {
+        public List<string> Arguments { get; } = [];
+
+        public Task<LinuxNativeProcessResult> RunAsync(
+            string executable,
+            IReadOnlyList<string> arguments,
+            CancellationToken cancellationToken)
+        {
+            Arguments.AddRange(arguments);
+            File.WriteAllBytes(outputPath, Encoding.ASCII.GetBytes("0000ftyp0000moov0000mdat"));
+            return Task.FromResult(new LinuxNativeProcessResult(0, string.Empty, string.Empty, false));
         }
     }
 
