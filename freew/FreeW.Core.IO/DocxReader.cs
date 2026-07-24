@@ -5919,6 +5919,15 @@ public static class DocxReader
             group.HeightPt = EmuToPoints(extent.Attribute("cy")?.Value ?? "0");
         }
 
+        var groupXfrm = wgp.Element(Wpg + "grpSpPr")?.Element(A + "xfrm");
+        if (groupXfrm is not null)
+        {
+            if (groupXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, out var rotEmu))
+                group.RotationAngle = rotEmu / 60000.0;
+            group.FlipH = groupXfrm.Attribute("flipH")?.Value is "1" or "true";
+            group.FlipV = groupXfrm.Attribute("flipV")?.Value is "1" or "true";
+        }
+
         // wpg:wgp permits shape, picture, and graphic-frame children. The latter two retain their real
         // relationship-bearing payload instead of the old marker-only wps:wsp placeholders.
         foreach (var groupChild in wgp.Elements().Where(element =>

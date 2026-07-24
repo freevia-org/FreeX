@@ -297,7 +297,9 @@ public sealed class DrawingObjectVisualPlannerTests
         var group = new DrawingGroup
         {
             WidthPt = 240,
-            HeightPt = 140
+            HeightPt = 140,
+            RotationAngle = 18,
+            FlipH = true
         };
         var image = new InlineImage([1, 2, 3, 4], widthPt: 24, heightPt: 18)
         {
@@ -354,6 +356,9 @@ public sealed class DrawingObjectVisualPlannerTests
                 ImageWrapping.Square));
 
         plan.Kind.Should().Be(DrawingObjectVisualKind.Group);
+        plan.RotationAngle.Should().Be(18);
+        plan.FlipH.Should().BeTrue();
+        plan.FlipV.Should().BeFalse();
         plan.GroupChildren.Should().HaveCount(5);
         plan.GroupChildren.Select(child => child.Visual.Kind).Should().Equal(
             DrawingObjectVisualKind.Image,

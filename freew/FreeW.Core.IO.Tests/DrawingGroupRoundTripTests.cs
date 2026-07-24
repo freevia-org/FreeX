@@ -442,6 +442,28 @@ public sealed class DrawingGroupRoundTripTests
         grp.HeightPt.Should().BeApproximately(90, 1.0);
     }
 
+    [Fact]
+    public void DrawingGroup_Transform_RoundTripsAndEmitsGroupXfrmAttributes()
+    {
+        var group = TwoMemberGroup();
+        group.RotationAngle = 45;
+        group.FlipH = true;
+        group.FlipV = true;
+
+        var xml = DocXml(DocumentWith(group));
+        var xfrm = xml.Descendants(Wpg + "grpSpPr").Single().Element(A + "xfrm");
+        xfrm.Should().NotBeNull();
+        xfrm!.Attribute("rot")!.Value.Should().Be("2700000");
+        xfrm.Attribute("flipH")!.Value.Should().Be("1");
+        xfrm.Attribute("flipV")!.Value.Should().Be("1");
+
+        var recovered = RoundTrip(DocumentWith(group));
+        var read = ((Paragraph)recovered.Blocks[0]).Runs.Single().DrawingGroup!;
+        read.RotationAngle.Should().BeApproximately(45, 0.001);
+        read.FlipH.Should().BeTrue();
+        read.FlipV.Should().BeTrue();
+    }
+
     // ── Three-member round-trip ──────────────────────────────────────────────────────────────────
 
     [Fact]

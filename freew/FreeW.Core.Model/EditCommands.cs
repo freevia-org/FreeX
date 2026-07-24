@@ -2850,10 +2850,11 @@ public sealed class SetFloatingWrapCommand(
 }
 
 /// <summary>
-/// Set the rotation + flip on ANY floating object that supports rotation (Image, Shape).
+/// Set the rotation + flip on ANY floating object that supports rotation (Image, Shape, Group).
 /// For Image: updates <see cref="InlineImage.RotationAngle"/>, FlipH, FlipV.
 /// For Shape: updates <see cref="Shape.RotationAngle"/>, FlipH, FlipV.
-/// Chart/SmartArt/WordArt/Group do not carry rotation in the model; this command is a no-op for them.
+/// For Group: updates the group-level DrawingML transform, leaving child-local transforms intact.
+/// Chart, SmartArt, and WordArt do not carry a model transform; this command is a no-op for them.
 /// </summary>
 public sealed class SetFloatingRotationCommand(
     int paragraphIndex, int runIndex,
@@ -2894,6 +2895,11 @@ public sealed class SetFloatingRotationCommand(
         {
             pAngle = shape.RotationAngle; pFH = shape.FlipH; pFV = shape.FlipV;
             shape.RotationAngle = a; shape.FlipH = fh; shape.FlipV = fv; return true;
+        }
+        if (run.DrawingGroup is { } group)
+        {
+            pAngle = group.RotationAngle; pFH = group.FlipH; pFV = group.FlipV;
+            group.RotationAngle = a; group.FlipH = fh; group.FlipV = fv; return true;
         }
         return false;
     }

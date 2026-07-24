@@ -4683,8 +4683,7 @@ public static class DocxWriter
             });
         }
 
-        var grpSpPr = new XElement(Wpg + "grpSpPr",
-            new XElement(A + "xfrm",
+        var groupXfrm = new XElement(A + "xfrm",
                 new XElement(A + "off",
                     new XAttribute("x", 0), new XAttribute("y", 0)),
                 new XElement(A + "ext",
@@ -4692,7 +4691,15 @@ public static class DocxWriter
                 new XElement(A + "chOff",
                     new XAttribute("x", 0), new XAttribute("y", 0)),
                 new XElement(A + "chExt",
-                    new XAttribute("cx", cx), new XAttribute("cy", cy))));
+                    new XAttribute("cx", cx), new XAttribute("cy", cy)));
+        if (group.RotationAngle != 0)
+            groupXfrm.Add(new XAttribute("rot", (long)Math.Round(group.RotationAngle * 60000)));
+        if (group.FlipH)
+            groupXfrm.Add(new XAttribute("flipH", "1"));
+        if (group.FlipV)
+            groupXfrm.Add(new XAttribute("flipV", "1"));
+
+        var grpSpPr = new XElement(Wpg + "grpSpPr", groupXfrm);
 
         var wgp = new XElement(Wpg + "wgp",
             new XAttribute(XNamespace.Xmlns + "wpg", Wpg.NamespaceName),

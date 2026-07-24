@@ -29,6 +29,18 @@ public sealed class DrawingGroup
     public double HeightPt { get; set; } = 72;
 
     /// <summary>
+    /// Group-level DrawingML rotation in degrees. This is stored on the group's
+    /// <c>wpg:grpSpPr/a:xfrm</c>, not on its individual children.
+    /// </summary>
+    public double RotationAngle { get; set; }
+
+    /// <summary>Whether the complete group is mirrored horizontally about its centre.</summary>
+    public bool FlipH { get; set; }
+
+    /// <summary>Whether the complete group is mirrored vertically about its centre.</summary>
+    public bool FlipV { get; set; }
+
+    /// <summary>
     /// The grouped drawing objects.  Each element is one of:
     /// <see cref="InlineImage"/>, <see cref="Shape"/>, <see cref="Chart"/>,
     /// <see cref="SmartArt"/>, or <see cref="WordArt"/>.

@@ -7305,6 +7305,7 @@ public sealed class DocumentView : Control
         {
             "Image" when run.Image is { } img => (img.RotationAngle, img.FlipH, img.FlipV),
             "Shape" when run.Shape is { } shape => (shape.RotationAngle, shape.FlipH, shape.FlipV),
+            "Group" when run.DrawingGroup is { } group => (group.RotationAngle, group.FlipH, group.FlipV),
             _ => (0, false, false),
         };
     }
@@ -8335,6 +8336,9 @@ public sealed class DocumentView : Control
         else if (run.Shape is { } shape)
             _bus.Execute(new SetShapeRotationCommand(sel.BlockIndex, sel.RunIndex,
                 angleDeg, shape.FlipH, shape.FlipV));
+        else if (run.DrawingGroup is { } group)
+            _bus.Execute(new SetFloatingRotationCommand(sel.BlockIndex, sel.RunIndex,
+                angleDeg, group.FlipH, group.FlipV));
         // Chart/SmartArt/WordArt/Group don't carry rotation — ignore.
         InvalidateLayoutAndVisual();
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
@@ -8361,6 +8365,12 @@ public sealed class DocumentView : Control
             var newFH = horizontal ? !shape.FlipH : shape.FlipH;
             var newFV = horizontal ? shape.FlipV : !shape.FlipV;
             _bus.Execute(new SetShapeRotationCommand(sel.BlockIndex, sel.RunIndex, shape.RotationAngle, newFH, newFV));
+        }
+        else if (run.DrawingGroup is { } group)
+        {
+            var newFH = horizontal ? !group.FlipH : group.FlipH;
+            var newFV = horizontal ? group.FlipV : !group.FlipV;
+            _bus.Execute(new SetFloatingRotationCommand(sel.BlockIndex, sel.RunIndex, group.RotationAngle, newFH, newFV));
         }
         InvalidateLayoutAndVisual();
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
@@ -15965,6 +15975,9 @@ public sealed class DocumentView : Control
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
         public int RunIndex;
+        public double RotationAngle;
+        public bool FlipH;
+        public bool FlipV;
         public List<FloatingGroupChildData> Children = [];
     }
 
@@ -16119,6 +16132,9 @@ public sealed class DocumentView : Control
             ZOrder = snapshot.ZOrderIndex,
             BlockIndex = snapshot.BlockIndex,
             RunIndex = snapshot.RunIndex,
+            RotationAngle = group.RotationAngle,
+            FlipH = group.FlipH,
+            FlipV = group.FlipV,
             Children = children,
         };
     }
@@ -16861,6 +16877,23 @@ public sealed class DocumentView : Control
     /// </summary>
     private void DrawFloatingGroup(DrawingContext context, FloatingGroupData gd)
     {
+        var centerX = gd.Rect.X + gd.Rect.Width / 2;
+        var centerY = gd.Rect.Y + gd.Rect.Height / 2;
+        IDisposable? transformState = null;
+        if (gd.RotationAngle != 0 || gd.FlipH || gd.FlipV)
+        {
+            var matrix = Matrix.Identity;
+            matrix = matrix * Matrix.CreateTranslation(-centerX, -centerY);
+            if (gd.FlipH) matrix = matrix * new Matrix(-1, 0, 0, 1, 0, 0);
+            if (gd.FlipV) matrix = matrix * new Matrix(1, 0, 0, -1, 0, 0);
+            if (gd.RotationAngle != 0)
+                matrix = matrix * Matrix.CreateRotation(gd.RotationAngle * Math.PI / 180.0);
+            matrix = matrix * Matrix.CreateTranslation(centerX, centerY);
+            transformState = context.PushTransform(matrix);
+        }
+
+        try
+        {
         // Optional: thin dashed group bounding frame for debuggability.
         context.DrawRectangle(null,
             new Pen(new SolidColorBrush(Color.FromArgb(0x44, 0x44, 0x44, 0x44)), 0.5,
@@ -16891,6 +16924,11 @@ public sealed class DocumentView : Control
                     DrawFloatingSmartArt(context, sasd);
                     break;
             }
+        }
+        }
+        finally
+        {
+            transformState?.Dispose();
         }
     }
 }

@@ -6330,6 +6330,23 @@ public sealed class DocumentView : RichTextBox
             Tag = group
         };
 
+        if (plan.RotationAngle != 0 || plan.FlipH || plan.FlipV)
+        {
+            var transforms = new System.Windows.Media.TransformGroup();
+            if (plan.FlipH || plan.FlipV)
+                transforms.Children.Add(new System.Windows.Media.ScaleTransform(
+                    plan.FlipH ? -1 : 1,
+                    plan.FlipV ? -1 : 1,
+                    widthPx / 2,
+                    heightPx / 2));
+            if (plan.RotationAngle != 0)
+                transforms.Children.Add(new System.Windows.Media.RotateTransform(
+                    plan.RotationAngle,
+                    widthPx / 2,
+                    heightPx / 2));
+            root.RenderTransform = transforms;
+        }
+
         root.Cursor = Cursors.SizeAll;
         root.MouseLeftButtonDown += (_, e) =>
         {

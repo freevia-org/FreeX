@@ -1231,7 +1231,10 @@ public static class DocumentViewLayoutPlanner
                     group.HeightPt,
                     defaultWidthPt: 144,
                     defaultHeightPt: 72,
-                    group.Placement);
+                    group.Placement,
+                    group.RotationAngle,
+                    group.FlipH,
+                    group.FlipV);
             }
         }
 

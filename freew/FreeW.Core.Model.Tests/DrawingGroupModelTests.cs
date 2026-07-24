@@ -78,6 +78,33 @@ public sealed class DrawingGroupModelTests
         grp.IsValid.Should().BeTrue("two-child group");
     }
 
+    [Fact]
+    public void SetFloatingRotationCommand_UpdatesAndRevertsGroupTransform()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var group = new DrawingGroup();
+        group.Children.Add(new Shape(ShapeKind.Rectangle, 60, 30));
+        group.Children.Add(new Shape(ShapeKind.Ellipse, 72, 36));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(group));
+        doc.Blocks.Add(paragraph);
+        var command = new SetFloatingRotationCommand(0, 0, 45, flipH: true, flipV: true);
+        var context = new TestCtx(doc);
+
+        command.Apply(context);
+
+        group.RotationAngle.Should().Be(45);
+        group.FlipH.Should().BeTrue();
+        group.FlipV.Should().BeTrue();
+
+        command.Revert(context);
+
+        group.RotationAngle.Should().Be(0);
+        group.FlipH.Should().BeFalse();
+        group.FlipV.Should().BeFalse();
+    }
+
     // ── GroupFloatingObjectsCommand ──────────────────────────────────────────────────────────────
 
     [Fact]

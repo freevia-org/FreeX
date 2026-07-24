@@ -443,6 +443,41 @@ public sealed class DocumentViewFloatingSelectionTests
         Assert.Equal(0.0, angleReverted);
     }
 
+    [Fact]
+    public async Task RotateAndFlipSelectedFloating_updates_group_transform_and_is_undoable()
+    {
+        double angleAfter = 0, angleReverted = 0;
+        bool flipAfter = false, flipReverted = true;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = MakeDocWithFloatingImageAndShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(0, 1);
+            view.SelectFloating(0, 2, addToMultiSelect: true);
+            view.GroupSelectedFloatingObjects();
+            view.SelectFloating(0, 1);
+
+            view.RotateSelectedFloating(45);
+            view.FlipSelectedFloating(horizontal: true);
+            var group = ((Paragraph)doc.Blocks[0]).Runs[1].DrawingGroup!;
+            angleAfter = group.RotationAngle;
+            flipAfter = group.FlipH;
+
+            view.Undo();
+            view.Undo();
+            angleReverted = group.RotationAngle;
+            flipReverted = group.FlipH;
+        });
+        if (!ran) return;
+
+        Assert.Equal(45, angleAfter);
+        Assert.True(flipAfter);
+        Assert.Equal(0.0, angleReverted);
+        Assert.False(flipReverted);
+    }
+
     // ── FLSEL-10: FlipSelectedFloating updates image flip + undoable ─────────────────────────────────
 
     [Fact]
