@@ -5805,6 +5805,33 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartDisplayOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartDisplayOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartDisplayOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(
+                "Revenue",
+                LegendPosition.Bottom,
+                true,
+                DataLabelPosition.OutsideEnd,
+                false,
+                true);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().Be(new ChartDisplayOptions(
+            "Revenue", LegendPosition.Bottom, true, DataLabelPosition.OutsideEnd, false, true));
+    }
+
+    [Fact]
     public async Task Ribbon_insert_picture_command_is_registered()
     {
         var found = false;

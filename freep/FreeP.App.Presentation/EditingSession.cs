@@ -1913,6 +1913,19 @@ public sealed class EditingSession
             categories, seriesNames, values, chartType));
     }
 
+    /// <summary>Applies common chart title, legend, label, and gridline options as one undo step.</summary>
+    public void ApplyChartDisplayOptions(ChartDisplayOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return;
+
+        Bus.Execute(new SetChartDisplayOptionsCommand(
+            _currentSlideIndex,
+            _selectedShapeIds[0],
+            options));
+    }
+
     /// <summary>
     /// Non-nullable overload for callers that already work with <c>double</c> sequences (no gaps).
     /// </summary>

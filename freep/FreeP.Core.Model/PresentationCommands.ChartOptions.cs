@@ -1,0 +1,104 @@
+namespace FreeP.Core.Model;
+
+/// <summary>Atomically updates common PowerPoint chart display options.</summary>
+public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly ChartDisplayOptions _newOptions;
+
+    private string? _oldTitle;
+    private bool _oldAutomaticTitle;
+    private LegendPosition? _oldLegend;
+    private ChartDataLabels? _oldDataLabels;
+    private bool _oldCategoryGridlines;
+    private bool _oldValueGridlines;
+
+    public SetChartDisplayOptionsCommand(
+        int slideIndex,
+        uint shapeId,
+        ChartDisplayOptions options)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newOptions = options ?? throw new ArgumentNullException(nameof(options));
+    }
+
+    public string Label => "Set Chart Options";
+
+    public void Apply(Presentation p)
+    {
+        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        if (chart is null)
+            return;
+
+        _oldTitle = chart.Title;
+        _oldAutomaticTitle = chart.HasAutomaticTitle;
+        _oldLegend = chart.Legend;
+        _oldDataLabels = CloneDataLabels(chart.DataLabels);
+        _oldCategoryGridlines = chart.CategoryAxis.HasMajorGridlines;
+        _oldValueGridlines = chart.ValueAxis.HasMajorGridlines;
+
+        chart.Title = string.IsNullOrWhiteSpace(_newOptions.Title) ? null : _newOptions.Title;
+        chart.HasAutomaticTitle = false;
+        chart.Legend = _newOptions.Legend;
+        chart.CategoryAxis.HasMajorGridlines = _newOptions.CategoryGridlines;
+        chart.ValueAxis.HasMajorGridlines = _newOptions.ValueGridlines;
+
+        if (chart.DataLabels is not null)
+        {
+            chart.DataLabels.ShowValue = _newOptions.ShowValueLabels;
+            chart.DataLabels.Position = _newOptions.LabelPosition;
+        }
+        else if (_newOptions.ShowValueLabels)
+        {
+            chart.DataLabels = new ChartDataLabels
+            {
+                ShowValue = true,
+                Position = _newOptions.LabelPosition,
+            };
+        }
+
+        ChartHelper.MarkWorkbookDirty(chart);
+    }
+
+    public void Revert(Presentation p)
+    {
+        var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
+        if (chart is null)
+            return;
+
+        chart.Title = _oldTitle;
+        chart.HasAutomaticTitle = _oldAutomaticTitle;
+        chart.Legend = _oldLegend;
+        chart.DataLabels = CloneDataLabels(_oldDataLabels);
+        chart.CategoryAxis.HasMajorGridlines = _oldCategoryGridlines;
+        chart.ValueAxis.HasMajorGridlines = _oldValueGridlines;
+        ChartHelper.MarkWorkbookDirty(chart);
+    }
+
+    private static ChartDataLabels? CloneDataLabels(ChartDataLabels? source) => source is null
+        ? null
+        : new ChartDataLabels
+        {
+            ShowValue = source.ShowValue,
+            ShowPercent = source.ShowPercent,
+            ShowCategoryName = source.ShowCategoryName,
+            ShowSeriesName = source.ShowSeriesName,
+            ShowLegendKey = source.ShowLegendKey,
+            Position = source.Position,
+            NumberFormat = source.NumberFormat,
+            Separator = source.Separator,
+            TextStyle = source.TextStyle is null
+                ? null
+                : new ChartTextStyle
+                {
+                    IsImplicitDefault = source.TextStyle.IsImplicitDefault,
+                    FontSizePt = source.TextStyle.FontSizePt,
+                    Bold = source.TextStyle.Bold,
+                    Italic = source.TextStyle.Italic,
+                    Color = source.TextStyle.Color,
+                    FontFamily = source.TextStyle.FontFamily,
+                },
+        };
+}

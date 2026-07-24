@@ -8,7 +8,7 @@ namespace FreeP.Core.Model;
 // Each command captures the prior state in Apply so that Revert is exact.
 // ════════════════════════════════════════════════════════════════════════════════
 
-file static class ChartHelper
+internal static class ChartHelper
 {
     internal static ChartShape? Find(Presentation p, int slideIndex, uint shapeId)
     {

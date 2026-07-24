@@ -250,6 +250,32 @@ public sealed class ChartDataDialogPlannerTests
             .Should().Be(12.5);
     }
 
+    [Fact]
+    public void ChartDisplayOptionsPlanner_UsesWorkingCopyAndBuildsOptions()
+    {
+        var chart = MakeChart();
+        chart.Title = "Existing";
+        chart.Legend = LegendPosition.Right;
+        chart.DataLabels = new ChartDataLabels { ShowValue = true, Position = DataLabelPosition.Center };
+        chart.CategoryAxis.HasMajorGridlines = true;
+        chart.ValueAxis.HasMajorGridlines = false;
+
+        var planner = ChartDisplayOptionsPlanner.FromChart(chart);
+        planner.SetTitle("Revenue");
+        planner.SetLegend(LegendPosition.Bottom);
+        planner.SetShowValueLabels(false);
+        planner.SetLabelPosition(DataLabelPosition.OutsideEnd);
+        planner.SetCategoryGridlines(false);
+        planner.SetValueGridlines(true);
+
+        var commit = planner.BuildCommitPlan();
+        commit.Should().Be(new ChartDisplayOptions(
+            "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true));
+        chart.Title.Should().Be("Existing", "the dialog planner is a working copy");
+        ChartDisplayOptionsPlanner.BuildSurfacePlan().CommandId
+            .Should().Be(ChartDisplayOptionsPlanner.CommandId);
+    }
+
     private static ChartShape MakeChart()
     {
         var chart = new ChartShape();

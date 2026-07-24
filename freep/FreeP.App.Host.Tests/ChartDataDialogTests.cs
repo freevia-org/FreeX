@@ -101,6 +101,32 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart!.Series[1].Name.Should().Be("Beta");
     }
 
+    [StaFact]
+    public void ChartDisplayOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.Title = "Existing";
+        sess.SelectedChart.Legend = LegendPosition.Right;
+
+        var dialog = new ChartDisplayOptionsDialog(sess);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.Title.Should().Be("Existing");
+        options.Legend.Should().Be(LegendPosition.Right);
+    }
+
+    [Fact]
+    public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDisplayOptionsDialog.cs");
+
+        source.Should().Contain("ChartDisplayOptionsPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildCommitPlan()");
+        source.Should().Contain("_editor.ApplyChartDisplayOptions");
+        source.Should().NotContain("new SetChartDisplayOptionsCommand");
+    }
+
     [Fact]
     public void ChartDataDialog_UsesSharedPlannerForPolicy()
     {

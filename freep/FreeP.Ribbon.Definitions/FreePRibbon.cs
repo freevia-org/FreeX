@@ -325,6 +325,7 @@ public static class FreePRibbon
                 FreePRibbonText.InsertChartSurface3DLabel, RibbonCommandIconKind.ChartColumn,
                 FreePRibbonText.InsertChartSurface3DKeyTip);
             group.Medium("freep.chart.edit-data", FreePRibbonText.ChartEditDataLabel, RibbonCommandIconKind.ChartTitle, FreePRibbonText.ChartEditDataKeyTip);
+            group.Medium(ChartDisplayOptionsPlanner.CommandId, FreePRibbonText.ChartDisplayOptionsLabel, RibbonCommandIconKind.Effects, FreePRibbonText.ChartDisplayOptionsKeyTip);
         });
         tab.Group("links", FreePRibbonText.LinksGroupLabel, FreePRibbonText.LinksGroupKeyTip, 92, group =>
         {
