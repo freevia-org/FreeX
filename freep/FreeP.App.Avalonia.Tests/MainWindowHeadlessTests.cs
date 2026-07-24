@@ -684,7 +684,9 @@ public sealed class MainWindowHeadlessTests
 
         charts.Controls.Select(control => control.CommandId.Value)
             .Last()
-            .Should().Be(ChartDataTableOptionsPlanner.CommandId);
+            .Should().Be(ChartAreaOptionsPlanner.CommandId);
+        charts.Controls.Select(control => control.CommandId.Value)
+            .Should().Contain(ChartDataTableOptionsPlanner.CommandId);
         charts.Controls.Count(control =>
             control.CommandId.Value == ChartDataDialogPlanner.EditDataCommandId)
             .Should().Be(1);
@@ -5999,6 +6001,30 @@ public sealed class MainWindowHeadlessTests
 
         if (!ran) return;
         options.Should().Be(new Chart3DViewOptions(25, 35, 54, 100, 125, true, false));
+    }
+
+    [Fact]
+    public async Task ChartAreaOptionsDialog_constructs_and_commits_shared_options()
+    {
+        ChartAreaOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartAreaOptionsDialog(window.Editor);
+            dialog.SetOptionsForTests(ChartAreaFormattingTarget.PlotArea, "#EAF2F8", "#1F4E79", 1.25);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        options!.Target.Should().Be(ChartAreaFormattingTarget.PlotArea);
+        ((ShapeFill.Solid)options.Fill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xEAF2F8));
+        ((ShapeOutline.Visible)options.Outline!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        ((ShapeOutline.Visible)options.Outline!).WidthPt.Should().Be(1.25);
     }
 
     [Fact]

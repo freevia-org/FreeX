@@ -111,7 +111,8 @@ internal static class FreePRibbonCommands
         Action?             onEditChartLayoutOptions = null,
         Action?             onEditChartDataTableOptions = null,
         Action?             onEditChart3DViewOptions = null,
-        Action?             onEditChartTextOptions = null)
+        Action?             onEditChartTextOptions = null,
+        Action?             onEditChartAreaOptions = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -445,6 +446,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onEditChart3DViewOptions?.Invoke()));
         registry.Register(ChartTextOptionsPlanner.CommandId,
             new ActionRibbonCommand(() => onEditChartTextOptions?.Invoke()));
+        registry.Register(ChartAreaOptionsPlanner.CommandId,
+            new ActionRibbonCommand(() => onEditChartAreaOptions?.Invoke()));
 
         // ── Wave 11A: Hyperlinks ──────────────────────────────────────────────────
 

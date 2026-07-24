@@ -496,6 +496,12 @@
   <data name="Ribbon_Command_ChartTextOptions_KeyTip" xml:space="preserve">
     <value>T</value>
   </data>
+  <data name="Ribbon_Command_ChartAreaOptions_Label" xml:space="preserve">
+    <value>Area Options</value>
+  </data>
+  <data name="Ribbon_Command_ChartAreaOptions_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
   <data name="Ribbon_Group_Links_Label" xml:space="preserve">
     <value>Links</value>
   </data>

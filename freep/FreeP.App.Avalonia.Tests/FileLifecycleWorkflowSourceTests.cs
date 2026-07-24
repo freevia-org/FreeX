@@ -32,7 +32,8 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().Contain("_fileWorkflow.SaveAsync(");
         source.Should().Contain("_fileWorkflow.ConfirmCloseAllowedAsync(");
         source.Should().Contain("SisterAvaloniaAsyncWindowCloseCoordinator");
-        source.Should().Contain("Closing += (_, e) => e.Cancel = _closeCoordinator.ShouldCancelClosing();");
+        source.Should().Contain("Closing += (_, e) => e.Cancel =");
+        source.Should().Contain("_closeCoordinator.ShouldCancelClosing();");
         source.Should().Contain("_fileWorkflow.ShowFileCommandErrorAsync(\"Could not open the presentation\"");
         source.Should().Contain("_fileWorkflow.ShowFileCommandErrorAsync(\"Could not save the presentation\"");
         source.Should().Contain("_fileWorkflow.MarkSavedWithoutPath()");

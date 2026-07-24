@@ -696,6 +696,12 @@ public abstract class DrawOp
 
         /// <summary>Resolved rich chart fills for series, points, and markers.</summary>
         public ChartFillPlanSet FillPlans { get; init; } = new();
+
+        /// <summary>Resolved authored chart-area and plot-area styling.</summary>
+        public ChartFillPlan? ChartAreaFill { get; init; }
+        public ChartStrokePlan? ChartAreaOutline { get; init; }
+        public ChartFillPlan? PlotAreaFill { get; init; }
+        public ChartStrokePlan? PlotAreaOutline { get; init; }
     }
 
     // ── Math draw op (Theme 27) ───────────────────────────────────────────────────────────────────────────────────────

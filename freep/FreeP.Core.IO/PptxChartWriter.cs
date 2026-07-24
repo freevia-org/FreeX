@@ -98,7 +98,15 @@ internal static class PptxChartWriter
                     new XElement(C + "plotVisOnly", new XAttribute("val", "1")),
                     BuildDisplayBlanksAsEl(chart),
                     BuildShowDataLabelsOverMaximumEl(chart)),
+                BuildChartShapePropertiesEl(chart.ChartAreaFill, chart.ChartAreaOutline),
                 BuildChartTextPropertiesEl(chart.TextStyle)));
+    }
+
+    private static XElement? BuildChartShapePropertiesEl(ShapeFill? fill, ShapeOutline? outline)
+    {
+        var fillEl = BuildChartAreaFillEl(fill);
+        var lineEl = BuildChartAreaOutlineEl(outline);
+        return fillEl is null && lineEl is null ? null : new XElement(C + "spPr", fillEl, lineEl);
     }
 
     private static XElement? BuildView3DEl(ChartShape chart)
@@ -243,7 +251,8 @@ internal static class PptxChartWriter
             serAxEl,
             secCatAxEl,
             secValAxEl,
-            dataTableEl);
+            dataTableEl,
+            BuildChartShapePropertiesEl(chart.PlotAreaFill, chart.PlotAreaOutline));
     }
 
     private static XElement? BuildLegendEl(ChartShape chart)
@@ -624,6 +633,40 @@ internal static class PptxChartWriter
         var line = BuildDataTableOutlineEl(outline);
         return fillEl is null && line is null ? null : new XElement(C + "spPr", fillEl, line);
     }
+
+    private static XElement? BuildChartAreaFillEl(ShapeFill? fill) =>
+        fill switch
+        {
+            null => null,
+            ShapeFill.None => new XElement(A + "noFill"),
+            ShapeFill.Solid s => new XElement(A + "solidFill", BuildColorEl(s.Color)),
+            ShapeFill.Gradient g => BuildGradFillEl(g),
+            ShapeFill.Pattern p => new XElement(A + "pattFill",
+                new XAttribute("prst", p.Preset),
+                new XElement(A + "fgClr", BuildColorEl(p.ForegroundColor)),
+                new XElement(A + "bgClr", BuildColorEl(p.BackgroundColor))),
+            _ => null
+        };
+
+    private static XElement? BuildChartAreaOutlineEl(ShapeOutline? outline) =>
+        outline switch
+        {
+            null => null,
+            ShapeOutline.None => new XElement(A + "ln", new XElement(A + "noFill")),
+            ShapeOutline.Visible v => new XElement(A + "ln",
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
+                new XElement(A + "solidFill", BuildColorEl(v.Color)),
+                v.Dash != OutlineDash.Solid
+                    ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(v.Dash)))
+                    : null),
+            ShapeOutline.GradientVisible gv => new XElement(A + "ln",
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(gv.WidthPt)),
+                BuildGradFillEl(gv.Gradient),
+                gv.Dash != OutlineDash.Solid
+                    ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash)))
+                    : null),
+            _ => null
+        };
 
     private static XElement? BuildDataTableFillEl(ShapeFill? fill) =>
         fill switch

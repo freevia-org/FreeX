@@ -920,12 +920,19 @@ public sealed class SlideCanvas : FrameworkElement
             chart,
             ToPlanRect(bounds),
             chartOp.SeriesColors,
-            chartOp.FillPlans);
+            chartOp.FillPlans,
+            chartOp.ChartAreaFill,
+            chartOp.ChartAreaOutline,
+            chartOp.PlotAreaFill,
+            chartOp.PlotAreaOutline);
 
         dc.DrawRectangle(
-            FreezeBrush(new SolidColorBrush(Colors.White)),
-            null,
+            scene.ChartAreaFill is { } chartFill ? ToBrush(chartFill) : FreezeBrush(new SolidColorBrush(Colors.White)),
+            scene.ChartAreaOutline is { } chartOutline ? ToPen(chartOutline) : null,
             new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
+
+        if (scene.PlotAreaFill is { } plotFill)
+            dc.DrawRectangle(ToBrush(plotFill), scene.PlotAreaOutline is { } plotOutline ? ToPen(plotOutline) : null, ToRect(scene.Frame.Plot));
 
         if (scene.Title is { } title)
         {

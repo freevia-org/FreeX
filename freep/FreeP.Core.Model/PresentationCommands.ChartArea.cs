@@ -1,0 +1,61 @@
+namespace FreeP.Core.Model;
+
+/// <summary>Undoable chart-area or plot-area fill and outline update.</summary>
+public sealed class SetChartAreaOptionsCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly ChartAreaOptions _newOptions;
+    private ChartAreaOptions? _oldOptions;
+
+    public SetChartAreaOptionsCommand(int slideIndex, uint shapeId, ChartAreaOptions options)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newOptions = options ?? throw new ArgumentNullException(nameof(options));
+    }
+
+    public string Label => "Set Chart Area Options";
+
+    public void Apply(Presentation presentation)
+    {
+        if (!TryGetChart(presentation, out var chart)) return;
+        _oldOptions ??= ReadOptions(chart, _newOptions.Target);
+        Apply(chart, _newOptions);
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        if (!TryGetChart(presentation, out var chart) || _oldOptions is null) return;
+        Apply(chart, _oldOptions);
+    }
+
+    private bool TryGetChart(Presentation presentation, out ChartShape chart)
+    {
+        chart = null!;
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count) return false;
+        var found = presentation.Slides[_slideIndex].Shapes.FirstOrDefault(s => s.Id == _shapeId)?.Chart;
+        if (found is null) return false;
+        chart = found;
+        return true;
+    }
+
+    private static ChartAreaOptions ReadOptions(ChartShape chart, ChartAreaFormattingTarget target) =>
+        target == ChartAreaFormattingTarget.ChartArea
+            ? new(target, chart.ChartAreaFill, chart.ChartAreaOutline)
+            : new(target, chart.PlotAreaFill, chart.PlotAreaOutline);
+
+    private static void Apply(ChartShape chart, ChartAreaOptions options)
+    {
+        if (options.Target == ChartAreaFormattingTarget.ChartArea)
+        {
+            chart.ChartAreaFill = options.Fill;
+            chart.ChartAreaOutline = options.Outline;
+        }
+        else
+        {
+            chart.PlotAreaFill = options.Fill;
+            chart.PlotAreaOutline = options.Outline;
+        }
+    }
+}

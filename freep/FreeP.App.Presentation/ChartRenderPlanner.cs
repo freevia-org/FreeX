@@ -513,6 +513,10 @@ public readonly record struct ChartAxisTitlePlan(
 public sealed class ChartScenePlan
 {
     public ChartFramePlan Frame { get; init; }
+    public ChartFillPlan? ChartAreaFill { get; init; }
+    public ChartStrokePlan? ChartAreaOutline { get; init; }
+    public ChartFillPlan? PlotAreaFill { get; init; }
+    public ChartStrokePlan? PlotAreaOutline { get; init; }
     public ChartSceneGeometryKind GeometryKind { get; init; }
     public bool UsesStockLineFallback { get; init; }
     public ChartTextPlan? Title { get; init; }
@@ -1395,7 +1399,11 @@ public static partial class ChartRenderPlanner
         ChartShape chart,
         ChartPlanRect bounds,
         IReadOnlyList<SrgbColor>? seriesColors = null,
-        ChartFillPlanSet? fillPlans = null)
+        ChartFillPlanSet? fillPlans = null,
+        ChartFillPlan? chartAreaFill = null,
+        ChartStrokePlan? chartAreaOutline = null,
+        ChartFillPlan? plotAreaFill = null,
+        ChartStrokePlan? plotAreaOutline = null)
     {
         var frame = BuildFramePlan(chart, bounds);
         bool wrapsTallSurfaceTitle = UsesImportedTallSurfaceTitleWrap(chart, bounds);
@@ -1429,6 +1437,10 @@ public static partial class ChartRenderPlanner
             return new ChartScenePlan
             {
                 Frame = frame,
+                ChartAreaFill = chartAreaFill,
+                ChartAreaOutline = chartAreaOutline,
+                PlotAreaFill = plotAreaFill,
+                PlotAreaOutline = plotAreaOutline,
                 GeometryKind = ChartSceneGeometryKind.Empty,
                 Title = title,
                 GridLines = EmptyMajorGridLinePrimitivePlan(),
@@ -1529,6 +1541,10 @@ public static partial class ChartRenderPlanner
         return new ChartScenePlan
         {
             Frame = frame,
+            ChartAreaFill = chartAreaFill,
+            ChartAreaOutline = chartAreaOutline,
+            PlotAreaFill = plotAreaFill,
+            PlotAreaOutline = plotAreaOutline,
             GeometryKind = geometryKind,
             UsesStockLineFallback = UsesStockLineFallback(chart),
             Title = title,

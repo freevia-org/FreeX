@@ -1056,11 +1056,20 @@ public sealed class SlideCanvas : Control
             chart,
             ToPlanRect(bounds),
             chartOp.SeriesColors,
-            chartOp.FillPlans);
+            chartOp.FillPlans,
+            chartOp.ChartAreaFill,
+            chartOp.ChartAreaOutline,
+            chartOp.PlotAreaFill,
+            chartOp.PlotAreaOutline);
 
         var frameRect = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-        dc.FillRectangle(Brushes.White, frameRect);
-        dc.DrawRectangle(null, null, frameRect);
+        dc.FillRectangle(scene.ChartAreaFill is { } chartFill ? ToBrush(chartFill) : Brushes.White, frameRect);
+        if (scene.PlotAreaFill is { } plotFill)
+            dc.FillRectangle(ToBrush(plotFill), ToRect(scene.Frame.Plot));
+        if (scene.ChartAreaOutline is { } chartOutline)
+            dc.DrawRectangle(ToPen(chartOutline), frameRect);
+        if (scene.PlotAreaOutline is { } plotOutline)
+            dc.DrawRectangle(ToPen(plotOutline), ToRect(scene.Frame.Plot));
 
         if (scene.Title is { } title)
             DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment), textColor: title.TextColor, fontFamily: title.FontFamily, maxLineCount: title.MaxLineCount);

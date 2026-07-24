@@ -782,8 +782,43 @@ public static class SlideCompositor
             BoundsDip    = frameBounds,
             ChartShape   = chart,
             SeriesColors = seriesColors,
-            FillPlans    = fillPlans
+            FillPlans    = fillPlans,
+            ChartAreaFill = ResolveChartSurfaceFill(chart.ChartAreaFill, theme, effectiveClrMap),
+            ChartAreaOutline = ResolveChartSurfaceOutline(chart.ChartAreaOutline, theme, effectiveClrMap),
+            PlotAreaFill = ResolveChartSurfaceFill(chart.PlotAreaFill, theme, effectiveClrMap),
+            PlotAreaOutline = ResolveChartSurfaceOutline(chart.PlotAreaOutline, theme, effectiveClrMap)
         });
+    }
+
+    private static ChartFillPlan? ResolveChartSurfaceFill(
+        ShapeFill? fill,
+        PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
+    {
+        if (fill is null) return null;
+        var resolved = ResolveFill(fill, theme, effectiveClrMap);
+        return resolved switch
+        {
+            ResolvedFill.Solid solid => new ChartFillPlan(solid.Color, solid.Alpha) { Fill = solid },
+            ResolvedFill.Gradient gradient => new ChartFillPlan(gradient.StartColor, 255) { Fill = gradient },
+            ResolvedFill.PatternFill pattern => new ChartFillPlan(pattern.ForegroundColor, 255) { Fill = pattern },
+            _ => null,
+        };
+    }
+
+    private static ChartStrokePlan? ResolveChartSurfaceOutline(
+        ShapeOutline? outline,
+        PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap)
+    {
+        if (outline is null) return null;
+        var resolved = ResolveOutline(outline, theme, effectiveClrMap);
+        return resolved switch
+        {
+            ResolvedOutline.Visible visible => new ChartStrokePlan(visible.Color, visible.Alpha, visible.WidthDip, visible.Dash),
+            ResolvedOutline.Gradient gradient => new ChartStrokePlan(gradient.Fill.StartColor, 255, gradient.WidthDip, gradient.Dash) { Fill = gradient.Fill },
+            _ => null,
+        };
     }
 
     // ─── SmartArt ────────────────────────────────────────────────────────────────────────────────

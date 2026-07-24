@@ -228,6 +228,21 @@ public sealed class ChartDataDialogTests : IDisposable
         options.Should().Be(new Chart3DViewOptions(25, 35, 54, 100, 125, true, true));
     }
 
+    [StaFact]
+    public void ChartAreaOptionsDialog_ConstructsAndUsesSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartAreaOptionsDialog(sess);
+        dialog.SetOptionsForTests(ChartAreaFormattingTarget.PlotArea, "#EAF2F8", "#1F4E79", 1.25);
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.Target.Should().Be(ChartAreaFormattingTarget.PlotArea);
+        ((ShapeFill.Solid)options.Fill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xEAF2F8));
+        ((ShapeOutline.Visible)options.Outline!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        ((ShapeOutline.Visible)options.Outline!).WidthPt.Should().Be(1.25);
+    }
+
     [Fact]
     public void ChartDisplayOptionsDialog_UsesSharedPlannerAndSessionCommand()
     {

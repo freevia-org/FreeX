@@ -61,6 +61,9 @@ public enum ChartMarkerSymbol
 /// <summary>Position of the chart legend relative to the plot area.</summary>
 public enum LegendPosition { Right, Left, Top, Bottom }
 
+/// <summary>Which chart surface receives an authored fill and outline.</summary>
+public enum ChartAreaFormattingTarget { ChartArea, PlotArea }
+
 /// <summary>Coordinate mode for OOXML chart <c>c:manualLayout</c> values.</summary>
 public enum ChartManualLayoutMode { Factor, Edge, Unsupported }
 
@@ -493,6 +496,12 @@ public sealed class ChartShape
     /// <summary>Chart title text, or null if no title.</summary>
     public string? Title { get; set; }
 
+    /// <summary>Optional authored chart-area fill from <c>c:chartSpace/c:spPr</c>.</summary>
+    public ShapeFill? ChartAreaFill { get; set; }
+
+    /// <summary>Optional authored chart-area outline from <c>c:chartSpace/c:spPr/a:ln</c>.</summary>
+    public ShapeOutline? ChartAreaOutline { get; set; }
+
     /// <summary>True when PowerPoint supplied <see cref="Title"/> as an automatic title.</summary>
     public bool HasAutomaticTitle { get; set; }
 
@@ -520,6 +529,12 @@ public sealed class ChartShape
 
     /// <summary>Optional plot-area manual layout from <c>c:plotArea/c:layout/c:manualLayout</c>.</summary>
     public ChartManualLayout? PlotAreaManualLayout { get; set; }
+
+    /// <summary>Optional authored plot-area fill from <c>c:plotArea/c:spPr</c>.</summary>
+    public ShapeFill? PlotAreaFill { get; set; }
+
+    /// <summary>Optional authored plot-area outline from <c>c:plotArea/c:spPr/a:ln</c>.</summary>
+    public ShapeOutline? PlotAreaOutline { get; set; }
 
     /// <summary>Optional legend manual layout from <c>c:legend/c:layout/c:manualLayout</c>.</summary>
     public ChartManualLayout? LegendManualLayout { get; set; }

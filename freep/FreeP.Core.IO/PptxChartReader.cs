@@ -49,6 +49,11 @@ internal static class PptxChartReader
         {
             StyleId = ReadStyleId(chartSpace)
         };
+        var chartSpaceSpPr = chartSpace.Element(C + "spPr");
+        shape.ChartAreaFill = chartSpaceSpPr is null ? null : PptxColorReader.TryReadFill(chartSpaceSpPr, scheme);
+        shape.ChartAreaOutline = chartSpaceSpPr is null
+            ? null
+            : PptxColorReader.TryReadOutline(chartSpaceSpPr.Element(A + "ln"), scheme);
         // PowerPoint uses an 18pt default for chart titles when c:txPr is absent,
         // but axes and data labels retain their role-specific defaults. Preserve
         // that inherited state without turning it into authored chart text.
@@ -67,6 +72,11 @@ internal static class PptxChartReader
         var plotArea = chartEl.Element(C + "plotArea");
         if (plotArea is null) return shape;
         shape.PlotAreaManualLayout = ReadManualLayout(plotArea.Element(C + "layout"));
+        var plotAreaSpPr = plotArea.Element(C + "spPr");
+        shape.PlotAreaFill = plotAreaSpPr is null ? null : PptxColorReader.TryReadFill(plotAreaSpPr, scheme);
+        shape.PlotAreaOutline = plotAreaSpPr is null
+            ? null
+            : PptxColorReader.TryReadOutline(plotAreaSpPr.Element(A + "ln"), scheme);
 
         var serIdxMap = DetectChartTypeAndSeries(plotArea, shape, scheme);
         ApplyPowerPointAutomaticTitleDefault(chartEl, shape);

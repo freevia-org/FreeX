@@ -499,6 +499,39 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_ChartAreaAndPlotAreaFormatting_PreservesSchemaPlacementAndModel()
+    {
+        var chart = BuildColumnChart();
+        chart.ChartAreaFill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xF2F2F2)));
+        chart.ChartAreaOutline = new ShapeOutline.Visible(new ThemeAwareColor(SrgbColor.FromRgb(0x7F7F7F)), 1.25);
+        chart.PlotAreaFill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xEAF2F8)));
+        chart.PlotAreaOutline = new ShapeOutline.Visible(new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79)), 0.75);
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var chartSpace = chartDoc.Root!;
+            var chartEl = chartSpace.Element(ChartNs + "chart")!;
+            var chartSpPr = chartSpace.Element(ChartNs + "spPr");
+            var plotArea = chartEl.Element(ChartNs + "plotArea")!;
+            var plotSpPr = plotArea.Element(ChartNs + "spPr");
+
+            chartSpPr.Should().NotBeNull();
+            chartSpace.Elements().Select(element => element.Name.LocalName).Should().ContainInOrder("chart", "spPr");
+            plotSpPr.Should().NotBeNull();
+            plotArea.Elements().Last().Should().Be(plotSpPr);
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var roundTripped = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        ((ShapeFill.Solid)roundTripped.ChartAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xF2F2F2));
+        ((ShapeOutline.Visible)roundTripped.ChartAreaOutline!).WidthPt.Should().Be(1.25);
+        ((ShapeFill.Solid)roundTripped.PlotAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xEAF2F8));
+        ((ShapeOutline.Visible)roundTripped.PlotAreaOutline!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [Fact]
     public void Read_PowerPointAuthoredBar3DChart_GapDepthClampedIntoModel()
     {
         var path = WriteToPptx(BuildPresWithChart(BuildColumnChart()));
