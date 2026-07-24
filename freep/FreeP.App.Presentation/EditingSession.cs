@@ -2047,6 +2047,30 @@ public sealed class EditingSession
             categories, seriesNames, values, chartType));
     }
 
+    /// <summary>
+    /// Replaces chart data including Scatter X values or Bubble sizes in one undoable batch.
+    /// Coordinate rows are optional for ordinary category charts.
+    /// </summary>
+    public void ReplaceChartData(
+        IEnumerable<string>               categories,
+        IEnumerable<string>               seriesNames,
+        IEnumerable<IEnumerable<double?>> values,
+        ChartType                          chartType,
+        IEnumerable<IEnumerable<double?>>? xValues,
+        IEnumerable<IEnumerable<double?>>? bubbleSizes)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new ReplaceChartDataCommand(
+            _currentSlideIndex,
+            _selectedShapeIds[0],
+            categories,
+            seriesNames,
+            values,
+            chartType,
+            xValues,
+            bubbleSizes));
+    }
+
     /// <summary>Applies common chart title, legend, label, and gridline options as one undo step.</summary>
     public void ApplyChartDisplayOptions(ChartDisplayOptions options)
     {

@@ -28,10 +28,8 @@ namespace FreeP.App.Host;
 /// <see cref="ReplaceChartDataCommand"/> through the <see cref="EditingSession"/> so all
 /// changes become one undoable batch.
 ///
-/// NOTE: The embedded workbook inside the .pptx is NOT updated by this dialog —
-/// only the cached data model (which the PptxChartWriter emits on save) is written.
-/// PowerPoint will read the embedded workbook and may warn about a mismatch; this is
-/// acceptable for the current wave and is documented here.
+/// The commit marks the chart workbook for regeneration; the package writer emits the
+/// updated embedded workbook and cached chart data together on save.
 /// </summary>
 public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
@@ -159,6 +157,13 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     internal string ValidationText => _validationText.Text;
 
+    internal ChartDataDialogCommitPlan BuildCommitPlanForTests()
+    {
+        if (!TryCommitPendingEdit())
+            throw new InvalidOperationException("The chart data grid contains an invalid value.");
+        return _planner.BuildCommitPlan(ReadCategoryEditsFromGrid());
+    }
+
     internal bool PrepareValidationForVisualEvidence()
     {
         if (_grid.Items.Count == 0 || _grid.Columns.Count < 2)
@@ -208,7 +213,9 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             var col = new DataGridTextColumn
             {
-                Header  = MakeEditableHeader(seriesColumn),
+                Header  = seriesColumn.IsSeriesNameColumn
+                    ? MakeEditableHeader(seriesColumn)
+                    : seriesColumn.Header,
                 Width   = new DataGridLength(1, DataGridLengthUnitType.Star),
                 Binding = new Binding($"Values[{seriesColumn.ValueIndex}]")
                 {
@@ -295,7 +302,9 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             commit.Categories,
             commit.SeriesNames,
             commit.ValuesForCommand(),
-            commit.ChartType);
+            commit.ChartType,
+            commit.XValuesForCommand(),
+            commit.BubbleSizesForCommand());
 
         DialogResult = true;
         Close();

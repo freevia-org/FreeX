@@ -206,9 +206,16 @@ internal sealed class ChartDataDialog : Window
             var seriesColumn = table.SeriesColumns[seriesColumnIndex];
             _tableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            var headerBox = MakeTextBox(seriesColumn.Name, minWidth: 100);
-            _seriesNameBoxes.Add(new IndexedTextBox(seriesColumn.SeriesIndex, headerBox));
-            AddCell(headerBox, row: 0, column: seriesColumnIndex + 1);
+            if (seriesColumn.IsSeriesNameColumn)
+            {
+                var headerBox = MakeTextBox(seriesColumn.Name, minWidth: 100);
+                _seriesNameBoxes.Add(new IndexedTextBox(seriesColumn.SeriesIndex, headerBox));
+                AddCell(headerBox, row: 0, column: seriesColumnIndex + 1);
+            }
+            else
+            {
+                AddCell(MakeHeader(seriesColumn.Header), row: 0, column: seriesColumnIndex + 1);
+            }
         }
 
         for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
@@ -227,7 +234,11 @@ internal sealed class ChartDataDialog : Window
                 var valueBox = MakeTextBox(
                     ChartDataDialogPlanner.FormatCellValue(cell.Value, _culture),
                     minWidth: 90);
-                _valueBoxes.Add(new ValueTextBox(cell.SeriesIndex, cell.CategoryIndex, valueBox));
+                _valueBoxes.Add(new ValueTextBox(
+                    cell.SeriesIndex,
+                    cell.CategoryIndex,
+                    cell.Kind,
+                    valueBox));
                 AddCell(valueBox, gridRow, valueIndex + 1);
             }
         }
@@ -294,7 +305,9 @@ internal sealed class ChartDataDialog : Window
             commit.Categories,
             commit.SeriesNames,
             commit.ValuesForCommand(),
-            commit.ChartType);
+            commit.ChartType,
+            commit.XValuesForCommand(),
+            commit.BubbleSizesForCommand());
         Close(true);
     }
 
@@ -320,7 +333,11 @@ internal sealed class ChartDataDialog : Window
         _planner.ApplyCategoryEdits(_categoryBoxes.Select(box =>
             new ChartDataDialogCategoryEdit(box.Index, box.TextBox.Text)));
         _planner.ApplyValueEdits(_valueBoxes.Select(box =>
-            new ChartDataDialogValueEdit(box.SeriesIndex, box.CategoryIndex, box.TextBox.Text)), _culture);
+            new ChartDataDialogValueEdit(
+                box.SeriesIndex,
+                box.CategoryIndex,
+                box.TextBox.Text,
+                box.Kind)), _culture);
         return true;
     }
 
@@ -378,5 +395,9 @@ internal sealed class ChartDataDialog : Window
 
     private sealed record IndexedTextBox(int Index, TextBox TextBox);
 
-    private sealed record ValueTextBox(int SeriesIndex, int CategoryIndex, TextBox TextBox);
+    private sealed record ValueTextBox(
+        int SeriesIndex,
+        int CategoryIndex,
+        ChartDataDialogValueKind Kind,
+        TextBox TextBox);
 }

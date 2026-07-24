@@ -133,6 +133,54 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ScatterProjection_ExposesEditableXAndYValues()
+    {
+        var chart = MakeCoordinateChart(ChartType.Scatter);
+        var planner = ChartDataDialogPlanner.FromChart(chart);
+
+        var table = planner.BuildTableProjection();
+
+        table.SeriesColumns.Select(column => column.Kind)
+            .Should().Equal(
+                ChartDataDialogValueKind.XValue,
+                ChartDataDialogValueKind.Value,
+                ChartDataDialogValueKind.XValue,
+                ChartDataDialogValueKind.Value);
+        table.SeriesColumns.Select(column => column.Header)
+            .Should().Equal("Sales X", "Sales", "Budget X", "Budget");
+        table.Rows[1].Values[0].Value = 2.5;
+        table.Rows[1].Values[1].Value = 12.5;
+
+        var commit = planner.BuildCommitPlan();
+
+        commit.XValues[0].Should().Equal(new double?[] { 1.0, 2.5, 3.0 });
+        commit.Values[0].Should().Equal(new double?[] { 1.0, 12.5, 3.0 });
+    }
+
+    [Fact]
+    public void BubbleProjection_ExposesEditableXYSizesAndSeedsNewCoordinates()
+    {
+        var planner = ChartDataDialogPlanner.FromChart(MakeCoordinateChart(ChartType.Bubble));
+
+        var table = planner.BuildTableProjection();
+
+        table.SeriesColumns.Select(column => column.Kind)
+            .Should().Equal(
+                ChartDataDialogValueKind.XValue,
+                ChartDataDialogValueKind.Value,
+                ChartDataDialogValueKind.BubbleSize,
+                ChartDataDialogValueKind.XValue,
+                ChartDataDialogValueKind.Value,
+                ChartDataDialogValueKind.BubbleSize);
+        table.Rows[0].Values[2].Value = 8.0;
+
+        var commit = planner.BuildCommitPlan();
+
+        commit.XValues[1].Should().Equal(new double?[] { 1.0, 2.0, 3.0 });
+        commit.BubbleSizes[0].Should().Equal(new double?[] { 8.0, 4.0, 5.0 });
+    }
+
+    [Fact]
     public void BuildCommitPlan_AppliesCategoryEditsAndReturnsDetachedCommandValues()
     {
         var planner = ChartDataDialogPlanner.FromChart(MakeChart());
@@ -474,6 +522,20 @@ public sealed class ChartDataDialogPlannerTests
         budget.Values.AddRange(new double?[] { 4.0, null, 6.0 });
         chart.Series.Add(budget);
 
+        return chart;
+    }
+
+    private static ChartShape MakeCoordinateChart(ChartType type)
+    {
+        var chart = MakeChart();
+        chart.ChartType = type;
+        chart.Series[0].XValues.AddRange(new double?[] { 1.0, 2.0, 3.0 });
+        chart.Series[1].XValues.AddRange(new double?[] { 1.0, 2.0, 3.0 });
+        if (type == ChartType.Bubble)
+        {
+            chart.Series[0].BubbleSizes.AddRange(new double?[] { 3.0, 4.0, 5.0 });
+            chart.Series[1].BubbleSizes.AddRange(new double?[] { 6.0, 7.0, 8.0 });
+        }
         return chart;
     }
 }

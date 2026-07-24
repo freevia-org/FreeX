@@ -102,6 +102,23 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartDataDialog_ScatterProjectionPreservesEditableCoordinates()
+    {
+        var (sess, _) = MakeSession();
+        var chart = sess.SelectedChart!;
+        chart.ChartType = ChartType.Scatter;
+        chart.Series[0].XValues.AddRange(new double?[] { 0.5, 1.5, 2.5 });
+        chart.Series[1].XValues.AddRange(new double?[] { 1.0, 2.0, 3.0 });
+
+        var dialog = new ChartDataDialog(sess);
+        var commit = dialog.BuildCommitPlanForTests();
+
+        commit.XValues[0].Should().Equal(new double?[] { 0.5, 1.5, 2.5 });
+        commit.XValues[1].Should().Equal(new double?[] { 1.0, 2.0, 3.0 });
+        commit.Values[0].Should().Equal(new double?[] { 1.0, 2.0, 3.0 });
+    }
+
+    [StaFact]
     public void ChartDisplayOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();

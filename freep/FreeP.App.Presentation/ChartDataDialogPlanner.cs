@@ -4,6 +4,13 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public enum ChartDataDialogValueKind
+{
+    Value,
+    XValue,
+    BubbleSize,
+}
+
 public sealed class ChartDataDialogSeriesColumn
 {
     private readonly ChartDataDialogPlanner _planner;
@@ -11,22 +18,34 @@ public sealed class ChartDataDialogSeriesColumn
     internal ChartDataDialogSeriesColumn(
         ChartDataDialogPlanner planner,
         int seriesIndex,
-        int valueIndex)
+        int valueIndex,
+        ChartDataDialogValueKind kind)
     {
         _planner = planner;
         SeriesIndex = seriesIndex;
         ValueIndex = valueIndex;
+        Kind = kind;
     }
 
     public int SeriesIndex { get; }
 
     public int ValueIndex { get; }
 
+    public ChartDataDialogValueKind Kind { get; }
+
+    public bool IsSeriesNameColumn => Kind == ChartDataDialogValueKind.Value;
+
     public string Name
     {
         get => _planner.GetSeriesName(SeriesIndex);
-        set => _planner.SetSeriesName(SeriesIndex, value);
+        set
+        {
+            if (IsSeriesNameColumn)
+                _planner.SetSeriesName(SeriesIndex, value);
+        }
     }
+
+    public string Header => _planner.GetSeriesColumnHeader(SeriesIndex, Kind);
 }
 
 public sealed class ChartDataDialogValueCell
@@ -36,21 +55,25 @@ public sealed class ChartDataDialogValueCell
     internal ChartDataDialogValueCell(
         ChartDataDialogPlanner planner,
         int seriesIndex,
-        int categoryIndex)
+        int categoryIndex,
+        ChartDataDialogValueKind kind = ChartDataDialogValueKind.Value)
     {
         _planner = planner;
         SeriesIndex = seriesIndex;
         CategoryIndex = categoryIndex;
+        Kind = kind;
     }
 
     public int SeriesIndex { get; }
 
     public int CategoryIndex { get; }
 
+    public ChartDataDialogValueKind Kind { get; }
+
     public double? Value
     {
-        get => _planner.GetValue(SeriesIndex, CategoryIndex);
-        set => _planner.SetValue(SeriesIndex, CategoryIndex, value);
+        get => _planner.GetValue(SeriesIndex, CategoryIndex, Kind);
+        set => _planner.SetValue(SeriesIndex, CategoryIndex, value, Kind);
     }
 }
 
@@ -95,7 +118,8 @@ public sealed record ChartDataDialogSeriesNameEdit(
 public sealed record ChartDataDialogValueEdit(
     int SeriesIndex,
     int CategoryIndex,
-    object? Value);
+    object? Value,
+    ChartDataDialogValueKind Kind = ChartDataDialogValueKind.Value);
 
 public sealed record ChartDataDialogSurfacePlan(
     string CommandId,
@@ -119,10 +143,22 @@ public sealed record ChartDataDialogCommitPlan(
     IReadOnlyList<IReadOnlyList<double?>> Values,
     ChartType ChartType)
 {
+    public IReadOnlyList<IReadOnlyList<double?>> XValues { get; init; } =
+        Array.Empty<IReadOnlyList<double?>>();
+
+    public IReadOnlyList<IReadOnlyList<double?>> BubbleSizes { get; init; } =
+        Array.Empty<IReadOnlyList<double?>>();
+
     public IEnumerable<IEnumerable<double?>> ValuesForCommand()
     {
         return Values.Select(values => (IEnumerable<double?>)values);
     }
+
+    public IEnumerable<IEnumerable<double?>> XValuesForCommand() =>
+        XValues.Select(values => (IEnumerable<double?>)values);
+
+    public IEnumerable<IEnumerable<double?>> BubbleSizesForCommand() =>
+        BubbleSizes.Select(values => (IEnumerable<double?>)values);
 }
 
 public sealed class ChartDataDialogPlanner
@@ -145,12 +181,20 @@ public sealed class ChartDataDialogPlanner
     public const double DefaultDialogHeight = 440;
 
     private readonly ChartDataGridPlanner _grid;
+    private readonly List<List<double?>> _xValues;
+    private readonly List<List<double?>> _bubbleSizes;
     private ChartType _chartType;
 
-    private ChartDataDialogPlanner(ChartDataGridPlanner grid, ChartType chartType)
+    private ChartDataDialogPlanner(
+        ChartDataGridPlanner grid,
+        ChartType chartType,
+        List<List<double?>> xValues,
+        List<List<double?>> bubbleSizes)
     {
         _grid = grid;
         _chartType = chartType;
+        _xValues = xValues;
+        _bubbleSizes = bubbleSizes;
     }
 
     public static IReadOnlyList<ChartDataDialogChartTypeOption> ChartTypeOptions { get; } =
@@ -186,10 +230,16 @@ public sealed class ChartDataDialogPlanner
     {
         ArgumentNullException.ThrowIfNull(chart);
 
-        return new ChartDataDialogPlanner(ChartDataGridPlanner.Create(
+        var planner = new ChartDataDialogPlanner(ChartDataGridPlanner.Create(
             chart.Categories,
             chart.Series.Select(series => series.Name),
-            chart.Series.Select(series => series.Values)), chart.ChartType);
+            chart.Series.Select(series => series.Values)),
+            chart.ChartType,
+            SnapshotCoordinates(chart, series => series.XValues),
+            SnapshotCoordinates(chart, series => series.BubbleSizes));
+        planner.EnsureCoordinateShape();
+        planner.SeedMissingCoordinates();
+        return planner;
     }
 
     public ChartType SelectedChartType => _chartType;
@@ -197,7 +247,16 @@ public sealed class ChartDataDialogPlanner
     public void SetChartType(ChartType chartType)
     {
         if (chartType != ChartType.Unknown)
+        {
+            var wasScatterLike = IsScatterLike(_chartType);
             _chartType = chartType;
+            EnsureCoordinateShape();
+            if (!wasScatterLike && IsScatterLike(chartType) ||
+                chartType == ChartType.Bubble && _bubbleSizes.All(values => values.All(value => value is null)))
+            {
+                SeedMissingCoordinates();
+            }
+        }
     }
 
     public string GetCategory(int categoryIndex)
@@ -222,47 +281,115 @@ public sealed class ChartDataDialogPlanner
 
     public double? GetValue(int seriesIndex, int categoryIndex)
     {
-        return _grid.GetValue(seriesIndex, categoryIndex);
+        return GetValue(seriesIndex, categoryIndex, ChartDataDialogValueKind.Value);
     }
 
     public void SetValue(int seriesIndex, int categoryIndex, double? value)
     {
-        _grid.SetValue(seriesIndex, categoryIndex, value);
+        SetValue(seriesIndex, categoryIndex, value, ChartDataDialogValueKind.Value);
+    }
+
+    public double? GetValue(
+        int seriesIndex,
+        int categoryIndex,
+        ChartDataDialogValueKind kind)
+    {
+        return kind switch
+        {
+            ChartDataDialogValueKind.Value => _grid.GetValue(seriesIndex, categoryIndex),
+            ChartDataDialogValueKind.XValue => GetCoordinate(_xValues, seriesIndex, categoryIndex),
+            ChartDataDialogValueKind.BubbleSize => GetCoordinate(_bubbleSizes, seriesIndex, categoryIndex),
+            _ => null,
+        };
+    }
+
+    public void SetValue(
+        int seriesIndex,
+        int categoryIndex,
+        double? value,
+        ChartDataDialogValueKind kind)
+    {
+        switch (kind)
+        {
+            case ChartDataDialogValueKind.Value:
+                _grid.SetValue(seriesIndex, categoryIndex, value);
+                break;
+            case ChartDataDialogValueKind.XValue:
+                SetCoordinate(_xValues, seriesIndex, categoryIndex, value);
+                break;
+            case ChartDataDialogValueKind.BubbleSize:
+                SetCoordinate(_bubbleSizes, seriesIndex, categoryIndex, value);
+                break;
+        }
+    }
+
+    public string GetSeriesColumnHeader(int seriesIndex, ChartDataDialogValueKind kind)
+    {
+        var name = GetSeriesName(seriesIndex);
+        return kind switch
+        {
+            ChartDataDialogValueKind.XValue => $"{name} X",
+            ChartDataDialogValueKind.BubbleSize => $"{name} Size",
+            _ => name,
+        };
     }
 
     public void AddSeries()
     {
         _grid.AddSeries(DefaultSeriesName(_grid.SeriesCount + 1));
+        _xValues.Add(NewCoordinateRow());
+        _bubbleSizes.Add(NewCoordinateRow());
+        SeedMissingCoordinates();
     }
 
     public void RemoveLastSeries()
     {
         _grid.RemoveLastSeries();
+        RemoveLastCoordinateRow(_xValues);
+        RemoveLastCoordinateRow(_bubbleSizes);
     }
 
     public void AddCategory()
     {
         _grid.AddCategory(DefaultCategoryName(_grid.CategoryCount + 1));
+        EnsureCoordinateShape();
+        var categoryIndex = _grid.CategoryCount - 1;
+        foreach (var values in _xValues)
+            values[categoryIndex] = IsScatterLike(_chartType) ? categoryIndex + 1.0 : null;
+        foreach (var values in _bubbleSizes)
+            values[categoryIndex] = _chartType == ChartType.Bubble ? 1.0 : null;
     }
 
     public void RemoveLastCategory()
     {
         _grid.RemoveLastCategory();
+        RemoveLastCoordinateValue(_xValues);
+        RemoveLastCoordinateValue(_bubbleSizes);
     }
 
     public void SwitchRowsAndColumns()
     {
+        var oldXValues = CloneMatrix(_xValues);
+        var oldBubbleSizes = CloneMatrix(_bubbleSizes);
         _grid.SwitchRowsAndColumns();
+        ReplaceMatrix(_xValues, Transpose(oldXValues));
+        ReplaceMatrix(_bubbleSizes, Transpose(oldBubbleSizes));
     }
 
     public ChartDataDialogTableProjection BuildTableProjection()
     {
-        var columns = Enumerable.Range(0, _grid.SeriesCount)
-            .Select(seriesIndex => new ChartDataDialogSeriesColumn(
-                this,
-                seriesIndex,
-                valueIndex: seriesIndex))
-            .ToList();
+        var columns = new List<ChartDataDialogSeriesColumn>();
+        foreach (var seriesIndex in Enumerable.Range(0, _grid.SeriesCount))
+        {
+            foreach (var kind in ColumnKinds(_chartType))
+            {
+                columns.Add(new ChartDataDialogSeriesColumn(
+                    this,
+                    seriesIndex,
+                    valueIndex: columns.Count,
+                    kind));
+            }
+        }
 
         var rows = Enumerable.Range(0, _grid.CategoryCount)
             .Select(categoryIndex => new ChartDataDialogTableRow(
@@ -272,7 +399,8 @@ public sealed class ChartDataDialogPlanner
                     .Select(column => new ChartDataDialogValueCell(
                         this,
                         column.SeriesIndex,
-                        categoryIndex))
+                        categoryIndex,
+                        column.Kind))
                     .ToList()))
             .ToList();
 
@@ -305,11 +433,14 @@ public sealed class ChartDataDialogPlanner
         ArgumentNullException.ThrowIfNull(valueEdits);
         ArgumentNullException.ThrowIfNull(culture);
 
-        _grid.ApplyValueEdits(valueEdits.Select(edit =>
-            new ChartDataGridValueEdit(
+        foreach (var edit in valueEdits)
+        {
+            SetValue(
                 edit.SeriesIndex,
                 edit.CategoryIndex,
-                ParseCellValue(edit.Value, culture))));
+                ParseCellValue(edit.Value, culture),
+                edit.Kind);
+        }
     }
 
     public ChartDataDialogCommitPlan BuildCommitPlan(
@@ -320,11 +451,16 @@ public sealed class ChartDataDialogPlanner
             ApplyCategoryEdits(categoryEdits);
         }
 
+        EnsureCoordinateShape();
         return new ChartDataDialogCommitPlan(
             CategoriesForCommit(),
             SeriesNamesForCommit(),
             ValuesForCommit(),
-            _chartType);
+            _chartType)
+        {
+            XValues = XValuesForCommit(),
+            BubbleSizes = BubbleSizesForCommit(),
+        };
     }
 
     public IReadOnlyList<string> CategoriesForCommit()
@@ -341,6 +477,10 @@ public sealed class ChartDataDialogPlanner
     {
         return _grid.ValuesSnapshot();
     }
+
+    public IReadOnlyList<IReadOnlyList<double?>> XValuesForCommit() => SnapshotMatrix(_xValues);
+
+    public IReadOnlyList<IReadOnlyList<double?>> BubbleSizesForCommit() => SnapshotMatrix(_bubbleSizes);
 
     public static string FormatCellValue(double? value, CultureInfo culture)
     {
@@ -389,5 +529,143 @@ public sealed class ChartDataDialogPlanner
             _ => chartType.ToString(),
         };
     }
+
+    private static bool IsScatterLike(ChartType chartType) =>
+        chartType is ChartType.Scatter or ChartType.Bubble;
+
+    private static IReadOnlyList<ChartDataDialogValueKind> ColumnKinds(ChartType chartType) =>
+        chartType switch
+        {
+            ChartType.Scatter =>
+                [ChartDataDialogValueKind.XValue, ChartDataDialogValueKind.Value],
+            ChartType.Bubble =>
+                [ChartDataDialogValueKind.XValue, ChartDataDialogValueKind.Value, ChartDataDialogValueKind.BubbleSize],
+            _ => [ChartDataDialogValueKind.Value],
+        };
+
+    private static List<List<double?>> SnapshotCoordinates(
+        ChartShape chart,
+        Func<ChartSeries, List<double?>> selector)
+    {
+        return chart.Series
+            .Select(series => NormalizeCoordinateRow(selector(series), chart.Categories.Count))
+            .ToList();
+    }
+
+    private static List<double?> NormalizeCoordinateRow(List<double?> source, int count)
+    {
+        var result = source.Take(count).ToList();
+        while (result.Count < count)
+            result.Add(null);
+        return result;
+    }
+
+    private void EnsureCoordinateShape()
+    {
+        while (_xValues.Count < _grid.SeriesCount)
+            _xValues.Add(NewCoordinateRow());
+        while (_bubbleSizes.Count < _grid.SeriesCount)
+            _bubbleSizes.Add(NewCoordinateRow());
+        while (_xValues.Count > _grid.SeriesCount)
+            _xValues.RemoveAt(_xValues.Count - 1);
+        while (_bubbleSizes.Count > _grid.SeriesCount)
+            _bubbleSizes.RemoveAt(_bubbleSizes.Count - 1);
+
+        foreach (var values in _xValues)
+            NormalizeCoordinateRowInPlace(values);
+        foreach (var values in _bubbleSizes)
+            NormalizeCoordinateRowInPlace(values);
+    }
+
+    private void NormalizeCoordinateRowInPlace(List<double?> values)
+    {
+        while (values.Count < _grid.CategoryCount)
+            values.Add(null);
+        while (values.Count > _grid.CategoryCount)
+            values.RemoveAt(values.Count - 1);
+    }
+
+    private void SeedMissingCoordinates()
+    {
+        if (!IsScatterLike(_chartType))
+            return;
+
+        EnsureCoordinateShape();
+        for (var seriesIndex = 0; seriesIndex < _xValues.Count; seriesIndex++)
+        {
+            for (var categoryIndex = 0; categoryIndex < _grid.CategoryCount; categoryIndex++)
+            {
+                _xValues[seriesIndex][categoryIndex] ??= categoryIndex + 1.0;
+                if (_chartType == ChartType.Bubble)
+                    _bubbleSizes[seriesIndex][categoryIndex] ??= 1.0;
+            }
+        }
+    }
+
+    private List<double?> NewCoordinateRow() =>
+        Enumerable.Repeat<double?>(null, _grid.CategoryCount).ToList();
+
+    private static double? GetCoordinate(
+        List<List<double?>> matrix,
+        int seriesIndex,
+        int categoryIndex) =>
+        seriesIndex >= 0 && seriesIndex < matrix.Count &&
+        categoryIndex >= 0 && categoryIndex < matrix[seriesIndex].Count
+            ? matrix[seriesIndex][categoryIndex]
+            : null;
+
+    private static void SetCoordinate(
+        List<List<double?>> matrix,
+        int seriesIndex,
+        int categoryIndex,
+        double? value)
+    {
+        if (seriesIndex >= 0 && seriesIndex < matrix.Count &&
+            categoryIndex >= 0 && categoryIndex < matrix[seriesIndex].Count)
+        {
+            matrix[seriesIndex][categoryIndex] = value;
+        }
+    }
+
+    private static void RemoveLastCoordinateRow(List<List<double?>> matrix)
+    {
+        if (matrix.Count > 0)
+            matrix.RemoveAt(matrix.Count - 1);
+    }
+
+    private static void RemoveLastCoordinateValue(List<List<double?>> matrix)
+    {
+        foreach (var values in matrix)
+        {
+            if (values.Count > 0)
+                values.RemoveAt(values.Count - 1);
+        }
+    }
+
+    private static List<List<double?>> CloneMatrix(IEnumerable<List<double?>> matrix) =>
+        matrix.Select(values => values.ToList()).ToList();
+
+    private static void ReplaceMatrix(List<List<double?>> target, IEnumerable<List<double?>> source)
+    {
+        target.Clear();
+        target.AddRange(source.Select(values => values.ToList()));
+    }
+
+    private static List<List<double?>> Transpose(IReadOnlyList<List<double?>> matrix)
+    {
+        if (matrix.Count == 0)
+            return [];
+
+        var width = matrix.Max(values => values.Count);
+        return Enumerable.Range(0, width)
+            .Select(columnIndex => matrix
+                .Select(values => columnIndex < values.Count ? values[columnIndex] : null)
+                .ToList())
+            .ToList();
+    }
+
+    private static IReadOnlyList<IReadOnlyList<double?>> SnapshotMatrix(
+        IEnumerable<List<double?>> matrix) =>
+        matrix.Select(values => (IReadOnlyList<double?>)values.ToList()).ToList();
 
 }

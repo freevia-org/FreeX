@@ -5933,6 +5933,32 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartDataDialog_scatter_projection_exposes_coordinate_columns()
+    {
+        int valueCells = -1;
+        ChartDataDialogCommitPlan? commit = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.Scatter);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartDataDialog(window.Editor, CultureInfo.InvariantCulture);
+            valueCells = dialog.RenderedValueCellCount;
+            commit = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        valueCells.Should().Be(12, "Scatter uses X and Y cells for two series across three points");
+        commit.Should().NotBeNull();
+        commit!.ChartType.Should().Be(ChartType.Scatter);
+        commit.XValues.Should().HaveCount(2);
+        commit.XValues.Should().AllSatisfy(values => values.Should().HaveCount(3));
+    }
+
+    [Fact]
     public async Task ChartDisplayOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartDisplayOptions? options = null;

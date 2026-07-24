@@ -385,6 +385,8 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
     private readonly List<string>      _newCategories;
     private readonly List<string>      _newSeriesNames;
     private readonly List<List<double?>> _newValues;   // [seriesIndex][categoryIndex], nulls = gaps
+    private readonly List<List<double?>>? _newXValues;
+    private readonly List<List<double?>>? _newBubbleSizes;
     private readonly ChartType?        _newChartType;
 
     // Captured prior state (W6: nullable to preserve gaps; W8: full series list for styling).
@@ -416,6 +418,22 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
         _newSeriesNames = seriesNames.ToList();
         _newValues      = values.Select(row => row.ToList()).ToList();
         _newChartType   = chartType;
+    }
+
+    /// <summary>Scatter/Bubble-aware batch constructor with editable coordinate payloads.</summary>
+    public ReplaceChartDataCommand(
+        int slideIndex,
+        uint shapeId,
+        IEnumerable<string> categories,
+        IEnumerable<string> seriesNames,
+        IEnumerable<IEnumerable<double?>> values,
+        ChartType? chartType,
+        IEnumerable<IEnumerable<double?>>? xValues,
+        IEnumerable<IEnumerable<double?>>? bubbleSizes)
+        : this(slideIndex, shapeId, categories, seriesNames, values, chartType)
+    {
+        _newXValues = xValues?.Select(row => row.ToList()).ToList();
+        _newBubbleSizes = bubbleSizes?.Select(row => row.ToList()).ToList();
     }
 
     /// <summary>
@@ -467,6 +485,11 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
             ApplyChartTypeTransition(chart, _oldChartType, _newChartType.Value);
             chart.ChartType = _newChartType.Value;
         }
+        ApplyCoordinatePayload(
+            chart,
+            _newXValues,
+            _newBubbleSizes,
+            _newChartType ?? _oldChartType);
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -558,6 +581,56 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
                 series.BubbleSizes.Clear();
             }
         }
+    }
+
+    private static void ApplyCoordinatePayload(
+        ChartShape chart,
+        List<List<double?>>? xValues,
+        List<List<double?>>? bubbleSizes,
+        ChartType targetChartType)
+    {
+        if (targetChartType is not (ChartType.Scatter or ChartType.Bubble))
+            return;
+
+        for (var seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            var series = chart.Series[seriesIndex];
+            if (xValues is not null && seriesIndex < xValues.Count)
+            {
+                series.XValues.Clear();
+                series.XValues.AddRange(
+                    NormalizeCoordinates(xValues[seriesIndex], chart.Categories.Count));
+            }
+
+            if (targetChartType == ChartType.Bubble)
+            {
+                if (bubbleSizes is not null && seriesIndex < bubbleSizes.Count)
+                {
+                    series.BubbleSizes.Clear();
+                    series.BubbleSizes.AddRange(
+                        NormalizeCoordinates(bubbleSizes[seriesIndex], chart.Categories.Count));
+                }
+                else if (series.BubbleSizes.Count == 0)
+                {
+                    for (var index = 0; index < chart.Categories.Count; index++)
+                        series.BubbleSizes.Add(1.0);
+                }
+            }
+            else
+            {
+                series.BubbleSizes.Clear();
+            }
+        }
+    }
+
+    private static IEnumerable<double?> NormalizeCoordinates(
+        IEnumerable<double?> values,
+        int count)
+    {
+        var normalized = values.Take(count).ToList();
+        while (normalized.Count < count)
+            normalized.Add(null);
+        return normalized;
     }
 
     private static void RestoreSeriesCoordinates(
