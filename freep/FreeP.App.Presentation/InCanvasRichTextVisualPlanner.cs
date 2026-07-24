@@ -22,7 +22,15 @@ public sealed record InCanvasRichTextVisualParagraph(
     TextAlign Alignment,
     double SpaceBeforeDip,
     double SpaceAfterDip,
-    IReadOnlyList<InCanvasRichTextVisualRun> Runs)
+    IReadOnlyList<InCanvasRichTextVisualRun> Runs,
+    BulletKind BulletKind = BulletKind.None,
+    string BulletText = "",
+    ImagePart? BulletImage = null,
+    string? BulletFontFamily = null,
+    double? BulletFontSizePt = null,
+    ThemeAwareColor? BulletColor = null,
+    double IndentDip = 0,
+    double HangingDip = 0)
 {
     public int GlobalEnd => GlobalStart + Text.Length;
 }
@@ -47,6 +55,8 @@ public static class InCanvasRichTextVisualPlanner
 
         var paragraphs = new List<InCanvasRichTextVisualParagraph>(body.Paragraphs.Count);
         int globalStart = 0;
+        int[] autoNumberCounters = new int[9];
+        int previousAutoNumberLevel = 0;
 
         for (int paragraphIndex = 0; paragraphIndex < body.Paragraphs.Count; paragraphIndex++)
         {
@@ -71,6 +81,44 @@ public static class InCanvasRichTextVisualPlanner
                 runStart += run.Text.Length;
             }
 
+            var seedRun = paragraph.Runs.FirstOrDefault(run => run.Text.Length > 0)
+                ?? paragraph.Runs.FirstOrDefault();
+            string bulletText = string.Empty;
+            if (!paragraph.BulletSuppressed)
+            {
+                switch (paragraph.BulletKind)
+                {
+                    case BulletKind.Char:
+                        bulletText = paragraph.BulletChar ?? "•";
+                        break;
+                    case BulletKind.Auto:
+                    {
+                        int level = Math.Clamp(paragraph.Level, 0, autoNumberCounters.Length - 1);
+                        if (level < previousAutoNumberLevel)
+                        {
+                            for (int index = level + 1; index < autoNumberCounters.Length; index++)
+                                autoNumberCounters[index] = 0;
+                        }
+
+                        autoNumberCounters[level] = autoNumberCounters[level] == 0
+                            ? Math.Max(1, paragraph.AutoNumStartAt)
+                            : autoNumberCounters[level] + 1;
+                        previousAutoNumberLevel = level;
+                        bulletText = SlideCompositor.FormatAutoNum(
+                            paragraph.AutoNumType,
+                            autoNumberCounters[level]);
+                        break;
+                    }
+                }
+            }
+
+            double indentDip = paragraph.MarginLeftEmu is { } marginLeft
+                ? Math.Max(0, marginLeft / EmuPerDip)
+                : 0;
+            double hangingDip = paragraph.IndentEmu is { } indent && indent < 0
+                ? -indent / EmuPerDip
+                : 0;
+
             paragraphs.Add(new InCanvasRichTextVisualParagraph(
                 paragraphIndex,
                 globalStart,
@@ -78,7 +126,15 @@ public static class InCanvasRichTextVisualPlanner
                 paragraph.Align ?? body.DefaultParaAlign ?? TextAlign.Left,
                 Math.Max(0, paragraph.SpaceBeforePt ?? 0) * PtToDip,
                 Math.Max(0, paragraph.SpaceAfterPt ?? 0) * PtToDip,
-                runs));
+                runs,
+                paragraph.BulletKind,
+                bulletText,
+                paragraph.BulletImage,
+                paragraph.BulletFontFamily ?? seedRun?.FontFamily,
+                paragraph.BulletSizePt ?? ResolveBulletSize(seedRun, paragraph.BulletSizePct),
+                paragraph.BulletColor ?? seedRun?.Color,
+                indentDip,
+                hangingDip));
 
             globalStart += text.Length + (paragraphIndex + 1 < body.Paragraphs.Count ? 1 : 0);
         }
@@ -94,4 +150,13 @@ public static class InCanvasRichTextVisualPlanner
         0,
         0,
         []);
+
+    private const double EmuPerDip = 9525.0;
+
+    private static double? ResolveBulletSize(Run? seedRun, int? sizePct)
+    {
+        if (sizePct is > 0 && seedRun?.FontSizePt is > 0)
+            return seedRun.FontSizePt.Value * sizePct.Value / 100000.0;
+        return seedRun?.FontSizePt;
+    }
 }

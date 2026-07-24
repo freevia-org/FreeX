@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
+using Avalonia.Media.Imaging;
 using Avalonia.Utilities;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -173,7 +174,17 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             context.FillRectangle(SelectionBrush, rect);
 
         foreach (var item in _layouts)
+        {
+            if (item.BulletLayout is not null)
+                item.BulletLayout.Draw(context, item.BulletOrigin);
+            else if (item.BulletImage is not null)
+            {
+                double size = Math.Max(1, ToDip(item.Paragraph.BulletFontSizePt ?? _fallbackFontSizePt));
+                context.DrawImage(item.BulletImage, new Rect(item.BulletOrigin, new Size(size, size)));
+            }
+
             item.Layout.Draw(context, item.Origin);
+        }
 
         var caret = BuildCaretRect();
         if (caret.Width > 0 && caret.Height > 0)
@@ -212,13 +223,22 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         foreach (var paragraph in _plan.Paragraphs)
         {
             y += paragraph.SpaceBeforeDip;
-            double originX = ContentPadding.Left;
+            double originX = ContentPadding.Left + paragraph.IndentDip;
             double maxWidth = Math.Max(
                 1,
                 width - originX - ContentPadding.Right);
             var layout = CreateLayout(paragraph, maxWidth);
             var origin = new Point(originX, y);
-            _layouts.Add(new ParagraphLayout(paragraph, layout, origin));
+            var bulletOrigin = new Point(
+                ContentPadding.Left + paragraph.IndentDip - paragraph.HangingDip,
+                y);
+            _layouts.Add(new ParagraphLayout(
+                paragraph,
+                layout,
+                origin,
+                CreateBulletLayout(paragraph),
+                bulletOrigin,
+                CreateBulletImage(paragraph)));
             y += layout.Height + paragraph.SpaceAfterDip;
         }
     }
@@ -257,6 +277,56 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             maxLines: 0,
             fontFeatures: null,
             textStyleOverrides: overrides);
+    }
+
+    private TextLayout? CreateBulletLayout(InCanvasRichTextVisualParagraph paragraph)
+    {
+        if (paragraph.BulletText.Length == 0 || paragraph.BulletKind == BulletKind.Image)
+            return null;
+
+        var typeface = new Typeface(
+            new FontFamily(string.IsNullOrWhiteSpace(paragraph.BulletFontFamily)
+                ? _fallbackFontFamily
+                : paragraph.BulletFontFamily),
+            FontStyle.Normal,
+            FontWeight.Normal);
+        IBrush foreground = paragraph.BulletColor is { } color
+            ? new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B))
+            : DefaultForeground;
+        return new TextLayout(
+            paragraph.BulletText,
+            typeface,
+            ToDip(paragraph.BulletFontSizePt ?? _fallbackFontSizePt),
+            foreground,
+            TextAlignment.Left,
+            TextWrapping.NoWrap,
+            TextTrimming.None,
+            textDecorations: null,
+            FlowDirection.LeftToRight,
+            double.PositiveInfinity,
+            double.PositiveInfinity,
+            lineHeight: double.NaN,
+            letterSpacing: 0,
+            maxLines: 0,
+            fontFeatures: null,
+            textStyleOverrides: null);
+    }
+
+    private static Bitmap? CreateBulletImage(InCanvasRichTextVisualParagraph paragraph)
+    {
+        if (paragraph.BulletKind != BulletKind.Image
+            || paragraph.BulletImage is not { Bytes.Length: > 0 } image)
+            return null;
+
+        try
+        {
+            using var stream = new MemoryStream(image.Bytes, writable: false);
+            return new Bitmap(stream);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private GenericTextRunProperties CreateRunProperties(InCanvasRichTextVisualRun? run)
@@ -374,14 +444,21 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     private void DisposeLayouts()
     {
         foreach (var item in _layouts)
+        {
             item.Layout.Dispose();
+            item.BulletLayout?.Dispose();
+            item.BulletImage?.Dispose();
+        }
         _layouts.Clear();
     }
 
     private sealed record ParagraphLayout(
         InCanvasRichTextVisualParagraph Paragraph,
         TextLayout Layout,
-        Point Origin)
+        Point Origin,
+        TextLayout? BulletLayout,
+        Point BulletOrigin,
+        Bitmap? BulletImage)
     {
         internal double Bottom => Origin.Y + Layout.Height + Paragraph.SpaceAfterDip;
     }
