@@ -3,9 +3,9 @@ using FreeX.App.Presentation.ConditionalFormatting;
 namespace FreeX.App.Presentation.PageLayout;
 
 /// <summary>
-/// The deterministic print-preview page used by the cross-shell visual capture. Both WPF and
-/// Avalonia render this same fixture so the evidence compares chrome and page rendering rather than
-/// comparing a native fixed document with a live worksheet pagination result.
+/// The deterministic print-preview page used by the cross-shell visual capture. Both desktop
+/// shells render this fixture so the evidence compares chrome and page rendering rather than
+/// comparing different page-content inputs.
 /// </summary>
 public sealed record PrintPreviewParityTextRun(
     string Text,
