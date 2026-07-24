@@ -1090,14 +1090,28 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void Matrix_MoreThanFourNodes_ReturnsNullForCachedFallback()
+    public void Matrix_MoreThanFourNodes_ContinuesWithLiveRows()
     {
-        var data = MakeData(SmartArtFamily.Matrix, "A", "B", "C", "D", "E");
+        var data = MakeData(SmartArtFamily.Matrix, "A", "B", "C", "D", "E", "F");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix";
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().BeNull("the bounded matrix planner only owns PowerPoint-style four-quadrant geometry");
+        result.Should().NotBeNull("matrix editing should remain live when the node count grows beyond one quadrant");
+        result!.Should().HaveCount(6);
+        result.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle);
+
+        result.Select(shape => shape.OffsetXEmu).Distinct().Should().HaveCount(2,
+            "larger matrices continue in two aligned columns");
+        result.Select(shape => shape.OffsetYEmu).Distinct().Should().HaveCount(3,
+            "six nodes continue into three live rows");
+        foreach (var shape in result)
+        {
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
     }
 
     [Fact]
