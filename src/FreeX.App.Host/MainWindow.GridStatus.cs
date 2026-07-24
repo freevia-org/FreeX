@@ -51,7 +51,8 @@ public partial class MainWindow
             stats,
             IsFileOperationProgressVisible(),
             zoomPercent: 0,
-            StatusBarCalculator.TextProvider);
+            StatusBarCalculator.TextProvider,
+            sheet is null ? null : GetEffectiveViewState(sheet).ViewMode);
         ApplyStatusBarRefreshPlan(plan);
     }
 
@@ -88,7 +89,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         return sheet is null
             ? StatusBarViewMode.Normal
-            : WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(sheet.ViewMode);
+            : WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(GetEffectiveViewState(sheet).ViewMode);
     }
 
     private bool IsFileOperationProgressVisible() =>

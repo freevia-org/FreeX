@@ -23,12 +23,25 @@ public sealed class WorkbookSaveService
         IFileAdapter adapter,
         Workbook workbook,
         IProgress<WorkbookSaveProgressUpdate>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        DateTime? expectedLastWriteTimeUtc = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(adapter);
         ArgumentNullException.ThrowIfNull(workbook);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Detect a concurrent second writer: if the caller captured the file's write time at open
+        // (WorkbookOpenResult.SourceLastWriteTimeUtc) and the file on disk has a different write
+        // time now, someone else changed it since we read it -- writing over it here would silently
+        // discard their changes. This is a best-effort check-then-act (not a held file lock), but it
+        // catches the common "another instance/colleague saved while I was still editing" case.
+        if (expectedLastWriteTimeUtc is { } expectedWriteTimeUtc &&
+            _fileOperations.FileExists(path) &&
+            _fileOperations.GetLastWriteTimeUtc(path) != expectedWriteTimeUtc)
+        {
+            throw new WorkbookExternallyModifiedException(path);
+        }
 
         ReportProgress(progress, WorkbookSavePhase.Preparing, TimeSpan.Zero, 1);
         var tempPath = CreateTemporaryPath(path, ".tmp");
@@ -200,6 +213,8 @@ public sealed class WorkbookSaveService
 
         public bool FileExists(string path) => File.Exists(path);
 
+        public DateTime GetLastWriteTimeUtc(string path) => File.GetLastWriteTimeUtc(path);
+
         public void ReplaceFile(string sourcePath, string destinationPath) =>
             File.Replace(sourcePath, destinationPath, null, ignoreMetadataErrors: true);
 
@@ -222,6 +237,8 @@ internal interface IWorkbookSaveFileOperations
 {
     bool FileExists(string path);
 
+    DateTime GetLastWriteTimeUtc(string path);
+
     void ReplaceFile(string sourcePath, string destinationPath);
 
     void MoveFile(string sourcePath, string destinationPath, bool overwrite);
@@ -229,4 +246,19 @@ internal interface IWorkbookSaveFileOperations
     void CopyFile(string sourcePath, string destinationPath, bool overwrite);
 
     void DeleteFile(string path);
+}
+
+/// <summary>
+/// Thrown by <see cref="WorkbookSaveService.SaveAsync"/> when the caller passed the file's write
+/// time from open (<c>expectedLastWriteTimeUtc</c>, sourced from
+/// <see cref="WorkbookOpenResult.SourceLastWriteTimeUtc"/>) and the target file on disk has since
+/// been modified by someone else -- a second FreeX/Excel instance, or a colleague on a shared
+/// path. Hosts should catch this the same way they catch <see cref="OperationCanceledException"/>
+/// around the save call and prompt the user (overwrite anyway / reload / save-as) instead of
+/// silently clobbering the other writer's changes.
+/// </summary>
+public sealed class WorkbookExternallyModifiedException(string path)
+    : Exception($"'{path}' was modified by another program since it was opened.")
+{
+    public string Path { get; } = path;
 }

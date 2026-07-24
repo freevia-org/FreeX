@@ -42,19 +42,10 @@ public static class DataValidationDropdownPlanner
         if (activeCell.Sheet != sheet.Id)
             return false;
 
-        var rule = FindDropdownRule(DataValidationService.GetApplicable(sheet, activeCell));
-        if (rule is null)
+        if (!TryGetDropdownItems(workbook, sheet, activeCell, out var items))
             return false;
 
-        try
-        {
-            var items = DataValidationService.GetListItems(rule, sheet, activeCell, workbook);
-            return items.Count > 0 && items.Count <= MaximumDropdownItems;
-        }
-        catch
-        {
-            return false;
-        }
+        return items.Count > 0 && items.Count <= MaximumDropdownItems;
     }
 
     public static bool TryPlan(
@@ -71,19 +62,8 @@ public static class DataValidationDropdownPlanner
         if (activeCell.Sheet != sheet.Id || !HasUsableBounds(cellBounds))
             return false;
 
-        var rule = FindDropdownRule(DataValidationService.GetApplicable(sheet, activeCell));
-        if (rule is null)
+        if (!TryGetDropdownItems(workbook, sheet, activeCell, out var items))
             return false;
-
-        IReadOnlyList<string> items;
-        try
-        {
-            items = DataValidationService.GetListItems(rule, sheet, activeCell, workbook);
-        }
-        catch
-        {
-            return false;
-        }
 
         if (items.Count == 0 || items.Count > MaximumDropdownItems)
             return false;
@@ -125,6 +105,65 @@ public static class DataValidationDropdownPlanner
 
         return null;
     }
+
+    /// <summary>
+    /// Resolves the items "Pick From Drop-down List" should offer for <paramref name="activeCell"/>:
+    /// the in-cell list validation's items when one applies, otherwise (matching Excel, where this
+    /// command works on any plain text column with no Data Validation at all) the distinct text
+    /// values from the contiguous run of non-blank cells in the same column as the active cell.
+    /// </summary>
+    private static bool TryGetDropdownItems(
+        Workbook workbook,
+        Sheet sheet,
+        CellAddress activeCell,
+        out IReadOnlyList<string> items)
+    {
+        var rule = FindDropdownRule(DataValidationService.GetApplicable(sheet, activeCell));
+        if (rule is not null)
+        {
+            try
+            {
+                items = DataValidationService.GetListItems(rule, sheet, activeCell, workbook);
+                return true;
+            }
+            catch
+            {
+                items = Array.Empty<string>();
+                return false;
+            }
+        }
+
+        items = GetContiguousColumnTextValues(sheet, activeCell);
+        return true;
+    }
+
+    private static IReadOnlyList<string> GetContiguousColumnTextValues(Sheet sheet, CellAddress activeCell)
+    {
+        var col = activeCell.Col;
+
+        var topRow = activeCell.Row;
+        while (topRow > 1 && IsNonBlank(sheet.GetCell(topRow - 1, col)))
+            topRow--;
+
+        var bottomRow = activeCell.Row;
+        while (bottomRow < CellAddress.MaxRow && IsNonBlank(sheet.GetCell(bottomRow + 1, col)))
+            bottomRow++;
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var items = new List<string>();
+        for (var row = topRow; row <= bottomRow; row++)
+        {
+            if (row == activeCell.Row)
+                continue;
+
+            if (sheet.GetCell(row, col)?.Value is TextValue { Value.Length: > 0 } text && seen.Add(text.Value))
+                items.Add(text.Value);
+        }
+
+        return items;
+    }
+
+    private static bool IsNonBlank(Cell? cell) => cell is not null && cell.Value is not BlankValue;
 
     private static string? FindSelectedItem(IReadOnlyList<string> items, string currentText)
     {

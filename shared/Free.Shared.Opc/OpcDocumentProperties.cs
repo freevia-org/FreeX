@@ -50,12 +50,16 @@ public static class OpcDocumentProperties
     public static readonly IReadOnlyList<XName> StableExtendedPropertyElementNames =
     [
         ExtendedPropertiesNamespace + "Application",
+        ExtendedPropertiesNamespace + "AppVersion",
         ExtendedPropertiesNamespace + "Company",
         ExtendedPropertiesNamespace + "Manager",
         ExtendedPropertiesNamespace + "PresentationFormat",
         ExtendedPropertiesNamespace + "Template",
         ExtendedPropertiesNamespace + "HyperlinkBase",
-        ExtendedPropertiesNamespace + "HLinks"
+        ExtendedPropertiesNamespace + "HLinks",
+        ExtendedPropertiesNamespace + "LinksUpToDate",
+        ExtendedPropertiesNamespace + "SharedDoc",
+        ExtendedPropertiesNamespace + "HyperlinksChanged"
     ];
 
     public static CoreDocumentProperties ReadCoreProperties(

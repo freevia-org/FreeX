@@ -16,14 +16,10 @@ public partial class MainWindow
     private void ApplyOptionsToView()
     {
         SheetGrid.UseR1C1ReferenceStyle = _options.UseR1C1ReferenceStyle;
+        ApplyFormulaBarVisibility(_options.ShowFormulaBar);
         _suppressAppViewOptionSync = true;
         try
         {
-            // The Formula Bar toggle's checked state follows the app option via the neutral store,
-            // which drives the rendered View > Formula Bar check box.
-            _ribbonState.SetChecked("Formula Bar", _options.ShowFormulaBar);
-            if (FormulaBarBorder is not null)
-                FormulaBarBorder.Visibility = _options.ShowFormulaBar ? Visibility.Visible : Visibility.Collapsed;
             _formulaBarExpanded = _options.FormulaBarExpanded;
             ApplyFormulaBarExpansion();
             ApplyStatusBarInteractiveDisplayState();
@@ -38,6 +34,30 @@ public partial class MainWindow
             CellAddressBox.Text = FormatNameBoxSelectionText(range);
             var sheet = _workbook.GetSheet(_currentSheetId);
             FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(range.Start), range.Start);
+        }
+    }
+
+    /// <summary>
+    /// Applies a Formula Bar visibility value to THIS window's chrome (the checked ribbon toggle
+    /// and the actual FormulaBarBorder visibility). Show Formula Bar is a genuine Excel-instance
+    /// display preference (R83-app-view-modes-5-2), so this is called both when this window loads
+    /// its own options and when the <see cref="WorkbookWindowRegistry"/> broadcasts a change made
+    /// in another window of the same process (see <see cref="IWorkbookWindow.ApplyFormulaBarVisibility"/>).
+    /// </summary>
+    public void ApplyFormulaBarVisibility(bool visible)
+    {
+        _suppressAppViewOptionSync = true;
+        try
+        {
+            // The Formula Bar toggle's checked state follows the app option via the neutral store,
+            // which drives the rendered View > Formula Bar check box.
+            _ribbonState.SetChecked("Formula Bar", visible);
+            if (FormulaBarBorder is not null)
+                FormulaBarBorder.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        }
+        finally
+        {
+            _suppressAppViewOptionSync = false;
         }
     }
 

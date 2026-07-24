@@ -661,10 +661,16 @@ public sealed partial class XlsxFileAdapter
     // everything that can legitimately follow them in a part this codebase writes or preserves -- used to
     // find the correct insertion point when a container needs to be newly added (or removed) because a
     // field moved onto (or off of) an axis that had no field on it at all in the original file.
+    // R83-meta-1: pivotTableStyleInfo comes BEFORE filters (and the invented valueFilters/labelFilters/
+    // pivotSorts elements), matching the real CT_pivotTableDefinition child sequence XlsxPivotTableWriter
+    // itself emits (see the R82-io-pivot-layout-5-2 comment on ToPivotTableDefinitionXml) -- the old order
+    // here had it backwards, which anchored a newly-inserted pageFields/rowFields/colFields container
+    // AFTER pivotTableStyleInfo (near the very end of the element sequence) whenever the part already had
+    // a native <filters> element, instead of near the front where it belongs.
     private static readonly string[] PivotFieldContainerCanonicalOrder =
     [
         "rowFields", "colFields", "pageFields", "dataFields", "calculatedItems",
-        "valueFilters", "labelFilters", "filters", "pivotSorts", "pivotTableStyleInfo", "extLst",
+        "pivotTableStyleInfo", "valueFilters", "labelFilters", "filters", "pivotSorts", "extLst",
     ];
 
     private static void ReplacePreservedPivotFieldContainer(XElement root, XNamespace workbookNs, string elementName, XElement? newElement)
@@ -1160,13 +1166,19 @@ public sealed partial class XlsxFileAdapter
     // R54-io-pivot-filter-3-1: value/label/top-N pivot filter edits (add/change/clear) made to the
     // loaded PivotTableModel after Load() were silently dropped on save, because nothing on this
     // preserved-part path ever wrote pivot.ValueFilters/LabelFilters back -- XlsxPivotTableWriter.Save
-    // (the only code that emits <valueFilters>/<labelFilters>/native <filters> XML) is gated behind
+    // (the only code that emits <valueFilters>/native <filters> XML) is gated behind
     // !hasSourcePackage and never runs here. Rewrite the preserved part's filter state from the model,
     // but ONLY when it actually differs from what is currently encoded there (decoded via the same
     // native-token/invented-token mappings XlsxPivotTableReader uses) -- this keeps a file the user never
     // touched byte-stable, rather than unconditionally converting a perfectly valid, Excel-authored
     // native <filters> element into FreeX's own non-schema <valueFilters>/<labelFilters> elements on
     // every single save.
+    // R83-order-guard-invented-sweep-1: mirrors XlsxPivotTableWriter's own fresh-part fix
+    // (R82-io-pivot-layout-5-2) -- only AboveAverage/BelowAverage value filters (which have no real
+    // ST_PivotFilterType token, see ToNativePivotValueFilterKindText) still go through the invented
+    // <valueFilters> shape; every other value-filter kind, plus every label-filter kind, now goes
+    // through the real CT_PivotFilters <filters> shape via ToPivotFiltersXml instead of the invented
+    // <labelFilters> element, which is never written by this path any more.
     private static bool RewritePreservedPivotValueAndLabelFilters(
         XElement pivotTableDefinitionRoot,
         PivotTableModel pivot,
@@ -1187,22 +1199,23 @@ public sealed partial class XlsxFileAdapter
         pivotTableDefinitionRoot.Element(workbookNs + "valueFilters")?.Remove();
         pivotTableDefinitionRoot.Element(workbookNs + "labelFilters")?.Remove();
 
-        var newValueFilters = XlsxPivotTableWriter.ToPivotValueFiltersXml(pivot.ValueFilters, workbookNs);
-        var newLabelFilters = XlsxPivotTableWriter.ToPivotLabelFiltersXml(pivot.LabelFilters, workbookNs);
+        var newValueFilters = XlsxPivotTableWriter.ToPivotValueFiltersXml(
+            pivot.ValueFilters.Where(filter => filter.Kind is PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage).ToList(),
+            workbookNs);
+        var newFilters = XlsxPivotTableWriter.ToPivotFiltersXml(pivot.ValueFilters, pivot.LabelFilters, workbookNs);
 
-        // Mirror XlsxPivotTableWriter's own element order for a fresh part: valueFilters, then
-        // labelFilters, positioned right before pivotSorts (or pivotTableStyleInfo, which is required and
-        // always present, if there is no pivotSorts) so a mixed preserved+regenerated part stays
-        // internally consistent.
-        // AddBeforeSelf places each newly-inserted element immediately before the anchor, so the
-        // LAST call ends up closest to the anchor and thus last in document order. Insert
-        // newValueFilters first (pushed earlier) and newLabelFilters second (ends up right before
-        // the anchor) so the final order is valueFilters-then-labelFilters, matching the comment
-        // above and XlsxPivotTableWriter.cs's own emission order for a fresh part.
+        // Mirror XlsxPivotTableWriter's own element order for a fresh part: valueFilters, then the real
+        // <filters>, both AFTER pivotTableStyleInfo (required and always present) -- see R82-io-pivot-
+        // layout-5-2 / R83-meta-1 for why pivotTableStyleInfo now precedes these elements instead of
+        // following them. AddBeforeSelf places each newly-inserted element immediately before the
+        // anchor, so the LAST call ends up closest to the anchor and thus last in document order:
+        // insert newValueFilters first (pushed earlier) and newFilters second (ends up right before
+        // the anchor) so the final order is valueFilters-then-filters, matching
+        // XlsxPivotTableWriter.cs's own emission order for a fresh part.
         var anchor = pivotTableDefinitionRoot.Element(workbookNs + "pivotSorts")
-            ?? pivotTableDefinitionRoot.Element(workbookNs + "pivotTableStyleInfo");
+            ?? pivotTableDefinitionRoot.Element(workbookNs + "extLst");
         InsertBeforeAnchorOrAppend(pivotTableDefinitionRoot, anchor, newValueFilters);
-        InsertBeforeAnchorOrAppend(pivotTableDefinitionRoot, anchor, newLabelFilters);
+        InsertBeforeAnchorOrAppend(pivotTableDefinitionRoot, anchor, newFilters);
 
         return true;
     }

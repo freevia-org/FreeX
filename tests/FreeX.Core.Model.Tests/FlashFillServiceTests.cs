@@ -247,6 +247,71 @@ public sealed class FlashFillCommandTests
     }
 
     [Fact]
+    public void FlashFillCommand_Preview_ComputesFillWithoutWritingToTheSheet()
+    {
+        var (wb, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("John Smith"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jane Doe"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Bob Brown"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("John"));
+        // Rows 2 and 3 in col B are still blank — the user hasn't invoked Ctrl+E yet.
+
+        var cmd = new FlashFillCommand(sheet.Id, fillColIndex: 2, sourceColIndex: 1, startRow: 1, endRow: 3);
+        var preview = cmd.Preview(ctx);
+
+        preview.Success.Should().BeTrue();
+        preview.Cells.Should().Equal(
+            (new CellAddress(sheet.Id, 2, 2), "Jane"),
+            (new CellAddress(sheet.Id, 3, 2), "Bob"));
+
+        // The sheet itself must be untouched — Preview never commits.
+        sheet.GetValue(2, 2).Should().BeOfType<BlankValue>();
+        sheet.GetValue(3, 2).Should().BeOfType<BlankValue>();
+    }
+
+    [Fact]
+    public void FlashFillCommand_Preview_MatchesWhatApplyWouldSubsequentlyWrite()
+    {
+        var (wb, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Ada"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Lovelace"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Ada Lovelace"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Grace"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Hopper"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("Grace Hopper"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Alan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("Turing"));
+
+        var cmd = new FlashFillCommand(sheet.Id, fillColIndex: 3, sourceColIndex: 2, startRow: 1, endRow: 3);
+        var preview = cmd.Preview(ctx);
+        var outcome = cmd.Apply(ctx);
+
+        preview.Success.Should().BeTrue();
+        preview.Cells.Should().ContainSingle()
+            .Which.Should().Be((new CellAddress(sheet.Id, 3, 3), "Alan Turing"));
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(3, 3)!.Value.Should().Be(new TextValue(preview.Cells[0].Value));
+    }
+
+    [Fact]
+    public void FlashFillCommand_Preview_ReturnsFailureWhenNoPatternDetected()
+    {
+        var (wb, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Alice"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Bob"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("hello"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("world"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Carol"));
+
+        var cmd = new FlashFillCommand(sheet.Id, fillColIndex: 2, sourceColIndex: 1, startRow: 1, endRow: 3);
+        var preview = cmd.Preview(ctx);
+
+        preview.Success.Should().BeFalse();
+        preview.Error.Should().NotBeNullOrEmpty();
+        preview.Cells.Should().BeEmpty();
+    }
+
+    [Fact]
     public void FlashFillCommand_NoPattern_ReturnsFailureOutcome()
     {
         var (wb, sheet, ctx) = Setup();

@@ -680,4 +680,76 @@ public partial class FunctionLibraryTests
         // Each distinct dept appears once as criteria → result per dept = 1/count.
         // Here we'll just assert the COUNTIFS result independently for clarity.
     }
+
+    // ── range-must-be-a-reference (R83-formula-index-offset-choose-5-1) ────────
+    //
+    // Excel requires the range/sum_range/criteria_range argument of the *IF(S)
+    // family to be a genuine worksheet reference. A computed array — an array
+    // constant like {1,2,3} or the result of an array-returning function like
+    // TRANSPOSE — is rejected with #VALUE!, even though the criteria argument
+    // itself is allowed to be an array (that triggers element-wise expansion).
+
+    [Fact]
+    public void Countif_ArrayConstantRange_ReturnsValueError()
+    {
+        // Real Excel: =COUNTIF({1,2,3},">1") is #VALUE! because the range argument
+        // must be a worksheet reference, not a computed array constant.
+        _eval.Evaluate("=COUNTIF({1,2,3},\">1\")", MakeSheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Countif_CellRangeReference_StillCounts()
+    {
+        // No-regression sibling: a genuine worksheet reference must still work.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+        _eval.Evaluate("=COUNTIF(A1:A3,\">1\")", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Sumif_TransposeRange_ReturnsValueError()
+    {
+        // TRANSPOSE always produces a computed (non-reference) array, so using it
+        // as SUMIF's range argument must be rejected with #VALUE! like Excel.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(3)));
+        _eval.Evaluate("=SUMIF(TRANSPOSE(A1:C1),\">1\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Sumif_SumRangeAsArrayConstant_ReturnsValueError()
+    {
+        // The sum_range argument must also be a genuine reference, not a computed array.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+        _eval.Evaluate("=SUMIF(A1:A3,\">1\",{10,20,30})", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Sumifs_CriteriaRangeAsArrayConstant_ReturnsValueError()
+    {
+        // SUMIFS' criteria_range slots are also required to be genuine references.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+        _eval.Evaluate("=SUMIFS(A1:A3,{1,2,3},\">1\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Sumifs_CellRangeReferences_StillSums()
+    {
+        // No-regression sibling: genuine references in every slot must still work.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)),
+            (2, 1, new NumberValue(2)), (2, 2, new NumberValue(20)),
+            (3, 1, new NumberValue(3)), (3, 2, new NumberValue(30)));
+        _eval.Evaluate("=SUMIFS(B1:B3,A1:A3,\">1\")", sheet).Should().Be(new NumberValue(50));
+    }
 }

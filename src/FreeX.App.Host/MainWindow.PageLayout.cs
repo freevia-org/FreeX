@@ -7,6 +7,7 @@ using System.Windows.Input;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.ThemeUI;
 using FreeX.App.Services;
+using FreeX.App.UI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -518,6 +519,30 @@ public partial class MainWindow
         TryExecuteGroupedSheetCommand(
             PageLayoutRibbonActionPlanner.PageBreaksCommandLabel,
             sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan));
+    }
+
+    /// <summary>
+    /// Applies a page-break line drag from Page Break Preview (GridView.PageBreakLineMoved): moves
+    /// the dragged manual break to <paramref name="newIndex"/>, or removes it when the user dragged
+    /// it off the print area (<paramref name="newIndex"/> is null), the same way Excel does.
+    /// </summary>
+    private void OnPageBreakLineMoved(PageBreakLineOrientation orientation, uint originalIndex, uint? newIndex)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var rowBreaks = sheet.RowPageBreaks.ToList();
+        var columnBreaks = sheet.ColumnPageBreaks.ToList();
+        var breaks = orientation == PageBreakLineOrientation.Row ? rowBreaks : columnBreaks;
+
+        breaks.Remove(originalIndex);
+        if (newIndex is { } index && !breaks.Contains(index))
+            breaks.Add(index);
+
+        TryExecuteGroupedSheetCommand(
+            PageLayoutRibbonActionPlanner.PageBreaksCommandLabel,
+            sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
     }
 
     private void ShowPageBreakDialog(string defaultValue)

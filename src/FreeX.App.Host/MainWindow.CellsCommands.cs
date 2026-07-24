@@ -263,7 +263,7 @@ public partial class MainWindow
             return null;
 
         var style = _workbook.GetStyle(cell.StyleId);
-        return new AutoFitCellText(GetAutoFitDisplayText(sheet, cell), style.WrapText, TextRotation: style.TextRotation);
+        return new AutoFitCellText(GetAutoFitDisplayText(sheet, cell), style.WrapText, TextRotation: style.TextRotation, FontSize: style.FontSize);
     }
 
     private string GetAutoFitDisplayText(Sheet sheet, Cell cell)

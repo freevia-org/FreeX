@@ -101,6 +101,44 @@ public sealed class StatusBarRefreshPlannerTests
         plan.ReadyText.Should().BeEmpty();
     }
 
+    [Fact]
+    public void Build_ViewModeOverrideProvided_WinsOverSheetsViewMode()
+    {
+        // R83-app-view-modes-5-1: a window's OWN displayed view mode can differ from
+        // sheet.ViewMode (Excel "New Window" keeps each window's view mode independent of a
+        // sibling window's changes to the shared Sheet) -- the caller-supplied override must win.
+        var sheet = CreateSheet();
+        sheet.ViewMode = WorksheetViewMode.PageLayout;
+
+        var plan = StatusBarRefreshPlanner.Build(
+            sheet,
+            selectedRange: null,
+            selectionStats: null,
+            isFileOperationProgressVisible: false,
+            zoomPercent: 100,
+            TextProvider,
+            viewModeOverride: WorksheetViewMode.Normal);
+
+        plan.ViewMode.Should().Be(StatusBarViewMode.Normal);
+    }
+
+    [Fact]
+    public void Build_NoViewModeOverride_FallsBackToSheetsViewMode()
+    {
+        var sheet = CreateSheet();
+        sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
+
+        var plan = StatusBarRefreshPlanner.Build(
+            sheet,
+            selectedRange: null,
+            selectionStats: null,
+            isFileOperationProgressVisible: false,
+            zoomPercent: 100,
+            TextProvider);
+
+        plan.ViewMode.Should().Be(StatusBarViewMode.PageBreak);
+    }
+
     private static Sheet CreateSheet()
     {
         var workbook = new Workbook("Book1");

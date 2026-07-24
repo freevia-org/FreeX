@@ -8,6 +8,10 @@ public sealed class AddSheetCommand : IWorkbookCommand
 {
     private readonly string _name;
     private SheetId? _addedSheetId;
+    // R83-io-vba-macro-5-1: the codeName assigned below on first Apply, cached and reused on
+    // redo (mirrors _addedSheetId's R16 redo-stability fix) so a redone Apply doesn't mint a
+    // second, different codeName for what is otherwise the same logical sheet.
+    private string? _assignedCodeName;
 
     public string Label => $"Add Sheet '{_name}'";
 
@@ -38,6 +42,16 @@ public sealed class AddSheetCommand : IWorkbookCommand
             _addedSheetId = sheet.Id;
         }
         sheet.ResetViewStateToA1();
+
+        // R83-io-vba-macro-5-1: Workbook.AddSheet/InsertSheet never assign a CodeName (it
+        // defaults to null), so a sheet added to a macro-enabled workbook would otherwise be the
+        // only worksheet with no sheetPr/@codeName at all -- an inconsistency real Excel's own
+        // Insert Sheet never produces once a workbook carries a VBA project. Assign a fresh,
+        // workbook-unique codeName here, mirroring DuplicateSheetCommand's codeName regeneration
+        // for the same reason (see DuplicateSheetCodeNameGenerator).
+        if (ctx.Workbook.HasVbaProjectPackage)
+            sheet.CodeName = _assignedCodeName ??= DuplicateSheetCodeNameGenerator.GenerateUniqueCodeName(ctx.Workbook);
+
         return new CommandOutcome(true);
     }
 

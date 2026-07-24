@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using FreeX.Core.Model;
 
@@ -149,6 +150,22 @@ public static class FormulaSerializer
                 WriteNamedRangeName(rangeAnchorName, sb);
                 sb.Append("#:");
                 WriteCellRef(namedRangeEnd, sb);
+                break;
+
+            // A structural rewrite (delete row/col/cells-shift, delete sheet) that removes the
+            // anchor cell (or, for the A1#:B5 shape, its end cell) replaces the wrapped
+            // CellRefNode/NamedRangeNode with ErrorNode(#REF!) (see FormulaRewriter's
+            // RewriteCellRefDelete* helpers) — the spill reference itself is gone, not merely
+            // erroring. Excel collapses the whole A1# (or A1#:B5) reference down to the bare
+            // #REF! error in this case (never "#REF!#" or "ANCHORARRAY(A1,#REF!)"), so print just
+            // the error, dropping the ANCHORARRAY wrapper and any surviving sibling argument
+            // entirely; otherwise this would fall through to the generic function-call case below
+            // and print a meaningless string like 'ANCHORARRAY(#REF!)' — not a function Excel
+            // recognizes.
+            case FunctionCallNode f when f.FunctionName == "ANCHORARRAY" &&
+                                         f.Arguments.Count is 1 or 2 &&
+                                         f.Arguments.OfType<ErrorNode>().FirstOrDefault() is { } anchorError:
+                sb.Append(anchorError.Error.Code);
                 break;
 
             case FunctionCallNode f:

@@ -55,6 +55,14 @@ public interface IWorkbookWindow
 
     /// <summary>Restores this window to Normal state and positions it at the given work-area bounds.</summary>
     void TileToWorkArea(Rect bounds);
+
+    /// <summary>
+    /// Applies a Formula Bar visibility change made in ANOTHER window of this same process
+    /// (R83-app-view-modes-5-2: Show Formula Bar is a genuine Excel-instance-wide display
+    /// preference, not a per-document one, so every open window -- across every document --
+    /// must reflect it immediately, the way real Excel does).
+    /// </summary>
+    void ApplyFormulaBarVisibility(bool visible);
 }
 
 /// <summary>
@@ -274,6 +282,25 @@ public sealed class WorkbookWindowRegistry
             var window = _windows[index];
             if (window.DocumentId == origin.DocumentId)
                 window.RefreshFromSharedWorkbook();
+        }
+    }
+
+    /// <summary>
+    /// Broadcasts a Formula Bar visibility change to every OTHER registered window in the
+    /// process, regardless of document (R83-app-view-modes-5-2). Show Formula Bar is a genuine
+    /// Excel-instance-wide display preference -- not a per-workbook property saved in the xlsx
+    /// (only the separate named "Custom Views" feature has a per-view showFormulaBar flag, via
+    /// customWorkbookView) -- so toggling it in one window must be reflected live in every other
+    /// open window, exactly like real Excel, instead of only taking effect the next time each
+    /// sibling window happens to refresh for an unrelated reason.
+    /// </summary>
+    public void BroadcastFormulaBarVisibility(IWorkbookWindow origin, bool visible)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        foreach (var window in _windows)
+        {
+            if (!ReferenceEquals(window, origin))
+                window.ApplyFormulaBarVisibility(visible);
         }
     }
 

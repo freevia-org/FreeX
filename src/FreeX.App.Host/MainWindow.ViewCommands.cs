@@ -61,7 +61,7 @@ public partial class MainWindow
         if (_suppressViewOptionSync || SheetGrid is null) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || sender is not System.Windows.Controls.CheckBox chk) return;
-        if (sheet.ViewMode != WorksheetViewMode.PageLayout)
+        if (GetEffectiveViewState(sheet).ViewMode != WorksheetViewMode.PageLayout)
         {
             chk.IsChecked = sheet.ShowRulers;
             return;
@@ -87,6 +87,11 @@ public partial class MainWindow
         _options.ShowFormulaBar = chk.IsChecked == true;
         _options.Save();
         FormulaBarBorder.Visibility = _options.ShowFormulaBar ? Visibility.Visible : Visibility.Collapsed;
+
+        // Show Formula Bar is an Excel-instance-wide display preference, not scoped to this
+        // window's own document -- every other open window (any document) must reflect it
+        // immediately too, exactly like real Excel (R83-app-view-modes-5-2).
+        _windowRegistry?.BroadcastFormulaBarVisibility(this, _options.ShowFormulaBar);
     }
 
     private void ToggleOutlineSymbolsShortcut()
@@ -114,10 +119,15 @@ public partial class MainWindow
 
     private void SetWorksheetViewMode(WorksheetViewMode viewMode)
     {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
         if (!TryExecuteGroupedSheetCommand("Workbook View",
                 sheetId => new SetWorksheetViewModeCommand(sheetId, viewMode)))
             return;
 
+        // This window chose the new view mode -- remember it as THIS window's own state so a
+        // sibling "New Window" over the same document keeps showing whatever it had before
+        // (R83-app-view-modes-5-1); only the window that changed it should see the change.
+        SyncWindowViewState(targetSheetIds);
         UpdateViewport();
     }
 
@@ -617,11 +627,15 @@ public partial class MainWindow
             }
         }
 
+        var targetSheetIds = CurrentGroupedEditSheetIds();
         if (!TryExecuteGroupedSheetCommand(
                 "Zoom",
                 sheetId => new SetWorksheetZoomCommand(sheetId, inputPlan.ZoomPercent)))
             return;
 
+        // This window chose the new zoom -- remember it as THIS window's own state so a sibling
+        // "New Window" over the same document keeps its own zoom (R83-app-view-modes-5-1).
+        SyncWindowViewState(targetSheetIds);
         SyncZoomFromSheet(inputPlan.ZoomPercent, updateSlider: false);
         UpdateViewport();
     }

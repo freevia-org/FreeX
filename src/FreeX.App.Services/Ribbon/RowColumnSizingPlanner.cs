@@ -20,13 +20,22 @@ public readonly record struct RowColumnSizePlan(uint Index, double Size);
 
 public static class RowColumnSizingPlanner
 {
+    /// <summary>
+    /// <see cref="Sheet.RowHeights"/>/<see cref="Sheet.DefaultRowHeight"/> are stored in device
+    /// pixels at 96 DPI (matching the row-header/grid rendering unit), while Excel's Row Height
+    /// dialog and its "0 to 409.5" ceiling are expressed in points -- the same 96/72 conversion
+    /// XlsxFileAdapter/XlsxWorksheetRowColumnLayoutReader apply at the XLSX file-I/O boundary.
+    /// </summary>
+    private const double PixelsPerPoint = 96.0 / 72.0;
+
     public static double GetRowHeightDialogValue(Sheet? sheet, GridRange range, double fallbackHeight = 20)
     {
         if (sheet is null)
             return fallbackHeight;
 
         var (startRow, _) = SelectionRangeService.GetRowSpan(range);
-        return sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight;
+        var heightPixels = sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight;
+        return heightPixels / PixelsPerPoint;
     }
 
     public static double GetColumnWidthDialogValue(Sheet? sheet, GridRange range, double fallbackWidth = 8.43)
@@ -38,10 +47,11 @@ public static class RowColumnSizingPlanner
         return sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth;
     }
 
+    /// <param name="height">The dialog-entered height in points (Excel's Row Height unit); converted here to the pixel unit <see cref="Sheet.RowHeights"/> stores.</param>
     public static IWorkbookCommand CreateRowHeightCommand(SheetId sheetId, GridRange range, double height)
     {
         var (startRow, endRow) = SelectionRangeService.GetRowSpan(range);
-        return new SetRowHeightCommand(sheetId, startRow, endRow, height);
+        return new SetRowHeightCommand(sheetId, startRow, endRow, height * PixelsPerPoint);
     }
 
     public static IWorkbookCommand CreateColumnWidthCommand(SheetId sheetId, GridRange range, double width)

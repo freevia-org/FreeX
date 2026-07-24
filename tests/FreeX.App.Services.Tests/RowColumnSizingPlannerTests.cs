@@ -18,12 +18,62 @@ public sealed class RowColumnSizingPlannerTests
         sheet.RowHeights[3] = 24;
         sheet.ColumnWidths[4] = 14.5;
 
-        RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, range).Should().Be(24);
+        // Row heights are stored in pixels (96 DPI) but the dialog shows/accepts Excel's points
+        // unit, so the dialog value is the stored pixel value converted at 96/72.
+        RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, range).Should().BeApproximately(18.0, 0.001); // 24px -> 18pt
         RowColumnSizingPlanner.GetColumnWidthDialogValue(sheet, range).Should().Be(14.5);
-        RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, Range(sheet.Id, 7, 4, 7, 4)).Should().Be(18);
+        RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, Range(sheet.Id, 7, 4, 7, 4)).Should().BeApproximately(13.5, 0.001); // 18px -> 13.5pt
         RowColumnSizingPlanner.GetColumnWidthDialogValue(sheet, Range(sheet.Id, 3, 8, 3, 8)).Should().Be(9.25);
         RowColumnSizingPlanner.GetRowHeightDialogValue(null, range).Should().Be(20);
         RowColumnSizingPlanner.GetColumnWidthDialogValue(null, range).Should().Be(8.43);
+    }
+
+    [Fact]
+    public void GetRowHeightDialogValue_ConvertsStoredPixelsToExcelPoints()
+    {
+        // R83-commands-rowcol-size-5-1: Sheet.RowHeights/DefaultRowHeight are stored in device
+        // pixels at 96 DPI, but the Row Height dialog is labeled/validated in Excel's points unit
+        // (0 to 409.5). A brand-new sheet's untouched row has DefaultRowHeight = 20 (pixels), which
+        // must surface to the dialog as Excel's real 15pt default -- not the raw "20".
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DefaultRowHeight = 20;
+        var range = Range(sheet.Id, 1, 1, 1, 1);
+
+        RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, range).Should().BeApproximately(15.0, 0.001);
+    }
+
+    [Fact]
+    public void GetColumnWidthDialogValue_IsNotUnitConverted()
+    {
+        // Sibling no-regression: column width has no pixel/point split (it's already Excel's
+        // character-count unit), so the dialog value must pass through verbatim.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DefaultColumnWidth = 8.43;
+        var range = Range(sheet.Id, 1, 1, 1, 1);
+
+        RowColumnSizingPlanner.GetColumnWidthDialogValue(sheet, range).Should().Be(8.43);
+    }
+
+    [Fact]
+    public void RowHeightDialogValueAndCommand_RoundTripThroughPoints()
+    {
+        // R83-commands-rowcol-size-5-1: a value read from the (points-labeled) dialog and written
+        // straight back via CreateRowHeightCommand must round-trip to the same stored pixel value --
+        // proving GetRowHeightDialogValue and CreateRowHeightCommand use inverse conversions.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        var range = Range(sheet.Id, 1, 1, 1, 1);
+        sheet.RowHeights[1] = 133.33333333333334; // 100pt stored as pixels (100 * 96/72)
+
+        var dialogValue = RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, range);
+        dialogValue.Should().BeApproximately(100.0, 0.001);
+
+        RowColumnSizingPlanner.CreateRowHeightCommand(sheet.Id, range, dialogValue).Apply(context).Success.Should().BeTrue();
+
+        sheet.RowHeights[1].Should().BeApproximately(133.33333333333334, 0.001);
     }
 
     [Fact]
@@ -42,8 +92,10 @@ public sealed class RowColumnSizingPlannerTests
             .Success.Should()
             .BeTrue();
 
+        // CreateRowHeightCommand takes points (Excel's Row Height unit) and converts to the pixel
+        // unit Sheet.RowHeights stores (30pt * 96/72 = 40px); column width has no such unit split.
         sheet.RowHeights.Should().ContainKeys(2u, 3u, 4u);
-        sheet.RowHeights.Values.Should().OnlyContain(height => height == 30);
+        sheet.RowHeights.Values.Should().OnlyContain(height => Math.Abs(height - 40.0) < 0.001);
         sheet.ColumnWidths.Should().ContainKeys(3u, 4u, 5u);
         sheet.ColumnWidths.Values.Should().OnlyContain(width => width == 12);
     }

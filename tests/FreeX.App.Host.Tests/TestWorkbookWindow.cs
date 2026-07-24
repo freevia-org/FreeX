@@ -22,6 +22,8 @@ internal sealed class TestWorkbookWindow : IWorkbookWindow
     public int SetScrollOffsetCount { get; private set; }
     public List<Rect> ArrangedBounds { get; } = [];
     public List<Rect> TiledBounds => ArrangedBounds;
+    public int FormulaBarVisibilityAppliedCount { get; private set; }
+    public bool? LastAppliedFormulaBarVisibility { get; private set; }
 
     public void ApplyWindowTitleSuffix(string suffix) => Suffix = suffix;
 
@@ -49,4 +51,10 @@ internal sealed class TestWorkbookWindow : IWorkbookWindow
     }
 
     public void TileToWorkArea(Rect bounds) => ArrangedBounds.Add(bounds);
+
+    public void ApplyFormulaBarVisibility(bool visible)
+    {
+        LastAppliedFormulaBarVisibility = visible;
+        FormulaBarVisibilityAppliedCount++;
+    }
 }

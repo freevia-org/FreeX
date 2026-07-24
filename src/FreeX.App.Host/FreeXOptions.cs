@@ -58,6 +58,7 @@ public sealed class FreeXOptions : IStatusBarOptionVisibilityStore
     public bool FormulaBarExpanded { get; set; }
     public bool MoveSelectionAfterEnter { get; set; } = true;
     public FreeXEnterDirection AfterEnterDirection { get; set; } = FreeXEnterDirection.Down;
+    public bool EnableAutoCompleteForCellValues { get; set; } = true;
     public bool ShowGridlines { get; set; } = true;
     public bool ShowHeadings { get; set; } = true;
     public FreeXObjectDisplay ObjectsDisplay { get; set; } = FreeXObjectDisplay.All;
@@ -168,6 +169,7 @@ public sealed class FreeXOptions : IStatusBarOptionVisibilityStore
             FormulaBarExpanded = FormulaBarExpanded,
             MoveSelectionAfterEnter = MoveSelectionAfterEnter,
             AfterEnterDirection = (AppOptionsEnterDirection)AfterEnterDirection,
+            EnableAutoCompleteForCellValues = EnableAutoCompleteForCellValues,
             ShowGridlines = ShowGridlines,
             ShowHeadings = ShowHeadings,
             ObjectsDisplay = (AppOptionsObjectDisplay)ObjectsDisplay,
@@ -218,6 +220,7 @@ public sealed class FreeXOptions : IStatusBarOptionVisibilityStore
         FormulaBarExpanded = options.FormulaBarExpanded;
         MoveSelectionAfterEnter = options.MoveSelectionAfterEnter;
         AfterEnterDirection = (FreeXEnterDirection)options.AfterEnterDirection;
+        EnableAutoCompleteForCellValues = options.EnableAutoCompleteForCellValues;
         ShowGridlines = options.ShowGridlines;
         ShowHeadings = options.ShowHeadings;
         ObjectsDisplay = (FreeXObjectDisplay)options.ObjectsDisplay;

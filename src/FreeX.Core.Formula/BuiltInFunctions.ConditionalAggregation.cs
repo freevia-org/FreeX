@@ -67,7 +67,11 @@ public static partial class BuiltInFunctions
     private static ScalarValue Sumif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue rangeError) return rangeError;
-        if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
+        // Excel requires the range argument to be a genuine worksheet reference, not a
+        // computed/array-constant value (e.g. {1,2,3} or TRANSPOSE(A1:A3)) — it returns
+        // #VALUE! for those. RangeValue.IsSheetReference distinguishes the two (see the
+        // same convention in BuiltInFunctions.Database.cs / BuiltInFunctions.Subtotal.cs).
+        if (args[0] is not RangeValue { IsSheetReference: true } rangeArg) return ErrorValue.Value;
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
 
@@ -78,7 +82,7 @@ public static partial class BuiltInFunctions
             return ExpandConditionalArrayCriteria(criteriaArray, args, 1, ctx, Sumif);
 
         if (args.Count > 2 && args[2] is ErrorValue sumRangeError) return sumRangeError;
-        if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
+        if (args.Count > 2 && args[2] is not RangeValue { IsSheetReference: true }) return ErrorValue.Value;
 
         RangeValue? sumRange = args.Count > 2 ? (RangeValue)args[2] : null;
         var criteriaMatcher = CompileCriteria(criteria);
@@ -105,7 +109,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue Countif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue rangeError) return rangeError;
-        if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
+        // Excel requires the range argument to be a genuine worksheet reference (see Sumif above).
+        if (args[0] is not RangeValue { IsSheetReference: true } rangeArg) return ErrorValue.Value;
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
 
@@ -122,7 +127,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue Averageif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue rangeError) return rangeError;
-        if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
+        // Excel requires the range argument to be a genuine worksheet reference (see Sumif above).
+        if (args[0] is not RangeValue { IsSheetReference: true } rangeArg) return ErrorValue.Value;
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
 
@@ -131,7 +137,7 @@ public static partial class BuiltInFunctions
             return ExpandConditionalArrayCriteria(criteriaArray, args, 1, ctx, Averageif);
 
         if (args.Count > 2 && args[2] is ErrorValue avgRangeError) return avgRangeError;
-        if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
+        if (args.Count > 2 && args[2] is not RangeValue { IsSheetReference: true }) return ErrorValue.Value;
 
         RangeValue? avgRange = args.Count > 2 ? (RangeValue)args[2] : null;
         var criteriaMatcher = CompileCriteria(criteria);
@@ -159,7 +165,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue Sumifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue sumRangeError) return sumRangeError;
-        if (args[0] is not RangeValue sumRange) return ErrorValue.Value;
+        if (args[0] is not RangeValue { IsSheetReference: true } sumRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
 
         // Array-criteria: any criteria-value slot holds a range → expand element-wise. Multiple
@@ -220,7 +226,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue Averageifs2(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue avgRangeError) return avgRangeError;
-        if (args[0] is not RangeValue avgRange) return ErrorValue.Value;
+        if (args[0] is not RangeValue { IsSheetReference: true } avgRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
 
         // Array-criteria: criteria-value slots for AVERAGEIFS are at indices 2, 4, 6, … (step 2).
@@ -254,7 +260,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue Maxifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue maxRangeError) return maxRangeError;
-        if (args[0] is not RangeValue maxRange) return ErrorValue.Value;
+        if (args[0] is not RangeValue { IsSheetReference: true } maxRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
 
         // Array-criteria: criteria-value slots for MAXIFS are at indices 2, 4, 6, … (step 2).
@@ -291,7 +297,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue Minifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue minRangeError) return minRangeError;
-        if (args[0] is not RangeValue minRange) return ErrorValue.Value;
+        if (args[0] is not RangeValue { IsSheetReference: true } minRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
 
         // Array-criteria: criteria-value slots for MINIFS are at indices 2, 4, 6, … (step 2).
@@ -470,7 +476,7 @@ public static partial class BuiltInFunctions
             int criteriaIndex = rangeIndex + 1;
 
             if (args[rangeIndex] is ErrorValue rangeError) return rangeError;
-            if (args[rangeIndex] is not RangeValue criteriaRange) return ErrorValue.Value;
+            if (args[rangeIndex] is not RangeValue { IsSheetReference: true } criteriaRange) return ErrorValue.Value;
 
             shapeRange ??= criteriaRange;
             if (!SameShape(shapeRange, criteriaRange)) return ErrorValue.Value;

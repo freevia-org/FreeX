@@ -3,22 +3,38 @@ namespace FreeX.Core.Commands;
 /// <summary>
 /// One cell's contribution to an AutoFit measurement: its display text, whether Wrap Text is
 /// enabled for it, its own column's width (in the same character-based unit as
-/// <see cref="AutoFitSizingService.EstimateColumnWidth"/>), and its TextRotation (Format Cells >
+/// <see cref="AutoFitSizingService.EstimateColumnWidth"/>), its TextRotation (Format Cells >
 /// Alignment > Orientation; -90..90 degrees, or 255 for stacked/vertical text, matching the
 /// normalized range used by <c>CellStyle.TextRotation</c> and
-/// <c>CellTextOrientationLayoutPlanner</c>). <see cref="AutoFitSizingService.EstimateRowHeight"/>
+/// <c>CellTextOrientationLayoutPlanner</c>), and its own font size in points (<c>CellStyle.FontSize</c>;
+/// 0/unset falls back to the row's default line height). <see cref="AutoFitSizingService.EstimateRowHeight"/>
 /// uses the wrap flag and column width together to size wrapped multi-line text to the number of
-/// visual lines it occupies at that column's width, and uses TextRotation to grow the row for
-/// angled or stacked text, matching Excel.
+/// visual lines it occupies at that column's width, uses TextRotation to grow the row for angled
+/// or stacked text, and scales each cell's own line height by its FontSize so a single large-font
+/// cell (e.g. a heading) grows the row even when unwrapped and unrotated, matching Excel.
 /// </summary>
-public readonly record struct AutoFitCellText(string Text, bool WrapText = false, double ColumnWidth = 0, int TextRotation = 0);
+public readonly record struct AutoFitCellText(string Text, bool WrapText = false, double ColumnWidth = 0, int TextRotation = 0, double FontSize = 0);
 
 public static class AutoFitSizingService
 {
     public const double MinimumColumnWidth = 3.0;
     public const double MaximumColumnWidth = 255.0;
     public const double MinimumRowHeight = 16.0;
-    public const double MaximumRowHeight = 220.0;
+
+    /// <summary>Excel's own row-height ceiling is 409.5 points; <see cref="Sheet.RowHeights"/> stores pixels at 96 DPI, so the pixel-unit clamp used here is that same cap converted (409.5 * 96/72).</summary>
+    public const double MaximumRowHeight = 409.5 * (96.0 / 72.0);
+
+    /// <summary>
+    /// Pixels of line height per point of font size, derived from the sheet's own default
+    /// mapping: an untouched row defaults to <see cref="Sheet.DefaultRowHeight"/> = 20px for
+    /// Calibri 11 (Excel's real 15pt default line height at 96 DPI), i.e. ~1.818 px/pt. Used to
+    /// scale a cell's own <see cref="AutoFitCellText.FontSize"/> into a line height when it
+    /// differs from the row's default font, so a large-font cell grows the row even when
+    /// unwrapped and unrotated.
+    /// </summary>
+    private const double DefaultFontSizePoints = 11.0;
+    private const double DefaultLineHeightPixels = 20.0;
+    private const double LineHeightPixelsPerFontPoint = DefaultLineHeightPixels / DefaultFontSizePoints;
 
     /// <summary>Characters of usable width per column-width unit, mirroring the "+2.0" padding used by <see cref="EstimateColumnWidth"/>.</summary>
     private const double ColumnWidthPadding = 2.0;
@@ -79,19 +95,28 @@ public static class AutoFitSizingService
     /// </summary>
     public static double EstimateRowHeight(IEnumerable<AutoFitCellText> displayTexts, double defaultHeight)
     {
-        var maxHeightUnits = 0.0;
+        var defaultLineHeight = Math.Max(defaultHeight, MinimumRowHeight);
+        var estimate = defaultHeight;
+
         foreach (var cellText in displayTexts)
         {
             var heightUnits = cellText.TextRotation == 0
                 ? EstimateLineCount(cellText.Text, cellText.WrapText, cellText.ColumnWidth)
                 : EstimateRotatedHeightUnits(cellText.Text, cellText.TextRotation);
-            maxHeightUnits = Math.Max(maxHeightUnits, heightUnits);
-        }
 
-        var lineHeight = Math.Max(defaultHeight, MinimumRowHeight);
-        var estimate = maxHeightUnits <= 0
-            ? defaultHeight
-            : Math.Max(defaultHeight, maxHeightUnits * lineHeight);
+            if (heightUnits <= 0)
+                continue;
+
+            // A cell's own font size (when larger/smaller than the row's default font) scales its
+            // contribution's line height instead of always using the row's default -- otherwise a
+            // large-font, unwrapped/unrotated cell (heightUnits == 1) would never grow the row past
+            // defaultHeight, clipping the glyph.
+            var lineHeight = cellText.FontSize > 0
+                ? cellText.FontSize * LineHeightPixelsPerFontPoint
+                : defaultLineHeight;
+
+            estimate = Math.Max(estimate, heightUnits * lineHeight);
+        }
 
         return Math.Clamp(estimate, MinimumRowHeight, MaximumRowHeight);
     }

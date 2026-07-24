@@ -69,9 +69,7 @@ public sealed partial class OptionsDialogSourceTests
 
         "OptEaseAccessibilityDisplay",
 
-        "OptAdvancedFillHandle",
-
-        "OptAdvancedAutoComplete"
+        "OptAdvancedFillHandle"
 
     ];
 

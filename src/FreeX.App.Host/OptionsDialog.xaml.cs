@@ -154,6 +154,7 @@ public partial class OptionsDialog : Window
             _ => 0
         };
         UpdateAfterEnterDirectionState();
+        OptAdvancedAutoComplete.IsChecked = _opts.EnableAutoCompleteForCellValues;
         OptShowGridlines.IsChecked = _opts.ShowGridlines;
         OptShowHeadings.IsChecked = _opts.ShowHeadings;
         OptObjectsDisplay.ItemsSource = new[]
@@ -545,6 +546,7 @@ public partial class OptionsDialog : Window
                 3 => FreeXEnterDirection.Left,
                 _ => FreeXEnterDirection.Down
             },
+            EnableAutoCompleteForCellValues = OptAdvancedAutoComplete.IsChecked == true,
             ShowGridlines = OptShowGridlines.IsChecked == true,
             ShowHeadings = OptShowHeadings.IsChecked == true,
             ObjectsDisplay = OptObjectsDisplay.SelectedIndex switch

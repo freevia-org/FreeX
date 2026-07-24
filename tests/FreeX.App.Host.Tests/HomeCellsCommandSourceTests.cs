@@ -50,6 +50,18 @@ public sealed class HomeCellsCommandSourceTests
     }
 
     [Fact]
+    public void GetAutoFitCellText_ThreadsFontSizeAlongsideWrapTextAndTextRotation()
+    {
+        // R83-commands-rowcol-size-5-2: GetAutoFitCellText must read style.FontSize (not just
+        // WrapText/TextRotation), otherwise a large-font, unwrapped/unrotated cell never grows the
+        // row via AutoFitSizingService.EstimateRowHeight (which needs FontSize to do so).
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
+
+        source.Should().Contain(
+            "return new AutoFitCellText(GetAutoFitDisplayText(sheet, cell), style.WrapText, TextRotation: style.TextRotation, FontSize: style.FontSize);");
+    }
+
+    [Fact]
     public void SheetVisibilityCommands_ShareSheetTabVisibilityWorkflow()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");

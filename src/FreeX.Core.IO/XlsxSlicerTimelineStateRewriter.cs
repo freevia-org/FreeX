@@ -287,7 +287,7 @@ internal static class XlsxSlicerTimelineStateRewriter
                 "slicerCache",
                 cacheRelationshipId);
 
-            var worksheetPath = ResolveWorksheetPath(workbook, worksheetPathMap, slicer.SourcePivotTableName);
+            var worksheetPath = ResolveWorksheetPath(workbook, worksheetPathMap, slicer.SourceSheetName, slicer.SourcePivotTableName);
             if (!string.IsNullOrWhiteSpace(worksheetPath))
             {
                 var slicerRelationshipId = EnsureWorksheetRelationship(archive, worksheetPath, slicerPath, SlicerRelationshipType);
@@ -300,6 +300,10 @@ internal static class XlsxSlicerTimelineStateRewriter
                     "slicerList",
                     "slicer",
                     slicerRelationshipId);
+
+                // R83-io-slicer-timeline-5-1: author the graphicFrame anchor too, or this brand-new
+                // slicer has no on-sheet shape at all after this save (see XlsxSlicerTimelineDrawingWriter).
+                XlsxSlicerTimelineDrawingWriter.EnsureSlicerAnchor(archive, worksheetPath, slicer);
             }
 
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{slicerPath}", "application/vnd.ms-excel.slicer+xml");
@@ -391,7 +395,7 @@ internal static class XlsxSlicerTimelineStateRewriter
                 "timelineCacheRef",
                 cacheRelationshipId);
 
-            var worksheetPath = ResolveWorksheetPath(workbook, worksheetPathMap, timeline.SourcePivotTableName);
+            var worksheetPath = ResolveWorksheetPath(workbook, worksheetPathMap, timeline.SourceSheetName, timeline.SourcePivotTableName);
             if (!string.IsNullOrWhiteSpace(worksheetPath))
             {
                 var timelineRelationshipId = EnsureWorksheetRelationship(archive, worksheetPath, timelinePath, TimelineRelationshipType);
@@ -404,6 +408,10 @@ internal static class XlsxSlicerTimelineStateRewriter
                     "timelineRefs",
                     "timelineRef",
                     timelineRelationshipId);
+
+                // R83-io-slicer-timeline-5-1: author the graphicFrame anchor too, or this brand-new
+                // timeline has no on-sheet shape at all after this save (see XlsxSlicerTimelineDrawingWriter).
+                XlsxSlicerTimelineDrawingWriter.EnsureTimelineAnchor(archive, worksheetPath, timeline);
             }
 
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{timelinePath}", "application/vnd.ms-excel.Timeline+xml");
@@ -448,16 +456,32 @@ internal static class XlsxSlicerTimelineStateRewriter
         return "1";
     }
 
-    // Resolves the ACTUAL preserved worksheet part path for the sheet hosting sourcePivotTableName, via the
+    // Resolves the ACTUAL preserved worksheet part path for the sheet HOSTING THE CONTROL ITSELF, via the
     // real workbook-sheet-to-part-path map (XlsxWorkbookWorksheetPathMap) rather than assuming a fresh-save
     // "sheetN.xml" naming convention -- a source-preserved package's worksheet part names do not necessarily
     // match the model's sheet order, so the fresh writer's naive index-based fallback would be wrong here.
+    // R83-io-slicer-timeline-5-2: a slicer/timeline anchored on a DIFFERENT sheet than its bound pivot
+    // table (a common "dashboard" pattern -- e.g. pivot on "Data", slicer placed on "Dashboard") must be
+    // wired to ITS OWN sheet, not the pivot's -- so sourceSheetName is consulted FIRST and only falls back
+    // to a pivot-table lookup (the control's default sheet, matching a same-sheet insert) when it is
+    // absent, exactly mirroring how a freshly-inserted control (which never sets SourceSheetName) still
+    // resolves correctly to the pivot's host sheet.
     private static string? ResolveWorksheetPath(
         Workbook workbook,
         XlsxWorkbookWorksheetPathMap? worksheetPathMap,
+        string? sourceSheetName,
         string? sourcePivotTableName)
     {
-        if (worksheetPathMap is null || string.IsNullOrWhiteSpace(sourcePivotTableName))
+        if (worksheetPathMap is null)
+            return null;
+
+        if (!string.IsNullOrWhiteSpace(sourceSheetName) &&
+            worksheetPathMap.SheetPathsByName.TryGetValue(sourceSheetName, out var directPath))
+        {
+            return directPath;
+        }
+
+        if (string.IsNullOrWhiteSpace(sourcePivotTableName))
             return null;
 
         foreach (var sheet in workbook.Sheets)

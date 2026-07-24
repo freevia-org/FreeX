@@ -43,6 +43,7 @@ public partial class GridView
     private CellAddress _selectionMoveStartCell;
     private GridRange? _selectionMovePreviewRange;
     private WorksheetPageMarginEdge? _marginDragEdge;
+    private PageBreakLineHit? _pageBreakLineDragHit;
     private SplitDividerHandle _splitDividerDragHandle = SplitDividerHandle.None;
     private bool _splitPaneScrollbarDragging;
     private SplitPaneScrollbar? _splitPaneScrollbarDragSource;

@@ -980,9 +980,11 @@ public sealed partial class MainWindow : Window
     private bool _isSaving;
     // Set after opening a workbook whose FileSharing.ReadOnlyRecommended/ReservationPassword
     // prompted the user and they accepted opening it read-only -- see
-    // ApplyReadOnlyRecommendedPromptIfNeeded (R75-services-protection-security-4-2). Mirrors the
-    // WPF host's field of the same name in MainWindow.xaml.cs; this is the same minimal fix scope
-    // noted there: the flag does not yet block Save-over or individual edit commands.
+    // ApplyReadOnlyRecommendedPromptIfNeeded (R75-services-protection-security-4-2).
+    // SaveCurrentWorkbookAsync reads this flag on every Save to force Save-over-original through
+    // the Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1).
+    // Mirrors the WPF host's field of the same name in MainWindow.xaml.cs. Individual edit commands
+    // are not yet blocked -- that remains out of scope.
     private bool _isWorkbookReadOnly;
     private bool _allowCloseWithoutDirtyPrompt;
     private bool _isDirtyCloseDialogOpen;
@@ -8132,8 +8134,9 @@ public sealed partial class MainWindow : Window
     /// enforced here (R75-services-protection-security-4-2). Mirrors the WPF host's
     /// <c>MainWindow.Backstage.ApplyReadOnlyRecommendedPromptIfNeeded</c>: prompt once on open and,
     /// if the user accepts read-only, mark this session's <see cref="_isWorkbookReadOnly"/> flag.
-    /// Same minimal fix scope as the WPF host: the flag itself does not yet block Save-over or
-    /// individual edit commands.
+    /// <see cref="SaveCurrentWorkbookAsync"/> now reads the flag on every Save to force Save-over
+    /// through the Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1).
+    /// Individual edit commands are not yet blocked -- that remains out of scope.
     /// </summary>
     private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
     {
@@ -8158,6 +8161,17 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal void ApplyReadOnlyRecommendedPromptIfNeededForTest(Workbook workbook) =>
         ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+
+    /// <summary>Test-only seam for <see cref="_isWorkbookReadOnly"/> (see its declaration) -- sets the
+    /// flag directly instead of driving it through <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/>,
+    /// so Save-enforcement tests (R83-services-doc-recovery-props-5-1) don't need FileSharing metadata
+    /// and a prompt override just to reach the read-only state. Not used by production code paths.
+    /// </summary>
+    internal void SetWorkbookReadOnlyForTest(bool value) => _isWorkbookReadOnly = value;
+
+    /// <summary>Test-only seam for <see cref="ResolveExistingSaveTarget"/> -- see its declaration.
+    /// Not used by production code paths.</summary>
+    internal FileSaveTarget? ResolveExistingSaveTargetForTest() => ResolveExistingSaveTarget();
 
     /// <summary>
     /// Owned modal Yes/No prompt for the Read-Only-Recommended/write-reservation alert, mirroring
@@ -8523,6 +8537,45 @@ public sealed partial class MainWindow : Window
         return new CellBorderNeighborEdges(above, below, left, right);
     }
 
+    /// <summary>
+    /// A merged cell collapses to a single rendered <see cref="Border"/> spanning the whole region
+    /// (<c>CreateCell</c> only ever renders the true/substitute anchor's own Border — every other
+    /// member cell hits the "non-anchor member" <c>continue</c> a few lines up), so the anchor's own
+    /// <see cref="CellStyle"/> would otherwise be the only style ever consulted for that Border's
+    /// four edges. But <c>BorderShortcutService</c>'s per-cell diff (Ribbon Home ▸ Borders ▸ Outline)
+    /// stores the BOTTOM and RIGHT outline edges on the OTHER constituent cells of the merge (the
+    /// bottom-row and right-column members), never on the anchor — so those edges must be pulled
+    /// from the actual owning member cell instead of silently dropping out. Top/left always come
+    /// from the anchor itself, which sits at the merge's own top-left corner. Mirrors WPF's
+    /// GridView.Rendering.cs per-constituent-cell border resolution for merges.
+    /// </summary>
+    private CellStyle? ResolveMergedOuterBorderStyle(CellStyle? anchorStyle, GridRange? mergeRegion)
+    {
+        if (mergeRegion is not { } region || region.Start == region.End)
+            return anchorStyle;
+
+        var sheet = _session.ActiveSheet;
+        var workbook = _session.Workbook;
+
+        var bottomBorder = sheet.GetCell(region.End.Row, region.Start.Col) is { } bottomCell
+            ? workbook.GetStyle(bottomCell.StyleId).BorderBottom
+            : default;
+        var rightBorder = sheet.GetCell(region.Start.Row, region.End.Col) is { } rightCell
+            ? workbook.GetStyle(rightCell.StyleId).BorderRight
+            : default;
+
+        if (bottomBorder == (anchorStyle?.BorderBottom ?? default) &&
+            rightBorder == (anchorStyle?.BorderRight ?? default))
+        {
+            return anchorStyle;
+        }
+
+        var merged = (anchorStyle ?? CellStyle.Default).Clone();
+        merged.BorderBottom = bottomBorder;
+        merged.BorderRight = rightBorder;
+        return merged;
+    }
+
     private Border CreateInteractiveCellBorder(
         string text,
         IBrush? background,
@@ -8559,6 +8612,7 @@ public sealed partial class MainWindow : Window
             address != _session.ActiveCell &&
             mergeRegion?.Contains(_session.ActiveCell) != true;
         var borderNeighbors = ResolveCellBorderNeighborEdges(address);
+        var borderStyle = ResolveMergedOuterBorderStyle(style, mergeRegion);
         var border = CreateCellBorder(
             text,
             background,
@@ -8573,7 +8627,7 @@ public sealed partial class MainWindow : Window
             applySelectionFill,
             indentPadding,
             textRotation,
-            style,
+            borderStyle,
             _session.ActiveSheet.ShowGridlines,
             zoomFactor,
             cellWidth,
@@ -9742,7 +9796,7 @@ public sealed partial class MainWindow : Window
 
         if (IsPointerOnAutofillHandle(args))
         {
-            _sheetGridHost.Cursor = new Cursor(StandardCursorType.Hand);
+            _sheetGridHost.Cursor = new Cursor(StandardCursorType.Cross);
             return;
         }
 
@@ -26142,10 +26196,20 @@ public sealed partial class MainWindow : Window
         return await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
             isDirty: _session.IsDirty,
             currentFilePath: _session.CurrentFilePath,
-            resolveCurrentTarget: () => _session.CanSaveCurrentSource(out var target) ? target : null,
+            resolveCurrentTarget: ResolveExistingSaveTarget,
             saveTargetAsync: target => SaveWorkbookToTargetAsync(target),
             saveAsAsync: SaveWorkbookAsAsync);
     }
+
+    /// <summary>
+    /// The existing-path save target, or <c>null</c> if there is none usable OR this session was
+    /// marked read-only by <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/> -- withholding the
+    /// target here falls <see cref="SaveCurrentWorkbookAsync"/> through to the Save-As dialog instead
+    /// of silently overwriting the original file (R83-services-doc-recovery-props-5-1, mirrors the
+    /// WPF host's <c>MainWindow.WorkbookLifecycle.ResolveExistingSaveTarget</c>).
+    /// </summary>
+    private FileSaveTarget? ResolveExistingSaveTarget() =>
+        !_isWorkbookReadOnly && _session.CanSaveCurrentSource(out var target) ? target : null;
 
     private async Task ShareWorkbookAsync()
     {

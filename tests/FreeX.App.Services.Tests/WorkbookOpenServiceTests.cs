@@ -142,6 +142,64 @@ public sealed class WorkbookOpenServiceTests
     }
 
     [Fact]
+    public async Task LoadAsync_CapturesSourceLastWriteTimeUtcMatchingTheFileOnDisk()
+    {
+        // R83-services-doc-recovery-props-5-2: WorkbookOpenService never recorded anything a later
+        // save could use to detect a concurrent second writer having changed the file in the
+        // meantime. LoadAsync must now snapshot the source file's write time into the result so
+        // WorkbookSaveService.SaveAsync can be given it as expectedLastWriteTimeUtc.
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "formula-load.fxjson");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        var expectedWriteTimeUtc = File.GetLastWriteTimeUtc(tempPath);
+        var adapter = new TestFileAdapter(stream =>
+        {
+            using var reader = new StreamReader(stream);
+            reader.ReadToEnd();
+            var workbook = new Workbook("Loaded");
+            workbook.AddSheet("Sheet1");
+            return workbook;
+        });
+
+        var result = await new WorkbookOpenService().LoadAsync(
+            tempPath,
+            adapter,
+            ".fxjson",
+            new FileFormatDescriptor(".fxjson", "Fake"));
+
+        result.SourceLastWriteTimeUtc.Should().Be(expectedWriteTimeUtc);
+    }
+
+    [Fact]
+    public async Task LoadAsync_StillReturnsCorrectWorkbookAndDisplayNameAlongsideTheNewTimestamp()
+    {
+        // No-regression sibling: adding SourceLastWriteTimeUtc must not disturb the rest of the
+        // existing WorkbookOpenResult projection.
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "formula-load.fxjson");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        var adapter = new TestFileAdapter(stream =>
+        {
+            using var reader = new StreamReader(stream);
+            reader.ReadToEnd().Should().Be("payload");
+            var workbook = new Workbook("Loaded");
+            workbook.AddSheet("Sheet1");
+            return workbook;
+        });
+
+        var result = await new WorkbookOpenService().LoadAsync(
+            tempPath,
+            adapter,
+            ".fxjson",
+            new FileFormatDescriptor(".fxjson", "Fake"));
+
+        result.Workbook.Name.Should().Be("Loaded");
+        result.DisplayName.Should().Be("formula-load");
+        result.OpenedAsTemplate.Should().BeFalse();
+        result.LoadWarnings.Should().BeEmpty();
+    }
+
+    [Fact]
     public void WorkbookFormulaScanner_UsesSheetFormulaCountsInsteadOfScanningCells()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find(

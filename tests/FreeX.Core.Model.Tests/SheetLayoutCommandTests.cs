@@ -72,8 +72,12 @@ public class SheetLayoutCommandTests
         AutoFitSizingService.EstimateRowHeight([""], defaultHeight: 8)
             .Should().Be(16);
 
+        // R83-commands-rowcol-size-5-3: the max-height clamp is Excel's real 409.5pt row-height
+        // ceiling converted to the pixel unit RowHeights stores (409.5 * 96/72 = 546), not the old,
+        // far-too-low 220 (~165pt) cap.
         AutoFitSizingService.EstimateRowHeight([string.Join('\n', Enumerable.Repeat("line", 50))], defaultHeight: 20)
-            .Should().Be(220);
+            .Should().Be(AutoFitSizingService.MaximumRowHeight);
+        AutoFitSizingService.MaximumRowHeight.Should().BeApproximately(546.0, 0.01);
     }
 
     [Fact]

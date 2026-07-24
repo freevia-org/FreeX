@@ -7,6 +7,7 @@ using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Calc;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -354,6 +355,31 @@ public partial class MainWindow
 
     // ── Navigation helpers ────────────────────────────────────────────────────
 
+    /// <summary>
+    /// This window's own view mode/zoom for <paramref name="sheet"/> (Excel "New Window"
+    /// independence -- R83-app-view-modes-5-1). Falls back to the Normal/100% defaults for a
+    /// null sheet without touching the store.
+    /// </summary>
+    private WorksheetViewStateSnapshot GetEffectiveViewState(Sheet? sheet) =>
+        sheet is null
+            ? new WorksheetViewStateSnapshot(WorksheetViewMode.Normal, 100)
+            : _worksheetViewStates.GetOrSeed(sheet);
+
+    /// <summary>
+    /// Records this window's own just-applied view-mode/zoom change so it survives a sibling
+    /// window later mutating the shared <see cref="Sheet"/>'s ViewMode/ZoomPercent fields.
+    /// Call once, right after successfully executing a view-mode/zoom command in THIS window,
+    /// for every sheet the command targeted (grouped-sheet edits touch more than one).
+    /// </summary>
+    private void SyncWindowViewState(IReadOnlyList<SheetId> sheetIds)
+    {
+        foreach (var sheetId in sheetIds)
+        {
+            if (_workbook.GetSheet(sheetId) is { } sheet)
+                _worksheetViewStates.Set(sheet.Id, new WorksheetViewStateSnapshot(sheet.ViewMode, sheet.ZoomPercent));
+        }
+    }
+
     private void UpdateViewport()
     {
         if (SheetGrid == null || _viewportService == null) return;
@@ -362,10 +388,14 @@ public partial class MainWindow
         CloseAutoFilterDropdownOnSheetChange();
 
         var sheet = _workbook.GetSheet(_currentSheetId);
+        // View mode and zoom are this window's own state (Excel "New Window" independence --
+        // R83-app-view-modes-5-1): read them from the per-window store instead of straight off
+        // the shared Sheet, which every window viewing this document mutates in common.
+        var viewState = GetEffectiveViewState(sheet);
         if (sheet is not null)
         {
             SyncWorkbookActiveSheetIndex();
-            SyncZoomFromSheet(sheet.ZoomPercent);
+            SyncZoomFromSheet(viewState.ZoomPercent);
             SyncPageLayoutScaleToFitControls(sheet);
         }
         EnsureActiveCellSelection(sheet);
@@ -487,7 +517,7 @@ public partial class MainWindow
                 _navigationCacheRevision,
                 () => SparklineSeriesReader.BuildValues(sheet));
         SheetGrid.MergedRegions = sheet?.MergedRegions;
-        SheetGrid.WorksheetViewMode = sheet?.ViewMode ?? WorksheetViewMode.Normal;
+        SheetGrid.WorksheetViewMode = viewState.ViewMode;
         SheetGrid.ShowGridLines = sheet?.ShowGridlines ?? true;
         SheetGrid.ShowHeaders = sheet?.ShowHeadings ?? true;
         SheetGrid.ShowRulers = sheet?.ShowRulers ?? true;
@@ -502,7 +532,7 @@ public partial class MainWindow
             _ribbonState.SetChecked("Headings", SheetGrid.ShowHeaders);
             _ribbonState.SetChecked("View Headings", SheetGrid.ShowHeaders);
             _ribbonState.SetChecked("Ruler", SheetGrid.ShowRulers);
-            _ribbonState.SetEnabled("Ruler", sheet?.ViewMode == WorksheetViewMode.PageLayout);
+            _ribbonState.SetEnabled("Ruler", SheetGrid.WorksheetViewMode == WorksheetViewMode.PageLayout);
             _ribbonState.SetChecked("Split", sheet?.SplitRow is not null || sheet?.SplitColumn is not null);
             SyncWorkbookViewModeToggleState(SheetGrid.WorksheetViewMode);
             RefreshViewWindowCommandState();

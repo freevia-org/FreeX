@@ -195,6 +195,57 @@ public sealed class DataValidationDropdownPlannerTests
         DataValidationDropdownPlanner.HasDropdownList(workbook, sheet, target).Should().BeFalse();
     }
 
+    [Fact]
+    public void HasDropdownList_IsTrue_ForContiguousTextColumnWithoutDataValidation()
+    {
+        // Excel's "Pick From Drop-down List" works on any plain text column, independent of Data
+        // Validation — the most common real-world use of the command.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Apple"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Banana"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Cherry"));
+        var target = new CellAddress(sheet.Id, 4, 1);
+
+        DataValidationDropdownPlanner.HasDropdownList(workbook, sheet, target).Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryPlan_ReturnsDistinctContiguousColumnTextValues_WhenNoDataValidationExists()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Apple"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Banana"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("apple")); // dup, different case
+        var target = new CellAddress(sheet.Id, 4, 1);
+
+        DataValidationDropdownPlanner.TryPlan(
+                workbook,
+                sheet,
+                target,
+                new DataValidationDropdownCellBounds(0, 0, 64, 20),
+                out var plan)
+            .Should()
+            .BeTrue();
+
+        plan.Items.Should().Equal("Apple", "Banana");
+    }
+
+    [Fact]
+    public void HasDropdownList_IsFalse_WhenBlankCellSeparatesColumnFromActiveCell()
+    {
+        // No-regression sibling: the contiguous-column fallback must stop at the first blank cell
+        // rather than reaching across it to unrelated data further away in the column.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Apple"));
+        // Row 2 intentionally left blank, separating "Apple" from the active cell.
+        var target = new CellAddress(sheet.Id, 3, 1);
+
+        DataValidationDropdownPlanner.HasDropdownList(workbook, sheet, target).Should().BeFalse();
+    }
+
     private static Workbook CreateWorkbook()
     {
         var workbook = new Workbook("Book");

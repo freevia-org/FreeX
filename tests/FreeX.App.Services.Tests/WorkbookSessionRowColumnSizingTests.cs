@@ -16,12 +16,14 @@ public sealed class WorkbookSessionRowColumnSizingTests
         sheet.ColumnWidths[4] = 14.5;
         var session = CreateSession(workbook);
 
+        // Row heights are stored in pixels (96 DPI) but the dialog shows/accepts Excel's points
+        // unit, so the dialog value is the stored pixel value converted at 96/72.
         session.SelectRange(Range(sheet.Id, 3, 4, 5, 6));
-        session.GetSelectedRowHeight().Should().Be(24);
+        session.GetSelectedRowHeight().Should().BeApproximately(18.0, 0.001); // 24px -> 18pt
         session.GetSelectedColumnWidth().Should().Be(14.5);
 
         session.SelectRange(Range(sheet.Id, 7, 8, 7, 8));
-        session.GetSelectedRowHeight().Should().Be(18);
+        session.GetSelectedRowHeight().Should().BeApproximately(13.5, 0.001); // 18px -> 13.5pt
         session.GetSelectedColumnWidth().Should().Be(9.25);
     }
 
@@ -36,8 +38,10 @@ public sealed class WorkbookSessionRowColumnSizingTests
         session.SetSelectedRowsHeight(30).Success.Should().BeTrue();
         session.SetSelectedColumnsWidth(12).Success.Should().BeTrue();
 
+        // SetSelectedRowsHeight takes points (Excel's Row Height unit) and converts to the pixel
+        // unit Sheet.RowHeights stores (30pt * 96/72 = 40px); column width has no such unit split.
         sheet.RowHeights.Should().ContainKeys(2u, 3u, 4u);
-        sheet.RowHeights.Values.Should().OnlyContain(h => h == 30);
+        sheet.RowHeights.Values.Should().OnlyContain(h => Math.Abs(h - 40.0) < 0.001);
         sheet.ColumnWidths.Should().ContainKeys(3u, 4u, 5u);
         sheet.ColumnWidths.Values.Should().OnlyContain(w => w == 12);
     }
@@ -116,6 +120,45 @@ public sealed class WorkbookSessionRowColumnSizingTests
 
         sheet.RowHeights.Should().ContainKey(1u);
         sheet.RowHeights[1].Should().Be(sheet.DefaultRowHeight);
+    }
+
+    [Fact]
+    public void AutoFitRowHeight_LargeFontCell_GrowsRowEvenWhenUnwrappedAndUnrotated()
+    {
+        // R83-commands-rowcol-size-5-2: AutoFit Row Height must read the cell's own FontSize (not
+        // just WrapText/TextRotation) so a large-font heading cell grows the row even when
+        // unwrapped and unrotated -- otherwise a 48pt heading is left clipped at the plain default.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.DefaultRowHeight = 20;
+        var address = new CellAddress(sheet.Id, 5, 1);
+        sheet.SetCell(address, new TextValue("Heading"));
+        sheet.GetCell(address)!.StyleId = workbook.RegisterStyle(new CellStyle { FontSize = 48 });
+        var session = CreateSession(workbook);
+
+        session.SelectRange(Range(sheet.Id, 5, 1, 5, 1));
+        session.AutoFitSelectedRowHeight().Success.Should().BeTrue();
+
+        sheet.RowHeights.Should().ContainKey(5u);
+        sheet.RowHeights[5].Should().BeGreaterThan(sheet.DefaultRowHeight * 3); // ~87px for a 48pt font vs a 20px default
+    }
+
+    [Fact]
+    public void AutoFitRowHeight_DefaultFontSizeCell_StaysAtDefaultHeight()
+    {
+        // Sibling no-regression: a plain default-font (11pt) unwrapped/unrotated cell must still
+        // autofit to the default row height exactly as before FontSize was wired in.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.DefaultRowHeight = 20;
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Heading"));
+        var session = CreateSession(workbook);
+
+        session.SelectRange(Range(sheet.Id, 5, 1, 5, 1));
+        session.AutoFitSelectedRowHeight().Success.Should().BeTrue();
+
+        sheet.RowHeights.Should().ContainKey(5u);
+        sheet.RowHeights[5].Should().Be(sheet.DefaultRowHeight);
     }
 
     [Fact]

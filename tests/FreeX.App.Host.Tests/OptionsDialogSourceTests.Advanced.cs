@@ -1,4 +1,5 @@
-﻿using System.Windows.Controls;
+﻿using System.IO;
+using System.Windows.Controls;
 using FreeX.App.Host;
 using FluentAssertions;
 
@@ -6,6 +7,70 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class OptionsDialogSourceTests
 {
+    // R83-app-flashfill-autocomplete-5-2: "Enable AutoComplete for cell values" used to be shown
+    // permanently checked AND disabled -- an unconditional claim of an active feature with no way
+    // to turn it off and no feature behind it at all. It is now a real, persisted, user-togglable
+    // option (see CellValueAutoCompleteSuggester for the feature it now actually gates).
+    [Fact]
+    public void OptionsDialog_AutoCompleteForCellValuesIsAGenuineTogglableOption()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new OptionsDialog(new FreeXOptions());
+            dialog.Show();
+            try
+            {
+                GetControl<CheckBox>(dialog, "OptAdvancedAutoComplete").IsEnabled.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void OptionsDialog_RoundTripsAutoCompleteForCellValuesOption()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "options.json");
+        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new OptionsDialog(new FreeXOptions { EnableAutoCompleteForCellValues = true });
+            dialog.Show();
+            try
+            {
+                var autoComplete = GetControl<CheckBox>(dialog, "OptAdvancedAutoComplete");
+                autoComplete.IsChecked.Should().BeTrue();
+
+                autoComplete.IsChecked = false;
+
+                ClickOkAllowingNonModalDialogResult(dialog);
+
+                dialog.Result.EnableAutoCompleteForCellValues.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+
+        var reloaded = FreeXOptions.LoadFromPath(path);
+        reloaded.EnableAutoCompleteForCellValues.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MainWindowEditing_WiresAutoCompleteOptionToCellValueSuggestions()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
+
+        source.Should().Contain("_options.EnableAutoCompleteForCellValues");
+        source.Should().Contain("CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries");
+        source.Should().Contain("CellValueAutoCompleteSuggester.Suggest(candidates, text)");
+    }
+
     [Fact]
     public void OptionsDialog_ExposesExcelLikeAdvancedAndDisplayAffordances()
     {

@@ -144,10 +144,14 @@ public static partial class BuiltInFunctions
     private static (List<ScalarValue> Matches, ErrorValue? Error, int MatchCount) DatabaseExtract(
         RangeValue database, ScalarValue fieldArg, RangeValue criteria, IEvalContext ctx)
     {
-        if (database.RowCount < 2) return (new List<ScalarValue>(), null, 0);
-
+        // Resolve the field argument before checking for data rows: an unresolvable field
+        // name/index is a #VALUE! error even when the database has no data rows to scan
+        // (matches DCOUNT/DCOUNTA's explicit ResolveDatabaseField check, which runs
+        // unconditional on RowCount).
         int? fieldCol = ResolveDatabaseField(database, fieldArg);
         if (fieldCol is null) return (new List<ScalarValue>(), ErrorValue.Value, 0);
+
+        if (database.RowCount < 2) return (new List<ScalarValue>(), null, 0);
 
         var matches = new List<ScalarValue>();
         ErrorValue? firstError = null;

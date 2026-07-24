@@ -65,6 +65,11 @@ public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOpti
     public bool FormulaBarExpanded { get; set; }
     public bool MoveSelectionAfterEnter { get; set; } = true;
     public AppOptionsEnterDirection AfterEnterDirection { get; set; } = AppOptionsEnterDirection.Down;
+
+    // Advanced — editing options. Parity with Excel's "Enable AutoComplete for cell values": while
+    // typing a plain text entry, offers to complete it from a matching entry already in the same
+    // column (see FreeX.Core.Commands.CellValueAutoCompleteSuggester).
+    public bool EnableAutoCompleteForCellValues { get; set; } = true;
     public bool ShowGridlines { get; set; } = true;
     public bool ShowHeadings { get; set; } = true;
     public AppOptionsObjectDisplay ObjectsDisplay { get; set; } = AppOptionsObjectDisplay.All;

@@ -833,7 +833,11 @@ internal static partial class XlsxPivotTableWriter
     // schema-valid via OpenXmlValidator (FileFormatVersions.Microsoft365); mirrors
     // XlsxPivotTableReader.FiltersAndSorts.cs's ReadNativePivotValueFilters/ReadNativePivotLabelFilters,
     // which already parse this exact shape back.
-    private static XElement? ToPivotFiltersXml(
+    // Internal (not private): also called from XlsxFileAdapter.SavePostProcessing.cs's
+    // RewritePreservedPivotValueAndLabelFilters to regenerate the real <filters> element on the
+    // hasSourcePackage (preserved-part) save path, mirroring the fresh-part fix immediately above
+    // (R83-order-guard-invented-sweep-1).
+    internal static XElement? ToPivotFiltersXml(
         IReadOnlyList<PivotValueFilterModel> valueFilters,
         IReadOnlyList<PivotLabelFilterModel> labelFilters,
         XNamespace workbookNs)

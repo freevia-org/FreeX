@@ -104,6 +104,15 @@ public partial class GridView
             return;
         }
 
+        if (_pageBreakLineDragHit.HasValue)
+        {
+            Cursor = _pageBreakLineDragHit.Value.Orientation == PageBreakLineOrientation.Row
+                ? Cursors.SizeNS
+                : Cursors.SizeWE;
+            e.Handled = true;
+            return;
+        }
+
         if (_splitDividerDragHandle != SplitDividerHandle.None)
         {
             Cursor = _splitDividerDragHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll
@@ -339,8 +348,11 @@ public partial class GridView
         }
 
         var marginGuide = HitTestPageMarginGuide(pos);
+        var pageBreakLine = HitTestPageBreakLine(pos);
         Cursor = marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
                : marginGuide is WorksheetPageMarginEdge.Top or WorksheetPageMarginEdge.Bottom ? Cursors.SizeNS
+               : pageBreakLine?.Orientation == PageBreakLineOrientation.Row ? Cursors.SizeNS
+               : pageBreakLine?.Orientation == PageBreakLineOrientation.Column ? Cursors.SizeWE
                : IsOnAutofillHandle(pos) ? Cursors.Cross
                : IsOnSelectionMoveBorder(pos) ? Cursors.SizeAll
                : IsCtrlModifierDown() && TryHitTestHyperlinkCell(pos, out _) ? Cursors.Hand
@@ -387,6 +399,7 @@ public partial class GridView
         _objectDragKind != ObjectDragKind.None ||
         _pictureCropDragHandle != PictureCropHandle.None ||
         _marginDragEdge.HasValue ||
+        _pageBreakLineDragHit.HasValue ||
         _splitDividerDragHandle != SplitDividerHandle.None ||
         _splitPaneScrollbarDragging ||
         _autofillDragging ||
@@ -424,6 +437,13 @@ public partial class GridView
         if (_marginDragEdge.HasValue)
         {
             _marginDragEdge = null;
+            Cursor = null;
+            InvalidateVisual();
+        }
+
+        if (_pageBreakLineDragHit.HasValue)
+        {
+            _pageBreakLineDragHit = null;
             Cursor = null;
             InvalidateVisual();
         }
@@ -672,6 +692,17 @@ public partial class GridView
             Cursor = marginEdge is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right
                 ? Cursors.SizeWE
                 : Cursors.SizeNS;
+            CaptureMouse();
+            e.Handled = true;
+            return;
+        }
+
+        if (HitTestPageBreakLine(pos) is { } pageBreakLineHit)
+        {
+            _pageBreakLineDragHit = pageBreakLineHit;
+            Cursor = pageBreakLineHit.Orientation == PageBreakLineOrientation.Row
+                ? Cursors.SizeNS
+                : Cursors.SizeWE;
             CaptureMouse();
             e.Handled = true;
             return;
@@ -977,6 +1008,31 @@ public partial class GridView
             }
 
             _marginDragEdge = null;
+            Cursor = null;
+            ReleaseMouseCapture();
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        if (_pageBreakLineDragHit.HasValue)
+        {
+            var hit = _pageBreakLineDragHit.Value;
+            var pos = e.GetPosition(this);
+            var newIndex = Viewport is null
+                ? null
+                : CalculatePageBreakLineDragTarget(
+                    Viewport,
+                    hit.Orientation,
+                    pos,
+                    ActualRowHeaderWidth,
+                    EffectiveColHeaderHeight,
+                    GetLogicalViewportWidth(),
+                    GetLogicalViewportHeight());
+            if (newIndex != hit.Index)
+                PageBreakLineMoved?.Invoke(hit.Orientation, hit.Index, newIndex);
+
+            _pageBreakLineDragHit = null;
             Cursor = null;
             ReleaseMouseCapture();
             InvalidateVisual();

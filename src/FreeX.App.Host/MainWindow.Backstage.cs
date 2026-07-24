@@ -572,6 +572,7 @@ public partial class MainWindow
         _workbookRef.Current = wb;
         InvalidateToolbarVisualState();
         _worksheetSelections.Clear();
+        _worksheetViewStates.Clear();
         _currentSheetId = wb.Sheets[0].Id;
         InvalidateNavigationCaches();
         _currentFilePath = null;
@@ -693,6 +694,7 @@ public partial class MainWindow
             InvalidateToolbarVisualState();
             _workbook.Name = plan.DisplayName;
             _worksheetSelections.Clear();
+            _worksheetViewStates.Clear();
             _currentSheetId = plan.ActiveSheetId;
             InvalidateNavigationCaches();
             _currentFilePath = plan.CurrentFilePath;
@@ -1386,8 +1388,10 @@ public partial class MainWindow
     /// prompt at all -- the metadata round-tripped on Save but was never enforced. Mirrors Excel: prompt
     /// once on open and, if the user accepts read-only (or -- since a modify-password unlock isn't
     /// implemented yet -- simply doesn't decline), mark this session's <see cref="_isWorkbookReadOnly"/>
-    /// flag. This is the minimal fix scope noted where <c>_isWorkbookReadOnly</c> is declared: the flag
-    /// itself does not yet block Save-over or individual edit commands.
+    /// flag. <see cref="ResolveExistingSaveTarget"/> (MainWindow.WorkbookLifecycle.cs) reads the flag
+    /// on every Save to force Save-over-original through the Save-As dialog instead of a silent
+    /// overwrite (R83-services-doc-recovery-props-5-1). Individual edit commands are not yet blocked --
+    /// that remains out of scope.
     /// </summary>
     private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
     {

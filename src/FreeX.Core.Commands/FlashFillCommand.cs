@@ -3,6 +3,17 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>
+/// The non-mutating result of <see cref="FlashFillCommand.Preview"/>: the cells Flash Fill would
+/// write and the values it would write into them, computed from the sheet's current contents
+/// without committing anything. <paramref name="Cells"/> pairs each target address with its
+/// inferred value, in the same order <see cref="FlashFillCommand.Apply"/> would write them.
+/// </summary>
+public readonly record struct FlashFillPreview(
+    bool Success,
+    string? Error,
+    IReadOnlyList<(CellAddress Address, string Value)> Cells);
+
+/// <summary>
 /// Implements the Flash Fill (Ctrl+E) command.
 /// Scans the fill column for user-provided examples, calls <see cref="FlashFillService"/>
 /// to detect a transformation pattern, and writes the inferred values into the blank cells.
@@ -41,6 +52,60 @@ public sealed class FlashFillCommand : IWorkbookCommand
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var detection = DetectFill(ctx);
+        if (!detection.Success)
+            return new CommandOutcome(false, detection.Error);
+
+        var sheet = ctx.GetSheet(_sheetId);
+        var rowsToFill = detection.RowsToFill!;
+        var filled = detection.FilledValues!;
+
+        // Write filled values, capturing snapshot for undo
+        _snapshot = [];
+        var affected = new List<CellAddress>();
+
+        for (int i = 0; i < rowsToFill.Count; i++)
+        {
+            var addr = new CellAddress(_sheetId, rowsToFill[i], _fillColIndex);
+            _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));
+
+            var newCell = Cell.FromValue(new TextValue(filled[i]));
+            sheet.SetCell(addr, newCell);
+            affected.Add(addr);
+        }
+
+        return new CommandOutcome(true, AffectedCells: affected);
+    }
+
+    /// <summary>
+    /// Computes what <see cref="Apply"/> would fill without writing anything to the sheet. This is
+    /// the pattern-detection step factored out so a live "as you type" Flash Fill preview can be
+    /// rendered from the current (possibly still-being-edited) sheet contents — the caller is
+    /// responsible for showing/hiding the preview UI; this only supplies the target cells and values.
+    /// </summary>
+    public FlashFillPreview Preview(ICommandContext ctx)
+    {
+        var detection = DetectFill(ctx);
+        return detection.Success
+            ? new FlashFillPreview(true, null, detection.RowsToFill!
+                .Select((row, i) => (new CellAddress(_sheetId, row, _fillColIndex), detection.FilledValues![i]))
+                .ToList())
+            : new FlashFillPreview(false, detection.Error, []);
+    }
+
+    private readonly record struct FillDetection(
+        bool Success,
+        string? Error,
+        IReadOnlyList<uint>? RowsToFill,
+        IReadOnlyList<string>? FilledValues);
+
+    /// <summary>
+    /// Scans the fill column for user-provided examples, detects the transformation pattern, and
+    /// computes the values that should be written into the blank rows — without mutating the sheet.
+    /// Shared by <see cref="Apply"/> (which commits the result) and <see cref="Preview"/> (which does not).
+    /// </summary>
+    private FillDetection DetectFill(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
 
@@ -86,40 +151,26 @@ public sealed class FlashFillCommand : IWorkbookCommand
         }
 
         if (exampleOutputs.Count == 0)
-            return new CommandOutcome(false, "No examples found. Type at least one value in the fill column.");
+            return new FillDetection(false, "No examples found. Type at least one value in the fill column.", null, null);
 
         if (rowsToFill.Count == 0)
-            return new CommandOutcome(true); // Nothing to fill — already complete
+            return new FillDetection(true, null, [], []); // Nothing to fill — already complete
 
         if (rowsToFill.Any(row => !CommandGuards.CanEditCell(
                 ctx.Workbook,
                 sheet,
                 new CellAddress(_sheetId, row, _fillColIndex))))
         {
-            return new CommandOutcome(false, "The sheet is protected.");
+            return new FillDetection(false, "The sheet is protected.", null, null);
         }
 
         // 2. Detect pattern and compute filled values
         var filled = TryFillFromImmediateLeftColumns(sheet, exampleRows, exampleOutputs, rowsToFill)
             ?? FlashFillService.Fill(examplePairs, sourcesToFill);
         if (filled is null)
-            return new CommandOutcome(false, "Could not detect a pattern from the provided examples.");
+            return new FillDetection(false, "Could not detect a pattern from the provided examples.", null, null);
 
-        // 3. Write filled values, capturing snapshot for undo
-        _snapshot = [];
-        var affected = new List<CellAddress>();
-
-        for (int i = 0; i < rowsToFill.Count; i++)
-        {
-            var addr = new CellAddress(_sheetId, rowsToFill[i], _fillColIndex);
-            _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));
-
-            var newCell = Cell.FromValue(new TextValue(filled[i]));
-            sheet.SetCell(addr, newCell);
-            affected.Add(addr);
-        }
-
-        return new CommandOutcome(true, AffectedCells: affected);
+        return new FillDetection(true, null, rowsToFill, filled);
     }
 
     public void Revert(ICommandContext ctx)

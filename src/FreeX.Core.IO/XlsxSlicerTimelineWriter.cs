@@ -279,7 +279,7 @@ internal static class XlsxSlicerTimelineWriter
                 "slicerCache",
                 cacheRelationshipId);
 
-            var worksheetPath = ResolveWorksheetPath(workbook, slicer.SourcePivotTableName);
+            var worksheetPath = ResolveWorksheetPath(workbook, slicer.SourceSheetName, slicer.SourcePivotTableName);
             if (!string.IsNullOrWhiteSpace(worksheetPath))
             {
                 var slicerRelationshipId = EnsureWorksheetRelationship(archive, worksheetPath, slicerPath, SlicerRelationshipType);
@@ -292,6 +292,10 @@ internal static class XlsxSlicerTimelineWriter
                     "slicerList",
                     "slicer",
                     slicerRelationshipId);
+
+                // R83-io-slicer-timeline-5-1: author the graphicFrame anchor too, or this slicer has no
+                // on-sheet shape at all after this save (see XlsxSlicerTimelineDrawingWriter).
+                XlsxSlicerTimelineDrawingWriter.EnsureSlicerAnchor(archive, worksheetPath, slicer);
             }
 
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{slicerPath}", "application/vnd.ms-excel.slicer+xml");
@@ -370,7 +374,7 @@ internal static class XlsxSlicerTimelineWriter
                 "timelineCacheRef",
                 cacheRelationshipId);
 
-            var worksheetPath = ResolveWorksheetPath(workbook, timeline.SourcePivotTableName);
+            var worksheetPath = ResolveWorksheetPath(workbook, timeline.SourceSheetName, timeline.SourcePivotTableName);
             if (!string.IsNullOrWhiteSpace(worksheetPath))
             {
                 var timelineRelationshipId = EnsureWorksheetRelationship(archive, worksheetPath, timelinePath, TimelineRelationshipType);
@@ -383,6 +387,10 @@ internal static class XlsxSlicerTimelineWriter
                     "timelineRefs",
                     "timelineRef",
                     timelineRelationshipId);
+
+                // R83-io-slicer-timeline-5-1: author the graphicFrame anchor too, or this timeline has no
+                // on-sheet shape at all after this save (see XlsxSlicerTimelineDrawingWriter).
+                XlsxSlicerTimelineDrawingWriter.EnsureTimelineAnchor(archive, worksheetPath, timeline);
             }
 
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{timelinePath}", "application/vnd.ms-excel.Timeline+xml");
@@ -432,8 +440,22 @@ internal static class XlsxSlicerTimelineWriter
         return "1";
     }
 
-    private static string ResolveWorksheetPath(Workbook workbook, string? sourcePivotTableName)
+    // R83-io-slicer-timeline-5-2: a slicer/timeline anchored on a DIFFERENT sheet than its bound pivot
+    // table (a common "dashboard" pattern -- e.g. pivot on "Data", slicer placed on "Dashboard") must be
+    // wired to ITS OWN sheet, not the pivot's -- so sourceSheetName is consulted FIRST and only falls
+    // back to the pivot-table lookup (the control's default sheet, matching a same-sheet insert, where
+    // SourceSheetName is never set) when it is absent.
+    private static string ResolveWorksheetPath(Workbook workbook, string? sourceSheetName, string? sourcePivotTableName)
     {
+        if (!string.IsNullOrWhiteSpace(sourceSheetName))
+        {
+            for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)
+            {
+                if (string.Equals(workbook.Sheets[sheetIndex].Name, sourceSheetName, StringComparison.OrdinalIgnoreCase))
+                    return $"xl/worksheets/sheet{sheetIndex + 1}.xml";
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(sourcePivotTableName))
         {
             for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)

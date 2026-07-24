@@ -25,13 +25,20 @@ public static class StatusBarRefreshPlanner
         WorkbookSelectionStats? selectionStats,
         bool isFileOperationProgressVisible,
         int zoomPercent,
-        IStatusBarTextProvider textProvider)
+        IStatusBarTextProvider textProvider,
+        WorksheetViewMode? viewModeOverride = null)
     {
         ArgumentNullException.ThrowIfNull(textProvider);
 
-        var viewMode = sheet is null
-            ? StatusBarViewMode.Normal
-            : WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(sheet.ViewMode);
+        // R83-app-view-modes-5-1: a window's displayed view mode can differ from sheet.ViewMode
+        // (Excel "New Window" keeps each window's own view mode independent of any sibling
+        // window's changes to the shared Sheet) -- callers that track their own view mode pass it
+        // as viewModeOverride so the status bar reflects THIS window, not the shared model.
+        var viewMode = viewModeOverride is { } overriddenViewMode
+            ? WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(overriddenViewMode)
+            : sheet is null
+                ? StatusBarViewMode.Normal
+                : WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(sheet.ViewMode);
 
         if (isFileOperationProgressVisible)
             return new StatusBarRefreshPlan(StatusBarRefreshAction.HideReadouts, viewMode, zoomPercent, "", default);

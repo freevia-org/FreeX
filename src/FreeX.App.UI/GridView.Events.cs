@@ -136,6 +136,13 @@ public partial class GridView
     /// <summary>Fired when the user releases after dragging a split-pane divider.</summary>
     public event Action<uint?, uint?>? SplitDividerMoved;
 
+    /// <summary>
+    /// Fired when the user releases after dragging a manual page-break line in Page Break Preview
+    /// view. <c>originalIndex</c> is the break's row/column before the drag; <c>newIndex</c> is where
+    /// it should move to, or <c>null</c> if it was dragged off the print area and should be removed.
+    /// </summary>
+    public event Action<PageBreakLineOrientation, uint, uint?>? PageBreakLineMoved;
+
     /// <summary>Fired when the user clicks or drags a split-pane mini scrollbar.</summary>
     public event Action<SplitPaneScrollbarScrollTarget>? SplitPaneScrollbarScrolled;
 

@@ -174,6 +174,74 @@ public sealed class WorkbookSaveServiceTests
     }
 
     [Fact]
+    public async Task SaveAsync_FileModifiedSinceOpen_ThrowsAndLeavesTargetAndTempUntouched()
+    {
+        // R83-services-doc-recovery-props-5-2: WorkbookOpenService.OpenFileStream never held the file
+        // open/locked for the editing session and nothing compared the target's write time against
+        // what was read at open, so a second writer's save between open and this save was clobbered
+        // with zero warning. SaveAsync must now refuse to overwrite when the caller passes the write
+        // time captured at open (WorkbookOpenResult.SourceLastWriteTimeUtc) and the file on disk no
+        // longer matches it.
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "saved.fxjson");
+        await File.WriteAllTextAsync(tempPath, "original");
+        var openedAtUtc = File.GetLastWriteTimeUtc(tempPath);
+
+        // Simulate a second writer touching the file after we "opened" it.
+        await Task.Delay(20);
+        await File.WriteAllTextAsync(tempPath, "someone else's edit");
+        File.SetLastWriteTimeUtc(tempPath, DateTime.UtcNow);
+
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapterInvoked = false;
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            adapterInvoked = true;
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("clobbered");
+        });
+
+        var act = async () => await new WorkbookSaveService().SaveAsync(
+            tempPath,
+            adapter,
+            workbook,
+            expectedLastWriteTimeUtc: openedAtUtc);
+
+        await act.Should().ThrowAsync<WorkbookExternallyModifiedException>();
+        adapterInvoked.Should().BeFalse("the save must bail out before writing over the other writer's change");
+        (await File.ReadAllTextAsync(tempPath)).Should().Be("someone else's edit");
+        Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SaveAsync_FileUnmodifiedSinceOpen_SavesNormallyWithExpectedWriteTimePassed()
+    {
+        // No-regression sibling for the external-modification check above: when the file on disk
+        // still has the write time captured at open, the save must proceed exactly as before.
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "saved.fxjson");
+        await File.WriteAllTextAsync(tempPath, "original");
+        var openedAtUtc = File.GetLastWriteTimeUtc(tempPath);
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("replacement");
+        });
+
+        await new WorkbookSaveService().SaveAsync(
+            tempPath,
+            adapter,
+            workbook,
+            expectedLastWriteTimeUtc: openedAtUtc);
+
+        (await File.ReadAllTextAsync(tempPath)).Should().Be("replacement");
+        Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task SaveAsync_PreservesExistingFileAndDeletesTemporaryFileWhenAdapterFails()
     {
         using var temp = new TestTemporaryDirectory();
@@ -201,6 +269,8 @@ public sealed class WorkbookSaveServiceTests
         public int OverwriteMoveCallCount { get; private set; }
 
         public bool FileExists(string path) => File.Exists(path);
+
+        public DateTime GetLastWriteTimeUtc(string path) => File.GetLastWriteTimeUtc(path);
 
         public void ReplaceFile(string sourcePath, string destinationPath)
         {

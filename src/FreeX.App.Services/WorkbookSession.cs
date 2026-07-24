@@ -1757,10 +1757,10 @@ public sealed class WorkbookSession
         var style = Workbook.GetStyle(cell.StyleId);
 
         if (ActiveSheet.ShowFormulas && cell.FormulaText is not null)
-            return new AutoFitCellText("=" + cell.FormulaText, style.WrapText, TextRotation: style.TextRotation);
+            return new AutoFitCellText("=" + cell.FormulaText, style.WrapText, TextRotation: style.TextRotation, FontSize: style.FontSize);
 
         var text = FreeX.Core.Formula.NumberFormatter.Format(cell.Value, style.NumberFormat);
-        return new AutoFitCellText(text, style.WrapText, TextRotation: style.TextRotation);
+        return new AutoFitCellText(text, style.WrapText, TextRotation: style.TextRotation, FontSize: style.FontSize);
     }
 
     private static WorkbookCellEditResult SucceededWithoutEdit() =>

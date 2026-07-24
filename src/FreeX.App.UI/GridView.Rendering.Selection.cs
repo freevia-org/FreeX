@@ -1244,6 +1244,15 @@ public partial class GridView
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
+        // A lone selected cell that is itself part of a merged region (e.g. clicking once on a
+        // merged B2:D2 title cell) still arrives here as an anchor-only 1x1 range - selection never
+        // merge-expands it (see WorkbookSession.SetSingleSelectedRange). Excel's selection outline
+        // and fill-handle always wrap the WHOLE merge, matching GetActiveCellRect's own FindMerge
+        // expansion just below, so route a merged single cell through the multi-cell layout path
+        // using its full merge footprint instead of sizing the rect from its own 1x1 metrics.
+        if (IsSingleCellRange(range) && FindMerge(range.Start.Row, range.Start.Col) is { } merge)
+            range = merge;
+
         if (IsSingleCellRange(range))
             return CalculateVisibleSingleCellSelectionLayout(viewport, range, rowHeaderWidth, columnHeaderHeight);
 

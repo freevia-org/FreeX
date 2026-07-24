@@ -88,6 +88,60 @@ public partial class GridView
         return null;
     }
 
+    /// <summary>
+    /// Given a page-break line drag that started at <paramref name="orientation"/>, computes where
+    /// dropping the pointer at <paramref name="pos"/> should place the break: the row/column of the
+    /// nearest gridline under the pointer, or <c>null</c> when the pointer is outside the grid/print
+    /// area (matching <see cref="HitTestPageBreakLine"/>'s bounds check) -- Excel removes a page break
+    /// dragged off the print area the same way. Takes the header size and logical (zoom-adjusted)
+    /// viewport extent explicitly so callers pass the same coordinate space the render path uses,
+    /// mirroring <see cref="HitTestSplitDividerHandle(ViewportModel, Point, double, double)"/>.
+    /// </summary>
+    internal static uint? CalculatePageBreakLineDragTarget(
+        ViewportModel viewport,
+        PageBreakLineOrientation orientation,
+        Point pos,
+        double rowHeaderWidth,
+        double colHeaderHeight,
+        double logicalWidth,
+        double logicalHeight)
+    {
+        if (pos.X < rowHeaderWidth || pos.Y < colHeaderHeight ||
+            pos.X > logicalWidth || pos.Y > logicalHeight)
+            return null;
+
+        if (orientation == PageBreakLineOrientation.Row)
+        {
+            uint? closestRow = null;
+            var closestDistance = double.MaxValue;
+            foreach (var metric in viewport.RowMetrics)
+            {
+                var y = metric.TopOffset + colHeaderHeight;
+                var distance = Math.Abs(pos.Y - y);
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestRow = metric.Row;
+                }
+            }
+            return closestRow;
+        }
+
+        uint? closestCol = null;
+        var closestColDistance = double.MaxValue;
+        foreach (var metric in viewport.ColMetrics)
+        {
+            var x = metric.LeftOffset + rowHeaderWidth;
+            var distance = Math.Abs(pos.X - x);
+            if (distance < closestColDistance)
+            {
+                closestColDistance = distance;
+                closestCol = metric.Col;
+            }
+        }
+        return closestCol;
+    }
+
     private WorksheetPageMarginEdge? HitTestPageMarginGuide(Point pos)
     {
         if (!ShowRulers || WorksheetViewMode != WorksheetViewMode.PageLayout || PrintArea is not { } printArea)
@@ -196,7 +250,7 @@ public partial class GridView
 }
 
 /// <summary>Which axis a hit-tested manual page-break line runs along.</summary>
-internal enum PageBreakLineOrientation
+public enum PageBreakLineOrientation
 {
     Row,
     Column

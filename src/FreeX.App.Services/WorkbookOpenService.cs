@@ -35,8 +35,12 @@ public sealed class WorkbookOpenService
         ArgumentNullException.ThrowIfNull(format);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var fileBytes = new FileInfo(path).Length;
+        var openedFileInfo = new FileInfo(path);
+        var fileBytes = openedFileInfo.Length;
         WorkbookOpenSizeGuard.EnsureFileWithinLimit(fileBytes, _maxFileBytes);
+        // Snapshot the write time before any parsing so a later save can detect the file having
+        // changed on disk since this open -- see WorkbookOpenResult.SourceLastWriteTimeUtc.
+        var sourceLastWriteTimeUtc = openedFileInfo.LastWriteTimeUtc;
         ReportProgress(progress, WorkbookOpenPhase.Reading, TimeSpan.Zero, 8);
 
         XlsxFeatureReport? featureReport = null;
@@ -145,7 +149,8 @@ public sealed class WorkbookOpenService
             featureReport,
             Path.GetFileNameWithoutExtension(path),
             format.OpensAsTemplate,
-            loadWarnings);
+            loadWarnings,
+            sourceLastWriteTimeUtc);
     }
 
     private static void ReportProgress(

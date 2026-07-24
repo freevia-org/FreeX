@@ -136,6 +136,46 @@ public sealed class AvaloniaGridInputSourceTests
         sessionSource.Should().Contain("new MoveRangeCommand(ActiveSheet.Id, sourceRange, targetRange.Start)");
     }
 
+    // ── R83-render-selection-fillhandle-5-2: fill-handle hover must use the crosshair, not Hand ──
+
+    [Fact]
+    public void SheetGridHostPointerMoved_FillHandleHover_UsesCrosshairNotHandCursor()
+    {
+        // Failure scenario: hovering the fill-handle grip previously set _sheetGridHost.Cursor to
+        // the same StandardCursorType.Hand used for hyperlink hover (see the ternary a few lines
+        // below in the same handler, and the header/select-all-corner Hand cursors), giving Linux/
+        // macOS users the pointing-hand "click to navigate" affordance over a "drag to fill" target
+        // instead of Excel/WPF's thin black crosshair (GridView.Input.cs:344 `Cursors.Cross`).
+        //
+        // The exact bare statement `_sheetGridHost.Cursor = new Cursor(StandardCursorType.Hand);`
+        // only ever existed at the fill-handle branch of SheetGridHost_PointerMoved -- every other
+        // Hand-cursor assignment in the file is either a ternary expression (hyperlink hover,
+        // header hover) or targets a different control (border-draw-mode/header controls), so this
+        // single assertion pins the exact regression without being sensitive to CRLF line endings.
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().NotContain(
+            "_sheetGridHost.Cursor = new Cursor(StandardCursorType.Hand);",
+            "the fill handle must show Excel/WPF's crosshair cursor, not the Hand cursor used for hyperlink hover");
+    }
+
+    [Fact]
+    public void SheetGridHostPointerMoved_OtherCursorAffordances_AreUnaffected()
+    {
+        // No-regression sibling: the fix must only touch the fill-handle branch. The border-draw-
+        // mode crosshair, the selection-move SizeAll cursor, and the Ctrl+hyperlink-hover ternary
+        // (still Hand, by design -- it really is a click-to-navigate affordance) must all still be
+        // present and unchanged.
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("_sheetGridHost.Cursor = new Cursor(StandardCursorType.Cross);");
+        source.Should().Contain("_sheetGridHost.Cursor = new Cursor(StandardCursorType.SizeAll);");
+        source.Should().Contain("if (IsPointerOnAutofillHandle(args))");
+        source.Should().Contain("? new Cursor(StandardCursorType.Hand)");
+        source.Should().Contain(": Cursor.Default;");
+        source.Should().Contain("HasHyperlinkActivationModifier(args.KeyModifiers)");
+    }
+
     [Fact]
     public void DrawingObjects_ExposeWpfParityResizeAndRotationHandles()
     {

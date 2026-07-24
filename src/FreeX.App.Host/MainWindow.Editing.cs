@@ -19,6 +19,15 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    // R83-app-flashfill-autocomplete-5-2: reentrancy guard for ApplyCellValueAutoCompleteSuggestion
+    // (setting _inlineEditor.Text to add the suggested tail fires TextChanged again).
+    private bool _applyingCellValueAutoCompleteSuggestion;
+
+    // Set for one TextChanged pass when Backspace/Delete just removed a live suggestion, so that
+    // pass doesn't instantly re-offer the very completion the user just rejected -- mirrors Excel,
+    // where Delete/Backspace reject the suggestion instead of re-triggering it.
+    private bool _suppressNextCellValueAutoCompleteSuggestion;
+
     private void EnterEditMode(double? clickX = null)
     {
         if (_selectionAnchor.HasValue)
@@ -116,6 +125,11 @@ public partial class MainWindow
                 RefreshInlineEditorTextSurface();
                 RefreshInlineEditorChromeBorder();
                 RefreshFormulaReferenceHighlights();
+
+                var suppressed = _suppressNextCellValueAutoCompleteSuggestion;
+                _suppressNextCellValueAutoCompleteSuggestion = false;
+                if (!suppressed)
+                    ApplyCellValueAutoCompleteSuggestion();
             };
             _inlineFormulaReferenceOverlay = new System.Windows.Controls.TextBlock
             {
@@ -213,6 +227,61 @@ public partial class MainWindow
             }
 
             return null;
+        }
+    }
+
+    /// <summary>
+    /// R83-app-flashfill-autocomplete-5-2: Excel's "AutoComplete for cell values". Runs on every
+    /// inline-editor keystroke; only actually offers a completion when all of these hold, so it
+    /// never fires while the user is mid-formula, mid-navigation, or already accepted/rejected a
+    /// suggestion:
+    /// <list type="bullet">
+    /// <item>the option is enabled (<see cref="FreeXOptions.EnableAutoCompleteForCellValues"/>);</item>
+    /// <item>the cell is a plain text entry -- not a formula (leading '=') and not mid formula
+    /// range-reference entry;</item>
+    /// <item>the caret sits at the very end of the text with nothing selected -- i.e. the user is
+    /// typing forward, not editing mid-string or already sitting on a live suggestion.</item>
+    /// </list>
+    /// On a match it appends the remainder of the matched column entry and selects it (WPF
+    /// ComboBox-style): Tab/Enter commits the completed text, continuing to type overwrites the
+    /// selected remainder with the new keystroke (which re-runs this same check for the new
+    /// prefix), and Backspace/Delete rejects it via <see cref="_suppressNextCellValueAutoCompleteSuggestion"/>.
+    /// </summary>
+    private void ApplyCellValueAutoCompleteSuggestion()
+    {
+        if (_applyingCellValueAutoCompleteSuggestion || _inlineEditor is null)
+            return;
+        if (!_options.EnableAutoCompleteForCellValues || _formulaRangeEntryMode)
+            return;
+        if (_formulaEditCell is not { } addr)
+            return;
+
+        var text = _inlineEditor.Text;
+        if (string.IsNullOrEmpty(text) || text.StartsWith("=", StringComparison.Ordinal))
+            return;
+
+        // Only offer a suggestion while genuinely typing forward: caret at the end, nothing
+        // already selected (a selected tail means a suggestion is already live).
+        if (_inlineEditor.SelectionLength != 0 || _inlineEditor.CaretIndex != text.Length)
+            return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var candidates = CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(sheet, addr);
+        if (CellValueAutoCompleteSuggester.Suggest(candidates, text) is not { } suggestion)
+            return;
+
+        _applyingCellValueAutoCompleteSuggestion = true;
+        try
+        {
+            _inlineEditor.Text = suggestion;
+            _inlineEditor.Select(text.Length, suggestion.Length - text.Length);
+        }
+        finally
+        {
+            _applyingCellValueAutoCompleteSuggestion = false;
         }
     }
 
@@ -438,6 +507,13 @@ public partial class MainWindow
 
     private void InlineEditor_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        // R83-app-flashfill-autocomplete-5-2: Backspace/Delete reject a live AutoComplete
+        // suggestion (Excel behavior) rather than instantly re-offering the same completion the
+        // deletion just removed. The key itself is left unhandled so it still performs its normal
+        // TextBox deletion.
+        if (e.Key == Key.Back || e.Key == Key.Delete)
+            _suppressNextCellValueAutoCompleteSuggestion = true;
+
         if (e.Key == Key.F2 && Keyboard.Modifiers == ModifierKeys.None && _inlineEditor is not null)
         {
             var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(_inlineEditor.Text, _formulaRangeEntryMode);

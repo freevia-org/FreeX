@@ -127,6 +127,10 @@ public partial class MainWindow : Window, IWorkbookWindow
     private ExcelSelectionMode _selectionMode = ExcelSelectionMode.Normal;
     // Remembers each sheet's selection within this window so switching sheets restores it (Excel parity).
     private readonly FreeX.Core.Commands.WorksheetSelectionStore _worksheetSelections = new();
+    // Remembers each sheet's view mode/zoom within THIS window, independent of any other window
+    // viewing the same document (Excel "New Window" gives every window its own view --
+    // R83-app-view-modes-5-1).
+    private readonly FreeX.Core.Commands.WorksheetViewStateStore _worksheetViewStates = new();
     private bool _endMode;
     // Captured from GridView.AutofillModifiersResolved immediately before the paired
     // AutofillRequested call, so OnAutofillRequested can pass Excel's Ctrl-flip state
@@ -154,9 +158,10 @@ public partial class MainWindow : Window, IWorkbookWindow
     private XlsxFeatureReport? _currentXlsxFeatureReport;
     // Set after OpenFileAsync prompts on a workbook.FileSharing.ReadOnlyRecommended/ReservationPassword
     // file and the user accepts opening it read-only (see ApplyReadOnlyRecommendedPromptIfNeeded in
-    // MainWindow.Backstage.cs). This is the minimal fix scope: it currently only surfaces the prompt and
-    // records the session's read-only intent -- it does not yet block Save-over or individual edit
-    // commands (residual enforcement work).
+    // MainWindow.Backstage.cs). ResolveExistingSaveTarget (MainWindow.WorkbookLifecycle.cs) reads this
+    // flag on every Save to force Save-over-original through the Save-As dialog instead of a silent
+    // overwrite (R83-services-doc-recovery-props-5-1). Individual edit commands are not yet blocked --
+    // that remains out of scope.
     private bool _isWorkbookReadOnly;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
@@ -397,6 +402,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;
         SheetGrid.WaterfallChartPointContextMenuRequested += OnWaterfallChartPointContextMenuRequested;
         SheetGrid.PageMarginsChanged += OnPageMarginsChanged;
+        SheetGrid.PageBreakLineMoved += OnPageBreakLineMoved;
         SheetGrid.SplitDividerMoved += OnSplitDividerMoved;
         SheetGrid.SplitPaneScrollbarScrolled += OnSplitPaneScrollbarScrolled;
         SheetGrid.ObjectMoved   += OnObjectMoved;

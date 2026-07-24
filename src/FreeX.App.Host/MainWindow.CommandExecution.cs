@@ -46,6 +46,16 @@ public partial class MainWindow
 
             MarkWorkbookDirty();
             InvalidateNavigationCaches();
+            // A successful command may have changed the current sheet's view mode/zoom (directly,
+            // via SetWorksheetViewModeCommand/SetWorksheetZoomCommand, or via a screenshot-tour
+            // helper that constructs those commands itself instead of going through
+            // MainWindow.ViewCommands.cs). Resync THIS window's own view-state cache from
+            // whatever the current sheet now holds so it can never drift from what this window's
+            // own command just applied (R83-app-view-modes-5-1); a no-op for every other command,
+            // since their view fields are unchanged. This single choke point covers every
+            // TryExecuteCommand/TryExecuteGroupedSheetCommand caller, so the more specific
+            // grouped-sheet resyncs elsewhere only need to cover the OTHER grouped sheet ids.
+            SyncWindowViewState([_currentSheetId]);
             NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
@@ -76,6 +86,8 @@ public partial class MainWindow
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
+            // See TryExecuteCommand above (R83-app-view-modes-5-1).
+            SyncWindowViewState([_currentSheetId]);
             NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
@@ -398,6 +410,10 @@ public partial class MainWindow
 
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
+        // Undo can revert a view-mode/zoom change THIS window itself made; re-adopt the current
+        // sheet's now-reverted values into this window's own view-state cache before rendering,
+        // or the stale cached override would mask the undo (R83-app-view-modes-5-1).
+        SyncWindowViewState([_currentSheetId]);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
@@ -433,6 +449,9 @@ public partial class MainWindow
 
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
+        // Redo can re-apply a view-mode/zoom change THIS window itself made; re-adopt the
+        // current sheet's values before rendering (see ExecuteUndo).
+        SyncWindowViewState([_currentSheetId]);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
@@ -459,6 +478,8 @@ public partial class MainWindow
         InvalidateNavigationCaches();
         postAction?.Invoke(outcome);
         RecalculateAfterCommandOutcome(outcome);
+        // See TryExecuteCommand above (R83-app-view-modes-5-1).
+        SyncWindowViewState([_currentSheetId]);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();

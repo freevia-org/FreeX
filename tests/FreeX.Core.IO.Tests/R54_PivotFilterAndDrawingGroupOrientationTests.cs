@@ -64,8 +64,13 @@ public sealed class R54_PivotFilterAndDrawingGroupOrientationTests
 
         saved.Position = 0;
         var reloaded = adapter.Load(saved);
+        // R83-order-guard-invented-sweep-1: Top has a real ST_PivotFilterType token, so this now
+        // round-trips through the native <filters> element (mirroring the fresh-workbook path fixed in
+        // r82) instead of the invented <valueFilters> shape. CT_PivotFilter's "fld" attribute is
+        // required, so an unspecified SourceFieldIndex normalizes to 0 on reload, exactly as it already
+        // does on the fresh-save path (see ToPivotFiltersXml / R82_PivotNativeFilterAndSortRoundTripTests).
         reloaded.GetSheetAt(0).PivotTables.Single().ValueFilters.Should().ContainSingle()
-            .Which.Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.Top, 5),
+            .Which.Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.Top, 5, SourceFieldIndex: 0),
                 "the Top-5 value filter applied after Load() must survive a save of the same file");
     }
 
