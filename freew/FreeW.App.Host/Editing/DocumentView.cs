@@ -4589,6 +4589,7 @@ public sealed class DocumentView : RichTextBox
         var leadingWrapReservations = BuildLeadingWrapReservations(
             _model,
             out var suppressedFloatingWrapRuns);
+        var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_model);
         ModelParagraph? previousBodyParagraph = null;
         WpfParagraph? previousBodyWpfParagraph = null;
         var i = 0;
@@ -4698,7 +4699,10 @@ public sealed class DocumentView : RichTextBox
                     _model,
                     i,
                     leadingWrapReservations.TryGetValue(i, out var reservations) ? reservations : null,
-                    suppressedFloatingWrapRuns).ToList();
+                    suppressedFloatingWrapRuns,
+                    preservedNumberingMarkers.TryGetValue(i, out var numberingMarker)
+                        ? numberingMarker
+                        : null).ToList();
                 foreach (var block in renderedBlocks)
                     flow.Blocks.Add(block);
 
@@ -7794,7 +7798,8 @@ public sealed class DocumentView : RichTextBox
         TextDocument document,
         int sourceBlockIndex,
         IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations = null,
-        IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns = null) => block switch
+        IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns = null,
+        PreservedNumberingMarkerPlan? preservedNumberingMarker = null) => block switch
     {
         ModelTable table => BuildTableBlocks(table, document, sourceBlockIndex),
         ModelParagraph paragraph => [BuildParagraph(
@@ -7802,7 +7807,8 @@ public sealed class DocumentView : RichTextBox
             document,
             sourceBlockIndex: sourceBlockIndex,
             leadingWrapReservations: leadingWrapReservations,
-            suppressedFloatingWrapRuns: suppressedFloatingWrapRuns)],
+            suppressedFloatingWrapRuns: suppressedFloatingWrapRuns,
+            preservedNumberingMarker: preservedNumberingMarker?.Text)],
         _ => [BuildParagraph(new ModelParagraph(), document)]
     };
 
@@ -8687,7 +8693,8 @@ public sealed class DocumentView : RichTextBox
         bool inTableCell = false,
         int? sourceBlockIndex = null,
         IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations = null,
-        IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns = null)
+        IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns = null,
+        string? preservedNumberingMarker = null)
     {
         var paraFmt = Resolve(paragraph, document);
         // Inside a table cell, paragraphs that don't set their own spacing follow the table style rather than
@@ -8882,6 +8889,9 @@ public sealed class DocumentView : RichTextBox
                 sourceBlockIndex,
                 suppressedFloatingWrapRuns);
         }
+
+        if (!string.IsNullOrWhiteSpace(preservedNumberingMarker))
+            PrependMultiLevelMarker(wpf, preservedNumberingMarker, document);
 
         return wpf;
     }

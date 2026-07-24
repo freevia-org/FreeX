@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Xml.Linq;
 using System.Windows.Documents;
 using FreeW.App.Host.Editing;
 using Xunit;
@@ -182,5 +183,41 @@ public sealed class MultiLevelMarkerTests
         levels.Should().Equal(0, 1, 2, 0);
         view.Model.Blocks.OfType<Paragraph>()
             .Should().OnlyContain(p => p.Formatting.ListKind == ListKind.MultiLevel);
+    }
+
+    [StaFact]
+    public void PreservedStyleNumbering_AppearsAsViewOnlyMarkerAndSurvivesCommit()
+    {
+        var document = new TextDocument();
+        document.Blocks.Clear();
+        document.Styles["Legal"] = new DocumentStyle
+        {
+            Id = "Legal",
+            Name = "Legal",
+            PreservedNumbering = new PreservedNumbering(2, 0)
+        };
+        document.Preserved.OriginalNumbering = XElement.Parse(
+            """
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum w:abstractNumId="10">
+                <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="Section %1."/></w:lvl>
+              </w:abstractNum>
+              <w:num w:numId="2"><w:abstractNumId w:val="10"/></w:num>
+            </w:numbering>
+            """);
+        document.Blocks.Add(new Paragraph("First") { StyleId = "Legal" });
+        document.Blocks.Add(new Paragraph("Second") { StyleId = "Legal" });
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var rendered = new TextRange(view.Document.ContentStart, view.Document.ContentEnd).Text;
+        rendered.Should().Contain("Section I.");
+        rendered.Should().Contain("Section II.");
+
+        view.CommitToModel();
+        view.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("First", "Second");
+        view.Model.Styles["Legal"].PreservedNumbering.Should().Be(new PreservedNumbering(2, 0));
     }
 }

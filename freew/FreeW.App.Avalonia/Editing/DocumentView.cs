@@ -2461,6 +2461,7 @@ public sealed class DocumentView : Control
         const int MaxListDepth = 9;
         var levelCounters = new int[MaxListDepth];
         var multiLevelMarkers = new MultiLevelListMarkerState(_doc.MultiLevelList.NumberFormats);
+        var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_doc);
         for (int i = 0; i < _doc.Blocks.Count; i++)
         {
             if (_doc.Blocks[i] is not Paragraph p)
@@ -2522,7 +2523,10 @@ public sealed class DocumentView : Control
                 // Non-list paragraph: the numbered run has ended, reset all counters.
                 Array.Clear(levelCounters, 0, MaxListDepth);
                 multiLevelMarkers.Reset();
-                if (i == blockIdx) return null;
+                if (i == blockIdx)
+                    return preservedNumberingMarkers.TryGetValue(i, out var preservedMarker)
+                        ? preservedMarker.Text
+                        : null;
             }
             else
             {
@@ -3456,6 +3460,7 @@ public sealed class DocumentView : Control
         const int MaxListDepth = 9;
         var levelCounters = new int[MaxListDepth];
         var multiLevelMarkers = new MultiLevelListMarkerState(_doc.MultiLevelList.NumberFormats);
+        var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_doc);
         var hiddenBlocks = HiddenOutlineBlockIndices();
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
         {
@@ -3529,6 +3534,16 @@ public sealed class DocumentView : Control
                         // The numbered list continues its sequence across interleaved sub-bullets.
                         marker = "•"; // bullet
                     }
+                }
+                else if (preservedNumberingMarkers.TryGetValue(blockIndex, out var preservedMarker))
+                {
+                    // Preserved numbering is Word-visible chrome, not a native FreeW list. Its counters
+                    // are planned independently from the native list state and the marker is never added
+                    // to editable cells or committed paragraph text.
+                    Array.Clear(levelCounters, 0, MaxListDepth);
+                    multiLevelMarkers.Reset();
+                    inset = ListIndentStep * (preservedMarker.Level + 1);
+                    marker = preservedMarker.Text;
                 }
                 else
                 {

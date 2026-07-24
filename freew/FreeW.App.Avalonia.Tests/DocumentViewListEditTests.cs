@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
@@ -70,6 +71,52 @@ public sealed class DocumentViewListEditTests
     /// <summary>Returns the paragraph at <paramref name="blockIdx"/> cast as Paragraph.</summary>
     private static Paragraph Para(DocumentView view, int blockIdx) =>
         (Paragraph)view.Document.Blocks[blockIdx];
+
+    [Fact]
+    public async Task Preserved_style_numbering_renders_marker_without_mutating_body_text()
+    {
+        string? firstMarker = null;
+        string? secondMarker = null;
+        string? firstText = null;
+        PreservedNumbering? styleNumbering = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Styles["Legal"] = new DocumentStyle
+            {
+                Id = "Legal",
+                Name = "Legal",
+                PreservedNumbering = new PreservedNumbering(2, 0)
+            };
+            document.Preserved.OriginalNumbering = XElement.Parse(
+                """
+                <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:abstractNum w:abstractNumId="10">
+                    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="Section %1."/></w:lvl>
+                  </w:abstractNum>
+                  <w:num w:numId="2"><w:abstractNumId w:val="10"/></w:num>
+                </w:numbering>
+                """);
+            document.Blocks.Add(new Paragraph("First") { StyleId = "Legal" });
+            document.Blocks.Add(new Paragraph("Second") { StyleId = "Legal" });
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(800, 4000));
+            firstMarker = view.GetListMarkerForBlockPublic(0);
+            secondMarker = view.GetListMarkerForBlockPublic(1);
+            firstText = Para(view, 0).PlainText;
+            styleNumbering = view.Document.Styles["Legal"].PreservedNumbering;
+        });
+
+        if (!ran) return;
+        firstMarker.Should().Be("Section I.");
+        secondMarker.Should().Be("Section II.");
+        firstText.Should().Be("First");
+        styleNumbering.Should().Be(new PreservedNumbering(2, 0));
+    }
 
     // ── 1. Enter in NON-EMPTY list item → continues list ─────────────────────────────────────────
 
