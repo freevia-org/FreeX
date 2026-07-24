@@ -845,6 +845,8 @@ public sealed class ChartDataCommandTests
         };
         chart.CategoryAxis.HasMajorGridlines = true;
         chart.ValueAxis.HasMajorGridlines = false;
+        chart.BarGapWidthPercent = 180;
+        chart.BarOverlapPercent = -20;
 
         bus.Execute(new SetChartDisplayOptionsCommand(
             0,
@@ -861,7 +863,9 @@ public sealed class ChartDataCommandTests
                 false,
                 true,
                 "0.0%",
-                " | ")));
+                " | ",
+                40,
+                55)));
 
         chart.Title.Should().Be("Revenue");
         chart.HasAutomaticTitle.Should().BeFalse();
@@ -876,6 +880,8 @@ public sealed class ChartDataCommandTests
         chart.DataLabels.Position.Should().Be(DataLabelPosition.OutsideEnd);
         chart.CategoryAxis.HasMajorGridlines.Should().BeFalse();
         chart.ValueAxis.HasMajorGridlines.Should().BeTrue();
+        chart.BarGapWidthPercent.Should().Be(40);
+        chart.BarOverlapPercent.Should().Be(55);
 
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(p, stream);
@@ -890,6 +896,8 @@ public sealed class ChartDataCommandTests
         roundTripped.DataLabels.ShowLegendKey.Should().BeTrue();
         roundTripped.DataLabels.NumberFormat.Should().Be("0.0%");
         roundTripped.DataLabels.Separator.Should().Be(" | ");
+        roundTripped.BarGapWidthPercent.Should().Be(40);
+        roundTripped.BarOverlapPercent.Should().Be(55);
         roundTripped.CategoryAxis.HasMajorGridlines.Should().BeFalse();
         roundTripped.ValueAxis.HasMajorGridlines.Should().BeTrue();
 
@@ -907,6 +915,8 @@ public sealed class ChartDataCommandTests
         chart.DataLabels.Position.Should().Be(DataLabelPosition.Center);
         chart.CategoryAxis.HasMajorGridlines.Should().BeTrue();
         chart.ValueAxis.HasMajorGridlines.Should().BeFalse();
+        chart.BarGapWidthPercent.Should().Be(180);
+        chart.BarOverlapPercent.Should().Be(-20);
     }
 
     [Fact]

@@ -21,6 +21,9 @@ public sealed record ChartDisplayOptionsSurfacePlan(
     string LabelPositionLabel,
     string CategoryGridlinesLabel,
     string ValueGridlinesLabel,
+    string BarGapWidthLabel,
+    string BarOverlapLabel,
+    string PlotHint,
     string OkLabel,
     string CancelLabel);
 
@@ -44,6 +47,9 @@ public sealed class ChartDisplayOptionsPlanner
     public const string LabelPositionLabel = "Label Position";
     public const string CategoryGridlinesLabel = "Category Gridlines";
     public const string ValueGridlinesLabel = "Value Gridlines";
+    public const string BarGapWidthLabel = "Bar gap width (%)";
+    public const string BarOverlapLabel = "Bar overlap (%)";
+    public const string PlotHint = "Bar gap width accepts 0-500; overlap accepts -100 to 100. Blank uses the chart default.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
     public const double DefaultDialogWidth = 420;
@@ -83,6 +89,8 @@ public sealed class ChartDisplayOptionsPlanner
     private string _labelSeparator = string.Empty;
     private bool _categoryGridlines;
     private bool _valueGridlines;
+    private int? _barGapWidthPercent;
+    private int? _barOverlapPercent;
 
     private ChartDisplayOptionsPlanner(ChartShape chart)
     {
@@ -98,6 +106,8 @@ public sealed class ChartDisplayOptionsPlanner
         _labelSeparator = chart.DataLabels?.Separator ?? string.Empty;
         _categoryGridlines = chart.CategoryAxis.HasMajorGridlines;
         _valueGridlines = chart.ValueAxis.HasMajorGridlines;
+        _barGapWidthPercent = chart.BarGapWidthPercent;
+        _barOverlapPercent = chart.BarOverlapPercent;
     }
 
     public static ChartDisplayOptionsSurfacePlan BuildSurfacePlan() =>
@@ -116,6 +126,9 @@ public sealed class ChartDisplayOptionsPlanner
             LabelPositionLabel,
             CategoryGridlinesLabel,
             ValueGridlinesLabel,
+            BarGapWidthLabel,
+            BarOverlapLabel,
+            PlotHint,
             OkLabel,
             CancelLabel);
 
@@ -137,6 +150,8 @@ public sealed class ChartDisplayOptionsPlanner
     public string LabelSeparator => _labelSeparator;
     public bool CategoryGridlines => _categoryGridlines;
     public bool ValueGridlines => _valueGridlines;
+    public int? BarGapWidthPercent => _barGapWidthPercent;
+    public int? BarOverlapPercent => _barOverlapPercent;
 
     public void SetTitle(string? title) => _title = title ?? string.Empty;
     public void SetLegend(LegendPosition? legend) => _legend = legend;
@@ -150,6 +165,8 @@ public sealed class ChartDisplayOptionsPlanner
     public void SetLabelSeparator(string? separator) => _labelSeparator = separator ?? string.Empty;
     public void SetCategoryGridlines(bool show) => _categoryGridlines = show;
     public void SetValueGridlines(bool show) => _valueGridlines = show;
+    public void SetBarGapWidthPercent(int? value) => _barGapWidthPercent = Normalize(value, 0, 500);
+    public void SetBarOverlapPercent(int? value) => _barOverlapPercent = Normalize(value, -100, 100);
 
     public ChartDisplayOptions BuildCommitPlan() => new(
         string.IsNullOrWhiteSpace(_title) ? null : _title,
@@ -163,5 +180,10 @@ public sealed class ChartDisplayOptionsPlanner
         _showSeriesLabels,
         _showLegendKeys,
         string.IsNullOrWhiteSpace(_labelNumberFormat) ? null : _labelNumberFormat,
-        string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator);
+        string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator,
+        _barGapWidthPercent,
+        _barOverlapPercent);
+
+    private static int? Normalize(int? value, int minimum, int maximum) =>
+        value is null ? null : Math.Clamp(value.Value, minimum, maximum);
 }

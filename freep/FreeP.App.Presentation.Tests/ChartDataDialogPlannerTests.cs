@@ -273,14 +273,32 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetLabelSeparator(" | ");
         planner.SetCategoryGridlines(false);
         planner.SetValueGridlines(true);
+        planner.SetBarGapWidthPercent(40);
+        planner.SetBarOverlapPercent(55);
 
         var commit = planner.BuildCommitPlan();
         commit.Should().Be(new ChartDisplayOptions(
             "Revenue", LegendPosition.Bottom, false, DataLabelPosition.OutsideEnd, false, true,
-            true, true, true, true, "0.0%", " | "));
+            true, true, true, true, "0.0%", " | ", 40, 55));
         chart.Title.Should().Be("Existing", "the dialog planner is a working copy");
         ChartDisplayOptionsPlanner.BuildSurfacePlan().CommandId
             .Should().Be(ChartDisplayOptionsPlanner.CommandId);
+    }
+
+    [Fact]
+    public void ChartDisplayOptionsPlanner_ClampsBarPlotRangesAndPreservesAutomaticValues()
+    {
+        var planner = ChartDisplayOptionsPlanner.FromChart(MakeChart());
+
+        planner.SetBarGapWidthPercent(700);
+        planner.SetBarOverlapPercent(-200);
+        planner.BuildCommitPlan().Should().Match<ChartDisplayOptions>(options =>
+            options.BarGapWidthPercent == 500 && options.BarOverlapPercent == -100);
+
+        planner.SetBarGapWidthPercent(null);
+        planner.SetBarOverlapPercent(null);
+        planner.BuildCommitPlan().BarGapWidthPercent.Should().BeNull();
+        planner.BuildCommitPlan().BarOverlapPercent.Should().BeNull();
     }
 
     [Fact]
