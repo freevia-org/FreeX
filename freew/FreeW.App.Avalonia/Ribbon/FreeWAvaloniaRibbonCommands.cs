@@ -1859,9 +1859,9 @@ internal static class FreeWAvaloniaRibbonCommands
         foreach (var preset in SmartArtLayoutPreset.Catalog)
             RegisterSmartArtLayoutPreset(r, editor, $"freew.smartart-layout-{preset.Id}", preset.Id);
 
-        // Change Colors — reuse the chart colour-scheme catalog ids.
+        // Change Colors — use the SmartArt catalog. Its native ids differ from chart color-scheme ids.
         r.Register("freew.smartart-colors", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        foreach (var scheme in ChartColorScheme.Catalog)
+        foreach (var scheme in SmartArtColorScheme.Catalog)
         {
             var sc = scheme;
             r.Register($"freew.smartart-colors-{sc.Id}", new ActionRibbonCommand(() => editor.SetSmartArtColor(sc.Id)));
