@@ -268,6 +268,35 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SetShapeGeometryAdjustmentCommand_SetsAndUndoRestoresMissingValue()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetShapeGeometryAdjustmentCommand(0, 1, "adj", 0.42));
+
+        shape.PresetGeometryAdjustments["adj"].Should().BeApproximately(0.42, 0.0001);
+        bus.Undo();
+        shape.PresetGeometryAdjustments.Should().NotContainKey("adj");
+    }
+
+    [Fact]
+    public void SetShapeGeometryAdjustmentCommand_RemoveAndUndoRestoresAuthoredValue()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        shape.PresetGeometryAdjustments["adj"] = 0.18;
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetShapeGeometryAdjustmentCommand(0, 1, "adj", null));
+
+        shape.PresetGeometryAdjustments.Should().NotContainKey("adj");
+        bus.Undo();
+        shape.PresetGeometryAdjustments["adj"].Should().BeApproximately(0.18, 0.0001);
+    }
+
+    [Fact]
     public void RotateShapeCommand_Apply_SetsRotation()
     {
         var (p, bus) = Make();
