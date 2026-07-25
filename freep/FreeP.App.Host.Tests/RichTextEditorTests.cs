@@ -231,6 +231,45 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void WpfAuthority_RendersAndRoundTripsSuperscriptAndSubscriptRuns()
+    {
+        var body = new TextBody();
+        var paragraph = new ModelParagraph { Align = TextAlign.Left };
+        paragraph.Runs.Add(new ModelRun { Text = "x", BaselineOffset = 30000 });
+        paragraph.Runs.Add(new ModelRun { Text = "2", BaselineOffset = -25000 });
+        paragraph.Runs.Add(new ModelRun { Text = " + y" });
+        body.Paragraphs.Add(paragraph);
+
+        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var runs = doc.Blocks.OfType<WpfParagraph>().Single().Inlines
+            .OfType<WpfRun>()
+            .ToArray();
+
+        runs[0].BaselineAlignment.Should().Be(BaselineAlignment.Superscript);
+        runs[1].BaselineAlignment.Should().Be(BaselineAlignment.Subscript);
+        runs[2].BaselineAlignment.Should().Be(BaselineAlignment.Baseline);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+        restored.Paragraphs[0].Runs.Select(run => run.BaselineOffset)
+            .Should().Equal(30000, -25000, null);
+    }
+
+    [StaFact]
+    public void WpfAuthority_NewBaselineEditsUseCanonicalSignFallbacks()
+    {
+        var doc = new FlowDocument();
+        var paragraph = new WpfParagraph();
+        paragraph.Inlines.Add(new WpfRun("up") { BaselineAlignment = BaselineAlignment.Superscript });
+        paragraph.Inlines.Add(new WpfRun("down") { BaselineAlignment = BaselineAlignment.Subscript });
+        paragraph.Inlines.Add(new WpfRun("normal"));
+        doc.Blocks.Add(paragraph);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc);
+        restored.Paragraphs[0].Runs.Select(run => run.BaselineOffset)
+            .Should().Equal(10000, -10000, null);
+    }
+
+    [StaFact]
     public void WpfAuthority_ProducesNonblankPairedSelectionCaretAndParagraphEvidence()
     {
         var body = MakeVisualEvidenceBody();

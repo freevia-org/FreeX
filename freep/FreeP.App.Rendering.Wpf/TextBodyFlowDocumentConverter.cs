@@ -21,7 +21,7 @@ namespace FreeP.App.Rendering.Wpf;
 /// itself is created on whatever thread it's needed; the RichTextBox wrapping it must be STA).
 ///
 /// Wave 10A: initial implementation.
-/// Deferred: IME/RTL, per-run super/subscript (TypographyProperties), list continuity.
+/// Deferred: IME/RTL, list continuity.
 /// </summary>
 internal static class TextBodyFlowDocumentConverter
 {
@@ -35,8 +35,8 @@ internal static class TextBodyFlowDocumentConverter
     /// Converts a <see cref="TextBody"/> to a WPF <see cref="FlowDocument"/>.
     /// Each model <see cref="ModelParagraph"/> becomes one WPF <see cref="WpfParagraph"/>;
     /// each model <see cref="ModelRun"/> becomes one WPF <see cref="WpfRun"/>.
-    /// Paragraph alignment, font family/size, bold, italic, underline, strikethrough, and color
-    /// are all mapped.
+    /// Paragraph alignment, font family/size, bold, italic, underline, strikethrough, color,
+    /// and the sign of per-run baseline offsets are all mapped.
     ///
     /// If <paramref name="body"/> is null or empty an empty single-paragraph document is returned.
     /// </summary>
@@ -312,6 +312,16 @@ internal static class TextBodyFlowDocumentConverter
         if (mr.FontSizePt.HasValue)
             wr.FontSize = mr.FontSizePt.Value * PtToDip;
 
+        // WPF exposes the user-facing superscript/subscript behavior as a baseline
+        // alignment. Preserve the authored numeric DrawingML value on read-back when
+        // possible; new edits use canonical sign-only values in the model.
+        wr.BaselineAlignment = mr.BaselineOffset switch
+        {
+            > 0 => BaselineAlignment.Superscript,
+            < 0 => BaselineAlignment.Subscript,
+            _   => BaselineAlignment.Baseline,
+        };
+
         // Y4: only set Bold from an explicit model value — do NOT set Normal as a local
         // value so that inherited-bold runs read back as UnsetValue from the document default.
         // Bold / Italic are still set unconditionally here because they are non-nullable booleans
@@ -411,6 +421,24 @@ internal static class TextBodyFlowDocumentConverter
             && !double.IsNaN(sizeDip) && sizeDip > 0)
             mr.FontSizePt = Math.Round(sizeDip * DipToPt, 4);
         // else leave mr.FontSizePt = null (inherit)
+
+        // Preserve the exact authored baseline token for an unchanged source run. WPF's
+        // BaselineAlignment models the visible superscript/subscript choice, not DrawingML's
+        // percentage magnitude, so a newly created run receives a stable sign-only fallback.
+        var localBaseline = inline.ReadLocalValue(Inline.BaselineAlignmentProperty);
+        if (localBaseline != DependencyProperty.UnsetValue && localBaseline is BaselineAlignment alignment)
+        {
+            mr.BaselineOffset = alignment switch
+            {
+                BaselineAlignment.Superscript => originalRun?.BaselineOffset ?? 10000,
+                BaselineAlignment.Subscript   => originalRun?.BaselineOffset ?? -10000,
+                _                             => null,
+            };
+        }
+        else
+        {
+            mr.BaselineOffset = originalRun?.BaselineOffset;
+        }
 
         // Y4: read FontWeight LOCAL value only, and map ONLY FontWeights.Bold to mr.Bold=true.
         // SemiBold/DemiBold must NOT be coerced to Bold.
