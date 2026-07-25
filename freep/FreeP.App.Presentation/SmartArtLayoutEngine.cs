@@ -102,6 +102,9 @@ public static class SmartArtLayoutEngine
         if (IsBasicPyramidLayout(data.LayoutUniqueId))
             return LayoutBasicPyramid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsPyramidListLayout(data.LayoutUniqueId))
+            return LayoutPyramidList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (data.Family == SmartArtFamily.Hierarchy && IsHorizontalHierarchyLayout(data.LayoutUniqueId))
             return LayoutHorizontalHierarchy(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -826,6 +829,55 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
+    /// Pyramid List geometry: centered rows that narrow toward the base, with
+    /// the widest segment at the top. The native layout ID remains authoritative
+    /// for save/reopen; this supplies a stable live edit/render path.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutPyramidList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = (long)(fcy * 0.01);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availH = Math.Max(fcy - 2 * outerPadY - (n - 1) * gapY, 1L);
+        long segmentH = Math.Max(availH / n, 1L);
+        double minWidthFrac = n == 1 ? 1.0 : 0.34;
+
+        uint idCounter = 530;
+        long curY = fy + outerPadY;
+        for (int i = 0; i < n; i++)
+        {
+            double t = n == 1 ? 1.0 : (double)i / (n - 1);
+            double widthFrac = 1.0 - ((1.0 - minWidthFrac) * t);
+            long segmentW = Math.Max((long)(innerW * widthFrac), 1L);
+            long x = fx + outerPadX + (innerW - segmentW) / 2;
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
+            var shapeKind = i == n - 1 ? DrawingShapeKind.Triangle : DrawingShapeKind.Trapezoid;
+
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                nodeStyle,
+                x,
+                curY,
+                segmentW,
+                segmentH,
+                NodeFontSizePt,
+                shapeKind));
+
+            curY += segmentH + gapY;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
     /// Basic Venn geometry: overlapping translucent ellipses centered in the
     /// frame. This models bounded relationship-family placement with shared
     /// shape ops, not exact PowerPoint blend math or text offsets.
@@ -1529,6 +1581,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "basicpyramid", StringComparison.Ordinal);
+    }
+
+    private static bool IsPyramidListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "pyramidlist", StringComparison.Ordinal);
     }
 
     private static bool IsDescendingBlockListLayout(string uniqueId)

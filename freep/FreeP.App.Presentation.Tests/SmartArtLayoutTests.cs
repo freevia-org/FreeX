@@ -1073,6 +1073,23 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void PyramidList_ReturnsCenteredNarrowingSegmentsWithoutConnectors()
+    {
+        var data = MakeData(
+            SmartArtFamily.List,
+            "Top", "Middle", "Base");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pyramidList";
+
+        var shapes = SmartArtLayoutEngine.Layout(
+            data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!;
+
+        shapes.Should().HaveCount(3);
+        shapes.Should().OnlyContain(shape => shape.Kind == SlideShapeKind.AutoShape);
+        shapes.Select(shape => shape.ExtentCxEmu).Should().BeInDescendingOrder();
+        shapes[^1].AutoShapeKind.Should().Be(DrawingShapeKind.Triangle);
+    }
+
+    [Fact]
     public void BasicMatrix_ReturnsLiveQuadrantBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.Matrix, "People", "Process", "Platform", "Proof");

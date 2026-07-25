@@ -678,6 +678,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.StackedList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.DescendingBlockList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicPyramid, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.PyramidList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.TitledMatrix, SmartArtFamily.Matrix)]

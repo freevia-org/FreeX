@@ -5317,6 +5317,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.StackedListLayoutCommandId,
                 SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
+                SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.TextCycleLayoutCommandId,

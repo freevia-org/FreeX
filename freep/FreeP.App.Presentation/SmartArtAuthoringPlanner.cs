@@ -46,6 +46,7 @@ public enum SmartArtLayoutPreset
     StackedList,
     DescendingBlockList,
     BasicPyramid,
+    PyramidList,
     RadialCycle,
     BasicMatrix,
     TitledMatrix,
@@ -136,6 +137,7 @@ public static class SmartArtAuthoringPlanner
     public const string StackedListLayoutCommandId = "freep.smartart.layout.stacked-list";
     public const string DescendingBlockListLayoutCommandId = "freep.smartart.layout.descending-block-list";
     public const string BasicPyramidLayoutCommandId = "freep.smartart.layout.basic-pyramid";
+    public const string PyramidListLayoutCommandId = "freep.smartart.layout.pyramid-list";
     public const string RadialCycleLayoutCommandId = "freep.smartart.layout.radial-cycle";
     public const string BasicMatrixLayoutCommandId = "freep.smartart.layout.basic-matrix";
     public const string TitledMatrixLayoutCommandId = "freep.smartart.layout.titled-matrix";
@@ -323,6 +325,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/descendingBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicPyramid =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid", SmartArtFamily.List),
+            SmartArtLayoutPreset.PyramidList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/pyramidList", SmartArtFamily.List),
             SmartArtLayoutPreset.RadialCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radialCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicMatrix =>
