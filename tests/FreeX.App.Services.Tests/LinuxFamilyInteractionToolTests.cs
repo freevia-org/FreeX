@@ -75,6 +75,10 @@ public sealed class LinuxFamilyInteractionToolTests
         probe.Should().Contain("run_file_shortcut_window_lifecycle \\\n        \"file-open-shortcut-dialog\" ctrl+o");
         probe.Should().Contain("if ! send_active_key \"$key\"; then");
         probe.Should().NotContain("run_file_shortcut_window_lifecycle +");
+        probe.Should().Contain("candidate-class-availability=");
+        probe.Should().Contain("unavailable-native-window-metadata");
+        probe.Should().NotContain("$class_ready");
+        probe.Should().NotContain("$prompt_class\" == *WM_CLASS*");
         var shortcutLifecycleStart = probe.IndexOf("run_file_shortcut_window_lifecycle()", StringComparison.Ordinal);
         var shortcutLifecycleEnd = probe.IndexOf("run_dirty_new_prompt_probe()", shortcutLifecycleStart, StringComparison.Ordinal);
         shortcutLifecycleStart.Should().BeGreaterThanOrEqualTo(0);

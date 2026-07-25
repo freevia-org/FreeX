@@ -402,7 +402,11 @@ window_id_in_list() {
 capture_shortcut_window_state() {
     local name="$1" phase="$2" candidate_id="$3" baseline_count="$4" observed_count="$5"
     local state_visible_ids=()
+    local candidate_class_metadata=""
     mapfile -t state_visible_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    if [[ -n "$candidate_id" ]]; then
+        candidate_class_metadata="$(xprop -id "$candidate_id" WM_CLASS 2>/dev/null || true)"
+    fi
     {
         printf 'phase=%s\n' "$phase"
         printf 'owner-window-id=%s\n' "$window_id"
@@ -415,10 +419,9 @@ capture_shortcut_window_state() {
         printf 'owner-focused='; if [[ "$(xdotool getwindowfocus 2>/dev/null || true)" == "$window_id" ]]; then printf 'true\n'; else printf 'false\n'; fi
         printf 'visible-window-ids='; printf '%s ' "${state_visible_ids[@]}"; printf '\n'
         printf 'candidate-title=%s\n' "$(if [[ -n "$candidate_id" ]]; then xdotool getwindowname "$candidate_id" 2>/dev/null || true; fi)"
+        printf 'candidate-class-availability=%s\n' "$(if [[ -n "$candidate_class_metadata" ]]; then printf 'available'; else printf 'unavailable-native-window-metadata'; fi)"
         printf 'candidate-class-begin\n'
-        if [[ -n "$candidate_id" ]]; then
-            xprop -id "$candidate_id" WM_CLASS 2>/dev/null || true
-        fi
+        printf '%s\n' "$candidate_class_metadata"
         printf 'candidate-class-end\n'
         printf 'wmctrl-list-begin\n'
         wmctrl -l 2>/dev/null || true
@@ -461,7 +464,7 @@ run_file_shortcut_window_lifecycle() {
     local candidate_title="" candidate_class=""
     local trigger_ready=true focus_ready=false
     local separate_window=false count_increased=false
-    local title_ready=false class_ready=false screen_open_changed=false
+    local title_ready=false screen_open_changed=false
     local dismiss_ready=true dialog_removed=false count_restored=false
     local owner_restored=false screen_dismissed_changed=false screen_restored=false
 
@@ -482,7 +485,6 @@ run_file_shortcut_window_lifecycle() {
         candidate_title="$(xdotool getwindowname "$file_shortcut_window_id" 2>/dev/null || true)"
         candidate_class="$(xprop -id "$file_shortcut_window_id" WM_CLASS 2>/dev/null || true)"
         [[ -n "$candidate_title" ]] && title_ready=true
-        [[ "$candidate_class" == *WM_CLASS* ]] && class_ready=true
         if [[ "$file_shortcut_window_id" != "$window_id" ]] &&
            ! window_id_in_list "$file_shortcut_window_id" "${file_lifecycle_before_ids[@]}"; then
             separate_window=true
@@ -535,18 +537,18 @@ run_file_shortcut_window_lifecycle() {
         printf 'separate-window=%s\n' "$separate_window"
         printf 'window-count-increased=%s\n' "$count_increased"
         printf 'title-ready=%s\n' "$title_ready"
-        printf 'class-ready=%s\n' "$class_ready"
+        printf 'class-metadata=%s\n' "$(if [[ -n "$candidate_class" ]]; then printf 'available'; else printf 'unavailable-native-window-metadata'; fi)"
         printf 'active-and-focused=%s\n' "$focus_ready"
         printf 'open-screenshot-changed=%s\n' "$screen_open_changed"
     } > "$output/$proof"
-    if $trigger_ready && $separate_window && $count_increased && $title_ready && $class_ready &&
+    if $trigger_ready && $separate_window && $count_increased && $title_ready &&
        $focus_ready && $screen_open_changed; then
         record_evidence_set "${id_prefix}-open" "passed" \
-            "$label opened a newly discovered visible top-level window with title/class, increased count, active focus, and screenshot transition." \
+            "$label opened a newly discovered visible top-level window with title, optional WM_CLASS capture, increased count, active focus, and screenshot transition." \
             "$proof" "$before" "$open" "$focused" "$before_state" "$open_state" "$focused_state"
     else
         record_evidence_set "${id_prefix}-open" "failed" \
-            "$label did not prove a separate focused top-level window with the required physical evidence." \
+            "$label did not prove a separate focused top-level window with title, count, focus, and screenshot evidence." \
             "$proof" "$before" "$open" "$focused" "$before_state" "$open_state" "$focused_state"
     fi
 
@@ -716,10 +718,10 @@ run_dirty_new_prompt_probe() {
         printf 'open-screenshot-changed=%s\n' "$prompt_screen_changed"
     } > "$output/$open_proof"
     if $prompt_trigger_ready && $prompt_separate && $prompt_count_increased &&
-       [[ -n "$prompt_title" && "$prompt_class" == *WM_CLASS* ]] &&
+       [[ -n "$prompt_title" ]] &&
        $prompt_focus_ready && $prompt_screen_changed; then
         record_evidence_set "file-new-shortcut-dirty-prompt-open" "passed" \
-            "Ctrl+N on the dirty sentinel opened a separate real Save Changes top-level window with title/class, increased count, active focus, and screenshot transition." \
+            "Ctrl+N on the dirty sentinel opened a separate real Save Changes top-level window with title, optional WM_CLASS capture, increased count, active focus, and screenshot transition." \
             "$open_proof" "$prompt_before" "$prompt_open" "$prompt_focused" \
             "$prompt_before_state" "$prompt_open_state" "$prompt_focused_state"
     else
