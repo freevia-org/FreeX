@@ -68,6 +68,16 @@ public sealed class ChartSeries
     }
 }
 
+/// <summary>
+/// Visual switches explicitly serialized by an imported chart part.  Native chart-style ids are
+/// family-specific themes, so their presence alone is not a reliable substitute for these elements.
+/// </summary>
+public sealed record ChartNativeVisualSettings(
+    bool ShowGridlines,
+    bool HasPlotAreaFill,
+    bool ShowDataLabels,
+    bool ScatterConnectsPoints);
+
 // ─── Chart Gallery catalogs ───────────────────────────────────────────────────
 //
 // Three curated sets mirror Word's Chart Design ribbon galleries:
@@ -283,6 +293,12 @@ public sealed class Chart
     /// (they are preserved on the model but the render ignores them). Persisted via a FreeW extension.
     /// </summary>
     public int QuickLayoutId { get; set; }
+
+    /// <summary>
+    /// Source-authoritative visual elements recovered from an imported chart part. Null keeps the
+    /// FreeW gallery-style defaults for charts authored in the model.
+    /// </summary>
+    public ChartNativeVisualSettings? NativeVisualSettings { get; set; }
 
     public Chart() { }
 

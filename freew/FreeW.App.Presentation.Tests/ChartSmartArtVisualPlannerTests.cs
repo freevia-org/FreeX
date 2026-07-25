@@ -93,6 +93,29 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartScene_NativeVisualSettings_OverrideSyntheticStyleAndPreserveScatterLine()
+    {
+        var column = Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0]);
+        column.StyleId = 7;
+        column.QuickLayoutId = 9;
+        column.NativeVisualSettings = new ChartNativeVisualSettings(
+            ShowGridlines: false,
+            HasPlotAreaFill: false,
+            ShowDataLabels: false,
+            ScatterConnectsPoints: false);
+
+        var columnScene = ChartSmartArtVisualPlanner.BuildChartScene(column, 240, 180);
+        columnScene.PlotFillHex.Should().BeNull();
+        columnScene.GridLines.Should().BeEmpty();
+        columnScene.Texts.Should().NotContain(text => text.Kind == ChartSceneTextKind.DataLabel);
+
+        var scatter = Chart.Create(ChartKind.Scatter, ["155", "160", "165"], [52.0, 58.0, 63.0]);
+        scatter.NativeVisualSettings = new ChartNativeVisualSettings(false, false, false, true);
+        ChartSmartArtVisualPlanner.BuildChartScene(scatter, 300, 200).LineSeries.Should().ContainSingle()
+            .Which.Points.Should().HaveCount(3);
+    }
+
+    [Fact]
     public void ChartScene_PieAndDoughnut_UseSharedSlicesAndCategoryLegend()
     {
         var chart = Chart.Create(ChartKind.Doughnut, ["A", "B", "C"], [1.0, 2.0, 3.0]);

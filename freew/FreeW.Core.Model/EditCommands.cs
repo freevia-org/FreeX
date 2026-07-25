@@ -3373,6 +3373,7 @@ public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Ch
         target.StyleId = source.StyleId;
         target.ColorSchemeId = source.ColorSchemeId;
         target.QuickLayoutId = source.QuickLayoutId;
+        target.NativeVisualSettings = source.NativeVisualSettings;
         target.Categories.Clear();
         target.Categories.AddRange(source.Categories);
         target.Series.Clear();
