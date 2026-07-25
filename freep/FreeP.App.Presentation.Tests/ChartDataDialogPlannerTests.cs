@@ -433,6 +433,8 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetSmoothLine(false);
         planner.SetOnSecondaryAxis(false);
         planner.SetLineWidth(2.25);
+        planner.SetLineColor("#1F4E79");
+        planner.SetLineDash(OutlineDash.DashDot);
         planner.SetFillColor("#4472C4");
         planner.SetMarkerSymbol(ChartMarkerSymbol.Diamond);
         planner.SetMarkerSize(8);
@@ -442,6 +444,8 @@ public sealed class ChartDataDialogPlannerTests
         options.SmoothLine.Should().BeFalse();
         options.OnSecondaryAxis.Should().BeFalse();
         options.LineWidthPt.Should().Be(2.25);
+        options.LineColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        options.LineDash.Should().Be(OutlineDash.DashDot);
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
         options.MarkerSizePt.Should().Be(8);
         options.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));

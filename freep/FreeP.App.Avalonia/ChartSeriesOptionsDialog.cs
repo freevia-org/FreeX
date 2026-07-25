@@ -18,6 +18,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
     private readonly CheckBox _smoothLineCheck;
     private readonly CheckBox _secondaryAxisCheck;
     private readonly TextBox _lineWidthBox;
+    private readonly TextBox _lineColorBox;
+    private readonly ComboBox _lineDashCombo;
     private readonly TextBox _fillColorBox;
     private readonly ComboBox _markerCombo;
     private readonly TextBox _markerSizeBox;
@@ -55,6 +57,12 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _smoothLineCheck = new CheckBox { Content = surface.SmoothLineLabel };
         _secondaryAxisCheck = new CheckBox { Content = surface.SecondaryAxisLabel };
         _lineWidthBox = new TextBox { MinWidth = 130 };
+        _lineColorBox = new TextBox { MinWidth = 150 };
+        _lineDashCombo = new ComboBox
+        {
+            ItemsSource = ChartSeriesOptionsPlanner.DashOptions.Select(option => option.Label).ToArray(),
+            MinWidth = 160,
+        };
         _fillColorBox = new TextBox { MinWidth = 150 };
         _markerCombo = new ComboBox
         {
@@ -87,6 +95,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
                 _smoothLineCheck,
                 _secondaryAxisCheck,
                 MakeRow(surface.LineWidthLabel, _lineWidthBox),
+                MakeRow(surface.LineColorLabel, _lineColorBox),
+                MakeRow(surface.LineDashLabel, _lineDashCombo),
                 MakeRow(surface.FillColorLabel, _fillColorBox),
                 MakeRow(surface.MarkerLabel, _markerCombo),
                 MakeRow(surface.MarkerSizeLabel, _markerSizeBox),
@@ -109,12 +119,16 @@ internal sealed class ChartSeriesOptionsDialog : Window
         double? lineWidthPt,
         ChartMarkerSymbol markerSymbol,
         double? markerSizePt,
-        string? fillColor = null)
+        string? fillColor = null,
+        string? lineColor = null,
+        OutlineDash lineDash = OutlineDash.Solid)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         _smoothLineCheck.IsChecked = smoothLine;
         _secondaryAxisCheck.IsChecked = onSecondaryAxis;
         _lineWidthBox.Text = Format(lineWidthPt);
+        _lineColorBox.Text = lineColor ?? string.Empty;
+        _lineDashCombo.SelectedIndex = FindDashIndex(lineDash);
         _markerCombo.SelectedIndex = FindMarkerIndex(markerSymbol);
         _markerSizeBox.Text = Format(markerSizePt);
         _fillColorBox.Text = fillColor ?? string.Empty;
@@ -138,6 +152,8 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _smoothLineCheck.IsChecked = _planner.SmoothLine;
         _secondaryAxisCheck.IsChecked = _planner.OnSecondaryAxis;
         _lineWidthBox.Text = Format(_planner.LineWidthPt);
+        _lineColorBox.Text = _planner.LineColorText;
+        _lineDashCombo.SelectedIndex = FindDashIndex(_planner.LineDash);
         _fillColorBox.Text = _planner.FillColorText;
         _markerCombo.SelectedIndex = FindMarkerIndex(_planner.MarkerSymbol);
         _markerSizeBox.Text = Format(_planner.MarkerSizePt);
@@ -148,6 +164,9 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _planner.SetSmoothLine(_smoothLineCheck.IsChecked == true);
         _planner.SetOnSecondaryAxis(_secondaryAxisCheck.IsChecked == true);
         _planner.SetLineWidth(ParseOptional(_lineWidthBox.Text, "Line width"));
+        _planner.SetLineColor(_lineColorBox.Text);
+        if (_lineDashCombo.SelectedIndex >= 0 && _lineDashCombo.SelectedIndex < ChartSeriesOptionsPlanner.DashOptions.Count)
+            _planner.SetLineDash(ChartSeriesOptionsPlanner.DashOptions[_lineDashCombo.SelectedIndex].Value);
         _planner.SetFillColor(_fillColorBox.Text);
         if (_markerCombo.SelectedIndex >= 0 && _markerCombo.SelectedIndex < ChartSeriesOptionsPlanner.MarkerOptions.Count)
             _planner.SetMarkerSymbol(ChartSeriesOptionsPlanner.MarkerOptions[_markerCombo.SelectedIndex].Value);
@@ -171,6 +190,11 @@ internal sealed class ChartSeriesOptionsDialog : Window
         Math.Max(0, ChartSeriesOptionsPlanner.MarkerOptions
             .Select((option, index) => (option, index))
             .FirstOrDefault(item => item.option.Value == symbol).index);
+
+    private static int FindDashIndex(OutlineDash dash) =>
+        Math.Max(0, ChartSeriesOptionsPlanner.DashOptions
+            .Select((option, index) => (option, index))
+            .FirstOrDefault(item => item.option.Value == dash).index);
 
     private static Control MakeRow(string label, Control control)
     {

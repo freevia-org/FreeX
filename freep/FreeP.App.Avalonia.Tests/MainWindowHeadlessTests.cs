@@ -6274,7 +6274,7 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartSeriesOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4");
+            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6288,6 +6288,8 @@ public sealed class MainWindowHeadlessTests
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
         options.MarkerSizePt.Should().Be(8);
         options.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
+        options.LineColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        options.LineDash.Should().Be(OutlineDash.DashDot);
     }
 
     [Fact]

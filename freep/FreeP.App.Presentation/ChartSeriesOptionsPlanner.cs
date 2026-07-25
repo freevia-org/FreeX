@@ -6,6 +6,8 @@ public sealed record ChartSeriesOption(int Index, string Label);
 
 public sealed record ChartMarkerSymbolOption(ChartMarkerSymbol Value, string Label);
 
+public sealed record ChartDashOption(OutlineDash Value, string Label);
+
 public sealed record ChartSeriesOptionsSurfacePlan(
     string CommandId,
     string Title,
@@ -13,6 +15,8 @@ public sealed record ChartSeriesOptionsSurfacePlan(
     string SmoothLineLabel,
     string SecondaryAxisLabel,
     string LineWidthLabel,
+    string LineColorLabel,
+    string LineDashLabel,
     string FillColorLabel,
     string MarkerLabel,
     string MarkerSizeLabel,
@@ -32,6 +36,8 @@ public sealed class ChartSeriesOptionsPlanner
     public const string SmoothLineLabel = "Smooth line";
     public const string SecondaryAxisLabel = "Plot on secondary axis";
     public const string LineWidthLabel = "Line width (pt)";
+    public const string LineColorLabel = "Line color (#RRGGBB)";
+    public const string LineDashLabel = "Line dash";
     public const string FillColorLabel = "Fill color (#RRGGBB)";
     public const string MarkerLabel = "Marker";
     public const string MarkerSizeLabel = "Marker size (pt)";
@@ -54,11 +60,27 @@ public sealed class ChartSeriesOptionsPlanner
         new(ChartMarkerSymbol.None, "None"),
     ];
 
+    public static IReadOnlyList<ChartDashOption> DashOptions { get; } =
+    [
+        new(OutlineDash.Solid, "Solid"),
+        new(OutlineDash.Dash, "Dash"),
+        new(OutlineDash.Dot, "Dot"),
+        new(OutlineDash.DashDot, "Dash dot"),
+        new(OutlineDash.LongDash, "Long dash"),
+        new(OutlineDash.LongDashDot, "Long dash dot"),
+        new(OutlineDash.LongDashDotDot, "Long dash dot dot"),
+        new(OutlineDash.SystemDash, "System dash"),
+        new(OutlineDash.SystemDot, "System dot"),
+        new(OutlineDash.SystemDashDot, "System dash dot"),
+    ];
+
     private readonly ChartShape _chart;
     private int _seriesIndex;
     private bool _smoothLine;
     private bool _onSecondaryAxis;
     private double? _lineWidthPt;
+    private ThemeAwareColor? _lineColor;
+    private OutlineDash _lineDash;
     private ThemeAwareColor? _fillColor;
     private ShapeFill? _fill;
     private ChartMarkerSymbol _markerSymbol;
@@ -78,6 +100,8 @@ public sealed class ChartSeriesOptionsPlanner
             SmoothLineLabel,
             SecondaryAxisLabel,
             LineWidthLabel,
+            LineColorLabel,
+            LineDashLabel,
             FillColorLabel,
             MarkerLabel,
             MarkerSizeLabel,
@@ -101,6 +125,8 @@ public sealed class ChartSeriesOptionsPlanner
     public bool SmoothLine => _smoothLine;
     public bool OnSecondaryAxis => _onSecondaryAxis;
     public double? LineWidthPt => _lineWidthPt;
+    public string LineColorText => FormatColor(_lineColor);
+    public OutlineDash LineDash => _lineDash;
     public string FillColorText => FormatColor(_fillColor);
     public ChartMarkerSymbol MarkerSymbol => _markerSymbol;
     public double? MarkerSizePt => _markerSizePt;
@@ -113,6 +139,8 @@ public sealed class ChartSeriesOptionsPlanner
             _smoothLine = false;
             _onSecondaryAxis = false;
             _lineWidthPt = null;
+            _lineColor = null;
+            _lineDash = OutlineDash.Solid;
             _fillColor = null;
             _fill = null;
             _markerSymbol = ChartMarkerSymbol.Auto;
@@ -125,6 +153,8 @@ public sealed class ChartSeriesOptionsPlanner
         _smoothLine = series.SmoothLine ?? false;
         _onSecondaryAxis = series.OnSecondaryAxis;
         _lineWidthPt = series.LineStyle?.WidthPt;
+        _lineColor = series.LineStyle?.Color;
+        _lineDash = series.LineStyle?.Dash ?? OutlineDash.Solid;
         _fill = series.Fill;
         _fillColor = series.FillColor ?? (series.Fill is ShapeFill.Solid solid ? solid.Color : null);
         _markerSymbol = series.MarkerStyle?.Symbol ?? ChartMarkerSymbol.Auto;
@@ -134,6 +164,10 @@ public sealed class ChartSeriesOptionsPlanner
     public void SetSmoothLine(bool value) => _smoothLine = value;
     public void SetOnSecondaryAxis(bool value) => _onSecondaryAxis = value;
     public void SetLineWidth(double? value) => _lineWidthPt = value;
+    public void SetLineColor(string? text) => _lineColor = string.IsNullOrWhiteSpace(text)
+        ? null
+        : ChartPointOptionsPlanner.ParseColor(text, LineColorLabel);
+    public void SetLineDash(OutlineDash value) => _lineDash = value;
     public void SetFillColor(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -156,7 +190,9 @@ public sealed class ChartSeriesOptionsPlanner
         _markerSymbol,
         _markerSizePt,
         _fillColor,
-        _fill);
+        _fill,
+        _lineColor,
+        _lineDash);
 
     private static string FormatColor(ThemeAwareColor? color) =>
         color is null ? string.Empty : color.Resolved.ToString();
