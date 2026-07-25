@@ -5015,8 +5015,8 @@ public sealed class MainWindowHeadlessTests
 
             window.ShowSmartArtTextPane();
             renderedRows = window.SmartArtTextPaneRenderedRows;
-            window.SmartArtTextPaneActionButtonCount.Should().Be(7);
-            window.SmartArtTextPaneEnabledActionButtonCount.Should().Be(7);
+            window.SmartArtTextPaneActionButtonCount.Should().Be(8);
+            window.SmartArtTextPaneEnabledActionButtonCount.Should().Be(8);
             window.SetSmartArtTextPaneRowText(0, "Discover");
             apply = window.ApplySmartArtTextPane();
             dirtyAfterApply = window.IsDirty;
@@ -5094,12 +5094,26 @@ public sealed class MainWindowHeadlessTests
             shape.SmartArt.Data!.Nodes[0].Children.Single().IsAssistant.Should().BeFalse();
             window.Editor.Redo();
             shape.SmartArt.Data.Nodes[0].Children.Single().IsAssistant.Should().BeTrue();
+
+            var addAssistant = window.ApplySmartArtTextPaneEditForTests(
+                SmartArtNodeEditKind.AddAssistant,
+                "n1");
+            addAssistant!.Applied.Should().BeTrue();
+            shape.SmartArt.Data.Nodes[0].Children.Should().ContainSingle(child =>
+                child.IsAssistant && child.Text == "Assistant");
+            window.Editor.Undo();
+            shape.SmartArt.Data.Nodes[0].Children.Should().ContainSingle(child =>
+                child.ModelId == "n2" && child.IsAssistant);
+            window.Editor.Redo();
+            shape.SmartArt.Data.Nodes[0].Children.Should().Contain(child =>
+                child.Text == "Assistant" && child.IsAssistant);
         });
 
         if (!ran) return;
         result.Should().NotBeNull();
         result!.Applied.Should().BeTrue();
-        smartArt!.Data!.Nodes[0].Children.Single().IsAssistant.Should().BeTrue();
+        smartArt!.Data!.Nodes[0].Children.Should().Contain(child =>
+            child.Text == "Assistant" && child.IsAssistant);
     }
 
     [Fact]

@@ -1771,8 +1771,8 @@ public sealed class ReviewWorkflowAdapterTests
 
             var outline = window.ShowSmartArtTextPane();
             outline.Select(row => row.Text).Should().Equal("Plan", "Build");
-            window.SmartArtTextPaneActionButtonCount.Should().Be(7);
-            window.SmartArtTextPaneEnabledActionButtonCount.Should().Be(7);
+            window.SmartArtTextPaneActionButtonCount.Should().Be(8);
+            window.SmartArtTextPaneEnabledActionButtonCount.Should().Be(8);
             window.SmartArtTextPaneRenderedRows.Should().Equal(
                 "n1|0|False|Plan",
                 "n2|0|False|Build");
@@ -1849,6 +1849,19 @@ public sealed class ReviewWorkflowAdapterTests
             shape.SmartArt.Data.Nodes[0].Children.Single().IsAssistant.Should().BeFalse();
             window.Editor.Redo();
             shape.SmartArt.Data.Nodes[0].Children.Single().IsAssistant.Should().BeTrue();
+
+            var addAssistant = window.ApplySmartArtTextPaneEditForTests(
+                SmartArtNodeEditKind.AddAssistant,
+                "n1");
+            addAssistant!.Applied.Should().BeTrue();
+            shape.SmartArt.Data.Nodes[0].Children.Should().ContainSingle(child =>
+                child.IsAssistant && child.Text == "Assistant");
+            window.Editor.Undo();
+            shape.SmartArt.Data.Nodes[0].Children.Should().ContainSingle(child =>
+                child.ModelId == "n2" && child.IsAssistant);
+            window.Editor.Redo();
+            shape.SmartArt.Data.Nodes[0].Children.Should().Contain(child =>
+                child.Text == "Assistant" && child.IsAssistant);
         }
         finally
         {

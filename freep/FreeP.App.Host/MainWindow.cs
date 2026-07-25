@@ -1018,6 +1018,10 @@ public sealed partial class MainWindow : Window
             "Demote",
             "Demote the selected SmartArt row.",
             SmartArtNodeEditKind.Demote);
+        AddSmartArtTextPaneActionButton(
+            "Add assistant",
+            "Add an assistant below the selected hierarchy row.",
+            SmartArtNodeEditKind.AddAssistant);
 
         var buttons = new StackPanel
         {
@@ -2447,6 +2451,9 @@ public sealed partial class MainWindow : Window
             SmartArtNodeEditKind.MoveDown => SmartArtNodeEditIntent.MoveDown(targetId),
             SmartArtNodeEditKind.Promote => SmartArtNodeEditIntent.Promote(targetId),
             SmartArtNodeEditKind.Demote => SmartArtNodeEditIntent.Demote(targetId),
+            SmartArtNodeEditKind.AddAssistant => SmartArtNodeEditIntent.AddAssistant(
+                targetId,
+                "Assistant"),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported SmartArt text-pane action."),
         };
         return ApplySmartArtTextPaneEdit(intent);

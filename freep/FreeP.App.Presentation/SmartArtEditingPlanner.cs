@@ -16,6 +16,7 @@ public enum SmartArtNodeEditKind
     MoveDown,
     Promote,
     Demote,
+    AddAssistant,
     ToggleAssistant
 }
 
@@ -64,6 +65,9 @@ public sealed record SmartArtNodeEditIntent(
 
     public static SmartArtNodeEditIntent Demote(string targetModelId) =>
         new(SmartArtNodeEditKind.Demote, targetModelId);
+
+    public static SmartArtNodeEditIntent AddAssistant(string targetModelId, string? text = null) =>
+        new(SmartArtNodeEditKind.AddAssistant, targetModelId, text);
 
     public static SmartArtNodeEditIntent ToggleAssistant(string targetModelId) =>
         new(SmartArtNodeEditKind.ToggleAssistant, targetModelId);
@@ -232,6 +236,7 @@ public static class SmartArtEditingPlanner
             SmartArtNodeEditKind.MoveDown => Move(data, location, targetId, offset: 1),
             SmartArtNodeEditKind.Promote => Promote(data, location, targetId),
             SmartArtNodeEditKind.Demote => Demote(data, location, targetId),
+            SmartArtNodeEditKind.AddAssistant => AddAssistant(data, location.Node!, targetId, intent.Text),
             SmartArtNodeEditKind.ToggleAssistant => ToggleAssistant(data, location.Node!, targetId),
             _ => SmartArtNodeEditResult.NotApplied(intent.Kind, targetId, "Unsupported SmartArt edit.", BuildOutline(data))
         };
@@ -660,6 +665,34 @@ public static class SmartArtEditingPlanner
             target.IsAssistant
                 ? "SmartArt node marked as an assistant."
                 : "SmartArt assistant designation removed.");
+    }
+
+    private static SmartArtNodeEditResult AddAssistant(
+        SmartArtData data,
+        SmartArtNode target,
+        string targetId,
+        string? text)
+    {
+        if (data.Family != SmartArtFamily.Hierarchy)
+        {
+            return SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.AddAssistant,
+                targetId,
+                "Assistant nodes are supported only in hierarchy SmartArt.",
+                BuildOutline(data));
+        }
+
+        var assistant = CreateNode(data, text ?? "Assistant", target.Level + 1, isAssistant: true);
+        var insertAt = target.Children.TakeWhile(child => child.IsAssistant).Count();
+        target.Children.Insert(insertAt, assistant);
+        NormalizeLevels(data);
+
+        return Applied(
+            data,
+            SmartArtNodeEditKind.AddAssistant,
+            targetId,
+            assistant.ModelId,
+            "SmartArt assistant node added.");
     }
 
     private static SmartArtNode CreateNode(SmartArtData data, string? text, int level, bool isAssistant)

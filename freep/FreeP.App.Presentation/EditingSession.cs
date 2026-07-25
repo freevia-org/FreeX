@@ -180,6 +180,30 @@ public sealed class EditingSession
             "The selected SmartArt graphic is not available.");
     }
 
+    /// <summary>
+    /// Adds a hierarchy assistant below the selected node through the shared undoable
+    /// package-refresh path. PowerPoint stores the new node as dgm:pt type="asst".
+    /// </summary>
+    public SmartArtNodeEditResult AddSmartArtAssistant(
+        uint shapeId,
+        string targetModelId,
+        string? text = null)
+    {
+        SmartArtNodeEditResult? result = null;
+        EditSmartArtWithPackageRefresh(shapeId, smartArt =>
+        {
+            result = SmartArtEditingPlanner.Apply(
+                smartArt.Data,
+                SmartArtNodeEditIntent.AddAssistant(targetModelId, text));
+            return result.Applied;
+        });
+
+        return result ?? SmartArtNodeEditResult.NotApplied(
+            SmartArtNodeEditKind.AddAssistant,
+            targetModelId,
+            "The selected SmartArt graphic is not available.");
+    }
+
     private bool EditSmartArtWithPackageRefresh(uint shapeId, Func<SmartArtShape, bool> edit)
     {
         var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate =>
