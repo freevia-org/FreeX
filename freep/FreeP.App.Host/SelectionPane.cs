@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using FreeP.App.Compositor;
 
@@ -70,13 +71,46 @@ internal sealed class SelectionPane : Border
     {
         var select = new Button
         {
-            Content = $"{item.SelectionIndex + 1}. {item.ShapeName}",
+            Content = $"{item.SelectionIndex + 1}.",
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(8, 5, 8, 5),
             Margin = new Thickness(8 + (item.NestingDepth * 16), 1, 4, 1),
             ToolTip = $"Select {item.ShapeTypeLabel}",
         };
         select.Click += (_, _) => _editor.Select(item.ShapeId);
+
+        var rename = new TextBox
+        {
+            Text = item.ShapeName,
+            MinWidth = 170,
+            Padding = new Thickness(4, 3, 4, 3),
+            Margin = new Thickness(0, 1, 4, 1),
+            ToolTip = "Rename object",
+        };
+        var committed = false;
+        void CommitName()
+        {
+            if (committed)
+                return;
+            committed = true;
+            if (!_editor.SetShapeName(item.ShapeId, rename.Text))
+                rename.Text = item.ShapeName;
+        }
+        rename.LostFocus += (_, _) => CommitName();
+        rename.KeyDown += (_, args) =>
+        {
+            if (args.Key == Key.Enter)
+            {
+                CommitName();
+                args.Handled = true;
+            }
+            else if (args.Key == Key.Escape)
+            {
+                committed = true;
+                Refresh();
+                args.Handled = true;
+            }
+        };
 
         var visibility = new Button
         {
@@ -90,7 +124,9 @@ internal sealed class SelectionPane : Border
 
         var row = new DockPanel();
         DockPanel.SetDock(visibility, Dock.Right);
+        DockPanel.SetDock(rename, Dock.Right);
         row.Children.Add(visibility);
+        row.Children.Add(rename);
         row.Children.Add(select);
         return row;
     }

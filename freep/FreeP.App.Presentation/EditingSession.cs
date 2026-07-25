@@ -518,6 +518,18 @@ public sealed class EditingSession
         return shape is not null && SetShapeHidden(shapeId, !shape.IsHidden);
     }
 
+    /// <summary>Renames an object through the shared undo bus, including grouped children.</summary>
+    public bool SetShapeName(uint shapeId, string? name)
+    {
+        var normalized = name?.Trim() ?? string.Empty;
+        var slide = CurrentSlide;
+        if (slide is null || normalized.Length == 0 || FindShape(slide.Shapes, shapeId) is null)
+            return false;
+
+        Bus.Execute(new SetShapeNameCommand(_currentSlideIndex, shapeId, normalized));
+        return string.Equals(FindShape(slide.Shapes, shapeId)?.Name, normalized, StringComparison.Ordinal);
+    }
+
     /// <summary>Navigates to the slide at <paramref name="index"/> and clears selection.</summary>
     public void SelectSlide(int index)
     {

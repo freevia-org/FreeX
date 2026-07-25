@@ -2342,6 +2342,15 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
         source.Should().Contain("BuildLayoutChoiceLabel(choice)");
+
+        var selectionPaneSource = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "SelectionPane.cs"));
+        selectionPaneSource.Should().Contain("_editor.SetShapeName(");
+        selectionPaneSource.Should().Contain("Key.Enter");
+        selectionPaneSource.Should().Contain("rename.LostFocus");
         source.Should().Contain("BuildLayoutChoiceTile(choice)");
         source.Should().Contain("BuildLayoutThumbnail(choice)");
         source.Should().NotContain("Modern resolved-thread state is not modeled yet.\";");
