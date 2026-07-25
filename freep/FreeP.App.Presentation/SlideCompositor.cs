@@ -121,6 +121,9 @@ public static class SlideCompositor
         int slideIndex = 0,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
+        if (shape.IsHidden)
+            return;
+
         if (!HeaderFooterCommandPlanner.IsVisibleByHeaderFooterFlags(shape, slide))
         {
             return;

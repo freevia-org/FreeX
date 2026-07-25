@@ -64,6 +64,7 @@ public static class SlideCloner
             AlternativeTextTitle = shape.AlternativeTextTitle,
             AlternativeText = shape.AlternativeText,
             IsDecorative   = shape.IsDecorative,
+            IsHidden       = shape.IsHidden,
             Kind           = shape.Kind,
             AutoShapeKind  = shape.AutoShapeKind,
             OffsetXEmu     = shape.OffsetXEmu,

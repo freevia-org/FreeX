@@ -369,6 +369,24 @@ public sealed class EditingSession
         return slide is not null && SetSlideHidden(_currentSlideIndex, !slide.IsHidden);
     }
 
+    /// <summary>Sets object visibility through the shared undo bus.</summary>
+    public bool SetShapeHidden(uint shapeId, bool isHidden)
+    {
+        var slide = CurrentSlide;
+        if (slide is null || slide.Shapes.All(shape => shape.Id != shapeId))
+            return false;
+
+        Bus.Execute(new SetShapeHiddenCommand(_currentSlideIndex, shapeId, isHidden));
+        return slide.Shapes.First(shape => shape.Id == shapeId).IsHidden == isHidden;
+    }
+
+    /// <summary>Toggles visibility for one selected top-level object.</summary>
+    public bool ToggleShapeHidden(uint shapeId)
+    {
+        var shape = CurrentSlide?.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        return shape is not null && SetShapeHidden(shapeId, !shape.IsHidden);
+    }
+
     /// <summary>Navigates to the slide at <paramref name="index"/> and clears selection.</summary>
     public void SelectSlide(int index)
     {

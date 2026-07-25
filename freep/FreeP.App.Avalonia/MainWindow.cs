@@ -168,6 +168,7 @@ public sealed partial class MainWindow : Window
     private int? _selectedAccessibilityCheckerRowIndex;
     private readonly List<string> _accessibilityCheckerTableStructureReviewRenderedLines = new();
     private Border _readingOrderPaneHost = null!;
+    private SelectionPane _selectionPane = null!;
     private TextBlock _readingOrderPaneHeading = null!;
     private TextBlock _readingOrderPaneMessage = null!;
     private StackPanel _readingOrderPaneItemsPanel = null!;
@@ -864,6 +865,7 @@ public sealed partial class MainWindow : Window
     {
         var bus = new PresentationCommandBus(_presentation);
         Editor  = new EditingSession(_presentation, bus);
+        _selectionPane?.SetEditor(Editor);
 
         Editor.Changed             += OnEditorChanged;
         Editor.CurrentSlideChanged += OnCurrentSlideChanged;
@@ -992,6 +994,8 @@ public sealed partial class MainWindow : Window
         _altTextPaneHost = BuildAltTextPaneHost();
         _accessibilityCheckerPaneHost = BuildAccessibilityCheckerPaneHost();
         _readingOrderPaneHost = BuildReadingOrderPaneHost();
+        _selectionPane = new SelectionPane(Editor);
+        _selectionPane.Refresh();
         _proofingPaneHost = BuildProofingPaneHost();
         _mediaCaptionPaneHost = BuildMediaCaptionPaneHost();
         _smartArtTextPaneHost = BuildSmartArtTextPaneHost();
@@ -1049,13 +1053,15 @@ public sealed partial class MainWindow : Window
         Grid.SetColumn(_proofingPaneHost, 5);
         Grid.SetColumn(_mediaCaptionPaneHost, 6);
         Grid.SetColumn(_smartArtTextPaneHost, 7);
-        Grid.SetColumn(_animationPaneHost, 8);
-        Grid.SetColumn(_printOptionsPaneHost, 9);
+        Grid.SetColumn(_selectionPane, 8);
+        Grid.SetColumn(_animationPaneHost, 9);
+        Grid.SetColumn(_printOptionsPaneHost, 10);
         body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
         body.Children.Add(_accessibilityCheckerPaneHost);
         body.Children.Add(_altTextPaneHost);
         body.Children.Add(_readingOrderPaneHost);
+        body.Children.Add(_selectionPane);
         body.Children.Add(_proofingPaneHost);
         body.Children.Add(_mediaCaptionPaneHost);
         body.Children.Add(_smartArtTextPaneHost);
@@ -3949,6 +3955,9 @@ public sealed partial class MainWindow : Window
             PresentationReviewWorkflowPlanner.ReadingOrderPaneCommandId,
             new ActionRibbonCommand(() => ShowReadingOrderPane()));
         registry.Register(
+            PresentationSelectionPanePlanner.SelectionPaneCommandId,
+            new ActionRibbonCommand(() => ShowSelectionPane()));
+        registry.Register(
             PresentationReviewWorkflowPlanner.ProofingCommandId,
             new ActionRibbonCommand(() => ShowProofingPane()));
         registry.Register(
@@ -5989,6 +5998,13 @@ public sealed partial class MainWindow : Window
         return plan;
     }
 
+    internal PresentationSelectionPanePlan ShowSelectionPane()
+    {
+        var plan = _selectionPane.Refresh();
+        _selectionPane.IsVisible = true;
+        return plan;
+    }
+
     internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveEarlier()
         => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
 
@@ -7391,6 +7407,7 @@ public sealed partial class MainWindow : Window
         RefreshNotesPane();
         RefreshReviewWorkflowPlans();
         RefreshVisibleAnimationPane(_selectedAnimationIndex);
+        _selectionPane?.Refresh();
         UpdateStatus();
     }
 
@@ -7414,6 +7431,7 @@ public sealed partial class MainWindow : Window
         RefreshReviewWorkflowPlans();
         RefreshVisibleMediaCaptionPaneFromFields();
         RefreshVisibleAnimationPane();
+        _selectionPane?.Refresh();
         UpdateStatus();
     }
 
@@ -7427,6 +7445,7 @@ public sealed partial class MainWindow : Window
             ShowSmartArtTextPane();
         RefreshVisibleMediaCaptionPaneFromFields();
         RefreshVisibleAnimationPane();
+        _selectionPane?.Refresh();
     }
 
     // ── Status ─────────────────────────────────────────────────────────────────
