@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 export DISPLAY="${DISPLAY:-:99}"
 
-output="${1:-/work/freep-file-slideshow-shortcut-validation}"
+output="${1:-/work/fps}"
 input_delay_ms="${FREEP_X11_INPUT_DELAY_MS:-160}"
 settle_seconds="${FREEP_X11_SETTLE_SECONDS:-0.45}"
 clipboard_timeout_seconds="${FREEP_X11_CLIPBOARD_TIMEOUT_SECONDS:-3}"
@@ -712,7 +712,7 @@ else
         slideshow-from-current-proof.txt slideshow-current-from-slide2-proof.txt slideshow-current-from-slide2-before-thumbnails.png slideshow-current-from-slide2-before-status.png slideshow-current-from-slide2-before-owner-state.txt slideshow-current-from-slide2-open.png slideshow-current-from-slide2-stage.png slideshow-current-from-slide2-dismissed.png slideshow-current-from-slide2-open-state.txt slideshow-current-from-slide2-dismissed-state.txt slideshow-control-from-slide1-stage.png
 fi
 
-python3 - "$records" "$screenshots_file" "$output/freep-file-slideshow-shortcut-results.json" "$owner_id" "$owner_title" "$expected_document_name" <<'PY'
+python3 - "$records" "$screenshots_file" "$output/results.json" "$owner_id" "$owner_title" "$expected_document_name" <<'PY'
 import json
 import sys
 

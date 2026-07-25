@@ -235,7 +235,7 @@ try {
 
     $probeInWork = Join-Path $sessionDirectory "freep-file-slideshow-shortcut-probe.sh"
     Copy-Item -LiteralPath $probeSource -Destination $probeInWork -Force
-    $manifestPath = Join-Path $sessionDirectory "freep-file-slideshow-shortcut-validation/freep-file-slideshow-shortcut-results.json"
+    $manifestPath = Join-Path $sessionDirectory "fps/results.json"
     $evidenceDirectory = Split-Path -Parent $manifestPath
     New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
     $probeLog = Join-Path $evidenceDirectory "probe.log"
@@ -255,7 +255,7 @@ try {
         "--env", "FREEP_SCREEN_HEIGHT=$Height",
         "--env", "FREEP_SCREEN_DPI=$Dpi",
         [string]$session.containerName, "bash", "/work/freep-file-slideshow-shortcut-probe.sh",
-        "/work/freep-file-slideshow-shortcut-validation"
+        "/work/fps"
     )
     Push-Location $repoRoot
     try {
