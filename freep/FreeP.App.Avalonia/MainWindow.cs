@@ -2341,6 +2341,12 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Cartoon)));
         r.Register(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
             new ActionRibbonCommand(() => ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset.Powder)));
+        r.Register(SmartArtAuthoringPlanner.ConvertToShapesCommandId,
+            new ActionRibbonCommand(() =>
+            {
+                if (Editor.SelectedShapeIds.Count == 1)
+                    Editor.ConvertSmartArtToShapes(Editor.SelectedShapeIds[0]);
+            }));
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));

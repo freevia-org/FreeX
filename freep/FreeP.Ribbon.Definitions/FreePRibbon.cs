@@ -552,6 +552,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
                 FreePRibbonText.SmartArtPowderStyleCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtPowderStyleCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.ConvertToShapesCommandId,
+                FreePRibbonText.SmartArtConvertToShapesCommand.Label, RibbonCommandIconKind.Group,
+                FreePRibbonText.SmartArtConvertToShapesCommand.KeyTip);
         });
     }
 

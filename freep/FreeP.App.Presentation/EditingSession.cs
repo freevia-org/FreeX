@@ -160,6 +160,107 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Converts one SmartArt graphic to the ordinary shapes produced by its live layout (or its
+    /// cached fallback when no live layout is available). The replacement is one undoable edit and
+    /// retains the graphic's original z-order slot.
+    /// </summary>
+    public bool ConvertSmartArtToShapes(uint shapeId)
+    {
+        var slide = CurrentSlide;
+        var smartArtShape = slide?.Shapes.FirstOrDefault(candidate =>
+            candidate.Id == shapeId &&
+            candidate.Kind == SlideShapeKind.SmartArt &&
+            candidate.SmartArt is not null);
+        if (slide is null || smartArtShape?.SmartArt is null)
+            return false;
+
+        var smartArt = smartArtShape.SmartArt;
+        if (smartArt.Data is null)
+            return false;
+        var converted = SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            smartArtShape.OffsetXEmu,
+            smartArtShape.OffsetYEmu,
+            smartArtShape.ExtentCxEmu,
+            smartArtShape.ExtentCyEmu,
+            Presentation.Theme,
+            slide.ColorMapOverride,
+            smartArt.QuickStyle,
+            smartArt.Colors)?.Select(SlideCloner.CloneShape).ToList();
+
+        if (converted is not { Count: > 0 })
+            converted = smartArt.FallbackShapes.Select(SlideCloner.CloneShape).ToList();
+        if (converted.Count == 0)
+            return false;
+
+        RemapConvertedShapeIds(slide, converted);
+        Bus.Execute(new ConvertSmartArtToShapesCommand(
+            _currentSlideIndex,
+            shapeId,
+            smartArtShape,
+            converted));
+
+        ClearSelection();
+        foreach (var shape in converted)
+            Select(shape.Id, addToSelection: true);
+        return true;
+    }
+
+    private static void RemapConvertedShapeIds(Slide slide, IReadOnlyList<SlideShape> shapes)
+    {
+        var used = new HashSet<uint>();
+        foreach (var shape in slide.Shapes)
+            CollectShapeIds(shape, used);
+
+        var remap = new Dictionary<uint, uint>();
+        uint next = 1;
+        while (used.Contains(next))
+            next++;
+
+        foreach (var shape in shapes)
+            AssignShapeIds(shape, used, remap, ref next);
+
+        foreach (var shape in shapes)
+            RewriteConnectorTargets(shape, remap);
+    }
+
+    private static void CollectShapeIds(SlideShape shape, HashSet<uint> used)
+    {
+        used.Add(shape.Id);
+        foreach (var child in shape.Children)
+            CollectShapeIds(child, used);
+    }
+
+    private static void AssignShapeIds(
+        SlideShape shape,
+        HashSet<uint> used,
+        Dictionary<uint, uint> remap,
+        ref uint next)
+    {
+        var oldId = shape.Id;
+        while (used.Contains(next))
+            next++;
+        var newId = next++;
+        used.Add(newId);
+        if (!remap.ContainsKey(oldId))
+            remap.Add(oldId, newId);
+        shape.Id = newId;
+
+        foreach (var child in shape.Children)
+            AssignShapeIds(child, used, remap, ref next);
+    }
+
+    private static void RewriteConnectorTargets(SlideShape shape, IReadOnlyDictionary<uint, uint> remap)
+    {
+        if (shape.ConnectionStart is { } start && remap.TryGetValue(start.ShapeId, out var startId))
+            start.ShapeId = startId;
+        if (shape.ConnectionEnd is { } end && remap.TryGetValue(end.ShapeId, out var endId))
+            end.ShapeId = endId;
+        foreach (var child in shape.Children)
+            RewriteConnectorTargets(child, remap);
+    }
+
+    /// <summary>
     /// Toggles the selected hierarchy node's assistant designation through the shared undoable
     /// package-refresh path.  PowerPoint stores this semantic distinction as dgm:pt type="asst".
     /// </summary>

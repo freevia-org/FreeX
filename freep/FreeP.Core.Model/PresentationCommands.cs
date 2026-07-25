@@ -670,6 +670,67 @@ public sealed class AddShapeCommand : IPresentationCommand
 }
 
 /// <summary>
+/// Replaces one SmartArt graphic with ordinary slide shapes at the same z-order position.
+/// This is the model-side operation behind PowerPoint's Convert to Shapes command.
+/// </summary>
+public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _smartArtId;
+    private readonly SlideShape _original;
+    private readonly List<SlideShape> _converted;
+    private int _index = -1;
+
+    public ConvertSmartArtToShapesCommand(
+        int slideIndex,
+        uint smartArtId,
+        SlideShape original,
+        IEnumerable<SlideShape> converted)
+    {
+        _slideIndex = slideIndex;
+        _smartArtId = smartArtId;
+        _original = SlideCloner.CloneShape(original);
+        _converted = converted.Select(SlideCloner.CloneShape).ToList();
+    }
+
+    public string Label => "Convert SmartArt to Shapes";
+
+    public bool HasEffect(Presentation presentation) =>
+        ShapeHelper.Find(presentation, _slideIndex, _smartArtId) is { Kind: SlideShapeKind.SmartArt } &&
+        _converted.Count > 0;
+
+    public void Apply(Presentation presentation)
+    {
+        var shapes = ShapeHelper.Shapes(presentation, _slideIndex);
+        if (shapes is null || _converted.Count == 0)
+            return;
+
+        _index = shapes.FindIndex(shape => shape.Id == _smartArtId);
+        if (_index < 0)
+            return;
+
+        shapes.RemoveAt(_index);
+        shapes.InsertRange(_index, _converted);
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shapes = ShapeHelper.Shapes(presentation, _slideIndex);
+        if (shapes is null || _index < 0)
+            return;
+
+        var firstConverted = _converted[0].Id;
+        var currentIndex = shapes.FindIndex(shape => shape.Id == firstConverted);
+        if (currentIndex < 0)
+            return;
+
+        var count = Math.Min(_converted.Count, shapes.Count - currentIndex);
+        shapes.RemoveRange(currentIndex, count);
+        shapes.Insert(Math.Clamp(currentIndex, 0, shapes.Count), _original);
+    }
+}
+
+/// <summary>
 /// Removes the shape identified by <paramref name="shapeId"/> from the slide.
 /// Captures the shape + its z-index for undo.
 /// </summary>

@@ -157,6 +157,7 @@ public static class SmartArtAuthoringPlanner
     public const string InsertQuickStyleCommandId = "freep.smartart.style.insert";
     public const string CartoonQuickStyleCommandId = "freep.smartart.style.cartoon";
     public const string PowderQuickStyleCommandId = "freep.smartart.style.powder";
+    public const string ConvertToShapesCommandId = "freep.smartart.convert-to-shapes";
 
     public static SmartArtQuickStyleApplyResult ApplyQuickStylePreset(
         SmartArtShape? smartArt,

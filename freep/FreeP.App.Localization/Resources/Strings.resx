@@ -1054,6 +1054,12 @@
   <data name="Ribbon_Command_SmartArtPowderStyle_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_SmartArtConvertToShapes_Label" xml:space="preserve">
+    <value>Convert to Shapes</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtConvertToShapes_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
   <data name="Ribbon_Command_SlideSizeWidescreen_Label" xml:space="preserve">
     <value>Widescreen (16:9)</value>
   </data>

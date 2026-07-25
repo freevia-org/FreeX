@@ -143,6 +143,32 @@ public sealed class EditingSessionTests
         session.Bus.CanUndo.Should().BeTrue();
     }
 
+    [Fact]
+    public void ConvertSmartArtToShapes_ReplacesAtSameSlotAndUndoRestoresGraphic()
+    {
+        var (session, _) = MakeSmartArtSession();
+        session.CurrentSlide!.Shapes.Insert(0, MakeShape(2));
+        session.CurrentSlide.Shapes.Add(MakeShape(90));
+
+        session.ConvertSmartArtToShapes(7).Should().BeTrue();
+
+        session.CurrentSlide.Shapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.SmartArt);
+        session.CurrentSlide.Shapes.First().Id.Should().Be(2);
+        session.CurrentSlide.Shapes.Last().Id.Should().Be(90);
+        session.CurrentSlide.Shapes.Select(shape => shape.Id).Should().OnlyHaveUniqueItems();
+        session.SelectedShapeIds.Should().NotContain(7);
+        session.SelectedShapeIds.Should().NotBeEmpty();
+
+        session.Undo();
+        session.CurrentSlide.Shapes.Should().HaveCount(3);
+        session.CurrentSlide.Shapes[1].Kind.Should().Be(SlideShapeKind.SmartArt);
+        session.CurrentSlide.Shapes[1].Id.Should().Be(7);
+
+        session.Redo();
+        session.CurrentSlide.Shapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.SmartArt);
+        session.CurrentSlide.Shapes.Select(shape => shape.Id).Should().OnlyHaveUniqueItems();
+    }
+
     // ── Slide operations ──────────────────────────────────────────────────────────
 
     [Fact]

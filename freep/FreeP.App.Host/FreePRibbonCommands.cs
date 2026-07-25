@@ -252,6 +252,12 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Cartoon)));
         registry.Register(SmartArtAuthoringPlanner.PowderQuickStyleCommandId,
             new ActionRibbonCommand(() => onSmartArtQuickStylePreset?.Invoke(SmartArtQuickStylePreset.Powder)));
+        registry.Register(SmartArtAuthoringPlanner.ConvertToShapesCommandId,
+            new ActionRibbonCommand(() =>
+            {
+                if (editor.SelectedShapeIds.Count == 1)
+                    editor.ConvertSmartArtToShapes(editor.SelectedShapeIds[0]);
+            }));
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
         //
