@@ -229,6 +229,7 @@ public class RibbonEditorCompleteness5BTests
         Assert.Contains(SlideObjectInsertionPlanner.HexagonCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.RightArrowCommandId, ids);
         Assert.Contains(SlideObjectInsertionPlanner.Star5CommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.ConnectorCommandId, ids);
     }
 
     [Fact]

@@ -373,6 +373,8 @@ public static class FreePRibbon
                 RibbonCommandIconKind.ArrowRight, FreePRibbonText.ShapeRightArrowKeyTip);
             group.Medium(SlideObjectInsertionPlanner.Star5CommandId, FreePRibbonText.ShapeStar5Label,
                 RibbonCommandIconKind.Star, FreePRibbonText.ShapeStar5KeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ConnectorCommandId, FreePRibbonText.ConnectorLabel,
+                RibbonCommandIconKind.Line, FreePRibbonText.ConnectorKeyTip);
         });
     }
 

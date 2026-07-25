@@ -56,6 +56,7 @@ internal static class FreePRibbonIcons
             ["freep.shape-hexagon"] = RibbonCommandIconKind.Pentagon,
             ["freep.shape-right-arrow"] = RibbonCommandIconKind.ArrowRight,
             ["freep.shape-star5"] = RibbonCommandIconKind.Star,
+            ["freep.insert-connector"] = RibbonCommandIconKind.Line,
 
             // ── Wave 5B: Insert — Tables ──────────────────────────────────────────────
             ["freep.insert-table-3x3"] = RibbonCommandIconKind.Table,

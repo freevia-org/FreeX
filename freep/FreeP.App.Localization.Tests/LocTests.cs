@@ -266,7 +266,9 @@ public sealed class LocTests
             "Ribbon_Command_ShapeRightArrow_Label",
             "Ribbon_Command_ShapeRightArrow_KeyTip",
             "Ribbon_Command_ShapeStar5_Label",
-            "Ribbon_Command_ShapeStar5_KeyTip"
+            "Ribbon_Command_ShapeStar5_KeyTip",
+            "Ribbon_Command_Connector_Label",
+            "Ribbon_Command_Connector_KeyTip"
         ]);
     }
 

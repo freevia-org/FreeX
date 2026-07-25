@@ -27,6 +27,7 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.HexagonCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.RightArrowCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.Star5CommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.ConnectorCommandId, SlideObjectInsertionKind.Connector)]
     [InlineData(SlideObjectInsertionPlanner.PictureCommandId, SlideObjectInsertionKind.Picture)]
     [InlineData(SlideObjectInsertionPlanner.VideoCommandId, SlideObjectInsertionKind.Media)]
     [InlineData(SlideObjectInsertionPlanner.AudioCommandId, SlideObjectInsertionKind.Media)]
@@ -70,6 +71,25 @@ public sealed class SlideObjectInsertionPlannerTests
         added!.Kind.Should().Be(SlideShapeKind.AutoShape);
         added.AutoShapeKind.Should().Be(expectedShape);
         (added.TextBody is not null).Should().Be(expectsTextBody);
+    }
+
+    [Fact]
+    public void ApplyCommand_InsertsFreeConnector()
+    {
+        var editor = MakeSession();
+        var before = editor.CurrentSlide!.Shapes.Count;
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.ConnectorCommandId);
+
+        added.Should().NotBeNull();
+        added!.Kind.Should().Be(SlideShapeKind.Connector);
+        added.AutoShapeKind.Should().Be(DrawingShapeKind.Line);
+        added.ConnectionStart.Should().BeNull();
+        added.ConnectionEnd.Should().BeNull();
+        editor.Undo();
+        editor.CurrentSlide!.Shapes.Should().HaveCount(before);
     }
 
     [Theory]

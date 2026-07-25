@@ -7,6 +7,7 @@ public enum SlideObjectInsertionKind
 {
     TextBox,
     AutoShape,
+    Connector,
     Picture,
     Media,
     Table,
@@ -45,6 +46,7 @@ public static class SlideObjectInsertionPlanner
     public const string HexagonCommandId = "freep.shape-hexagon";
     public const string RightArrowCommandId = "freep.shape-right-arrow";
     public const string Star5CommandId = "freep.shape-star5";
+    public const string ConnectorCommandId = "freep.insert-connector";
     public const string PictureCommandId = "freep.picture";
     public const string VideoCommandId = "freep.video";
     public const string AudioCommandId = "freep.audio";
@@ -80,6 +82,7 @@ public static class SlideObjectInsertionPlanner
         new(HexagonCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Hexagon),
         new(RightArrowCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RightArrow),
         new(Star5CommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Star5),
+        new(ConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.Line),
         new(PictureCommandId, SlideObjectInsertionKind.Picture),
         new(VideoCommandId, SlideObjectInsertionKind.Media),
         new(AudioCommandId, SlideObjectInsertionKind.Media),
@@ -148,6 +151,7 @@ public static class SlideObjectInsertionPlanner
         {
             SlideObjectInsertionKind.TextBox => editor.InsertDefaultTextBox(),
             SlideObjectInsertionKind.AutoShape => ApplyAutoShape(editor, plan.AutoShapeKind),
+            SlideObjectInsertionKind.Connector => ApplyConnector(editor, plan.AutoShapeKind),
             SlideObjectInsertionKind.Picture => picturePayload is null
                 ? null
                 : editor.InsertPicture(picturePayload.Bytes, picturePayload.ContentType),
@@ -236,5 +240,14 @@ public static class SlideObjectInsertionPlanner
         }
 
         return editor.InsertDefaultAutoShape(kind);
+    }
+
+    private static SlideShape? ApplyConnector(
+        EditingSession editor,
+        DrawingShapeKind? shapeKind)
+    {
+        return shapeKind is { } kind && DrawingShapeKindSupport.IsLineLike(kind)
+            ? editor.InsertDefaultConnector(kind)
+            : null;
     }
 }

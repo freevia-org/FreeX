@@ -501,6 +501,37 @@ public sealed class EditingSessionTests
         shape.AutoShapeKind.Should().Be(DrawingShapeKind.Ellipse);
     }
 
+    [Fact]
+    public void InsertDefaultConnector_AttachesSelectedShapesAtFacingSites()
+    {
+        var sess = Make();
+        var left = MakeShape(1);
+        left.AutoShapeKind = DrawingShapeKind.Rectangle;
+        left.ExtentCxEmu = 100;
+        left.ExtentCyEmu = 100;
+        var right = MakeShape(2);
+        right.AutoShapeKind = DrawingShapeKind.Rectangle;
+        right.OffsetXEmu = 500;
+        right.ExtentCxEmu = 100;
+        right.ExtentCyEmu = 100;
+        sess.CurrentSlide!.Shapes.AddRange([left, right]);
+        sess.Select(left.Id);
+        sess.Select(right.Id, addToSelection: true);
+
+        var connector = sess.InsertDefaultConnector();
+
+        connector.Kind.Should().Be(SlideShapeKind.Connector);
+        connector.AutoShapeKind.Should().Be(DrawingShapeKind.Line);
+        connector.ConnectionStart!.ShapeId.Should().Be(left.Id);
+        connector.ConnectionStart.SiteIndex.Should().Be(2);
+        connector.ConnectionEnd!.ShapeId.Should().Be(right.Id);
+        connector.ConnectionEnd.SiteIndex.Should().Be(0);
+        connector.OffsetXEmu.Should().Be(100);
+        connector.ExtentCxEmu.Should().Be(400);
+        sess.Undo();
+        sess.CurrentSlide.Shapes.Should().HaveCount(2);
+    }
+
     // ── Format toggles ────────────────────────────────────────────────────────────
 
     [Fact]

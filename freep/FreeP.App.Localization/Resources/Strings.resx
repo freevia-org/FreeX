@@ -598,6 +598,12 @@
   <data name="Ribbon_Command_ShapeStar5_KeyTip" xml:space="preserve">
     <value>ST</value>
   </data>
+  <data name="Ribbon_Command_Connector_Label" xml:space="preserve">
+    <value>Connector</value>
+  </data>
+  <data name="Ribbon_Command_Connector_KeyTip" xml:space="preserve">
+    <value>CN</value>
+  </data>
   <data name="Ribbon_Group_Arrange_Label" xml:space="preserve">
     <value>Arrange</value>
   </data>

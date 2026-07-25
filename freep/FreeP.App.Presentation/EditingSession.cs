@@ -1134,6 +1134,97 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Creates and inserts a straight connector. When exactly two shapes are selected, the
+    /// connector attaches to the nearest cardinal connection sites so subsequent shape moves
+    /// can reroute it. With no two-shape selection, a free centered connector is inserted.
+    /// </summary>
+    public SlideShape InsertDefaultConnector(DrawingShapeKind connectorKind = DrawingShapeKind.Line)
+    {
+        if (!DrawingShapeKindSupport.IsLineLike(connectorKind))
+            throw new ArgumentOutOfRangeException(nameof(connectorKind), connectorKind, "The connector kind must be line-like.");
+
+        var slide = CurrentSlide ?? throw new InvalidOperationException("A current slide is required to insert a connector.");
+        ConnectorAttachment? start = null;
+        ConnectorAttachment? end = null;
+        long x;
+        long y;
+        long cx;
+        long cy;
+
+        var selected = _selectedShapeIds
+            .Select(id => slide.Shapes.FirstOrDefault(shape => shape.Id == id))
+            .Where(shape => shape is not null && shape.Kind != SlideShapeKind.Connector)
+            .Cast<SlideShape>()
+            .Take(2)
+            .ToArray();
+
+        if (selected.Length == 2)
+        {
+            var first = selected[0];
+            var second = selected[1];
+            var firstSite = SelectConnectionSite(first, second);
+            var secondSite = OppositeConnectionSite(firstSite);
+            start = new ConnectorAttachment { ShapeId = first.Id, SiteIndex = firstSite };
+            end = new ConnectorAttachment { ShapeId = second.Id, SiteIndex = secondSite };
+
+            var startPoint = ConnectionSiteHelper.Resolve(start, slide);
+            var endPoint = ConnectionSiteHelper.Resolve(end, slide);
+            x = Math.Min(startPoint.X, endPoint.X);
+            y = Math.Min(startPoint.Y, endPoint.Y);
+            cx = Math.Max(Math.Abs(endPoint.X - startPoint.X), 1L);
+            cy = Math.Max(Math.Abs(endPoint.Y - startPoint.Y), 1L);
+        }
+        else
+        {
+            var bounds = DefaultShapeBounds();
+            x = bounds.x;
+            y = bounds.y + bounds.cy / 2;
+            cx = bounds.cx;
+            cy = 1;
+        }
+
+        var shape = new SlideShape
+        {
+            Id = NextShapeId(),
+            Name = "Connector",
+            Kind = SlideShapeKind.Connector,
+            AutoShapeKind = connectorKind,
+            OffsetXEmu = x,
+            OffsetYEmu = y,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            ConnectionStart = start,
+            ConnectionEnd = end,
+        };
+        AddShape(shape);
+        return shape;
+    }
+
+    private static int SelectConnectionSite(SlideShape from, SlideShape to)
+    {
+        var fromCenterX = from.OffsetXEmu + from.ExtentCxEmu / 2;
+        var fromCenterY = from.OffsetYEmu + from.ExtentCyEmu / 2;
+        var toCenterX = to.OffsetXEmu + to.ExtentCxEmu / 2;
+        var toCenterY = to.OffsetYEmu + to.ExtentCyEmu / 2;
+        var dx = toCenterX - fromCenterX;
+        var dy = toCenterY - fromCenterY;
+
+        if (Math.Abs(dx) >= Math.Abs(dy))
+            return dx >= 0 ? 2 : 0;
+
+        return dy >= 0 ? 3 : 1;
+    }
+
+    private static int OppositeConnectionSite(int siteIndex) => siteIndex switch
+    {
+        0 => 2,
+        1 => 3,
+        2 => 0,
+        3 => 1,
+        _ => 0,
+    };
+
+    /// <summary>
     /// Creates and inserts a picture shape from raw image bytes onto the current slide.
     /// </summary>
     public SlideShape InsertPicture(byte[] imageBytes, string contentType = "image/png")
