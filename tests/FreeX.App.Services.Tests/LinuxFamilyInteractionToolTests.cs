@@ -77,6 +77,10 @@ public sealed class LinuxFamilyInteractionToolTests
         probe.Should().NotContain("run_file_shortcut_window_lifecycle +");
         probe.Should().Contain("candidate-class-availability=");
         probe.Should().Contain("unavailable-native-window-metadata");
+        probe.Should().Contain("\"editor-expected-sentinel.txt\"");
+        probe.Should().Contain("\"file-new-shortcut-cancel-clipboard.txt\"");
+        probe.Should().Contain("\"file-new-shortcut-empty-marker.txt\"");
+        probe.Should().Contain("\"file-new-shortcut-empty-clipboard.txt\"");
         probe.Should().NotContain("$class_ready");
         probe.Should().NotContain("$prompt_class\" == *WM_CLASS*");
         var shortcutLifecycleStart = probe.IndexOf("run_file_shortcut_window_lifecycle()", StringComparison.Ordinal);

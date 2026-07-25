@@ -788,12 +788,12 @@ run_dirty_new_prompt_probe() {
         record_evidence_set "file-new-shortcut-cancel-preserves" "passed" \
             "Escape cancelled the dirty New prompt, restored the owner, kept the dirty title, and preserved the exact sentinel through select-all/copy." \
             "$cancel_proof" "$prompt_before" "$prompt_open" "$prompt_cancelled" \
-            "$prompt_open_state" "$prompt_cancelled_state" "$expected" "$cancel_clipboard"
+            "$prompt_open_state" "$prompt_cancelled_state" "editor-expected-sentinel.txt" "file-new-shortcut-cancel-clipboard.txt"
     else
         record_evidence_set "file-new-shortcut-cancel-preserves" "failed" \
             "Dirty New cancellation did not prove exact sentinel preservation and owner restoration." \
             "$cancel_proof" "$prompt_before" "$prompt_open" "$prompt_cancelled" \
-            "$prompt_open_state" "$prompt_cancelled_state" "$expected" "$cancel_clipboard"
+            "$prompt_open_state" "$prompt_cancelled_state" "editor-expected-sentinel.txt" "file-new-shortcut-cancel-clipboard.txt"
     fi
 
     focus_app
@@ -929,12 +929,12 @@ run_dirty_new_prompt_probe() {
         record_evidence_set "file-new-shortcut-discard-creates-clean" "passed" \
             "Ctrl+N was repeated, Don't save was selected by physical Tab/Return navigation, and the removed prompt left an owner-focused clean empty document proven by an unchanged exact clipboard marker." \
             "$discard_proof" "$discard_before" "$discard_open" "$discard_focused" "$discard_after" \
-            "$discard_open_state" "$discard_focused_state" "$discard_after_state" "$marker_source" "$empty_clipboard"
+            "$discard_open_state" "$discard_focused_state" "$discard_after_state" "file-new-shortcut-empty-marker.txt" "file-new-shortcut-empty-clipboard.txt"
     else
         record_evidence_set "file-new-shortcut-discard-creates-clean" "failed" \
             "The physical Don't save path did not prove prompt removal, owner restoration, clean title, and an empty document." \
             "$discard_proof" "$discard_before" "$discard_open" "$discard_focused" "$discard_after" \
-            "$discard_open_state" "$discard_focused_state" "$discard_after_state" "$marker_source" "$empty_clipboard"
+            "$discard_open_state" "$discard_focused_state" "$discard_after_state" "file-new-shortcut-empty-marker.txt" "file-new-shortcut-empty-clipboard.txt"
     fi
 }
 
