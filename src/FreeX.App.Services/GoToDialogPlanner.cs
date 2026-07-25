@@ -98,7 +98,7 @@ public static class GoToSpecialDialogPlanner
     public const double AvaloniaChoiceGroupHorizontalPadding = 8;
     public const double AvaloniaChoiceGroupBottomPadding = 9;
     public const double AvaloniaValueTypeGroupBottomPadding = 4;
-    public const double AvaloniaValueTypeSpacing = 12;
+    public const double AvaloniaValueTypeSpacing = 16;
     public const double AvaloniaChoiceButtonRightMargin = 12;
     public const double AvaloniaChoiceButtonBottomMargin = 1;
 

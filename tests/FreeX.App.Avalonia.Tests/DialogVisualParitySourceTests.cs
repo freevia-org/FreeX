@@ -34,7 +34,6 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("GoToSpecialDialogPlanner.AvaloniaValueTypeSpacing");
         source.Should().Contain("GoToSpecialDialogPlanner.AvaloniaChoiceButtonRightMargin");
         source.Should().Contain("GoToSpecialDialogPlanner.AvaloniaChoiceButtonBottomMargin");
-        source.Should().Contain("GoToSpecialDialogPlanner.ContentMargin");
         source.Should().Contain("GoToSpecialDialogPlanner.AvaloniaContentLeftMargin");
         source.Should().Contain("GoToSpecialDialogPlanner.AvaloniaContentTopMargin");
         source.Should().Contain("GoToSpecialDialogPlanner.AvaloniaContentRightMargin");
@@ -46,6 +45,9 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("ApplyGoToSpecialButtonSize(cancelButton);");
         source.Should().Contain("var root = new DockPanel { Margin = new Thickness(0) };");
         source.Should().Contain("DockPanel.SetDock(buttonRow, Dock.Bottom);");
+
+        var wpfSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "GoToSpecialDialog.cs"));
+        wpfSource.Should().Contain("GoToSpecialDialogPlanner.ContentMargin");
 
         var chrome = File.ReadAllText(RepoFile("shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs"));
         chrome.Should().Contain("IBrush? borderBrush = null");

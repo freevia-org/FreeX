@@ -38,7 +38,7 @@ public sealed class GoToDialogPlannerTests
         GoToSpecialDialogPlanner.AvaloniaChoiceGroupHorizontalPadding.Should().Be(8);
         GoToSpecialDialogPlanner.AvaloniaChoiceGroupBottomPadding.Should().Be(9);
         GoToSpecialDialogPlanner.AvaloniaValueTypeGroupBottomPadding.Should().Be(4);
-        GoToSpecialDialogPlanner.AvaloniaValueTypeSpacing.Should().Be(12);
+        GoToSpecialDialogPlanner.AvaloniaValueTypeSpacing.Should().Be(16);
         GoToSpecialDialogPlanner.AvaloniaChoiceButtonRightMargin.Should().Be(12);
         GoToSpecialDialogPlanner.AvaloniaChoiceButtonBottomMargin.Should().Be(1);
     }

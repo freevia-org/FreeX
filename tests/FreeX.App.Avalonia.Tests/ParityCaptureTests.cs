@@ -436,6 +436,8 @@ public sealed class ParityCaptureTests
                 CountExactColorOnRow(image, 274, red: 213, green: 223, blue: 229)
                     .Should().BeGreaterThan(300,
                         "the bottom value-type border should remain at the WPF-aligned action-row separation");
+                var checkboxAnchors = FindDarkRunStartsOnRow(image, 248, minimumLength: 12);
+                checkboxAnchors.Should().Equal([27, 113, 173, 255]);
 
                 window.Close();
             }, CancellationToken.None);
@@ -552,6 +554,39 @@ public sealed class ParityCaptureTests
         }
 
         return count;
+    }
+
+    private static IReadOnlyList<int> FindDarkRunStartsOnRow(
+        PixelImage image,
+        int y,
+        int minimumLength)
+    {
+        var starts = new List<int>();
+        var runStart = -1;
+
+        for (var x = 0; x <= image.Width; x++)
+        {
+            var isDark = false;
+            if (x < image.Width)
+            {
+                var offset = (y * image.Width + x) * 4;
+                isDark = image.Pixels[offset + 3] == 255
+                    && image.Pixels[offset] + image.Pixels[offset + 1] + image.Pixels[offset + 2] < 660;
+            }
+
+            if (isDark && runStart < 0)
+            {
+                runStart = x;
+            }
+            else if (!isDark && runStart >= 0)
+            {
+                if (x - runStart >= minimumLength)
+                    starts.Add(runStart);
+                runStart = -1;
+            }
+        }
+
+        return starts;
     }
 
     private static void TryDeleteDirectory(string path)
