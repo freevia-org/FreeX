@@ -604,6 +604,18 @@
   <data name="Ribbon_Command_Connector_KeyTip" xml:space="preserve">
     <value>CN</value>
   </data>
+  <data name="Ribbon_Command_ElbowConnector_Label" xml:space="preserve">
+    <value>Elbow Connector</value>
+  </data>
+  <data name="Ribbon_Command_ElbowConnector_KeyTip" xml:space="preserve">
+    <value>EC</value>
+  </data>
+  <data name="Ribbon_Command_CurvedConnector_Label" xml:space="preserve">
+    <value>Curved Connector</value>
+  </data>
+  <data name="Ribbon_Command_CurvedConnector_KeyTip" xml:space="preserve">
+    <value>CC</value>
+  </data>
   <data name="Ribbon_Group_Arrange_Label" xml:space="preserve">
     <value>Arrange</value>
   </data>

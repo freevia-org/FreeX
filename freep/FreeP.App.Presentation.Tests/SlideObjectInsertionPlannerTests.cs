@@ -28,6 +28,8 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.RightArrowCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.Star5CommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.ConnectorCommandId, SlideObjectInsertionKind.Connector)]
+    [InlineData(SlideObjectInsertionPlanner.ElbowConnectorCommandId, SlideObjectInsertionKind.Connector)]
+    [InlineData(SlideObjectInsertionPlanner.CurvedConnectorCommandId, SlideObjectInsertionKind.Connector)]
     [InlineData(SlideObjectInsertionPlanner.PictureCommandId, SlideObjectInsertionKind.Picture)]
     [InlineData(SlideObjectInsertionPlanner.VideoCommandId, SlideObjectInsertionKind.Media)]
     [InlineData(SlideObjectInsertionPlanner.AudioCommandId, SlideObjectInsertionKind.Media)]
@@ -90,6 +92,20 @@ public sealed class SlideObjectInsertionPlannerTests
         added.ConnectionEnd.Should().BeNull();
         editor.Undo();
         editor.CurrentSlide!.Shapes.Should().HaveCount(before);
+    }
+
+    [Theory]
+    [InlineData(SlideObjectInsertionPlanner.ElbowConnectorCommandId, DrawingShapeKind.ElbowConnector)]
+    [InlineData(SlideObjectInsertionPlanner.CurvedConnectorCommandId, DrawingShapeKind.CurvedConnector)]
+    public void ApplyCommand_InsertsConnectorVariant(string commandId, DrawingShapeKind expectedKind)
+    {
+        var editor = MakeSession();
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(editor, commandId);
+
+        added.Should().NotBeNull();
+        added!.Kind.Should().Be(SlideShapeKind.Connector);
+        added.AutoShapeKind.Should().Be(expectedKind);
     }
 
     [Theory]

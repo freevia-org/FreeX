@@ -47,6 +47,8 @@ public static class SlideObjectInsertionPlanner
     public const string RightArrowCommandId = "freep.shape-right-arrow";
     public const string Star5CommandId = "freep.shape-star5";
     public const string ConnectorCommandId = "freep.insert-connector";
+    public const string ElbowConnectorCommandId = "freep.insert-elbow-connector";
+    public const string CurvedConnectorCommandId = "freep.insert-curved-connector";
     public const string PictureCommandId = "freep.picture";
     public const string VideoCommandId = "freep.video";
     public const string AudioCommandId = "freep.audio";
@@ -83,6 +85,8 @@ public static class SlideObjectInsertionPlanner
         new(RightArrowCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RightArrow),
         new(Star5CommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Star5),
         new(ConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.Line),
+        new(ElbowConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.ElbowConnector),
+        new(CurvedConnectorCommandId, SlideObjectInsertionKind.Connector, AutoShapeKind: DrawingShapeKind.CurvedConnector),
         new(PictureCommandId, SlideObjectInsertionKind.Picture),
         new(VideoCommandId, SlideObjectInsertionKind.Media),
         new(AudioCommandId, SlideObjectInsertionKind.Media),

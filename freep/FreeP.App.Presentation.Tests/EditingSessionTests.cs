@@ -532,6 +532,28 @@ public sealed class EditingSessionTests
         sess.CurrentSlide.Shapes.Should().HaveCount(2);
     }
 
+    [Theory]
+    [InlineData(DrawingShapeKind.ElbowConnector)]
+    [InlineData(DrawingShapeKind.CurvedConnector)]
+    public void InsertDefaultConnector_VariantPreservesSelectedAttachments(DrawingShapeKind kind)
+    {
+        var sess = Make();
+        var first = MakeShape(1);
+        first.AutoShapeKind = DrawingShapeKind.Rectangle;
+        var second = MakeShape(2);
+        second.AutoShapeKind = DrawingShapeKind.Rectangle;
+        second.OffsetXEmu = 500;
+        sess.CurrentSlide!.Shapes.AddRange([first, second]);
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+
+        var connector = sess.InsertDefaultConnector(kind);
+
+        connector.AutoShapeKind.Should().Be(kind);
+        connector.ConnectionStart!.ShapeId.Should().Be(first.Id);
+        connector.ConnectionEnd!.ShapeId.Should().Be(second.Id);
+    }
+
     // ── Format toggles ────────────────────────────────────────────────────────────
 
     [Fact]

@@ -211,6 +211,10 @@ internal static class FreePRibbonText
     public static string ShapeStar5KeyTip => Get("Ribbon_Command_ShapeStar5_KeyTip");
     public static string ConnectorLabel => Get("Ribbon_Command_Connector_Label");
     public static string ConnectorKeyTip => Get("Ribbon_Command_Connector_KeyTip");
+    public static string ElbowConnectorLabel => Get("Ribbon_Command_ElbowConnector_Label");
+    public static string ElbowConnectorKeyTip => Get("Ribbon_Command_ElbowConnector_KeyTip");
+    public static string CurvedConnectorLabel => Get("Ribbon_Command_CurvedConnector_Label");
+    public static string CurvedConnectorKeyTip => Get("Ribbon_Command_CurvedConnector_KeyTip");
 
     public static RibbonText ArrangeGroup { get; } = new("Ribbon_Group_Arrange_Label", "Ribbon_Group_Arrange_KeyTip");
     public static RibbonText ArrangeGroupCommand { get; } = new("Ribbon_Command_ArrangeGroup_Label", "Ribbon_Command_ArrangeGroup_KeyTip");

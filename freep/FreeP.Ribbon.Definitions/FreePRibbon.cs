@@ -375,6 +375,10 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Star, FreePRibbonText.ShapeStar5KeyTip);
             group.Medium(SlideObjectInsertionPlanner.ConnectorCommandId, FreePRibbonText.ConnectorLabel,
                 RibbonCommandIconKind.Line, FreePRibbonText.ConnectorKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ElbowConnectorCommandId, FreePRibbonText.ElbowConnectorLabel,
+                RibbonCommandIconKind.Line, FreePRibbonText.ElbowConnectorKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.CurvedConnectorCommandId, FreePRibbonText.CurvedConnectorLabel,
+                RibbonCommandIconKind.Line, FreePRibbonText.CurvedConnectorKeyTip);
         });
     }
 
