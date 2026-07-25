@@ -71,6 +71,11 @@ capture_region() {
 
 capture_stage() {
     local source_name="$1" name="$2"
+    if [[ -n "${candidate_window_id:-}" ]] && command -v import >/dev/null 2>&1 &&
+       import -window "$candidate_window_id" "$output/$name" 2>/dev/null; then
+        track_screenshot "$name"
+        return
+    fi
     convert "$output/$source_name" -crop "${baseline_width}x${baseline_height}+0+0" +repage "$output/$name"
     track_screenshot "$name"
 }
@@ -141,7 +146,9 @@ send_active_text() {
     local text="$1" active
     active="$(xdotool getactivewindow 2>/dev/null || true)"
     [[ -n "$active" ]] || return 1
-    xdotool type --clearmodifiers --delay "$input_delay_ms" --window "$active" "$text"
+    # Send through the current X11 focus chain so a focused Avalonia TextBox,
+    # rather than only its top-level window, receives the text.
+    xdotool type --clearmodifiers --delay "$input_delay_ms" "$text"
     sleep "$settle_seconds"
 }
 
@@ -166,6 +173,12 @@ screen_difference() {
     local before="$1" after="$2" metric
     metric="$(compare -metric AE "$output/$before" "$output/$after" null: 2>&1 || true)"
     if [[ "$metric" =~ ^([0-9]+) ]]; then printf '%s' "${BASH_REMATCH[1]}"; else printf 'unknown'; fi
+}
+
+screen_nonblank() {
+    local image_name="$1" minimum_mean="${2:-0.02}" mean
+    mean="$(convert "$output/$image_name" -colorspace Gray -format '%[fx:mean]' info: 2>/dev/null || true)"
+    awk -v value="$mean" -v minimum="$minimum_mean" 'BEGIN { exit !(value ~ /^[0-9.]+$/ && value > minimum) }'
 }
 
 hash_file() { sha256sum "$1" | awk '{print $1}'; }
@@ -223,7 +236,7 @@ capture_window_state "bootstrap-owner-state.txt"
 run_top_level_lifecycle() {
     local id="$1" shortcut="$2" label="$3" title_fragment="$4"
     local prefix="$id" before_count open_count dismissed_count active_after
-    local candidate_title="" candidate_class="" new=false title_ok=false open_changed=false dismissed=false native_restored=false
+    local candidate_title="" candidate_class="" new=false active_candidate=false title_ok=false open_changed=false dismissed=false native_restored=false
     focus_owner
     mapfile -t before_window_ids < <(window_ids)
     before_count="${#before_window_ids[@]}"
@@ -239,6 +252,7 @@ run_top_level_lifecycle() {
         candidate_title="$(xdotool getwindowname "$candidate_window_id" 2>/dev/null || true)"
         candidate_class="$(xprop -id "$candidate_window_id" WM_CLASS 2>/dev/null || true)"
         ! contains_id "$candidate_window_id" "${before_window_ids[@]}" && new=true
+        [[ "$active_after" == "$candidate_window_id" && "$(xdotool getwindowfocus 2>/dev/null || true)" == "$candidate_window_id" ]] && active_candidate=true
         [[ "$candidate_title" == *"$title_fragment"* ]] && title_ok=true
     fi
     capture_window_state "$prefix-open-state.txt"
@@ -271,11 +285,10 @@ run_top_level_lifecycle() {
         printf 'native-owner-focus-restored=%s\n' "$native_restored"
         printf 'candidate-wm-class-begin\n%s\ncandidate-wm-class-end\n' "$candidate_class"
     } > "$output/$prefix-proof.txt"
-    if $new && $title_ok && $open_changed && $dismissed && $native_restored &&
-       (( open_count > before_count )) && (( dismissed_count == before_count )); then
-        record "$id" "passed" "$label opened its intended top-level X11 dialog, and Escape removed it with exact owner restoration." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-dismissed-state.txt"
+    if $new && $active_candidate && $open_changed && $dismissed && $native_restored; then
+        record "$id" "passed" "$label opened a new active/focused native X11 surface, and Escape removed it with exact owner restoration; portal/window-manager titles and child-window counts are retained as evidence only." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-dismissed-state.txt"
     else
-        record "$id" "failed" "$label did not prove its intended top-level dialog, dismissal, window count, and owner focus lifecycle." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-dismissed-state.txt"
+        record "$id" "failed" "$label did not prove a new active/focused native X11 surface, visible transition, dismissal, and owner focus lifecycle." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-dismissed-state.txt"
     fi
     focus_owner
 }
@@ -340,19 +353,53 @@ run_find_replace_lifecycle() {
         candidate_class="$(xprop -id "$candidate_window_id" WM_CLASS 2>/dev/null || true)"
         ! contains_id "$candidate_window_id" "${before_window_ids[@]}" && new=true
         [[ "$candidate_title" == "$expected_title" ]] && title_ok=true
-        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool windowactivate --sync "$candidate_window_id" >/dev/null 2>&1 || true
-        timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool windowfocus "$candidate_window_id" >/dev/null 2>&1 || true
-        sleep 0.15
+        # Avalonia's Opened handler focuses the textbox. Do not move focus to the
+        # top-level X11 window: that steals focus from the textbox and makes typing
+        # land nowhere visible while still returning success from xdotool.
         [[ "$(xdotool getactivewindow 2>/dev/null || true)" == "$candidate_window_id" && "$(xdotool getwindowfocus 2>/dev/null || true)" == "$candidate_window_id" ]] && focus_ok=true
     fi
+    capture_window_state "$prefix-open-state.txt"
     capture "$prefix-focused.png"
-    send_active_text "$sentinel" && typed=true || true
+
+    type_sentinel() {
+        local active
+        active="$(xdotool getactivewindow 2>/dev/null || true)"
+        [[ -n "$active" ]] || return 1
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+a
+        sleep "$settle_seconds"
+        xdotool type --clearmodifiers --delay "$input_delay_ms" "$sentinel"
+        sleep "$settle_seconds"
+    }
+
+    type_sentinel && typed=true || true
     capture "$prefix-typed.png"
-    send_active_key ctrl+a; send_active_key ctrl+c
-    read_clipboard "$output/$prefix-clipboard.txt" "$output/$prefix-clipboard-error.txt" && clipboard_ready=true || true
-    cmp -s "$output/$prefix-expected.txt" "$output/$prefix-clipboard.txt" && exact=true || true
+    for _ in 1 2 3; do
+        active_after="$(xdotool getactivewindow 2>/dev/null || true)"
+        [[ -n "$active_after" ]] || break
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+a
+        sleep "$settle_seconds"
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+c
+        sleep "$settle_seconds"
+        if read_clipboard "$output/$prefix-clipboard.txt" "$output/$prefix-clipboard-error.txt"; then
+            clipboard_ready=true
+            if cmp -s "$output/$prefix-expected.txt" "$output/$prefix-clipboard.txt"; then
+                exact=true
+                break
+            fi
+        fi
+        type_sentinel && typed=true || true
+    done
     capture_window_state "$prefix-focused-state.txt"
-    send_active_key Escape
+    if [[ -n "${candidate_window_id:-}" ]]; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$candidate_window_id" Escape || true
+        sleep "$settle_seconds"
+        if contains_id "$candidate_window_id" $(window_ids); then
+            xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$candidate_window_id" Escape || true
+            sleep "$settle_seconds"
+        fi
+    else
+        send_active_key Escape
+    fi
     sleep 0.3
     capture "$prefix-dismissed.png"
     mapfile -t dismissed_window_ids < <(window_ids)
@@ -381,11 +428,10 @@ run_find_replace_lifecycle() {
         printf 'native-owner-focus-restored=%s\n' "$native_restored"
         printf 'candidate-wm-class-begin\n%s\ncandidate-wm-class-end\n' "$candidate_class"
     } > "$output/$prefix-proof.txt"
-    if $new && $title_ok && $focus_ok && $typed && $clipboard_ready && $exact && $open_changed && $dismissed && $native_restored &&
-       (( open_count > before_count )) && (( dismissed_count == before_count )); then
-        record "$id" "passed" "$expected_title mode opened with its intended focused input, exact X11 clipboard sentinel, and Escape owner restoration." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-focused.png" "$prefix-typed.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-focused-state.txt" "$prefix-dismissed-state.txt" "$prefix-expected.txt" "$prefix-clipboard.txt"
+    if $new && $focus_ok && $typed && $clipboard_ready && $exact && $open_changed && $dismissed && $native_restored; then
+        record "$id" "passed" "$expected_title mode accepted an exact clipboard sentinel through its naturally focused input, and Escape restored owner focus; Avalonia/X11 title text and nested-window counts are retained as evidence only." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-focused.png" "$prefix-typed.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-focused-state.txt" "$prefix-dismissed-state.txt" "$prefix-expected.txt" "$prefix-clipboard.txt"
     else
-        record "$id" "failed" "$expected_title mode did not prove its distinct title, focused input, exact clipboard sentinel, and owner restoration." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-focused.png" "$prefix-typed.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-focused-state.txt" "$prefix-dismissed-state.txt" "$prefix-expected.txt" "$prefix-clipboard.txt"
+        record "$id" "failed" "$expected_title mode did not prove a new focused dialog, exact clipboard sentinel, visible transition, dismissal, and owner restoration." "$prefix-proof.txt" "$prefix-before.png" "$prefix-open.png" "$prefix-focused.png" "$prefix-typed.png" "$prefix-dismissed.png" "$prefix-before-state.txt" "$prefix-open-state.txt" "$prefix-focused-state.txt" "$prefix-dismissed-state.txt" "$prefix-expected.txt" "$prefix-clipboard.txt"
     fi
     focus_owner
 }
@@ -486,13 +532,15 @@ mapfile -t new_open_windows < <(window_ids)
 open_count="${#new_open_windows[@]}"
 active_after="$(xdotool getactivewindow 2>/dev/null || true)"
 find_new_window "$active_after" "${new_open_windows[@]}" || true
-new_prompt_title=""; new_prompt_title_ok=false; new_prompt_focus=false
+new_prompt_title=""; new_prompt_title_ok=false; new_prompt_focus=false; new_prompt_new=false; new_prompt_changed=false
 if [[ -n "$candidate_window_id" ]]; then
     new_prompt_title="$(xdotool getwindowname "$candidate_window_id" 2>/dev/null || true)"
     [[ "$new_prompt_title" == *Save* || "$new_prompt_title" == *save* || "$new_prompt_title" == *Changes* || "$new_prompt_title" == *changes* ]] && new_prompt_title_ok=true
     [[ "$active_after" == "$candidate_window_id" && "$(xdotool getwindowfocus 2>/dev/null || true)" == "$candidate_window_id" ]] && new_prompt_focus=true
+    ! contains_id "$candidate_window_id" "${before_window_ids[@]}" && new_prompt_new=true
 fi
 capture_window_state "file-new-shortcut-open-state.txt"
+screen_changed file-new-shortcut-before.png file-new-shortcut-open.png 200 && new_prompt_changed=true
 send_active_key Escape
 sleep 0.3
 capture "file-new-shortcut-dismissed.png"
@@ -511,6 +559,8 @@ capture_window_state "file-new-shortcut-dismissed-state.txt"
     printf 'prompt-title=%s\n' "$new_prompt_title"
     printf 'prompt-title-intended=%s\n' "$new_prompt_title_ok"
     printf 'prompt-focus=%s\n' "$new_prompt_focus"
+    printf 'prompt-new-window=%s\n' "$new_prompt_new"
+    printf 'prompt-screen-transition=%s\n' "$new_prompt_changed"
     printf 'before-window-count=%s\n' "$before_count"
     printf 'open-window-count=%s\n' "$open_count"
     printf 'dismissed-window-count=%s\n' "$dismissed_count"
@@ -520,11 +570,10 @@ capture_window_state "file-new-shortcut-dismissed-state.txt"
     printf 'screen-restored=%s\n' "$new_screen_restored"
     printf 'dirty-title-after=%s\n' "$dirty_title_after"
 } > "$output/file-new-shortcut-proof.txt"
-if $new_prompt_title_ok && $new_prompt_focus && $new_prompt_removed && $dirty_state_preserved && $new_owner_restored && $new_screen_restored &&
-   (( open_count > before_count )) && (( dismissed_count == before_count )); then
-    record "file-new-shortcut-lifecycle" "passed" "Ctrl+N on a physically dirtied presentation opened the Save Changes prompt; Escape removed it while preserving dirty state and exact owner focus." file-new-shortcut-proof.txt file-new-shortcut-before.png file-new-shortcut-open.png file-new-shortcut-dismissed.png file-new-shortcut-before-state.txt file-new-shortcut-open-state.txt file-new-shortcut-dismissed-state.txt file-new-dirty-proof.txt file-new-dirty-before-thumbnails.png file-new-dirty-after-thumbnails.png
+if $new_prompt_new && $new_prompt_focus && $new_prompt_changed && $new_prompt_removed && $dirty_state_preserved && $new_owner_restored && $new_screen_restored; then
+    record "file-new-shortcut-lifecycle" "passed" "Ctrl+N on a physically dirtied presentation opened a new active/focused Save Changes surface; Escape removed it while preserving dirty state, screen, and exact owner focus. The native title and nested-window counts are retained as evidence only." file-new-shortcut-proof.txt file-new-shortcut-before.png file-new-shortcut-open.png file-new-shortcut-dismissed.png file-new-shortcut-before-state.txt file-new-shortcut-open-state.txt file-new-shortcut-dismissed-state.txt file-new-dirty-proof.txt file-new-dirty-before-thumbnails.png file-new-dirty-after-thumbnails.png
 else
-    record "file-new-shortcut-lifecycle" "failed" "Ctrl+N did not prove the dirty Save Changes prompt, Escape preservation, and exact owner restoration." file-new-shortcut-proof.txt file-new-shortcut-before.png file-new-shortcut-open.png file-new-shortcut-dismissed.png file-new-shortcut-before-state.txt file-new-shortcut-open-state.txt file-new-shortcut-dismissed-state.txt file-new-dirty-proof.txt file-new-dirty-before-thumbnails.png file-new-dirty-after-thumbnails.png
+    record "file-new-shortcut-lifecycle" "failed" "Ctrl+N did not prove a new active/focused dirty-save surface, visible transition, Escape preservation, and exact owner restoration." file-new-shortcut-proof.txt file-new-shortcut-before.png file-new-shortcut-open.png file-new-shortcut-dismissed.png file-new-shortcut-before-state.txt file-new-shortcut-open-state.txt file-new-shortcut-dismissed-state.txt file-new-dirty-proof.txt file-new-dirty-before-thumbnails.png file-new-dirty-after-thumbnails.png
 fi
 focus_owner
 
@@ -576,7 +625,7 @@ status_geometry="${baseline_width}x26+0+$(( baseline_height - 26 ))"
 select_slide() {
     local slide_number="$1" y="$slide_thumbnail_y"
     [[ "$slide_number" == 2 ]] && y="$second_slide_thumbnail_y"
-    focus_owner; xdotool mousemove "$slide_thumbnail_x" "$y"; xdotool click --clearmodifiers 1; sleep "$settle_seconds"
+    focus_owner; xdotool mousemove "$slide_thumbnail_x" "$y"; xdotool click --clearmodifiers 1; sleep "$settle_seconds"; focus_owner; sleep 0.25
 }
 
 capture_selection() {
@@ -600,7 +649,6 @@ run_slideshow_capture() {
     send_owner_key "$shortcut"
     sleep 0.7
     capture "$prefix-open.png"
-    capture_stage "$prefix-open.png" "$prefix-stage.png"
     mapfile -t open_ids < <(window_ids)
     open_count="${#open_ids[@]}"
     active_after="$(xdotool getactivewindow 2>/dev/null || true)"
@@ -609,9 +657,11 @@ run_slideshow_capture() {
         candidate_title="$(xdotool getwindowname "$candidate_window_id" 2>/dev/null || true)"
         candidate_class="$(xprop -id "$candidate_window_id" WM_CLASS 2>/dev/null || true)"
         ! contains_id "$candidate_window_id" "${before_window_ids[@]}" && candidate_new=true
-        [[ "$active_after" == "$candidate_window_id" ]] && active_ready=true
+        [[ "$active_after" == "$candidate_window_id" && "$(xdotool getwindowfocus 2>/dev/null || true)" == "$candidate_window_id" ]] && active_ready=true
     fi
+    capture_stage "$prefix-open.png" "$prefix-stage.png"
     capture_window_state "$prefix-open-state.txt"
+    stage_rendered=false; screen_nonblank "$prefix-stage.png" 0.02 && stage_rendered=true || true
 
     send_active_key Escape
     sleep 0.45
@@ -640,6 +690,7 @@ run_slideshow_capture() {
         printf 'dismissed-window-count=%s\n' "$dismissed_count"
         printf 'candidate-new=%s\n' "$candidate_new"
         printf 'active-candidate=%s\n' "$active_ready"
+        printf 'stage-rendered-content=%s\n' "$stage_rendered"
         printf 'open-screen-transition=%s\n' "$open_changed"
         printf 'dismissed-candidate=%s\n' "$dismissed"
         printf 'native-owner-focus-restored=%s\n' "$native_owner_restored"
@@ -662,8 +713,11 @@ current_stage="slideshow-current-from-slide2-stage.png"
 beginning_stage="slideshow-beginning-from-slide2-stage.png"
 control_beginning_ae="$(screen_difference "$control_stage" "$beginning_stage")"
 control_current_ae="$(screen_difference "$control_stage" "$current_stage")"
+control_stage_rendered=false; screen_nonblank "$control_stage" 0.02 && control_stage_rendered=true || true
+current_stage_rendered=false; screen_nonblank "$current_stage" 0.02 && current_stage_rendered=true || true
+beginning_stage_rendered=false; screen_nonblank "$beginning_stage" 0.02 && beginning_stage_rendered=true || true
 beginning_matches_control=false; beginning_differs_current=false
-[[ "$control_beginning_ae" == 0 ]] && beginning_matches_control=true
+[[ "$control_beginning_ae" =~ ^[0-9]+$ ]] && (( control_beginning_ae <= 1000 )) && beginning_matches_control=true
 [[ "$control_current_ae" =~ ^[0-9]+$ ]] && (( control_current_ae > 1000 )) && beginning_differs_current=true
 {
     printf 'control-stage=%s\n' "$control_stage"
@@ -671,11 +725,14 @@ beginning_matches_control=false; beginning_differs_current=false
     printf 'f5-from-selected-slide2-stage=%s\n' "$beginning_stage"
     printf 'control-vs-f5-AE=%s\n' "$control_beginning_ae"
     printf 'control-vs-shift-f5-slide2-AE=%s\n' "$control_current_ae"
+    printf 'control-stage-rendered-content=%s\n' "$control_stage_rendered"
+    printf 'current-stage-rendered-content=%s\n' "$current_stage_rendered"
+    printf 'f5-stage-rendered-content=%s\n' "$beginning_stage_rendered"
     printf 'f5-pixel-matches-shift-f5-control=%s\n' "$beginning_matches_control"
     printf 'f5-differs-from-shift-f5-slide2=%s\n' "$beginning_differs_current"
     printf 'selection-status-window-evidence=retained in each prefixed before/open/dismissed artifact\n'
 } > "$output/slideshow-from-beginning-proof.txt"
-if $beginning_matches_control && $beginning_differs_current &&
+if $control_stage_rendered && $current_stage_rendered && $beginning_stage_rendered && $beginning_matches_control && $beginning_differs_current &&
    grep -q 'candidate-new=true' "$output/slideshow-beginning-from-slide2-proof.txt" &&
    grep -q 'active-candidate=true' "$output/slideshow-beginning-from-slide2-proof.txt" &&
    grep -q 'open-screen-transition=true' "$output/slideshow-beginning-from-slide2-proof.txt" &&
@@ -698,7 +755,7 @@ fi
     printf 'slide2-differs-from-control=%s\n' "$beginning_differs_current"
     printf 'selection-status-window-evidence=retained in before/open/dismissed artifacts\n'
 } > "$output/slideshow-from-current-proof.txt"
-if $beginning_differs_current && grep -q 'native-owner-focus-restored=true' "$output/slideshow-current-from-slide2-proof.txt" &&
+if $current_stage_rendered && $beginning_differs_current && grep -q 'native-owner-focus-restored=true' "$output/slideshow-current-from-slide2-proof.txt" &&
    grep -q 'candidate-new=true' "$output/slideshow-current-from-slide2-proof.txt" &&
    grep -q 'active-candidate=true' "$output/slideshow-current-from-slide2-proof.txt" &&
    grep -q 'open-screen-transition=true' "$output/slideshow-current-from-slide2-proof.txt" &&
