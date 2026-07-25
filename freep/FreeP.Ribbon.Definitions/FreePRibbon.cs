@@ -363,6 +363,16 @@ public static class FreePRibbon
                 FreePRibbonText.PictureEffectsResetCommand.KeyTip);
             group.Medium("freep.shape-rectangle", FreePRibbonText.ShapeRectangleLabel, RibbonCommandIconKind.Rectangle, FreePRibbonText.ShapeRectangleKeyTip);
             group.Medium("freep.shape-ellipse", FreePRibbonText.ShapeEllipseLabel, RibbonCommandIconKind.Ellipse, FreePRibbonText.ShapeEllipseKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.TriangleCommandId, FreePRibbonText.ShapeTriangleLabel,
+                RibbonCommandIconKind.Triangle, FreePRibbonText.ShapeTriangleKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.DiamondCommandId, FreePRibbonText.ShapeDiamondLabel,
+                RibbonCommandIconKind.Diamond, FreePRibbonText.ShapeDiamondKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.HexagonCommandId, FreePRibbonText.ShapeHexagonLabel,
+                RibbonCommandIconKind.Pentagon, FreePRibbonText.ShapeHexagonKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.RightArrowCommandId, FreePRibbonText.ShapeRightArrowLabel,
+                RibbonCommandIconKind.ArrowRight, FreePRibbonText.ShapeRightArrowKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.Star5CommandId, FreePRibbonText.ShapeStar5Label,
+                RibbonCommandIconKind.Star, FreePRibbonText.ShapeStar5KeyTip);
         });
     }
 

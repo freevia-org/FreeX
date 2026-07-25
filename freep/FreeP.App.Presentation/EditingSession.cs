@@ -1105,33 +1105,25 @@ public sealed class EditingSession
 
     /// <summary>Creates and inserts a default rectangle autoshape onto the current slide.</summary>
     public SlideShape InsertDefaultRectangle()
-    {
-        var (x, y, cx, cy) = DefaultShapeBounds();
-        var shape = new SlideShape
-        {
-            Id            = NextShapeId(),
-            Name          = "Rectangle",
-            Kind          = SlideShapeKind.AutoShape,
-            AutoShapeKind = DrawingShapeKind.Rectangle,
-            OffsetXEmu    = x,
-            OffsetYEmu    = y,
-            ExtentCxEmu   = cx,
-            ExtentCyEmu   = cy,
-        };
-        AddShape(shape);
-        return shape;
-    }
+        => InsertDefaultAutoShape(DrawingShapeKind.Rectangle);
 
     /// <summary>Creates and inserts a default ellipse autoshape onto the current slide.</summary>
     public SlideShape InsertDefaultEllipse()
+        => InsertDefaultAutoShape(DrawingShapeKind.Ellipse);
+
+    /// <summary>Creates and inserts a default renderable AutoShape preset onto the current slide.</summary>
+    public SlideShape InsertDefaultAutoShape(DrawingShapeKind shapeKind)
     {
+        if (!DrawingShapeKindSupport.IsRenderable(shapeKind) || DrawingShapeKindSupport.IsLineLike(shapeKind))
+            throw new ArgumentOutOfRangeException(nameof(shapeKind), shapeKind, "The shape kind is not a fillable AutoShape preset.");
+
         var (x, y, cx, cy) = DefaultShapeBounds();
         var shape = new SlideShape
         {
             Id            = NextShapeId(),
-            Name          = "Ellipse",
+            Name          = shapeKind.ToString(),
             Kind          = SlideShapeKind.AutoShape,
-            AutoShapeKind = DrawingShapeKind.Ellipse,
+            AutoShapeKind = shapeKind,
             OffsetXEmu    = x,
             OffsetYEmu    = y,
             ExtentCxEmu   = cx,

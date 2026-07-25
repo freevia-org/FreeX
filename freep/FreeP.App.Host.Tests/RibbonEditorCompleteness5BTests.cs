@@ -218,6 +218,20 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void IllustrationsGroup_ContainsCommonShapeIds()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "insert");
+        var group = tab.Groups.Single(g => g.Id == "illustrations");
+        var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
+        Assert.Contains(SlideObjectInsertionPlanner.TriangleCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.DiamondCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.HexagonCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.RightArrowCommandId, ids);
+        Assert.Contains(SlideObjectInsertionPlanner.Star5CommandId, ids);
+    }
+
+    [Fact]
     public void TablesGroup_ContainsExpectedTableIds()
     {
         var def = FreePRibbon.Build();
@@ -939,6 +953,11 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.insert-chart-bar")]
     [InlineData("freep.insert-chart-line")]
     [InlineData("freep.insert-chart-pie")]
+    [InlineData("freep.shape-triangle")]
+    [InlineData("freep.shape-diamond")]
+    [InlineData("freep.shape-hexagon")]
+    [InlineData("freep.shape-right-arrow")]
+    [InlineData("freep.shape-star5")]
     [InlineData("freep.header-footer")]
     [InlineData("freep.date-time")]
     [InlineData("freep.slide-number")]
