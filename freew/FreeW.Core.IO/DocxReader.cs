@@ -4324,6 +4324,19 @@ public static class DocxReader
         if (int.TryParse(chartSpace.Element(C + "style")?.Attribute("val")?.Value, out var styleId) && styleId > 0)
             chart.StyleId = styleId;
 
+        // Native c:style ids are family-specific themes. Preserve the concrete visual elements so
+        // an imported chart does not inherit FreeW's similarly numbered gallery approximation.
+        chart.NativeVisualSettings = new ChartNativeVisualSettings(
+            ShowGridlines: plotArea.Descendants(C + "majorGridlines").Any(),
+            HasPlotAreaFill: plotArea.Element(C + "spPr")?.Elements()
+                .Any(element => element.Name == A + "solidFill"
+                    || element.Name == A + "gradFill"
+                    || element.Name == A + "pattFill"
+                    || element.Name == A + "blipFill") == true,
+            ShowDataLabels: typeElement.Element(C + "dLbls") is not null,
+            ScatterConnectsPoints: kind == ChartKind.Scatter
+                && string.Equals(typeElement.Element(C + "scatterStyle")?.Attribute("val")?.Value, "lineMarker", StringComparison.OrdinalIgnoreCase));
+
         // freew:ext — FreeW extension: color scheme id and quick layout id (written as c:extLst / c:ext).
         XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
         var freewExt = chartSpace.Descendants(C + "ext")

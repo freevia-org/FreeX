@@ -206,6 +206,7 @@ public sealed record ChartVisualPlan(
     bool ShowGridlines,
     bool PlotAreaFill,
     bool ShowMarkers,
+    bool ScatterConnectsPoints,
     bool ShowDataLabels,
     bool ShowAxisTitles,
     string? CategoryAxisTitle,
@@ -372,16 +373,16 @@ public static class ChartSmartArtVisualPlanner
         bool showTitle;
         bool showLegend;
         bool showAxisTitles;
-        var showGridlines = style.ShowGridlines;
-        var showDataLabels = style.ShowDataLabels;
+        var showGridlines = chart.NativeVisualSettings?.ShowGridlines ?? style.ShowGridlines;
+        var showDataLabels = chart.NativeVisualSettings?.ShowDataLabels ?? style.ShowDataLabels;
 
         var quickLayout = chart.QuickLayoutId > 0 ? ChartQuickLayout.FindById(chart.QuickLayoutId) : null;
         if (quickLayout is not null)
         {
             showTitle = quickLayout.ShowTitle && !string.IsNullOrEmpty(chart.Title);
             showLegend = quickLayout.ShowLegend && chart.Series.Count > 0;
-            showGridlines = quickLayout.ShowGridlines;
-            showDataLabels = quickLayout.ShowDataLabels;
+            showGridlines = chart.NativeVisualSettings?.ShowGridlines ?? quickLayout.ShowGridlines;
+            showDataLabels = chart.NativeVisualSettings?.ShowDataLabels ?? quickLayout.ShowDataLabels;
             showAxisTitles = quickLayout.ShowAxisTitles;
         }
         else
@@ -411,8 +412,9 @@ public static class ChartSmartArtVisualPlanner
             showTitle,
             showLegend,
             showGridlines,
-            style.PlotAreaFill,
+            chart.NativeVisualSettings?.HasPlotAreaFill ?? style.PlotAreaFill,
             style.ShowMarkers || chart.Kind == ChartKind.Scatter,
+            chart.NativeVisualSettings?.ScatterConnectsPoints == true,
             showDataLabels,
             showAxisTitles,
             showAxisTitles ? chart.CategoryAxisTitle : null,
@@ -617,17 +619,21 @@ public static class ChartSmartArtVisualPlanner
                 var xMax = scatterAxis.Maximum;
                 for (var series = 0; series < plan.Series.Count; series++)
                 {
+                    var points = new List<(double X, double Y)>();
                     for (var category = 0; category < plan.Series[series].Values.Count; category++)
                     {
                         var xValue = category < xValues.Count && !double.IsNaN(xValues[category]) ? xValues[category] : category + 1;
                         var x = plot.X + (xValue - xMin) / (xMax - xMin) * plot.Width;
                         var y = plot.Bottom - axis.ValueFraction(plan.Series[series].Values[category]) * plot.Height;
                         var paletteIndex = plan.Series.Count == 1 ? category : series;
+                        points.Add((x, y));
                         markers.Add(new ChartSceneMarker(x, y, 4, (ChartSceneMarkerKind)(category % 4),
                             paletteHex[paletteIndex % paletteHex.Count]));
                         if (plan.ShowDataLabels)
                             AddDataText(texts, plan.Series[series].Values[category], x + 6, y - 10);
                     }
+                    if (plan.ScatterConnectsPoints && points.Count > 1)
+                        lineSeries.Add(new ChartSceneLineSeries(points, paletteHex[series % paletteHex.Count], 1.5, false, zeroY));
                 }
                 for (var tick = xMin; tick <= xMax + scatterAxis.Step / 2; tick += scatterAxis.Step)
                 {

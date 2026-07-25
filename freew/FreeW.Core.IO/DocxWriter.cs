@@ -6381,7 +6381,10 @@ public static class DocxWriter
         var showTitle = quickLayout?.ShowTitle ?? true;
         var showLegend = quickLayout?.ShowLegend ?? chart.ShowLegend;
         var showAxisTitles = quickLayout?.ShowAxisTitles ?? true;
-        var showGridlines = quickLayout?.ShowGridlines ?? style?.ShowGridlines ?? ChartStyle.Default.ShowGridlines;
+        var showGridlines = chart.NativeVisualSettings?.ShowGridlines
+            ?? quickLayout?.ShowGridlines
+            ?? style?.ShowGridlines
+            ?? ChartStyle.Default.ShowGridlines;
         var categoryAxisTitle = showAxisTitles ? chart.CategoryAxisTitle : null;
         var valueAxisTitle = showAxisTitles ? chart.ValueAxisTitle : null;
         // Stable axis ids referenced by the plot's series-holding chart element (cartesian kinds only).
@@ -6630,9 +6633,8 @@ public static class DocxWriter
     private static XElement BuildScatterChart(Chart chart, long xAxisId, long yAxisId)
     {
         var root = new XElement(C + "scatterChart",
-            // The model's scatter rendering is marker-only.  Keep the OOXML style in sync so Word does not
-            // add a connecting line when it opens the exported chart.
-            new XElement(C + "scatterStyle", new XAttribute("val", "marker")));
+            new XElement(C + "scatterStyle", new XAttribute("val",
+                chart.NativeVisualSettings?.ScatterConnectsPoints == true ? "lineMarker" : "marker")));
         for (var i = 0; i < chart.Series.Count; i++)
             root.Add(BuildScatterSeries(chart, chart.Series[i], i));
         if (ChartShowsDataLabels(chart))
@@ -6658,6 +6660,9 @@ public static class DocxWriter
 
     private static bool ChartShowsDataLabels(Chart chart)
     {
+        if (chart.NativeVisualSettings is not null)
+            return chart.NativeVisualSettings.ShowDataLabels;
+
         if (chart.QuickLayoutId > 0)
             return ChartQuickLayout.FindById(chart.QuickLayoutId)?.ShowDataLabels == true;
 
@@ -6673,7 +6678,8 @@ public static class DocxWriter
             new XElement(C + "showSerName", new XAttribute("val", "0")));
 
     private static bool ChartHasPlotAreaFill(Chart chart) =>
-        chart.StyleId > 0 && ChartStyle.FindById(chart.StyleId)?.PlotAreaFill == true;
+        chart.NativeVisualSettings?.HasPlotAreaFill
+        ?? (chart.StyleId > 0 && ChartStyle.FindById(chart.StyleId)?.PlotAreaFill == true);
 
     private static XElement BuildChartPlotAreaProperties() =>
         new(C + "spPr",

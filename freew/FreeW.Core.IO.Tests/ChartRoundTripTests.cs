@@ -312,6 +312,33 @@ public class ChartRoundTripTests
     }
 
     [Fact]
+    public void NativeVisualSettings_RoundTripConcreteChartElements()
+    {
+        var chart = Chart.Create(ChartKind.Scatter, ["1", "2"], [3.0, 4.0]);
+        chart.StyleId = 4;
+        chart.NativeVisualSettings = new ChartNativeVisualSettings(
+            ShowGridlines: false,
+            HasPlotAreaFill: false,
+            ShowDataLabels: false,
+            ScatterConnectsPoints: true);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(paragraph);
+
+        var docx = WriteBytes(doc);
+        var chartXml = EntryXml(docx, "word/charts/chart1.xml");
+        var scatter = chartXml.Descendants(C + "scatterChart").Single();
+        scatter.Element(C + "scatterStyle")!.Attribute("val")!.Value.Should().Be("lineMarker");
+        scatter.Element(C + "dLbls").Should().BeNull();
+        chartXml.Descendants(C + "majorGridlines").Should().BeEmpty();
+        chartXml.Descendants(C + "plotArea").Single().Element(C + "spPr").Should().BeNull();
+
+        var roundTripped = RoundTrip(doc).Paragraphs.Single().Runs.Single().Chart!;
+        roundTripped.NativeVisualSettings.Should().Be(new ChartNativeVisualSettings(false, false, false, true));
+    }
+
+    [Fact]
     public void LegendAndAxisTitles_RoundTrip()
     {
         var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], title: "T");
