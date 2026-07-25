@@ -381,6 +381,45 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
         }
     }
 
+    [Fact]
+    public void Build_CompoundArrows_ExposeShaftAndSymmetricHeadGuides()
+    {
+        var horizontal = new SlideShape
+        {
+            Id = 23,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.LeftRightArrow,
+        };
+        var vertical = new SlideShape
+        {
+            Id = 24,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.UpDownArrow,
+        };
+
+        var horizontalPlan = ShapeGeometryAdjustmentPlanner.Build(horizontal, Bounds);
+        horizontalPlan.Handles.Select(handle => handle.Name).Should().Equal("adj1", "adj2");
+        horizontalPlan.Handles[0].PositionDip.Should().Be(new LayoutPoint(Bounds.Left, 45));
+        horizontalPlan.Handles[1].PositionDip.Should().Be(new LayoutPoint(60, Bounds.Top));
+        horizontalPlan.Handles[1].Maximum.Should().Be(200000);
+
+        var verticalPlan = ShapeGeometryAdjustmentPlanner.Build(vertical, Bounds);
+        verticalPlan.Handles.Select(handle => handle.Name).Should().Equal("adj1", "adj2");
+        verticalPlan.Handles[0].PositionDip.Should().Be(new LayoutPoint(135, Bounds.Top));
+        verticalPlan.Handles[1].PositionDip.Should().Be(new LayoutPoint(Bounds.Left, 70));
+        verticalPlan.Handles[1].Maximum.Should().Be(100000);
+
+        var horizontalMutation = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            horizontal, Bounds, "adj2", new LayoutPoint(60, Bounds.Top));
+        horizontalMutation.ShouldApply.Should().BeTrue();
+        horizontalMutation.Value.Should().Be(50000);
+
+        var verticalMutation = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            vertical, Bounds, "adj1", new LayoutPoint(135, Bounds.Top));
+        verticalMutation.ShouldApply.Should().BeTrue();
+        verticalMutation.Value.Should().Be(50000);
+    }
+
     private static SlideShape MakeCustomTriangle()
     {
         var path = new CustomGeometryPath { PathW = 100, PathH = 100 };

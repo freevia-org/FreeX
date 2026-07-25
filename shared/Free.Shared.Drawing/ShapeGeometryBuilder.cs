@@ -76,8 +76,8 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.LeftArrow => Arrow(rect, adjustments, DrawingShapeKind.LeftArrow),
             DrawingShapeKind.UpArrow => Arrow(rect, adjustments, DrawingShapeKind.UpArrow),
             DrawingShapeKind.DownArrow => Arrow(rect, adjustments, DrawingShapeKind.DownArrow),
-            DrawingShapeKind.LeftRightArrow => Polygon(rect, [(0, 0.5), (0.25, 0), (0.25, 0.25), (0.75, 0.25), (0.75, 0), (1, 0.5), (0.75, 1), (0.75, 0.75), (0.25, 0.75), (0.25, 1)]),
-            DrawingShapeKind.UpDownArrow => Polygon(rect, [(0.5, 0), (1, 0.25), (0.75, 0.25), (0.75, 0.75), (1, 0.75), (0.5, 1), (0, 0.75), (0.25, 0.75), (0.25, 0.25), (0, 0.25)]),
+            DrawingShapeKind.LeftRightArrow => CompoundArrow(rect, adjustments, vertical: false),
+            DrawingShapeKind.UpDownArrow => CompoundArrow(rect, adjustments, vertical: true),
             DrawingShapeKind.MinusSign => Minus(rect),
             DrawingShapeKind.MultiplySign => Multiply(rect),
             DrawingShapeKind.DivideSign => Divide(rect),
@@ -256,6 +256,52 @@ public static class ShapeGeometryBuilder
         var x1 = rect.Width - Math.Min(rect.Width, rect.Height) * depth / 100000.0;
         return Polygon(rect,
         [(0, 0), (x1 / rect.Width, 0), (1, 0.5), (x1 / rect.Width, 1), (0, 1)]);
+    }
+
+    private static ShapeGeometry CompoundArrow(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments,
+        bool vertical)
+    {
+        if (adjustments is null ||
+            (!adjustments.ContainsKey("adj1") && !adjustments.ContainsKey("adj2")))
+        {
+            return vertical
+                ? Polygon(rect, [(0.5, 0), (1, 0.25), (0.75, 0.25), (0.75, 0.75), (1, 0.75), (0.5, 1), (0, 0.75), (0.25, 0.75), (0.25, 0.25), (0, 0.25)])
+                : Polygon(rect, [(0, 0.5), (0.25, 0), (0.25, 0.25), (0.75, 0.25), (0.75, 0), (1, 0.5), (0.75, 1), (0.75, 0.75), (0.25, 0.75), (0.25, 1)]);
+        }
+
+        var minimumDimension = Math.Min(rect.Width, rect.Height);
+        var shaftHalf = minimumDimension * Math.Clamp(GetAdjustment(adjustments, "adj1", 50000), 0, 100000) / 200000.0;
+        var headDepth = minimumDimension * Math.Clamp(
+            GetAdjustment(adjustments, "adj2", 50000),
+            0,
+            100000.0 * (vertical ? rect.Height : rect.Width) / minimumDimension) / 100000.0;
+
+        if (vertical)
+        {
+            var shaftHalfRatio = shaftHalf / rect.Width;
+            var topBase = headDepth / rect.Height;
+            var bottomBase = 1 - topBase;
+            return Polygon(rect,
+            [
+                (0.5, 0), (1, topBase), (0.5 + shaftHalfRatio, topBase),
+                (0.5 + shaftHalfRatio, bottomBase), (1, bottomBase), (0.5, 1),
+                (0, bottomBase), (0.5 - shaftHalfRatio, bottomBase),
+                (0.5 - shaftHalfRatio, topBase), (0, topBase),
+            ]);
+        }
+
+        var shaftHalfRatioHorizontal = shaftHalf / rect.Height;
+        var leftBase = headDepth / rect.Width;
+        var rightBase = 1 - leftBase;
+        return Polygon(rect,
+        [
+            (0, 0.5), (leftBase, 0), (leftBase, 0.5 - shaftHalfRatioHorizontal),
+            (rightBase, 0.5 - shaftHalfRatioHorizontal), (rightBase, 0), (1, 0.5),
+            (rightBase, 1), (rightBase, 0.5 + shaftHalfRatioHorizontal),
+            (leftBase, 0.5 + shaftHalfRatioHorizontal), (leftBase, 1),
+        ]);
     }
 
     private static ShapeContour RectangleContour(LayoutRect rect) =>

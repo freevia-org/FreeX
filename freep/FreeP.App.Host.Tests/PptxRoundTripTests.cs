@@ -443,6 +443,41 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_CompoundArrows_PreserveAuthoredAdjustmentGuides()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        uint id = 1;
+        foreach (var kind in new[] { DrawingShapeKind.LeftRightArrow, DrawingShapeKind.UpDownArrow })
+        {
+            var shape = new SlideShape
+            {
+                Id = id++,
+                Name = kind.ToString(),
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = kind,
+                ExtentCxEmu = 914400,
+                ExtentCyEmu = 457200,
+            };
+            shape.PresetGeometryAdjustments["adj1"] = 25000;
+            shape.PresetGeometryAdjustments["adj2"] = 75000;
+            slide.Shapes.Add(shape);
+        }
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        foreach (var kind in new[] { DrawingShapeKind.LeftRightArrow, DrawingShapeKind.UpDownArrow })
+        {
+            var shape = reloaded.Slides[0].Shapes.Single(candidate => candidate.Name == kind.ToString());
+            shape.AutoShapeKind.Should().Be(kind);
+            shape.PresetGeometryAdjustments["adj1"].Should().Be(25000);
+            shape.PresetGeometryAdjustments["adj2"].Should().Be(75000);
+        }
+    }
+
+    [Fact]
     public void RoundTrip_Rotation_And_Flip()
     {
         var pres = new Presentation();

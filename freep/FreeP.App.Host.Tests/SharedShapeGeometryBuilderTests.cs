@@ -218,6 +218,30 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void CompoundArrows_UseAuthoredShaftAndSymmetricHeadGuides()
+    {
+        var adjustments = new Dictionary<string, double>
+        {
+            ["adj1"] = 25000,
+            ["adj2"] = 25000,
+        };
+
+        var horizontal = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.LeftRightArrow, Bounds, adjustments).Contours.Single();
+        horizontal.Start.Should().Be(new LayoutPoint(100, 230));
+        horizontal.Segments[0].End.Should().Be(new LayoutPoint(115, 200));
+        horizontal.Segments[2].End.Should().Be(new LayoutPoint(165, 222.5));
+        horizontal.Segments[4].End.Should().Be(new LayoutPoint(180, 230));
+
+        var vertical = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.UpDownArrow, Bounds, adjustments).Contours.Single();
+        vertical.Start.Should().Be(new LayoutPoint(140, 200));
+        vertical.Segments[0].End.Should().Be(new LayoutPoint(180, 215));
+        vertical.Segments[2].End.Should().Be(new LayoutPoint(147.5, 245));
+        vertical.Segments[4].End.Should().Be(new LayoutPoint(140, 260));
+    }
+
+    [Fact]
     public void Cylinder_EnumValue_Is44_NoRenumbering()
     {
         // Appended after HomePlate=43 — verify no renumbering occurred.

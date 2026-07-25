@@ -47,8 +47,9 @@ public sealed record ShapeGeometryAdjustmentMutationPlan(
 /// Shared planning for PowerPoint-style preset-shape edit points.
 /// Supported geometries are imported/custom line vertices, Chord (two explicit angle guides),
 /// Rounded Rectangle (one explicit corner-radius guide), Triangle (one apex guide), directional
-/// arrows (shaft and head guides), Chevron, and Home Plate (one point-depth guide each). The
-/// compositor already consumes these geometry representations.
+/// arrows (shaft and head guides), compound arrows (shaft and symmetric head guides), Chevron,
+/// and Home Plate (one point-depth guide each). The compositor already consumes these geometry
+/// representations.
 /// </summary>
 public static class ShapeGeometryAdjustmentPlanner
 {
@@ -77,6 +78,7 @@ public static class ShapeGeometryAdjustmentPlanner
         if (shape.Kind != SlideShapeKind.AutoShape ||
             shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or
                 DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or DrawingShapeKind.UpArrow or DrawingShapeKind.DownArrow or
+                DrawingShapeKind.LeftRightArrow or DrawingShapeKind.UpDownArrow or
                 DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate))
         {
             return new ShapeGeometryAdjustmentPlan(
@@ -170,6 +172,43 @@ public static class ShapeGeometryAdjustmentPlanner
                         headAdjustment,
                         0,
                         MaxArrowAdjustment),
+                ]);
+        }
+
+        if (IsCompoundArrow(shape.AutoShapeKind))
+        {
+            var vertical = shape.AutoShapeKind == DrawingShapeKind.UpDownArrow;
+            var minimumDimension = Math.Min(boundsDip.Width, boundsDip.Height);
+            var maximumHeadAdjustment = CompoundArrowHeadMaximum(boundsDip, vertical);
+            var shaftAdjustment = ReadAdjustment(shape, "adj1", DefaultArrowAdjustment, MaxArrowAdjustment);
+            var headAdjustment = ReadAdjustment(shape, "adj2", DefaultArrowAdjustment, maximumHeadAdjustment);
+            var shaftHalf = minimumDimension * shaftAdjustment / 200000.0;
+            var headDepth = minimumDimension * headAdjustment / 100000.0;
+            var shaftPosition = vertical
+                ? new LayoutPoint(boundsDip.Left + boundsDip.Width / 2 + shaftHalf, boundsDip.Top)
+                : new LayoutPoint(boundsDip.Left, boundsDip.Top + boundsDip.Height / 2 - shaftHalf);
+            var headPosition = vertical
+                ? new LayoutPoint(boundsDip.Left, boundsDip.Top + headDepth)
+                : new LayoutPoint(boundsDip.Left + headDepth, boundsDip.Top);
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [
+                    new ShapeGeometryAdjustmentHandlePlan(
+                        "adj1",
+                        "Shaft thickness",
+                        shaftPosition,
+                        shaftAdjustment,
+                        0,
+                        MaxArrowAdjustment),
+                    new ShapeGeometryAdjustmentHandlePlan(
+                        "adj2",
+                        "Head length",
+                        headPosition,
+                        headAdjustment,
+                        0,
+                        maximumHeadAdjustment),
                 ]);
         }
 
@@ -318,6 +357,35 @@ public static class ShapeGeometryAdjustmentPlanner
             return new(true, "adj", Math.Clamp(cornerAdjustment, 0, MaxCornerAdjustment), null);
         }
 
+        if (IsCompoundArrow(shape.AutoShapeKind))
+        {
+            var vertical = shape.AutoShapeKind == DrawingShapeKind.UpDownArrow;
+            var minimumDimension = Math.Min(boundsDip.Width, boundsDip.Height);
+            if (handleName == "adj1")
+            {
+                var center = vertical
+                    ? boundsDip.Left + boundsDip.Width / 2
+                    : boundsDip.Top + boundsDip.Height / 2;
+                var pointer = vertical ? pointerDip.X : pointerDip.Y;
+                var normalizedHalf = Math.Abs(pointer - center) / minimumDimension;
+                return new(true, "adj1", Math.Clamp(normalizedHalf * 200000.0, 0, MaxArrowAdjustment), null);
+            }
+
+            if (handleName == "adj2")
+            {
+                var normalizedDepth = vertical
+                    ? (pointerDip.Y - boundsDip.Top) / minimumDimension
+                    : (pointerDip.X - boundsDip.Left) / minimumDimension;
+                return new(
+                    true,
+                    "adj2",
+                    Math.Clamp(normalizedDepth * 100000.0, 0, CompoundArrowHeadMaximum(boundsDip, vertical)),
+                    null);
+            }
+
+            return new(false, null, null, InvalidHandleMessage);
+        }
+
         if (shape.AutoShapeKind is DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate)
         {
             if (handleName != "adj")
@@ -464,6 +532,12 @@ public static class ShapeGeometryAdjustmentPlanner
     private static bool IsDirectionalArrow(DrawingShapeKind kind) =>
         kind is DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or
             DrawingShapeKind.UpArrow or DrawingShapeKind.DownArrow;
+
+    private static bool IsCompoundArrow(DrawingShapeKind kind) =>
+        kind is DrawingShapeKind.LeftRightArrow or DrawingShapeKind.UpDownArrow;
+
+    private static double CompoundArrowHeadMaximum(LayoutRect boundsDip, bool vertical) =>
+        100000.0 * (vertical ? boundsDip.Height : boundsDip.Width) / Math.Min(boundsDip.Width, boundsDip.Height);
 
     private static double GuideMaximum(LayoutRect boundsDip) =>
         100000.0 * boundsDip.Width / Math.Min(boundsDip.Width, boundsDip.Height);
