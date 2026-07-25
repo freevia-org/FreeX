@@ -8340,9 +8340,13 @@ public sealed partial class MainWindow : Window
             int sourceIdx = route.GetSourceSlideIndex(exitIdx);
             if (sourceIdx >= 0 && sourceIdx < _presentation.Slides.Count)
                 Editor.SelectSlide(sourceIdx);
+            RestoreOwnerFocus();
         };
 
-        slideShow.Show();
+        if (IsVisible)
+            slideShow.Show(this);
+        else
+            slideShow.Show();
     }
 
     internal bool TryBuildCustomSlideShowRoute(
