@@ -512,6 +512,11 @@ capture_window_state "shape-selection-state.txt"
 
 copy_key_sent=true
 send_owner_key ctrl+c || copy_key_sent=false
+post_copy_pre_save_hash="$(hash_file "$document_path")"
+printf '%s\n' "$post_copy_pre_save_hash" \
+    > "$output/after-copy-before-save.sha256.txt"
+copy_source_unchanged=false
+[[ "$post_copy_pre_save_hash" == "$initial_hash" ]] && copy_source_unchanged=true
 copy_clipboard_ready=false
 if capture_clipboard "clipboard-copy" "$expected_text" true; then
     copy_clipboard_ready=true
@@ -526,8 +531,6 @@ fi
 after_copy_hash=""
 [[ -s "$output/after-copy.sha256.txt" ]] &&
     after_copy_hash="$(tr -d '\r\n' < "$output/after-copy.sha256.txt")"
-copy_source_unchanged=false
-[[ "$after_copy_hash" == "$initial_hash" ]] && copy_source_unchanged=true
 {
     printf 'shortcut=ctrl+c\n'
     printf 'copy-key-sent=%s\n' "$copy_key_sent"
@@ -536,8 +539,11 @@ copy_source_unchanged=false
     printf 'exact-text=%s\n' "$expected_text"
     printf 'ctrl-s-baseline-checkpoint=%s\n' "$copy_checkpoint"
     printf 'baseline-package-sha256=%s\n' "$initial_hash"
-    printf 'after-copy-package-sha256=%s\n' "$after_copy_hash"
-    printf 'source-package-unchanged=%s\n' "$copy_source_unchanged"
+    printf 'post-copy-pre-save-package-sha256=%s\n' "$post_copy_pre_save_hash"
+    printf 'post-copy-pre-save-source-unchanged=%s\n' "$copy_source_unchanged"
+    printf 'saved-after-copy-package-sha256=%s\n' "$after_copy_hash"
+    printf 'saved-package-byte-equality-required=false\n'
+    printf 'saved-package-proof=exact parsed baseline semantics\n'
     printf 'selection-before-screenshot=%s\n' "$selection_before_capture"
     printf 'selection-after-screenshot=%s\n' "$selection_after_capture"
     printf 'copy-after-screenshot=%s\n' "$copy_capture"
@@ -548,15 +554,16 @@ if $visible_pass && $copy_key_sent && $copy_clipboard_ready && $copy_checkpoint 
    $copy_capture; then
     copy_pass=true
     record "clipboard-copy-x11-preserves-source" "passed" \
-        "Pointer-selected shape Ctrl+C exposed the exact native X11 target and text, while Ctrl+S preserved the exact baseline package." \
+        "Pointer-selected shape Ctrl+C exposed the exact native X11 target and text without changing the mounted package before save; Ctrl+S then preserved exact parsed baseline semantics, while its ZIP bytes were allowed to differ." \
         clipboard-copy-proof.txt shape-pointer-calibration.txt shape-selection-state.txt \
         clipboard-copy-state.txt clipboard-copy-targets.txt clipboard-copy-native.bin \
-        clipboard-copy-native.sha256.txt clipboard-copy-text.txt after-copy.pptx \
-        after-copy.json after-copy.sha256.txt
+        clipboard-copy-native.sha256.txt clipboard-copy-text.txt \
+        after-copy-before-save.sha256.txt after-copy.pptx after-copy.json \
+        after-copy.sha256.txt
 else
     lane_failed=true
     record "clipboard-copy-x11-preserves-source" "failed" \
-        "Ctrl+C did not prove native X11 shape data, exact text, real captures, and unchanged baseline package semantics." \
+        "Ctrl+C did not prove native X11 shape data, exact text, real captures, unchanged pre-save package bytes, and exact saved baseline semantics." \
         clipboard-copy-proof.txt shape-pointer-calibration.txt shape-selection-state.txt \
         clipboard-copy-state.txt
 fi
