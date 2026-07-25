@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freex.local/schemas/freep-linux-rich-text-shortcut-physical-v1.json",
+  "title": "FreeP Linux physical rich-text soft-break evidence",
+  "description": "Strict host contract for the dedicated non-exhaustive physical X11 rich-text soft-break lane.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "baseline", "appSurface", "window", "parameters", "coverage", "contractValidation", "screenshots", "summary", "results"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "suite": { "const": "freep-linux-rich-text-shortcut-physical" }, "platform": { "const": "linux" }, "shell": { "const": "avalonia" }, "app": { "const": "FreeP" }, "baseline": { "const": false }, "appSurface": { "const": "in-canvas-rich-text-soft-break" },
+    "window": { "type": "object", "additionalProperties": true, "required": ["id", "title", "pattern", "visible"], "properties": { "id": { "type": "string", "minLength": 1 }, "title": { "type": "string", "minLength": 1 }, "pattern": { "const": "21-comments-notes.pptx" }, "visible": { "const": true } } },
+    "coverage": { "type": "object", "additionalProperties": true, "required": ["scope", "exhaustive"], "properties": { "scope": { "const": "physical FreeP rich-text soft-break evidence lane" }, "exhaustive": { "const": false } } },
+    "contractValidation": { "type": "object", "additionalProperties": true, "required": ["status", "validator", "contractReference"], "properties": { "status": { "const": "passed" }, "validator": { "const": "tools/Run-FreePClipboardShortcutValidation.ps1" }, "contractReference": { "const": "tools/LinuxInteractiveDocker/freep-rich-text-shortcut-validation.schema.json" } } },
+    "screenshots": { "type": "array", "items": { "type": "object", "additionalProperties": true, "required": ["name", "kind"], "properties": { "name": { "type": "string", "minLength": 1 }, "kind": { "const": "screenshot" } } } },
+    "summary": { "type": "object", "additionalProperties": true, "required": ["passed", "failed", "total"], "properties": { "passed": { "type": "integer", "minimum": 0 }, "failed": { "type": "integer", "minimum": 0 }, "total": { "const": 8 } } },
+    "results": { "type": "array", "minItems": 5, "maxItems": 5, "prefixItems": [
+      { "$ref": "#/$defs/resultVisible" }, { "$ref": "#/$defs/resultCopy" }, { "$ref": "#/$defs/resultPaste" }, { "$ref": "#/$defs/resultSelect" }, { "$ref": "#/$defs/resultCut" }, { "$ref": "#/$defs/resultUndo" }, { "$ref": "#/$defs/resultRedo" }, { "$ref": "#/$defs/resultPasteAfterCut" }
+    ], "items": false }
+  },
+  "$defs": {
+    "result": { "type": "object", "additionalProperties": true, "required": ["id", "category", "status", "evidenceLevel", "evidence", "note"], "properties": { "category": { "const": "physical-x11-rich-text-shortcut" }, "status": { "enum": ["passed", "failed"] }, "evidenceLevel": { "const": "physical-x11-input" }, "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }, "note": { "type": "string", "minLength": 1 } } },
+    "resultVisible": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "visible-window-discovery" } } }] },
+    "resultCopy": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "rich-text-copy-x11-preserves-source" } } }] },
+    "resultPaste": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "rich-text-paste-native-editable-shape" } } }] },
+    "resultSelect": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "undo-restores-original-text" } } }] },
+    "resultCut": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "redo-restores-soft-break" } } }] },
+    "resultUndo": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "undo-restores-editable-shapes" } } }] },
+    "resultRedo": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "redo-reapplies-cut" } } }] },
+    "resultPasteAfterCut": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "id": { "const": "redo-restores-soft-break" } } }] }
+  }
+}
