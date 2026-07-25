@@ -348,7 +348,7 @@ public sealed partial class MainWindow
             var name = nameBox.Text?.Trim() ?? string.Empty;
             var liveScope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)].Scope;
             var existing = ExistingDefinedNames(_session.Workbook, liveScope);
-            var nameResult = DefinedNameValidator.Validate(name, existing, seed?.Name);
+            var nameResult = DefinedNameValidator.Validate(name, existing, OriginalNameForDuplicateCheck(seed, liveScope));
             if (!nameResult.IsValid)
             {
                 ShowWarning(DescribeNameError(nameResult.Error));
@@ -378,7 +378,7 @@ public sealed partial class MainWindow
             var name = nameBox.Text?.Trim() ?? string.Empty;
             var scope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)].Scope;
             var existing = ExistingDefinedNames(_session.Workbook, scope);
-            var nameResult = DefinedNameValidator.Validate(name, existing, seed?.Name);
+            var nameResult = DefinedNameValidator.Validate(name, existing, OriginalNameForDuplicateCheck(seed, scope));
             if (!nameResult.IsValid)
             {
                 ShowWarning(DescribeNameError(nameResult.Error));
@@ -640,6 +640,25 @@ public sealed partial class MainWindow
                 .Where(key => key.Sheet.Equals(sheetId))
                 .Select(key => key.Name));
     }
+
+    /// <summary>
+    /// R88-app-name-manager-ui-5-1: the seed's own name is only excluded from the duplicate check
+    /// (i.e. treated as "the entry being edited, not a collision") when <paramref name="candidateScope"/>
+    /// is the SAME scope the seed already occupies. Editing a name's Scope dropdown to a scope that
+    /// already holds an unrelated same-text name must NOT be waved through as "the entry being
+    /// edited" -- Excel's New Name dialog rejects that with "A name with that text already exists in
+    /// this scope" instead of silently overwriting the pre-existing entry (mirrors the WPF host's
+    /// NamedRangeDialog.DefineOrUpdateName, which computes its isSameEntry gate from BOTH the
+    /// original name AND the original scope).
+    /// </summary>
+    private static string? OriginalNameForDuplicateCheck(DefinedNameRow? seed, DefinedNameScope candidateScope) =>
+        seed is not null && string.Equals(seed.ScopeLabel, candidateScope.Label, StringComparison.OrdinalIgnoreCase)
+            ? seed.Name
+            : null;
+
+    /// <summary>Test-only forwarder for <see cref="OriginalNameForDuplicateCheck"/>.</summary>
+    internal static string? OriginalNameForDuplicateCheckForTest(DefinedNameRow? seed, DefinedNameScope candidateScope) =>
+        OriginalNameForDuplicateCheck(seed, candidateScope);
 
     private static int FindScopeIndex(
         IReadOnlyList<DefinedNamesShellGlue.ScopeChoice> choices,

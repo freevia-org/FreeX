@@ -70,9 +70,13 @@ public static class ChartDataLabelTextPlanner
             parts.Add(categoryName);
         // Excel's fixed data-label order is Series Name, Category Name, Value, Percentage.
         // Value and Percentage are independently toggleable (showVal/showPercent) and can both
-        // be set at once, so they must not be treated as mutually exclusive here.
+        // be set at once, so they must not be treated as mutually exclusive here. The value is
+        // always the raw slice value formatted with its own number format - FormatLabelValue
+        // must not be used here because it reformats as a percentage whenever percentage labels
+        // are enabled, which would corrupt the value (the percentage is supplied separately via
+        // "fraction" below).
         if (chart.ShowDataLabelValue || (!chart.ShowDataLabelPercentage && parts.Count == 0))
-            parts.Add(FormatLabelValue(chart, value));
+            parts.Add(FormatAxisValue(chart.DataLabelNumberFormat, value));
         if (chart.ShowDataLabelPercentage)
             parts.Add(fraction.ToString("0%", CultureInfo.InvariantCulture));
 

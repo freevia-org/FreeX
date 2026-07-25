@@ -92,6 +92,27 @@ public static class SparklineLayoutEngine
     }
 
     /// <summary>
+    /// Lays out a line sparkline whose group has a Date Axis Type configured, spacing points
+    /// proportionally to <paramref name="datePositions"/> (e.g. each point's date serial number)
+    /// instead of evenly by array index -- matching Excel, which spaces a date-axis sparkline's
+    /// points by elapsed time so unevenly-spaced dates bunch together or spread apart on screen.
+    /// <paramref name="datePositions"/> must be the same length as <paramref name="values"/>; when it
+    /// is null, the wrong length, or every finite entry shares the same position, this falls back to
+    /// the even by-index spacing of <see cref="CalculateLineLayout(IReadOnlyList{double}, LayoutRect, double?, double?)"/>.
+    /// </summary>
+    public static SparklineLineLayout CalculateLineLayout(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        double? overrideMin,
+        double? overrideMax,
+        IReadOnlyList<double>? datePositions)
+    {
+        var consumer = new LineLayoutCollector(values.Count);
+        VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax, datePositions);
+        return consumer.ToLayout();
+    }
+
+    /// <summary>
     /// Streams a line sparkline's geometry into <paramref name="consumer"/> without allocating a list.
     /// Same math as <see cref="CalculateLineLayout"/>; a renderer can consume points/segments directly.
     /// </summary>
@@ -114,6 +135,23 @@ public static class SparklineLayoutEngine
         ref TConsumer consumer,
         double? overrideMin,
         double? overrideMax)
+        where TConsumer : struct, ISparklineLineLayoutConsumer =>
+        VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax, datePositions: null);
+
+    /// <summary>
+    /// Streams a line sparkline's geometry into <paramref name="consumer"/>, optionally spacing
+    /// points by <paramref name="datePositions"/> (a Date Axis Type's per-point date serial numbers)
+    /// instead of evenly by array index. See
+    /// <see cref="CalculateLineLayout(IReadOnlyList{double}, LayoutRect, double?, double?, IReadOnlyList{double}?)"/>
+    /// for the fallback rules when <paramref name="datePositions"/> cannot be used.
+    /// </summary>
+    public static void VisitLineLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        ref TConsumer consumer,
+        double? overrideMin,
+        double? overrideMax,
+        IReadOnlyList<double>? datePositions)
         where TConsumer : struct, ISparklineLineLayoutConsumer
     {
         if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
@@ -161,6 +199,47 @@ public static class SparklineLayoutEngine
         if (overrideMax.HasValue && double.IsFinite(overrideMax.Value))
             max = overrideMax.Value;
 
+        // A configured Date Axis Type spaces points proportionally to elapsed time instead of
+        // evenly by index (matching Excel). Usable only when a position is supplied for every
+        // value and the positions actually span a non-zero range; otherwise fall back to even
+        // by-index spacing below.
+        var useDatePositions = false;
+        var minPos = 0d;
+        var maxPos = 0d;
+        if (datePositions is not null && datePositions.Count == values.Count)
+        {
+            for (var i = 0; i < datePositions.Count; i++)
+            {
+                if (!double.IsFinite(values[i]))
+                    continue;
+
+                var position = datePositions[i];
+                if (!double.IsFinite(position))
+                {
+                    minPos = maxPos = 0;
+                    useDatePositions = false;
+                    break;
+                }
+
+                if (!useDatePositions)
+                {
+                    minPos = position;
+                    maxPos = position;
+                    useDatePositions = true;
+                }
+                else
+                {
+                    if (position < minPos) minPos = position;
+                    if (position > maxPos) maxPos = position;
+                }
+            }
+
+            if (maxPos - minPos < Epsilon)
+                useDatePositions = false;
+        }
+
+        var posSpan = useDatePositions ? maxPos - minPos : 1;
+
         var span = Math.Abs(max - min) < Epsilon ? 1 : max - min;
         LayoutPoint? previous = null;
         var visiblePointCount = 0;
@@ -174,8 +253,11 @@ public static class SparklineLayoutEngine
                 continue;
             }
 
+            var xFraction = useDatePositions
+                ? (datePositions![i] - minPos) / posSpan
+                : (double)i / (values.Count - 1);
             var point = new LayoutPoint(
-                rect.Left + (rect.Width * i / (values.Count - 1)),
+                rect.Left + (rect.Width * xFraction),
                 rect.Bottom - (Math.Clamp((value - min) / span, 0, 1) * rect.Height));
 
             if (previous is { } start)

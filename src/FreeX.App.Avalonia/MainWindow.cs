@@ -487,6 +487,16 @@ public sealed partial class MainWindow : Window
     private int? _inlineCellEditSelectionStart;
     private int? _inlineCellEditSelectionEnd;
     private int? _pendingInlineCellCaretIndex;
+
+    // R88-app-autocomplete-picklist-5-2: reentrancy guard for ApplyInlineCellValueAutoCompleteSuggestion
+    // (setting the inline editor's Text to add the suggested tail fires TextChanged again), mirroring the
+    // WPF host's _applyingCellValueAutoCompleteSuggestion (MainWindow.Editing.cs).
+    private bool _applyingInlineCellValueAutoCompleteSuggestion;
+
+    // Set for one TextChanged pass when Backspace/Delete just removed a live suggestion, so that pass
+    // doesn't instantly re-offer the very completion the user just rejected -- mirrors the WPF host's
+    // _suppressNextCellValueAutoCompleteSuggestion.
+    private bool _suppressNextInlineCellValueAutoCompleteSuggestion;
     private CellAddress? _lastCellPointerPressAddress;
     private long _lastCellPointerPressTimestamp;
     private CellAddress? _formulaRangeSelectionAnchor;
@@ -8747,6 +8757,14 @@ public sealed partial class MainWindow : Window
         {
             ToolTip.SetTip(border, FormatCommentTooltip(comment));
         }
+        else if (FormatHyperlinkTooltip(_session.Workbook.GetSheet(address.Sheet), address) is { } hyperlinkTooltip)
+        {
+            // R88-app-hyperlink-navigation-5-4: a hyperlink's ScreenTip (or, absent one, its target
+            // URL) is captured and persisted but was never surfaced anywhere in the grid -- real
+            // Excel shows it as a hover tooltip over the linked cell. Skipped when the cell also
+            // carries a comment (handled above); Excel itself prioritizes the comment popup there.
+            ToolTip.SetTip(border, hyperlinkTooltip);
+        }
 
         // Per-cell accessible name/id so a screen reader (Orca/AT-SPI on Linux, VoiceOver on macOS)
         // can announce which cell has focus, its address, and its value while navigating the grid —
@@ -8964,6 +8982,11 @@ public sealed partial class MainWindow : Window
             UpdateFormulaRangeEntryStateAfterTextChanged(_inlineCellEditText);
             RefreshFormulaReferenceHighlights();
             RefreshFormulaReferenceGridHighlights();
+
+            var suppressed = _suppressNextInlineCellValueAutoCompleteSuggestion;
+            _suppressNextInlineCellValueAutoCompleteSuggestion = false;
+            if (!suppressed)
+                ApplyInlineCellValueAutoCompleteSuggestion(address, editor);
         };
         editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
 
@@ -9089,6 +9112,12 @@ public sealed partial class MainWindow : Window
 
     private void InlineCellEditor_KeyDown(CellAddress address, TextBox editor, KeyEventArgs args)
     {
+        // R88-app-autocomplete-picklist-5-2: Backspace/Delete reject a live AutoComplete suggestion
+        // (Excel behavior) rather than instantly re-offering the same completion the deletion just
+        // removed. The key itself is left unhandled so it still performs its normal TextBox deletion.
+        if (args.Key is Key.Back or Key.Delete)
+            _suppressNextInlineCellValueAutoCompleteSuggestion = true;
+
         if (TryHandleFormulaEditorModeOrReferenceCycle(editor, args))
             return;
 
@@ -9156,6 +9185,69 @@ public sealed partial class MainWindow : Window
         {
             CancelCellEditAndRestoreCommittedText();
             args.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// R88-app-autocomplete-picklist-5-2: Excel's "AutoComplete for cell values", ported to the
+    /// in-cell inline editor from the WPF host's ApplyCellValueAutoCompleteSuggestion
+    /// (MainWindow.Editing.cs). Runs on every inline-editor keystroke; only actually offers a
+    /// completion when all of these hold, so it never fires while the user is mid-formula,
+    /// mid-navigation, or already accepted/rejected a suggestion:
+    /// <list type="bullet">
+    /// <item>the option is enabled (<see cref="EnableAutoCompleteForCellValues"/>);</item>
+    /// <item>the cell is a plain text entry -- not a formula (leading '=') and not mid formula
+    /// range-reference entry;</item>
+    /// <item>the caret sits at the very end of the text with nothing selected -- i.e. the user is
+    /// typing forward, not editing mid-string or already sitting on a live suggestion.</item>
+    /// </list>
+    /// On a match it appends the remainder of the matched column entry and selects it: Tab/Enter
+    /// commits the completed text, continuing to type overwrites the selected remainder with the new
+    /// keystroke (which re-runs this same check for the new prefix), and Backspace/Delete rejects it
+    /// via <see cref="_suppressNextInlineCellValueAutoCompleteSuggestion"/>.
+    /// </summary>
+    private void ApplyInlineCellValueAutoCompleteSuggestion(CellAddress address, TextBox editor)
+    {
+        if (_applyingInlineCellValueAutoCompleteSuggestion ||
+            !Equals(_inlineCellEditAddress, address) ||
+            !ReferenceEquals(_inlineCellEditor, editor))
+        {
+            return;
+        }
+
+        if (!EnableAutoCompleteForCellValues || _formulaRangeEntryMode)
+            return;
+
+        var text = editor.Text ?? "";
+        if (string.IsNullOrEmpty(text) || text.StartsWith("=", StringComparison.Ordinal))
+            return;
+
+        // Only offer a suggestion while genuinely typing forward: caret at the end, nothing already
+        // selected (a selected tail means a suggestion is already live).
+        if (editor.SelectionStart != editor.SelectionEnd || editor.CaretIndex != text.Length)
+            return;
+
+        var sheet = _session.Workbook.GetSheet(address.Sheet);
+        if (sheet is null)
+            return;
+
+        var candidates = CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(sheet, address);
+        if (CellValueAutoCompleteSuggester.Suggest(candidates, text) is not { } suggestion)
+            return;
+
+        _applyingInlineCellValueAutoCompleteSuggestion = true;
+        try
+        {
+            editor.Text = suggestion;
+            editor.CaretIndex = suggestion.Length;
+            editor.SelectionStart = text.Length;
+            editor.SelectionEnd = suggestion.Length;
+            _inlineCellEditSelectionStart = text.Length;
+            _inlineCellEditSelectionEnd = suggestion.Length;
+        }
+        finally
+        {
+            _applyingInlineCellValueAutoCompleteSuggestion = false;
         }
     }
 
@@ -10857,6 +10949,26 @@ public sealed partial class MainWindow : Window
         var body = comment.Body;
         return string.IsNullOrEmpty(title) ? body : $"{title}{Environment.NewLine}{body}";
     }
+
+    /// <summary>
+    /// R88-app-hyperlink-navigation-5-4: the hover tooltip for a hyperlinked cell -- the custom
+    /// ScreenTip set via the Insert Hyperlink dialog's ScreenTip... button, falling back to the raw
+    /// link target when no custom ScreenTip was set. Returns null when the cell carries no
+    /// hyperlink, matching Excel's own behavior of showing nothing for a plain cell.
+    /// </summary>
+    private static string? FormatHyperlinkTooltip(Sheet? sheet, CellAddress address)
+    {
+        if (sheet is null || !sheet.Hyperlinks.TryGetValue(address, out var target) || string.IsNullOrWhiteSpace(target))
+            return null;
+
+        sheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
+        var screenTip = metadata?.ScreenTip;
+        return string.IsNullOrWhiteSpace(screenTip) ? target.Trim() : screenTip.Trim();
+    }
+
+    /// <summary>Test-only forwarder for <see cref="FormatHyperlinkTooltip"/>.</summary>
+    internal static string? FormatHyperlinkTooltipForTest(Sheet? sheet, CellAddress address) =>
+        FormatHyperlinkTooltip(sheet, address);
 
     /// <summary>
     /// Wrap-width available to a rotated cell's TextBlock before it is measured, matching WPF's
@@ -13784,16 +13896,16 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (!_session.TryResolveOpenTarget(plan.LocalPath, out var target, out var message) ||
-            target is null)
+        if (_session.TryResolveOpenTarget(plan.LocalPath, out var target, out var message) &&
+            target is not null)
         {
-            ShowEditIssue(string.IsNullOrWhiteSpace(message)
-                ? UiText.Get("MainLoc_OpenHyperlinkRequiresWorkbook")
-                : message);
+            await OpenWorkbookPathAsync(target.Path);
             return;
         }
 
-        await OpenWorkbookPathAsync(target.Path);
+        ShowEditIssue(string.IsNullOrWhiteSpace(message)
+            ? UiText.Get("MainLoc_OpenHyperlinkRequiresWorkbook")
+            : message);
     }
 
     private async Task OpenExternalHyperlinkAsync(string target)
@@ -27923,6 +28035,36 @@ public sealed partial class MainWindow : Window
             _cachedUseR1C1ReferenceStyle = value;
             _cachedUseR1C1ReferenceStyleStorePath = storePath;
             _cachedUseR1C1ReferenceStyleWriteTimeUtc = writeTimeUtc;
+            return value;
+        }
+    }
+
+    // Same write-time cache strategy as UseR1C1ReferenceStyle above, for the "Enable AutoComplete for
+    // cell values" option (Options ▸ Advanced ▸ Editing options): mirrors WPF's live
+    // <c>_options.EnableAutoCompleteForCellValues</c> field (MainWindow.Editing.cs), which gates
+    // ApplyCellValueAutoCompleteSuggestion.
+    private static bool? _cachedEnableAutoCompleteForCellValues;
+    private static DateTime _cachedEnableAutoCompleteForCellValuesWriteTimeUtc;
+    private static string? _cachedEnableAutoCompleteForCellValuesStorePath;
+
+    private static bool EnableAutoCompleteForCellValues
+    {
+        get
+        {
+            var storePath = AppOptionsStore.StorePath;
+            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
+
+            if (_cachedEnableAutoCompleteForCellValues is { } cached &&
+                _cachedEnableAutoCompleteForCellValuesStorePath == storePath &&
+                _cachedEnableAutoCompleteForCellValuesWriteTimeUtc == writeTimeUtc)
+            {
+                return cached;
+            }
+
+            var value = AppOptionsStore.Load().EnableAutoCompleteForCellValues;
+            _cachedEnableAutoCompleteForCellValues = value;
+            _cachedEnableAutoCompleteForCellValuesStorePath = storePath;
+            _cachedEnableAutoCompleteForCellValuesWriteTimeUtc = writeTimeUtc;
             return value;
         }
     }

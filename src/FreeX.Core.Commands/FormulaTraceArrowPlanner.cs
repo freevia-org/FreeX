@@ -17,9 +17,13 @@ public static class FormulaTraceArrowPlanner
 
         foreach (var target in GetTraceFrontier(activeCell, relevantArrows, expandPrecedents: true))
         {
-            foreach (var precedent in FormulaAuditingService.GetDirectPrecedents(workbook, target))
+            // Use the region form so a multi-cell range precedent (e.g. =SUM(A1:A20)) collapses
+            // into a single arrow anchored at the range's top-left cell instead of one arrow per
+            // cell in the range, matching Excel's single arrow-to-a-box display
+            // (R88-app-formula-auditing-5-3).
+            foreach (var region in FormulaAuditingService.GetDirectPrecedentRegions(workbook, target))
             {
-                var arrow = new FormulaTraceArrow(precedent, target, FormulaTraceArrowKind.Precedent);
+                var arrow = new FormulaTraceArrow(region.Start, target, FormulaTraceArrowKind.Precedent);
                 if (knownArrows.Add(arrow))
                     result.Add(arrow);
             }

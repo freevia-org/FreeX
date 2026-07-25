@@ -16,8 +16,12 @@ public sealed partial class MainWindow
     // host's persisted StatusBarShow* options — which filters the rendered readouts/zoom.
 
     // Per-option-tag visibility, keyed by the StatusBarCustomizeContextMenuPlanner OptionTag values.
+    // R88-app-status-bar-aggregates-5-1: seeded from the PERSISTED AppOptions.StatusBarShow* toggles
+    // (via the shared StatusBarOptionVisibilityStore, the same store the WPF host's FreeXOptions
+    // implements) rather than always the hardcoded Excel defaults, so a customization made in a
+    // previous session survives a relaunch instead of silently resetting every time.
     private readonly Dictionary<string, bool> _statusBarOptionVisibility =
-        AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
+        StatusBarOptionVisibilityStore.ToVisibility(AppOptionsStore.Load()).ToDictionary();
 
     // Tracks the runtime-built customize toggle items by OptionTag so the menu's live checked state can
     // be refreshed on open, mirroring the WPF host's _statusBarCustomizeMenuItems registry.
@@ -123,6 +127,19 @@ public sealed partial class MainWindow
     private void OnStatusBarCustomizeToggled(string optionTag, bool isChecked)
     {
         _statusBarOptionVisibility[optionTag] = isChecked;
+
+        // R88-app-status-bar-aggregates-5-1: persist the toggle to the on-disk options file (mirrors
+        // the WPF host's StatusBarCustomizeMenuItem_Click, which calls
+        // StatusBarOptionVisibilityStore.TrySetOption(_options, ...) followed by _options.Save()) so
+        // the customization survives a relaunch instead of only living in the in-memory dictionary
+        // above.
+        var options = AppOptionsStore.Load();
+        if (StatusBarOptionVisibilityStore.TrySetOption(options, optionTag, isChecked) &&
+            !AppOptionsStore.Save(options))
+        {
+            ShowEditIssue(options.LastPersistenceError ?? UiText.Get("Options_SaveFailed"));
+        }
+
         ApplyStatusBarModel(_statusText.Text ?? AvaloniaStatusBarSource.ReadyText());
     }
 

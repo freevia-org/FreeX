@@ -20,6 +20,17 @@ public sealed class WatchWindowDialog : Window
     private readonly ListView _listView;
     private readonly Button _deleteButton;
 
+    // R88-app-formula-auditing-5-1: MainWindow's recalculation choke points (RecalculateWorkbook,
+    // RecalculateIfAutomatic, RecalculateDirtyCells, RebuildDependenciesAndCalculate) all call
+    // Refresh() so the Value/Formula columns update live after every recalculation, not only when
+    // the user clicks Add/Refresh/Delete. But the getEntries callback supplied to this dialog's
+    // constructor itself calls MainWindow's RecalculateWorkbook() to guarantee fresh values before
+    // reading them -- which now re-enters this very method through that same choke point. Without
+    // this guard the re-entrant call would re-clear and re-populate _rows out from under the
+    // in-progress outer call, producing duplicated rows; with it, the nested call is a safe no-op
+    // and the outer call finishes the refresh once, correctly.
+    private bool _isRefreshing;
+
     public WatchWindowDialog(
         Func<IReadOnlyList<WatchWindowEntry>> getEntries,
         Action? addWatch,
@@ -128,24 +139,35 @@ public sealed class WatchWindowDialog : Window
 
     public void Refresh()
     {
-        var selectedAddresses = _listView.SelectedItems
-            .OfType<WatchWindowRow>()
-            .Select(row => row.Address)
-            .ToHashSet();
-        _rows.Clear();
-        foreach (var entry in _getEntries())
+        if (_isRefreshing)
+            return;
+
+        _isRefreshing = true;
+        try
         {
-            _rows.Add(new WatchWindowRow(
-                UiText.Get("WatchWindow_ThisWorkbook"),
-                entry.SheetName,
-                "",
-                entry.Address.ToA1(),
-                entry.ValueText,
-                entry.FormulaText ?? "",
-                entry.Address));
+            var selectedAddresses = _listView.SelectedItems
+                .OfType<WatchWindowRow>()
+                .Select(row => row.Address)
+                .ToHashSet();
+            _rows.Clear();
+            foreach (var entry in _getEntries())
+            {
+                _rows.Add(new WatchWindowRow(
+                    UiText.Get("WatchWindow_ThisWorkbook"),
+                    entry.SheetName,
+                    "",
+                    entry.Address.ToA1(),
+                    entry.ValueText,
+                    entry.FormulaText ?? "",
+                    entry.Address));
+            }
+            RestoreSelection(selectedAddresses);
+            UpdateDeleteButtonState();
         }
-        RestoreSelection(selectedAddresses);
-        UpdateDeleteButtonState();
+        finally
+        {
+            _isRefreshing = false;
+        }
     }
 
     private void RestoreSelection(IReadOnlySet<CellAddress> selectedAddresses)

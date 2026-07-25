@@ -84,9 +84,11 @@ public static class PagePaginationPlanner
     /// Computes the baseline rows/columns that fit on one page, using the actual per-row heights and
     /// per-column widths from the sheet model. The average row height across the print range and the
     /// average column width (in pixels) across the print range are used to estimate how many items fit
-    /// on one page. The printable body height is the paper height minus page margins minus the
-    /// header/footer margin reservations (PR5 fix); the printable body width is the paper width minus
-    /// page margins. Falls back to <see cref="NominalRowHeight"/> or <see cref="MinimumPrintColumnWidth"/>
+    /// on one page. The printable body height is the paper height minus the top/bottom margins, where
+    /// each margin further expands to the header/footer margin only when that margin is larger than the
+    /// corresponding top/bottom margin (R88-services-page-setup-margins-5-1: the header/footer band sits
+    /// within the top/bottom margin, not in addition to it); the printable body width is the paper width
+    /// minus page margins. Falls back to <see cref="NominalRowHeight"/> or <see cref="MinimumPrintColumnWidth"/>
     /// when a row/column has no recorded size.
     /// </summary>
     /// <param name="printRange">The range of rows and columns being printed.</param>
@@ -100,8 +102,8 @@ public static class PagePaginationPlanner
     /// <param name="defaultRowHeight">Default row height in pixels, used for rows absent from <paramref name="rowHeights"/>.</param>
     /// <param name="columnWidths">Per-column width overrides in characters (1-based col → characters). May be empty.</param>
     /// <param name="defaultColumnWidth">Default column width in characters, used for columns absent from <paramref name="columnWidths"/>.</param>
-    /// <param name="headerMarginInches">Distance from page top to header, in inches (PR5: subtracted from body height).</param>
-    /// <param name="footerMarginInches">Distance from page bottom to footer, in inches (PR5: subtracted from body height).</param>
+    /// <param name="headerMarginInches">Distance from page top to header, in inches (shrinks the body height only when it exceeds the top margin).</param>
+    /// <param name="footerMarginInches">Distance from page bottom to footer, in inches (shrinks the body height only when it exceeds the bottom margin).</param>
     public static PageCapacity CalculatePageCapacity(
         GridRange printRange,
         WorksheetScaleToFit scaleToFit,
@@ -164,10 +166,17 @@ public static class PagePaginationPlanner
     {
         var pageSize = WorksheetPageLayout.GetPageSizeInches(paperSize, orientation);
 
-        // PR5: subtract header + footer margin reservations from the body height.
-        var headerFooterReservedPx = Math.Max(0.0, headerMarginInches + footerMarginInches) * Dpi;
+        // R88-services-page-setup-margins-5-1: the header/footer margin is the distance from the
+        // page edge to the header/footer band, which sits WITHIN the top/bottom margin band as long
+        // as it doesn't exceed it -- Excel's own guide-line model -- so the body only shrinks further
+        // when a header/footer margin is larger than its corresponding top/bottom margin. Treating the
+        // header/footer margins as an ADDITIONAL reservation on top of the top/bottom margins (the old
+        // PR5 formula) silently lost real body height even with the universal defaults (0.3in
+        // header/footer margin under a 0.75in top/bottom margin), where Excel reserves nothing extra.
+        var bodyTopInches = Math.Max(margins.Top, headerMarginInches);
+        var bodyBottomInches = Math.Max(margins.Bottom, footerMarginInches);
         var printableWidth = Math.Max(1.0, (pageSize.Width - margins.Left - margins.Right) * Dpi);
-        var printableHeight = Math.Max(1.0, (pageSize.Height - margins.Top - margins.Bottom) * Dpi - headerFooterReservedPx);
+        var printableHeight = Math.Max(1.0, (pageSize.Height - bodyTopInches - bodyBottomInches) * Dpi);
 
         // PR1: compute average row height from actual per-row sizes across the print range.
         var effectiveRowHeight = AverageRowHeightPixels(

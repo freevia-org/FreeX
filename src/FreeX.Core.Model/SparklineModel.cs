@@ -108,6 +108,28 @@ public sealed class SparklineModel
     /// <summary>Plot the sparkline right-to-left.</summary>
     public bool RightToLeft { get; set; }
 
+    /// <summary>
+    /// Returns <paramref name="values"/> in the order a layout/render consumer should plot them:
+    /// reversed when <see cref="RightToLeft"/> is set, unchanged otherwise. Excel's "Plot Data
+    /// Right-to-Left" sparkline-group option mirrors the series so the first data point lands on
+    /// the right edge and the last on the left; this is the single contract point every consumer
+    /// (the desktop-shell renderers and the shared layout engine) should route a sparkline's series
+    /// through before laying it out, so the option is honored everywhere instead of only being
+    /// round-tripped through load/save. A count of 0 or 1 is returned as-is since there is nothing
+    /// to reorder.
+    /// </summary>
+    public IReadOnlyList<double> ApplyPlotOrder(IReadOnlyList<double> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        if (!RightToLeft || values.Count <= 1)
+            return values;
+
+        var reversed = new List<double>(values);
+        reversed.Reverse();
+        return reversed;
+    }
+
     // ── Colors ─────────────────────────────────────────────────────────────────
 
     /// <summary>Optional series color; when null the renderer uses its default sparkline color.</summary>

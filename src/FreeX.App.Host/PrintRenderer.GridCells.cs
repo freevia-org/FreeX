@@ -242,6 +242,67 @@ public static partial class PrintRenderer
                     blackAndWhite);
             }
         }
+
+        // Sparklines are a screen-only overlay drawn above the grid (GridView.Overlays.Sparklines.cs
+        // RenderSparklines), not part of DisplayCell.Style or any of the per-cell fields already
+        // printed above -- like the ConditionalDataBar/ConditionalIcon pass, they need their own
+        // draw call here or Print/Print Preview/PDF/XPS silently omits them entirely
+        // (R88-render-sparkline-5-1).
+        if (sheet is { Sparklines.Count: > 0 })
+        {
+            DrawPrintedSparklines(dc, sheet, measurement, pageRows, pageColumns, gridLeft, gridTop);
+        }
+    }
+
+    private static void DrawPrintedSparklines(
+        DrawingContext dc,
+        Sheet sheet,
+        PrintGridMeasurement measurement,
+        IReadOnlyList<uint> pageRows,
+        IReadOnlyList<uint> pageColumns,
+        double gridLeft,
+        double gridTop)
+    {
+        var rowIndexLookup = new Dictionary<uint, int>(pageRows.Count);
+        for (var i = 0; i < pageRows.Count; i++)
+            rowIndexLookup[pageRows[i]] = i;
+
+        var colIndexLookup = new Dictionary<uint, int>(pageColumns.Count);
+        for (var i = 0; i < pageColumns.Count; i++)
+            colIndexLookup[pageColumns[i]] = i;
+
+        var sparklineValues = FreeX.App.Presentation.Sparklines.SparklineSeriesReader.BuildValues(sheet);
+
+        GridView.BuildSparklineGroupScalingBounds(
+            sheet.Sparklines,
+            sparklineValues,
+            out var groupMinValues,
+            out var groupMaxValues,
+            out var groupMaxAbsValues);
+
+        foreach (var sparkline in sheet.Sparklines)
+        {
+            if (!rowIndexLookup.TryGetValue(sparkline.Location.Row, out var rowIndex) ||
+                !colIndexLookup.TryGetValue(sparkline.Location.Col, out var colIndex) ||
+                !sparklineValues.TryGetValue(sparkline.Id, out var values) ||
+                values.Count == 0)
+            {
+                continue;
+            }
+
+            // Match the interactive grid's own 3px inset (GridView.Overlays.Sparklines.cs
+            // RenderSparklines) so the printed sparkline sits inside the cell border exactly like
+            // the on-screen one.
+            var colWidth = measurement.ColumnWidthAt(colIndex);
+            var rowHeight = measurement.RowHeightAt(rowIndex);
+            var rect = new Rect(
+                gridLeft + measurement.ColumnOffset(colIndex) + 3,
+                gridTop + measurement.RowOffset(rowIndex) + 3,
+                Math.Max(1, colWidth - 6),
+                Math.Max(1, rowHeight - 6));
+
+            GridView.DrawSparklineIntoCell(dc, sparkline, values, rect, groupMinValues, groupMaxValues, groupMaxAbsValues);
+        }
     }
 
     private static void DrawPrintedCellText(

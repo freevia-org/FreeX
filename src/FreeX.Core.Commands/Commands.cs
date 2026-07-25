@@ -89,6 +89,16 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
                 hadPhoneticGuide,
                 oldPhoneticGuide));
 
+            // A destination cell that is a non-anchor (hidden/covered) member of an existing merged
+            // region must stay empty, matching Excel and PasteCellsCommand/PasteSpecialCellsCommand:
+            // only the merge's top-left anchor cell ever carries a value. Writing into a covered
+            // cell would silently plant a live value that the grid never displays (the merge only
+            // renders the anchor), yet formulas like =SUM or unmerging later would suddenly surface
+            // it. So skip the mutation entirely for those cells (R88-paste-5-1).
+            var mergeRegion = sheet.GetMergeRegion(addr);
+            if (mergeRegion is { } region && !region.Start.Equals(addr))
+                continue;
+
             // Apply new state while preserving the cell's existing formatting -- UNLESS
             // CellEntryParser already resolved and attached an auto-inferred number format for
             // this literal (e.g. typing "50%"/"$5"/"1 1/2"/"3:30 PM" into a General-formatted

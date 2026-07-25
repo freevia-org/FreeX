@@ -5449,17 +5449,33 @@ public sealed class WorkbookSession
         // FrozenColsOverride/SplitOverride), rebuilding BEFORE the stale entry is dropped would bake
         // the pre-Undo/Redo cached value into the rendered viewport, leaving it visibly stuck one
         // step behind even though the shared Sheet field itself already reverted correctly.
-        _viewZoomOverrides.Remove(ActiveSheet.Id);
-        _viewModeOverrides.Remove(ActiveSheet.Id);
-        _viewShowGridlinesOverrides.Remove(ActiveSheet.Id);
-        _viewShowHeadingsOverrides.Remove(ActiveSheet.Id);
-        _viewShowFormulasOverrides.Remove(ActiveSheet.Id);
-        _viewFrozenRowsOverrides.Remove(ActiveSheet.Id);
-        _viewFrozenColsOverrides.Remove(ActiveSheet.Id);
-        _viewSplitRowOverrides.Remove(ActiveSheet.Id);
-        _viewSplitColOverrides.Remove(ActiveSheet.Id);
+        InvalidateAllPerViewOverridesForSheet(ActiveSheet.Id);
         RefreshViewport();
         EnsureActiveCellVisible();
+    }
+
+    /// <summary>
+    /// Single choke point that drops every per-view cached override (zoom, view mode, gridlines,
+    /// headings, formulas, frozen rows/cols, and split row/col) for the given sheet, forcing the
+    /// next read of each to re-seed from the (possibly just-written) shared Sheet fields instead of
+    /// returning a stale cached value. Used by both <see cref="ApplySuccessfulWorkbookMetadataResult"/>
+    /// (the dedicated setters' and Undo/Redo's forward-apply choke point) and
+    /// <see cref="ApplySuccessfulEditResult"/> (the generic ExecuteReviewCommand path used by commands
+    /// like ApplyCustomViewCommand and SetSplitPanesCommand that write sheet-view fields directly
+    /// without going through a dedicated setter) so that no current or future command path reaching
+    /// either choke point can leave a per-view cache stale (R88-window-seed-order-guard-sweep-1).
+    /// </summary>
+    private void InvalidateAllPerViewOverridesForSheet(SheetId sheetId)
+    {
+        _viewZoomOverrides.Remove(sheetId);
+        _viewModeOverrides.Remove(sheetId);
+        _viewShowGridlinesOverrides.Remove(sheetId);
+        _viewShowHeadingsOverrides.Remove(sheetId);
+        _viewShowFormulasOverrides.Remove(sheetId);
+        _viewFrozenRowsOverrides.Remove(sheetId);
+        _viewFrozenColsOverrides.Remove(sheetId);
+        _viewSplitRowOverrides.Remove(sheetId);
+        _viewSplitColOverrides.Remove(sheetId);
     }
 
     private void MarkDirty()
@@ -5574,14 +5590,16 @@ public sealed class WorkbookSession
         RefreshLinkedPicturesForEditedCells(result);
         MarkDirty();
         _selectionStatsRevision++;
-        // R87-order-guard-window-state-sweep-2: this is the forward-apply choke point for
-        // SetSplitPanesCommand (reached via the generic ExecuteReviewCommand, since Split has no
-        // dedicated setter like SetFreezePanes) -- drop this view's own split-override snapshot for
-        // the affected sheet so the next read (GetEffectiveSplitRow/GetEffectiveSplitCol, which never
-        // seed-on-read -- see their remarks) falls back to the live value the command just wrote to
-        // the shared Sheet fields, instead of returning this view's own stale pre-split snapshot.
-        _viewSplitRowOverrides.Remove(ActiveSheet.Id);
-        _viewSplitColOverrides.Remove(ActiveSheet.Id);
+        // R87-order-guard-window-state-sweep-2 / R88-window-seed-order-guard-sweep-1: this is the
+        // forward-apply choke point for every command reached only via the generic
+        // ExecuteReviewCommand path that writes sheet-view fields directly instead of going through a
+        // dedicated setter -- e.g. SetSplitPanesCommand (Split has no dedicated setter like
+        // SetFreezePanes) and ApplyCustomViewCommand (writes zoom/gridlines/headings/formulas/view
+        // mode/frozen/split all at once via CustomViewStatePlanner.ApplyState). Drop ALL of this
+        // view's per-view override snapshots for the affected sheet here so the next read of any of
+        // them falls back to the live value the command just wrote to the shared Sheet fields,
+        // instead of returning this view's own stale pre-apply snapshot.
+        InvalidateAllPerViewOverridesForSheet(ActiveSheet.Id);
         RefreshViewport();
         EnsureActiveCellVisible();
     }

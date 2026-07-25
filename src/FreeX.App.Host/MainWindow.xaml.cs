@@ -451,6 +451,21 @@ public partial class MainWindow : Window, IWorkbookWindow
             }
 
             RefreshFormulaReferenceHighlights();
+
+            // R88-app-autocomplete-picklist-5-3: Cell-value AutoComplete was only ever wired to the
+            // inline in-cell editor's own TextChanged handler. Typing straight into the Formula Bar
+            // (its own edit surface whenever EditActiveCellInFormulaBar begins an edit without also
+            // showing the inline editor) never offered a suggestion. Only run this here when the
+            // inline editor isn't the live editing surface -- it already applies (and syncs back to
+            // the Formula Bar) its own suggestion, so re-running against the Formula Bar mid-sync
+            // would fight over the selected suggestion tail.
+            if (_inlineEditor?.IsVisible != true)
+            {
+                var suppressed = _suppressNextCellValueAutoCompleteSuggestion;
+                _suppressNextCellValueAutoCompleteSuggestion = false;
+                if (!suppressed)
+                    ApplyCellValueAutoCompleteSuggestion(FormulaBar);
+            }
         };
         
         Loaded += MainWindow_Loaded;

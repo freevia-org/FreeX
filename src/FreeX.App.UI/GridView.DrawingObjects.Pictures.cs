@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 
@@ -192,6 +193,12 @@ public partial class GridView
 
         var style = cell.Style;
         var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
+        // Match the live grid's reading-order resolution (GridView.Rendering.cs) so a snapshot taken
+        // from -- or now rendered on -- a right-to-left sheet mirrors General alignment and text flow
+        // direction the same way the live cells it was copied from do (R88-render-rtl-bidi-5-2).
+        var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+            style?.ReadingOrder ?? CellReadingOrder.Context, IsSheetRightToLeft);
+        var flowDirection = isEffectivelyRightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
         var textRotation = style?.TextRotation ?? 0;
         var renderText = PrepareCellDisplayTextForRender(cell.Text, textRotation);
         var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
@@ -221,7 +228,7 @@ public partial class GridView
         var text = new FormattedText(
             renderText,
             CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
+            flowDirection,
             typefaceForText,
             fontSize,
             textBrush,
@@ -232,12 +239,7 @@ public partial class GridView
         if (style?.WrapText == true)
         {
             text.MaxTextWidth = Math.Max(1, cellRect.Width - 4);
-            text.TextAlignment = hAlign switch
-            {
-                CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
-                CellHAlign.Right => TextAlignment.Right,
-                _ => TextAlignment.Left
-            };
+            text.TextAlignment = ResolveWrapTextAlignment(hAlign, cell.IsNumericOrDate, isEffectivelyRightToLeft);
         }
         else
         {
@@ -253,7 +255,8 @@ public partial class GridView
             style?.VerticalAlignment,
             cell.IsNumericOrDate,
             indentPx,
-            textRotation);
+            textRotation,
+            isEffectivelyRightToLeft);
         var clipRect = new Rect(
             cellRect.Left + 2,
             cellRect.Top + 1,

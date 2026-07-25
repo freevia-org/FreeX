@@ -50,8 +50,13 @@ public partial class MainWindow
 
         if (SheetGrid.SelectedRange?.Start is { } address)
         {
-            var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(address);
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            var cell = sheet?.GetCell(address);
             FormulaBar.Text = FormatFormulaBarText(cell, address);
+            // R88-render-rtl-bidi-5-3: this is the "click straight into the Formula Bar" edit-start
+            // path (the inline editor is never shown here), so the Formula Bar itself must get the
+            // RTL/LTR base paragraph direction -- ShowInlineEditor only sets it on the in-cell editor.
+            FormulaBar.FlowDirection = ResolveInlineEditorFlowDirection(sheet, cell);
         }
 
         FocusFormulaBarAtEnd();
@@ -177,6 +182,12 @@ public partial class MainWindow
         // (mirrors the Avalonia shell's CreateInlineCellEditor, which threads the same
         // style/value-derived alignment into its TextBox) instead of always defaulting to left.
         _inlineEditor.TextAlignment = ResolveInlineEditorTextAlignment(sheet, cell);
+        // R88-render-rtl-bidi-5-3: also switch the base paragraph embedding direction (not just the
+        // text-block anchor) so an RTL-reading-order cell edits with true right-to-left bidi
+        // reordering/caret behavior; the Formula Bar edits the same cell so it must match.
+        var inlineEditorFlowDirection = ResolveInlineEditorFlowDirection(sheet, cell);
+        _inlineEditor.FlowDirection = inlineEditorFlowDirection;
+        FormulaBar.FlowDirection = inlineEditorFlowDirection;
         AutomationProperties.SetAutomationId(_inlineEditor, "WorksheetInlineCellEditor");
         AutomationProperties.SetName(_inlineEditor, UiText.Format("MainWindow_AutomationName_InlineCellEditorFormat", FormatCellReference(addr)));
         _inlineEditorChromeBaseRect = layout.EditorRect;
@@ -247,22 +258,31 @@ public partial class MainWindow
     /// selected remainder with the new keystroke (which re-runs this same check for the new
     /// prefix), and Backspace/Delete rejects it via <see cref="_suppressNextCellValueAutoCompleteSuggestion"/>.
     /// </summary>
-    private void ApplyCellValueAutoCompleteSuggestion()
+    private void ApplyCellValueAutoCompleteSuggestion() => ApplyCellValueAutoCompleteSuggestion(_inlineEditor);
+
+    /// <summary>
+    /// R88-app-autocomplete-picklist-5-3: same AutoComplete logic as the inline in-cell editor's own
+    /// suggestion pass, generalized to whichever <see cref="TextBox"/> is the live editing surface --
+    /// the inline editor when it is visible, or the Formula Bar itself when the user began the edit
+    /// by clicking straight into the Formula Bar (in which case <see cref="ShowInlineEditor"/> is
+    /// never invoked and the inline editor's own TextChanged handler never runs).
+    /// </summary>
+    private void ApplyCellValueAutoCompleteSuggestion(System.Windows.Controls.TextBox? editor)
     {
-        if (_applyingCellValueAutoCompleteSuggestion || _inlineEditor is null)
+        if (_applyingCellValueAutoCompleteSuggestion || editor is null)
             return;
         if (!_options.EnableAutoCompleteForCellValues || _formulaRangeEntryMode)
             return;
         if (_formulaEditCell is not { } addr)
             return;
 
-        var text = _inlineEditor.Text;
+        var text = editor.Text;
         if (string.IsNullOrEmpty(text) || text.StartsWith("=", StringComparison.Ordinal))
             return;
 
         // Only offer a suggestion while genuinely typing forward: caret at the end, nothing
         // already selected (a selected tail means a suggestion is already live).
-        if (_inlineEditor.SelectionLength != 0 || _inlineEditor.CaretIndex != text.Length)
+        if (editor.SelectionLength != 0 || editor.CaretIndex != text.Length)
             return;
 
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -276,8 +296,8 @@ public partial class MainWindow
         _applyingCellValueAutoCompleteSuggestion = true;
         try
         {
-            _inlineEditor.Text = suggestion;
-            _inlineEditor.Select(text.Length, suggestion.Length - text.Length);
+            editor.Text = suggestion;
+            editor.Select(text.Length, suggestion.Length - text.Length);
         }
         finally
         {
@@ -378,6 +398,23 @@ public partial class MainWindow
             _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
             _inlineFormulaReferenceOverlay.Height = layout.TextOverlayRect.Height;
         }
+    }
+
+    /// <summary>
+    /// R88-render-rtl-bidi-5-3: resolves the WPF <see cref="FlowDirection"/> the inline editor (and
+    /// the Formula Bar, which edits the same cell) should use so an RTL-reading-order cell edits
+    /// with a true right-to-left paragraph embedding direction -- matching real Excel's behavior of
+    /// starting the caret at the right, sending Home to the visual-right start, and live bidi
+    /// reordering while typing. <see cref="ResolveInlineEditorTextAlignment"/> only anchors the text
+    /// block to one edge; it never switches the base paragraph direction WPF's TextBox uses for
+    /// caret/insertion-point behavior, so both must be set together.
+    /// </summary>
+    private FlowDirection ResolveInlineEditorFlowDirection(Sheet? sheet, Cell? cell)
+    {
+        var style = cell is null ? null : _workbook.GetStyle(cell.StyleId);
+        var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+            style?.ReadingOrder ?? CellReadingOrder.Context, sheet?.IsRightToLeft ?? false);
+        return isEffectivelyRightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
     }
 
     /// <summary>
@@ -825,6 +862,12 @@ public partial class MainWindow
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        // R88-app-autocomplete-picklist-5-3: Backspace/Delete reject a live AutoComplete suggestion
+        // (Excel behavior) rather than instantly re-offering the same completion the deletion just
+        // removed -- mirrors InlineEditor_KeyDown's identical guard for the in-cell editor.
+        if (e.Key == Key.Back || e.Key == Key.Delete)
+            _suppressNextCellValueAutoCompleteSuggestion = true;
+
         if (e.Key == Key.F2 && e.KeyboardDevice.Modifiers == ModifierKeys.None)
         {
             var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(FormulaBar.Text, _formulaRangeEntryMode);

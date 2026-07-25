@@ -185,6 +185,18 @@ public partial class MainWindow
         if (selectedActiveSheet)
             RefreshSheetTabs();
 
+        // A Custom View can restore ViewMode/Zoom/Gridlines/Headings/Rulers on ANY sheet named in
+        // the saved view (ApplyCustomViewCommand loops over every WorksheetCustomViewState it
+        // holds), not just the active one -- so unlike a single-sheet View-tab toggle, this window
+        // can't hand a narrow target-sheet-id list to SyncWindowViewState. Forget this window's
+        // entire per-sheet view-state cache instead, so GetEffectiveViewState (via
+        // ApplyOpenedWorksheetViewState -> UpdateViewport below) reseeds fresh from the just-applied
+        // Sheet fields rather than replaying whatever this window had cached before Apply
+        // (R88-window-seed-order-guard-sweep-2) -- the same invalidation every other View-tab
+        // handler performs (via SyncWindowViewState) right after mutating
+        // Sheet.ViewMode/ZoomPercent/ShowGridlines/ShowHeadings/ShowRulers.
+        _worksheetViewStates.Clear();
+
         _worksheetSelections.Remove(_currentSheetId);
         ApplyOpenedWorksheetViewState();
     }

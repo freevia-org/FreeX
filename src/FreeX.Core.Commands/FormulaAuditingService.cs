@@ -24,6 +24,24 @@ public static partial class FormulaAuditingService
         return ExtractPrecedents(workbook, formulaAddress.Sheet, cell.FormulaText);
     }
 
+    /// <summary>
+    /// Like <see cref="GetDirectPrecedents"/>, but a multi-cell range/named-range/structured
+    /// reference is returned as ONE contiguous <see cref="GridRange"/> region instead of being
+    /// flattened into individual cells. Used only for building trace arrows (see
+    /// <see cref="CollectPrecedentTraceArrows"/> and <c>FormulaTraceArrowPlanner</c>) so a range
+    /// precedent draws as a single arrow rather than one arrow per cell in the range
+    /// (R88-app-formula-auditing-5-3).
+    /// </summary>
+    public static IReadOnlyList<GridRange> GetDirectPrecedentRegions(Workbook workbook, CellAddress formulaAddress)
+    {
+        var sheet = workbook.GetSheet(formulaAddress.Sheet);
+        var cell = sheet?.GetCell(formulaAddress);
+        if (cell?.HasFormula != true || string.IsNullOrWhiteSpace(cell.FormulaText))
+            return [];
+
+        return ExtractPrecedentRegions(workbook, formulaAddress.Sheet, cell.FormulaText);
+    }
+
     public static IReadOnlyList<FormulaTraceArrow> GetPrecedentTraceArrows(Workbook workbook, CellAddress formulaAddress)
     {
         var result = new List<FormulaTraceArrow>();
@@ -152,10 +170,16 @@ public static partial class FormulaAuditingService
         if (!visited.Add(formulaAddress))
             return;
 
-        foreach (var precedent in GetDirectPrecedents(workbook, formulaAddress))
+        // Use the region form (GetDirectPrecedentRegions), not the flattened per-cell
+        // GetDirectPrecedents, so a multi-cell range precedent produces ONE arrow anchored at the
+        // range's top-left cell instead of one arrow per cell in the range
+        // (R88-app-formula-auditing-5-3). Recursion still visits every individual cell in the
+        // region so deeper precedent chains are unaffected.
+        foreach (var region in GetDirectPrecedentRegions(workbook, formulaAddress))
         {
-            result.Add(new FormulaTraceArrow(precedent, formulaAddress, FormulaTraceArrowKind.Precedent));
-            CollectPrecedentTraceArrows(workbook, precedent, result, visited);
+            result.Add(new FormulaTraceArrow(region.Start, formulaAddress, FormulaTraceArrowKind.Precedent));
+            foreach (var precedentCell in region.AllCells())
+                CollectPrecedentTraceArrows(workbook, precedentCell, result, visited);
         }
     }
 

@@ -31,11 +31,16 @@ public static class ChartDataLabelFormatter
             (false, true) => "{1}",
             _ => ""
         };
-        var valuePart = chart.ShowDataLabelPercentage
-            ? "{2:0%}"
-            : chart.ShowDataLabelValue
-                ? GetPieValueFormat(chart.DataLabelNumberFormat)
-                : "";
+        // Excel treats showVal and showPercent as independent flags (e.g. the built-in "Value,
+        // Percentage" preset sets both), so the value and percentage placeholders must compose
+        // rather than the percentage silently displacing the value.
+        var valuePart = (chart.ShowDataLabelValue, chart.ShowDataLabelPercentage) switch
+        {
+            (true, true) => $"{GetPieValueFormat(chart.DataLabelNumberFormat)}{separator}{{2:0%}}",
+            (true, false) => GetPieValueFormat(chart.DataLabelNumberFormat),
+            (false, true) => "{2:0%}",
+            _ => ""
+        };
 
         if (valuePart.Length == 0 && nameParts.Length == 0)
             return GetPieValueFormat(chart.DataLabelNumberFormat);

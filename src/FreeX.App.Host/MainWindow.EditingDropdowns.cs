@@ -236,18 +236,99 @@ public partial class MainWindow
             return;
         }
 
-        OpenAutoFilterDropdownForActiveCell();
+        if (OpenAutoFilterDropdownForActiveCell())
+            return;
+
+        // R88-app-autocomplete-picklist-5-1: Excel's classic "Pick From Drop-down List" -- a plain
+        // cell with adjacent text entries and no Data Validation rule and no AutoFilter header still
+        // offers a pick list built from the contiguous column text block, independent of both
+        // features above.
+        OpenTextEntryPickListDropdown();
     }
 
-    private void OpenAutoFilterDropdownForActiveCell()
+    private bool OpenAutoFilterDropdownForActiveCell()
     {
+        if (SheetGrid.SelectedRange?.Start is not { } activeCell ||
+            _workbook.GetSheet(_currentSheetId) is not { } sheet)
+        {
+            return false;
+        }
+
+        return ShowAutoFilterDropdownForHeaderCell(sheet, activeCell);
+    }
+
+    /// <summary>
+    /// R88-app-autocomplete-picklist-5-1: Excel's "Pick From Drop-down List" (Alt+Down / right-click)
+    /// for a plain cell with no Data Validation rule and no AutoFilter header -- lists the unique
+    /// text entries already present in the active cell's contiguous column block (the same block
+    /// <see cref="ApplyCellValueAutoCompleteSuggestion"/> draws AutoComplete candidates from) and
+    /// commits the chosen entry into the active cell on selection via the same
+    /// <see cref="ValidationDropdown_SelectionChanged"/> handler the Data Validation dropdown uses.
+    /// </summary>
+    private void OpenTextEntryPickListDropdown()
+    {
+        if (_inlineEditor?.IsVisible == true || _textBoxInlineEditor?.IsVisible == true)
+            return;
+
         if (SheetGrid.SelectedRange?.Start is not { } activeCell ||
             _workbook.GetSheet(_currentSheetId) is not { } sheet)
         {
             return;
         }
 
-        ShowAutoFilterDropdownForHeaderCell(sheet, activeCell);
+        if (TryGetCellOverlayRect(activeCell) is not { } rect)
+            return;
+
+        var items = BuildTextEntryPickListItems(sheet, activeCell);
+        if (items.Count == 0)
+            return;
+
+        EnsureValidationDropdown();
+
+        _suppressValidationDropdownCommit = true;
+        _validationDropdown!.ItemsSource = items;
+        _validationDropdown.SelectedItem = null;
+        _suppressValidationDropdownCommit = false;
+
+        // Anchored/sized exactly like RefreshValidationDropdown's in-cell dropdown-arrow button.
+        var zoom = _zoomLevel;
+        var btnWidth = DataValidationAffordancePlanner.ArrowButtonWidth * zoom;
+        var btnLeft = (rect.Left + rect.Width) * zoom - btnWidth;
+        var btnTop = rect.Top * zoom;
+        var btnHeight = rect.Height * zoom;
+
+        System.Windows.Controls.Canvas.SetLeft(_validationDropdown, btnLeft);
+        System.Windows.Controls.Canvas.SetTop(_validationDropdown, btnTop);
+        _validationDropdown.Width = btnWidth;
+        _validationDropdown.Height = Math.Max(DataValidationDropdownPlanner.MinimumHeight, btnHeight);
+        _validationDropdown.Visibility = Visibility.Visible;
+        EditOverlay.IsHitTestVisible = true;
+
+        _validationDropdown.Focus();
+        _validationDropdown.IsDropDownOpen = true;
+    }
+
+    /// <summary>
+    /// Builds the unique, order-preserving list of text entries the plain-cell pick list offers:
+    /// the contiguous column text block, deduplicated case-insensitively (first occurrence wins) --
+    /// the pick list shows each distinct existing entry once regardless of how many times it repeats
+    /// in the column.
+    /// </summary>
+    private static IReadOnlyList<string> BuildTextEntryPickListItems(Sheet sheet, CellAddress activeCell)
+    {
+        var candidates = CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(sheet, activeCell);
+        if (candidates.Count == 0)
+            return Array.Empty<string>();
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var items = new List<string>(candidates.Count);
+        foreach (var candidate in candidates)
+        {
+            if (seen.Add(candidate))
+                items.Add(candidate);
+        }
+
+        return items;
     }
 
     private void OnAutoFilterDropdownRequested(CellAddress headerCell, System.Windows.Point position)
@@ -282,7 +363,7 @@ public partial class MainWindow
                range == currentRegion;
     }
 
-    private void ShowAutoFilterDropdownForHeaderCell(
+    private bool ShowAutoFilterDropdownForHeaderCell(
         Sheet sheet,
         CellAddress headerCell,
         System.Windows.Point? anchorPoint = null)
@@ -290,7 +371,7 @@ public partial class MainWindow
         if (CreateAutoFilterFlyoutDialog(sheet, headerCell, anchorPoint, out var createdPlan) is not { } dialog ||
             createdPlan is not { } plan)
         {
-            return;
+            return false;
         }
 
         dialog.ResultCommitted += (_, result) =>
@@ -313,6 +394,7 @@ public partial class MainWindow
 
         dialog.Show();
         dialog.Activate();
+        return true;
     }
 
     /// <summary>

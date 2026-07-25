@@ -410,6 +410,12 @@ public partial class MainWindow
 
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
+        // R88-commands-undo-redo-coalescing-5-1: Excel switches the active sheet and reselects the
+        // edited range so the user immediately sees what was reverted, even when they had navigated
+        // away to a different sheet (or a different part of the current sheet) before pressing
+        // Ctrl+Z. Must run before SyncWindowViewState/UpdateViewport below so both act on the
+        // now-current sheet.
+        RestoreSelectionAfterUndoRedo(outcome);
         // Undo can revert a view-mode/zoom change THIS window itself made; re-adopt the current
         // sheet's now-reverted values into this window's own view-state cache before rendering,
         // or the stale cached override would mask the undo (R83-app-view-modes-5-1).
@@ -449,6 +455,9 @@ public partial class MainWindow
 
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
+        // See ExecuteUndo() (R88-commands-undo-redo-coalescing-5-1): re-navigate to the
+        // affected sheet/range before SyncWindowViewState/UpdateViewport below.
+        RestoreSelectionAfterUndoRedo(outcome);
         // Redo can re-apply a view-mode/zoom change THIS window itself made; re-adopt the
         // current sheet's values before rendering (see ExecuteUndo).
         SyncWindowViewState([_currentSheetId]);
@@ -493,6 +502,60 @@ public partial class MainWindow
         return targetSheetIds.Count > 1
             ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
             : new EditCellsCommand(_currentSheetId, edits);
+    }
+
+    /// <summary>
+    /// R88-commands-undo-redo-coalescing-5-1: single choke point for both <see cref="ExecuteUndo"/>
+    /// and <see cref="ExecuteRedo"/> to switch the active sheet and reselect the affected range,
+    /// matching real Excel (which always brings the just-undone/redone edit back into view even when
+    /// the user had navigated to a different sheet, or a different part of the current sheet, since
+    /// the edit was made). No-ops when the outcome carries no affected cells (nothing to navigate
+    /// to), leaving today's behavior unchanged for those outcomes.
+    /// </summary>
+    private void RestoreSelectionAfterUndoRedo(CommandOutcome outcome)
+    {
+        if (outcome.AffectedCells is not { Count: > 0 } affectedCells)
+            return;
+
+        // A single command's affected cells always belong to one sheet, EXCEPT a
+        // CompositeWorkbookCommand fanned out across a grouped-sheet edit (Commands.cs); in that
+        // case land on the sheet the user was already viewing if it was one of the affected sheets,
+        // otherwise fall back to the first affected cell's sheet (mirrors Excel picking the sheet
+        // that contains the edit when the previous active sheet had no part in it).
+        var targetSheetId = affectedCells[0].Sheet;
+        foreach (var candidate in affectedCells)
+        {
+            if (candidate.Sheet.Equals(_currentSheetId))
+            {
+                targetSheetId = _currentSheetId;
+                break;
+            }
+        }
+
+        uint minRow = uint.MaxValue, maxRow = uint.MinValue, minCol = uint.MaxValue, maxCol = uint.MinValue;
+        foreach (var address in affectedCells)
+        {
+            if (!address.Sheet.Equals(targetSheetId))
+                continue;
+
+            if (address.Row < minRow) minRow = address.Row;
+            if (address.Row > maxRow) maxRow = address.Row;
+            if (address.Col < minCol) minCol = address.Col;
+            if (address.Col > maxCol) maxCol = address.Col;
+        }
+
+        if (minRow == uint.MaxValue)
+            return;
+
+        var previousSheetId = _currentSheetId;
+        _currentSheetId = targetSheetId;
+        var start = new CellAddress(targetSheetId, minRow, minCol);
+        var end = new CellAddress(targetSheetId, maxRow, maxCol);
+        SetSelectionRange(new GridRange(start, end), start);
+        EnsureCellVisible(start);
+
+        if (!targetSheetId.Equals(previousSheetId))
+            RefreshSheetTabs();
     }
 
     private void RecalculateAfterCommandOutcome(CommandOutcome outcome)

@@ -187,6 +187,31 @@ public static class ImportDataPlanner
     }
 
     /// <summary>
+    /// R88-io-text-import-wizard-5-4: resolves <see cref="ImportDataOptions.DecimalSeparator"/> and
+    /// <see cref="ImportDataOptions.ThousandsSeparator"/> to the <see cref="TextToColumnsAdvancedOptions"/>
+    /// the shared numeric-coercion helper (<see cref="TextToColumnsValueConverter"/>) already understands,
+    /// so a value parser downstream of the import can honor the same per-import locale override the
+    /// sibling Text-to-Columns Advanced dialog exposes -- without duplicating its separator-validation or
+    /// digit-grouping logic. Returns <c>null</c> when neither separator is overridden, so a caller that
+    /// only forwards a non-null result leaves numeric coercion on its normal (current-culture-then-
+    /// invariant-culture) resolution exactly as before this option existed.
+    /// </summary>
+    public static TextToColumnsAdvancedOptions? BuildAdvancedOptions(ImportDataOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (options.DecimalSeparator is null && options.ThousandsSeparator is null)
+            return null;
+
+        var defaults = new TextToColumnsAdvancedOptions();
+        return defaults with
+        {
+            DecimalSeparator = options.DecimalSeparator ?? defaults.DecimalSeparator,
+            ThousandsSeparator = options.ThousandsSeparator ?? defaults.ThousandsSeparator
+        };
+    }
+
+    /// <summary>
     /// Splits a block of text into its lines on CR, LF or CRLF, dropping a single trailing empty line so a
     /// file ending in a newline does not add a phantom blank row. An empty input yields no lines.
     /// </summary>

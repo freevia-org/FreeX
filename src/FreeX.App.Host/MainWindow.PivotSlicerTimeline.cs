@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -101,7 +102,20 @@ public partial class MainWindow
             return;
 
         var allItems = ReadSlicerSourceItems(slicer).ToList();
-        var selected = SlicerTimelinePlanner.ToggleSlicerSelection(allItems, slicer.SelectedItems, tile.Caption);
+
+        // R88-app-slicer-timeline-interaction-5-2: match Excel's slicer click semantics -- a plain
+        // click REPLACES the whole selection with just the clicked item (like the native on-grid
+        // overlay's SlicerLayoutBuilder.Toggle(additive: false) path), Ctrl+click toggles the item's
+        // membership in the existing selection, and Shift+click extends to the contiguous range
+        // between the current selection and the clicked item. Only a plain click can narrow a
+        // multi-item filter down to a single item; the additive toggle alone can never do that.
+        IReadOnlyList<string> selected;
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            selected = SlicerTimelinePlanner.ExtendSlicerSelection(allItems, slicer.SelectedItems, tile.Caption);
+        else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+            selected = SlicerTimelinePlanner.ToggleSlicerSelection(allItems, slicer.SelectedItems, tile.Caption);
+        else
+            selected = SlicerTimelinePlanner.ReplaceSlicerSelection(slicer.SelectedItems, tile.Caption);
 
         if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicer.Name, selected.ToList()), "Slicer"))
             return;
@@ -174,16 +188,15 @@ public partial class MainWindow
 
         // P8/H45: GridView reports a plain click on an on-grid slicer tile with no modifier info
         // (NativeSlicerTileToggleRequested is Action<string,string>), so this path must apply Excel's
-        // plain-click REPLACE semantics — the same behaviour Avalonia gets from
-        // SlicerLayoutBuilder.Toggle(..., additive: false) — instead of the additive toggle used by
-        // SlicerTimelinePlanner.ToggleSlicerSelection (which is for the Ctrl-click-aware slicer pane).
-        // A plain click on a caption replaces the whole selection with just that item; a second plain
-        // click on the lone already-selected item clears the filter back to "everything selected".
-        var isSoleSelection = slicer.SelectedItems.Count == 1 &&
-            string.Equals(slicer.SelectedItems[0], caption, StringComparison.CurrentCultureIgnoreCase);
-        List<string> selected = isSoleSelection ? [] : [caption];
+        // plain-click REPLACE semantics — the same SlicerTimelinePlanner.ReplaceSlicerSelection path
+        // SlicerTileButton_Click now uses for the pane's own plain clicks (R88-app-slicer-timeline-
+        // interaction-5-2), matching the behaviour Avalonia gets from SlicerLayoutBuilder.Toggle(...,
+        // additive: false). A plain click on a caption replaces the whole selection with just that
+        // item; a second plain click on the lone already-selected item clears the filter back to
+        // "everything selected".
+        var selected = SlicerTimelinePlanner.ReplaceSlicerSelection(slicer.SelectedItems, caption);
 
-        if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicerName, selected), "Slicer"))
+        if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicerName, selected.ToList()), "Slicer"))
             return;
 
         UpdateViewport();

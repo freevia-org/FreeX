@@ -136,7 +136,11 @@ internal static class LegendLayoutBuilder
         {
             var labels = new List<(int, string)>();
             for (var i = 0; i < request.Categories.Count; i++)
+            {
+                if (IsPieLegendEntryDeleted(chart, i))
+                    continue;
                 labels.Add((i, request.Categories[i]));
+            }
             return labels;
         }
 
@@ -170,6 +174,24 @@ internal static class LegendLayoutBuilder
                 : entry.Index;
             if (resolvedSeriesIndex == seriesIndex)
                 return entry.IsDeleted == true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns true when the pie/doughnut point at <paramref name="pointIndex"/> has its legend
+    /// entry marked deleted. Unlike <see cref="IsLegendEntryDeleted"/> (series legends), pie/doughnut
+    /// charts have exactly one plotted series, so each &lt;c:legendEntry&gt; idx is the point/category
+    /// index directly -- there is no series-plot-order indirection to resolve.
+    /// </summary>
+    private static bool IsPieLegendEntryDeleted(ChartModel chart, int pointIndex)
+    {
+        var entries = chart.LegendEntries;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            if (entries[i].Index == pointIndex)
+                return entries[i].IsDeleted == true;
         }
 
         return false;
