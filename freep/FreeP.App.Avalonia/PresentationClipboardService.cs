@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -236,32 +239,85 @@ internal sealed class AvaloniaClipboardShapeRenderer : IPresentationClipboardSha
     }
 }
 
+internal sealed record PreparedClipboardWrite(
+    EditingSession Editor,
+    PresentationClipboardContent? Content,
+    int SlideIndex,
+    IReadOnlyList<uint> SelectedShapeIds);
+
+internal sealed record PreparedClipboardPaste(EditingSession Editor, int SlideIndex);
+
+internal sealed record ClipboardSelectionSnapshot(
+    int SlideIndex,
+    IReadOnlyList<uint> SelectedShapeIds);
+
 internal sealed class AvaloniaPresentationClipboardService(
     IPresentationSystemClipboard systemClipboard,
     IPresentationClipboardShapeRenderer renderer)
 {
     private string? _lastOwnerToken;
+    private string? _lastContentIdentity;
 
-    public async Task<bool> CopyAsync(EditingSession editor)
+    public Task<bool> CopyAsync(EditingSession editor) =>
+        ExecuteCopyAsync(PrepareWrite(editor));
+
+    public Task<bool> CutAsync(EditingSession editor) =>
+        ExecuteCutAsync(PrepareWrite(editor));
+
+    public Task<PresentationClipboardPasteSource> PasteAsync(EditingSession editor) =>
+        ExecutePasteAsync(PreparePaste(editor));
+
+    internal PreparedClipboardWrite PrepareWrite(EditingSession editor)
     {
+        ArgumentNullException.ThrowIfNull(editor);
+        var selectedShapeIds = editor.SelectedShapeIds.ToArray();
         var content = Capture(editor);
-        editor.CopySelectedShapes();
-        return content is not null && await TryWriteAsync(content);
+
+        return new PreparedClipboardWrite(
+            editor,
+            content,
+            editor.CurrentSlideIndex,
+            selectedShapeIds);
     }
 
-    public async Task<bool> CutAsync(EditingSession editor)
+    internal PreparedClipboardPaste PreparePaste(EditingSession editor)
     {
-        // Export while the source selection still exists, then perform one undoable delete.
-        // The internal clipboard remains populated even when the OS clipboard is unavailable.
-        var content = Capture(editor);
-        editor.CopySelectedShapes();
-        var written = content is not null && await TryWriteAsync(content);
-        editor.DeleteSelected();
-        return written;
+        ArgumentNullException.ThrowIfNull(editor);
+        return new PreparedClipboardPaste(editor, editor.CurrentSlideIndex);
     }
 
-    public async Task<PresentationClipboardPasteSource> PasteAsync(EditingSession editor)
+    internal async Task<bool> ExecuteCopyAsync(PreparedClipboardWrite request)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // Keep internal clipboard mutation in the same serialized order as the native write.
+        var liveSelection = CaptureSelection(request.Editor);
+        RestoreSelection(request.Editor, request.SlideIndex, request.SelectedShapeIds);
+        request.Editor.CopySelectedShapes();
+        RestoreSelection(request.Editor, liveSelection.SlideIndex, liveSelection.SelectedShapeIds);
+        return request.Content is not null && await TryWriteAsync(request.Content);
+    }
+
+    internal async Task<bool> ExecuteCutAsync(PreparedClipboardWrite request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        // Start exporting while the source selection still exists. The cut mutation is then
+        // committed before awaiting the OS clipboard so a later user selection is not restored
+        // over the top of the UI after an asynchronous write.
+        var writeTask = request.Content is not null
+            ? TryWriteAsync(request.Content)
+            : Task.FromResult(false);
+
+        RestoreSelection(request.Editor, request.SlideIndex, request.SelectedShapeIds);
+        request.Editor.CopySelectedShapes();
+        request.Editor.DeleteSelected();
+        return await writeTask;
+    }
+
+    internal async Task<PresentationClipboardPasteSource> ExecutePasteAsync(
+        PreparedClipboardPaste request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
         PresentationClipboardContent content;
         try
         {
@@ -272,14 +328,24 @@ internal sealed class AvaloniaPresentationClipboardService(
             content = new PresentationClipboardContent();
         }
 
+        if (request.Editor.CurrentSlideIndex != request.SlideIndex)
+            request.Editor.SelectSlide(request.SlideIndex);
+
+        // Avalonia has no portable native clipboard sequence. Hashing every payload returned at
+        // this boundary, with PNG normalization, proves the observed content still matches the
+        // last successful write; an exact replay of all payloads remains indistinguishable.
         var ownCopy = !string.IsNullOrEmpty(_lastOwnerToken)
             && string.Equals(content.OwnerToken, _lastOwnerToken, StringComparison.Ordinal)
-            && editor.CanPaste;
+            && string.Equals(
+                ComputeContentIdentity(content),
+                _lastContentIdentity,
+                StringComparison.Ordinal)
+            && request.Editor.CanPaste;
         var source = PresentationClipboardPastePlanner.Decide(
             content.HasSelection,
             content.HasImage,
             content.HasText,
-            editor.CanPaste,
+            request.Editor.CanPaste,
             ownCopy);
 
         if (source == PresentationClipboardPasteSource.NativeSelection)
@@ -289,7 +355,7 @@ internal sealed class AvaloniaPresentationClipboardService(
                 var shapes = PresentationClipboardSelectionCodec.Deserialize(content.SelectionBytes!);
                 if (shapes.Count > 0)
                 {
-                    editor.PasteExternalShapes(shapes);
+                    request.Editor.PasteExternalShapes(shapes);
                     return source;
                 }
             }
@@ -302,25 +368,45 @@ internal sealed class AvaloniaPresentationClipboardService(
                 hasNativeSelection: false,
                 content.HasImage,
                 content.HasText,
-                editor.CanPaste,
+                request.Editor.CanPaste,
                 ownCopyIsCurrent: false);
         }
 
         switch (source)
         {
             case PresentationClipboardPasteSource.Image:
-                editor.InsertPicture(content.PngBytes!, "image/png");
+                request.Editor.InsertPicture(content.PngBytes!, "image/png");
                 break;
             case PresentationClipboardPasteSource.Text:
-                editor.InsertTextBox(content.Text!);
+                request.Editor.InsertTextBox(content.Text!);
                 break;
             case PresentationClipboardPasteSource.Internal:
-                editor.Paste();
+                request.Editor.Paste();
                 break;
         }
 
         return source;
     }
+
+    private static void RestoreSelection(
+        EditingSession editor,
+        int slideIndex,
+        IReadOnlyList<uint> selectedShapeIds)
+    {
+        if (editor.CurrentSlideIndex != slideIndex)
+            editor.SelectSlide(slideIndex);
+        else
+            editor.ClearSelection();
+
+        foreach (var shapeId in selectedShapeIds)
+        {
+            if (editor.CurrentSlide?.Shapes.Any(shape => shape.Id == shapeId) == true)
+                editor.Select(shapeId, addToSelection: true);
+        }
+    }
+
+    private static ClipboardSelectionSnapshot CaptureSelection(EditingSession editor) =>
+        new(editor.CurrentSlideIndex, editor.SelectedShapeIds.ToArray());
 
     private PresentationClipboardContent? Capture(EditingSession editor)
     {
@@ -338,12 +424,61 @@ internal sealed class AvaloniaPresentationClipboardService(
         {
             await systemClipboard.WriteAsync(content);
             _lastOwnerToken = content.OwnerToken;
+            _lastContentIdentity = ComputeContentIdentity(content);
             return true;
         }
         catch
         {
             _lastOwnerToken = null;
+            _lastContentIdentity = null;
             return false;
+        }
+    }
+
+    internal static string ComputeContentIdentity(PresentationClipboardContent content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        AppendBytes(hash, content.SelectionBytes);
+        AppendBytes(hash, NormalizePng(content.PngBytes));
+        AppendBytes(hash, content.Text is null ? null : Encoding.UTF8.GetBytes(content.Text));
+        AppendBytes(hash, content.OwnerToken is null ? null : Encoding.UTF8.GetBytes(content.OwnerToken));
+        return Convert.ToHexString(hash.GetHashAndReset());
+    }
+
+    private static void AppendBytes(IncrementalHash hash, byte[]? bytes)
+    {
+        Span<byte> length = stackalloc byte[4];
+        if (bytes is null)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(length, -1);
+            hash.AppendData(length);
+            return;
+        }
+
+        BinaryPrimitives.WriteInt32LittleEndian(length, bytes.Length);
+        hash.AppendData(length);
+        hash.AppendData(bytes);
+    }
+
+    private static byte[]? NormalizePng(byte[]? pngBytes)
+    {
+        if (pngBytes is not { Length: > 0 })
+            return pngBytes;
+
+        try
+        {
+            using var bitmap = new Bitmap(new MemoryStream(pngBytes, writable: false));
+            using var stream = new MemoryStream();
+            bitmap.Save(stream);
+            return stream.ToArray();
+        }
+        catch
+        {
+            // BuildDataTransfer omits an image that Avalonia cannot decode, so it is not part
+            // of the native content identity in that case.
+            return null;
         }
     }
 }

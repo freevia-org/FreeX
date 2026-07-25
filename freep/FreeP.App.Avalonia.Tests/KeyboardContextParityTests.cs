@@ -22,7 +22,7 @@ public sealed class KeyboardContextParityTests
     [Fact]
     public async Task AvaloniaMissingWpfRoutesExecuteRealCommandEffects()
     {
-        await Session.Dispatch(() =>
+        await Session.Dispatch(async () =>
         {
             var window = new MainWindow([]);
             try
@@ -38,12 +38,25 @@ public sealed class KeyboardContextParityTests
 
                 var shape = new SlideShape { Id = 701, Name = "Clipboard shape" };
                 window.Editor.CurrentSlide!.Shapes.Add(shape);
+                var secondShape = new SlideShape { Id = 702, Name = "Second clipboard shape" };
+                window.Editor.CurrentSlide.Shapes.Add(secondShape);
                 var shapeCountBeforeCut = window.Editor.CurrentSlide.Shapes.Count;
                 window.Editor.Select(shape.Id);
+
+                Press(window, Key.A, KeyModifiers.Control).Handled.Should().BeTrue();
+                window.Editor.SelectedShapeIds.Should().Equal(shape.Id, secondShape.Id);
                 Press(window, Key.C, KeyModifiers.Control).Handled.Should().BeTrue();
+                await window.ClipboardOperationForTests;
                 Press(window, Key.X, KeyModifiers.Control).Handled.Should().BeTrue();
+                await window.ClipboardOperationForTests;
                 window.Editor.CurrentSlide.Shapes.Should().NotContain(candidate => candidate.Id == shape.Id);
                 Press(window, Key.V, KeyModifiers.Control).Handled.Should().BeTrue();
+                await window.ClipboardOperationForTests;
+                window.Editor.CurrentSlide.Shapes.Should().HaveCount(shapeCountBeforeCut);
+
+                Press(window, Key.Z, KeyModifiers.Control).Handled.Should().BeTrue();
+                window.Editor.CurrentSlide.Shapes.Should().BeEmpty();
+                Press(window, Key.Z, KeyModifiers.Control | KeyModifiers.Shift).Handled.Should().BeTrue();
                 window.Editor.CurrentSlide.Shapes.Should().HaveCount(shapeCountBeforeCut);
 
                 Press(window, Key.F, KeyModifiers.Control).Handled.Should().BeTrue();

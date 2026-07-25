@@ -2008,11 +2008,11 @@ public sealed partial class MainWindow : Window
 
         // Clipboard
         r.Register("freep.copy", new ActionRibbonCommand(() =>
-            QueueClipboardOperation(() => _clipboardService.CopyAsync(Editor))));
+            QueueClipboardCopy()));
         r.Register("freep.cut", new ActionRibbonCommand(() =>
-            QueueClipboardOperation(() => _clipboardService.CutAsync(Editor))));
+            QueueClipboardCut()));
         r.Register("freep.paste", new ActionRibbonCommand(() =>
-            QueueClipboardOperation(() => _clipboardService.PasteAsync(Editor))));
+            QueueClipboardPaste()));
         r.Register("freep.format-painter", new ActionRibbonCommand(() =>
         {
             if (Editor.SelectedShapeIds.Count == 1 && _gestureHandler?.BeginFormatPainter() == true)
@@ -7835,19 +7835,37 @@ public sealed partial class MainWindow : Window
             case FreePKeyboardCommand.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
             case FreePKeyboardCommand.StartSlideShowFromCurrentSlide: StartSlideShow(fromStart: false); break;
             case FreePKeyboardCommand.Copy:
-                QueueClipboardOperation(() => _clipboardService.CopyAsync(Editor));
+                QueueClipboardCopy();
                 break;
             case FreePKeyboardCommand.Cut:
-                QueueClipboardOperation(() => _clipboardService.CutAsync(Editor));
+                QueueClipboardCut();
                 break;
             case FreePKeyboardCommand.Paste:
-                QueueClipboardOperation(() => _clipboardService.PasteAsync(Editor));
+                QueueClipboardPaste();
                 break;
             case FreePKeyboardCommand.Find: OpenFindDialog(); break;
             case FreePKeyboardCommand.Replace: OpenFindReplaceDialog(); break;
             case FreePKeyboardCommand.SelectAll: Editor.SelectAll(); break;
             default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
         }
+    }
+
+    private void QueueClipboardCopy()
+    {
+        var request = _clipboardService.PrepareWrite(Editor);
+        QueueClipboardOperation(() => _clipboardService.ExecuteCopyAsync(request));
+    }
+
+    private void QueueClipboardCut()
+    {
+        var request = _clipboardService.PrepareWrite(Editor);
+        QueueClipboardOperation(() => _clipboardService.ExecuteCutAsync(request));
+    }
+
+    private void QueueClipboardPaste()
+    {
+        var request = _clipboardService.PreparePaste(Editor);
+        QueueClipboardOperation(() => _clipboardService.ExecutePasteAsync(request));
     }
 
     private void QueueClipboardOperation(Func<Task> operation)

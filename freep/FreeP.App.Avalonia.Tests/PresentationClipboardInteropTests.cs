@@ -312,6 +312,43 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task Reused_owner_token_with_changed_native_content_does_not_use_internal_fallback()
+    {
+        var clipboard = new FakeSystemClipboard();
+        var editor = CreateEditorWithSelectedShape(out _);
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        await service.CopyAsync(editor);
+        var ownerToken = clipboard.LastWritten!.OwnerToken;
+        clipboard.Content = new PresentationClipboardContent(
+            PngBytes: Png,
+            Text: "changed native content",
+            OwnerToken: ownerToken);
+
+        var result = await service.PasteAsync(editor);
+
+        result.Should().Be(PresentationClipboardPasteSource.Image);
+        editor.CurrentSlide!.Shapes.Last().Kind.Should().Be(SlideShapeKind.Picture);
+    }
+
+    [Fact]
+    public async Task Failed_write_invalidates_reused_owner_token_currentness()
+    {
+        var clipboard = new FakeSystemClipboard();
+        var editor = CreateEditorWithSelectedShape(out _);
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        await service.CopyAsync(editor);
+        clipboard.Content = new PresentationClipboardContent(
+            Text: "external after failed write",
+            OwnerToken: clipboard.LastWritten!.OwnerToken);
+        clipboard.ThrowOnWrite = true;
+
+        (await service.CopyAsync(editor)).Should().BeFalse();
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.Text);
+    }
+
+    [Fact]
     public async Task Empty_or_unsupported_clipboard_falls_back_to_internal_then_nothing()
     {
         var clipboard = new FakeSystemClipboard();
@@ -387,6 +424,69 @@ public sealed class PresentationClipboardInteropTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task Queued_clipboard_commands_use_invocation_selection_in_order()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var firstWriteStarted = new TaskCompletionSource<bool>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var firstWriteGate = new TaskCompletionSource<bool>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var clipboard = new FakeSystemClipboard
+            {
+                WriteStarted = firstWriteStarted,
+                WriteGate = firstWriteGate,
+            };
+            var window = new MainWindow(
+                [],
+                loadRecentFilesStore: null,
+                systemClipboard: clipboard,
+                clipboardRenderer: new StubRenderer());
+            try
+            {
+                var first = window.Editor.InsertDefaultRectangle();
+                first.Name = "First";
+                var middle = window.Editor.InsertDefaultRectangle();
+                middle.Name = "Middle";
+                var later = window.Editor.InsertDefaultRectangle();
+                later.Name = "Later";
+
+                window.Editor.Select(first.Id);
+                RaiseClipboardKey(window, Key.C);
+                await firstWriteStarted.Task;
+
+                window.Editor.Select(middle.Id);
+                RaiseClipboardKey(window, Key.X);
+                window.Editor.Select(later.Id);
+                RaiseClipboardKey(window, Key.V);
+
+                firstWriteGate.TrySetResult(true);
+                await window.ClipboardOperationForTests;
+
+                window.Editor.CurrentSlide!.Shapes.Should().Contain(shape => shape.Id == first.Id);
+                window.Editor.CurrentSlide.Shapes.Should().Contain(shape => shape.Id == later.Id);
+                window.Editor.CurrentSlide.Shapes.Should().NotContain(shape => shape.Id == middle.Id);
+                window.Editor.CurrentSlide.Shapes
+                    .Count(shape => shape.Name == middle.Name)
+                    .Should().Be(1);
+                clipboard.WriteCount.Should().Be(2);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    private static KeyEventArgs RaiseClipboardKey(MainWindow window, Key key)
+    {
+        var args = new KeyEventArgs { Key = key, KeyModifiers = KeyModifiers.Control };
+        window.RaiseKeyDownForTests(args);
+        args.Handled.Should().BeTrue();
+        return args;
+    }
+
     private static EditingSession CreateEditorWithSelectedShape(out SlideShape shape)
     {
         var editor = CreateEmptyEditor();
@@ -433,16 +533,20 @@ public sealed class PresentationClipboardInteropTests
         public bool ThrowOnWrite { get; set; }
         public bool ThrowOnRead { get; set; }
         public Action? BeforeWrite { get; set; }
+        public TaskCompletionSource<bool>? WriteStarted { get; set; }
+        public TaskCompletionSource<bool>? WriteGate { get; set; }
 
-        public Task WriteAsync(PresentationClipboardContent content)
+        public async Task WriteAsync(PresentationClipboardContent content)
         {
             if (ThrowOnWrite)
                 throw new InvalidOperationException("clipboard locked");
             BeforeWrite?.Invoke();
+            WriteStarted?.TrySetResult(true);
+            if (WriteGate is not null)
+                await WriteGate.Task;
             LastWritten = content;
             Content = content;
             WriteCount++;
-            return Task.CompletedTask;
         }
 
         public Task<PresentationClipboardContent> ReadAsync()
