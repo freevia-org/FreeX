@@ -285,7 +285,7 @@ public sealed class SetSlideHiddenCommand : IPresentationCommand
     }
 }
 
-/// <summary>Sets whether a top-level slide object is hidden in the editing view.</summary>
+/// <summary>Sets whether a slide object, including a grouped child, is hidden in the editing view.</summary>
 public sealed class SetShapeHiddenCommand : IPresentationCommand
 {
     private readonly int _slideIndex;
@@ -326,8 +326,21 @@ public sealed class SetShapeHiddenCommand : IPresentationCommand
         if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
             return false;
 
-        shape = p.Slides[_slideIndex].Shapes.FirstOrDefault(candidate => candidate.Id == _shapeId)!;
+        shape = FindShape(p.Slides[_slideIndex].Shapes, _shapeId)!;
         return shape is not null;
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 }
 
