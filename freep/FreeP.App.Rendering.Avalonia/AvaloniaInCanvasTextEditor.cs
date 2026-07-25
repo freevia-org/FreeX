@@ -338,6 +338,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     private void OnEditorActiveTableCellChanged(object? sender, EventArgs e) => RefreshTableCellHighlight();
     private void OnEditorCurrentSlideChanged(object? sender, EventArgs e)
     {
+        Commit();
         CommitCellEdit();
         RefreshTableCellHighlight();
     }
@@ -402,6 +403,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _textBox.InputBox.KeyDown += OnTextBoxKeyDown;
 
         _overlay.Children.Add(_textBox);
+        _canvas.ActiveTextEditShapeId = shapeId;
         UpdateOverlayState();
         _textBox.FocusEditor();
         ApplyInitialSelection(_textBox, startPlan.InitialSelection);
@@ -473,8 +475,14 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     /// <summary>Commits the current text edit, if active, to the command bus and hides the overlay.</summary>
     public void Commit()
     {
-        if (!_active || _textBox is null || _committing)
+        if (_committing)
             return;
+
+        if (!_active || _textBox is null)
+        {
+            _canvas.ActiveTextEditShapeId = null;
+            return;
+        }
 
         _committing = true;
         try
@@ -485,16 +493,9 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             _overlay.Children.Remove(_textBox);
             _textBox = null;
             _active = false;
+            _canvas.ActiveTextEditShapeId = null;
             _editPlan = null;
             UpdateOverlayState();
-
-            var slide = _editor.CurrentSlide;
-            if (slide is null)
-                return;
-
-            var shape = slide.Shapes.FirstOrDefault(s => s.Id == _editingShapeId);
-            if (shape is null)
-                return;
 
             var decision = editPlan?.CommitRichText(newBody)
                 ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
@@ -563,11 +564,15 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     public void Cancel()
     {
         if (!_active || _textBox is null)
+        {
+            _canvas.ActiveTextEditShapeId = null;
             return;
+        }
 
         _overlay.Children.Remove(_textBox);
         _textBox = null;
         _active = false;
+        _canvas.ActiveTextEditShapeId = null;
         _ = _editPlan?.Cancel();
         _editPlan = null;
         UpdateOverlayState();

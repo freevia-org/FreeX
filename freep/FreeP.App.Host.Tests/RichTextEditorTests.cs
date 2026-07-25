@@ -555,6 +555,79 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void InCanvasTextEditor_ActiveShapeSuppression_FollowsEditorLifecycle()
+    {
+        var p = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            TextBody = MakeTwoRunBody(),
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(p, new PresentationCommandBus(p));
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+
+        canvas.TextEditor!.Activate(shape.Id);
+        canvas.ActiveTextEditShapeId.Should().Be(shape.Id);
+
+        canvas.TextEditor.Cancel();
+        canvas.ActiveTextEditShapeId.Should().BeNull();
+
+        canvas.TextEditor.Activate(shape.Id);
+        canvas.TextEditor.Commit();
+        canvas.ActiveTextEditShapeId.Should().BeNull();
+
+        canvas.TextEditor.Activate(shape.Id);
+        canvas.TextEditor.Dispose();
+        canvas.ActiveTextEditShapeId.Should().BeNull();
+    }
+
+    [StaFact]
+    public void InCanvasTextEditor_CurrentSlideChange_CommitsTextAndClearsSuppression()
+    {
+        var p = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        p.Slides.Add(new Slide());
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            TextBody = MakeTwoRunBody(),
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(p, new PresentationCommandBus(p));
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+        canvas.TextEditor!.Activate(shape.Id);
+
+        var box = overlay.Children.OfType<System.Windows.Controls.RichTextBox>().Single();
+        box.SelectAll();
+        box.Selection.Text = "Committed before slide change";
+
+        editor.SelectSlide(1);
+
+        canvas.ActiveTextEditShapeId.Should().BeNull();
+        InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody)
+            .Should().Be("Committed before slide change");
+        editor.CanUndo.Should().BeTrue();
+    }
+
+    [StaFact]
     public void InCanvasTextEditor_Commit_IssuesSetShapeTextBodyCommand()
     {
         var p     = Presentation.CreateEmpty();

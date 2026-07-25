@@ -67,6 +67,13 @@ public sealed class SlideCanvas : FrameworkElement
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender,
                 OnModelChanged));
 
+    public static readonly DependencyProperty ActiveTextEditShapeIdProperty =
+        DependencyProperty.Register(
+            nameof(ActiveTextEditShapeId),
+            typeof(uint?),
+            typeof(SlideCanvas),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
     public Presentation? Presentation
     {
         get => (Presentation?)GetValue(PresentationProperty);
@@ -77,6 +84,13 @@ public sealed class SlideCanvas : FrameworkElement
     {
         get => (Slide?)GetValue(SlideProperty);
         set => SetValue(SlideProperty, value);
+    }
+
+    /// <summary>Shape whose base text is hidden while its rich editor overlay is active.</summary>
+    public uint? ActiveTextEditShapeId
+    {
+        get => (uint?)GetValue(ActiveTextEditShapeIdProperty);
+        set => SetValue(ActiveTextEditShapeIdProperty, value);
     }
     /// <summary>
     /// Shape ids temporarily omitted from the base canvas while the slideshow host
@@ -110,6 +124,8 @@ public sealed class SlideCanvas : FrameworkElement
     public void AttachEditing(EditingSession editor, Canvas textOverlay)
     {
         // Detach previous handler if any (don't re-add adorner on every call)
+        _textEditor?.Dispose();
+        ActiveTextEditShapeId = null;
         _textEditor      = null;
         _tableCellEditor = null;
         _gestureHandler  = new CanvasGestureHandler(this, editor);
@@ -275,7 +291,7 @@ public sealed class SlideCanvas : FrameworkElement
                 break;
             case DrawOp.Shape shape:
                 if (shape.ShapeId != 0 && SuppressedShapeIds.Contains(shape.ShapeId)) break;
-                RenderShape(dc, shape);
+                RenderShape(dc, shape, shape.ShapeId != 0 && shape.ShapeId == ActiveTextEditShapeId);
                 break;
             case DrawOp.Picture pic:
                 if (pic.ShapeId != 0 && SuppressedShapeIds.Contains(pic.ShapeId)) break;
@@ -305,7 +321,7 @@ public sealed class SlideCanvas : FrameworkElement
 
     // ── AutoShape ──────────────────────────────────────────────────────────────
 
-    private static void RenderShape(DrawingContext dc, DrawOp.Shape shape)
+    private static void RenderShape(DrawingContext dc, DrawOp.Shape shape, bool suppressText)
     {
         if (shape.Geometry.Contours.Count == 0 && shape.Text is null
             && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
@@ -362,7 +378,7 @@ public sealed class SlideCanvas : FrameworkElement
             RenderImportedShapeMaterial(dc, materialPlan, shapeGeometry);
 
         // Draw text overlay
-        if (shape.Text is not null)
+        if (!suppressText && shape.Text is not null)
             RenderText(dc, shape.Text, bounds);
 
         if (hasTransform)

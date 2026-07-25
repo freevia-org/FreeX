@@ -142,6 +142,49 @@ public sealed class SlideCanvasTests
     }
 
     [StaFact]
+    public void SlideCanvas_ActiveTextEditShapeId_SuppressesOnlyMatchingShapeText()
+    {
+        var p = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Background = new ShapeFill.Solid(SrgbColor.White);
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 1371600,
+            Fill = new ShapeFill.Solid(new SrgbColor(0xD9, 0xE2, 0xF3)),
+            TextBody = MakeRenderTextBody("Active shape"),
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            OffsetXEmu = 4572000,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 1371600,
+            Fill = new ShapeFill.Solid(new SrgbColor(0xE2, 0xF0, 0xD9)),
+            TextBody = MakeRenderTextBody("Other shape"),
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        canvas.Measure(new Size(960, 540));
+        canvas.Arrange(new Rect(0, 0, 960, 540));
+        canvas.UpdateLayout();
+
+        var before = RenderPixels(canvas, 960, 540);
+        canvas.ActiveTextEditShapeId = 1;
+        var suppressed = RenderPixels(canvas, 960, 540);
+
+        CountPixelDifferences(before, suppressed, 0, 0, 360, 260)
+            .Should().BeGreaterThan(0, "the active shape base text should be removed");
+        CountPixelDifferences(before, suppressed, 360, 0, 960, 260)
+            .Should().Be(0, "a different shape must remain unchanged");
+    }
+
+    [StaFact]
     public void SlideCanvas_WithStackedVerticalTextShape_RendersWithoutThrow()
     {
         var p = Presentation.CreateEmpty();
@@ -205,6 +248,54 @@ public sealed class SlideCanvasTests
     }
 
     // ── ComputeNiceAxisRange unit tests ───────────────────────────────────────
+
+    private static TextBody MakeRenderTextBody(string text)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
+    private static byte[] RenderPixels(SlideCanvas canvas, int width, int height)
+    {
+        canvas.Refresh();
+        canvas.UpdateLayout();
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(canvas);
+        var pixels = new byte[width * height * 4];
+        bitmap.CopyPixels(pixels, width * 4, 0);
+        return pixels;
+    }
+
+    private static int CountPixelDifferences(
+        byte[] first,
+        byte[] second,
+        int left,
+        int top,
+        int right,
+        int bottom)
+    {
+        int width = 960;
+        int differences = 0;
+        for (int y = top; y < bottom; y++)
+        {
+            for (int x = left; x < right; x++)
+            {
+                int offset = (y * width + x) * 4;
+                if (first[offset] != second[offset]
+                    || first[offset + 1] != second[offset + 1]
+                    || first[offset + 2] != second[offset + 2]
+                    || first[offset + 3] != second[offset + 3])
+                {
+                    differences++;
+                }
+            }
+        }
+
+        return differences;
+    }
 
     private static ChartShape MakeChart(params double[] values)
     {
