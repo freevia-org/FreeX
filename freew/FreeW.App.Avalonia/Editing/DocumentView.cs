@@ -203,6 +203,8 @@ public sealed class DocumentView : Control
     // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
     // Rect is the page-space bounding rect as laid out in the last layout pass.
     private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedFloating;
+    // AV-SHAPETEXT: bounded one-paragraph caret for the selected floating text box.
+    private (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? _shapeCaret;
     // Multi-select set for object arrange commands. DrawingGroup itself is single-select because the
     // shared grouping command currently consumes only concrete floating object runs.
     private readonly List<(int BlockIndex, int RunIndex, string Kind)> _selectedFloatingObjects = [];
@@ -467,6 +469,7 @@ public sealed class DocumentView : Control
         _collapsedHeadings.Clear();
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
+        _shapeCaret = null;
         _selectedFloatingObjects.Clear();
         _floatDragState   = null;
         if (RestrictEditingPolicy.ShouldForceTrackChanges)
@@ -8021,10 +8024,46 @@ public sealed class DocumentView : Control
     public Shape? SelectedFloatingShape() =>
         SelectedFloatingShapeLocation()?.Shape;
 
+    /// <summary>True while keyboard input is editing the first text run of a selected text box.</summary>
+    public bool IsShapeTextEditing => _shapeCaret is not null;
+
+    /// <summary>Current selected text-box caret, or null when the object is not in text-edit mode.</summary>
+    public (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? ShapeTextCaretInfo =>
+        _shapeCaret;
+
+    /// <summary>
+    /// Enter the bounded text-edit route for the selected floating text box. This intentionally edits
+    /// only its first paragraph/run; richer text-box editing remains a separate parity slice.
+    /// </summary>
+    public bool EnterSelectedShapeTextEditing()
+    {
+        if (IsEditingLocked || _selectedFloating is not { Kind: "Shape" } selected
+            || !TryGetRun(selected.BlockIndex, selected.RunIndex, out var shapeRun)
+            || shapeRun.Shape is not { Kind: ShapeKind.TextBox }
+            || !TryGetShapeTextRun(selected.BlockIndex, selected.RunIndex, 0, 0, out var run))
+            return false;
+
+        _shapeCaret = (selected.BlockIndex, selected.RunIndex, 0, 0, run.Text.Length);
+        Focus();
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        return true;
+    }
+
+    /// <summary>Exit floating text-box editing while keeping the object selected.</summary>
+    public void ExitShapeTextEditing()
+    {
+        if (_shapeCaret is null) return;
+        _shapeCaret = null;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
     /// <summary>Deselect any selected floating object. No-op when nothing is selected.</summary>
     public void DeselectFloating()
     {
         if (_selectedFloating is null && _selectedFloatingObjects.Count == 0) return;
+        _shapeCaret = null;
         _selectedFloating = null;
         _selectedFloatingObjects.Clear();
         _floatDragState   = null;
@@ -8058,6 +8097,7 @@ public sealed class DocumentView : Control
 
     private void SelectFloatingCore(int blockIndex, int runIndex, string kind, bool addToMultiSelect)
     {
+        _shapeCaret = null;
         var item = (blockIndex, runIndex, kind);
         if (addToMultiSelect && IsGroupableFloatingKind(kind))
         {
@@ -8105,6 +8145,27 @@ public sealed class DocumentView : Control
         if (_doc.Blocks[blockIndex] is not Paragraph para) return false;
         if (runIndex < 0 || runIndex >= para.Runs.Count) return false;
         run = para.Runs[runIndex];
+        return true;
+    }
+
+    private bool TryGetShapeTextRun(
+        int blockIndex,
+        int runIndex,
+        int textParagraphIndex,
+        int textRunIndex,
+        out Run textRun)
+    {
+        textRun = null!;
+        if (!TryGetRun(blockIndex, runIndex, out var run)
+            || run.Shape is not { } shape
+            || textParagraphIndex < 0 || textParagraphIndex >= shape.TextParagraphs.Count)
+            return false;
+
+        var paragraph = shape.TextParagraphs[textParagraphIndex];
+        if (textRunIndex < 0 || textRunIndex >= paragraph.Runs.Count)
+            return false;
+
+        textRun = paragraph.Runs[textRunIndex];
         return true;
     }
 
@@ -9336,6 +9397,7 @@ public sealed class DocumentView : Control
         // Click outside any float → deselect.
         if (_selectedFloating is not null)
         {
+            _shapeCaret = null;
             _selectedFloating = null;
             _selectedFloatingObjects.Clear();
             _floatDragState   = null;
@@ -9480,6 +9542,14 @@ public sealed class DocumentView : Control
             return;
         }
 
+        if (_shapeCaret is not null)
+        {
+            if (!string.IsNullOrEmpty(e.Text) && e.Text != "\r" && e.Text != "\n")
+                InsertText(e.Text);
+            e.Handled = true;
+            return;
+        }
+
         if (string.IsNullOrEmpty(e.Text) || e.Text == "\r" || e.Text == "\n")
             return;
         InsertText(e.Text);
@@ -9506,6 +9576,45 @@ public sealed class DocumentView : Control
             return;
         }
 
+        if (_shapeCaret is { } shapeCaret)
+        {
+            switch (e.Key)
+            {
+                case Key.Escape:
+                    ExitShapeTextEditing();
+                    e.Handled = true;
+                    return;
+                case Key.Left:
+                    MoveShapeTextCaret(-1);
+                    e.Handled = true;
+                    return;
+                case Key.Right:
+                    MoveShapeTextCaret(+1);
+                    e.Handled = true;
+                    return;
+                case Key.Home:
+                    SetShapeTextCaretOffset(0);
+                    e.Handled = true;
+                    return;
+                case Key.End:
+                    SetShapeTextCaretOffset(GetShapeTextLength(shapeCaret));
+                    e.Handled = true;
+                    return;
+                case Key.Back:
+                    Backspace();
+                    e.Handled = true;
+                    return;
+                case Key.Delete:
+                    DeleteForward();
+                    e.Handled = true;
+                    return;
+                case Key.Z when ctrl:
+                    Undo(); e.Handled = true; return;
+                case Key.Y when ctrl:
+                    Redo(); e.Handled = true; return;
+            }
+        }
+
         if (e.Key == Key.Escape && IsFormatPainterArmed)
         {
             CancelFormatPainter();
@@ -9516,6 +9625,13 @@ public sealed class DocumentView : Control
         // AV-FLSEL: when a float is selected, intercept navigation/delete keys before body text.
         if (_selectedFloating is { } selFloat)
         {
+            if (e.Key == Key.Enter && selFloat.Kind == "Shape")
+            {
+                if (EnterSelectedShapeTextEditing())
+                    e.Handled = true;
+                return;
+            }
+
             const double NudgePt = 6; // 6pt ≈ 8px nudge per arrow key press
             switch (e.Key)
             {
@@ -9657,6 +9773,12 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
+        if (_shapeCaret is { } shapeCaret)
+        {
+            InsertShapeText(shapeCaret, text);
+            return;
+        }
+
         // AV-HFEDIT: route into a header/footer region when the caret is inside one.
         if (_hfCaret is not null)
         {
@@ -9736,6 +9858,68 @@ public sealed class DocumentView : Control
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
         _selectionAnchor = _caret;
+    }
+
+    private void InsertShapeText(
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) caret,
+        string text)
+    {
+        if (string.IsNullOrEmpty(text)
+            || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex, caret.TextRunIndex, out var run))
+            return;
+
+        var offset = Math.Clamp(caret.Offset, 0, run.Text.Length);
+        _bus.Execute(new SetShapeTextRunCommand(
+            caret.BlockIndex,
+            caret.RunIndex,
+            caret.TextParagraphIndex,
+            caret.TextRunIndex,
+            run.Text.Insert(offset, text)));
+        SetShapeTextCaretOffset(offset + text.Length);
+        InvalidateLayoutAndVisual();
+    }
+
+    private int GetShapeTextLength(
+        (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) caret) =>
+        TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex, caret.TextRunIndex, out var run)
+            ? run.Text.Length
+            : 0;
+
+    private void MoveShapeTextCaret(int delta)
+    {
+        if (_shapeCaret is not { } caret) return;
+        SetShapeTextCaretOffset(caret.Offset + delta);
+    }
+
+    private void SetShapeTextCaretOffset(int offset)
+    {
+        if (_shapeCaret is not { } caret
+            || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex, caret.TextRunIndex, out var run))
+            return;
+
+        _shapeCaret = caret with { Offset = Math.Clamp(offset, 0, run.Text.Length) };
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    private void DeleteShapeText(bool backward)
+    {
+        if (_shapeCaret is not { } caret
+            || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex, caret.TextRunIndex, out var run))
+            return;
+
+        var offset = Math.Clamp(caret.Offset, 0, run.Text.Length);
+        var deleteAt = backward ? offset - 1 : offset;
+        if (deleteAt < 0 || deleteAt >= run.Text.Length) return;
+
+        _bus.Execute(new SetShapeTextRunCommand(
+            caret.BlockIndex,
+            caret.RunIndex,
+            caret.TextParagraphIndex,
+            caret.TextRunIndex,
+            run.Text.Remove(deleteAt, 1)));
+        SetShapeTextCaretOffset(backward ? deleteAt : offset);
+        InvalidateLayoutAndVisual();
     }
 
     /// <summary>
@@ -9927,6 +10111,12 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
+        if (_shapeCaret is not null)
+        {
+            DeleteShapeText(backward: true);
+            return;
+        }
+
         // AV-HFEDIT: route into a header/footer region.
         if (_hfCaret is not null)
         {
@@ -10010,6 +10200,12 @@ public sealed class DocumentView : Control
     {
         if (IsEditingLocked)
             return;
+
+        if (_shapeCaret is not null)
+        {
+            DeleteShapeText(backward: false);
+            return;
+        }
 
         // AV-HFEDIT: route into a header/footer region.
         if (_hfCaret is not null)

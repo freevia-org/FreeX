@@ -386,6 +386,51 @@ public sealed class DocumentViewFloatingShapeTests
     // ── Test 12: multiple shapes — count and both present ────────────────────────────────────────
 
     [Fact]
+    public async Task Selected_floating_text_box_accepts_text_and_undo_redo()
+    {
+        string? editedText = null;
+        string? undoneText = null;
+        string? redoneText = null;
+        bool entered = false;
+        int caretOffset = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#FFFFFF",
+                text: "Hello shape");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            view.SelectFloating(0, 1);
+
+            entered = view.EnterSelectedShapeTextEditing();
+            view.InsertText("!");
+            editedText = view.SelectedFloatingShape()?.PlainText;
+            caretOffset = view.ShapeTextCaretInfo?.Offset ?? -1;
+
+            view.Undo();
+            undoneText = view.SelectedFloatingShape()?.PlainText;
+        view.Redo();
+        redoneText = view.SelectedFloatingShape()?.PlainText;
+        view.BackspacePublic();
+        var afterBackspace = view.SelectedFloatingShape()?.PlainText;
+        afterBackspace.Should().Be("Hello shape");
+        view.Undo();
+        var restoredAfterBackspace = view.SelectedFloatingShape()?.PlainText;
+        restoredAfterBackspace.Should().Be("Hello shape!");
+        });
+
+        if (!ran) return;
+        entered.Should().BeTrue("a selected floating text box should enter text-edit mode");
+        editedText.Should().Be("Hello shape!");
+        caretOffset.Should().Be("Hello shape!".Length);
+        undoneText.Should().Be("Hello shape");
+        redoneText.Should().Be("Hello shape!");
+    }
+
+    [Fact]
     public async Task Multiple_floating_shapes_are_all_collected()
     {
         int count = 0;
