@@ -268,6 +268,77 @@ public sealed class PresentationDesignCommandPlannerTests
     }
 
     [Fact]
+    public void TryApplyLayoutChoice_ReconcilesPlaceholderGeometryAndAddsMissingPlaceholders()
+    {
+        var editor = MakeSession(out var presentation);
+        var title = editor.CurrentSlide!.Shapes.Single(shape =>
+            shape.Placeholder?.Type == PlaceholderType.Title);
+        title.OffsetXEmu = 100;
+        title.OffsetYEmu = 200;
+        title.ExtentCxEmu = 300;
+        title.ExtentCyEmu = 400;
+        title.Text = "Authored title";
+
+        presentation.Layouts.Add(new SlideLayout
+        {
+            Id = "rId2",
+            Name = "Title and Content",
+            LayoutType = SlideLayoutType.TitleContent,
+            MasterId = presentation.Masters[0].Id,
+            Placeholders =
+            {
+                new SlideShape
+                {
+                    Id = 10,
+                    Name = "Title Placeholder",
+                    Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+                    OffsetXEmu = 1_000,
+                    OffsetYEmu = 2_000,
+                    ExtentCxEmu = 3_000,
+                    ExtentCyEmu = 4_000,
+                },
+                new SlideShape
+                {
+                    Id = 11,
+                    Name = "Content Placeholder",
+                    Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+                    OffsetXEmu = 5_000,
+                    OffsetYEmu = 6_000,
+                    ExtentCxEmu = 7_000,
+                    ExtentCyEmu = 8_000,
+                },
+            }
+        });
+
+        PresentationDesignCommandPlanner.TryApplyLayoutChoice(editor, "rId2", out _)
+            .Should().BeTrue();
+
+        title.OffsetXEmu.Should().Be(1_000);
+        title.OffsetYEmu.Should().Be(2_000);
+        title.ExtentCxEmu.Should().Be(3_000);
+        title.ExtentCyEmu.Should().Be(4_000);
+        title.PlainText.Should().Be("Authored title");
+        editor.CurrentSlide.Shapes.Count(shape =>
+            shape.Placeholder is not null &&
+            shape.Placeholder.Type == PlaceholderType.Body &&
+            shape.OffsetXEmu == 5_000 && shape.ExtentCyEmu == 8_000)
+            .Should().Be(1);
+
+        editor.Undo();
+        title.OffsetXEmu.Should().Be(100);
+        title.ExtentCxEmu.Should().Be(300);
+        editor.CurrentSlide.Shapes.Count(shape =>
+            shape.Placeholder is not null && shape.Placeholder.Type == PlaceholderType.Body)
+            .Should().Be(0);
+
+        editor.Redo();
+        title.OffsetXEmu.Should().Be(1_000);
+        editor.CurrentSlide.Shapes.Count(shape =>
+            shape.Placeholder is not null && shape.Placeholder.Type == PlaceholderType.Body)
+            .Should().Be(1);
+    }
+
+    [Fact]
     public void TryApplyLayoutChoice_RejectsMissingLayout()
     {
         var editor = MakeSession(out _);

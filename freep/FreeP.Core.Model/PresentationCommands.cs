@@ -1,3 +1,4 @@
+using System.Linq;
 using Free.Shared.Commands;
 using Free.Shared.Drawing;
 
@@ -397,6 +398,9 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
     private readonly int _slideIndex;
     private readonly string _newLayoutId;
     private string? _oldLayoutId;
+    private bool _initialized;
+    private readonly List<PlaceholderGeometryState> _updatedPlaceholders = new();
+    private readonly List<SlideShape> _addedPlaceholders = new();
 
     public SetSlideLayoutCommand(int slideIndex, string layoutId)
     {
@@ -425,8 +429,58 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
         }
 
         var slide = p.Slides[_slideIndex];
+        var layout = p.Layouts.First(layout =>
+            StringComparer.Ordinal.Equals(layout.Id, _newLayoutId));
+
+        if (_initialized)
+        {
+            slide.LayoutId = _newLayoutId;
+            foreach (var state in _updatedPlaceholders)
+                state.ApplyTargetGeometry();
+
+            foreach (var placeholder in _addedPlaceholders)
+            {
+                if (!slide.Shapes.Contains(placeholder))
+                    slide.Shapes.Add(placeholder);
+            }
+
+            return;
+        }
+
         _oldLayoutId = slide.LayoutId;
         slide.LayoutId = _newLayoutId;
+
+        foreach (var shape in slide.Shapes.ToList())
+        {
+            var target = FindMatchingPlaceholder(layout, shape.Placeholder);
+            if (target is null || !HasGeometry(target))
+                continue;
+
+            var state = new PlaceholderGeometryState(shape, target);
+            _updatedPlaceholders.Add(state);
+            state.ApplyTargetGeometry();
+        }
+
+        var nextShapeId = NextShapeId(slide);
+        foreach (var target in layout.Placeholders)
+        {
+            if (!HasGeometry(target) || target.Placeholder is null ||
+                slide.Shapes.Any(shape => MatchesPlaceholder(target.Placeholder, shape.Placeholder)))
+            {
+                continue;
+            }
+
+            var placeholder = SlideCloner.CloneShape(target);
+            placeholder.Id = nextShapeId++;
+            placeholder.TextBody = null;
+            placeholder.Name = string.IsNullOrWhiteSpace(target.Name)
+                ? $"Placeholder {placeholder.Id}"
+                : target.Name;
+            slide.Shapes.Add(placeholder);
+            _addedPlaceholders.Add(placeholder);
+        }
+
+        _initialized = true;
     }
 
     public void Revert(Presentation p)
@@ -436,7 +490,116 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
             return;
         }
 
-        p.Slides[_slideIndex].LayoutId = _oldLayoutId;
+        var slide = p.Slides[_slideIndex];
+        slide.LayoutId = _oldLayoutId;
+
+        foreach (var state in _updatedPlaceholders)
+            state.RestoreOriginalGeometry();
+
+        foreach (var placeholder in _addedPlaceholders)
+            slide.Shapes.Remove(placeholder);
+    }
+
+    private static SlideShape? FindMatchingPlaceholder(
+        SlideLayout layout,
+        Placeholder? target) =>
+        target is null
+            ? null
+            : layout.Placeholders.FirstOrDefault(candidate =>
+                MatchesPlaceholder(candidate.Placeholder, target));
+
+    private static bool MatchesPlaceholder(Placeholder? candidate, Placeholder? target)
+    {
+        if (candidate is null || target is null || candidate.Idx != target.Idx)
+            return false;
+
+        if (candidate.Type == target.Type)
+            return true;
+
+        var title = candidate.Type is PlaceholderType.Title or PlaceholderType.CenteredTitle &&
+                    target.Type is PlaceholderType.Title or PlaceholderType.CenteredTitle;
+        if (title)
+            return true;
+
+        return IsContentPlaceholder(candidate.Type) && IsContentPlaceholder(target.Type);
+    }
+
+    private static bool IsContentPlaceholder(PlaceholderType type) => type is
+        PlaceholderType.Body or PlaceholderType.Object or PlaceholderType.Chart or
+        PlaceholderType.Table or PlaceholderType.ClipArt or PlaceholderType.Diagram or
+        PlaceholderType.Media or PlaceholderType.Picture;
+
+    private static bool HasGeometry(SlideShape shape) =>
+        shape.ExtentCxEmu > 0 || shape.ExtentCyEmu > 0 || shape.HasExplicitZeroExtentTransform;
+
+    private static uint NextShapeId(Slide slide)
+    {
+        var max = slide.Shapes
+            .SelectMany(EnumerateShapes)
+            .Select(shape => shape.Id)
+            .DefaultIfEmpty(0u)
+            .Max();
+        return max == uint.MaxValue ? 1 : max + 1;
+    }
+
+    private static IEnumerable<SlideShape> EnumerateShapes(SlideShape shape)
+    {
+        yield return shape;
+        foreach (var child in shape.Children)
+        foreach (var descendant in EnumerateShapes(child))
+            yield return descendant;
+    }
+
+    private sealed class PlaceholderGeometryState
+    {
+        private readonly SlideShape _shape;
+        private readonly SlideShape _target;
+        private readonly long _offsetX;
+        private readonly long _offsetY;
+        private readonly long _extentCx;
+        private readonly long _extentCy;
+        private readonly double _rotation;
+        private readonly bool _flipH;
+        private readonly bool _flipV;
+        private readonly bool _explicitZero;
+
+        public PlaceholderGeometryState(SlideShape shape, SlideShape target)
+        {
+            _shape = shape;
+            _target = target;
+            _offsetX = shape.OffsetXEmu;
+            _offsetY = shape.OffsetYEmu;
+            _extentCx = shape.ExtentCxEmu;
+            _extentCy = shape.ExtentCyEmu;
+            _rotation = shape.RotationDeg;
+            _flipH = shape.FlipH;
+            _flipV = shape.FlipV;
+            _explicitZero = shape.HasExplicitZeroExtentTransform;
+        }
+
+        public void ApplyTargetGeometry()
+        {
+            _shape.OffsetXEmu = _target.OffsetXEmu;
+            _shape.OffsetYEmu = _target.OffsetYEmu;
+            _shape.ExtentCxEmu = _target.ExtentCxEmu;
+            _shape.ExtentCyEmu = _target.ExtentCyEmu;
+            _shape.RotationDeg = _target.RotationDeg;
+            _shape.FlipH = _target.FlipH;
+            _shape.FlipV = _target.FlipV;
+            _shape.HasExplicitZeroExtentTransform = _target.HasExplicitZeroExtentTransform;
+        }
+
+        public void RestoreOriginalGeometry()
+        {
+            _shape.OffsetXEmu = _offsetX;
+            _shape.OffsetYEmu = _offsetY;
+            _shape.ExtentCxEmu = _extentCx;
+            _shape.ExtentCyEmu = _extentCy;
+            _shape.RotationDeg = _rotation;
+            _shape.FlipH = _flipH;
+            _shape.FlipV = _flipV;
+            _shape.HasExplicitZeroExtentTransform = _explicitZero;
+        }
     }
 }
 
