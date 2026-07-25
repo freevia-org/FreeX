@@ -10,7 +10,9 @@ public sealed record SlideShowPresenterViewPlan(
     string NotesText,
     string ElapsedText,
     Slide? CurrentSlide,
-    Slide? NextSlide)
+    Slide? NextSlide,
+    bool CanGoBack,
+    bool CanAdvance)
 {
     public bool HasNotes =>
         !string.IsNullOrWhiteSpace(NotesText)
@@ -43,7 +45,9 @@ public static class SlideShowPresenterViewPlanner
             string.IsNullOrWhiteSpace(state.NotesText) ? NoNotesText : state.NotesText,
             FormatElapsed(state.Elapsed),
             state.CurrentSlide?.Slide,
-            state.NextSlide?.Slide);
+            state.NextSlide?.Slide,
+            state.HostState.HasSlides && !state.HostState.IsFirstSlide,
+            state.HostState.HasSlides && (!state.HostState.IsLastSlide || state.HostState.HasPendingSteps));
     }
 
     public static string FormatElapsed(TimeSpan elapsed)

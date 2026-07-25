@@ -34,6 +34,8 @@ public sealed class SlideShowPresenterViewPlannerTests
         plan.NextSlide.Should().BeSameAs(next);
         plan.HasNotes.Should().BeTrue();
         plan.HasNextSlide.Should().BeTrue();
+        plan.CanGoBack.Should().BeFalse();
+        plan.CanAdvance.Should().BeTrue();
     }
 
     [Fact]
@@ -57,6 +59,25 @@ public sealed class SlideShowPresenterViewPlannerTests
         plan.ElapsedText.Should().Be("00:00");
         plan.HasNotes.Should().BeFalse();
         plan.HasNextSlide.Should().BeFalse();
+        plan.CanGoBack.Should().BeFalse();
+        plan.CanAdvance.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Build_AllowsAdvanceForPendingAnimationOnLastSlide()
+    {
+        var slide = new Slide { Id = "last" };
+        var state = new SlideShowPresenterState(
+            new SlideShowHostState(1, 0, true, true, true, true, "Slide 1 of 1"),
+            new SlideShowPresenterSlideState(0, slide.Id, "Last", slide),
+            null,
+            string.Empty,
+            DateTimeOffset.UtcNow,
+            TimeSpan.Zero,
+            SlideShowPresenterDisplayIntent.FullScreen,
+            SlideShowPresenterToolPlanner.BuildPlan());
+
+        SlideShowPresenterViewPlanner.Build(state).CanAdvance.Should().BeTrue();
     }
 
     [Theory]

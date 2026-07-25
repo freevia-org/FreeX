@@ -21,13 +21,21 @@ public sealed class PresenterViewWindow : Window
     private readonly TextBlock _currentLabel;
     private readonly TextBlock _nextLabel;
     private readonly TextBox _notesText;
+    private readonly Button _backButton;
+    private readonly Button _advanceButton;
+    private readonly Action? _goBack;
+    private readonly Action? _goNext;
 
     public PresenterViewWindow(
         Presentation presentation,
-        Func<SlideShowPresenterState> stateProvider)
+        Func<SlideShowPresenterState> stateProvider,
+        Action? goBack = null,
+        Action? goNext = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
+        _goBack = goBack;
+        _goNext = goNext;
 
         Title = "Presenter View";
         Width = 1200;
@@ -46,10 +54,30 @@ public sealed class PresenterViewWindow : Window
         var header = new Grid { Margin = new Thickness(0, 0, 0, 14) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _statusText = MakeText(18, FontWeights.SemiBold);
         _elapsedText = MakeText(18, FontWeights.Normal);
-        Grid.SetColumn(_elapsedText, 1);
+        var controls = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(18, 0, 18, 0),
+        };
+        _backButton = MakeActionButton("Previous", () =>
+        {
+            _goBack?.Invoke();
+            RefreshFromState();
+        });
+        _advanceButton = MakeActionButton("Next", () =>
+        {
+            _goNext?.Invoke();
+            RefreshFromState();
+        });
+        controls.Children.Add(_backButton);
+        controls.Children.Add(_advanceButton);
+        Grid.SetColumn(controls, 1);
+        Grid.SetColumn(_elapsedText, 2);
         header.Children.Add(_statusText);
+        header.Children.Add(controls);
         header.Children.Add(_elapsedText);
         root.Children.Add(header);
 
@@ -121,6 +149,8 @@ public sealed class PresenterViewWindow : Window
         _currentLabel.Text = plan.CurrentSlideLabel;
         _nextLabel.Text = plan.NextSlideLabel;
         _notesText.Text = plan.NotesText;
+        _backButton.IsEnabled = plan.CanGoBack && _goBack is not null;
+        _advanceButton.IsEnabled = plan.CanAdvance && _goNext is not null;
         _currentPreview.Slide = plan.CurrentSlide;
         _nextPreview.Slide = plan.NextSlide;
         _currentPreview.Refresh();
@@ -170,4 +200,17 @@ public sealed class PresenterViewWindow : Window
         Foreground = Brushes.White,
         VerticalAlignment = VerticalAlignment.Center,
     };
+
+    private static Button MakeActionButton(string label, Action action)
+    {
+        var button = new Button
+        {
+            Content = label,
+            Padding = new Thickness(12, 5, 12, 5),
+            Margin = new Thickness(3, 0, 3, 0),
+            MinWidth = 78,
+        };
+        button.Click += (_, _) => action();
+        return button;
+    }
 }

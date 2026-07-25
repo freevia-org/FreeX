@@ -372,7 +372,9 @@ public sealed class SlideShowWindow : Window
 
         var window = new PresenterViewWindow(
             _presentation,
-            () => CreatePresenterState(DateTimeOffset.UtcNow));
+            () => CreatePresenterState(DateTimeOffset.UtcNow),
+            () => ExecuteBack(),
+            () => ExecuteAdvance());
         _presenterViewWindow = window;
         window.Owner = this;
         window.Closed += (_, _) =>
