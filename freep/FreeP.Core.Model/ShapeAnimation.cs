@@ -33,6 +33,18 @@ public sealed class ShapeAnimation
     /// <summary>Duration of the animation effect in milliseconds. Typical: 500 (fast), 1000 (medium), 2000 (slow).</summary>
     public int DurationMs { get; set; } = 500;
 
+    /// <summary>
+    /// Number of times the effect plays, including its first pass. Null means no finite count
+    /// was authored; use <see cref="RepeatIndefinitely"/> for the explicit indefinite token.
+    /// </summary>
+    public int? RepeatCount { get; set; }
+
+    /// <summary>Whether the effect repeats indefinitely in the authored timing.</summary>
+    public bool RepeatIndefinitely { get; set; }
+
+    /// <summary>Whether each repeat reverses direction before the next pass.</summary>
+    public bool AutoReverse { get; set; }
+
     /// <summary>Optional direction modifier (e.g. FlyIn from left vs. right).</summary>
     public AnimationDirection? Direction { get; set; }
 

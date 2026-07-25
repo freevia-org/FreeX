@@ -4846,7 +4846,18 @@ public static class PptxPackageReader
         // Check for motion path: look for p:animMotion anywhere in descendants.
         var animMotion = buildPar.Descendants(P + "animMotion").FirstOrDefault();
         if (animMotion is not null)
-            return ReadMotionBuildItem(animMotion, buildPar, durationMs, innerTrigger, triggerShapeId);
+        {
+            var motionRepeat = ReadRepeat(cTn);
+            return ReadMotionBuildItem(
+                animMotion,
+                buildPar,
+                durationMs,
+                innerTrigger,
+                triggerShapeId,
+                motionRepeat.Count,
+                motionRepeat.Indefinite,
+                ReadBoolean(cTn.Attribute("autoRev")?.Value));
+        }
 
         // Preset entrance/emphasis/exit animation.
         var presetClass = cTn.Attribute("presetClass")?.Value;
@@ -4855,6 +4866,9 @@ public static class PptxPackageReader
         if (!int.TryParse(presetIdStr, out var presetId)) return null;
 
         var presetSubtype = cTn.Attribute("presetSubtype")?.Value;
+
+        var repeatInfo = ReadRepeat(cTn);
+        var autoReverse = ReadBoolean(cTn.Attribute("autoRev")?.Value);
 
         var spTgt = FindSpTgt(buildPar);
         if (spTgt is null) return null;
@@ -4875,6 +4889,9 @@ public static class PptxPackageReader
             Trigger        = innerTrigger,
             DelayMs        = delayMs,
             DurationMs     = durationMs,
+            RepeatCount    = repeatInfo.Count,
+            RepeatIndefinitely = repeatInfo.Indefinite,
+            AutoReverse    = autoReverse,
             Direction      = direction,
             WheelSpokeCount = wheelSpokeCount,
             TriggerShapeId = triggerShapeId,
@@ -4906,6 +4923,21 @@ public static class PptxPackageReader
             .Select(wheel => ReadPositiveInt(wheel.Attribute("spokes")?.Value))
             .FirstOrDefault(spokes => spokes is not null);
     }
+
+    private static (int? Count, bool Indefinite) ReadRepeat(XElement cTn)
+    {
+        var value = cTn.Attribute("repeatCount")?.Value;
+        if (string.Equals(value, "indefinite", StringComparison.OrdinalIgnoreCase))
+            return (null, true);
+
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
+            && count > 1
+            ? (count, false)
+            : (null, false);
+    }
+
+    private static bool ReadBoolean(string? value)
+        => value is "1" or "true" or "on";
 
     private static int? ReadWheelSpokeCountFromFilter(string? filter)
     {
@@ -4940,7 +4972,8 @@ public static class PptxPackageReader
 
     private static ShapeAnimation? ReadMotionBuildItem(
         XElement animMotion, XElement buildPar,
-        int durationMs, AnimationTrigger trigger, uint? triggerShapeId)
+        int durationMs, AnimationTrigger trigger, uint? triggerShapeId,
+        int? repeatCount, bool repeatIndefinitely, bool autoReverse)
     {
         // p:animMotion has: path attr (mini-language), origin attr, cBhvr child with spTgt.
         var pathStr = animMotion.Attribute("path")?.Value ?? string.Empty;
@@ -4993,6 +5026,9 @@ public static class PptxPackageReader
             Trigger        = trigger,
             DelayMs        = delayMs,
             DurationMs     = durationMs,
+            RepeatCount    = repeatCount,
+            RepeatIndefinitely = repeatIndefinitely,
+            AutoReverse    = autoReverse,
             Motion         = motion,
             TriggerShapeId = triggerShapeId,
         };

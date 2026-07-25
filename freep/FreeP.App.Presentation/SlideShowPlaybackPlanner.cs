@@ -158,7 +158,12 @@ public sealed record SlideShowShapeAnimationPlaybackPlan(
     bool CheckerboardHorizontal,
     int CheckerboardRowCount,
     int CheckerboardColumnCount,
-    IReadOnlyList<SlideShowMotionPathKeyFrame> MotionKeyFrames);
+    IReadOnlyList<SlideShowMotionPathKeyFrame> MotionKeyFrames)
+{
+    public int? RepeatCount { get; init; }
+    public bool RepeatIndefinitely { get; init; }
+    public bool AutoReverse { get; init; }
+}
 
 public sealed record SlideShowFallbackAnimationPlaybackPlan(
     int DurationMs,
@@ -353,7 +358,12 @@ public static class SlideShowPlaybackPlanner
             IsHorizontalCheckerboard(animation.Direction),
             CheckerboardRowCount,
             CheckerboardColumnCount,
-            BuildMotionKeyFrames(animation.Motion));
+            BuildMotionKeyFrames(animation.Motion))
+        {
+            RepeatCount = animation.RepeatCount,
+            RepeatIndefinitely = animation.RepeatIndefinitely,
+            AutoReverse = animation.AutoReverse,
+        };
     }
 
     public static SlideShowFallbackAnimationPlaybackPlan? PlanFallbackAnimation(

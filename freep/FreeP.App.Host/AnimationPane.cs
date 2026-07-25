@@ -353,6 +353,28 @@ public sealed class AnimationPane : Border
             triggerCombo.Items.Add(label);
         triggerCombo.SelectedIndex = item.TriggerIndex;
 
+        var repeatCombo = new ComboBox
+        {
+            FontSize = 10,
+            Width = 82,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2),
+            ToolTip = "Repeat count",
+        };
+        foreach (var value in new[] { "1", "2", "3", "4", "Indefinitely" })
+            repeatCombo.Items.Add(value);
+        repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
+            item.RepeatCount,
+            item.RepeatIndefinitely);
+
+        var autoReverseCheck = new CheckBox
+        {
+            IsChecked = item.AutoReverse,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2),
+            ToolTip = "Auto-reverse between repeats",
+        };
+
         // Capture by value for the closure.
         int capturedIndex = item.Index;
         effectOptionCombo.SelectionChanged += (_, _) =>
@@ -395,6 +417,27 @@ public sealed class AnimationPane : Border
                 triggerCombo.SelectedIndex);
             AnimationPanePlanner.TryApplyTimingMutation(_editor, plan);
         };
+
+        void ApplyRepeat()
+        {
+            var plan = AnimationPanePlanner.BuildRepeatMutationPlan(
+                _editor.CurrentSlideAnimations,
+                capturedIndex,
+                repeatCombo.SelectedItem as string,
+                autoReverseCheck.IsChecked == true);
+            if (!AnimationPanePlanner.TryApplyRepeatMutation(_editor, plan)
+                && plan.DisabledReason is not null)
+            {
+                repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
+                    plan.RepeatCount,
+                    plan.RepeatIndefinitely);
+                autoReverseCheck.IsChecked = plan.AutoReverse;
+            }
+        }
+
+        repeatCombo.SelectionChanged += (_, _) => ApplyRepeat();
+        autoReverseCheck.Checked += (_, _) => ApplyRepeat();
+        autoReverseCheck.Unchecked += (_, _) => ApplyRepeat();
 
         // ── Duration field ──────────────────────────────────────────────────────
         var durationBox = new TextBox
@@ -519,6 +562,8 @@ public sealed class AnimationPane : Border
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // trigger
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // duration
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // delay
+        innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // repeat
+        innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // auto reverse
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // buttons
 
         Grid.SetColumn(orderLabel,  0);
@@ -529,7 +574,9 @@ public sealed class AnimationPane : Border
         Grid.SetColumn(triggerCombo, 5);
         Grid.SetColumn(durationBox, 6);
         Grid.SetColumn(delayBox,    7);
-        Grid.SetColumn(btnPanel,    8);
+        Grid.SetColumn(repeatCombo, 8);
+        Grid.SetColumn(autoReverseCheck, 9);
+        Grid.SetColumn(btnPanel,    10);
 
         innerGrid.Children.Add(orderLabel);
         innerGrid.Children.Add(nameLabel);
@@ -539,6 +586,8 @@ public sealed class AnimationPane : Border
         innerGrid.Children.Add(triggerCombo);
         innerGrid.Children.Add(durationBox);
         innerGrid.Children.Add(delayBox);
+        innerGrid.Children.Add(repeatCombo);
+        innerGrid.Children.Add(autoReverseCheck);
         innerGrid.Children.Add(btnPanel);
 
         // ── Row border ───────────────────────────────────────────────────────────

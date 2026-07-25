@@ -42,6 +42,15 @@ public sealed record AnimationPaneEffectOptionMutationPlan(
     string? DisabledReason,
     int? WheelSpokeCount = null);
 
+public sealed record AnimationPaneRepeatMutationPlan(
+    bool ShouldApply,
+    int AnimationIndex,
+    int? RepeatCount,
+    bool RepeatIndefinitely,
+    bool AutoReverse,
+    string DisplayText,
+    string? DisabledReason);
+
 public sealed record AnimationPaneTimingMutationPlan(
     bool ShouldApply,
     int AnimationIndex,
@@ -84,7 +93,12 @@ public sealed record AnimationPaneTimelineItemPlan(
     bool CanMoveEarlier,
     bool CanMoveLater,
     bool IsSelected,
-    AnimationPaneEffectOptionsPlan EffectOptions);
+    AnimationPaneEffectOptionsPlan EffectOptions)
+{
+    public int? RepeatCount { get; init; }
+    public bool RepeatIndefinitely { get; init; }
+    public bool AutoReverse { get; init; }
+}
 
 public sealed record AnimationPaneWorkflowViewPlan(
     string Heading,
@@ -354,7 +368,12 @@ public static class AnimationPanePlanner
                 i > 0,
                 i < animations.Count - 1,
                 i == selectedIndex,
-                effectOptions));
+                effectOptions)
+            {
+                RepeatCount = animation.RepeatCount,
+                RepeatIndefinitely = animation.RepeatIndefinitely,
+                AutoReverse = animation.AutoReverse,
+            });
         }
 
         var playbackControls = BuildPlaybackControls(
@@ -937,6 +956,92 @@ public static class AnimationPanePlanner
         editor.SetAnimation(plan.AnimationIndex, updated);
         return true;
     }
+
+    public static AnimationPaneRepeatMutationPlan BuildRepeatMutationPlan(
+        IReadOnlyList<ShapeAnimation> animations,
+        int animationIndex,
+        string? repeatText,
+        bool autoReverse)
+    {
+        if (!TryGetAnimation(animations, animationIndex, out var animation))
+        {
+            return new AnimationPaneRepeatMutationPlan(
+                false, animationIndex, null, false, autoReverse, string.Empty, MissingAnimationMessage);
+        }
+
+        if (!TryParseRepeat(repeatText, out var repeatCount, out var indefinite))
+        {
+            return new AnimationPaneRepeatMutationPlan(
+                false,
+                animationIndex,
+                animation.RepeatCount,
+                animation.RepeatIndefinitely,
+                animation.AutoReverse,
+                FormatRepeat(animation.RepeatCount, animation.RepeatIndefinitely),
+                "Repeat must be 1 or greater, or Indefinitely.");
+        }
+
+        var changed = repeatCount != animation.RepeatCount
+            || indefinite != animation.RepeatIndefinitely
+            || autoReverse != animation.AutoReverse;
+        return new AnimationPaneRepeatMutationPlan(
+            changed,
+            animationIndex,
+            repeatCount,
+            indefinite,
+            autoReverse,
+            FormatRepeat(repeatCount, indefinite),
+            null);
+    }
+
+    public static bool TryApplyRepeatMutation(
+        EditingSession editor,
+        AnimationPaneRepeatMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!plan.ShouldApply
+            || !TryGetAnimation(editor.CurrentSlideAnimations, plan.AnimationIndex, out var current))
+        {
+            return false;
+        }
+
+        var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
+        updated.RepeatCount = plan.RepeatCount;
+        updated.RepeatIndefinitely = plan.RepeatIndefinitely;
+        updated.AutoReverse = plan.AutoReverse;
+        editor.SetAnimation(plan.AnimationIndex, updated);
+        return true;
+    }
+
+    public static bool TryParseRepeat(
+        string? text,
+        out int? repeatCount,
+        out bool indefinite)
+    {
+        indefinite = string.Equals(text?.Trim(), "indefinitely", StringComparison.OrdinalIgnoreCase);
+        if (indefinite)
+        {
+            repeatCount = null;
+            return true;
+        }
+
+        if (int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
+            && count >= 1)
+        {
+            repeatCount = count == 1 ? null : count;
+            return true;
+        }
+
+        repeatCount = null;
+        return false;
+    }
+
+    public static string FormatRepeat(int? repeatCount, bool indefinite)
+        => indefinite
+            ? "Indefinitely"
+            : (repeatCount ?? 1).ToString(CultureInfo.InvariantCulture);
 
     public static bool TryApplyReorderMutation(
         EditingSession editor,

@@ -2254,6 +2254,7 @@ public static class PptxPackageWriter
             new XAttribute("grpId", "0"),
             new XAttribute("nodeType", "withEffect"),
         };
+        AddRepeatAttributes(cTnAttrs, anim);
 
         var animEffectEl = BuildWheelSpokeAnimEffectEl(anim, ref nodeId);
         var childTimingItems = new List<object>();
@@ -2338,6 +2339,8 @@ public static class PptxPackageWriter
                 new XAttribute("fill", "hold"),
                 new XAttribute("grpId", "0"),
                 new XAttribute("nodeType", "withEffect"),
+                RepeatAttributes(anim),
+                AutoReverseAttribute(anim),
                 new XElement(P + "stCondLst",
                     new XElement(P + "cond", new XAttribute("delay", delayStr))),
                 new XElement(P + "childTnLst",
@@ -2377,6 +2380,27 @@ public static class PptxPackageWriter
         }
         return sb.ToString().TrimEnd();
     }
+
+    private static void AddRepeatAttributes(List<object> attributes, ShapeAnimation animation)
+    {
+        if (animation.RepeatIndefinitely)
+            attributes.Add(new XAttribute("repeatCount", "indefinite"));
+        else if (animation.RepeatCount is > 1)
+            attributes.Add(new XAttribute("repeatCount", animation.RepeatCount.Value));
+
+        if (animation.AutoReverse)
+            attributes.Add(new XAttribute("autoRev", "1"));
+    }
+
+    private static XAttribute? RepeatAttributes(ShapeAnimation animation)
+        => animation.RepeatIndefinitely
+            ? new XAttribute("repeatCount", "indefinite")
+            : animation.RepeatCount is > 1
+                ? new XAttribute("repeatCount", animation.RepeatCount.Value)
+                : null;
+
+    private static XAttribute? AutoReverseAttribute(ShapeAnimation animation)
+        => animation.AutoReverse ? new XAttribute("autoRev", "1") : null;
 
     // ── slideLayout.xml ──────────────────────────────────────────────────────────
 

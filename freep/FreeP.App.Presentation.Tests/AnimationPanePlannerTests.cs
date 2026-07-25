@@ -640,6 +640,27 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void RepeatMutationPlan_ParsesFiniteAndIndefiniteValues()
+    {
+        var slide = CreateSlideWithTimelineAnimations();
+        slide.Animations[1].RepeatCount = 2;
+
+        var finite = AnimationPanePlanner.BuildRepeatMutationPlan(
+            slide.Animations, 1, "3", autoReverse: true);
+        finite.Should().Be(new AnimationPaneRepeatMutationPlan(
+            true, 1, 3, false, true, "3", null));
+
+        var indefinite = AnimationPanePlanner.BuildRepeatMutationPlan(
+            slide.Animations, 1, "Indefinitely", autoReverse: false);
+        indefinite.RepeatIndefinitely.Should().BeTrue();
+        indefinite.RepeatCount.Should().BeNull();
+        indefinite.AutoReverse.Should().BeFalse();
+
+        AnimationPanePlanner.BuildRepeatMutationPlan(slide.Animations, 1, "0", false)
+            .DisabledReason.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
     public void TryApplyTimingMutation_UpdatesSelectedAnimation()
     {
         var presentation = Presentation.CreateEmpty();

@@ -4910,6 +4910,47 @@ public sealed partial class MainWindow : Window
         };
         _animationPaneDelayControlCount++;
 
+        var repeatCombo = new ComboBox
+        {
+            ItemsSource = new[] { "1", "2", "3", "4", "Indefinitely" },
+            SelectedItem = AnimationPanePlanner.FormatRepeat(item.RepeatCount, item.RepeatIndefinitely),
+            Width = 82,
+            Height = 24,
+            FontSize = 10,
+            Margin = new Thickness(2),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(repeatCombo, "Repeat count");
+
+        var autoReverseCheck = new CheckBox
+        {
+            IsChecked = item.AutoReverse,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2),
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(autoReverseCheck, "Auto-reverse between repeats");
+
+        void ApplyRepeat()
+        {
+            var plan = AnimationPanePlanner.BuildRepeatMutationPlan(
+                Editor.CurrentSlideAnimations,
+                item.Index,
+                repeatCombo.SelectedItem as string,
+                autoReverseCheck.IsChecked == true);
+            if (!AnimationPanePlanner.TryApplyRepeatMutation(Editor, plan)
+                && plan.DisabledReason is not null)
+            {
+                repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
+                    plan.RepeatCount,
+                    plan.RepeatIndefinitely);
+                autoReverseCheck.IsChecked = plan.AutoReverse;
+            }
+        }
+
+        repeatCombo.SelectionChanged += (_, _) => ApplyRepeat();
+        autoReverseCheck.IsCheckedChanged += (_, _) => ApplyRepeat();
+
         var innerGrid = new Grid
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -4918,6 +4959,8 @@ public sealed partial class MainWindow : Window
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = new GridLength(80) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
@@ -4962,6 +5005,8 @@ public sealed partial class MainWindow : Window
                      (triggerCombo, 5),
                      (durationBox, 6),
                      (delayBox, 7),
+                     (repeatCombo, 8),
+                     (autoReverseCheck, 9),
                  })
         {
             Grid.SetColumn(placement.Control, placement.Column);

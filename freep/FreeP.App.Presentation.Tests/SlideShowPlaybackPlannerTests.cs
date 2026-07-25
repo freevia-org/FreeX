@@ -1220,6 +1220,27 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanShapeAnimation_PreservesRepeatAndAutoReverseTiming()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 7,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Pulse,
+                RepeatCount = 3,
+                AutoReverse = true,
+                DurationMs = 240
+            },
+            startDelayMs: 15);
+
+        plan.RepeatCount.Should().Be(3);
+        plan.RepeatIndefinitely.Should().BeFalse();
+        plan.AutoReverse.Should().BeTrue();
+        plan.DelayMs.Should().Be(15);
+    }
+
+    [Fact]
     public void PlanShapeAnimation_MapsAdvancedImportedEffects()
     {
         var split = SlideShowPlaybackPlanner.PlanShapeAnimation(
