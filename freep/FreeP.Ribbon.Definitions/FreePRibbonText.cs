@@ -250,6 +250,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtVerticalBoxListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBoxList_Label", "Ribbon_Command_SmartArtVerticalBoxList_KeyTip");
     public static RibbonText SmartArtVerticalBulletListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBulletList_Label", "Ribbon_Command_SmartArtVerticalBulletList_KeyTip");
     public static RibbonText SmartArtBasicCycleCommand { get; } = new("Ribbon_Command_SmartArtBasicCycle_Label", "Ribbon_Command_SmartArtBasicCycle_KeyTip");
+    public static RibbonText SmartArtContinuousCycleCommand { get; } = new("Ribbon_Command_SmartArtContinuousCycle_Label", "Ribbon_Command_SmartArtContinuousCycle_KeyTip");
     public static RibbonText SmartArtGearCycleCommand { get; } = new("Ribbon_Command_SmartArtGearCycle_Label", "Ribbon_Command_SmartArtGearCycle_KeyTip");
     public static RibbonText SmartArtTextCycleCommand { get; } = new("Ribbon_Command_SmartArtTextCycle_Label", "Ribbon_Command_SmartArtTextCycle_KeyTip");
     public static RibbonText SmartArtBlockCycleCommand { get; } = new("Ribbon_Command_SmartArtBlockCycle_Label", "Ribbon_Command_SmartArtBlockCycle_KeyTip");
