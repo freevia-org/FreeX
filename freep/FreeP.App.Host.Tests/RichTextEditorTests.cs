@@ -604,6 +604,78 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void InCanvasTextEditor_ShapeParagraphPreset_CommitsListMetadataAsOneEdit()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            TextBody = MakeTwoRunBody(),
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var canvas = new SlideCanvas();
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+        canvas.Presentation = presentation;
+        canvas.Slide = slide;
+
+        canvas.TextEditor!.Activate(shape.Id);
+        canvas.TextEditor.TryApplyActiveShapeParagraphListPreset(
+            TableCellListPresetCatalog.BulletSquare).Should().BeTrue();
+        canvas.TextEditor.TryApplyActiveShapeParagraphIndent().Should().BeTrue();
+        canvas.TextEditor.Commit();
+
+        var paragraph = shape.TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("▪");
+        paragraph.BulletSuppressed.Should().BeFalse();
+        paragraph.Level.Should().Be(1);
+        editor.CanUndo.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void InCanvasTextEditor_ShapeParagraphNumberingToggle_UsesActiveShapeSelection()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            TextBody = MakeTwoRunBody(),
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var canvas = new SlideCanvas();
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+        canvas.Presentation = presentation;
+        canvas.Slide = slide;
+
+        canvas.TextEditor!.Activate(shape.Id);
+        canvas.TextEditor.TryApplyActiveShapeParagraphNumberingToggle().Should().BeTrue();
+        canvas.TextEditor.Commit();
+
+        var paragraph = shape.TextBody!.Paragraphs[0];
+        paragraph.BulletKind.Should().Be(BulletKind.Auto);
+        paragraph.AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        paragraph.BulletSuppressed.Should().BeFalse();
+    }
+
+    [StaFact]
     public void InCanvasTextEditor_TextAndFormattingStayLocalAndCommitAsOneUndoStep()
     {
         var presentation = Presentation.CreateEmpty();

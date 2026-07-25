@@ -111,6 +111,76 @@ public sealed class AvaloniaInCanvasTextEditor
         return changed;
     }
 
+    public bool TryApplyActiveShapeParagraphAlignment(TextAlign alignment)
+    {
+        if (!_active || _textBox is null)
+            return false;
+        bool changed = _textBox.ApplyParagraphAlignment(alignment);
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
+    }
+
+    public bool TryApplyActiveShapeParagraphBulletToggle()
+    {
+        if (!_active || _textBox is null)
+            return false;
+        bool changed = _textBox.ToggleParagraphBullets();
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
+    }
+
+    public bool TryApplyActiveShapeParagraphNumberingToggle()
+    {
+        if (!_active || _textBox is null)
+            return false;
+        bool changed = _textBox.ToggleParagraphNumbering();
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
+    }
+
+    public bool TryApplyActiveShapeParagraphListPreset(TableCellListPresetDescriptor preset)
+    {
+        if (!_active || _textBox is null)
+            return false;
+        bool changed = _textBox.ApplyParagraphListPreset(preset);
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
+    }
+
+    public bool TryApplyActiveShapeParagraphPictureBullet(PresentationPictureBulletPayload payload)
+    {
+        if (!_active || _textBox is null)
+            return false;
+        bool changed = _textBox.ApplyParagraphPictureBullet(payload);
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
+    }
+
+    public bool TryApplyActiveShapeParagraphIndent()
+    {
+        if (!_active || _textBox is null)
+            return false;
+        bool changed = _textBox.ApplyParagraphIndent(increase: true);
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
+    }
+
+    public bool TryApplyActiveShapeParagraphOutdent()
+    {
+        if (!_active || _textBox is null)
+            return false;
+        bool changed = _textBox.ApplyParagraphIndent(increase: false);
+        if (changed)
+            RefreshShapeOverlayRichTextPlan();
+        return changed;
+    }
+
     public bool TryApplyActiveTableCellTextFormat(TableCellTextFormatKind kind)
     {
         if (!_cellEditActive || _cellTextBox is null)
