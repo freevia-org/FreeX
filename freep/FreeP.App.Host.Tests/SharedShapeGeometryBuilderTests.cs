@@ -175,6 +175,29 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void DirectionalArrows_UseAuthoredGuidesForTheirTips()
+    {
+        var expectedTips = new Dictionary<DrawingShapeKind, LayoutPoint>
+        {
+            [DrawingShapeKind.RightArrow] = new(Bounds.Right, Bounds.Top + Bounds.Height / 2),
+            [DrawingShapeKind.LeftArrow] = new(Bounds.Left, Bounds.Top + Bounds.Height / 2),
+            [DrawingShapeKind.UpArrow] = new(Bounds.Left + Bounds.Width / 2, Bounds.Top),
+            [DrawingShapeKind.DownArrow] = new(Bounds.Left + Bounds.Width / 2, Bounds.Bottom),
+        };
+
+        foreach (var (kind, expectedTip) in expectedTips)
+        {
+            var geometry = ShapeGeometryBuilder.Build(
+                kind,
+                Bounds,
+                new Dictionary<string, double> { ["adj1"] = 25000, ["adj2"] = 70000 });
+
+            geometry.Contours.Should().ContainSingle(kind.ToString());
+            geometry.Contours[0].Segments[2].End.Should().Be(expectedTip, kind.ToString());
+        }
+    }
+
+    [Fact]
     public void Cylinder_EnumValue_Is44_NoRenumbering()
     {
         // Appended after HomePlate=43 — verify no renumbering occurred.

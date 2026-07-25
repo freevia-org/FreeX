@@ -325,6 +325,33 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
         headPlan.Value.Should().Be(70000);
     }
 
+    [Fact]
+    public void Build_DirectionalArrows_ExposeNativeShaftAndHeadGuides()
+    {
+        foreach (var kind in new[]
+        {
+            DrawingShapeKind.LeftArrow,
+            DrawingShapeKind.UpArrow,
+            DrawingShapeKind.DownArrow,
+        })
+        {
+            var shape = new SlideShape
+            {
+                Id = 21,
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = kind,
+            };
+
+            var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+            plan.CanEdit.Should().BeTrue(kind.ToString());
+            plan.Handles.Select(handle => handle.Name).Should().Equal("adj1", "adj2");
+            plan.Handles.Should().OnlyContain(handle =>
+                (handle.Label == "Shaft thickness" || handle.Label == "Head length") &&
+                handle.Minimum == 0 && handle.Maximum == 100000);
+        }
+    }
+
     private static SlideShape MakeCustomTriangle()
     {
         var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
