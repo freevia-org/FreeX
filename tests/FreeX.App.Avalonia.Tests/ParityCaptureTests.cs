@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Headless;
 using FluentAssertions;
 using FreeX.App.Presentation.Interactions;
+using FreeX.ParityCompare.Core;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -425,6 +426,17 @@ public sealed class ParityCaptureTests
                 ReadPngDimensions(pngPath).Should().Be((430, 438),
                     "the fixed-size dialog client area should be captured without edge clipping");
 
+                var image = PngCodec.DecodeFile(pngPath);
+                FindExactColorBounds(image, red: 213, green: 223, blue: 229)
+                    .Should().Be((13, 43, 400, 274),
+                        "the Go To Special and value-type group borders should retain the WPF logical bounds");
+                CountExactColorOnRow(image, 43, red: 213, green: 223, blue: 229)
+                    .Should().BeGreaterThan(250,
+                        "the top group border should span the full WPF-aligned content width");
+                CountExactColorOnRow(image, 274, red: 213, green: 223, blue: 229)
+                    .Should().BeGreaterThan(300,
+                        "the bottom value-type border should remain at the WPF-aligned action-row separation");
+
                 window.Close();
             }, CancellationToken.None);
         }
@@ -483,6 +495,63 @@ public sealed class ParityCaptureTests
         return (
             BinaryPrimitives.ReadInt32BigEndian(header[16..20]),
             BinaryPrimitives.ReadInt32BigEndian(header[20..24]));
+    }
+
+    private static (int MinX, int MinY, int MaxX, int MaxY) FindExactColorBounds(
+        PixelImage image,
+        byte red,
+        byte green,
+        byte blue)
+    {
+        var minX = image.Width;
+        var minY = image.Height;
+        var maxX = -1;
+        var maxY = -1;
+
+        for (var y = 0; y < image.Height; y++)
+        {
+            for (var x = 0; x < image.Width; x++)
+            {
+                var offset = (y * image.Width + x) * 4;
+                if (image.Pixels[offset] != blue
+                    || image.Pixels[offset + 1] != green
+                    || image.Pixels[offset + 2] != red
+                    || image.Pixels[offset + 3] != 255)
+                {
+                    continue;
+                }
+
+                minX = Math.Min(minX, x);
+                minY = Math.Min(minY, y);
+                maxX = Math.Max(maxX, x);
+                maxY = Math.Max(maxY, y);
+            }
+        }
+
+        return (minX, minY, maxX, maxY);
+    }
+
+    private static int CountExactColorOnRow(
+        PixelImage image,
+        int y,
+        byte red,
+        byte green,
+        byte blue)
+    {
+        var count = 0;
+        for (var x = 0; x < image.Width; x++)
+        {
+            var offset = (y * image.Width + x) * 4;
+            if (image.Pixels[offset] == blue
+                && image.Pixels[offset + 1] == green
+                && image.Pixels[offset + 2] == red
+                && image.Pixels[offset + 3] == 255)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private static void TryDeleteDirectory(string path)

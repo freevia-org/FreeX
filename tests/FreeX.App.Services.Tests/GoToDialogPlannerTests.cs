@@ -23,6 +23,27 @@ public sealed class GoToDialogPlannerTests
     }
 
     [Fact]
+    public void GoToSpecialDialogLayout_UsesSharedWpfEvidenceMetrics()
+    {
+        GoToSpecialDialogPlanner.ContentMargin.Should().Be(12);
+        GoToSpecialDialogPlanner.AvaloniaContentLeftMargin.Should().Be(13);
+        GoToSpecialDialogPlanner.AvaloniaContentTopMargin.Should().Be(12);
+        GoToSpecialDialogPlanner.AvaloniaContentRightMargin.Should().Be(29);
+        GoToSpecialDialogPlanner.ActionRowTopMargin.Should().Be(10);
+        GoToSpecialDialogPlanner.ActionRowRightMargin.Should().Be(28);
+        GoToSpecialDialogPlanner.ActionRowBottomMargin.Should().Be(51);
+        GoToSpecialDialogPlanner.ActionButtonHeight.Should().Be(20);
+        GoToSpecialDialogPlanner.AvaloniaChoiceGroupTopMargin.Should().Be(3);
+        GoToSpecialDialogPlanner.AvaloniaChoiceGroupBottomMargin.Should().Be(13);
+        GoToSpecialDialogPlanner.AvaloniaChoiceGroupHorizontalPadding.Should().Be(8);
+        GoToSpecialDialogPlanner.AvaloniaChoiceGroupBottomPadding.Should().Be(9);
+        GoToSpecialDialogPlanner.AvaloniaValueTypeGroupBottomPadding.Should().Be(4);
+        GoToSpecialDialogPlanner.AvaloniaValueTypeSpacing.Should().Be(12);
+        GoToSpecialDialogPlanner.AvaloniaChoiceButtonRightMargin.Should().Be(12);
+        GoToSpecialDialogPlanner.AvaloniaChoiceButtonBottomMargin.Should().Be(1);
+    }
+
+    [Fact]
     public void BuildChoices_UsesSharedExcelOrder()
     {
         GoToSpecialDialogPlanner.BuildChoices().Select(choice => choice.Kind).Should().Equal(
