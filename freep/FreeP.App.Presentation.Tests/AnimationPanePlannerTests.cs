@@ -772,6 +772,10 @@ public sealed class AnimationPanePlannerTests
     [InlineData(AnimationPreset.Wheel, AnimationDirection.In, "In,Out", "In")]
     [InlineData(AnimationPreset.Peek, AnimationDirection.FromTop, "From Bottom,From Left,From Right,From Top", "From Top")]
     [InlineData(AnimationPreset.Crawl, AnimationDirection.FromRight, "From Bottom,From Left,From Right,From Top", "From Right")]
+    [InlineData(AnimationPreset.Bounce, AnimationDirection.FromBottom, "From Bottom,From Left,From Right,From Top", "From Bottom")]
+    [InlineData(AnimationPreset.Float, AnimationDirection.FromTop, "From Bottom,From Left,From Right,From Top", "From Top")]
+    [InlineData(AnimationPreset.Swoop, AnimationDirection.FromRight, "From Bottom,From Left,From Right,From Top", "From Right")]
+    [InlineData(AnimationPreset.Boomerang, AnimationDirection.FromLeft, "From Bottom,From Left,From Right,From Top", "From Left")]
     [InlineData(AnimationPreset.Strips, AnimationDirection.LeftDown, "Left Up,Left Down,Right Up,Right Down", "Left Down")]
     public void BuildEffectOptionsPlan_ProjectsAdvancedImportedEffectOptions(
         AnimationPreset preset,
@@ -810,6 +814,10 @@ public sealed class AnimationPanePlannerTests
     [InlineData(AnimationPreset.Wheel, "in", AnimationDirection.In)]
     [InlineData(AnimationPreset.Peek, "from-left", AnimationDirection.FromLeft)]
     [InlineData(AnimationPreset.Crawl, "from-top", AnimationDirection.FromTop)]
+    [InlineData(AnimationPreset.Bounce, "from-bottom", AnimationDirection.FromBottom)]
+    [InlineData(AnimationPreset.Float, "from-top", AnimationDirection.FromTop)]
+    [InlineData(AnimationPreset.Swoop, "from-right", AnimationDirection.FromRight)]
+    [InlineData(AnimationPreset.Boomerang, "from-left", AnimationDirection.FromLeft)]
     [InlineData(AnimationPreset.Strips, "right-up", AnimationDirection.RightUp)]
     public void BuildEffectOptionMutationPlan_MapsSupportedOptionIds(
         AnimationPreset preset,

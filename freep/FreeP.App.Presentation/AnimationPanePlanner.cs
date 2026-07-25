@@ -1529,6 +1529,10 @@ public static class AnimationPanePlanner
 
             case AnimationPreset.Peek:
             case AnimationPreset.Crawl:
+            case AnimationPreset.Bounce:
+            case AnimationPreset.Float:
+            case AnimationPreset.Swoop:
+            case AnimationPreset.Boomerang:
                 foreach (var option in FromCardinalOptions())
                     yield return option;
                 break;
