@@ -1345,6 +1345,7 @@ public static class PptxPackageReader
                 AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
                 AlternativeText = ReadAlternativeText(cNvPr),
                 IsDecorative = ReadDecorative(cNvPr),
+                IsHidden = ReadHidden(cNvPr),
                 Kind = SlideShapeKind.Table,
                 OffsetXEmu = offX,
                 OffsetYEmu = offY,
@@ -1378,6 +1379,7 @@ public static class PptxPackageReader
                 AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
                 AlternativeText = ReadAlternativeText(cNvPr),
                 IsDecorative = ReadDecorative(cNvPr),
+                IsHidden = ReadHidden(cNvPr),
                 Kind = SlideShapeKind.Chart,
                 OffsetXEmu = offX,
                 OffsetYEmu = offY,
@@ -1398,6 +1400,7 @@ public static class PptxPackageReader
                 AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
                 AlternativeText = ReadAlternativeText(cNvPr),
                 IsDecorative = ReadDecorative(cNvPr),
+                IsHidden = ReadHidden(cNvPr),
                 Kind = SlideShapeKind.SmartArt,
                 OffsetXEmu = offX,
                 OffsetYEmu = offY,
@@ -1425,6 +1428,7 @@ public static class PptxPackageReader
                     oleShape.AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr);
                     oleShape.AlternativeText = ReadAlternativeText(cNvPr);
                     oleShape.IsDecorative = ReadDecorative(cNvPr);
+                    oleShape.IsHidden = ReadHidden(cNvPr);
                     oleShape.OffsetXEmu = offX;
                     oleShape.OffsetYEmu = offY;
                     oleShape.ExtentCxEmu = extCx;
@@ -1551,6 +1555,7 @@ public static class PptxPackageReader
             AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
             AlternativeText = ReadAlternativeText(cNvPr),
             IsDecorative    = ReadDecorative(cNvPr),
+            IsHidden        = ReadHidden(cNvPr),
             Kind            = slideShapeKind,
             OffsetXEmu      = offX,
             OffsetYEmu      = offY,
@@ -1680,6 +1685,7 @@ public static class PptxPackageReader
             AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
             AlternativeText = ReadAlternativeText(cNvPr),
             IsDecorative    = ReadDecorative(cNvPr),
+            IsHidden        = ReadHidden(cNvPr),
             Kind            = SlideShapeKind.Ink,
             OffsetXEmu      = offX,
             OffsetYEmu      = offY,
@@ -2690,6 +2696,7 @@ public static class PptxPackageReader
             AlternativeTextTitle = ReadAlternativeTextTitle(cNvPrEl),
             AlternativeText = ReadAlternativeText(cNvPrEl),
             IsDecorative = ReadDecorative(cNvPrEl),
+            IsHidden = ReadHidden(cNvPrEl),
             Kind = SlideShapeKind.AutoShape
         };
 
@@ -2761,6 +2768,7 @@ public static class PptxPackageReader
             AlternativeTextTitle = ReadAlternativeTextTitle(cNvPrEl),
             AlternativeText = ReadAlternativeText(cNvPrEl),
             IsDecorative = ReadDecorative(cNvPrEl),
+            IsHidden = ReadHidden(cNvPrEl),
             Kind = SlideShapeKind.Picture
         };
 
@@ -2805,6 +2813,7 @@ public static class PptxPackageReader
             AlternativeTextTitle = ReadAlternativeTextTitle(cNvPrEl),
             AlternativeText = ReadAlternativeText(cNvPrEl),
             IsDecorative = ReadDecorative(cNvPrEl),
+            IsHidden = ReadHidden(cNvPrEl),
             Kind = SlideShapeKind.Group
         };
 
@@ -2964,6 +2973,7 @@ public static class PptxPackageReader
             AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
             AlternativeText = ReadAlternativeText(cNvPr),
             IsDecorative = ReadDecorative(cNvPr),
+            IsHidden = ReadHidden(cNvPr),
             Kind = SlideShapeKind.AutoShape
         };
 
@@ -3007,6 +3017,7 @@ public static class PptxPackageReader
             AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
             AlternativeText = ReadAlternativeText(cNvPr),
             IsDecorative = ReadDecorative(cNvPr),
+            IsHidden = ReadHidden(cNvPr),
             Kind = SlideShapeKind.Picture
         };
 
@@ -3358,6 +3369,7 @@ public static class PptxPackageReader
             AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
             AlternativeText = ReadAlternativeText(cNvPr),
             IsDecorative = ReadDecorative(cNvPr),
+            IsHidden = ReadHidden(cNvPr),
             Kind = SlideShapeKind.Connector
         };
 
@@ -3417,6 +3429,7 @@ public static class PptxPackageReader
             AlternativeTextTitle = ReadAlternativeTextTitle(cNvPr),
             AlternativeText = ReadAlternativeText(cNvPr),
             IsDecorative = ReadDecorative(cNvPr),
+            IsHidden = ReadHidden(cNvPr),
             Kind = SlideShapeKind.Group
         };
 
@@ -5448,6 +5461,9 @@ public static class PptxPackageReader
         var value = decorative?.Attribute("val")?.Value;
         return decorative is not null && (value is null || ParseBoolean(value));
     }
+
+    private static bool ReadHidden(XElement? cNvPr) =>
+        cNvPr is not null && ParseBoolean(cNvPr.Attribute("hidden")?.Value);
 
     private static bool ParseBoolean(string? value)
         => value is "1"

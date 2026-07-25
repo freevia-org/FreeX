@@ -335,6 +335,9 @@ public sealed class SlideShape
     /// <summary>True when the object is marked decorative and should not require alt text.</summary>
     public bool IsDecorative { get; set; }
 
+    /// <summary>True when the object is hidden in the slide editing view (p:cNvPr/@hidden).</summary>
+    public bool IsHidden { get; set; }
+
     // ── Kind discriminator ───────────────────────────────────────────────────────
 
     /// <summary>

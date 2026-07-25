@@ -81,6 +81,7 @@ internal static class FreePRibbonCommands
         Action?             onReviewAccessibility = null,
         Action?             onReviewAltText = null,
         Action?             onReviewReadingOrder = null,
+        Action?             onSelectionPane = null,
         Action?             onReviewProofing = null,
         Action?             onAddComment = null,
         Action?             onEditComment = null,
@@ -540,6 +541,9 @@ internal static class FreePRibbonCommands
             onNextComment,
             onResolveComment,
             onReopenComment);
+        registry.Register(
+            PresentationSelectionPanePlanner.SelectionPaneCommandId,
+            new ActionRibbonCommand(() => onSelectionPane?.Invoke()));
         RegisterViewShowCommands(registry, stateStore, getViewShowState, applyViewShowState);
         RegisterViewZoomCommands(registry, getViewZoomState, applyViewZoomState);
 

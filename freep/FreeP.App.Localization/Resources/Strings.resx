@@ -1663,6 +1663,12 @@
   <data name="Ribbon_Command_ViewGuides_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
+  <data name="Ribbon_Command_ViewSelectionPane_Label" xml:space="preserve">
+    <value>Selection Pane</value>
+  </data>
+  <data name="Ribbon_Command_ViewSelectionPane_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
   <data name="Ribbon_Group_ViewZoom_Label" xml:space="preserve">
     <value>Zoom</value>
   </data>

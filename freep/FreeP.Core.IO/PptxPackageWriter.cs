@@ -5601,6 +5601,10 @@ public static class PptxPackageWriter
     private static XElement CnvPrBase(SlideShape shape)
     {
         var el = new XElement(P + "cNvPr", new XAttribute("id", shape.Id), new XAttribute("name", shape.Name));
+        if (shape.IsHidden)
+        {
+            el.Add(new XAttribute("hidden", "1"));
+        }
         if (!string.IsNullOrWhiteSpace(shape.AlternativeTextTitle))
         {
             el.Add(new XAttribute("title", shape.AlternativeTextTitle.Trim()));

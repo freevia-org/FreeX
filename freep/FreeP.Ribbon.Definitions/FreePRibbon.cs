@@ -682,6 +682,8 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Grid, FreePRibbonText.ViewGridlinesCommand.KeyTip);
             group.MediumToggle("freep.view.show.guides", FreePRibbonText.ViewGuidesCommand.Label,
                 RibbonCommandIconKind.Align, FreePRibbonText.ViewGuidesCommand.KeyTip);
+            group.Medium("freep.view.selection-pane", FreePRibbonText.ViewSelectionPaneCommand.Label,
+                RibbonCommandIconKind.List, FreePRibbonText.ViewSelectionPaneCommand.KeyTip);
         });
         tab.Group("zoom", FreePRibbonText.ViewZoomGroup.Label, FreePRibbonText.ViewZoomGroup.KeyTip, 90, group =>
         {

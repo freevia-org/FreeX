@@ -149,6 +149,7 @@ public sealed partial class MainWindow : Window
     private int? _selectedAccessibilityCheckerRowIndex;
     private readonly List<string> _accessibilityCheckerTableStructureReviewRenderedLines = new();
     private Border _readingOrderPaneHost = null!;
+    private SelectionPane _selectionPane = null!;
     private TextBlock _readingOrderPaneHeading = null!;
     private TextBlock _readingOrderPaneMessage = null!;
     private StackPanel _readingOrderPaneItemsPanel = null!;
@@ -446,6 +447,7 @@ public sealed partial class MainWindow : Window
             onReviewAccessibility: () => ShowAccessibilityCheckerPane(),
             onReviewAltText: () => ShowAltTextPane(),
             onReviewReadingOrder: () => ShowReadingOrderPane(),
+            onSelectionPane: () => ShowSelectionPane(),
             onReviewProofing: () => ShowProofingPane(),
             onAddComment: () => AddComment("New comment"),
             onEditComment: () => EditSelectedComment(GetSelectedCommentText()),
@@ -523,9 +525,10 @@ public sealed partial class MainWindow : Window
     {
         var bus = new PresentationCommandBus(_presentation);
         Editor  = new EditingSession(_presentation, bus);
+        _selectionPane?.SetEditor(Editor);
 
-        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); RefreshNotesPane(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); };
-        Editor.CurrentSlideChanged += (_, _) => { _reviewWorkflowSession.SelectedCommentIndex = null; _selectedMediaCaptionTrackIndex = null; RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); RefreshVisibleMediaCaptionPaneFromFields(); };
+        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); RefreshNotesPane(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); _selectionPane?.Refresh(); };
+        Editor.CurrentSlideChanged += (_, _) => { _reviewWorkflowSession.SelectedCommentIndex = null; _selectedMediaCaptionTrackIndex = null; RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); RefreshVisibleMediaCaptionPaneFromFields(); _selectionPane?.Refresh(); };
         Editor.SelectionChanged += (_, _) =>
         {
             RefreshAltTextRequestPlan();
@@ -535,6 +538,7 @@ public sealed partial class MainWindow : Window
             if (IsSmartArtTextPaneVisible)
                 ShowSmartArtTextPane();
             RefreshVisibleMediaCaptionPaneFromFields();
+            _selectionPane?.Refresh();
         };
 
         // Re-attach editing layer whenever the editor is rebuilt (file open/new).
@@ -778,6 +782,8 @@ public sealed partial class MainWindow : Window
         // END 16B SEAM
 
         _readingOrderPaneHost = BuildReadingOrderPaneHost();
+        _selectionPane = new SelectionPane(Editor);
+        _selectionPane.Refresh();
         _proofingPaneHost = BuildProofingPaneHost();
         _mediaCaptionPaneHost = BuildMediaCaptionPaneHost();
         _smartArtTextPaneHost = BuildSmartArtTextPaneHost();
@@ -791,6 +797,7 @@ public sealed partial class MainWindow : Window
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // selection pane
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // 16B: anim pane
         Grid.SetColumn(SlidePaneHost,  0);
         Grid.SetColumn(rightPanel,     1);
@@ -800,7 +807,8 @@ public sealed partial class MainWindow : Window
         Grid.SetColumn(_proofingPaneHost, 5);
         Grid.SetColumn(_mediaCaptionPaneHost, 6);
         Grid.SetColumn(_smartArtTextPaneHost, 7);
-        Grid.SetColumn(_animPaneHost,  8); // 16B
+        Grid.SetColumn(_selectionPane, 8);
+        Grid.SetColumn(_animPaneHost,  9); // 16B
         splitter.Children.Add(SlidePaneHost);
         splitter.Children.Add(rightPanel);
         splitter.Children.Add(_accessibilityCheckerPaneHost);
@@ -809,6 +817,7 @@ public sealed partial class MainWindow : Window
         splitter.Children.Add(_proofingPaneHost);
         splitter.Children.Add(_mediaCaptionPaneHost);
         splitter.Children.Add(_smartArtTextPaneHost);
+        splitter.Children.Add(_selectionPane);
         splitter.Children.Add(_animPaneHost); // 16B
 
         return splitter;
@@ -2876,6 +2885,13 @@ public sealed partial class MainWindow : Window
         var plan = RefreshReadingOrderPlan();
         RenderReadingOrderPane(plan);
         _readingOrderPaneHost.Visibility = Visibility.Visible;
+        return plan;
+    }
+
+    internal PresentationSelectionPanePlan ShowSelectionPane()
+    {
+        var plan = _selectionPane.Refresh();
+        _selectionPane.Visibility = Visibility.Visible;
         return plan;
     }
 

@@ -285,6 +285,52 @@ public sealed class SetSlideHiddenCommand : IPresentationCommand
     }
 }
 
+/// <summary>Sets whether a top-level slide object is hidden in the editing view.</summary>
+public sealed class SetShapeHiddenCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly bool _newValue;
+    private bool _oldValue;
+
+    public SetShapeHiddenCommand(int slideIndex, uint shapeId, bool hidden)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newValue = hidden;
+    }
+
+    public string Label => _newValue ? "Hide Object" : "Show Object";
+
+    public bool HasEffect(Presentation p) =>
+        TryGetShape(p, out var shape) && shape.IsHidden != _newValue;
+
+    public void Apply(Presentation p)
+    {
+        if (!TryGetShape(p, out var shape))
+            return;
+
+        _oldValue = shape.IsHidden;
+        shape.IsHidden = _newValue;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (TryGetShape(p, out var shape))
+            shape.IsHidden = _oldValue;
+    }
+
+    private bool TryGetShape(Presentation p, out SlideShape shape)
+    {
+        shape = null!;
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+            return false;
+
+        shape = p.Slides[_slideIndex].Shapes.FirstOrDefault(candidate => candidate.Id == _shapeId)!;
+        return shape is not null;
+    }
+}
+
 /// <summary>
 /// Sets the title metadata for a slide. Revert restores the previous title.
 /// </summary>
