@@ -6221,7 +6221,7 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartAreaOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(ChartAreaFormattingTarget.PlotArea, "#EAF2F8", "#1F4E79", 1.25);
+            dialog.SetOptionsForTests(ChartAreaFormattingTarget.PlotArea, null, null, null, true, true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -6229,9 +6229,8 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         options.Should().NotBeNull();
         options!.Target.Should().Be(ChartAreaFormattingTarget.PlotArea);
-        ((ShapeFill.Solid)options.Fill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xEAF2F8));
-        ((ShapeOutline.Visible)options.Outline!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
-        ((ShapeOutline.Visible)options.Outline!).WidthPt.Should().Be(1.25);
+        options.Fill.Should().BeSameAs(ShapeFill.None.Instance);
+        options.Outline.Should().BeSameAs(ShapeOutline.None.Instance);
     }
 
     [Fact]

@@ -255,14 +255,13 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var (sess, _) = MakeSession();
         var dialog = new ChartAreaOptionsDialog(sess);
-        dialog.SetOptionsForTests(ChartAreaFormattingTarget.PlotArea, "#EAF2F8", "#1F4E79", 1.25);
+        dialog.SetOptionsForTests(ChartAreaFormattingTarget.PlotArea, null, null, null, true, true);
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
         options.Target.Should().Be(ChartAreaFormattingTarget.PlotArea);
-        ((ShapeFill.Solid)options.Fill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xEAF2F8));
-        ((ShapeOutline.Visible)options.Outline!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
-        ((ShapeOutline.Visible)options.Outline!).WidthPt.Should().Be(1.25);
+        options.Fill.Should().BeSameAs(ShapeFill.None.Instance);
+        options.Outline.Should().BeSameAs(ShapeOutline.None.Instance);
     }
 
     [Fact]

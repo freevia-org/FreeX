@@ -9,7 +9,9 @@ public sealed record ChartAreaOptionsSurfacePlan(
     string Title,
     string TargetLabel,
     string FillLabel,
+    string NoFillLabel,
     string OutlineLabel,
+    string NoOutlineLabel,
     string WidthLabel,
     string Hint,
     string OkLabel,
@@ -22,7 +24,9 @@ public sealed class ChartAreaOptionsPlanner
     public const string DialogTitle = "Chart Area Options";
     public const string TargetLabel = "Apply to";
     public const string FillLabel = "Fill color (#RRGGBB)";
+    public const string NoFillLabel = "No fill";
     public const string OutlineLabel = "Outline color (#RRGGBB)";
+    public const string NoOutlineLabel = "No outline";
     public const string WidthLabel = "Outline width (pt)";
     public const string Hint = "Blank fill and outline values restore the chart or theme default.";
     public const string OkLabel = "OK";
@@ -37,7 +41,9 @@ public sealed class ChartAreaOptionsPlanner
     private readonly ChartShape _chart;
     private ChartAreaFormattingTarget _target = ChartAreaFormattingTarget.ChartArea;
     private string _fillColor = string.Empty;
+    private bool _noFill;
     private string _outlineColor = string.Empty;
+    private bool _noOutline;
     private double? _outlineWidthPt;
 
     private ChartAreaOptionsPlanner(ChartShape chart)
@@ -47,7 +53,7 @@ public sealed class ChartAreaOptionsPlanner
     }
 
     public static ChartAreaOptionsSurfacePlan BuildSurfacePlan() => new(
-        CommandId, DialogTitle, TargetLabel, FillLabel, OutlineLabel, WidthLabel,
+        CommandId, DialogTitle, TargetLabel, FillLabel, NoFillLabel, OutlineLabel, NoOutlineLabel, WidthLabel,
         Hint, OkLabel, CancelLabel);
 
     public static ChartAreaOptionsPlanner FromChart(ChartShape chart)
@@ -58,7 +64,9 @@ public sealed class ChartAreaOptionsPlanner
 
     public ChartAreaFormattingTarget Target => _target;
     public string FillColor => _fillColor;
+    public bool NoFill => _noFill;
     public string OutlineColor => _outlineColor;
+    public bool NoOutline => _noOutline;
     public double? OutlineWidthPt => _outlineWidthPt;
 
     public void SetTarget(ChartAreaFormattingTarget target)
@@ -67,19 +75,31 @@ public sealed class ChartAreaOptionsPlanner
         LoadTarget();
     }
 
-    public void SetFillColor(string? value) => _fillColor = value?.Trim() ?? string.Empty;
+    public void SetFillColor(string? value)
+    {
+        _fillColor = value?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(_fillColor))
+            _noFill = false;
+    }
     public void SetOutlineColor(string? value) => _outlineColor = value?.Trim() ?? string.Empty;
+    public void SetNoFill(bool value) => _noFill = value;
+    public void SetNoOutline(bool value) => _noOutline = value;
     public void SetOutlineWidth(double? value) =>
         _outlineWidthPt = value is { } number && double.IsFinite(number) && number > 0 ? number : null;
 
     public ChartAreaOptions BuildCommitPlan()
     {
-        var fill = string.IsNullOrWhiteSpace(_fillColor)
-            ? null
-            : new ShapeFill.Solid(ChartPointOptionsPlanner.ParseColor(_fillColor, FillLabel)!);
-        var outline = string.IsNullOrWhiteSpace(_outlineColor)
-            ? null
-            : new ShapeOutline.Visible(
+        ShapeFill? fill = null;
+        if (_noFill)
+            fill = ShapeFill.None.Instance;
+        else if (!string.IsNullOrWhiteSpace(_fillColor))
+            fill = new ShapeFill.Solid(ChartPointOptionsPlanner.ParseColor(_fillColor, FillLabel)!);
+
+        ShapeOutline? outline = null;
+        if (_noOutline)
+            outline = ShapeOutline.None.Instance;
+        else if (!string.IsNullOrWhiteSpace(_outlineColor))
+            outline = new ShapeOutline.Visible(
                 ChartPointOptionsPlanner.ParseColor(_outlineColor, OutlineLabel)!,
                 _outlineWidthPt ?? 0.75);
         return new ChartAreaOptions(_target, fill, outline);
@@ -89,7 +109,9 @@ public sealed class ChartAreaOptionsPlanner
     {
         var fill = _target == ChartAreaFormattingTarget.ChartArea ? _chart.ChartAreaFill : _chart.PlotAreaFill;
         var outline = _target == ChartAreaFormattingTarget.ChartArea ? _chart.ChartAreaOutline : _chart.PlotAreaOutline;
+        _noFill = fill is ShapeFill.None;
         _fillColor = fill is ShapeFill.Solid solid ? solid.Color.Resolved.ToString() : string.Empty;
+        _noOutline = outline is ShapeOutline.None;
         if (outline is ShapeOutline.Visible visible)
         {
             _outlineColor = visible.Color.Resolved.ToString();
