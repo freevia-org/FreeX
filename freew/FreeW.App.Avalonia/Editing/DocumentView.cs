@@ -4067,43 +4067,17 @@ public sealed class DocumentView : Control
     /// </summary>
     private string? ResolveHfField(Run run, string pageNumberText, int pageCount)
     {
-        // Simple RunFieldKind fields.
-        switch (run.FieldKind)
-        {
-            case RunFieldKind.PageNumber:
-                return pageNumberText;
-            case RunFieldKind.NumPages:
-                return pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            case RunFieldKind.Date:
-            case RunFieldKind.Time:
-                return DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture);
-            case RunFieldKind.FileName:
-                return string.Empty; // DocumentProperties has no FileName property
-            case RunFieldKind.Author:
-                return _doc.Properties.Author ?? string.Empty;
-            case RunFieldKind.Title:
-                return _doc.Properties.Title ?? string.Empty;
-            case RunFieldKind.Subject:
-                return _doc.Properties.Subject ?? string.Empty;
-            case RunFieldKind.Keywords:
-                return _doc.Properties.Keywords ?? string.Empty;
-            case RunFieldKind.DocComments:
-                return _doc.Properties.Comments ?? string.Empty;
-        }
+        if (run.FieldKind != RunFieldKind.None)
+            return ResolveLiveField(run.FieldKind, run.Text, pageNumberText, pageCount);
 
         // Complex fields: inspect the instruction keyword.
         if (run.ComplexField is { } cf)
         {
-            var resolved = ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword) switch
-            {
-                RunFieldKind.PageNumber => pageNumberText,
-                RunFieldKind.NumPages => pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                RunFieldKind.Date or RunFieldKind.Time => DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture),
-                RunFieldKind.FileName => string.Empty,
-                RunFieldKind.Author => _doc.Properties.Author ?? string.Empty,
-                RunFieldKind.Title => _doc.Properties.Title ?? string.Empty,
-                _ => run.Text,
-            };
+            var resolved = ResolveLiveField(
+                ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword),
+                run.Text,
+                pageNumberText,
+                pageCount);
             return ComplexFieldDisplayPlanner.Build(cf, resolved, _doc).Text;
         }
 
@@ -13433,32 +13407,38 @@ public sealed class DocumentView : Control
     }
 
     private string ResolveComplexField(ComplexField field, string fallback) =>
-        field.Keyword switch
-        {
-            "DATE" or "TIME" => DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture),
-            "AUTHOR" => _doc.Properties.Author ?? string.Empty,
-            "TITLE" => _doc.Properties.Title ?? string.Empty,
-            "FILENAME" => string.Empty,
-            "PAGE" => ResolvePageNumberFieldText(),
-            "NUMPAGES" => "1",
-            _ => fallback,
-        };
+        ResolveLiveField(
+            ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
+            fallback,
+            ResolvePageNumberFieldText(),
+            pageCount: 1);
 
     // Resolve a document-property / date field's cached display text (page-independent fields only).
     // Page/NumPages resolve to "1" as a sensible placeholder; the renderer recomputes paginated fields.
-    private string ResolveDocumentField(RunFieldKind kind) => kind switch
+    private string ResolveDocumentField(RunFieldKind kind) =>
+        ResolveLiveField(kind, string.Empty, ResolvePageNumberFieldText(), pageCount: 1);
+
+    private string ResolveLiveField(
+        RunFieldKind kind,
+        string fallback,
+        string pageNumberText,
+        int pageCount) => kind switch
     {
         RunFieldKind.Date or RunFieldKind.Time =>
-            DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture),
-        RunFieldKind.Author      => _doc.Properties.Author ?? string.Empty,
-        RunFieldKind.Title       => _doc.Properties.Title ?? string.Empty,
-        RunFieldKind.Subject     => _doc.Properties.Subject ?? string.Empty,
-        RunFieldKind.Keywords    => _doc.Properties.Keywords ?? string.Empty,
-        RunFieldKind.DocComments => _doc.Properties.Comments ?? string.Empty,
-        RunFieldKind.PageNumber  => ResolvePageNumberFieldText(),
-        RunFieldKind.NumPages    => "1",
-        _ => string.Empty,
+            ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(kind, DateTime.Now),
+        RunFieldKind.Author => PreferLiveValue(_doc.Properties.Author, fallback),
+        RunFieldKind.Title => PreferLiveValue(_doc.Properties.Title, fallback),
+        RunFieldKind.Subject => PreferLiveValue(_doc.Properties.Subject, fallback),
+        RunFieldKind.Keywords => PreferLiveValue(_doc.Properties.Keywords, fallback),
+        RunFieldKind.DocComments => PreferLiveValue(_doc.Properties.Comments, fallback),
+        RunFieldKind.FileName => fallback,
+        RunFieldKind.PageNumber => pageNumberText,
+        RunFieldKind.NumPages => pageCount.ToString(CultureInfo.InvariantCulture),
+        _ => fallback,
     };
+
+    private static string PreferLiveValue(string? value, string fallback) =>
+        string.IsNullOrEmpty(value) ? fallback : value;
 
     private string ResolvePageNumberFieldText()
     {

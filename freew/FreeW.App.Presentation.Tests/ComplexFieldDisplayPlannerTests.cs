@@ -22,6 +22,17 @@ public sealed class ComplexFieldDisplayPlannerTests
     }
 
     [Fact]
+    public void FormatInvariantTemporalValue_DistinguishesDateFromTime()
+    {
+        var value = new DateTime(2026, 7, 25, 16, 5, 0);
+
+        ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(RunFieldKind.Date, value)
+            .Should().Be("7/25/2026");
+        ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(RunFieldKind.Time, value)
+            .Should().Be("4:05 PM");
+    }
+
+    [Fact]
     public void Build_UsesWordFieldCodeShape_AndKeepsCodePresentationSeparateFromResult()
     {
         var document = TextDocument.CreateEmpty();
