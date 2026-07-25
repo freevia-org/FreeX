@@ -22,6 +22,11 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.TextBoxCommandId, SlideObjectInsertionKind.TextBox)]
     [InlineData(SlideObjectInsertionPlanner.RectangleCommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.EllipseCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.TriangleCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.DiamondCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.HexagonCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.RightArrowCommandId, SlideObjectInsertionKind.AutoShape)]
+    [InlineData(SlideObjectInsertionPlanner.Star5CommandId, SlideObjectInsertionKind.AutoShape)]
     [InlineData(SlideObjectInsertionPlanner.PictureCommandId, SlideObjectInsertionKind.Picture)]
     [InlineData(SlideObjectInsertionPlanner.VideoCommandId, SlideObjectInsertionKind.Media)]
     [InlineData(SlideObjectInsertionPlanner.AudioCommandId, SlideObjectInsertionKind.Media)]
@@ -45,6 +50,11 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.TextBoxCommandId, DrawingShapeKind.Rectangle, true)]
     [InlineData(SlideObjectInsertionPlanner.RectangleCommandId, DrawingShapeKind.Rectangle, false)]
     [InlineData(SlideObjectInsertionPlanner.EllipseCommandId, DrawingShapeKind.Ellipse, false)]
+    [InlineData(SlideObjectInsertionPlanner.TriangleCommandId, DrawingShapeKind.Triangle, false)]
+    [InlineData(SlideObjectInsertionPlanner.DiamondCommandId, DrawingShapeKind.Diamond, false)]
+    [InlineData(SlideObjectInsertionPlanner.HexagonCommandId, DrawingShapeKind.Hexagon, false)]
+    [InlineData(SlideObjectInsertionPlanner.RightArrowCommandId, DrawingShapeKind.RightArrow, false)]
+    [InlineData(SlideObjectInsertionPlanner.Star5CommandId, DrawingShapeKind.Star5, false)]
     public void ApplyCommand_InsertsExpectedAutoShape(
         string commandId,
         DrawingShapeKind expectedShape,
@@ -122,6 +132,16 @@ public sealed class SlideObjectInsertionPlannerTests
 
         added.Should().BeNull();
         editor.CurrentSlide.Shapes.Should().HaveCount(before);
+    }
+
+    [Fact]
+    public void InsertDefaultAutoShape_RejectsLineLikeKinds()
+    {
+        var editor = MakeSession();
+
+        var action = () => editor.InsertDefaultAutoShape(DrawingShapeKind.ElbowConnector);
+
+        action.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     [Fact]

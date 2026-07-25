@@ -199,6 +199,16 @@ internal static class FreePRibbonText
     public static string ShapeRectangleKeyTip => Get("Ribbon_Command_ShapeRectangle_KeyTip");
     public static string ShapeEllipseLabel => Get("Ribbon_Command_ShapeEllipse_Label");
     public static string ShapeEllipseKeyTip => Get("Ribbon_Command_ShapeEllipse_KeyTip");
+    public static string ShapeTriangleLabel => Get("Ribbon_Command_ShapeTriangle_Label");
+    public static string ShapeTriangleKeyTip => Get("Ribbon_Command_ShapeTriangle_KeyTip");
+    public static string ShapeDiamondLabel => Get("Ribbon_Command_ShapeDiamond_Label");
+    public static string ShapeDiamondKeyTip => Get("Ribbon_Command_ShapeDiamond_KeyTip");
+    public static string ShapeHexagonLabel => Get("Ribbon_Command_ShapeHexagon_Label");
+    public static string ShapeHexagonKeyTip => Get("Ribbon_Command_ShapeHexagon_KeyTip");
+    public static string ShapeRightArrowLabel => Get("Ribbon_Command_ShapeRightArrow_Label");
+    public static string ShapeRightArrowKeyTip => Get("Ribbon_Command_ShapeRightArrow_KeyTip");
+    public static string ShapeStar5Label => Get("Ribbon_Command_ShapeStar5_Label");
+    public static string ShapeStar5KeyTip => Get("Ribbon_Command_ShapeStar5_KeyTip");
 
     public static RibbonText ArrangeGroup { get; } = new("Ribbon_Group_Arrange_Label", "Ribbon_Group_Arrange_KeyTip");
     public static RibbonText ArrangeGroupCommand { get; } = new("Ribbon_Command_ArrangeGroup_Label", "Ribbon_Command_ArrangeGroup_KeyTip");

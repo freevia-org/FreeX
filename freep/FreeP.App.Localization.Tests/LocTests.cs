@@ -256,7 +256,17 @@ public sealed class LocTests
             "Ribbon_Command_ShapeRectangle_Label",
             "Ribbon_Command_ShapeRectangle_KeyTip",
             "Ribbon_Command_ShapeEllipse_Label",
-            "Ribbon_Command_ShapeEllipse_KeyTip"
+            "Ribbon_Command_ShapeEllipse_KeyTip",
+            "Ribbon_Command_ShapeTriangle_Label",
+            "Ribbon_Command_ShapeTriangle_KeyTip",
+            "Ribbon_Command_ShapeDiamond_Label",
+            "Ribbon_Command_ShapeDiamond_KeyTip",
+            "Ribbon_Command_ShapeHexagon_Label",
+            "Ribbon_Command_ShapeHexagon_KeyTip",
+            "Ribbon_Command_ShapeRightArrow_Label",
+            "Ribbon_Command_ShapeRightArrow_KeyTip",
+            "Ribbon_Command_ShapeStar5_Label",
+            "Ribbon_Command_ShapeStar5_KeyTip"
         ]);
     }
 

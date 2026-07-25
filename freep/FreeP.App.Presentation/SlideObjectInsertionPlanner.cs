@@ -40,6 +40,11 @@ public static class SlideObjectInsertionPlanner
     public const string TextBoxCommandId = "freep.text-box";
     public const string RectangleCommandId = "freep.shape-rectangle";
     public const string EllipseCommandId = "freep.shape-ellipse";
+    public const string TriangleCommandId = "freep.shape-triangle";
+    public const string DiamondCommandId = "freep.shape-diamond";
+    public const string HexagonCommandId = "freep.shape-hexagon";
+    public const string RightArrowCommandId = "freep.shape-right-arrow";
+    public const string Star5CommandId = "freep.shape-star5";
     public const string PictureCommandId = "freep.picture";
     public const string VideoCommandId = "freep.video";
     public const string AudioCommandId = "freep.audio";
@@ -70,6 +75,11 @@ public static class SlideObjectInsertionPlanner
         new(TextBoxCommandId, SlideObjectInsertionKind.TextBox),
         new(RectangleCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Rectangle),
         new(EllipseCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Ellipse),
+        new(TriangleCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Triangle),
+        new(DiamondCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Diamond),
+        new(HexagonCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Hexagon),
+        new(RightArrowCommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.RightArrow),
+        new(Star5CommandId, SlideObjectInsertionKind.AutoShape, AutoShapeKind: DrawingShapeKind.Star5),
         new(PictureCommandId, SlideObjectInsertionKind.Picture),
         new(VideoCommandId, SlideObjectInsertionKind.Media),
         new(AudioCommandId, SlideObjectInsertionKind.Media),
@@ -218,11 +228,13 @@ public static class SlideObjectInsertionPlanner
         EditingSession editor,
         DrawingShapeKind? shapeKind)
     {
-        return shapeKind switch
+        if (shapeKind is not { } kind ||
+            !DrawingShapeKindSupport.IsRenderable(kind) ||
+            DrawingShapeKindSupport.IsLineLike(kind))
         {
-            DrawingShapeKind.Rectangle => editor.InsertDefaultRectangle(),
-            DrawingShapeKind.Ellipse => editor.InsertDefaultEllipse(),
-            _ => null,
-        };
+            return null;
+        }
+
+        return editor.InsertDefaultAutoShape(kind);
     }
 }

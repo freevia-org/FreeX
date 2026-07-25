@@ -51,6 +51,11 @@ internal static class FreePRibbonIcons
             ["freep.audio"] = RibbonCommandIconKind.Picture,
             ["freep.shape-rectangle"] = RibbonCommandIconKind.Rectangle,
             ["freep.shape-ellipse"] = RibbonCommandIconKind.Ellipse,
+            ["freep.shape-triangle"] = RibbonCommandIconKind.Triangle,
+            ["freep.shape-diamond"] = RibbonCommandIconKind.Diamond,
+            ["freep.shape-hexagon"] = RibbonCommandIconKind.Pentagon,
+            ["freep.shape-right-arrow"] = RibbonCommandIconKind.ArrowRight,
+            ["freep.shape-star5"] = RibbonCommandIconKind.Star,
 
             // ── Wave 5B: Insert — Tables ──────────────────────────────────────────────
             ["freep.insert-table-3x3"] = RibbonCommandIconKind.Table,

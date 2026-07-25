@@ -568,6 +568,36 @@
   <data name="Ribbon_Command_ShapeEllipse_KeyTip" xml:space="preserve">
     <value>E</value>
   </data>
+  <data name="Ribbon_Command_ShapeTriangle_Label" xml:space="preserve">
+    <value>Triangle</value>
+  </data>
+  <data name="Ribbon_Command_ShapeTriangle_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_ShapeDiamond_Label" xml:space="preserve">
+    <value>Diamond</value>
+  </data>
+  <data name="Ribbon_Command_ShapeDiamond_KeyTip" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="Ribbon_Command_ShapeHexagon_Label" xml:space="preserve">
+    <value>Hexagon</value>
+  </data>
+  <data name="Ribbon_Command_ShapeHexagon_KeyTip" xml:space="preserve">
+    <value>HX</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRightArrow_Label" xml:space="preserve">
+    <value>Right Arrow</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRightArrow_KeyTip" xml:space="preserve">
+    <value>RA</value>
+  </data>
+  <data name="Ribbon_Command_ShapeStar5_Label" xml:space="preserve">
+    <value>5-Point Star</value>
+  </data>
+  <data name="Ribbon_Command_ShapeStar5_KeyTip" xml:space="preserve">
+    <value>ST</value>
+  </data>
   <data name="Ribbon_Group_Arrange_Label" xml:space="preserve">
     <value>Arrange</value>
   </data>
