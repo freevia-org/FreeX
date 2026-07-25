@@ -72,7 +72,7 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.Hexagon => Polygon(rect, [(0.25, 0), (0.75, 0), (1, 0.5), (0.75, 1), (0.25, 1), (0, 0.5)]),
             DrawingShapeKind.Octagon => Polygon(rect, [(0.3, 0), (0.7, 0), (1, 0.3), (1, 0.7), (0.7, 1), (0.3, 1), (0, 0.7), (0, 0.3)]),
             DrawingShapeKind.Cross or DrawingShapeKind.PlusSign => Plus(rect),
-            DrawingShapeKind.RightArrow => Polygon(rect, [(0, 0.25), (0.62, 0.25), (0.62, 0), (1, 0.5), (0.62, 1), (0.62, 0.75), (0, 0.75)]),
+            DrawingShapeKind.RightArrow => RightArrow(rect, adjustments),
             DrawingShapeKind.LeftArrow => Polygon(rect, [(1, 0.25), (0.38, 0.25), (0.38, 0), (0, 0.5), (0.38, 1), (0.38, 0.75), (1, 0.75)]),
             DrawingShapeKind.UpArrow => Polygon(rect, [(0.25, 1), (0.25, 0.38), (0, 0.38), (0.5, 0), (1, 0.38), (0.75, 0.38), (0.75, 1)]),
             DrawingShapeKind.DownArrow => Polygon(rect, [(0.25, 0), (0.75, 0), (0.75, 0.62), (1, 0.62), (0.5, 1), (0, 0.62), (0.25, 0.62)]),
@@ -177,6 +177,36 @@ public static class ShapeGeometryBuilder
         // created shapes and legacy packages without the guide.
         var apexX = GetAdjustment(adjustments, "adj", 50000) / 100000.0;
         return Polygon(rect, [(apexX, 0), (1, 1), (0, 1)]);
+    }
+
+    private static ShapeGeometry RightArrow(
+        LayoutRect rect,
+        IReadOnlyDictionary<string, double>? adjustments)
+    {
+        // Preserve the established FreeP outline for legacy shapes that carry no
+        // authored guide. DrawingML rightArrow uses adj1 for shaft thickness and
+        // adj2 for head length; once either guide is present, consume the native
+        // 0..100000 values instead of silently flattening them to the preset.
+        if (adjustments is null ||
+            (!adjustments.ContainsKey("adj1") && !adjustments.ContainsKey("adj2")))
+        {
+            return Polygon(rect, [(0, 0.25), (0.62, 0.25), (0.62, 0), (1, 0.5), (0.62, 1), (0.62, 0.75), (0, 0.75)]);
+        }
+
+        var shaftAdjustment = GetAdjustment(adjustments, "adj1", 50000);
+        var headAdjustment = GetAdjustment(adjustments, "adj2", 50000);
+        var halfShaftHeight = Math.Clamp(shaftAdjustment, 0, 100000) / 200000.0;
+        var headBaseX = 1 - Math.Clamp(headAdjustment, 0, 100000) / 100000.0;
+        return Polygon(rect,
+        [
+            (0, 0.5 - halfShaftHeight),
+            (headBaseX, 0.5 - halfShaftHeight),
+            (headBaseX, 0),
+            (1, 0.5),
+            (headBaseX, 1),
+            (headBaseX, 0.5 + halfShaftHeight),
+            (0, 0.5 + halfShaftHeight),
+        ]);
     }
 
     private static ShapeContour RectangleContour(LayoutRect rect) =>

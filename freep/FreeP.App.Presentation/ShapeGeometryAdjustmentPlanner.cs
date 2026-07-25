@@ -46,8 +46,9 @@ public sealed record ShapeGeometryAdjustmentMutationPlan(
 /// <summary>
 /// Shared planning for PowerPoint-style preset-shape edit points.
 /// Supported geometries are imported/custom line vertices, Chord (two explicit angle guides),
-/// and Rounded Rectangle (one explicit corner-radius guide). The compositor already consumes
-/// these geometry representations.
+/// Rounded Rectangle (one explicit corner-radius guide), Triangle (one apex guide), and
+/// RightArrow (shaft and head guides). The compositor already consumes these geometry
+/// representations.
 /// </summary>
 public static class ShapeGeometryAdjustmentPlanner
 {
@@ -59,6 +60,8 @@ public static class ShapeGeometryAdjustmentPlanner
     private const double MaxCornerAdjustment = 50000;
     private const double DefaultTriangleAdjustment = 50000;
     private const double MaxTriangleAdjustment = 100000;
+    private const double DefaultArrowAdjustment = 50000;
+    private const double MaxArrowAdjustment = 100000;
 
     public const string UnsupportedShapeMessage =
         "This preset shape does not expose shared edit points yet.";
@@ -72,7 +75,7 @@ public static class ShapeGeometryAdjustmentPlanner
             return BuildCustomGeometryPlan(shape, boundsDip);
 
         if (shape.Kind != SlideShapeKind.AutoShape ||
-            shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle))
+            shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or DrawingShapeKind.RightArrow))
         {
             return new ShapeGeometryAdjustmentPlan(
                 shape.Id,
@@ -123,6 +126,34 @@ public static class ShapeGeometryAdjustmentPlanner
                     adjustment,
                     0,
                     MaxCornerAdjustment)]);
+        }
+
+        if (shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+        {
+            var shaftAdjustment = ReadAdjustment(shape, "adj1", DefaultArrowAdjustment, MaxArrowAdjustment);
+            var headAdjustment = ReadAdjustment(shape, "adj2", DefaultArrowAdjustment, MaxArrowAdjustment);
+            var halfShaftHeight = shaftAdjustment / 200000.0;
+            var headBaseX = 1 - headAdjustment / MaxArrowAdjustment;
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [
+                    new ShapeGeometryAdjustmentHandlePlan(
+                        "adj1",
+                        "Shaft thickness",
+                        new LayoutPoint(boundsDip.Left, boundsDip.Top + boundsDip.Height * (0.5 - halfShaftHeight)),
+                        shaftAdjustment,
+                        0,
+                        MaxArrowAdjustment),
+                    new ShapeGeometryAdjustmentHandlePlan(
+                        "adj2",
+                        "Head length",
+                        new LayoutPoint(boundsDip.Left + boundsDip.Width * headBaseX, boundsDip.Top),
+                        headAdjustment,
+                        0,
+                        MaxArrowAdjustment),
+                ]);
         }
 
         var start = ReadAngle(shape, "adj1", DefaultStartAngle);
@@ -210,8 +241,25 @@ public static class ShapeGeometryAdjustmentPlanner
                 new ShapeGeometryCustomPointMutationPlan(pathIndex, segmentIndex, x, y, slot));
         }
 
-        if (shape.AutoShapeKind is DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle)
+        if (shape.AutoShapeKind is DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or DrawingShapeKind.RightArrow)
         {
+            if (shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+            {
+                if (handleName == "adj1")
+                {
+                    var normalizedHalfHeight = Math.Abs(pointerDip.Y - (boundsDip.Top + boundsDip.Height / 2)) / boundsDip.Height;
+                    return new(true, "adj1", Math.Clamp(normalizedHalfHeight * 200000.0, 0, MaxArrowAdjustment), null);
+                }
+
+                if (handleName == "adj2")
+                {
+                    var normalizedHeadBase = (pointerDip.X - boundsDip.Left) / boundsDip.Width;
+                    return new(true, "adj2", Math.Clamp((1 - normalizedHeadBase) * MaxArrowAdjustment, 0, MaxArrowAdjustment), null);
+                }
+
+                return new(false, null, null, InvalidHandleMessage);
+            }
+
             if (handleName != "adj")
                 return new(false, null, null, InvalidHandleMessage);
 

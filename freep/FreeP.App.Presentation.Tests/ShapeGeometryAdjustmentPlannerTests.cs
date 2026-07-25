@@ -278,6 +278,53 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
         plan.DisabledReason.Should().BeNull();
     }
 
+    [Fact]
+    public void Build_RightArrow_ExposesShaftAndHeadGuides()
+    {
+        var shape = new SlideShape
+        {
+            Id = 19,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RightArrow,
+        };
+        shape.PresetGeometryAdjustments["adj1"] = 25000;
+        shape.PresetGeometryAdjustments["adj2"] = 70000;
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.CanEdit.Should().BeTrue();
+        plan.Handles.Should().HaveCount(2);
+        plan.Handles[0].Name.Should().Be("adj1");
+        plan.Handles[0].Label.Should().Be("Shaft thickness");
+        plan.Handles[0].Value.Should().Be(25000);
+        plan.Handles[1].Name.Should().Be("adj2");
+        plan.Handles[1].Label.Should().Be("Head length");
+        plan.Handles[1].Value.Should().Be(70000);
+    }
+
+    [Fact]
+    public void BuildMutationPlan_RightArrow_MapsShaftAndHeadPointers()
+    {
+        var shape = new SlideShape
+        {
+            Id = 20,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RightArrow,
+        };
+
+        var shaftPlan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape, Bounds, "adj1", new LayoutPoint(Bounds.Left, Bounds.Top + 25));
+        var headPlan = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(
+            shape, Bounds, "adj2", new LayoutPoint(Bounds.Left + 60, Bounds.Top));
+
+        shaftPlan.ShouldApply.Should().BeTrue();
+        shaftPlan.Name.Should().Be("adj1");
+        shaftPlan.Value.Should().Be(50000);
+        headPlan.ShouldApply.Should().BeTrue();
+        headPlan.Name.Should().Be("adj2");
+        headPlan.Value.Should().Be(70000);
+    }
+
     private static SlideShape MakeCustomTriangle()
     {
         var path = new CustomGeometryPath { PathW = 100, PathH = 100 };

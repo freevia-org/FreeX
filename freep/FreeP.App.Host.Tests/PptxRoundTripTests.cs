@@ -382,6 +382,34 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_RightArrow_PreservesAuthoredAdjustmentGuides()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var arrow = new SlideShape
+        {
+            Id = 1,
+            Name = "Adjusted right arrow",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RightArrow,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 457200,
+        };
+        arrow.PresetGeometryAdjustments["adj1"] = 18553;
+        arrow.PresetGeometryAdjustments["adj2"] = 81447;
+        slide.Shapes.Add(arrow);
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+        var reloadedArrow = reloaded.Slides[0].Shapes.Single(shape => shape.Id == 1);
+
+        reloadedArrow.AutoShapeKind.Should().Be(DrawingShapeKind.RightArrow);
+        reloadedArrow.PresetGeometryAdjustments["adj1"].Should().Be(18553);
+        reloadedArrow.PresetGeometryAdjustments["adj2"].Should().Be(81447);
+    }
+
+    [Fact]
     public void RoundTrip_Rotation_And_Flip()
     {
         var pres = new Presentation();

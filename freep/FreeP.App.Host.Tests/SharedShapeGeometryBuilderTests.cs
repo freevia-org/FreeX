@@ -157,6 +157,24 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void RightArrow_UsesAuthoredShaftAndHeadAdjustmentsWhenPresent()
+    {
+        var geometry = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.RightArrow,
+            Bounds,
+            new Dictionary<string, double>
+            {
+                ["adj1"] = 25000,
+                ["adj2"] = 70000,
+            });
+
+        geometry.Contours.Should().ContainSingle();
+        var contour = geometry.Contours[0];
+        contour.Start.Should().Be(new LayoutPoint(Bounds.Left, Bounds.Top + Bounds.Height * .375));
+        contour.Segments[1].End.Should().Be(new LayoutPoint(Bounds.Left + Bounds.Width * .3, Bounds.Top));
+    }
+
+    [Fact]
     public void Cylinder_EnumValue_Is44_NoRenumbering()
     {
         // Appended after HomePlate=43 — verify no renumbering occurred.
