@@ -123,6 +123,39 @@ public sealed class ConnectorAttachmentTests
         y.Should().Be(500);
     }
 
+    [Theory]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Pentagon, 0, 0, 38)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Pentagon, 1, 50, 0)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Hexagon, 0, 0, 50)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Octagon, 2, 100, 50)]
+    [InlineData(Free.Shared.Drawing.DrawingShapeKind.Cross, 3, 50, 100)]
+    public void ConnectionSiteHelper_PolygonSitesFollowVisibleOutline(
+        Free.Shared.Drawing.DrawingShapeKind kind,
+        int siteIndex,
+        int expectedX,
+        int expectedY)
+    {
+        var shape = MakeRect(1, 0, 0, 100, 100);
+        shape.AutoShapeKind = kind;
+
+        var (x, y) = ConnectionSiteHelper.Resolve(shape, siteIndex);
+
+        x.Should().Be(expectedX);
+        y.Should().Be(expectedY);
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_Star5SitesFollowOuterVertices()
+    {
+        var shape = MakeRect(1, 0, 0, 100, 100);
+        shape.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Star5;
+
+        ConnectionSiteHelper.Resolve(shape, 0).Should().Be((21L, 90L));
+        ConnectionSiteHelper.Resolve(shape, 1).Should().Be((50L, 0L));
+        ConnectionSiteHelper.Resolve(shape, 2).Should().Be((98L, 35L));
+        ConnectionSiteHelper.Resolve(shape, 3).Should().Be((50L, 71L));
+    }
+
     [Fact]
     public void ConnectionSiteHelper_OutOfRange_ReturnsCentre()
     {
