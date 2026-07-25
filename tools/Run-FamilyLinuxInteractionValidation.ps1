@@ -145,7 +145,18 @@ function Assert-ManifestContract {
             "editor-keyboard-context-open",
             "editor-keyboard-context-dismissal",
             "editor-pointer-context-open",
-            "editor-pointer-context-dismissal"
+            "editor-pointer-context-dismissal",
+            "file-open-shortcut-dialog-open",
+            "file-open-shortcut-dialog-dismissal",
+            "file-save-shortcut-dialog-open",
+            "file-save-shortcut-dialog-dismissal",
+            "file-save-as-shortcut-dialog-open",
+            "file-save-as-shortcut-dialog-dismissal",
+            "file-print-shortcut-preview-open",
+            "file-print-shortcut-preview-dismissal",
+            "file-new-shortcut-dirty-prompt-open",
+            "file-new-shortcut-cancel-preserves",
+            "file-new-shortcut-discard-creates-clean"
         )
     } else {
         $requiredIds += @(
@@ -170,7 +181,7 @@ function Assert-ManifestContract {
     if ($ids.Count -ne ($ids | Select-Object -Unique).Count) {
         throw "Manifest contains duplicate result IDs."
     }
-    $expectedResultCount = if ($App -eq "FreeP") { 22 } else { 25 }
+    $expectedResultCount = if ($App -eq "FreeP") { 22 } else { 36 }
     if ($results.Count -ne $expectedResultCount) {
         throw "$App family baseline must contain exactly $expectedResultCount result rows."
     }
@@ -325,7 +336,18 @@ try {
                 "editor-keyboard-context-open",
                 "editor-keyboard-context-dismissal",
                 "editor-pointer-context-open",
-                "editor-pointer-context-dismissal"
+                "editor-pointer-context-dismissal",
+                "file-open-shortcut-dialog-open",
+                "file-open-shortcut-dialog-dismissal",
+                "file-save-shortcut-dialog-open",
+                "file-save-shortcut-dialog-dismissal",
+                "file-save-as-shortcut-dialog-open",
+                "file-save-as-shortcut-dialog-dismissal",
+                "file-print-shortcut-preview-open",
+                "file-print-shortcut-preview-dismissal",
+                "file-new-shortcut-dirty-prompt-open",
+                "file-new-shortcut-cancel-preserves",
+                "file-new-shortcut-discard-creates-clean"
             )
         } else {
             $failureIds += @(

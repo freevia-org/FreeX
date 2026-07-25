@@ -72,6 +72,33 @@ public sealed class LinuxFamilyInteractionToolTests
         probe.Should().Contain("xclip -selection clipboard -o");
         probe.Should().Contain("xclip -silent -selection clipboard -in");
         probe.Should().Contain("stop_clipboard_owner");
+        probe.Should().Contain("run_file_shortcut_window_lifecycle \\\n        \"file-open-shortcut-dialog\" ctrl+o");
+        probe.Should().Contain("if ! send_active_key \"$key\"; then");
+        probe.Should().NotContain("run_file_shortcut_window_lifecycle +");
+        var shortcutLifecycleStart = probe.IndexOf("run_file_shortcut_window_lifecycle()", StringComparison.Ordinal);
+        var shortcutLifecycleEnd = probe.IndexOf("run_dirty_new_prompt_probe()", shortcutLifecycleStart, StringComparison.Ordinal);
+        shortcutLifecycleStart.Should().BeGreaterThanOrEqualTo(0);
+        shortcutLifecycleEnd.Should().BeGreaterThan(shortcutLifecycleStart);
+        var shortcutLifecycle = probe[shortcutLifecycleStart..shortcutLifecycleEnd];
+        shortcutLifecycle.IndexOf("    focus_app", StringComparison.Ordinal)
+            .Should().BeLessThan(shortcutLifecycle.IndexOf("    if ! send_active_key \"$key\"; then", StringComparison.Ordinal));
+        foreach (var id in new[]
+        {
+            "file-open-shortcut-dialog-open",
+            "file-open-shortcut-dialog-dismissal",
+            "file-save-shortcut-dialog-open",
+            "file-save-shortcut-dialog-dismissal",
+            "file-save-as-shortcut-dialog-open",
+            "file-save-as-shortcut-dialog-dismissal",
+            "file-print-shortcut-preview-open",
+            "file-print-shortcut-preview-dismissal",
+            "file-new-shortcut-dirty-prompt-open",
+            "file-new-shortcut-cancel-preserves",
+            "file-new-shortcut-discard-creates-clean"
+        })
+        {
+            probe.Should().Contain($"\"{id}\"");
+        }
         probe.Should().Contain("screen_matches");
         probe.Should().Contain("trap on_exit EXIT");
         probe.Should().Contain("required_ids=(");
@@ -135,7 +162,24 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("Length -le 0");
         runner.Should().Contain("exhaustive -ne $false");
         runner.Should().Contain("Run-FreeXLinuxInteractionValidation.ps1");
-        runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 22 } else { 25 }");
+        runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 22 } else { 36 }");
+        foreach (var id in new[]
+        {
+            "file-open-shortcut-dialog-open",
+            "file-open-shortcut-dialog-dismissal",
+            "file-save-shortcut-dialog-open",
+            "file-save-shortcut-dialog-dismissal",
+            "file-save-as-shortcut-dialog-open",
+            "file-save-as-shortcut-dialog-dismissal",
+            "file-print-shortcut-preview-open",
+            "file-print-shortcut-preview-dismissal",
+            "file-new-shortcut-dirty-prompt-open",
+            "file-new-shortcut-cancel-preserves",
+            "file-new-shortcut-discard-creates-clean"
+        })
+        {
+            runner.Should().Contain($"\"{id}\"");
+        }
         runner.Should().Contain("slide-pane-delete-undo");
         runner.Should().Contain("editor-keyboard-context-dismissal");
         runner.Should().Contain("editor-find-open");
@@ -168,8 +212,8 @@ public sealed class LinuxFamilyInteractionToolTests
         freePContract.GetProperty("minItems").GetInt32().Should().Be(22);
         freePContract.GetProperty("maxItems").GetInt32().Should().Be(22);
         var freeWContract = root.GetProperty("allOf")[1].GetProperty("then").GetProperty("properties").GetProperty("results");
-        freeWContract.GetProperty("minItems").GetInt32().Should().Be(25);
-        freeWContract.GetProperty("maxItems").GetInt32().Should().Be(25);
+        freeWContract.GetProperty("minItems").GetInt32().Should().Be(36);
+        freeWContract.GetProperty("maxItems").GetInt32().Should().Be(36);
         root.GetProperty("allOf").GetArrayLength().Should().Be(2);
     }
 
@@ -187,6 +231,8 @@ public sealed class LinuxFamilyInteractionToolTests
         doc.Should().Contain("contractValidation");
         doc.Should().Contain("Run-FamilyLinuxInteractionValidation.ps1");
         doc.Should().Contain("exact twenty-two-row contract");
+        doc.Should().Contain("exact thirty-six-row contract");
+        doc.Should().Contain("file-new-shortcut-discard-creates-clean");
         doc.Should().Contain("slide-pane-new-slide-create");
         doc.Should().Contain("slide-pane-delete-undo");
         doc.Should().Contain("Ctrl+Z").And.Contain("Shift+F10");

@@ -49,6 +49,17 @@ if [[ "$app" == "FreeW" ]]; then
         "editor-keyboard-context-dismissal"
         "editor-pointer-context-open"
         "editor-pointer-context-dismissal"
+        "file-open-shortcut-dialog-open"
+        "file-open-shortcut-dialog-dismissal"
+        "file-save-shortcut-dialog-open"
+        "file-save-shortcut-dialog-dismissal"
+        "file-save-as-shortcut-dialog-open"
+        "file-save-as-shortcut-dialog-dismissal"
+        "file-print-shortcut-preview-open"
+        "file-print-shortcut-preview-dismissal"
+        "file-new-shortcut-dirty-prompt-open"
+        "file-new-shortcut-cancel-preserves"
+        "file-new-shortcut-discard-creates-clean"
     )
 else
     required_ids+=(
@@ -84,6 +95,17 @@ json_escape() {
 record() {
     local id="$1" status="$2" evidence="$3" note="${4:-}"
     results+=("{\"id\":\"$(json_escape "$id")\",\"category\":\"physical-x11-smoke\",\"status\":\"$status\",\"evidenceLevel\":\"physical-x11-input\",\"evidence\":[\"$(json_escape "$evidence")\"],\"note\":\"$(json_escape "$note")\"}")
+}
+
+record_evidence_set() {
+    local id="$1" status="$2" note="$3"
+    shift 3
+    local evidence evidence_json="" separator=""
+    for evidence in "$@"; do
+        evidence_json+="$separator\"$(json_escape "$evidence")\""
+        separator=","
+    done
+    results+=("{\"id\":\"$(json_escape "$id")\",\"category\":\"physical-x11-smoke\",\"status\":\"$status\",\"evidenceLevel\":\"physical-x11-input\",\"evidence\":[${evidence_json}],\"note\":\"$(json_escape "$note")\"}")
 }
 
 has_result() {
@@ -365,6 +387,555 @@ active_window_is_owner() {
     [[ "$(xdotool getactivewindow 2>/dev/null || true)" == "$window_id" ]]
 }
 
+window_id_in_list() {
+    local wanted="$1"
+    shift
+    local candidate
+    for candidate in "$@"; do
+        if [[ "$candidate" == "$wanted" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+capture_shortcut_window_state() {
+    local name="$1" phase="$2" candidate_id="$3" baseline_count="$4" observed_count="$5"
+    local state_visible_ids=()
+    mapfile -t state_visible_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    {
+        printf 'phase=%s\n' "$phase"
+        printf 'owner-window-id=%s\n' "$window_id"
+        printf 'candidate-window-id=%s\n' "$candidate_id"
+        printf 'baseline-window-count=%s\n' "$baseline_count"
+        printf 'observed-window-count=%s\n' "$observed_count"
+        printf 'active-window=%s\n' "$(xdotool getactivewindow 2>/dev/null || true)"
+        printf 'focus-window=%s\n' "$(xdotool getwindowfocus 2>/dev/null || true)"
+        printf 'owner-active='; if active_window_is_owner; then printf 'true\n'; else printf 'false\n'; fi
+        printf 'owner-focused='; if [[ "$(xdotool getwindowfocus 2>/dev/null || true)" == "$window_id" ]]; then printf 'true\n'; else printf 'false\n'; fi
+        printf 'visible-window-ids='; printf '%s ' "${state_visible_ids[@]}"; printf '\n'
+        printf 'candidate-title=%s\n' "$(if [[ -n "$candidate_id" ]]; then xdotool getwindowname "$candidate_id" 2>/dev/null || true; fi)"
+        printf 'candidate-class-begin\n'
+        if [[ -n "$candidate_id" ]]; then
+            xprop -id "$candidate_id" WM_CLASS 2>/dev/null || true
+        fi
+        printf 'candidate-class-end\n'
+        printf 'wmctrl-list-begin\n'
+        wmctrl -l 2>/dev/null || true
+        printf 'wmctrl-list-end\n'
+    } > "$output/$name"
+}
+
+find_new_shortcut_window() {
+    local active_id="$1"
+    shift
+    file_shortcut_window_id=""
+    local candidate
+    for candidate in "$@"; do
+        if ! window_id_in_list "$candidate" "${file_lifecycle_before_ids[@]}"; then
+            if [[ "$candidate" == "$active_id" ]]; then
+                file_shortcut_window_id="$candidate"
+                return 0
+            fi
+            if [[ -z "$file_shortcut_window_id" ]]; then
+                file_shortcut_window_id="$candidate"
+            fi
+        fi
+    done
+    [[ -n "$file_shortcut_window_id" ]]
+}
+
+run_file_shortcut_window_lifecycle() {
+    local id_prefix="$1" key="$2" label="$3"
+    local before="${id_prefix}-before.png"
+    local open="${id_prefix}-open.png"
+    local focused="${id_prefix}-focused.png"
+    local dismissed="${id_prefix}-dismissed.png"
+    local before_state="${id_prefix}-before-state.txt"
+    local open_state="${id_prefix}-open-state.txt"
+    local focused_state="${id_prefix}-focused-state.txt"
+    local dismissed_state="${id_prefix}-dismissed-state.txt"
+    local proof="${id_prefix}-proof.txt"
+    local baseline_count open_count dismissed_count
+    local active_after_open active_after_focus focus_after_focus
+    local candidate_title="" candidate_class=""
+    local trigger_ready=true focus_ready=false
+    local separate_window=false count_increased=false
+    local title_ready=false class_ready=false screen_open_changed=false
+    local dismiss_ready=true dialog_removed=false count_restored=false
+    local owner_restored=false screen_dismissed_changed=false screen_restored=false
+
+    focus_app
+    mapfile -t file_lifecycle_before_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    baseline_count="$(window_count)"
+    capture "$before"
+    capture_window_state "$before_state"
+    if ! send_active_key "$key"; then
+        trigger_ready=false
+    fi
+    capture "$open"
+    mapfile -t file_lifecycle_after_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    open_count="$(window_count)"
+    active_after_open="$(xdotool getactivewindow 2>/dev/null || true)"
+    find_new_shortcut_window "$active_after_open" "${file_lifecycle_after_ids[@]}" || true
+    if [[ -n "$file_shortcut_window_id" ]]; then
+        candidate_title="$(xdotool getwindowname "$file_shortcut_window_id" 2>/dev/null || true)"
+        candidate_class="$(xprop -id "$file_shortcut_window_id" WM_CLASS 2>/dev/null || true)"
+        [[ -n "$candidate_title" ]] && title_ready=true
+        [[ "$candidate_class" == *WM_CLASS* ]] && class_ready=true
+        if [[ "$file_shortcut_window_id" != "$window_id" ]] &&
+           ! window_id_in_list "$file_shortcut_window_id" "${file_lifecycle_before_ids[@]}"; then
+            separate_window=true
+        fi
+    fi
+    if (( open_count > baseline_count )); then
+        count_increased=true
+    fi
+    capture_shortcut_window_state "$open_state" open "$file_shortcut_window_id" "$baseline_count" "$open_count"
+    if [[ -n "$file_shortcut_window_id" ]] &&
+       timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+           xdotool windowactivate --sync "$file_shortcut_window_id" 2>/dev/null &&
+       timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+           xdotool windowfocus "$file_shortcut_window_id" 2>/dev/null; then
+        sleep 0.12
+    fi
+    active_after_focus="$(xdotool getactivewindow 2>/dev/null || true)"
+    focus_after_focus="$(xdotool getwindowfocus 2>/dev/null || true)"
+    if [[ -n "$file_shortcut_window_id" &&
+          "$active_after_focus" == "$file_shortcut_window_id" &&
+          "$focus_after_focus" == "$file_shortcut_window_id" ]]; then
+        focus_ready=true
+    fi
+    capture "$focused"
+    capture_shortcut_window_state "$focused_state" focused "$file_shortcut_window_id" "$baseline_count" "$open_count"
+    if screen_changed "$output/$before" "$output/$open" 200; then
+        screen_open_changed=true
+    fi
+    {
+        printf 'label=%s\n' "$label"
+        printf 'shortcut=%s\n' "$key"
+        printf 'before-screenshot=%s\n' "$before"
+        printf 'open-screenshot=%s\n' "$open"
+        printf 'focused-screenshot=%s\n' "$focused"
+        printf 'dismissed-screenshot=%s\n' "$dismissed"
+        printf 'before-state=%s\n' "$before_state"
+        printf 'open-state=%s\n' "$open_state"
+        printf 'focused-state=%s\n' "$focused_state"
+        printf 'dismissed-state=%s\n' "$dismissed_state"
+        printf 'owner-window-id=%s\n' "$window_id"
+        printf 'candidate-window-id=%s\n' "$file_shortcut_window_id"
+        printf 'candidate-title=%s\n' "$candidate_title"
+        printf 'candidate-class=%s\n' "$candidate_class"
+        printf 'active-on-open=%s\n' "$active_after_open"
+        printf 'active-after-focus=%s\n' "$active_after_focus"
+        printf 'focus-after-focus=%s\n' "$focus_after_focus"
+        printf 'baseline-window-count=%s\n' "$baseline_count"
+        printf 'open-window-count=%s\n' "$open_count"
+        printf 'trigger-ready=%s\n' "$trigger_ready"
+        printf 'separate-window=%s\n' "$separate_window"
+        printf 'window-count-increased=%s\n' "$count_increased"
+        printf 'title-ready=%s\n' "$title_ready"
+        printf 'class-ready=%s\n' "$class_ready"
+        printf 'active-and-focused=%s\n' "$focus_ready"
+        printf 'open-screenshot-changed=%s\n' "$screen_open_changed"
+    } > "$output/$proof"
+    if $trigger_ready && $separate_window && $count_increased && $title_ready && $class_ready &&
+       $focus_ready && $screen_open_changed; then
+        record_evidence_set "${id_prefix}-open" "passed" \
+            "$label opened a newly discovered visible top-level window with title/class, increased count, active focus, and screenshot transition." \
+            "$proof" "$before" "$open" "$focused" "$before_state" "$open_state" "$focused_state"
+    else
+        record_evidence_set "${id_prefix}-open" "failed" \
+            "$label did not prove a separate focused top-level window with the required physical evidence." \
+            "$proof" "$before" "$open" "$focused" "$before_state" "$open_state" "$focused_state"
+    fi
+
+    if ! send_active_key Escape; then
+        dismiss_ready=false
+    fi
+    focus_app
+    capture "$dismissed"
+    mapfile -t file_lifecycle_dismissed_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    dismissed_count="$(window_count)"
+    capture_shortcut_window_state "$dismissed_state" dismissed "$file_shortcut_window_id" "$baseline_count" "$dismissed_count"
+    if [[ -n "$file_shortcut_window_id" ]] &&
+       window_id_in_list "$file_shortcut_window_id" "${file_lifecycle_dismissed_ids[@]}"; then
+        dialog_removed=false
+    else
+        dialog_removed=true
+    fi
+    if [[ "$dismissed_count" -eq "$baseline_count" ]]; then
+        count_restored=true
+    fi
+    if active_window_is_owner &&
+       [[ "$(xdotool getwindowfocus 2>/dev/null || true)" == "$window_id" ]]; then
+        owner_restored=true
+    fi
+    if screen_changed "$output/$open" "$output/$dismissed" 100; then
+        screen_dismissed_changed=true
+    fi
+    if screen_matches "$output/$before" "$output/$dismissed" 500; then
+        screen_restored=true
+    fi
+    {
+        printf 'dismiss-ready=%s\n' "$dismiss_ready"
+        printf 'dialog-removed=%s\n' "$dialog_removed"
+        printf 'baseline-window-count=%s\n' "$baseline_count"
+        printf 'dismissed-window-count=%s\n' "$dismissed_count"
+        printf 'window-count-restored=%s\n' "$count_restored"
+        printf 'owner-restored=%s\n' "$owner_restored"
+        printf 'dismissed-screenshot-changed=%s\n' "$screen_dismissed_changed"
+        printf 'screen-restored-to-before=%s\n' "$screen_restored"
+    } >> "$output/$proof"
+    if $dismiss_ready && $dialog_removed && $count_restored && $owner_restored &&
+       $screen_dismissed_changed && $screen_restored; then
+        record_evidence_set "${id_prefix}-dismissal" "passed" \
+            "Escape removed the $label top-level window, restored the exact owner focus/count, and returned the screen to its pre-trigger state." \
+            "$proof" "$open" "$focused" "$dismissed" "$open_state" "$focused_state" "$dismissed_state"
+    else
+        record_evidence_set "${id_prefix}-dismissal" "failed" \
+            "Escape did not prove removal and exact owner restoration for the $label top-level window." \
+            "$proof" "$open" "$focused" "$dismissed" "$open_state" "$focused_state" "$dismissed_state"
+    fi
+}
+
+run_dirty_new_prompt_probe() {
+    local expected="$output/editor-expected-sentinel.txt"
+    local cancel_clipboard="$output/file-new-shortcut-cancel-clipboard.txt"
+    local cancel_clipboard_error="$output/file-new-shortcut-cancel-clipboard-error.txt"
+    local marker_source="$output/file-new-shortcut-empty-marker.txt"
+    local empty_clipboard="$output/file-new-shortcut-empty-clipboard.txt"
+    local empty_clipboard_error="$output/file-new-shortcut-empty-clipboard-error.txt"
+    local marker="FreeW-new-empty-document-clipboard-marker-r1"
+    local prompt_before="file-new-shortcut-prompt-before.png"
+    local prompt_open="file-new-shortcut-prompt-open.png"
+    local prompt_focused="file-new-shortcut-prompt-focused.png"
+    local prompt_cancelled="file-new-shortcut-prompt-cancelled.png"
+    local discard_before="file-new-shortcut-discard-before.png"
+    local discard_open="file-new-shortcut-discard-open.png"
+    local discard_focused="file-new-shortcut-discard-focused.png"
+    local discard_after="file-new-shortcut-discard-after.png"
+    local prompt_before_state="file-new-shortcut-prompt-before-state.txt"
+    local prompt_open_state="file-new-shortcut-prompt-open-state.txt"
+    local prompt_focused_state="file-new-shortcut-prompt-focused-state.txt"
+    local prompt_cancelled_state="file-new-shortcut-prompt-cancelled-state.txt"
+    local discard_before_state="file-new-shortcut-discard-before-state.txt"
+    local discard_open_state="file-new-shortcut-discard-open-state.txt"
+    local discard_focused_state="file-new-shortcut-discard-focused-state.txt"
+    local discard_after_state="file-new-shortcut-discard-after-state.txt"
+    local open_proof="file-new-shortcut-dirty-prompt-open-proof.txt"
+    local cancel_proof="file-new-shortcut-cancel-preserves-proof.txt"
+    local discard_proof="file-new-shortcut-discard-creates-clean-proof.txt"
+    local prompt_baseline_count prompt_open_count prompt_cancelled_count
+    local discard_baseline_count discard_open_count discard_after_count
+    local prompt_active prompt_active_after_focus prompt_focus_after_focus
+    local discard_active discard_active_after_focus discard_focus_after_focus
+    local prompt_title="" prompt_class="" discard_title="" discard_class=""
+    local prompt_trigger_ready=true prompt_focus_ready=false
+    local prompt_separate=false prompt_count_increased=false prompt_screen_changed=false
+    local prompt_removed=false prompt_count_restored=false prompt_owner_restored=false
+    local prompt_cancel_screen_changed=false prompt_title_dirty=false
+    local cancel_clipboard_ready=false cancel_clipboard_exact=false
+    local discard_trigger_ready=true discard_focus_ready=false
+    local discard_separate=false discard_count_increased=false discard_screen_changed=false
+    local discard_removed=false discard_count_restored=false discard_owner_restored=false
+    local discard_decision_sent=false marker_owner=false empty_clipboard_ready=false
+    local empty_clipboard_exact=false discard_title_clean=false
+
+    printf '%s' "$marker" > "$marker_source"
+    focus_app
+    send_editor_key ctrl+a || true
+    send_editor_key ctrl+c || true
+    focus_app
+    mapfile -t file_lifecycle_before_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    prompt_baseline_count="$(window_count)"
+    capture "$prompt_before"
+    capture_shortcut_window_state "$prompt_before_state" before "" "$prompt_baseline_count" "$prompt_baseline_count"
+    if ! send_active_key ctrl+n; then
+        prompt_trigger_ready=false
+    fi
+    capture "$prompt_open"
+    mapfile -t file_lifecycle_after_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    prompt_open_count="$(window_count)"
+    prompt_active="$(xdotool getactivewindow 2>/dev/null || true)"
+    find_new_shortcut_window "$prompt_active" "${file_lifecycle_after_ids[@]}" || true
+    if [[ -n "$file_shortcut_window_id" ]]; then
+        prompt_title="$(xdotool getwindowname "$file_shortcut_window_id" 2>/dev/null || true)"
+        prompt_class="$(xprop -id "$file_shortcut_window_id" WM_CLASS 2>/dev/null || true)"
+        if [[ "$file_shortcut_window_id" != "$window_id" ]] &&
+           ! window_id_in_list "$file_shortcut_window_id" "${file_lifecycle_before_ids[@]}"; then
+            prompt_separate=true
+        fi
+    fi
+    if (( prompt_open_count > prompt_baseline_count )); then
+        prompt_count_increased=true
+    fi
+    capture_shortcut_window_state "$prompt_open_state" open "$file_shortcut_window_id" \
+        "$prompt_baseline_count" "$prompt_open_count"
+    if [[ -n "$file_shortcut_window_id" ]] &&
+       timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+           xdotool windowactivate --sync "$file_shortcut_window_id" 2>/dev/null &&
+       timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+           xdotool windowfocus "$file_shortcut_window_id" 2>/dev/null; then
+        sleep 0.12
+    fi
+    prompt_active_after_focus="$(xdotool getactivewindow 2>/dev/null || true)"
+    prompt_focus_after_focus="$(xdotool getwindowfocus 2>/dev/null || true)"
+    if [[ -n "$file_shortcut_window_id" &&
+          "$prompt_active_after_focus" == "$file_shortcut_window_id" &&
+          "$prompt_focus_after_focus" == "$file_shortcut_window_id" ]]; then
+        prompt_focus_ready=true
+    fi
+    capture "$prompt_focused"
+    capture_shortcut_window_state "$prompt_focused_state" focused "$file_shortcut_window_id" \
+        "$prompt_baseline_count" "$prompt_open_count"
+    if screen_changed "$output/$prompt_before" "$output/$prompt_open" 200; then
+        prompt_screen_changed=true
+    fi
+    {
+        printf 'expected-sentinel-file=%s\n' "$expected"
+        printf 'shortcut=ctrl+n\n'
+        printf 'before-screenshot=%s\n' "$prompt_before"
+        printf 'open-screenshot=%s\n' "$prompt_open"
+        printf 'focused-screenshot=%s\n' "$prompt_focused"
+        printf 'before-state=%s\n' "$prompt_before_state"
+        printf 'open-state=%s\n' "$prompt_open_state"
+        printf 'focused-state=%s\n' "$prompt_focused_state"
+        printf 'candidate-window-id=%s\n' "$file_shortcut_window_id"
+        printf 'candidate-title=%s\n' "$prompt_title"
+        printf 'candidate-class=%s\n' "$prompt_class"
+        printf 'active-on-open=%s\n' "$prompt_active"
+        printf 'active-after-focus=%s\n' "$prompt_active_after_focus"
+        printf 'focus-after-focus=%s\n' "$prompt_focus_after_focus"
+        printf 'baseline-window-count=%s\n' "$prompt_baseline_count"
+        printf 'open-window-count=%s\n' "$prompt_open_count"
+        printf 'trigger-ready=%s\n' "$prompt_trigger_ready"
+        printf 'separate-window=%s\n' "$prompt_separate"
+        printf 'window-count-increased=%s\n' "$prompt_count_increased"
+        printf 'active-and-focused=%s\n' "$prompt_focus_ready"
+        printf 'open-screenshot-changed=%s\n' "$prompt_screen_changed"
+    } > "$output/$open_proof"
+    if $prompt_trigger_ready && $prompt_separate && $prompt_count_increased &&
+       [[ -n "$prompt_title" && "$prompt_class" == *WM_CLASS* ]] &&
+       $prompt_focus_ready && $prompt_screen_changed; then
+        record_evidence_set "file-new-shortcut-dirty-prompt-open" "passed" \
+            "Ctrl+N on the dirty sentinel opened a separate real Save Changes top-level window with title/class, increased count, active focus, and screenshot transition." \
+            "$open_proof" "$prompt_before" "$prompt_open" "$prompt_focused" \
+            "$prompt_before_state" "$prompt_open_state" "$prompt_focused_state"
+    else
+        record_evidence_set "file-new-shortcut-dirty-prompt-open" "failed" \
+            "Ctrl+N did not prove the real dirty Save Changes top-level window with the required physical evidence." \
+            "$open_proof" "$prompt_before" "$prompt_open" "$prompt_focused" \
+            "$prompt_before_state" "$prompt_open_state" "$prompt_focused_state"
+    fi
+
+    if ! send_active_key Escape; then
+        prompt_trigger_ready=false
+    fi
+    focus_app
+    capture "$prompt_cancelled"
+    mapfile -t file_lifecycle_cancelled_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    prompt_cancelled_count="$(window_count)"
+    capture_shortcut_window_state "$prompt_cancelled_state" cancelled "$file_shortcut_window_id" \
+        "$prompt_baseline_count" "$prompt_cancelled_count"
+    if [[ -n "$file_shortcut_window_id" ]] &&
+       window_id_in_list "$file_shortcut_window_id" "${file_lifecycle_cancelled_ids[@]}"; then
+        prompt_removed=false
+    else
+        prompt_removed=true
+    fi
+    if [[ "$prompt_cancelled_count" -eq "$prompt_baseline_count" ]]; then
+        prompt_count_restored=true
+    fi
+    if active_window_is_owner &&
+       [[ "$(xdotool getwindowfocus 2>/dev/null || true)" == "$window_id" ]]; then
+        prompt_owner_restored=true
+    fi
+    if screen_changed "$output/$prompt_open" "$output/$prompt_cancelled" 100; then
+        prompt_cancel_screen_changed=true
+    fi
+    send_editor_key ctrl+a || true
+    send_editor_key ctrl+c || true
+    if read_clipboard_bounded "$cancel_clipboard" "$cancel_clipboard_error"; then
+        cancel_clipboard_ready=true
+    fi
+    if $cancel_clipboard_ready && cmp -s "$expected" "$cancel_clipboard"; then
+        cancel_clipboard_exact=true
+    fi
+    if [[ "$(xdotool getwindowname "$window_id" 2>/dev/null || true)" == *"*"* ]]; then
+        prompt_title_dirty=true
+    fi
+    {
+        printf 'open-proof=%s\n' "$open_proof"
+        printf 'cancel-screenshot=%s\n' "$prompt_cancelled"
+        printf 'cancel-state=%s\n' "$prompt_cancelled_state"
+        printf 'cancel-clipboard=%s\n' "$cancel_clipboard"
+        printf 'cancel-clipboard-error=%s\n' "$cancel_clipboard_error"
+        printf 'expected-sentinel=%s\n' "$expected"
+        printf 'cancel-clipboard-ready=%s\n' "$cancel_clipboard_ready"
+        printf 'cancel-clipboard-exact=%s\n' "$cancel_clipboard_exact"
+        printf 'prompt-removed=%s\n' "$prompt_removed"
+        printf 'window-count-restored=%s\n' "$prompt_count_restored"
+        printf 'owner-restored=%s\n' "$prompt_owner_restored"
+        printf 'cancel-screenshot-changed=%s\n' "$prompt_cancel_screen_changed"
+        printf 'owner-title-still-dirty=%s\n' "$prompt_title_dirty"
+        printf 'observed-cancel-clipboard='; if $cancel_clipboard_ready; then cat "$cancel_clipboard"; fi; printf '\n'
+    } > "$output/$cancel_proof"
+    if $prompt_trigger_ready && $prompt_removed && $prompt_count_restored && $prompt_owner_restored &&
+       $prompt_cancel_screen_changed && $cancel_clipboard_exact && $prompt_title_dirty; then
+        record_evidence_set "file-new-shortcut-cancel-preserves" "passed" \
+            "Escape cancelled the dirty New prompt, restored the owner, kept the dirty title, and preserved the exact sentinel through select-all/copy." \
+            "$cancel_proof" "$prompt_before" "$prompt_open" "$prompt_cancelled" \
+            "$prompt_open_state" "$prompt_cancelled_state" "$expected" "$cancel_clipboard"
+    else
+        record_evidence_set "file-new-shortcut-cancel-preserves" "failed" \
+            "Dirty New cancellation did not prove exact sentinel preservation and owner restoration." \
+            "$cancel_proof" "$prompt_before" "$prompt_open" "$prompt_cancelled" \
+            "$prompt_open_state" "$prompt_cancelled_state" "$expected" "$cancel_clipboard"
+    fi
+
+    focus_app
+    mapfile -t file_lifecycle_before_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    discard_baseline_count="$(window_count)"
+    capture "$discard_before"
+    capture_shortcut_window_state "$discard_before_state" before "" "$discard_baseline_count" "$discard_baseline_count"
+    if ! send_active_key ctrl+n; then
+        discard_trigger_ready=false
+    fi
+    capture "$discard_open"
+    mapfile -t file_lifecycle_after_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    discard_open_count="$(window_count)"
+    discard_active="$(xdotool getactivewindow 2>/dev/null || true)"
+    find_new_shortcut_window "$discard_active" "${file_lifecycle_after_ids[@]}" || true
+    if [[ -n "$file_shortcut_window_id" ]]; then
+        discard_title="$(xdotool getwindowname "$file_shortcut_window_id" 2>/dev/null || true)"
+        discard_class="$(xprop -id "$file_shortcut_window_id" WM_CLASS 2>/dev/null || true)"
+        if [[ "$file_shortcut_window_id" != "$window_id" ]] &&
+           ! window_id_in_list "$file_shortcut_window_id" "${file_lifecycle_before_ids[@]}"; then
+            discard_separate=true
+        fi
+    fi
+    if (( discard_open_count > discard_baseline_count )); then
+        discard_count_increased=true
+    fi
+    capture_shortcut_window_state "$discard_open_state" open "$file_shortcut_window_id" \
+        "$discard_baseline_count" "$discard_open_count"
+    if [[ -n "$file_shortcut_window_id" ]] &&
+       timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+           xdotool windowactivate --sync "$file_shortcut_window_id" 2>/dev/null &&
+       timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+           xdotool windowfocus "$file_shortcut_window_id" 2>/dev/null; then
+        sleep 0.12
+    fi
+    discard_active_after_focus="$(xdotool getactivewindow 2>/dev/null || true)"
+    discard_focus_after_focus="$(xdotool getwindowfocus 2>/dev/null || true)"
+    if [[ -n "$file_shortcut_window_id" &&
+          "$discard_active_after_focus" == "$file_shortcut_window_id" &&
+          "$discard_focus_after_focus" == "$file_shortcut_window_id" ]]; then
+        discard_focus_ready=true
+    fi
+    if start_clipboard_owner "$marker_source" "$output/file-new-shortcut-empty-marker-owner-error.txt"; then
+        marker_owner=true
+    fi
+    if ! send_active_key Tab; then
+        discard_trigger_ready=false
+    fi
+    capture "$discard_focused"
+    capture_shortcut_window_state "$discard_focused_state" focused "$file_shortcut_window_id" \
+        "$discard_baseline_count" "$discard_open_count"
+    if ! send_active_key Return; then
+        discard_trigger_ready=false
+    else
+        discard_decision_sent=true
+    fi
+    focus_app
+    capture "$discard_after"
+    mapfile -t file_lifecycle_discarded_ids < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    discard_after_count="$(window_count)"
+    capture_shortcut_window_state "$discard_after_state" after "$file_shortcut_window_id" \
+        "$discard_baseline_count" "$discard_after_count"
+    if [[ -n "$file_shortcut_window_id" ]] &&
+       window_id_in_list "$file_shortcut_window_id" "${file_lifecycle_discarded_ids[@]}"; then
+        discard_removed=false
+    else
+        discard_removed=true
+    fi
+    if [[ "$discard_after_count" -eq "$discard_baseline_count" ]]; then
+        discard_count_restored=true
+    fi
+    if active_window_is_owner &&
+       [[ "$(xdotool getwindowfocus 2>/dev/null || true)" == "$window_id" ]]; then
+        discard_owner_restored=true
+    fi
+    if screen_changed "$output/$discard_before" "$output/$discard_after" 200; then
+        discard_screen_changed=true
+    fi
+    send_editor_key ctrl+a || true
+    send_editor_key ctrl+c || true
+    if read_clipboard_bounded "$empty_clipboard" "$empty_clipboard_error"; then
+        empty_clipboard_ready=true
+    fi
+    if $empty_clipboard_ready && cmp -s "$marker_source" "$empty_clipboard"; then
+        empty_clipboard_exact=true
+    fi
+    if [[ "$(xdotool getwindowname "$window_id" 2>/dev/null || true)" != *"*"* &&
+          "$(xdotool getwindowname "$window_id" 2>/dev/null || true)" == *"FreeW"* ]]; then
+        discard_title_clean=true
+    fi
+    if $marker_owner; then
+        stop_clipboard_owner
+    fi
+    {
+        printf 'discard-before=%s\n' "$discard_before"
+        printf 'discard-open=%s\n' "$discard_open"
+        printf 'discard-focused-after-tab=%s\n' "$discard_focused"
+        printf 'discard-after=%s\n' "$discard_after"
+        printf 'discard-before-state=%s\n' "$discard_before_state"
+        printf 'discard-open-state=%s\n' "$discard_open_state"
+        printf 'discard-focused-state=%s\n' "$discard_focused_state"
+        printf 'discard-after-state=%s\n' "$discard_after_state"
+        printf 'candidate-window-id=%s\n' "$file_shortcut_window_id"
+        printf 'candidate-title=%s\n' "$discard_title"
+        printf 'candidate-class=%s\n' "$discard_class"
+        printf 'active-on-open=%s\n' "$discard_active"
+        printf 'active-after-focus=%s\n' "$discard_active_after_focus"
+        printf 'focus-after-focus=%s\n' "$discard_focus_after_focus"
+        printf 'baseline-window-count=%s\n' "$discard_baseline_count"
+        printf 'open-window-count=%s\n' "$discard_open_count"
+        printf 'after-window-count=%s\n' "$discard_after_count"
+        printf 'trigger-ready=%s\n' "$discard_trigger_ready"
+        printf 'keyboard-navigation=Tab-then-Return\n'
+        printf 'dont-save-decision-sent=%s\n' "$discard_decision_sent"
+        printf 'separate-window=%s\n' "$discard_separate"
+        printf 'window-count-increased=%s\n' "$discard_count_increased"
+        printf 'active-and-focused=%s\n' "$discard_focus_ready"
+        printf 'prompt-removed=%s\n' "$discard_removed"
+        printf 'window-count-restored=%s\n' "$discard_count_restored"
+        printf 'owner-restored=%s\n' "$discard_owner_restored"
+        printf 'discard-screenshot-changed=%s\n' "$discard_screen_changed"
+        printf 'empty-marker=%s\n' "$marker"
+        printf 'empty-clipboard=%s\n' "$empty_clipboard"
+        printf 'empty-clipboard-ready=%s\n' "$empty_clipboard_ready"
+        printf 'empty-clipboard-exact=%s\n' "$empty_clipboard_exact"
+        printf 'clean-title=%s\n' "$discard_title_clean"
+        printf 'observed-empty-clipboard='; if $empty_clipboard_ready; then cat "$empty_clipboard"; fi; printf '\n'
+    } > "$output/$discard_proof"
+    if $discard_trigger_ready && $discard_decision_sent && $discard_separate &&
+       $discard_count_increased && $discard_focus_ready && $discard_removed &&
+       $discard_count_restored && $discard_owner_restored && $discard_screen_changed &&
+       $empty_clipboard_exact && $discard_title_clean; then
+        record_evidence_set "file-new-shortcut-discard-creates-clean" "passed" \
+            "Ctrl+N was repeated, Don't save was selected by physical Tab/Return navigation, and the removed prompt left an owner-focused clean empty document proven by an unchanged exact clipboard marker." \
+            "$discard_proof" "$discard_before" "$discard_open" "$discard_focused" "$discard_after" \
+            "$discard_open_state" "$discard_focused_state" "$discard_after_state" "$marker_source" "$empty_clipboard"
+    else
+        record_evidence_set "file-new-shortcut-discard-creates-clean" "failed" \
+            "The physical Don't save path did not prove prompt removal, owner restoration, clean title, and an empty document." \
+            "$discard_proof" "$discard_before" "$discard_open" "$discard_focused" "$discard_after" \
+            "$discard_open_state" "$discard_focused_state" "$discard_after_state" "$marker_source" "$empty_clipboard"
+    fi
+}
+
 run_keytip_cycle() {
     local id_prefix="$1" key="$2"
     local before="${id_prefix}-before.png" visible="${id_prefix}-visible.png" dismissed="${id_prefix}-dismissed.png"
@@ -477,6 +1048,20 @@ else
         "The probe cannot validate an unknown File surface."
     record "file-surface-dismissal" "failed" "file-surface-configuration.txt" \
         "The probe cannot validate an unknown File surface."
+fi
+
+# FreeW-only clean-document file shortcut lifecycle evidence. Run this before
+# the sentinel edit below so the picker and preview rows observe a clean,
+# untitled document and Ctrl+S is proven to delegate to Save As.
+if [[ "$app" == "FreeW" ]]; then
+    run_file_shortcut_window_lifecycle \
+        "file-open-shortcut-dialog" ctrl+o "Ctrl+O Open"
+    run_file_shortcut_window_lifecycle \
+        "file-save-shortcut-dialog" ctrl+s "Ctrl+S Save As for clean Untitled"
+    run_file_shortcut_window_lifecycle \
+        "file-save-as-shortcut-dialog" ctrl+shift+s "Ctrl+Shift+S Save As"
+    run_file_shortcut_window_lifecycle \
+        "file-print-shortcut-preview" ctrl+p "Ctrl+P Print Preview"
 fi
 
 # FreeW-only physical editing evidence. FreeP deliberately retains its exact
@@ -998,6 +1583,7 @@ if [[ "$app" == "FreeW" ]]; then
         "editor-keyboard-context-before.png" "editor-keyboard-context-open.png" "editor-keyboard-context-dismissed.png"
     run_editor_context_probe "editor-pointer-context" pointer \
         "editor-pointer-context-before.png" "editor-pointer-context-open.png" "editor-pointer-context-dismissed.png"
+    run_dirty_new_prompt_probe
 else
     # FreeP-only physical slide-pane evidence. Geometry is derived from the real
     # window bounds and the baseline screenshot, then retained in a calibration
