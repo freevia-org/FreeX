@@ -4,6 +4,8 @@ using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
 using FreeW.App.Presentation.Options;
+using FreeW.Core.IO;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -11,6 +13,56 @@ public sealed class AsyncFileLifecycleHeadlessTests
 {
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    [Fact]
+    public async Task StartupDocument_RetainsPathTitleAndDirectSaveRouting()
+    {
+        var tempDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "FreeW.Avalonia.Tests",
+            Guid.NewGuid().ToString("N"));
+        var documentPath = Path.Combine(tempDirectory, "Field Shortcut Fixture.docx");
+        var settingsPath = Path.Combine(tempDirectory, "settings.json");
+        Directory.CreateDirectory(tempDirectory);
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        source.Blocks.Add(new Paragraph("Startup content"));
+        DocxWriter.Write(source, documentPath);
+
+        try
+        {
+            string? currentPath = null;
+            string? displayName = null;
+            string? cleanTitle = null;
+            var saveResult = false;
+
+            await RunOnUiThread(async () =>
+            {
+                var window = new MainWindow(
+                    [documentPath],
+                    new FreeWOptions(),
+                    ApplicationOptionsStore<FreeWOptions>.ForPath(settingsPath));
+                var callbacks = window.BuildBackstageCallbacks();
+                currentPath = callbacks.CurrentPath;
+                displayName = callbacks.DisplayName;
+                cleanTitle = window.Title;
+
+                window.Editor.InsertText("Updated ");
+                saveResult = await window.SaveForTests();
+            });
+
+            saveResult.Should().BeTrue();
+            currentPath.Should().Be(documentPath);
+            displayName.Should().Be(Path.GetFileNameWithoutExtension(documentPath));
+            cleanTitle.Should().Be($"{Path.GetFileName(documentPath)} \u2014 FreeW");
+            DocxReader.Read(documentPath).PlainText.Should().Contain("Updated");
+        }
+        finally
+        {
+            try { Directory.Delete(tempDirectory, recursive: true); }
+            catch { /* best-effort cleanup */ }
+        }
+    }
 
     [Theory]
     [InlineData(SaveChangesPrompt.DontSave, true, false)]

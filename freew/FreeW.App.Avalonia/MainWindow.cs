@@ -267,7 +267,11 @@ public sealed partial class MainWindow : Window
             if (result is not null)
                 _editor.SetCellText(req.Block, req.Row, req.Col, result);
         };
-        LoadDocumentAsSaved(LoadStartupDocument(startupArguments), path: null);
+        var startupDocument = LoadStartupDocument(startupArguments);
+        if (startupDocument is null)
+            LoadDocumentAsSaved(SampleDocument.Create(), path: null);
+        else
+            ApplyOpenResult(startupDocument);
         KeyDown += MainWindow_KeyDown;
         AddHandler(
             InputElement.PointerPressedEvent,
@@ -1542,18 +1546,18 @@ public sealed partial class MainWindow : Window
             _editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyPaperSize(page, parsed));
     }
 
-    private static TextDocument LoadStartupDocument(IReadOnlyList<string> startupArguments)
+    private DocumentOpenResult? LoadStartupDocument(IReadOnlyList<string> startupArguments)
     {
-        var path = startupArguments.FirstOrDefault(a => a.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) && File.Exists(a));
+        var path = startupArguments.FirstOrDefault(a => File.Exists(a) && _documentPersistence.CanOpenPath(a));
         if (path is null)
-            return SampleDocument.Create();
+            return null;
         try
         {
-            return DocxReader.Read(path);
+            return _documentPersistence.Open(path);
         }
         catch (Exception)
         {
-            return SampleDocument.Create();
+            return null;
         }
     }
 
@@ -2900,6 +2904,8 @@ public sealed partial class MainWindow : Window
 
     private Task<bool> SaveAsync() =>
         _fileWorkflow.SaveAsync(SaveToCurrentPathAsync, SaveAsAsync);
+
+    internal Task<bool> SaveForTests() => SaveAsync();
 
     private Task<bool> SaveToCurrentPathAsync(string path) =>
         _documentPersistence.TryResolveCurrentSaveTarget(path, out var target)

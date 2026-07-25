@@ -32,6 +32,7 @@ $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
 }
 $fixtureProject = Join-Path $repoRoot "freew/tools/FreeW.FieldShortcutFixture/FreeW.FieldShortcutFixture.csproj"
 $fixturePath = Join-Path $resolvedOutputRoot "fixture/field-shortcut-fixture.docx"
+$fixtureFileName = Split-Path -Leaf $fixturePath
 $expectedTitle = "FreeW deterministic field shortcut title"
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freew-field-shortcut-probe.sh"
@@ -80,7 +81,8 @@ function Assert-ManifestContract {
         $manifest.coverage.exhaustive -ne $false -or
         $manifest.coverage.scope -ne "physical Alt+F9/F9 field shortcut lane" -or
         $manifest.appSurface -ne "document-editor-field-shortcuts" -or
-        $manifest.window.pattern -ne "FreeW" -or
+        $manifest.window.pattern -ne $fixtureFileName -or
+        ([string]$manifest.window.title).IndexOf($fixtureFileName, [StringComparison]::Ordinal) -lt 0 -or
         $manifest.window.visible -ne $true) {
         throw "Field shortcut manifest header does not satisfy its dedicated contract."
     }
@@ -174,6 +176,7 @@ try {
     New-Item -ItemType Directory -Path (Split-Path -Parent $probeLog) -Force | Out-Null
     $dockerArguments = @(
         "exec", "--env", "FIELD_DOCUMENT_PATH=/documents/field-shortcut-fixture.docx",
+        "--env", "FIELD_EXPECTED_DOCUMENT_NAME=$fixtureFileName",
         [string]$session.containerName, "bash", "/work/field-shortcut-probe.sh", "/work/field-shortcut-validation"
     )
     Push-Location $repoRoot

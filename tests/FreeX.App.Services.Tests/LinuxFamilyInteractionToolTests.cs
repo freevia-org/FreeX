@@ -289,6 +289,10 @@ public sealed class LinuxFamilyInteractionToolTests
         }
         probe.Should().Contain("xdotool key").And.Contain("alt+F9").And.Contain("send_key F9").And.Contain("send_key ctrl+s");
         probe.Should().Contain("capture_editor_region").And.Contain("sha256sum").And.Contain("active-window=").And.Contain("focus-window=");
+        runner.Should().Contain("FIELD_EXPECTED_DOCUMENT_NAME=$fixtureFileName");
+        probe.Should().Contain("candidate_title").And.Contain("expected_document_name");
+        probe.Should().Contain("owner_has_focus field-update-after-save")
+            .And.Contain("owner_title_matches_expected_document field-update-after-save");
         probe.Should().NotContain("ToggleFieldCodes").And.NotContain("UpdateFields()");
         fixture.Should().Contain("DocxWriter.Write").And.Contain("DocxReader.Read");
         fixture.Should().Contain("Run.ComplexFieldRun(\" TITLE \", staleTitle)");
@@ -309,6 +313,9 @@ public sealed class LinuxFamilyInteractionToolTests
         root.GetProperty("properties").GetProperty("results").GetProperty("items")
             .GetProperty("properties").GetProperty("category").GetProperty("const").GetString()
             .Should().Be("physical-x11-field-shortcut");
+        root.GetProperty("properties").GetProperty("window").GetProperty("properties")
+            .GetProperty("pattern").GetProperty("const").GetString()
+            .Should().Be("field-shortcut-fixture.docx");
     }
 
     [Fact]

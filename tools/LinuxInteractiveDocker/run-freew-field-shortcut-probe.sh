@@ -7,6 +7,7 @@ input_delay_ms="${FIELD_X11_INPUT_DELAY_MS:-180}"
 settle_seconds="${FIELD_X11_SETTLE_SECONDS:-0.65}"
 pointer_timeout_seconds="${FIELD_X11_POINTER_TIMEOUT_SECONDS:-3}"
 document_path="${FIELD_DOCUMENT_PATH:-/documents/field-shortcut-fixture.docx}"
+expected_document_name="${FIELD_EXPECTED_DOCUMENT_NAME:-$(basename "$document_path")}"
 
 mkdir -p "$output"
 declare -a results=()
@@ -81,10 +82,14 @@ screen_difference() {
 
 capture_window_state() {
     local name="$1"
+    local current_title
+    current_title="$(xdotool getwindowname "$window_id" 2>/dev/null || true)"
     {
         printf 'phase=%s\n' "$name"
         printf 'owner-window-id=%s\n' "$window_id"
-        printf 'window-title=%s\n' "$window_title"
+        printf 'window-title=%s\n' "$current_title"
+        printf 'expected-document-name=%s\n' "$expected_document_name"
+        printf 'expected-document-title=%s\n' "$(if [[ "$current_title" == *"$expected_document_name"* ]]; then printf true; else printf false; fi)"
         printf 'active-window=%s\n' "$(xdotool getactivewindow 2>/dev/null || true)"
         printf 'focus-window=%s\n' "$(xdotool getwindowfocus 2>/dev/null || true)"
         printf 'owner-active=%s\n' "$(if [[ "$(xdotool getactivewindow 2>/dev/null || true)" == "$window_id" ]]; then printf true; else printf false; fi)"
@@ -97,6 +102,11 @@ owner_has_focus() {
     local name="$1"
     grep -Fxq 'owner-active=true' "$output/$name-state.txt" \
         && grep -Fxq 'owner-focused=true' "$output/$name-state.txt"
+}
+
+owner_title_matches_expected_document() {
+    local name="$1"
+    grep -Fxq 'expected-document-title=true' "$output/$name-state.txt"
 }
 
 focus_app() {
@@ -124,8 +134,8 @@ write_manifest() {
     {
         printf '{\"schemaVersion\":1,\"suite\":\"freew-linux-field-shortcut-physical\",\"platform\":\"linux\",\"shell\":\"avalonia\",\"app\":\"FreeW\",\"baseline\":false,\"appSurface\":\"document-editor-field-shortcuts\"'
         printf ',\"coverage\":{\"scope\":\"physical Alt+F9/F9 field shortcut lane\",\"exhaustive\":false}'
-        printf ',\"window\":{\"id\":\"%s\",\"title\":\"%s\",\"pattern\":\"FreeW\",\"visible\":true}' \
-            "$(json_escape "$window_id")" "$(json_escape "$window_title")"
+        printf ',\"window\":{\"id\":\"%s\",\"title\":\"%s\",\"pattern\":\"%s\",\"visible\":true}' \
+            "$(json_escape "$window_id")" "$(json_escape "$window_title")" "$(json_escape "$expected_document_name")"
         printf ',\"screenshots\":['
         for screenshot in "${screenshots[@]}"; do
             if $screenshot_first; then screenshot_first=false; else printf ','; fi
@@ -164,10 +174,21 @@ on_exit() {
 }
 trap on_exit EXIT
 
-mapfile -t visible_windows < <(xdotool search --onlyvisible --name 'FreeW' 2>/dev/null || true)
+mapfile -t freew_windows < <(xdotool search --onlyvisible --name 'FreeW' 2>/dev/null || true)
+visible_windows=()
+for candidate_id in "${freew_windows[@]}"; do
+    candidate_title="$(xdotool getwindowname "$candidate_id" 2>/dev/null || true)"
+    if [[ "$candidate_title" == *"$expected_document_name"* ]]; then
+        visible_windows+=("$candidate_id")
+    fi
+done
 if (( ${#visible_windows[@]} == 0 )); then
-    printf 'No visible FreeW window was discovered.\n' > "$output/window-discovery-error.txt"
-    record visible-window-discovery failed "No visible FreeW window matched the physical probe." window-discovery-error.txt
+    {
+        printf 'No visible FreeW window title contained the expected fixture filename.\n'
+        printf 'expected-document-name=%s\n' "$expected_document_name"
+        wmctrl -l 2>/dev/null || true
+    } > "$output/window-discovery-error.txt"
+    record visible-window-discovery failed "No visible FreeW window was associated with the expected fixture document." window-discovery-error.txt
     write_manifest
     exit 2
 fi
@@ -177,8 +198,9 @@ window_title="$(xdotool getwindowname "$window_id" 2>/dev/null || printf FreeW)"
 capture baseline.png
 capture_editor_region baseline.png baseline-editor-region.png
 capture_window_state baseline
-printf 'window-id=%s\nwindow-title=%s\n' "$window_id" "$window_title" > "$output/baseline-window-proof.txt"
-record visible-window-discovery passed "Discovered the real visible FreeW Avalonia window and captured focus state." baseline.png baseline-editor-region.png baseline-state.txt baseline-window-proof.txt
+printf 'window-id=%s\nwindow-title=%s\nexpected-document-name=%s\n' \
+    "$window_id" "$window_title" "$expected_document_name" > "$output/baseline-window-proof.txt"
+record visible-window-discovery passed "Discovered the visible FreeW Avalonia window for the expected fixture document and captured focus state." baseline.png baseline-editor-region.png baseline-state.txt baseline-window-proof.txt
 
 initial_hash="$(region_hash baseline-editor-region.png)"
 send_key alt+F9
@@ -227,10 +249,12 @@ capture_window_state field-update-after-save
 after_sha="$(sha256sum "$document_path" | cut -d' ' -f1)"
 printf 'key-dispatch=xdotool F9 then ctrl+s\ndocument-path=%s\ndocument-before-save=%s\ndocument-after-save=%s\nfile-changed=%s\nstructured-inspection=performed-by-host-validator\n' \
     "$document_path" "$before_sha" "$after_sha" "$(if [[ "$before_sha" != "$after_sha" ]]; then printf true; else printf false; fi)" > "$output/field-update-shortcut-state.txt"
-if [[ -f "$document_path" && "$before_sha" != "$after_sha" ]]; then
-    record field-update-shortcut-persist passed "Real F9 followed by Ctrl+S changed the harness-owned DOCX; host validation must prove the exact persisted TITLE cache." field-update-before-save.txt field-update-after-f9.png field-update-after-save.png field-update-after-f9-state.txt field-update-after-save-state.txt field-update-shortcut-state.txt
+if [[ -f "$document_path" && "$before_sha" != "$after_sha" ]] \
+    && owner_has_focus field-update-after-save \
+    && owner_title_matches_expected_document field-update-after-save; then
+    record field-update-shortcut-persist passed "Real F9 followed by Ctrl+S changed the harness-owned DOCX while the fixture-backed owner window retained focus; host validation must prove the exact persisted TITLE cache." field-update-before-save.txt field-update-after-f9.png field-update-after-save.png field-update-after-f9-state.txt field-update-after-save-state.txt field-update-shortcut-state.txt
 else
-    record field-update-shortcut-persist failed "F9/Ctrl+S did not change the harness-owned DOCX." field-update-before-save.txt field-update-after-f9.png field-update-after-save.png field-update-shortcut-state.txt
+    record field-update-shortcut-persist failed "F9/Ctrl+S did not prove a direct save to the fixture-backed DOCX without a Save As dialog." field-update-before-save.txt field-update-after-f9.png field-update-after-save.png field-update-after-f9-state.txt field-update-after-save-state.txt field-update-shortcut-state.txt
 fi
 
 write_manifest

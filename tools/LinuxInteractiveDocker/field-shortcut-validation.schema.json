@@ -26,7 +26,7 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "title": { "type": "string", "minLength": 1 },
-        "pattern": { "const": "FreeW" },
+        "pattern": { "const": "field-shortcut-fixture.docx" },
         "visible": { "const": true }
       },
       "additionalProperties": true
