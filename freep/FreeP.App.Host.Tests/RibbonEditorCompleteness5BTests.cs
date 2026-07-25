@@ -353,6 +353,38 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_OpenEmbeddedObject_ProvidesSelectedOlePayload()
+    {
+        var (ed, pres) = MakeSession();
+        var expected = new OleObjectInfo
+        {
+            EmbeddedBytes = [1, 2, 3],
+            EmbeddedExtension = "xlsx",
+            ProgId = "Excel.Sheet.12",
+        };
+        var shape = new SlideShape
+        {
+            Id = 502,
+            Name = "Embedded",
+            Kind = SlideShapeKind.Ole,
+            OleObject = expected,
+            ExtentCxEmu = DrawingMlCoordinateUnits.EmuPerInch,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerInch,
+        };
+        pres.Slides[0].Shapes.Add(shape);
+        ed.Select(shape.Id);
+
+        OleObjectInfo? opened = null;
+        var registry = FreePRibbonCommands.Build(
+            new RibbonStateStore(), ed,
+            onOpenEmbeddedObject: ole => opened = ole);
+
+        Exec(registry, OleActivationPlanner.OpenEmbeddedObjectCommandId);
+
+        Assert.Same(expected, opened);
+    }
+
+    [Fact]
     public void Cmd_Paste_WithNoClipboard_IsNoOp()
     {
         var (ed, pres) = MakeSession();

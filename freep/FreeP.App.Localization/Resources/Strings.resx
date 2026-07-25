@@ -670,6 +670,12 @@
   <data name="Ribbon_Command_ArrangeChangeShapeRightArrow_KeyTip" xml:space="preserve">
     <value>A</value>
   </data>
+  <data name="Ribbon_Command_OpenEmbeddedObject_Label" xml:space="preserve">
+    <value>Open Embedded Object</value>
+  </data>
+  <data name="Ribbon_Command_OpenEmbeddedObject_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
   <data name="Ribbon_Command_ArrangeEditPoints_Label" xml:space="preserve">
     <value>Edit Points</value>
   </data>

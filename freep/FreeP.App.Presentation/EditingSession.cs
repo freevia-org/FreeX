@@ -103,6 +103,12 @@ public sealed class EditingSession
             ? Presentation.Slides[_currentSlideIndex]
             : null;
 
+    /// <summary>The preserved OLE payload when exactly one embedded object is selected.</summary>
+    public OleObjectInfo? SelectedOleObject =>
+        CurrentSlide is { } slide && _selectedShapeIds.Count == 1
+            ? FindShape(slide.Shapes, _selectedShapeIds[0])?.OleObject
+            : null;
+
     /// <summary>
     /// Prepares and commits one SmartArt edit through the shared undo bus. The callback receives
     /// an isolated payload, so callers can run planner mutations and regenerate its package/cache

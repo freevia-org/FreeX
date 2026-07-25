@@ -2179,6 +2179,12 @@ public sealed partial class MainWindow : Window
         {
             r.Register(route.CommandId, new ActionRibbonCommand(() => route.Execute(Editor)));
         }
+        r.Register(OleActivationPlanner.OpenEmbeddedObjectCommandId,
+            new ActionRibbonCommand(() =>
+            {
+                if (Editor.SelectedOleObject is { } ole)
+                    OleActivationService.TryActivate(ole);
+            }));
         r.Register("freep.arrange.edit-points", new EditPointsToggleCommand(_slideCanvas));
 
         // Insert objects/text
