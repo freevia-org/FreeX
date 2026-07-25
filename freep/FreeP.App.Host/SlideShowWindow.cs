@@ -82,6 +82,8 @@ public sealed class SlideShowWindow : Window
     // Presenter ink overlay: shared-plan-backed strokes and laser pointer above slide content.
     private readonly Canvas _inkOverlay;
     private readonly Rectangle _transitionFlashOverlay;
+    private readonly Rectangle _screenModeOverlay;
+    private SlideShowScreenMode _screenMode;
 
     // Manages MediaElement lifecycle for the current slide's media shapes.
     private readonly SlideShowMediaController _mediaController;
@@ -221,6 +223,17 @@ public sealed class SlideShowWindow : Window
         };
         stage.Children.Add(_transitionFlashOverlay);
 
+        _screenModeOverlay = new Rectangle
+        {
+            Fill = Brushes.Black,
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
+        Grid.SetZIndex(_screenModeOverlay, 4);
+        stage.Children.Add(_screenModeOverlay);
+
         // Media controller: created now; EnterSlide is called per-slide in DisplayCurrentSlide.
         _mediaController = new SlideShowMediaController(_mediaOverlay);
 
@@ -267,6 +280,19 @@ public sealed class SlideShowWindow : Window
 
     /// <summary>The underlying state machine (for test assertions).</summary>
     public SlideShowController Controller => _controller;
+
+    /// <summary>The presenter blank-screen mode currently covering the slide.</summary>
+    public SlideShowScreenMode ScreenMode => _screenMode;
+
+    /// <summary>Show the slide, a black screen, or a white screen during presentation.</summary>
+    public void SetScreenMode(SlideShowScreenMode mode)
+    {
+        _screenMode = mode;
+        _screenModeOverlay.Fill = mode == SlideShowScreenMode.White ? Brushes.White : Brushes.Black;
+        _screenModeOverlay.Visibility = SlideShowScreenModePlanner.IsBlank(mode)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
 
     public DateTimeOffset PresenterStartedAtUtc => _session.StartedAtUtc;
 
@@ -372,6 +398,13 @@ public sealed class SlideShowWindow : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        if (SlideShowScreenModePlanner.TryPlanKey(e.Key.ToString(), _screenMode, out var screenMode))
+        {
+            SetScreenMode(screenMode);
+            e.Handled = true;
+            return;
+        }
+
         var command = SlideShowHostPlanner.PlanKey(e.Key.ToString(), _controller, _playbackRoute.Slides);
         ApplyHostCommand(command);
         e.Handled = command.IsHandled;

@@ -97,6 +97,8 @@ public sealed class SlideShowWindow : Window
     // Presenter ink overlay: shared-plan-backed strokes and laser pointer above slide content.
     private readonly Canvas _inkOverlay;
     private readonly Rectangle _transitionFlashOverlay;
+    private readonly Rectangle _screenModeOverlay;
+    private SlideShowScreenMode _screenMode;
 
     // Per-shape animation state for the current slide.
     // Maps shapeId → the Image element in _animOverlay that represents that shape.
@@ -237,6 +239,17 @@ public sealed class SlideShowWindow : Window
         };
         stage.Children.Add(_transitionFlashOverlay);
 
+        _screenModeOverlay = new Rectangle
+        {
+            Fill = Brushes.Black,
+            IsVisible = false,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            ZIndex = 4,
+        };
+        stage.Children.Add(_screenModeOverlay);
+
         _root = new Panel { Background = Brushes.Black };
         _root.Children.Add(stage);
 
@@ -280,6 +293,17 @@ public sealed class SlideShowWindow : Window
 
     /// <summary>The underlying state machine (for test assertions).</summary>
     public SlideShowController Controller => _controller;
+
+    /// <summary>The presenter blank-screen mode currently covering the slide.</summary>
+    public SlideShowScreenMode ScreenMode => _screenMode;
+
+    /// <summary>Show the slide, a black screen, or a white screen during presentation.</summary>
+    public void SetScreenMode(SlideShowScreenMode mode)
+    {
+        _screenMode = mode;
+        _screenModeOverlay.Fill = mode == SlideShowScreenMode.White ? Brushes.White : Brushes.Black;
+        _screenModeOverlay.IsVisible = SlideShowScreenModePlanner.IsBlank(mode);
+    }
 
     public DateTimeOffset PresenterStartedAtUtc => _session.StartedAtUtc;
 
@@ -410,6 +434,13 @@ public sealed class SlideShowWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (SlideShowScreenModePlanner.TryPlanKey(e.Key.ToString(), _screenMode, out var screenMode))
+        {
+            SetScreenMode(screenMode);
+            e.Handled = true;
+            return;
+        }
+
         var command = SlideShowHostPlanner.PlanKey(e.Key.ToString(), _controller, _playbackRoute.Slides);
         ApplyHostCommand(command);
         e.Handled = command.IsHandled;
