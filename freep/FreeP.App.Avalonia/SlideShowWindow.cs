@@ -99,6 +99,7 @@ public sealed class SlideShowWindow : Window
     private readonly Rectangle _transitionFlashOverlay;
     private readonly Rectangle _screenModeOverlay;
     private SlideShowScreenMode _screenMode;
+    private string _slideNumberBuffer = string.Empty;
 
     // Per-shape animation state for the current slide.
     // Maps shapeId → the Image element in _animOverlay that represents that shape.
@@ -291,6 +292,16 @@ public sealed class SlideShowWindow : Window
         return command.BackResult!;
     }
 
+    /// <summary>Jump to a one-based slide number without playing its entrance transition.</summary>
+    public void ExecuteSlideNumberJump(int oneBasedSlideNumber)
+    {
+        _slideNumberBuffer = string.Empty;
+        ApplyHostCommand(SlideShowHostPlanner.PlanSlideNumberJump(
+            _controller,
+            _playbackRoute.Slides,
+            oneBasedSlideNumber));
+    }
+
     /// <summary>The underlying state machine (for test assertions).</summary>
     public SlideShowController Controller => _controller;
 
@@ -434,6 +445,14 @@ public sealed class SlideShowWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (TryHandleSlideNumberKey(e.Key.ToString()))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        _slideNumberBuffer = string.Empty;
+
         if (SlideShowScreenModePlanner.TryPlanKey(e.Key.ToString(), _screenMode, out var screenMode))
         {
             SetScreenMode(screenMode);
@@ -444,6 +463,36 @@ public sealed class SlideShowWindow : Window
         var command = SlideShowHostPlanner.PlanKey(e.Key.ToString(), _controller, _playbackRoute.Slides);
         ApplyHostCommand(command);
         e.Handled = command.IsHandled;
+    }
+
+    private bool TryHandleSlideNumberKey(string keyName)
+    {
+        if (SlideShowSlideNumberPlanner.TryGetDigit(keyName, out var digit))
+        {
+            _slideNumberBuffer = SlideShowSlideNumberPlanner.AppendDigit(_slideNumberBuffer, digit);
+            return true;
+        }
+
+        if (keyName is "Escape" && _slideNumberBuffer.Length > 0)
+        {
+            _slideNumberBuffer = string.Empty;
+            return true;
+        }
+
+        if (keyName is not ("Enter" or "Return") || _slideNumberBuffer.Length == 0)
+            return false;
+
+        var buffer = _slideNumberBuffer;
+        _slideNumberBuffer = string.Empty;
+        if (SlideShowSlideNumberPlanner.TryParseSlideNumber(buffer, out var slideNumber))
+        {
+            ApplyHostCommand(SlideShowHostPlanner.PlanSlideNumberJump(
+                _controller,
+                _playbackRoute.Slides,
+                slideNumber));
+        }
+
+        return true;
     }
 
     // ── Pointer navigation ────────────────────────────────────────────────────────

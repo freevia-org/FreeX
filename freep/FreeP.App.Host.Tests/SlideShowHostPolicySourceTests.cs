@@ -14,6 +14,9 @@ public sealed class SlideShowHostPolicySourceTests
             "SlideShowWindow.cs"));
 
         source.Should().Contain("SlideShowHostPlanner.PlanKey(");
+        source.Should().Contain("SlideShowSlideNumberPlanner.TryGetDigit(");
+        source.Should().Contain("SlideShowHostPlanner.PlanSlideNumberJump(");
+        source.Should().Contain("ExecuteSlideNumberJump");
         source.Should().Contain("SlideShowScreenModePlanner.TryPlanKey(");
         source.Should().Contain("SetScreenMode(screenMode);");
         source.Should().Contain("SlideShowHostPlanner.PlanAdvance(");

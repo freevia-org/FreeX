@@ -6,6 +6,14 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class SlideShowScreenModeTests
 {
+    private static Presentation MakePresentation(int slideCount)
+    {
+        var presentation = Presentation.CreateEmpty();
+        for (var i = 1; i < slideCount; i++)
+            presentation.Slides.Add(new Slide { Title = $"Slide {i + 1}" });
+        return presentation;
+    }
+
     [StaFact]
     public void WpfHost_BlankScreenModeCanBeChangedAndRestored()
     {
@@ -18,5 +26,15 @@ public sealed class SlideShowScreenModeTests
         window.ScreenMode.Should().Be(SlideShowScreenMode.White);
         window.SetScreenMode(SlideShowScreenMode.Normal);
         window.ScreenMode.Should().Be(SlideShowScreenMode.Normal);
+    }
+
+    [StaFact]
+    public void WpfHost_CanJumpToOneBasedSlideNumber()
+    {
+        var window = new SlideShowWindow(MakePresentation(3), startIndex: 0);
+
+        window.ExecuteSlideNumberJump(3);
+
+        window.Controller.CurrentSlideIndex.Should().Be(2);
     }
 }

@@ -366,6 +366,25 @@ public static class SlideShowHostPlanner
         return PlanJump(controller, slides, targetIndex, animateSlide: false, stopAutoAdvance: true);
     }
 
+    public static SlideShowHostCommand PlanSlideNumberJump(
+        SlideShowController controller,
+        IReadOnlyList<Slide> slides,
+        int oneBasedSlideNumber)
+    {
+        ArgumentNullException.ThrowIfNull(controller);
+        ArgumentNullException.ThrowIfNull(slides);
+
+        if (oneBasedSlideNumber <= 0 || oneBasedSlideNumber > slides.Count)
+            return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+
+        return PlanJump(
+            controller,
+            slides,
+            oneBasedSlideNumber - 1,
+            animateSlide: false,
+            stopAutoAdvance: true);
+    }
+
     public static SlideShowHostDisplayPlan BuildDisplayPlan(
         Presentation presentation,
         SlideShowController controller,

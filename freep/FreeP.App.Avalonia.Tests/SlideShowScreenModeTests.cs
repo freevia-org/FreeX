@@ -13,6 +13,14 @@ public sealed class SlideShowScreenModeTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreePHeadlessApp).Assembly);
 
+    private static Presentation MakePresentation(int slideCount)
+    {
+        var presentation = Presentation.CreateEmpty();
+        for (var i = 1; i < slideCount; i++)
+            presentation.Slides.Add(new Slide { Title = $"Slide {i + 1}" });
+        return presentation;
+    }
+
     [Fact]
     public async Task AvaloniaHost_BlankScreenModeCanBeChangedAndRestored()
     {
@@ -33,5 +41,19 @@ public sealed class SlideShowScreenModeTests
         black.Should().Be(SlideShowScreenMode.Black);
         white.Should().Be(SlideShowScreenMode.White);
         normal.Should().Be(SlideShowScreenMode.Normal);
+    }
+
+    [Fact]
+    public async Task AvaloniaHost_CanJumpToOneBasedSlideNumber()
+    {
+        var index = -1;
+        await Session.Dispatch(() =>
+        {
+            var window = new SlideShowWindow(MakePresentation(3), startIndex: 0);
+            window.ExecuteSlideNumberJump(3);
+            index = window.Controller.CurrentSlideIndex;
+        }, CancellationToken.None);
+
+        index.Should().Be(2);
     }
 }
