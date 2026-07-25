@@ -15,7 +15,8 @@ public enum SmartArtNodeEditKind
     MoveUp,
     MoveDown,
     Promote,
-    Demote
+    Demote,
+    ToggleAssistant
 }
 
 [Flags]
@@ -63,6 +64,9 @@ public sealed record SmartArtNodeEditIntent(
 
     public static SmartArtNodeEditIntent Demote(string targetModelId) =>
         new(SmartArtNodeEditKind.Demote, targetModelId);
+
+    public static SmartArtNodeEditIntent ToggleAssistant(string targetModelId) =>
+        new(SmartArtNodeEditKind.ToggleAssistant, targetModelId);
 }
 
 public sealed record SmartArtNodeOutlineItem(
@@ -228,6 +232,7 @@ public static class SmartArtEditingPlanner
             SmartArtNodeEditKind.MoveDown => Move(data, location, targetId, offset: 1),
             SmartArtNodeEditKind.Promote => Promote(data, location, targetId),
             SmartArtNodeEditKind.Demote => Demote(data, location, targetId),
+            SmartArtNodeEditKind.ToggleAssistant => ToggleAssistant(data, location.Node!, targetId),
             _ => SmartArtNodeEditResult.NotApplied(intent.Kind, targetId, "Unsupported SmartArt edit.", BuildOutline(data))
         };
     }
@@ -621,6 +626,40 @@ public static class SmartArtEditingPlanner
             targetId,
             node.ModelId,
             "SmartArt node demoted.");
+    }
+
+    private static SmartArtNodeEditResult ToggleAssistant(
+        SmartArtData data,
+        SmartArtNode target,
+        string targetId)
+    {
+        if (data.Family != SmartArtFamily.Hierarchy)
+        {
+            return SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.ToggleAssistant,
+                targetId,
+                "Assistant nodes are supported only in hierarchy SmartArt.",
+                BuildOutline(data));
+        }
+
+        if (target.Level == 0)
+        {
+            return SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.ToggleAssistant,
+                targetId,
+                "A root SmartArt node cannot be an assistant.",
+                BuildOutline(data));
+        }
+
+        target.IsAssistant = !target.IsAssistant;
+        return Applied(
+            data,
+            SmartArtNodeEditKind.ToggleAssistant,
+            targetId,
+            target.ModelId,
+            target.IsAssistant
+                ? "SmartArt node marked as an assistant."
+                : "SmartArt assistant designation removed.");
     }
 
     private static SmartArtNode CreateNode(SmartArtData data, string? text, int level, bool isAssistant)

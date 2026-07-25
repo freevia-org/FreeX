@@ -180,6 +180,7 @@ public sealed partial class MainWindow : Window
     private TextBlock _smartArtTextPaneHeading = null!;
     private TextBlock _smartArtTextPaneMessage = null!;
     private StackPanel _smartArtTextPaneRowsPanel = null!;
+    private Button _smartArtTextPaneAssistantButton = null!;
     private Button _smartArtTextPaneApplyButton = null!;
     private Button _smartArtTextPaneCloseButton = null!;
     private bool _smartArtTextPaneRefreshing;
@@ -947,6 +948,13 @@ public sealed partial class MainWindow : Window
         {
             Orientation = Orientation.Vertical,
         };
+        _smartArtTextPaneAssistantButton = new Button
+        {
+            Content = "Toggle Assistant",
+            MinWidth = 120,
+            Padding = new Thickness(10, 4, 10, 4),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
         _smartArtTextPaneApplyButton = new Button
         {
             Content = "Apply",
@@ -960,6 +968,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 72,
             Padding = new Thickness(10, 4, 10, 4),
         };
+        _smartArtTextPaneAssistantButton.Click += (_, _) => ToggleSmartArtTextPaneAssistant();
         _smartArtTextPaneApplyButton.Click += (_, _) => ApplySmartArtTextPane();
         _smartArtTextPaneCloseButton.Click += (_, _) => HideSmartArtTextPane();
 
@@ -969,6 +978,7 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(12, 8, 12, 12),
         };
+        buttons.Children.Add(_smartArtTextPaneAssistantButton);
         buttons.Children.Add(_smartArtTextPaneApplyButton);
         buttons.Children.Add(_smartArtTextPaneCloseButton);
 
@@ -2300,6 +2310,40 @@ public sealed partial class MainWindow : Window
         return LastSmartArtTextPaneApplyResult!;
     }
 
+    internal SmartArtNodeEditResult? ToggleSmartArtTextPaneAssistantForTests(string? modelId = null)
+    {
+        if (modelId is not null)
+            _selectedSmartArtTextPaneModelId = modelId;
+        return ToggleSmartArtTextPaneAssistant();
+    }
+
+    private SmartArtNodeEditResult? ToggleSmartArtTextPaneAssistant()
+    {
+        var smartArtShape = GetSelectedSmartArtShape();
+        var targetId = _selectedSmartArtTextPaneModelId;
+        if (smartArtShape is null || string.IsNullOrWhiteSpace(targetId))
+        {
+            LastSmartArtTextPaneEditResult = SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.ToggleAssistant,
+                targetId,
+                "Select a SmartArt hierarchy row first.");
+        }
+        else
+        {
+            LastSmartArtTextPaneEditResult = Editor.ToggleSmartArtAssistant(smartArtShape.Id, targetId);
+        }
+
+        if (LastSmartArtTextPaneEditResult is { Applied: true })
+        {
+            _file.MarkDirty();
+            RefreshCanvas();
+            UpdateTitle();
+        }
+
+        RefreshSmartArtTextPane();
+        return LastSmartArtTextPaneEditResult;
+    }
+
     internal SmartArtColorApplyResult ApplySmartArtColorPresetForTests(SmartArtColorPreset preset) =>
         ApplySmartArtColorPreset(preset);
 
@@ -2438,6 +2482,11 @@ public sealed partial class MainWindow : Window
                     ? "The selected SmartArt graphic has no editable shared outline rows."
                     : "Rows mirror the shared SmartArt outline.";
             _smartArtTextPaneApplyButton.IsEnabled = shape is not null && outline.Count > 0;
+            var selectedItem = outline.FirstOrDefault(item =>
+                StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId));
+            _smartArtTextPaneAssistantButton.IsEnabled =
+                shape?.SmartArt?.Data?.Family == SmartArtFamily.Hierarchy &&
+                selectedItem is { Level: > 0 };
 
             foreach (var item in outline)
                 _smartArtTextPaneRowsPanel.Children.Add(BuildSmartArtTextPaneRow(item));

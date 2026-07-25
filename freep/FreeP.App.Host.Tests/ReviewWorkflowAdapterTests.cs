@@ -1813,6 +1813,42 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_SmartArtTextPane_TogglesAssistantThroughUndoablePackageRefresh()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var shape = MakeSmartArtShape();
+            shape.SmartArt!.Data!.Family = SmartArtFamily.Hierarchy;
+            shape.SmartArt.Data.LayoutUniqueId =
+                "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
+            var root = shape.SmartArt.Data.Nodes[0];
+            var child = shape.SmartArt.Data.Nodes[1];
+            shape.SmartArt.Data.Nodes.RemoveAt(1);
+            child.Level = 1;
+            root.Children.Add(child);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+            window.ShowSmartArtTextPane();
+
+            var result = window.ToggleSmartArtTextPaneAssistantForTests("n2");
+
+            result.Should().NotBeNull();
+            result!.Applied.Should().BeTrue();
+            shape.SmartArt.Data!.Nodes[0].Children.Single().IsAssistant.Should().BeTrue();
+            window.SmartArtTextPaneRenderedRows.Should().Contain(row => row.Contains("|1|True|Build", StringComparison.Ordinal));
+            window.Editor.Undo();
+            shape.SmartArt.Data.Nodes[0].Children.Single().IsAssistant.Should().BeFalse();
+            window.Editor.Redo();
+            shape.SmartArt.Data.Nodes[0].Children.Single().IsAssistant.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_SmartArtColorPreset_UsesNativePartAndUndoBus()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

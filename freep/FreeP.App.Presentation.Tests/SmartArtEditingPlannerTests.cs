@@ -421,6 +421,69 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void ToggleAssistant_ChangesHierarchyNodeTypeAndSupportsUndoIntent()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+        data.Nodes[0].Children.Add(new SmartArtNode
+        {
+            ModelId = "child",
+            Text = "Manager",
+            Level = 1,
+        });
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
+
+        var enable = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.ToggleAssistant("child"));
+
+        enable.Applied.Should().BeTrue();
+        enable.Kind.Should().Be(SmartArtNodeEditKind.ToggleAssistant);
+        data.Nodes[0].Children.Single().IsAssistant.Should().BeTrue();
+        enable.Outline.Single(item => item.ModelId == "child").IsAssistant.Should().BeTrue();
+
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/data1.xml"].Bytes))
+            .Descendants(dgm + "pt")
+            .Single(pt => (string?)pt.Attribute("modelId") == "child")
+            .Attribute("type")!.Value.Should().Be("asst");
+
+        var disable = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.ToggleAssistant("child"));
+
+        disable.Applied.Should().BeTrue();
+        data.Nodes[0].Children.Single().IsAssistant.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ToggleAssistant_RejectsRootAndNonHierarchyNodes()
+    {
+        var hierarchy = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+        var rootResult = SmartArtEditingPlanner.Apply(
+            hierarchy,
+            SmartArtNodeEditIntent.ToggleAssistant("root"));
+
+        rootResult.Applied.Should().BeFalse();
+        rootResult.Message.Should().Be("A root SmartArt node cannot be an assistant.");
+
+        var process = MakeFlatData(SmartArtFamily.Process, ("root", "Step"));
+        var processResult = SmartArtEditingPlanner.Apply(
+            process,
+            SmartArtNodeEditIntent.ToggleAssistant("root"));
+
+        processResult.Applied.Should().BeFalse();
+        processResult.Message.Should().Be("Assistant nodes are supported only in hierarchy SmartArt.");
+    }
+
+    [Fact]
     public void ApplyTextPaneOutline_SkippedParentLevelIsRejectedWithoutMutation()
     {
         var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));

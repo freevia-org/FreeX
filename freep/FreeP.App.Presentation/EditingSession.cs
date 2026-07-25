@@ -156,7 +156,28 @@ public sealed class EditingSession
                 smartArt,
                 preset,
                 Presentation.Theme,
-                CurrentSlide?.ColorMapOverride).Applied);
+            CurrentSlide?.ColorMapOverride).Applied);
+    }
+
+    /// <summary>
+    /// Toggles the selected hierarchy node's assistant designation through the shared undoable
+    /// package-refresh path.  PowerPoint stores this semantic distinction as dgm:pt type="asst".
+    /// </summary>
+    public SmartArtNodeEditResult ToggleSmartArtAssistant(uint shapeId, string targetModelId)
+    {
+        SmartArtNodeEditResult? result = null;
+        EditSmartArtWithPackageRefresh(shapeId, smartArt =>
+        {
+            result = SmartArtEditingPlanner.Apply(
+                smartArt.Data,
+                SmartArtNodeEditIntent.ToggleAssistant(targetModelId));
+            return result.Applied;
+        });
+
+        return result ?? SmartArtNodeEditResult.NotApplied(
+            SmartArtNodeEditKind.ToggleAssistant,
+            targetModelId,
+            "The selected SmartArt graphic is not available.");
     }
 
     private bool EditSmartArtWithPackageRefresh(uint shapeId, Func<SmartArtShape, bool> edit)

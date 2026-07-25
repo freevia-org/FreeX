@@ -5048,6 +5048,46 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_text_pane_toggles_assistant_through_undoable_package_refresh()
+    {
+        SmartArtNodeEditResult? result = null;
+        SmartArtShape? smartArt = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape();
+            smartArt = shape.SmartArt;
+            smartArt!.Data!.Family = SmartArtFamily.Hierarchy;
+            smartArt.Data.LayoutUniqueId =
+                "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
+            var root = smartArt.Data.Nodes[0];
+            var child = smartArt.Data.Nodes[1];
+            smartArt.Data.Nodes.RemoveAt(1);
+            child.Level = 1;
+            root.Children.Add(child);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+            window.ShowSmartArtTextPane();
+
+            result = window.ToggleSmartArtTextPaneAssistantForTests("n2");
+
+            result!.Applied.Should().BeTrue();
+            shape.SmartArt!.Data!.Nodes[0].Children.Single().IsAssistant.Should().BeTrue();
+            window.SmartArtTextPaneRenderedRows.Should().Contain(row => row.Contains("|1|True|Build", StringComparison.Ordinal));
+            window.Editor.Undo();
+            shape.SmartArt.Data!.Nodes[0].Children.Single().IsAssistant.Should().BeFalse();
+            window.Editor.Redo();
+            shape.SmartArt.Data.Nodes[0].Children.Single().IsAssistant.Should().BeTrue();
+        });
+
+        if (!ran) return;
+        result.Should().NotBeNull();
+        result!.Applied.Should().BeTrue();
+        smartArt!.Data!.Nodes[0].Children.Single().IsAssistant.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task SmartArt_color_preset_uses_native_part_and_undo_bus()
     {
         byte[]? before = null;
