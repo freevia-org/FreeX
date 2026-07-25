@@ -46,7 +46,8 @@ public sealed record ShapeGeometryAdjustmentMutationPlan(
 /// <summary>
 /// Shared planning for PowerPoint-style preset-shape edit points.
 /// Supported geometries are imported/custom line vertices, Chord (two explicit angle guides),
-/// Rounded Rectangle (one explicit corner-radius guide), Triangle (one apex guide), directional
+/// Rounded Rectangle (one explicit corner-radius guide), Triangle (one apex guide), Star5 (one
+/// point-depth guide), directional
 /// arrows (shaft and head guides), compound arrows (shaft and symmetric head guides), Chevron,
 /// and Home Plate (one point-depth guide each). The compositor already consumes these geometry
 /// representations.
@@ -63,6 +64,8 @@ public static class ShapeGeometryAdjustmentPlanner
     private const double MaxTriangleAdjustment = 100000;
     private const double DefaultArrowAdjustment = 50000;
     private const double MaxArrowAdjustment = 100000;
+    private const double DefaultStarAdjustment = 42000;
+    private const double MaxStarAdjustment = 100000;
 
     public const string UnsupportedShapeMessage =
         "This preset shape does not expose shared edit points yet.";
@@ -76,7 +79,7 @@ public static class ShapeGeometryAdjustmentPlanner
             return BuildCustomGeometryPlan(shape, boundsDip);
 
         if (shape.Kind != SlideShapeKind.AutoShape ||
-            shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or
+            shape.AutoShapeKind is not (DrawingShapeKind.Chord or DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or DrawingShapeKind.Star5 or
                 DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or DrawingShapeKind.UpArrow or DrawingShapeKind.DownArrow or
                 DrawingShapeKind.LeftRightArrow or DrawingShapeKind.UpDownArrow or
                 DrawingShapeKind.Chevron or DrawingShapeKind.HomePlate))
@@ -130,6 +133,26 @@ public static class ShapeGeometryAdjustmentPlanner
                     adjustment,
                     0,
                     MaxCornerAdjustment)]);
+        }
+
+        if (shape.AutoShapeKind == DrawingShapeKind.Star5)
+        {
+            var adjustment = ReadAdjustment(shape, "adj", DefaultStarAdjustment, MaxStarAdjustment);
+            var radial = adjustment / MaxStarAdjustment / 2.0;
+            var angle = -Math.PI / 2 + Math.PI / 5;
+            return new ShapeGeometryAdjustmentPlan(
+                shape.Id,
+                CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
+                boundsDip.Width > 0 && boundsDip.Height > 0 ? null : UnsupportedShapeMessage,
+                [new ShapeGeometryAdjustmentHandlePlan(
+                    "adj",
+                    "Star point depth",
+                    new LayoutPoint(
+                        boundsDip.Left + boundsDip.Width * (0.5 + Math.Cos(angle) * radial),
+                        boundsDip.Top + boundsDip.Height * (0.5 + Math.Sin(angle) * radial)),
+                    adjustment,
+                    0,
+                    MaxStarAdjustment)]);
         }
 
         if (IsDirectionalArrow(shape.AutoShapeKind))
@@ -315,7 +338,7 @@ public static class ShapeGeometryAdjustmentPlanner
                 new ShapeGeometryCustomPointMutationPlan(pathIndex, segmentIndex, x, y, slot));
         }
 
-        if (shape.AutoShapeKind is DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle ||
+        if (shape.AutoShapeKind is DrawingShapeKind.RoundedRectangle or DrawingShapeKind.Triangle or DrawingShapeKind.Star5 ||
             IsDirectionalArrow(shape.AutoShapeKind))
         {
             if (IsDirectionalArrow(shape.AutoShapeKind))
@@ -350,6 +373,15 @@ public static class ShapeGeometryAdjustmentPlanner
             {
                 var adjustment = (pointerDip.X - boundsDip.Left) / boundsDip.Width * MaxTriangleAdjustment;
                 return new(true, "adj", Math.Clamp(adjustment, 0, MaxTriangleAdjustment), null);
+            }
+
+            if (shape.AutoShapeKind == DrawingShapeKind.Star5)
+            {
+                var starNormalizedX = (pointerDip.X - (boundsDip.Left + boundsDip.Width / 2)) / (boundsDip.Width / 2);
+                var starNormalizedY = (pointerDip.Y - (boundsDip.Top + boundsDip.Height / 2)) / (boundsDip.Height / 2);
+                var angle = -Math.PI / 2 + Math.PI / 5;
+                var radial = starNormalizedX * Math.Cos(angle) + starNormalizedY * Math.Sin(angle);
+                return new(true, "adj", Math.Clamp(radial * MaxStarAdjustment, 0, MaxStarAdjustment), null);
             }
 
             var minDimension = Math.Min(boundsDip.Width, boundsDip.Height);

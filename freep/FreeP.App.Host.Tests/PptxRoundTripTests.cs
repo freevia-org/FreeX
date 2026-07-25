@@ -443,6 +443,32 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_Star5_PreservesAuthoredPointDepth()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var star = new SlideShape
+        {
+            Id = 1,
+            Name = "Adjusted star",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Star5,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+        };
+        star.PresetGeometryAdjustments["adj"] = 72000;
+        slide.Shapes.Add(star);
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+        var reloadedStar = reloaded.Slides[0].Shapes.Single(shape => shape.Id == 1);
+
+        reloadedStar.AutoShapeKind.Should().Be(DrawingShapeKind.Star5);
+        reloadedStar.PresetGeometryAdjustments["adj"].Should().Be(72000);
+    }
+
+    [Fact]
     public void RoundTrip_CompoundArrows_PreserveAuthoredAdjustmentGuides()
     {
         var pres = new Presentation();

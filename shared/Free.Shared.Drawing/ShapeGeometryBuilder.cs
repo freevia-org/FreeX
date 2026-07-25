@@ -88,7 +88,7 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.FlowchartPredefinedProcess => FlowchartPredefinedProcess(rect),
             DrawingShapeKind.FlowchartDocument => FlowchartDocument(rect),
             DrawingShapeKind.FlowchartTerminator => RoundedRectangle(rect, Math.Max(1, rect.Height / 2)),
-            DrawingShapeKind.Star5 => Star(rect, 5, 0.42),
+            DrawingShapeKind.Star5 => Star(rect, 5, StarInnerRadius(adjustments, 0.42)),
             DrawingShapeKind.Star8 => Star(rect, 8, 0.46),
             DrawingShapeKind.Explosion => Star(rect, 12, 0.62, startAngle: (-Math.PI / 2) + 0.08),
             DrawingShapeKind.Ribbon => Ribbon(rect),
@@ -633,6 +633,15 @@ public static class ShapeGeometryBuilder
         }
 
         return Polygon(rect, vertices);
+    }
+
+    private static double StarInnerRadius(
+        IReadOnlyDictionary<string, double>? adjustments,
+        double fallback)
+    {
+        // Star5 exposes one DrawingML `adj` guide controlling point depth. Keep
+        // the established fallback for new/legacy shapes with no authored guide.
+        return Math.Clamp(GetAdjustment(adjustments, "adj", fallback * 100000) / 100000.0, 0, 1);
     }
 
     private static ShapeGeometry Ribbon(LayoutRect rect) =>
