@@ -239,6 +239,9 @@ public static class FreePRibbon
         group.Medium(ShapeChangePlanner.MenuCommandId, FreePRibbonText.ArrangeChangeShapeCommand.Label,
             RibbonCommandIconKind.RibbonShape, FreePRibbonText.ArrangeChangeShapeCommand.KeyTip,
             dropdown: true, menu: BuildChangeShapeMenu);
+        group.Medium(OleActivationPlanner.OpenEmbeddedObjectCommandId,
+            FreePRibbonText.OpenEmbeddedObjectCommand.Label, RibbonCommandIconKind.RibbonShape,
+            FreePRibbonText.OpenEmbeddedObjectCommand.KeyTip);
         group.IconToggle("freep.arrange.edit-points", FreePRibbonText.ArrangeEditPointsCommand.Label,
             RibbonCommandIconKind.Diamond, FreePRibbonText.ArrangeEditPointsCommand.KeyTip);
         group.Separator();

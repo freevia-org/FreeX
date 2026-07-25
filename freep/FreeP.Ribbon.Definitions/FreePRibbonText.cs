@@ -225,6 +225,7 @@ internal static class FreePRibbonText
     public static RibbonText ArrangeChangeShapeTriangleCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeTriangle_Label", "Ribbon_Command_ArrangeChangeShapeTriangle_KeyTip");
     public static RibbonText ArrangeChangeShapeDiamondCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeDiamond_Label", "Ribbon_Command_ArrangeChangeShapeDiamond_KeyTip");
     public static RibbonText ArrangeChangeShapeRightArrowCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeRightArrow_Label", "Ribbon_Command_ArrangeChangeShapeRightArrow_KeyTip");
+    public static RibbonText OpenEmbeddedObjectCommand { get; } = new("Ribbon_Command_OpenEmbeddedObject_Label", "Ribbon_Command_OpenEmbeddedObject_KeyTip");
     public static RibbonText ArrangeEditPointsCommand { get; } = new("Ribbon_Command_ArrangeEditPoints_Label", "Ribbon_Command_ArrangeEditPoints_KeyTip");
     public static RibbonText ArrangeBringToFrontCommand { get; } = new("Ribbon_Command_ArrangeBringToFront_Label", "Ribbon_Command_ArrangeBringToFront_KeyTip");
     public static RibbonText ArrangeBringForwardCommand { get; } = new("Ribbon_Command_ArrangeBringForward_Label", "Ribbon_Command_ArrangeBringForward_KeyTip");

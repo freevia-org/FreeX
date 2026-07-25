@@ -113,7 +113,8 @@ internal static class FreePRibbonCommands
         Action?             onEditChartDataTableOptions = null,
         Action?             onEditChart3DViewOptions = null,
         Action?             onEditChartTextOptions = null,
-        Action?             onEditChartAreaOptions = null)
+        Action?             onEditChartAreaOptions = null,
+        Action<OleObjectInfo>? onOpenEmbeddedObject = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -545,6 +546,18 @@ internal static class FreePRibbonCommands
             registry.Register(commandId,
                 new ActionRibbonCommand(() => editor.ChangeSelectedAutoShapeKind(kind)));
         }
+
+        registry.Register(OleActivationPlanner.OpenEmbeddedObjectCommandId,
+            new ActionRibbonCommand(() =>
+            {
+                if (editor.SelectedOleObject is not { } ole)
+                    return;
+
+                if (onOpenEmbeddedObject is { } open)
+                    open(ole);
+                else
+                    OleActivationService.TryActivate(ole);
+            }));
 
         registry.Register("freep.arrange.edit-points",
             new EditorToggleCommand(stateStore, "freep.arrange.edit-points",
