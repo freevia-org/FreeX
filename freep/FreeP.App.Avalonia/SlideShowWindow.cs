@@ -391,7 +391,10 @@ public sealed class SlideShowWindow : Window
             _presentation,
             () => CreatePresenterState(DateTimeOffset.UtcNow),
             () => ExecuteBack(),
-            () => ExecuteAdvance());
+            () => ExecuteAdvance(),
+            SetScreenMode,
+            mode => SetPresenterPointerMode(mode),
+            () => ClearPresenterInkStrokes());
         _presenterViewWindow = window;
         window.Closed += (_, _) =>
         {
@@ -423,6 +426,21 @@ public sealed class SlideShowWindow : Window
 
         RefreshInkOverlay();
         return plan;
+    }
+
+    public SlideShowPresenterToolPlan SetPresenterPointerMode(
+        SlideShowPresenterPointerMode pointerMode,
+        DateTimeOffset? nowUtc = null)
+    {
+        var current = _session.ToolPlan;
+        return ApplyPresenterToolIntent(
+            current.Recording.TimingIntent,
+            current.Recording.MediaIntent,
+            pointerMode,
+            current.PointerInk.InkState.ColorHex,
+            current.PointerInk.InkState.ThicknessDip,
+            current.PointerInk.InkRetentionDecision,
+            nowUtc);
     }
 
     public SlideShowInkExecutionResult BeginPresenterInkStroke(double canvasX, double canvasY) =>

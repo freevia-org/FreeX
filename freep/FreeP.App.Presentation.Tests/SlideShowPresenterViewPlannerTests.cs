@@ -36,6 +36,7 @@ public sealed class SlideShowPresenterViewPlannerTests
         plan.HasNextSlide.Should().BeTrue();
         plan.CanGoBack.Should().BeFalse();
         plan.CanAdvance.Should().BeTrue();
+        plan.PointerMode.Should().Be(SlideShowPresenterPointerMode.Arrow);
     }
 
     [Fact]

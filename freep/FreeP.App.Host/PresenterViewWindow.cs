@@ -25,17 +25,28 @@ public sealed class PresenterViewWindow : Window
     private readonly Button _advanceButton;
     private readonly Action? _goBack;
     private readonly Action? _goNext;
+    private readonly ComboBox _pointerModeCombo;
+    private readonly Action<SlideShowScreenMode>? _setScreenMode;
+    private readonly Action<SlideShowPresenterPointerMode>? _selectPointerMode;
+    private readonly Action? _clearInk;
+    private bool _refreshing;
 
     public PresenterViewWindow(
         Presentation presentation,
         Func<SlideShowPresenterState> stateProvider,
         Action? goBack = null,
-        Action? goNext = null)
+        Action? goNext = null,
+        Action<SlideShowScreenMode>? setScreenMode = null,
+        Action<SlideShowPresenterPointerMode>? selectPointerMode = null,
+        Action? clearInk = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
         _goBack = goBack;
         _goNext = goNext;
+        _setScreenMode = setScreenMode;
+        _selectPointerMode = selectPointerMode;
+        _clearInk = clearInk;
 
         Title = "Presenter View";
         Width = 1200;
@@ -74,6 +85,28 @@ public sealed class PresenterViewWindow : Window
         });
         controls.Children.Add(_backButton);
         controls.Children.Add(_advanceButton);
+        var normalButton = MakeActionButton("Show", () => _setScreenMode?.Invoke(SlideShowScreenMode.Normal));
+        var blackButton = MakeActionButton("Black", () => _setScreenMode?.Invoke(SlideShowScreenMode.Black));
+        var whiteButton = MakeActionButton("White", () => _setScreenMode?.Invoke(SlideShowScreenMode.White));
+        var clearInkButton = MakeActionButton("Clear ink", () => _clearInk?.Invoke());
+        normalButton.IsEnabled = _setScreenMode is not null;
+        blackButton.IsEnabled = _setScreenMode is not null;
+        whiteButton.IsEnabled = _setScreenMode is not null;
+        clearInkButton.IsEnabled = _clearInk is not null;
+        _pointerModeCombo = MakePointerModePicker(mode =>
+        {
+            if (!_refreshing && mode is not null)
+            {
+                _selectPointerMode?.Invoke(mode.Value);
+                RefreshFromState();
+            }
+        });
+        _pointerModeCombo.IsEnabled = _selectPointerMode is not null;
+        controls.Children.Add(normalButton);
+        controls.Children.Add(blackButton);
+        controls.Children.Add(whiteButton);
+        controls.Children.Add(clearInkButton);
+        controls.Children.Add(_pointerModeCombo);
         Grid.SetColumn(controls, 1);
         Grid.SetColumn(_elapsedText, 2);
         header.Children.Add(_statusText);
@@ -144,17 +177,26 @@ public sealed class PresenterViewWindow : Window
     public void RefreshFromState()
     {
         var plan = SlideShowPresenterViewPlanner.Build(_stateProvider());
-        _statusText.Text = plan.StatusText;
-        _elapsedText.Text = $"Elapsed {plan.ElapsedText}";
-        _currentLabel.Text = plan.CurrentSlideLabel;
-        _nextLabel.Text = plan.NextSlideLabel;
-        _notesText.Text = plan.NotesText;
-        _backButton.IsEnabled = plan.CanGoBack && _goBack is not null;
-        _advanceButton.IsEnabled = plan.CanAdvance && _goNext is not null;
-        _currentPreview.Slide = plan.CurrentSlide;
-        _nextPreview.Slide = plan.NextSlide;
-        _currentPreview.Refresh();
-        _nextPreview.Refresh();
+        _refreshing = true;
+        try
+        {
+            _statusText.Text = plan.StatusText;
+            _elapsedText.Text = $"Elapsed {plan.ElapsedText}";
+            _currentLabel.Text = plan.CurrentSlideLabel;
+            _nextLabel.Text = plan.NextSlideLabel;
+            _notesText.Text = plan.NotesText;
+            _backButton.IsEnabled = plan.CanGoBack && _goBack is not null;
+            _advanceButton.IsEnabled = plan.CanAdvance && _goNext is not null;
+            _pointerModeCombo.SelectedItem = plan.PointerMode;
+            _currentPreview.Slide = plan.CurrentSlide;
+            _nextPreview.Slide = plan.NextSlide;
+            _currentPreview.Refresh();
+            _nextPreview.Refresh();
+        }
+        finally
+        {
+            _refreshing = false;
+        }
     }
 
     private SlideCanvas MakePreview() => new()
@@ -212,5 +254,18 @@ public sealed class PresenterViewWindow : Window
         };
         button.Click += (_, _) => action();
         return button;
+    }
+
+    private static ComboBox MakePointerModePicker(Action<SlideShowPresenterPointerMode?> changed)
+    {
+        var combo = new ComboBox
+        {
+            ItemsSource = Enum.GetValues<SlideShowPresenterPointerMode>(),
+            MinWidth = 104,
+            Margin = new Thickness(6, 0, 3, 0),
+        };
+        combo.SelectionChanged += (_, _) =>
+            changed(combo.SelectedItem is SlideShowPresenterPointerMode mode ? mode : null);
+        return combo;
     }
 }
