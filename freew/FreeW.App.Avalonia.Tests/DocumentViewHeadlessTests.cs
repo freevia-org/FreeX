@@ -97,6 +97,53 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task Complex_field_toggle_rebuilds_layout_with_word_code_shape_and_restores_result()
+    {
+        string? initial = null;
+        string? code = null;
+        string? restored = null;
+        string? codeColor = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Properties.Title = "Current title";
+            doc.Blocks.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run("Title: "),
+                    Run.ComplexFieldRun(" TITLE ", "Stale result")
+                }
+            });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 1200));
+            initial = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+
+            view.ToggleFieldCodes();
+            view.Measure(new Size(900, 1200));
+            code = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+            codeColor = view.GetPlacedFormattingForBlock(0)
+                .FirstOrDefault(formatting => formatting.ColorHex is not null)
+                ?.ColorHex;
+
+            view.ToggleFieldCodes();
+            view.Measure(new Size(900, 1200));
+            restored = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+        });
+
+        if (!ran)
+            return;
+
+        initial.Should().Contain("Title: Current title");
+        code.Should().Contain("Title: { TITLE }");
+        codeColor.Should().Be("#808080");
+        restored.Should().Be(initial);
+    }
+
+    [Fact]
     public async Task Unstyled_runs_inherit_document_default_run_formatting()
     {
         IReadOnlyList<RunFormatting>? formatting = null;

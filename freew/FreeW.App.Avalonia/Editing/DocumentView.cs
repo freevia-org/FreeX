@@ -4094,19 +4094,17 @@ public sealed class DocumentView : Control
         // Complex fields: inspect the instruction keyword.
         if (run.ComplexField is { } cf)
         {
-            var instr = cf.Instruction?.Trim() ?? string.Empty;
-            var keyword = instr.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
-            return keyword.ToUpperInvariant() switch
+            var resolved = ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword) switch
             {
-                "PAGE"     => pageNumberText,
-                "NUMPAGES" => pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                "DATE"     => DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture),
-                "TIME"     => DateTime.Now.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture),
-                "FILENAME" => string.Empty, // DocumentProperties has no FileName property
-                "AUTHOR"   => _doc.Properties.Author ?? string.Empty,
-                "TITLE"    => _doc.Properties.Title ?? string.Empty,
-                _          => run.Text, // fall back to cached result text
+                RunFieldKind.PageNumber => pageNumberText,
+                RunFieldKind.NumPages => pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                RunFieldKind.Date or RunFieldKind.Time => DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture),
+                RunFieldKind.FileName => string.Empty,
+                RunFieldKind.Author => _doc.Properties.Author ?? string.Empty,
+                RunFieldKind.Title => _doc.Properties.Title ?? string.Empty,
+                _ => run.Text,
             };
+            return ComplexFieldDisplayPlanner.Build(cf, resolved, _doc).Text;
         }
 
         // Not a field run — caller should use run.Text.
@@ -11859,7 +11857,7 @@ public sealed class DocumentView : Control
         var slot = footer ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header;
         var next = mutate(HeaderFooterDialogPlanner.GetSlot(store, slot));
         HeaderFooterDialogPlanner.SetSlot(store, slot, next);
-        InvalidateVisual();
+        InvalidateLayoutAndVisual();
         Focus();
     }
 
@@ -13355,7 +13353,7 @@ public sealed class DocumentView : Control
         foreach (var run in fields)
             run.ComplexField = run.ComplexField! with { ShowCode = show };
 
-        InvalidateVisual();
+        InvalidateLayoutAndVisual();
         Focus();
     }
 
@@ -15173,7 +15171,7 @@ public sealed class DocumentView : Control
         // anchor render). Word keeps commented text fully editable. The textless comment-reference run has
         // empty text and contributes no cells, so it does not affect editability either.
         paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
-            && r.FootnoteId is null && r.EndnoteId is null && r.Control is null);
+            && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null && r.Control is null);
 
     private static List<Cell> ParaCells(Paragraph paragraph)
     {
@@ -15211,8 +15209,21 @@ public sealed class DocumentView : Control
                 continue;
             }
 
-            foreach (var ch in run.Text)
-                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor,
+            var displayText = run.Text;
+            var displayFormatting = run.Formatting;
+            if (run.ComplexField is { } complexField)
+            {
+                var resolved = ComplexFieldEngine.CanRecompute(complexField)
+                    ? run.Text
+                    : ResolveComplexField(complexField, run.Text);
+                var displayPlan = ComplexFieldDisplayPlanner.Build(complexField, resolved, _doc);
+                displayText = displayPlan.Text;
+                if (displayPlan.IsFieldCode)
+                    displayFormatting = displayFormatting with { ColorHex = ComplexFieldDisplayPlanner.FieldCodeColorHex };
+            }
+
+            foreach (var ch in displayText)
+                cells.Add(new Cell(ch, displayFormatting, run.CommentId, run.Revision, run.RevisionAuthor,
                     run.RevisionDateXml, link, run.FormatRevision));
         }
         return cells;

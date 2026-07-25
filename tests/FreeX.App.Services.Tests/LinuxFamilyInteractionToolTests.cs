@@ -265,6 +265,53 @@ public sealed class LinuxFamilyInteractionToolTests
     }
 
     [Fact]
+    public void FreeWFieldShortcutLaneUsesPhysicalKeysAndStructuredPersistenceInspection()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeWFieldShortcutValidation.ps1"));
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freew-field-shortcut-probe.sh"));
+        var fixture = File.ReadAllText(RepositoryFileLocator.Find(
+            "freew", "tools", "FreeW.FieldShortcutFixture", "Program.cs"));
+
+        runner.Should().Contain("field-shortcut-validation.schema.json");
+        runner.Should().Contain("DocxReader").And.Contain("saved-field-inspection.txt");
+        runner.Should().Contain("coverage.exhaustive -ne $false");
+        foreach (var id in new[]
+        {
+            "visible-window-discovery",
+            "field-code-shortcut-show",
+            "field-code-shortcut-hide",
+            "field-update-shortcut-persist"
+        })
+        {
+            probe.Should().Contain(id);
+        }
+        probe.Should().Contain("xdotool key").And.Contain("alt+F9").And.Contain("send_key F9").And.Contain("send_key ctrl+s");
+        probe.Should().Contain("capture_editor_region").And.Contain("sha256sum").And.Contain("active-window=").And.Contain("focus-window=");
+        probe.Should().NotContain("ToggleFieldCodes").And.NotContain("UpdateFields()");
+        fixture.Should().Contain("DocxWriter.Write").And.Contain("DocxReader.Read");
+        fixture.Should().Contain("Run.ComplexFieldRun(\" TITLE \", staleTitle)");
+    }
+
+    [Fact]
+    public void FreeWFieldShortcutSchemaIsStrictAndExplicitlyNonExhaustive()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "field-shortcut-validation.schema.json")));
+        var root = document.RootElement;
+        root.GetProperty("properties").GetProperty("suite").GetProperty("const").GetString()
+            .Should().Be("freew-linux-field-shortcut-physical");
+        root.GetProperty("properties").GetProperty("coverage").GetProperty("properties")
+            .GetProperty("exhaustive").GetProperty("const").GetBoolean().Should().BeFalse();
+        root.GetProperty("properties").GetProperty("results").GetProperty("minItems").GetInt32().Should().Be(4);
+        root.GetProperty("properties").GetProperty("results").GetProperty("maxItems").GetInt32().Should().Be(4);
+        root.GetProperty("properties").GetProperty("results").GetProperty("items")
+            .GetProperty("properties").GetProperty("category").GetProperty("const").GetString()
+            .Should().Be("physical-x11-field-shortcut");
+    }
+
+    [Fact]
     public void ManifestEvidenceSettle_UsesDirectChildMapForLongEvidencePaths()
     {
         if (!OperatingSystem.IsWindows())

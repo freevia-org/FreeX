@@ -10519,18 +10519,11 @@ public sealed class DocumentView : RichTextBox
     private static WpfRun BuildComplexFieldRun(ModelRun run, TextDocument document)
     {
         var field = run.ComplexField!;
-        var display = field.ShowCode
-            ? "{" + field.Instruction.TrimEnd() + " }"
-            : ResolveFieldText(ComplexFieldKindFor(field.Keyword), run.Text, document, _renderFileName);
-        // Word leaves a BIBLIOGRAPHY field's stale result hidden once the generated bibliography
-        // region owns the visible output. Keep the serialized cache for round-trip and F9, but do
-        // not duplicate it in the rendered document.
-        if (!field.ShowCode
-            && string.Equals(field.Keyword, "BIBLIOGRAPHY", StringComparison.Ordinal)
-            && document.Blocks.Any(Citations.IsBibliographyParagraph))
-        {
-            display = string.Empty;
-        }
+        var displayPlan = ComplexFieldDisplayPlanner.Build(
+            field,
+            ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword), run.Text, document, _renderFileName),
+            document);
+        var display = displayPlan.Text;
         var fmt = run.Formatting ?? document.DefaultRun;
         var wpf = new WpfRun(display)
         {
@@ -10542,7 +10535,7 @@ public sealed class DocumentView : RichTextBox
             wpf.FontFamily = new FontFamily(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
-        if (field.ShowCode)
+        if (displayPlan.IsFieldCode)
             wpf.Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80));
         else if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
@@ -10556,21 +10549,6 @@ public sealed class DocumentView : RichTextBox
     /// their <c>w:fldSimple</c> cousins. Unrecognised keywords map to <see cref="RunFieldKind.None"/> so the
     /// field shows its cached result.
     /// </summary>
-    private static RunFieldKind ComplexFieldKindFor(string keyword) => keyword switch
-    {
-        "PAGE" => RunFieldKind.PageNumber,
-        "DATE" => RunFieldKind.Date,
-        "TIME" => RunFieldKind.Time,
-        "FILENAME" => RunFieldKind.FileName,
-        "AUTHOR" => RunFieldKind.Author,
-        "NUMPAGES" => RunFieldKind.NumPages,
-        "TITLE" => RunFieldKind.Title,
-        "SUBJECT" => RunFieldKind.Subject,
-        "KEYWORDS" => RunFieldKind.Keywords,
-        "COMMENTS" => RunFieldKind.DocComments,
-        _ => RunFieldKind.None
-    };
-
     /// <summary>Builds a WPF run rendering a cross-reference field's cached text, tagged for round-trip.</summary>
     private static WpfRun BuildCrossReferenceRun(ModelRun run, TextDocument document)
     {
@@ -10778,7 +10756,7 @@ public sealed class DocumentView : RichTextBox
         // from a bare "PAGE".
         var normalized = " " + instruction.Trim() + " ";
         var field = new ComplexField(normalized);
-        var cached = ResolveFieldText(ComplexFieldKindFor(field.Keyword), string.Empty, _model, CurrentFileName);
+        var cached = ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword), string.Empty, _model, CurrentFileName);
         var run = new ModelRun(cached) { ComplexField = field };
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
     }
@@ -10836,7 +10814,7 @@ public sealed class DocumentView : RichTextBox
                     // live DATE/AUTHOR/… resolver (PAGE/NUMPAGES keep their cached value here).
                     var resolved = ComplexFieldEngine.CanRecompute(cf)
                         ? ComplexFieldEngine.Recompute(_model, b, i)
-                        : ResolveFieldText(ComplexFieldKindFor(cf.Keyword), r.Text, _model, CurrentFileName);
+                        : ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword), r.Text, _model, CurrentFileName);
                     if (resolved.Length > 0)
                         r.Text = resolved;
                 }
