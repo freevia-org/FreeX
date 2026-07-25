@@ -219,6 +219,12 @@ internal static class FreePRibbonText
     public static RibbonText ArrangeGroup { get; } = new("Ribbon_Group_Arrange_Label", "Ribbon_Group_Arrange_KeyTip");
     public static RibbonText ArrangeGroupCommand { get; } = new("Ribbon_Command_ArrangeGroup_Label", "Ribbon_Command_ArrangeGroup_KeyTip");
     public static RibbonText ArrangeUngroupCommand { get; } = new("Ribbon_Command_ArrangeUngroup_Label", "Ribbon_Command_ArrangeUngroup_KeyTip");
+    public static RibbonText ArrangeChangeShapeCommand { get; } = new("Ribbon_Command_ArrangeChangeShape_Label", "Ribbon_Command_ArrangeChangeShape_KeyTip");
+    public static RibbonText ArrangeChangeShapeRectangleCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeRectangle_Label", "Ribbon_Command_ArrangeChangeShapeRectangle_KeyTip");
+    public static RibbonText ArrangeChangeShapeEllipseCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeEllipse_Label", "Ribbon_Command_ArrangeChangeShapeEllipse_KeyTip");
+    public static RibbonText ArrangeChangeShapeTriangleCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeTriangle_Label", "Ribbon_Command_ArrangeChangeShapeTriangle_KeyTip");
+    public static RibbonText ArrangeChangeShapeDiamondCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeDiamond_Label", "Ribbon_Command_ArrangeChangeShapeDiamond_KeyTip");
+    public static RibbonText ArrangeChangeShapeRightArrowCommand { get; } = new("Ribbon_Command_ArrangeChangeShapeRightArrow_Label", "Ribbon_Command_ArrangeChangeShapeRightArrow_KeyTip");
     public static RibbonText ArrangeEditPointsCommand { get; } = new("Ribbon_Command_ArrangeEditPoints_Label", "Ribbon_Command_ArrangeEditPoints_KeyTip");
     public static RibbonText ArrangeBringToFrontCommand { get; } = new("Ribbon_Command_ArrangeBringToFront_Label", "Ribbon_Command_ArrangeBringToFront_KeyTip");
     public static RibbonText ArrangeBringForwardCommand { get; } = new("Ribbon_Command_ArrangeBringForward_Label", "Ribbon_Command_ArrangeBringForward_KeyTip");

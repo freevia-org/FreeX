@@ -85,6 +85,11 @@ public sealed partial class MainWindow : Window
     [
         ("freep.arrange.group", static editor => editor.GroupSelectedShapes()),
         ("freep.arrange.ungroup", static editor => editor.UngroupSelected()),
+        (ShapeChangePlanner.RectangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Rectangle)),
+        (ShapeChangePlanner.EllipseCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Ellipse)),
+        (ShapeChangePlanner.TriangleCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Triangle)),
+        (ShapeChangePlanner.DiamondCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.Diamond)),
+        (ShapeChangePlanner.RightArrowCommandId, static editor => editor.ChangeSelectedAutoShapeKind(DrawingShapeKind.RightArrow)),
         ("freep.arrange.bring-to-front", static editor => editor.BringToFront()),
         ("freep.arrange.bring-forward", static editor => editor.BringForward()),
         ("freep.arrange.send-backward", static editor => editor.SendBackward()),

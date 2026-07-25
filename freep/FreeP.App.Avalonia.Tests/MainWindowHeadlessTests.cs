@@ -832,6 +832,11 @@ public sealed class MainWindowHeadlessTests
         ids.Should().Contain([
             "freep.arrange.group",
             "freep.arrange.ungroup",
+            "freep.arrange.change-shape.rectangle",
+            "freep.arrange.change-shape.ellipse",
+            "freep.arrange.change-shape.triangle",
+            "freep.arrange.change-shape.diamond",
+            "freep.arrange.change-shape.right-arrow",
             "freep.arrange.edit-points",
             "freep.arrange.bring-to-front",
             "freep.arrange.bring-forward",
@@ -5968,6 +5973,11 @@ public sealed class MainWindowHeadlessTests
     [Theory]
     [InlineData("freep.arrange.group")]
     [InlineData("freep.arrange.ungroup")]
+    [InlineData("freep.arrange.change-shape.rectangle")]
+    [InlineData("freep.arrange.change-shape.ellipse")]
+    [InlineData("freep.arrange.change-shape.triangle")]
+    [InlineData("freep.arrange.change-shape.diamond")]
+    [InlineData("freep.arrange.change-shape.right-arrow")]
     [InlineData("freep.arrange.edit-points")]
     [InlineData("freep.arrange.bring-to-front")]
     [InlineData("freep.arrange.bring-forward")]

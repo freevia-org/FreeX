@@ -670,6 +670,82 @@ public sealed class AddShapeCommand : IPresentationCommand
 }
 
 /// <summary>
+/// Changes one AutoShape's preset geometry while preserving its authored frame, text, and style.
+/// The old preset guides/custom paths are captured so the operation is a single undoable edit.
+/// </summary>
+public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly DrawingShapeKind _newKind;
+    private DrawingShapeKind _oldKind;
+    private Dictionary<string, double>? _oldAdjustments;
+    private List<CustomGeometryPath>? _oldCustomGeometry;
+
+    public ChangeAutoShapeKindCommand(int slideIndex, uint shapeId, DrawingShapeKind newKind)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newKind = newKind;
+    }
+
+    public string Label => "Change Shape";
+
+    public bool HasEffect(Presentation presentation) =>
+        ShapeHelper.Find(presentation, _slideIndex, _shapeId) is
+        { Kind: SlideShapeKind.AutoShape } shape &&
+        shape.AutoShapeKind != _newKind;
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape is not { Kind: SlideShapeKind.AutoShape })
+            return;
+
+        _oldKind = shape.AutoShapeKind;
+        _oldAdjustments = new Dictionary<string, double>(shape.PresetGeometryAdjustments,
+            StringComparer.OrdinalIgnoreCase);
+        _oldCustomGeometry = CloneCustomGeometry(shape.CustomGeometry);
+        shape.AutoShapeKind = _newKind;
+        shape.PresetGeometryAdjustments.Clear();
+        shape.CustomGeometry.Clear();
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape is not { Kind: SlideShapeKind.AutoShape })
+            return;
+
+        shape.AutoShapeKind = _oldKind;
+        shape.PresetGeometryAdjustments.Clear();
+        if (_oldAdjustments is not null)
+        {
+            foreach (var pair in _oldAdjustments)
+                shape.PresetGeometryAdjustments[pair.Key] = pair.Value;
+        }
+
+        shape.CustomGeometry.Clear();
+        if (_oldCustomGeometry is not null)
+            shape.CustomGeometry.AddRange(CloneCustomGeometry(_oldCustomGeometry));
+    }
+
+    private static List<CustomGeometryPath> CloneCustomGeometry(IEnumerable<CustomGeometryPath> paths) =>
+        paths.Select(path =>
+        {
+            var copy = new CustomGeometryPath
+            {
+                PathW = path.PathW,
+                PathH = path.PathH,
+                Fill = path.Fill,
+                Stroke = path.Stroke,
+            };
+            copy.Segments.AddRange(path.Segments);
+            return copy;
+        }).ToList();
+}
+
+/// <summary>
 /// Replaces one SmartArt graphic with ordinary slide shapes at the same z-order position.
 /// This is the model-side operation behind PowerPoint's Convert to Shapes command.
 /// </summary>

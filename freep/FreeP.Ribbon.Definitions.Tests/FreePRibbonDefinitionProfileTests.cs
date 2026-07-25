@@ -117,6 +117,8 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(wpf, "freep.delete-slide").Label,
                 RequiredControl(wpf, "freep.layout").Label,
                 RequiredControl(wpf, "freep.layout").KeyTip!,
+                RequiredControl(wpf, "freep.arrange.change-shape").Label,
+                RequiredControl(wpf, "freep.arrange.change-shape").KeyTip!,
                 RequiredGroup(wpf, "home", "clipboard").Header,
                 RequiredGroup(wpf, "home", "clipboard").KeyTip!,
                 RequiredControl(wpf, "freep.paste").Label,

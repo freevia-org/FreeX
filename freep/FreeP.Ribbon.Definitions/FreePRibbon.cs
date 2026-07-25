@@ -236,6 +236,9 @@ public static class FreePRibbon
             FreePRibbonText.ArrangeGroupCommand.KeyTip);
         group.Medium("freep.arrange.ungroup", FreePRibbonText.ArrangeUngroupCommand.Label, RibbonCommandIconKind.Ungroup,
             FreePRibbonText.ArrangeUngroupCommand.KeyTip);
+        group.Medium(ShapeChangePlanner.MenuCommandId, FreePRibbonText.ArrangeChangeShapeCommand.Label,
+            RibbonCommandIconKind.RibbonShape, FreePRibbonText.ArrangeChangeShapeCommand.KeyTip,
+            dropdown: true, menu: BuildChangeShapeMenu);
         group.IconToggle("freep.arrange.edit-points", FreePRibbonText.ArrangeEditPointsCommand.Label,
             RibbonCommandIconKind.Diamond, FreePRibbonText.ArrangeEditPointsCommand.KeyTip);
         group.Separator();
@@ -265,6 +268,25 @@ public static class FreePRibbon
             RibbonCommandIconKind.AlignCenter, FreePRibbonText.ArrangeDistributeHorizontalCommand.KeyTip);
         group.Medium("freep.arrange.distribute-v", FreePRibbonText.ArrangeDistributeVerticalCommand.Label,
             RibbonCommandIconKind.Align, FreePRibbonText.ArrangeDistributeVerticalCommand.KeyTip);
+    }
+
+    private static void BuildChangeShapeMenu(RibbonMenuBuilder menu)
+    {
+        menu.Item(ShapeChangePlanner.RectangleCommandId,
+            FreePRibbonText.ArrangeChangeShapeRectangleCommand.Label,
+            FreePRibbonText.ArrangeChangeShapeRectangleCommand.KeyTip);
+        menu.Item(ShapeChangePlanner.EllipseCommandId,
+            FreePRibbonText.ArrangeChangeShapeEllipseCommand.Label,
+            FreePRibbonText.ArrangeChangeShapeEllipseCommand.KeyTip);
+        menu.Item(ShapeChangePlanner.TriangleCommandId,
+            FreePRibbonText.ArrangeChangeShapeTriangleCommand.Label,
+            FreePRibbonText.ArrangeChangeShapeTriangleCommand.KeyTip);
+        menu.Item(ShapeChangePlanner.DiamondCommandId,
+            FreePRibbonText.ArrangeChangeShapeDiamondCommand.Label,
+            FreePRibbonText.ArrangeChangeShapeDiamondCommand.KeyTip);
+        menu.Item(ShapeChangePlanner.RightArrowCommandId,
+            FreePRibbonText.ArrangeChangeShapeRightArrowCommand.Label,
+            FreePRibbonText.ArrangeChangeShapeRightArrowCommand.KeyTip);
     }
 
     private static void AddInsertGroups(RibbonTabBuilder tab)

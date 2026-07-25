@@ -540,6 +540,12 @@ internal static class FreePRibbonCommands
         registry.Register("freep.arrange.ungroup",
             new ActionRibbonCommand(() => editor.UngroupSelected()));
 
+        foreach (var (commandId, kind) in ShapeChangePlanner.Presets)
+        {
+            registry.Register(commandId,
+                new ActionRibbonCommand(() => editor.ChangeSelectedAutoShapeKind(kind)));
+        }
+
         registry.Register("freep.arrange.edit-points",
             new EditorToggleCommand(stateStore, "freep.arrange.edit-points",
                 () => onEditPoints?.Invoke(), initialChecked: true));

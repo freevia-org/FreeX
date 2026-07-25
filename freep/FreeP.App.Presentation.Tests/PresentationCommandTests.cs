@@ -195,6 +195,35 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void ChangeAutoShapeKindCommand_PreservesFrameAndRestoresGeometryOnUndo()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        shape.AutoShapeKind = DrawingShapeKind.RoundedRectangle;
+        shape.PresetGeometryAdjustments["adj"] = 24000;
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, 0, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 100, 100));
+        shape.CustomGeometry.Add(path);
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new ChangeAutoShapeKindCommand(0, shape.Id, DrawingShapeKind.Diamond));
+
+        shape.AutoShapeKind.Should().Be(DrawingShapeKind.Diamond);
+        shape.OffsetXEmu.Should().Be(100);
+        shape.ExtentCyEmu.Should().Be(400);
+        shape.PresetGeometryAdjustments.Should().BeEmpty();
+        shape.CustomGeometry.Should().BeEmpty();
+
+        bus.Undo();
+
+        shape.AutoShapeKind.Should().Be(DrawingShapeKind.RoundedRectangle);
+        shape.PresetGeometryAdjustments["adj"].Should().Be(24000);
+        shape.CustomGeometry.Should().HaveCount(1);
+        shape.CustomGeometry[0].Segments.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void DeleteShapeCommand_Apply_RemovesShape()
     {
         var (p, bus) = Make();

@@ -2568,6 +2568,23 @@ public sealed class EditingSession
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Changes the selected AutoShape's preset geometry while retaining its authored frame,
+    /// text, formatting, and effects. The geometry transition is one undoable operation.
+    /// </summary>
+    public bool ChangeSelectedAutoShapeKind(DrawingShapeKind kind)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count != 1)
+            return false;
+
+        var shape = CurrentSlide.Shapes.FirstOrDefault(candidate => candidate.Id == _selectedShapeIds[0]);
+        if (shape is not { Kind: SlideShapeKind.AutoShape } || shape.AutoShapeKind == kind)
+            return false;
+
+        Bus.Execute(new ChangeAutoShapeKindCommand(_currentSlideIndex, shape.Id, kind));
+        return shape.AutoShapeKind == kind;
+    }
+
     // ── Align ─────────────────────────────────────────────────────────────────────
 
     /// <summary>Aligns selected shapes' left edges. One undo step.</summary>

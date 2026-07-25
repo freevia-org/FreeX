@@ -331,6 +331,28 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_ChangeShape_RoutesThroughSharedEditingSession()
+    {
+        var (ed, pres) = MakeSession();
+        var shape = new SlideShape
+        {
+            Id = 501,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 2 * DrawingMlCoordinateUnits.EmuPerInch,
+            ExtentCyEmu = DrawingMlCoordinateUnits.EmuPerInch,
+        };
+        pres.Slides[0].Shapes.Add(shape);
+        ed.Select(shape.Id);
+
+        Exec(MakeRegistry(ed), ShapeChangePlanner.EllipseCommandId);
+
+        Assert.Equal(DrawingShapeKind.Ellipse, shape.AutoShapeKind);
+        ed.Undo();
+        Assert.Equal(DrawingShapeKind.Rectangle, shape.AutoShapeKind);
+    }
+
+    [Fact]
     public void Cmd_Paste_WithNoClipboard_IsNoOp()
     {
         var (ed, pres) = MakeSession();

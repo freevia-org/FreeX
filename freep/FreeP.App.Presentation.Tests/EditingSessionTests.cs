@@ -274,6 +274,28 @@ public sealed class EditingSessionTests
         sess.SelectedShapeIds.Should().BeEmpty();
     }
 
+    [Fact]
+    public void ChangeSelectedAutoShapeKind_IsUndoableAndRetainsTextAndFrame()
+    {
+        var sess = Make();
+        var shape = MakeShape(1);
+        shape.AutoShapeKind = DrawingShapeKind.Rectangle;
+        shape.TextBody = new TextBody();
+        shape.TextBody.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "Keep me" } } });
+        sess.CurrentSlide!.Shapes.Add(shape);
+        sess.Select(shape.Id);
+
+        sess.ChangeSelectedAutoShapeKind(DrawingShapeKind.Ellipse).Should().BeTrue();
+        shape.AutoShapeKind.Should().Be(DrawingShapeKind.Ellipse);
+        shape.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Keep me");
+        shape.ExtentCxEmu.Should().Be(100);
+
+        sess.Undo();
+        shape.AutoShapeKind.Should().Be(DrawingShapeKind.Rectangle);
+        sess.Redo();
+        shape.AutoShapeKind.Should().Be(DrawingShapeKind.Ellipse);
+    }
+
     // ── Undo/redo through session ─────────────────────────────────────────────────
 
     [Fact]
