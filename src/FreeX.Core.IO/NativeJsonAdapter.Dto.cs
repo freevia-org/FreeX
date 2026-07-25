@@ -49,6 +49,10 @@ public sealed partial class NativeJsonAdapter
         public bool IterativeCalculation { get; set; }
         public int? MaxCalculationIterations { get; set; }
         public double? MaxCalculationChange { get; set; }
+        // R90-io-workbook-calc-settings-5-1: precision-as-displayed (File > Options > Advanced >
+        // "Set precision as displayed", calcPr/@fullPrecision on the XLSX side). Default true matches
+        // Workbook.FullPrecision's default so an omitted/older .fxl still loads as "full precision".
+        public bool FullPrecision { get; set; } = true;
         public List<string> DisabledFormulaErrorCodes { get; set; } = [];
         public List<NamedRangeDto> NamedRanges { get; set; } = [];
         public List<CustomViewDto> CustomViews { get; set; } = [];

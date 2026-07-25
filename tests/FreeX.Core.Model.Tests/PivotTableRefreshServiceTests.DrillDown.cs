@@ -17,7 +17,11 @@ public sealed partial class PivotTableRefreshServiceTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
-            TargetRange = Range(sheet, "E2", "I10")
+            TargetRange = Range(sheet, "E2", "I10"),
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Tabular/no-subtotal defaults this
+            // drill-down cell-address test was written against.
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -118,7 +122,11 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "H10"),
-            ShowSubtotals = true
+            ShowSubtotals = true,
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Bottom/Tabular defaults this
+            // drill-down cell-address test was written against.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -146,7 +154,11 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "H10"),
-            RepeatItemLabels = false
+            RepeatItemLabels = false,
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Tabular/no-subtotal defaults this
+            // drill-down cell-address test was written against.
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -172,7 +184,10 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "H10"),
-            ReportLayout = PivotReportLayout.Compact
+            ReportLayout = PivotReportLayout.Compact,
+            // R90-render-pivot-layout-5-1: pin the (former) no-subtotal default -- this test is about
+            // the compact collapsed-row-label drill-down mapping, not subtotals.
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));

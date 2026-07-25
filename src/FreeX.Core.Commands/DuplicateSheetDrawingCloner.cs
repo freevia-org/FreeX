@@ -210,6 +210,15 @@ internal static class DuplicateSheetDrawingCloner
             OutlineDash = shape.OutlineDash,
             HeadArrowhead = shape.HeadArrowhead,
             TailArrowhead = shape.TailArrowhead,
+            // R90-shape-5-3: carry the connector's shape-attachment endpoints (stCxn/endCxn) into the
+            // clone too -- otherwise duplicating a sheet containing a connector attached to another
+            // shape silently drops that attachment, since the clone is marked NOT source-loaded (see
+            // IsSourceLoaded above) and goes through the regenerated-element writer path, which only
+            // emits what this model carries.
+            StartConnectedShapeId = shape.StartConnectedShapeId,
+            StartConnectedShapeConnectionIndex = shape.StartConnectedShapeConnectionIndex,
+            EndConnectedShapeId = shape.EndConnectedShapeId,
+            EndConnectedShapeConnectionIndex = shape.EndConnectedShapeConnectionIndex,
             IsWordArt = shape.IsWordArt,
             WarpPreset = shape.WarpPreset,
             ShapeTextGradientEndColor = shape.ShapeTextGradientEndColor,

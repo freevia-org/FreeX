@@ -55,10 +55,27 @@ public static class SparklineLayoutPlanner
         ref TConsumer consumer,
         double? overrideMin,
         double? overrideMax)
+        where TConsumer : struct, ISparklineLineLayoutConsumer =>
+        VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax, rightToLeft: false);
+
+    /// <summary>
+    /// Streams a line sparkline's geometry honoring the sparkline group's "Plot Data Right-to-Left"
+    /// option (<see cref="FreeX.Core.Model.SparklineModel.RightToLeft"/>). When
+    /// <paramref name="rightToLeft"/> is true every point's horizontal position is mirrored so the
+    /// first data point lands at the right edge and the last at the left, matching Excel.
+    /// </summary>
+    internal static void VisitLineLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        Rect rect,
+        ref TConsumer consumer,
+        double? overrideMin,
+        double? overrideMax,
+        bool rightToLeft)
         where TConsumer : struct, ISparklineLineLayoutConsumer
     {
         var bridge = new LineConsumerBridge<TConsumer>(consumer);
-        SparklineLayoutEngine.VisitLineLayout(values, ToLayoutRect(rect), ref bridge, overrideMin, overrideMax);
+        SparklineLayoutEngine.VisitLineLayout(
+            values, ToLayoutRect(rect), ref bridge, overrideMin, overrideMax, datePositions: null, rightToLeft);
         consumer = bridge.Inner;
     }
 
@@ -83,10 +100,27 @@ public static class SparklineLayoutPlanner
         bool winLoss,
         ref TConsumer consumer,
         double? overrideMaxAbs)
+        where TConsumer : struct, ISparklineColumnLayoutConsumer =>
+        VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs, rightToLeft: false);
+
+    /// <summary>
+    /// Streams a column/win-loss sparkline's bars honoring the sparkline group's "Plot Data
+    /// Right-to-Left" option (<see cref="FreeX.Core.Model.SparklineModel.RightToLeft"/>). When
+    /// <paramref name="rightToLeft"/> is true each bar's slot is mirrored so the first value's bar
+    /// lands in the rightmost slot and the last in the leftmost, matching Excel.
+    /// </summary>
+    internal static void VisitColumnLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        Rect rect,
+        bool winLoss,
+        ref TConsumer consumer,
+        double? overrideMaxAbs,
+        bool rightToLeft)
         where TConsumer : struct, ISparklineColumnLayoutConsumer
     {
         var bridge = new ColumnConsumerBridge<TConsumer>(consumer);
-        SparklineLayoutEngine.VisitColumnLayout(values, ToLayoutRect(rect), winLoss, ref bridge, overrideMaxAbs);
+        SparklineLayoutEngine.VisitColumnLayout(
+            values, ToLayoutRect(rect), winLoss, ref bridge, overrideMaxAbs, rightToLeft);
         consumer = bridge.Inner;
     }
 
@@ -94,9 +128,10 @@ public static class SparklineLayoutPlanner
         IReadOnlyList<double> values,
         Rect rect,
         double? overrideMin,
-        double? overrideMax)
+        double? overrideMax,
+        bool rightToLeft = false)
     {
-        var enginePoints = SparklineLayoutEngine.GetLinePoints(values, ToLayoutRect(rect), overrideMin, overrideMax);
+        var enginePoints = SparklineLayoutEngine.GetLinePoints(values, ToLayoutRect(rect), overrideMin, overrideMax, rightToLeft);
         if (enginePoints.Count == 0)
             return [];
 

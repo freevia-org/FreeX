@@ -86,12 +86,22 @@ internal static class XlsxStructuredTableModelMapper
         if (style is null)
             return;
 
+        // R90-io-table-style-banding-5-2: snapshot which cells already carry an explicit fill BEFORE
+        // this method paints anything, so the passes below that reflect dynamic table styling
+        // (wholeTable, row/column stripes, firstColumn/lastColumn) can preserve a pre-existing direct
+        // cell fill instead of stomping it — Excel's direct-cell-format-wins-over-table-style
+        // precedence, mirroring the built-in-style path's own keepExistingFill guard
+        // (StructuredTableStyleService.MergeStyleOntoCell). Header/totals rows and their per-corner
+        // overrides intentionally keep taking the style's fill unconditionally, matching the
+        // documented "header/totals rows always take the style fill" contract, so they are excluded.
+        var preserveExistingFill = CaptureExistingFillCells(workbook, sheet, table.Range);
+
         if (FindElementFormat(style, "wholeTable") is { } wholeTableFormat)
-            ApplyStyleDiff(workbook, sheet, table.Range, wholeTableFormat);
+            ApplyStyleDiff(workbook, sheet, table.Range, wholeTableFormat, preserveExistingFill);
 
         var sections = TableStyleSections.From(table);
-        ApplyRowStripeFormats(workbook, sheet, style, sections.DataBody, table.ShowRowStripes);
-        ApplyColumnStripeFormats(workbook, sheet, style, sections.DataBody, table.ShowColumnStripes);
+        ApplyRowStripeFormats(workbook, sheet, style, sections.DataBody, table.ShowRowStripes, preserveExistingFill);
+        ApplyColumnStripeFormats(workbook, sheet, style, sections.DataBody, table.ShowColumnStripes, preserveExistingFill);
 
         if (sections.HeaderRows is { } headerRows && FindElementFormat(style, "headerRow") is { } headerRowFormat)
         {
@@ -105,14 +115,18 @@ internal static class XlsxStructuredTableModelMapper
         if (sections.TotalsRows is { } totalsRows && FindElementFormat(style, "totalRow") is { } totalRowFormat)
             ApplyStyleDiff(workbook, sheet, totalsRows, totalRowFormat);
 
-        if (table.ShowFirstColumn && FindElementFormat(style, "firstColumn") is { } firstColumnFormat)
-            ApplyStyleDiff(workbook, sheet, sections.FirstColumn, firstColumnFormat);
+        if (table.ShowFirstColumn &&
+            sections.FirstColumn is { } firstColumn &&
+            FindElementFormat(style, "firstColumn") is { } firstColumnFormat)
+        {
+            ApplyStyleDiff(workbook, sheet, firstColumn, firstColumnFormat, preserveExistingFill);
+        }
 
         if (table.ShowLastColumn &&
             sections.LastColumn is { } lastColumn &&
             FindElementFormat(style, "lastColumn") is { } lastColumnFormat)
         {
-            ApplyStyleDiff(workbook, sheet, lastColumn, lastColumnFormat);
+            ApplyStyleDiff(workbook, sheet, lastColumn, lastColumnFormat, preserveExistingFill);
         }
 
         if (table.ShowFirstColumn &&
@@ -193,7 +207,8 @@ internal static class XlsxStructuredTableModelMapper
         Sheet sheet,
         StructuredTableStyleModel style,
         GridRange? dataBody,
-        bool enabled)
+        bool enabled,
+        IReadOnlySet<CellAddress>? preserveExistingFill = null)
     {
         if (!enabled || dataBody is null)
             return;
@@ -220,7 +235,8 @@ internal static class XlsxStructuredTableModelMapper
                 new GridRange(
                     new CellAddress(dataBody.Value.Start.Sheet, row, dataBody.Value.Start.Col),
                     new CellAddress(dataBody.Value.Start.Sheet, row, dataBody.Value.End.Col)),
-                format);
+                format,
+                preserveExistingFill);
         }
     }
 
@@ -229,7 +245,8 @@ internal static class XlsxStructuredTableModelMapper
         Sheet sheet,
         StructuredTableStyleModel style,
         GridRange? dataBody,
-        bool enabled)
+        bool enabled,
+        IReadOnlySet<CellAddress>? preserveExistingFill = null)
     {
         if (!enabled || dataBody is null)
             return;
@@ -256,7 +273,8 @@ internal static class XlsxStructuredTableModelMapper
                 new GridRange(
                     new CellAddress(dataBody.Value.Start.Sheet, dataBody.Value.Start.Row, col),
                     new CellAddress(dataBody.Value.Start.Sheet, dataBody.Value.End.Row, col)),
-                format);
+                format,
+                preserveExistingFill);
         }
     }
 
@@ -302,19 +320,46 @@ internal static class XlsxStructuredTableModelMapper
         return null;
     }
 
-    private static void ApplyStyleDiff(Workbook workbook, Sheet sheet, GridRange range, StyleDiff diff)
+    private static void ApplyStyleDiff(
+        Workbook workbook,
+        Sheet sheet,
+        GridRange range,
+        StyleDiff diff,
+        IReadOnlySet<CellAddress>? preserveExistingFill = null)
     {
-        var styleCache = new Dictionary<StyleId, StyleId>();
+        var fullCache = new Dictionary<StyleId, StyleId>();
+        Dictionary<StyleId, StyleId>? guardedCache = null;
+        StyleDiff? fillLessDiff = null;
+
         foreach (var address in range.AllCells())
         {
             var cell = sheet.GetCell(address);
             var baseStyleId = cell?.StyleId ??
                 sheet.GetStyleOnly(address.Row, address.Col) ??
                 StyleId.Default;
-            if (!styleCache.TryGetValue(baseStyleId, out var styleId))
+
+            // A cell that already carried an explicit fill before this table was styled at all keeps
+            // it: direct cell formatting wins over dynamic table styling (see R90-io-table-style-
+            // banding-5-2). Every other property in the diff (font, border, etc.) still applies.
+            var keepExistingFill = preserveExistingFill?.Contains(address) == true;
+            var effectiveDiff = diff;
+            Dictionary<StyleId, StyleId> cache;
+            if (keepExistingFill)
             {
-                styleId = workbook.RegisterStyle(diff.ApplyTo(workbook.GetStyle(baseStyleId)));
-                styleCache[baseStyleId] = styleId;
+                fillLessDiff ??= StripFillOverrides(diff);
+                effectiveDiff = fillLessDiff;
+                guardedCache ??= new Dictionary<StyleId, StyleId>();
+                cache = guardedCache;
+            }
+            else
+            {
+                cache = fullCache;
+            }
+
+            if (!cache.TryGetValue(baseStyleId, out var styleId))
+            {
+                styleId = workbook.RegisterStyle(effectiveDiff.ApplyTo(workbook.GetStyle(baseStyleId)));
+                cache[baseStyleId] = styleId;
             }
 
             if (cell is null)
@@ -324,11 +369,53 @@ internal static class XlsxStructuredTableModelMapper
         }
     }
 
+    /// <summary>
+    /// Returns a copy of <paramref name="diff"/> with every fill-affecting override cleared, so
+    /// applying it leaves a cell's existing fill untouched while still applying its other properties
+    /// (font, border, number format, alignment, etc.).
+    /// </summary>
+    private static StyleDiff StripFillOverrides(StyleDiff diff) => diff with
+    {
+        FillColor = null,
+        FillThemeColor = null,
+        ClearFill = null,
+        FillPatternStyle = null,
+        FillPatternColor = null,
+        FillPatternThemeColor = null,
+        GradientFill = null
+    };
+
+    /// <summary>
+    /// Snapshots which cells in <paramref name="range"/> already carry an explicit fill (flat color,
+    /// theme color, pattern, or gradient) before any table-style pass writes to them.
+    /// </summary>
+    private static HashSet<CellAddress> CaptureExistingFillCells(Workbook workbook, Sheet sheet, GridRange range)
+    {
+        var cells = new HashSet<CellAddress>();
+        foreach (var address in range.AllCells())
+        {
+            var styleId = sheet.GetCell(address)?.StyleId ?? sheet.GetStyleOnly(address.Row, address.Col);
+            if (styleId is null)
+                continue;
+
+            var existingStyle = workbook.GetStyle(styleId.Value);
+            if (existingStyle.FillColor is not null ||
+                existingStyle.FillThemeColor is not null ||
+                existingStyle.FillPatternStyle != CellFillPatternStyle.None ||
+                existingStyle.GradientFill is not null)
+            {
+                cells.Add(address);
+            }
+        }
+
+        return cells;
+    }
+
     private readonly record struct TableStyleSections(
         GridRange? HeaderRows,
         GridRange? DataBody,
         GridRange? TotalsRows,
-        GridRange FirstColumn,
+        GridRange? FirstColumn,
         GridRange? LastColumn,
         GridRange? FirstHeaderCell,
         GridRange? LastHeaderCell,
@@ -369,19 +456,28 @@ internal static class XlsxStructuredTableModelMapper
                     table.Range.End.Row,
                     table.Range.End.Col)
                 : (GridRange?)null;
-            var firstColumn = CreateRange(
-                table,
-                table.Range.Start.Row,
-                table.Range.Start.Col,
-                table.Range.End.Row,
-                table.Range.Start.Col);
-            var hasDistinctLastColumn = table.Range.End.Col != table.Range.Start.Col;
-            var lastColumn = hasDistinctLastColumn
+            // firstColumn/lastColumn govern ONLY the data body rows of that column — the header and
+            // totals corners of the first/last column are governed exclusively by
+            // firstHeaderCell/lastHeaderCell/firstTotalCell/lastTotalCell (falling back to
+            // headerRow/totalRow when a corner element is absent), never by firstColumn/lastColumn.
+            // Scoping these to the full table height (including header/totals rows) would let this
+            // format get applied to those corner cells too, stomping the correct headerRow/totalRow
+            // look when the style doesn't define the per-corner overrides.
+            var firstColumn = dataRange is { } firstColumnDataRange
                 ? CreateRange(
                     table,
-                    table.Range.Start.Row,
+                    firstColumnDataRange.Start.Row,
+                    table.Range.Start.Col,
+                    firstColumnDataRange.End.Row,
+                    table.Range.Start.Col)
+                : (GridRange?)null;
+            var hasDistinctLastColumn = table.Range.End.Col != table.Range.Start.Col;
+            var lastColumn = hasDistinctLastColumn && dataRange is { } lastColumnDataRange
+                ? CreateRange(
+                    table,
+                    lastColumnDataRange.Start.Row,
                     table.Range.End.Col,
-                    table.Range.End.Row,
+                    lastColumnDataRange.End.Row,
                     table.Range.End.Col)
                 : (GridRange?)null;
 

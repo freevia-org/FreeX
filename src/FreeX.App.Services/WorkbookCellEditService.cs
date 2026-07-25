@@ -156,12 +156,27 @@ public sealed class WorkbookCellEditService
         if (TryValidateGoalSeekRequest(workbook, request, out var errorMessage))
             return WorkbookGoalSeekResult.Invalid(request, errorMessage);
 
+        // R90-app-goalseek-whatif-5-2: Goal Seek is documented by Excel as stopping "after
+        // [Maximum Iterations] iterations or when the change is smaller than [Maximum Change]" --
+        // the same workbook-level fields RecalcEngine honors for iterative calculation (see
+        // RecalcEngine's DefaultMaxIterations/DefaultMaxChange fallback below). Route them through
+        // instead of always taking GoalSeekService.Seek's own 1000/1e-6 hardcoded defaults, so a
+        // user-configured File > Options > Formulas setting actually changes Goal Seek's behavior.
+        var maxIterations = workbook.MaxCalculationIterations is int configuredIterations && configuredIterations > 0
+            ? configuredIterations
+            : 1000;
+        var tolerance = workbook.MaxCalculationChange is double configuredChange && configuredChange > 0
+            ? configuredChange
+            : 1e-6;
+
         var seekResult = GoalSeekService.Seek(
             workbook,
             _recalcEngine,
             request.SetCell,
             request.TargetValue,
-            request.ChangingCell);
+            request.ChangingCell,
+            maxIterations,
+            tolerance);
 
         if (!seekResult.Converged)
             return WorkbookGoalSeekResult.NotConverged(request, seekResult);
@@ -299,6 +314,17 @@ public sealed class WorkbookCellEditService
         if (string.IsNullOrEmpty(setSheet.GetCell(request.SetCell)?.FormulaText))
         {
             errorMessage = "Goal Seek set cell must contain a formula.";
+            return true;
+        }
+
+        // R90-app-goalseek-whatif-5-1: Excel refuses to run Goal Seek when the changing cell
+        // itself holds a formula -- it requires a constant there so the search has something it
+        // can freely overwrite. Without this guard, GoalSeekCommand.Apply (via GoalSeekService.Seek
+        // during the search, and again once it applies) unconditionally replaces the changing
+        // cell's content with a bare NumberValue, silently destroying the user's formula.
+        if (!string.IsNullOrEmpty(changingSheet.GetCell(request.ChangingCell)?.FormulaText))
+        {
+            errorMessage = "Goal Seek changing cell must contain a constant value, not a formula.";
             return true;
         }
 

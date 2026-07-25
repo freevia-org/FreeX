@@ -436,7 +436,21 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
         _affectedCells = affected;
         ApplySortStateResult(sheet, BuildSortState(_range, keyColIndexes, leftToRight: false));
+        RebandOwningTableIfAny(ctx.Workbook, sheet);
         return new CommandOutcome(true, AffectedCells: affected);
+    }
+
+    // R90-io-table-style-banding-5-3: real Excel's table banding is purely positional and
+    // continuously re-flows after a sort — the rows just moved, but StructuredTableStyleService's
+    // load-time bake travels WITH each Cell (StyleId included) rather than recomputing, so without
+    // this the alternating fill would reflect the PRE-sort row order instead of the new one.
+    // Every cell this can touch already falls inside _snapshot's capture (the sort range, which is
+    // always contained in the table's own range for a table-scoped sort), so Revert's existing
+    // full-range restore already undoes this call with no extra bookkeeping needed.
+    private void RebandOwningTableIfAny(Workbook workbook, Sheet sheet)
+    {
+        if (_structuredTableIndex >= 0 && _structuredTableIndex < sheet.StructuredTables.Count)
+            StructuredTableStyleService.RebandTable(workbook, sheet, sheet.StructuredTables[_structuredTableIndex]);
     }
 
     private CommandOutcome ApplyLeftToRight(
@@ -557,6 +571,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
         _affectedCells = affected;
         ApplySortStateResult(sheet, BuildSortState(_range, keyRowIndexes, leftToRight: true));
+        RebandOwningTableIfAny(workbook, sheet);
         return new CommandOutcome(true, AffectedCells: affected);
     }
 

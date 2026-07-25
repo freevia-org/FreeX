@@ -13,12 +13,20 @@ public static partial class AccessibilityCheckerService
 
             if (string.IsNullOrWhiteSpace(chart.Title))
             {
-                issues.Add(new AccessibilityIssue(
-                    AccessibilityIssueKind.ChartMissingTitle,
-                    sheet.Id,
-                    sheet.Name,
-                    FormatRange(chart.DataRange),
-                    "Chart is missing a title."));
+                // R90-app-accessibility-checker-5-3: a chart with "Show chart title" turned off has
+                // no visible Title, but the user may have set real Alt Text via Excel's "Edit Alt
+                // Text" pane -- that alt text is exactly what the Accessibility Checker is meant to
+                // find, per ChartModel.AltTextTitle/AltTextDescription's own doc comment. Only flag
+                // MissingTitle when there is no accessible alt text either.
+                if (string.IsNullOrWhiteSpace(chart.AltTextTitle) && string.IsNullOrWhiteSpace(chart.AltTextDescription))
+                {
+                    issues.Add(new AccessibilityIssue(
+                        AccessibilityIssueKind.ChartMissingTitle,
+                        sheet.Id,
+                        sheet.Name,
+                        FormatRange(chart.DataRange),
+                        "Chart is missing a title."));
+                }
                 continue;
             }
 

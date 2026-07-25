@@ -348,15 +348,28 @@ public sealed class WorkbookWindowRegistry
     /// Applies an Arrange All layout to every visible workbook window. Hidden windows are left as-is,
     /// matching Excel's distinction between Hide/Unhide and live window arrangement.
     /// </summary>
+    /// <param name="arrangement">The tiling layout to apply.</param>
+    /// <param name="workAreaWidth">Work-area width to tile within.</param>
+    /// <param name="workAreaHeight">Work-area height to tile within.</param>
+    /// <param name="restrictToDocumentId">
+    /// When non-null, mirrors the Arrange Windows dialog's "Windows of active workbook" checkbox:
+    /// only visible windows viewing this document are tiled, leaving every other open document's
+    /// windows exactly where they are. Null (the default) arranges every visible window across
+    /// every open document, matching the checkbox left unchecked (R90-app-window-arrange-freeze-ui-5-4).
+    /// </param>
     public bool ArrangeVisibleWindows(
         WorkbookWindowArrangement arrangement,
         double workAreaWidth,
-        double workAreaHeight)
+        double workAreaHeight,
+        WorkbookId? restrictToDocumentId = null)
     {
         if (!Enum.IsDefined(arrangement))
             return false;
 
-        var visibleWindows = _windows.Where(w => !_hidden.Contains(w)).ToList();
+        IEnumerable<IWorkbookWindow> candidates = _windows.Where(w => !_hidden.Contains(w));
+        if (restrictToDocumentId is { } documentId)
+            candidates = candidates.Where(w => w.DocumentId == documentId);
+        var visibleWindows = candidates.ToList();
         if (visibleWindows.Count == 0)
             return false;
 
@@ -368,7 +381,13 @@ public sealed class WorkbookWindowRegistry
         if (bounds.Count != visibleWindows.Count)
             return false;
 
-        DisableSideBySide();
+        // An unrestricted Arrange All always breaks any active side-by-side pairing (unchanged
+        // behavior). A restricted one only breaks it if the pair is actually among the windows
+        // being re-tiled -- arranging one workbook's windows must not silently un-pair an unrelated
+        // side-by-side comparison between two OTHER documents.
+        if (restrictToDocumentId is null || visibleWindows.Any(IsSideBySideEndpoint))
+            DisableSideBySide();
+
         for (var index = 0; index < visibleWindows.Count; index++)
         {
             var b = bounds[index];
@@ -401,6 +420,26 @@ public sealed class WorkbookWindowRegistry
 
         _sideBySidePrimary = primary;
         _sideBySidePartner = partner;
+        return true;
+    }
+
+    /// <summary>
+    /// Excel's "Reset Window Position" (View Side by Side group): restores BOTH windows of the
+    /// active side-by-side pair to their original tiled top/bottom (or left/right) halves via
+    /// <see cref="SideBySideLayoutPlanner"/> -- the same geometry <see cref="EnableSideBySide"/>
+    /// applied -- undoing any manual resize/drag made to either window while comparing them.
+    /// Unlike a generic per-window cascade, this never touches a window that is not part of the
+    /// active pair, and does nothing (returning false) when side-by-side is not currently active,
+    /// matching Excel disabling the command outside of View Side by Side.
+    /// </summary>
+    public bool ResetSideBySidePair(double workAreaWidth, double workAreaHeight)
+    {
+        if (_sideBySidePrimary is not { } primary || _sideBySidePartner is not { } partner)
+            return false;
+
+        var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(workAreaWidth, workAreaHeight);
+        primary.TileToWorkArea(new Rect(primaryBounds.X, primaryBounds.Y, primaryBounds.Width, primaryBounds.Height));
+        partner.TileToWorkArea(new Rect(partnerBounds.X, partnerBounds.Y, partnerBounds.Width, partnerBounds.Height));
         return true;
     }
 

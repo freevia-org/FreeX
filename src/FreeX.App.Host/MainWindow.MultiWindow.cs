@@ -103,12 +103,33 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Resolves the sheet id that a newly-adopted secondary window should open on.
-    /// Prefers the currently-visible sheet in an already-registered window OF THE SAME
-    /// document (i.e. the window that triggered "New Window"); falls back to <c>Sheets[0]</c>.
+    /// The window that invoked View &gt; New Window to create this window, if any. Set by
+    /// <see cref="ViewNewWindowBtn_Click"/> on the newly-constructed window before it is shown, so
+    /// <see cref="ResolveAdoptedSheetId"/> can seed the new window from the sheet the user was
+    /// actually looking at (Excel: New Window opens as a copy of the invoking window) instead of
+    /// guessing from registry (registration) order — which picks the wrong sibling once 3+
+    /// windows share a document and are independently navigated to different sheets.
+    /// </summary>
+    private MainWindow? _newWindowSourceHint;
+
+    /// <summary>Records which window invoked View &gt; New Window to create this window (see <see cref="_newWindowSourceHint"/>).</summary>
+    internal void SetNewWindowSourceHint(MainWindow sourceWindow) => _newWindowSourceHint = sourceWindow;
+
+    /// <summary>
+    /// Resolves the sheet id that a newly-adopted secondary window should open on. Prefers the
+    /// invoking window's current sheet (<see cref="_newWindowSourceHint"/>, i.e. the window whose
+    /// View &gt; New Window command actually created this one); falls back to the currently-visible
+    /// sheet in any other already-registered window of the same document; falls back to <c>Sheets[0]</c>.
     /// </summary>
     private SheetId ResolveAdoptedSheetId()
     {
+        if (_newWindowSourceHint is { } source && source.DocumentId == _workbook.Id)
+        {
+            var hintedId = source._currentSheetId;
+            if (_workbook.GetSheet(hintedId) is not null)
+                return hintedId;
+        }
+
         if (_windowRegistry is not null)
         {
             foreach (var win in _windowRegistry.Windows)
@@ -264,6 +285,13 @@ public partial class MainWindow
             _workbookRef,
             _workbookRef.Current,
             _documentState);
+
+        // Record that THIS window invoked New Window, before the new window loads/adopts the
+        // shared workbook, so ResolveAdoptedSheetId opens it on this window's current sheet —
+        // matching Excel, which opens the new window as a copy of the invoking window — rather
+        // than on whichever sibling happens to be first in the registry (R90-app-window-arrange
+        // -freeze-ui-5-2).
+        newWindow.SetNewWindowSourceHint(this);
 
         // Give the secondary window its own autosave timer + recovery snapshot (same wiring
         // App.xaml.cs performs for the primary window and for crash-recovery windows). Autosave
@@ -428,15 +456,15 @@ public partial class MainWindow
 
     private void ViewResetWindowPositionBtn_Click(object sender, RoutedEventArgs e)
     {
+        // Excel: Reset Window Position lives in the View Side by Side group and restores BOTH
+        // windows of the active side-by-side pair back to their tiled top/bottom (or left/right)
+        // halves, undoing any manual resize/drag made while comparing them -- it never touches an
+        // unrelated window and is meaningless without an active pair (R90-app-window-arrange
+        // -freeze-ui-5-3). Previously this cascaded/recentered ONLY the clicked window to an
+        // unrelated 75%-of-work-area rectangle via WindowResetPositionPlanner, ignoring any
+        // side-by-side pairing entirely.
         var workArea = SystemParameters.WorkArea;
-        var index = _windowRegistry?.IndexOf(this) ?? 0;
-        var bounds = WindowResetPositionPlanner.Compute(workArea.Width, workArea.Height, index);
-
-        WindowState = WindowState.Normal;
-        Left = workArea.Left + bounds.Left;
-        Top = workArea.Top + bounds.Top;
-        Width = bounds.Width;
-        Height = bounds.Height;
+        _windowRegistry?.ResetSideBySidePair(workArea.Width, workArea.Height);
         RefreshViewWindowCommandState();
     }
 

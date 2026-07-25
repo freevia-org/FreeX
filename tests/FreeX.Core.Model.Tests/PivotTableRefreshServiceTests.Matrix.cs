@@ -17,7 +17,10 @@ public sealed partial class PivotTableRefreshServiceTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
-            TargetRange = Range(sheet, "E2", "I7")
+            TargetRange = Range(sheet, "E2", "I7"),
+            // R90-render-pivot-layout-5-3: pin the (former) Tabular default -- this test expects the
+            // row field's own name as the header, not the new Compact "Row Labels" default.
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.ColumnFields.Add(new PivotFieldModel(1));
@@ -50,7 +53,8 @@ public sealed partial class PivotTableRefreshServiceTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
-            TargetRange = Range(sheet, "E2", "I7")
+            TargetRange = Range(sheet, "E2", "I7"),
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.ColumnFields.Add(new PivotFieldModel(1));
@@ -194,7 +198,8 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "C3"),
             TargetRange = Range(sheet, "E2", "G7"),
             EmptyValueText = "N/A",
-            ShowItemsWithNoDataOnRows = true
+            ShowItemsWithNoDataOnRows = true,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
@@ -236,7 +241,8 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "C3"),
             TargetRange = Range(sheet, "E2", "I7"),
             EmptyValueText = "N/A",
-            ShowItemsWithNoDataOnRows = true
+            ShowItemsWithNoDataOnRows = true,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.ColumnFields.Add(new PivotFieldModel(1));
@@ -286,7 +292,11 @@ public sealed partial class PivotTableRefreshServiceTests
             TargetRange = Range(sheet, "E2", "H12"),
             EmptyValueText = "N/A",
             ShowItemsWithNoDataOnRows = true,
-            ShowSubtotals = true
+            ShowSubtotals = true,
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Bottom/Tabular defaults this test's
+            // column layout (value column at G) and "Total after group" assertions were written against.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -313,7 +323,11 @@ public sealed partial class PivotTableRefreshServiceTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "D9"),
-            TargetRange = Range(sheet, "F2", "M10")
+            TargetRange = Range(sheet, "F2", "M10"),
+            ReportLayout = PivotReportLayout.Tabular,
+            // R90-render-pivot-layout-5-1: pin the (former) no-subtotal default -- this 2-column-field
+            // test's column layout assumes no subtotal columns.
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.ColumnFields.Add(new PivotFieldModel(1));
@@ -516,7 +530,11 @@ public sealed partial class PivotTableRefreshServiceTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
-            TargetRange = Range(sheet, "E2", "I10")
+            TargetRange = Range(sheet, "E2", "I10"),
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Tabular/no-subtotal defaults this
+            // 2-row-field layout test was written against.
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));

@@ -134,6 +134,46 @@ public static class SparklineLayoutEngine
     }
 
     /// <summary>
+    /// Lays out a line sparkline, deriving the "Plot Data Right-to-Left" option directly from
+    /// <paramref name="sparkline"/> instead of requiring the caller to thread a separate
+    /// <c>rightToLeft</c> argument. This is the recommended entry point for any caller that already
+    /// has the <see cref="SparklineModel"/> in hand: unlike the <c>rightToLeft</c>-parameter overloads
+    /// (which a caller can silently omit and so miss the option), this overload makes it impossible to
+    /// plot a sparkline without honoring its own group setting.
+    /// </summary>
+    public static SparklineLineLayout CalculateLineLayout(
+        SparklineModel sparkline,
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        double? overrideMin = null,
+        double? overrideMax = null,
+        IReadOnlyList<double>? datePositions = null)
+    {
+        ArgumentNullException.ThrowIfNull(sparkline);
+        return CalculateLineLayout(values, rect, overrideMin, overrideMax, datePositions, sparkline.RightToLeft);
+    }
+
+    /// <summary>
+    /// Streams a line sparkline's geometry into <paramref name="consumer"/>, deriving the "Plot Data
+    /// Right-to-Left" option directly from <paramref name="sparkline"/>. See
+    /// <see cref="CalculateLineLayout(SparklineModel, IReadOnlyList{double}, LayoutRect, double?, double?, IReadOnlyList{double}?)"/>
+    /// for why this is the recommended entry point over the <c>rightToLeft</c>-parameter overloads.
+    /// </summary>
+    public static void VisitLineLayout<TConsumer>(
+        SparklineModel sparkline,
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        ref TConsumer consumer,
+        double? overrideMin = null,
+        double? overrideMax = null,
+        IReadOnlyList<double>? datePositions = null)
+        where TConsumer : struct, ISparklineLineLayoutConsumer
+    {
+        ArgumentNullException.ThrowIfNull(sparkline);
+        VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax, datePositions, sparkline.RightToLeft);
+    }
+
+    /// <summary>
     /// Streams a line sparkline's geometry into <paramref name="consumer"/> without allocating a list.
     /// Same math as <see cref="CalculateLineLayout"/>; a renderer can consume points/segments directly.
     /// </summary>
@@ -367,6 +407,25 @@ public static class SparklineLayoutEngine
     }
 
     /// <summary>
+    /// Lays out a column or win/loss sparkline, deriving both its kind and its "Plot Data
+    /// Right-to-Left" option directly from <paramref name="sparkline"/> instead of requiring the
+    /// caller to thread separate <c>winLoss</c>/<c>rightToLeft</c> arguments. This is the recommended
+    /// entry point for any caller that already has the <see cref="SparklineModel"/> in hand: unlike the
+    /// <c>rightToLeft</c>-parameter overloads (which a caller can silently omit and so miss the
+    /// option), this overload makes it impossible to plot a sparkline without honoring its own group
+    /// setting.
+    /// </summary>
+    public static SparklineColumnLayout CalculateColumnLayout(
+        SparklineModel sparkline,
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        double? overrideMaxAbs = null)
+    {
+        ArgumentNullException.ThrowIfNull(sparkline);
+        return CalculateColumnLayout(values, rect, sparkline.Kind == SparklineKind.WinLoss, overrideMaxAbs, sparkline.RightToLeft);
+    }
+
+    /// <summary>
     /// Streams a column / win-loss sparkline's bar geometry into <paramref name="consumer"/> without
     /// allocating a list. Same math as <see cref="CalculateColumnLayout(IReadOnlyList{double}, LayoutRect, bool)"/>.
     /// </summary>
@@ -377,6 +436,24 @@ public static class SparklineLayoutEngine
         ref TConsumer consumer)
         where TConsumer : struct, ISparklineColumnLayoutConsumer =>
         VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs: null);
+
+    /// <summary>
+    /// Streams a column / win-loss sparkline's bar geometry into <paramref name="consumer"/>, deriving
+    /// both its kind and its "Plot Data Right-to-Left" option directly from <paramref name="sparkline"/>.
+    /// See <see cref="CalculateColumnLayout(SparklineModel, IReadOnlyList{double}, LayoutRect, double?)"/>
+    /// for why this is the recommended entry point over the <c>rightToLeft</c>-parameter overloads.
+    /// </summary>
+    public static void VisitColumnLayout<TConsumer>(
+        SparklineModel sparkline,
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        ref TConsumer consumer,
+        double? overrideMaxAbs = null)
+        where TConsumer : struct, ISparklineColumnLayoutConsumer
+    {
+        ArgumentNullException.ThrowIfNull(sparkline);
+        VisitColumnLayout(values, rect, sparkline.Kind == SparklineKind.WinLoss, ref consumer, overrideMaxAbs, sparkline.RightToLeft);
+    }
 
     /// <summary>
     /// Streams a column / win-loss sparkline's bar geometry into <paramref name="consumer"/> with an

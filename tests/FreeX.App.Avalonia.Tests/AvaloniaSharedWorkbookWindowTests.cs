@@ -26,8 +26,8 @@ public sealed class AvaloniaSharedWorkbookWindowTests
             {
                 first.Session.Workbook.Should().BeSameAs(second.Session.Workbook);
                 first.Session.Should().NotBeSameAs(second.Session);
-                first.Title.Should().Be($"{first.Session.DisplayName} - 1 - FreeX");
-                second.Title.Should().Be($"{second.Session.DisplayName} - 2 - FreeX");
+                first.Title.Should().Be($"{first.Session.DisplayName}:1 - FreeX");
+                second.Title.Should().Be($"{second.Session.DisplayName}:2 - FreeX");
                 first.Session.DataValidationPromptResolver
                     .Should().NotBeSameAs(second.Session.DataValidationPromptResolver);
 
@@ -51,7 +51,7 @@ public sealed class AvaloniaSharedWorkbookWindowTests
                     .Should().Be(new TextValue("shared edit"));
                 second.Session.ActiveCell.Should().Be(secondCell);
                 second.Session.ViewportOrigin.Should().Be((30u, 7u));
-                second.Title.Should().Be($"{second.Session.DisplayName} - 2 * - FreeX");
+                second.Title.Should().Be($"{second.Session.DisplayName}:2 * - FreeX");
             }
             finally
             {
@@ -120,17 +120,17 @@ public sealed class AvaloniaSharedWorkbookWindowTests
                 var savePath = Path.Combine(Path.GetTempPath(), "AvaloniaSharedSavePoint.xlsx");
                 first.Session.MarkSaved(savePath);
 
-                first.Title.Should().Be($"{first.Session.DisplayName} - 1 - FreeX");
-                second.Title.Should().Be($"{second.Session.DisplayName} - 2 - FreeX");
+                first.Title.Should().Be($"{first.Session.DisplayName}:1 - FreeX");
+                second.Title.Should().Be($"{second.Session.DisplayName}:2 - FreeX");
 
                 first.Session.CommitCellText("dirty after save").Success.Should().BeTrue();
-                second.Title.Should().Be($"{second.Session.DisplayName} - 2 * - FreeX");
+                second.Title.Should().Be($"{second.Session.DisplayName}:2 * - FreeX");
 
                 first.Session.UndoLastEdit().Success.Should().BeTrue();
 
                 first.Session.IsDirty.Should().BeFalse();
                 second.Session.IsDirty.Should().BeFalse();
-                second.Title.Should().Be($"{second.Session.DisplayName} - 2 - FreeX");
+                second.Title.Should().Be($"{second.Session.DisplayName}:2 - FreeX");
             }
             finally
             {

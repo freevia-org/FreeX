@@ -170,6 +170,17 @@ public static class AccessibilityIssueClassification
             "AccessibilityChecker_HowDuplicateTableHeader",
             "Give each table column a unique header."),
 
+        // R90-app-accessibility-checker-5-1: previously fell through to the generic "Other
+        // accessibility issues" default arm below, which mis-bucketed it as a Tip and showed
+        // boilerplate guidance instead of a dedicated heading.
+        AccessibilityIssueKind.BlankRowOrColumnInTable => new(
+            AccessibilitySeverity.Warning,
+            "AccessibilityChecker_GroupBlankTableRowOrColumn", "Blank rows or columns in a table",
+            "AccessibilityChecker_WhyBlankTableRowOrColumn",
+            "A screen reader can interpret a fully blank row or column as the end of the table.",
+            "AccessibilityChecker_HowBlankTableRowOrColumn",
+            "Remove the blank row or column, or fill it with data."),
+
         // ---- Tips: accessible content that could be better organized -----------------------------
         AccessibilityIssueKind.DefaultWorksheetName => new(
             AccessibilitySeverity.Tip,

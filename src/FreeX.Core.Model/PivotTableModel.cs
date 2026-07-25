@@ -99,8 +99,11 @@ public sealed class PivotTableModel
     public int FirstHeaderRow { get; set; } = 1;
     public int FirstDataRow { get; set; } = 1;
     public int FirstDataColumn { get; set; } = 1;
-    public bool ShowSubtotals { get; set; }
-    public PivotSubtotalPlacement SubtotalPlacement { get; set; } = PivotSubtotalPlacement.Bottom;
+    // R90-render-pivot-layout-5-1: Excel's own PivotTable defaults (and CT_pivotField's
+    // defaultSubtotal/subtotalTop schema defaults, both true) are subtotals ON, placed at the TOP of
+    // each group -- a freshly created pivot must match that, not render with subtotals off entirely.
+    public bool ShowSubtotals { get; set; } = true;
+    public PivotSubtotalPlacement SubtotalPlacement { get; set; } = PivotSubtotalPlacement.Top;
     public bool ShowGrandTotals
     {
         get => _showRowGrandTotals || _showColumnGrandTotals;
@@ -122,7 +125,10 @@ public sealed class PivotTableModel
     }
     public bool RepeatItemLabels { get; set; } = true;
     public bool BlankLineAfterItems { get; set; }
-    public PivotReportLayout ReportLayout { get; set; } = PivotReportLayout.Tabular;
+    // R90-render-pivot-layout-5-3: Excel's out-of-the-box default report layout is Compact Form (CT_
+    // pivotTableDefinition's compact attribute defaults to true), not Tabular -- a freshly created
+    // pivot must match that.
+    public PivotReportLayout ReportLayout { get; set; } = PivotReportLayout.Compact;
     public int CompactRowLabelIndent { get; set; } = 1;
     public string StyleName { get; set; } = "PivotStyleLight16";
     public bool ShowRowHeaders { get; set; } = true;

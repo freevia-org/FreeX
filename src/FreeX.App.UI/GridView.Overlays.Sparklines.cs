@@ -242,7 +242,7 @@ public partial class GridView
         Dictionary<CellColor, SolidColorBrush>? brushCache)
     {
         var consumer = new LineSparklineDrawingConsumer(dc, linePen);
-        SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax);
+        SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax, sparkline.RightToLeft);
 
         // Draw markers (line sparklines only).
         if (sparkline.ShowMarkers    || sparkline.ShowHighPoint   || sparkline.ShowLowPoint  ||
@@ -264,7 +264,7 @@ public partial class GridView
         if (values.Count == 0)
             return;
 
-        var points = SparklineLayoutPlanner.GetLinePoints(values, rect, overrideMin, overrideMax);
+        var points = SparklineLayoutPlanner.GetLinePoints(values, rect, overrideMin, overrideMax, sparkline.RightToLeft);
         if (points.Count == 0)
             return;
 
@@ -329,6 +329,7 @@ public partial class GridView
 
     private static void DrawColumnSparkline(
         DrawingContext dc,
+        SparklineModel sparkline,
         IReadOnlyList<double> values,
         Rect rect,
         bool winLoss,
@@ -337,7 +338,7 @@ public partial class GridView
         double? overrideMaxAbs)
     {
         var consumer = new ColumnSparklineDrawingConsumer(dc, positiveFill, negativeFill);
-        SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs);
+        SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs, sparkline.RightToLeft);
     }
 
     // ── Consumers (zero-allocation streaming) ─────────────────────────────────
@@ -459,7 +460,7 @@ public partial class GridView
             else
             {
                 DrawColumnSparkline(
-                    dc, values, rect,
+                    dc, sparkline, values, rect,
                     sparkline.Kind == SparklineKind.WinLoss,
                     BrushForCellColor(seriesColor,   _brushCache),
                     BrushForCellColor(negativeColor, _brushCache),
@@ -567,7 +568,7 @@ public partial class GridView
         else
         {
             DrawColumnSparkline(
-                dc, values, rect,
+                dc, sparkline, values, rect,
                 sparkline.Kind == SparklineKind.WinLoss,
                 BrushForCellColor(seriesColor,   brushCache),
                 BrushForCellColor(negativeColor, brushCache),

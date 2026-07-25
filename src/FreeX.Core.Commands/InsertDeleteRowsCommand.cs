@@ -193,7 +193,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         // bumps every existing formula's cell-reference rows >= _beforeRow by _count regardless of
         // which cell holds them, so a same-row reference we write here (already targeting its final
         // post-insert row) would be incorrectly re-shifted again if written any earlier.
-        _tableCalculatedColumnFillSnapshot = FillGrownCalculatedColumnsForInsertedRows(sheet);
+        _tableCalculatedColumnFillSnapshot = FillGrownCalculatedColumnsForInsertedRows(ctx.Workbook, sheet);
 
         return new CommandOutcome(
             true,
@@ -213,7 +213,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     // body, which excludes the header and any shown totals row) is touched. Mirrors
     // ResizeStructuredTableCommand.FillGrownCalculatedColumns's formula-anchoring convention: each
     // row's formula is row-shifted from the table's first data-body row, never written verbatim.
-    private List<(CellAddress Address, Cell? OldCell)> FillGrownCalculatedColumnsForInsertedRows(Sheet sheet)
+    private List<(CellAddress Address, Cell? OldCell)> FillGrownCalculatedColumnsForInsertedRows(Workbook workbook, Sheet sheet)
     {
         var filled = new List<(CellAddress Address, Cell? OldCell)>();
         if (_addressStateSnapshot is null)
@@ -239,6 +239,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             if (fillEndRow < fillStartRow)
                 continue;
 
+            var calculatedColumns = new HashSet<uint>();
             for (var columnIndex = 0; columnIndex < resizedTable.Columns.Count; columnIndex++)
             {
                 var formula = resizedTable.Columns[columnIndex].CalculatedColumnFormula;
@@ -246,6 +247,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
                     continue;
 
                 var col = resizedTable.Range.Start.Col + (uint)columnIndex;
+                calculatedColumns.Add(col);
                 for (var row = fillStartRow; row <= fillEndRow; row++)
                 {
                     var address = new CellAddress(sheet.Id, row, col);
@@ -254,6 +256,32 @@ public sealed class InsertRowsCommand : IWorkbookCommand
                     sheet.SetCell(address, Cell.FromFormula(shiftedFormula));
                 }
             }
+
+            // R90-io-table-style-banding-5-3: capture the pre-reband state of every OTHER
+            // (non-calculated-column) cell in the newly-inserted row window before RebandTable
+            // below paints its stripe fill onto them -- these cells have no other undo coverage
+            // (they didn't exist pre-insert, so _movedSnapshot never captured them, and the
+            // calculated-column snapshot just above only covers calculated-column addresses).
+            // Calculated-column cells are deliberately excluded here since their pre-fill state
+            // (always null, captured above) already fully covers whatever reband does to the same
+            // address -- capturing them twice would let this second, later entry's stale "after
+            // fill, before reband" cell state win on Revert instead of the true original null.
+            for (var row = fillStartRow; row <= fillEndRow; row++)
+            {
+                for (var col = resizedTable.Range.Start.Col; col <= resizedTable.Range.End.Col; col++)
+                {
+                    if (calculatedColumns.Contains(col))
+                        continue;
+                    var address = new CellAddress(sheet.Id, row, col);
+                    filled.Add((address, sheet.GetCell(address)?.Clone()));
+                }
+            }
+
+            // Real Excel's table banding is purely positional and reflows immediately after any
+            // row insert; StructuredTableStyleService's load-time bake otherwise leaves the new
+            // row unstriped and every row below it out of parity. Recompute now that the row
+            // shift + calculated-column fill above are both done.
+            StructuredTableStyleService.RebandTable(workbook, sheet, resizedTable);
         }
 
         return filled;

@@ -52,7 +52,12 @@ internal sealed record XlsxPicturePackagePart(
     // Icons/SVG" pictures keep a PNG raster in ImageBytes/ContentType as the universal fallback AND
     // this vector original so the picture stays editable as a shape/recolorable in Excel's "Graphics
     // Format" tab). Null for every ordinary raster picture. See ReadPictureSvgBlipRelationshipId.
-    byte[]? SvgImageBytes = null);
+    byte[]? SvgImageBytes = null,
+    // R90-app-accessibility-checker-5-2: true when this picture's <xdr:cNvPr><a:extLst> carries the
+    // "Mark as decorative" extension (see XlsxWorksheetDrawingParts.ReadNonVisualDecorative). Must
+    // round-trip on save (XlsxWorksheetDrawingObjectWriter) or a decorative picture would incorrectly
+    // become a real Missing-Alt-Text finding (in FreeX and in real Excel) after opening and resaving.
+    bool IsDecorative = false);
 
 internal sealed record XlsxTextBoxPackagePart(
     string Text,
@@ -117,6 +122,20 @@ internal sealed record XlsxShapePackagePart(
     DrawingArrowhead? HeadArrowhead,
     /// <summary>Arrowhead at the end of a line/connector, from &lt;a:tailEnd&gt;; null = none.</summary>
     DrawingArrowhead? TailArrowhead,
+    /// <summary>
+    /// R90-shape-5-3: id of the shape a connector's start point is glued to, from
+    /// &lt;a:stCxn id="..." idx="..."/&gt; under &lt;xdr:cNvCxnSpPr&gt;; null = unattached.
+    /// </summary>
+    int? StartConnectedShapeId,
+    /// <summary>Connection-site index on <see cref="StartConnectedShapeId"/>; null when unattached.</summary>
+    int? StartConnectedShapeConnectionIndex,
+    /// <summary>
+    /// R90-shape-5-3: id of the shape a connector's end point is glued to, from
+    /// &lt;a:endCxn id="..." idx="..."/&gt; under &lt;xdr:cNvCxnSpPr&gt;; null = unattached.
+    /// </summary>
+    int? EndConnectedShapeId,
+    /// <summary>Connection-site index on <see cref="EndConnectedShapeId"/>; null when unattached.</summary>
+    int? EndConnectedShapeConnectionIndex,
     // ── txBody text fields (null/empty = no text) ─────────────────────────
     /// <summary>Concatenated plain text from all &lt;a:t&gt; runs; null when there is no txBody.</summary>
     string? ShapeText,
@@ -365,6 +384,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 .Element(spreadsheetDrawingNs + "blipFill")?
                 .Element(drawingNs + "srcRect");
             var (name, title, altText) = ReadNonVisualProperties(pictureElement);
+            // R90-app-accessibility-checker-5-2: preserve Excel's "Mark as decorative" flag so a
+            // decorative picture stays exempt from the Missing-Alt-Text rule after a round-trip.
+            var isDecorative = ReadNonVisualDecorative(pictureElement);
             var anchorElement = FindNearestAnchorElement(pictureElement, spreadsheetDrawingNs);
             var pictureTransform = pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm");
 
@@ -408,7 +430,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 ReadSourceRectangleRatio(sourceRectangle, "b"),
                 anchorElement is null ? -1 : ReadAnchorOrderIndex(anchorElement, spreadsheetDrawingNs),
                 linkTarget,
-                svgImageBytes));
+                svgImageBytes,
+                isDecorative));
         }
 
         return pictures;
@@ -678,6 +701,11 @@ internal static partial class XlsxWorksheetDrawingPartReader
             outlineDash,
             ReadDrawingArrowhead(lnElement, drawingNs, "headEnd"),
             ReadDrawingArrowhead(lnElement, drawingNs, "tailEnd"),
+            // R90-shape-5-3: only <xdr:cxnSp> elements carry stCxn/endCxn -- a plain <xdr:sp> never does.
+            null, // StartConnectedShapeId
+            null, // StartConnectedShapeConnectionIndex
+            null, // EndConnectedShapeId
+            null, // EndConnectedShapeConnectionIndex
             shapeText,
             textFontSizePt,
             textBold,
@@ -934,6 +962,15 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
         // Default to Line when no prstGeom is present (bare connector with no geometry override).
         var kind = DrawingMlPresetGeometryMap.GetShapeKindOrDefault(preset, DrawingShapeKind.Line);
+
+        // R90-shape-5-3: <xdr:nvCxnSpPr><xdr:cNvCxnSpPr><a:stCxn id=".." idx=".."/><a:endCxn .../>
+        // record which shapes (by their cNvPr id) this connector's endpoints are glued to. Previously
+        // never read at all, so an attached connector silently became a bare unattached line/geometry
+        // on load, with no way to know it had ever been glued to anything.
+        var cNvCxnSpPr = cxnSpElement.Element(spreadsheetDrawingNs + "nvCxnSpPr")?.Element(spreadsheetDrawingNs + "cNvCxnSpPr");
+        var (startConnectedShapeId, startConnectedShapeConnectionIndex) = ReadConnectionSite(cNvCxnSpPr?.Element(drawingNs + "stCxn"));
+        var (endConnectedShapeId, endConnectedShapeConnectionIndex) = ReadConnectionSite(cNvCxnSpPr?.Element(drawingNs + "endCxn"));
+
         shapes.Add(new XlsxShapePackagePart(
             kind,
             name,
@@ -961,6 +998,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
             outlineDash,
             ReadDrawingArrowhead(lnElement, drawingNs, "headEnd"),
             ReadDrawingArrowhead(lnElement, drawingNs, "tailEnd"),
+            StartConnectedShapeId: startConnectedShapeId,
+            StartConnectedShapeConnectionIndex: startConnectedShapeConnectionIndex,
+            EndConnectedShapeId: endConnectedShapeId,
+            EndConnectedShapeConnectionIndex: endConnectedShapeConnectionIndex,
             // connectors carry no text
             ShapeText: null,
             ShapeTextFontSizePoints: 0,
@@ -1066,6 +1107,39 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         return ReadFirstNonVisualAttribute(element, spreadsheetDrawingNs, "title");
     }
+
+    /// <summary>
+    /// R90-app-accessibility-checker-5-2: reads Excel's "Mark as decorative" flag from the first
+    /// descendant <c>&lt;xdr:cNvPr&gt;</c>'s <c>&lt;a:extLst&gt;&lt;a:ext
+    /// uri="{C183D7F6-B498-43B3-948B-1728B52AA6E4}"&gt;&lt;adec:decorative val="1"/&gt;</c>
+    /// extension (the same extension Word/PowerPoint/Excel 2019+ use for their shared "Alt Text ->
+    /// Mark as decorative" checkbox). Returns <see langword="false"/> when the element/extension is
+    /// absent or <c>val</c> is not a truthy value.
+    /// </summary>
+    private static bool ReadNonVisualDecorative(XElement element)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        foreach (var cNvPr in element.Descendants(spreadsheetDrawingNs + "cNvPr"))
+        {
+            var decorativeVal = cNvPr
+                .Element(drawingNs + "extLst")?
+                .Elements(drawingNs + "ext")
+                .FirstOrDefault(ext => (string?)ext.Attribute("uri") == DrawingMlDecorativeExtensionUri)?
+                .Elements()
+                .FirstOrDefault(child => child.Name.LocalName == "decorative")?
+                .Attribute("val")?.Value;
+            return XlsxWorksheetXmlValueParser.IsTruthy(decorativeVal);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Extension-list URI for the "Mark as decorative" flag on a <c>&lt;xdr:cNvPr&gt;</c>, shared by
+    /// <see cref="ReadNonVisualDecorative"/> and <see cref="XlsxWorksheetDrawingObjectWriter"/>.
+    /// </summary>
+    internal const string DrawingMlDecorativeExtensionUri = "{C183D7F6-B498-43B3-948B-1728B52AA6E4}";
 
     private static double ReadSourceRectangleRatio(XElement? sourceRectangle, string attributeName)
     {
@@ -1730,6 +1804,27 @@ internal static partial class XlsxWorksheetDrawingPartReader
             _ => DrawingArrowheadSize.Medium
         };
         return new DrawingArrowhead(type, w, len);
+    }
+
+    /// <summary>
+    /// R90-shape-5-3: reads a connector's <c>&lt;a:stCxn id="..." idx="..."/&gt;</c> or
+    /// <c>&lt;a:endCxn id="..." idx="..."/&gt;</c> connection-site element (child of
+    /// <c>&lt;xdr:cNvCxnSpPr&gt;</c>). Returns (null, null) when <paramref name="connectionElement"/>
+    /// is absent or its <c>id</c>/<c>idx</c> attributes are missing/unparsable -- an unattached
+    /// connector endpoint.
+    /// </summary>
+    private static (int? ShapeId, int? ConnectionIndex) ReadConnectionSite(XElement? connectionElement)
+    {
+        if (connectionElement is null)
+            return (null, null);
+
+        var id = int.TryParse(connectionElement.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedId)
+            ? parsedId
+            : (int?)null;
+        var idx = int.TryParse(connectionElement.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedIdx)
+            ? parsedIdx
+            : (int?)null;
+        return id is null ? (null, null) : (id, idx);
     }
 
     /// <summary>

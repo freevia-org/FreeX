@@ -40,7 +40,10 @@ public sealed partial class PivotTableCommandTests
         pivot.TargetRange.Should().Be(target);
         pivot.RowFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(0);
         pivot.DataFields.Should().ContainSingle().Which.Should().Be(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
-        sheet.GetCell(3, 4)!.Value.Should().Be(new TextValue("Category"));
+        // R90-render-pivot-layout-5-1/5-3: a freshly created pivot now defaults to Excel's real
+        // out-of-the-box report (subtotals on, Compact layout), so the header reads the generic
+        // "Row Labels" caption rather than the row field's own name.
+        sheet.GetCell(3, 4)!.Value.Should().Be(new TextValue("Row Labels"));
         sheet.GetCell(4, 4)!.Value.Should().Be(new TextValue("A"));
         sheet.GetCell(4, 5)!.Value.Should().Be(new NumberValue(10));
 
@@ -98,7 +101,8 @@ public sealed partial class PivotTableCommandTests
         outcome.Success.Should().BeTrue();
         workbook.PivotCaches.Should().ContainSingle();
         sheet.PivotTables.Should().ContainSingle();
-        sheet.GetCell(Addr(sheet, "D3"))!.Value.Should().Be(new TextValue("Category"));
+        // R90-render-pivot-layout-5-1/5-3: Compact-layout default header.
+        sheet.GetCell(Addr(sheet, "D3"))!.Value.Should().Be(new TextValue("Row Labels"));
     }
 
     [Fact]
@@ -257,7 +261,8 @@ public sealed partial class PivotTableCommandTests
         pivot.Name.Should().Be("PivotTable1");
         pivot.SourceRange.Should().Be(Range(sourceSheet, "A1", "B3"));
         pivot.TargetRange.Start.ToA1().Should().Be("A3");
-        pivotSheet.GetCell(Addr(pivotSheet, "A3"))!.Value.Should().Be(new TextValue("Category"));
+        // R90-render-pivot-layout-5-1/5-3: Compact-layout default header.
+        pivotSheet.GetCell(Addr(pivotSheet, "A3"))!.Value.Should().Be(new TextValue("Row Labels"));
         pivotSheet.GetCell(Addr(pivotSheet, "A4"))!.Value.Should().Be(new TextValue("A"));
         pivotSheet.GetCell(Addr(pivotSheet, "B4"))!.Value.Should().Be(new NumberValue(10));
 

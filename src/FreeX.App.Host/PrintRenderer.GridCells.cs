@@ -168,7 +168,23 @@ public static partial class PrintRenderer
                 var col = pageColumns[colIndex];
                 var colWidth = measurement.ColumnWidthAt(colIndex);
                 var x = gridLeft + measurement.ColumnOffset(colIndex);
-                var cellRect = new Rect(x, y, colWidth, rowHeight);
+
+                // Merge-span widening: mirrors GridView.Rendering.cs's Pass 3 (lines 835-841), which
+                // sums every merged column's width / merged row's height into the rect BEFORE laying
+                // out text (and before drawing data bars/icon sets into that same rect), so a merged
+                // banner cell's text is measured/clipped against its true multi-column footprint
+                // instead of just its single anchor cell (R90-render-cell-overflow-clip-5-1). Only the
+                // merge's anchor cell widens; a non-anchor member cell has no display text of its own
+                // (Excel clears it on merge) so it draws nothing here regardless.
+                var textMerge = sheet?.GetMergeRegion(new CellAddress(sheet.Id, row, col));
+                var cellWidth = colWidth;
+                var cellHeight = rowHeight;
+                if (textMerge is { } tm && row == tm.Start.Row && col == tm.Start.Col)
+                {
+                    cellWidth = SumPrintedMergedColumnWidth(measurement, pageColumns, colIndex, tm.End.Col);
+                    cellHeight = SumPrintedMergedRowHeight(measurement, pageRows, rowIndex, tm.End.Row);
+                }
+                var cellRect = new Rect(x, y, cellWidth, cellHeight);
 
                 cellLookup.TryGetValue((row, col), out var cell);
                 var style = cell.Style;
@@ -239,6 +255,8 @@ public static partial class PrintRenderer
                     colIndex,
                     row,
                     cellLookup,
+                    textMerge,
+                    sheet,
                     blackAndWhite);
             }
         }
@@ -317,6 +335,8 @@ public static partial class PrintRenderer
         int colIndex,
         uint row,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        GridRange? merge,
+        Sheet? sheet,
         bool blackAndWhite = false)
     {
         var textRotation = style?.TextRotation ?? 0;
@@ -384,7 +404,7 @@ public static partial class PrintRenderer
         var indentPx = (style?.IndentLevel ?? 0) * 8.0;
 
         var canOverflow = !hasOrientation &&
-            GridView.CanOverflowCellText(style, cell.RawValue, displayText, merge: null);
+            GridView.CanOverflowCellText(style, cell.RawValue, displayText, merge);
         // Mirror GridView.Rendering.cs's direction-aware overflow: a Right-aligned cell's text is
         // anchored to the cell's right edge, so a too-wide value spills LEFTWARD into empty
         // neighbor cells; Center spills both ways; Left/General (the common case) spills
@@ -393,11 +413,11 @@ public static partial class PrintRenderer
         {
             var overflowWidth = resolvedHAlign switch
             {
-                CellHAlign.Right => ComputePrintedOverflowWidthLeft(measurement, pageColumns, colIndex, row, cellLookup),
-                CellHAlign.Center => ComputePrintedOverflowWidth(measurement, pageColumns, colIndex, row, cellLookup)
-                    + ComputePrintedOverflowWidthLeft(measurement, pageColumns, colIndex, row, cellLookup)
+                CellHAlign.Right => ComputePrintedOverflowWidthLeft(measurement, pageColumns, colIndex, row, cellLookup, sheet),
+                CellHAlign.Center => ComputePrintedOverflowWidth(measurement, pageColumns, colIndex, row, cellLookup, sheet)
+                    + ComputePrintedOverflowWidthLeft(measurement, pageColumns, colIndex, row, cellLookup, sheet)
                     - measurement.ColumnWidthAt(colIndex),
-                _ => ComputePrintedOverflowWidth(measurement, pageColumns, colIndex, row, cellLookup),
+                _ => ComputePrintedOverflowWidth(measurement, pageColumns, colIndex, row, cellLookup, sheet),
             };
             overflowWidth -= 4;
             if (overflowWidth > maxTextWidth)
@@ -513,14 +533,24 @@ public static partial class PrintRenderer
         IReadOnlyList<uint> pageColumns,
         int colIndex,
         uint row,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup)
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        Sheet? sheet)
     {
         var width = measurement.ColumnWidthAt(colIndex);
         var nextIndex = colIndex + 1;
         while (nextIndex < pageColumns.Count)
         {
             var nextCol = pageColumns[nextIndex];
-            if (cellLookup.TryGetValue((row, nextCol), out var nextCell) && !string.IsNullOrEmpty(nextCell.DisplayText))
+            // Mirror GridView's occupied-cell lookup (CellTextOverflowPlanner.IsOverflowOccupied): a
+            // merged, formula-bearing (e.g. `=""`), or icon/data-bar neighbor blocks overflow just
+            // like a cell with visible DisplayText -- checking DisplayText alone missed all three
+            // (R90-render-cell-overflow-clip-5-2). Merge membership is checked independently of
+            // cellLookup: a blank member of a merge that holds no value of its own is never added to
+            // the print viewport's cell list at all, so it would otherwise be invisible to this scan.
+            if (sheet?.GetMergeRegion(new CellAddress(sheet.Id, row, nextCol)) is not null)
+                break;
+            if (cellLookup.TryGetValue((row, nextCol), out var nextCell) &&
+                CellTextOverflowPlanner.IsOverflowOccupied(nextCell, editingCell: null, merge: null))
                 break;
 
             width += measurement.ColumnWidthAt(nextIndex);
@@ -543,14 +573,21 @@ public static partial class PrintRenderer
         IReadOnlyList<uint> pageColumns,
         int colIndex,
         uint row,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup)
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        Sheet? sheet)
     {
         var width = measurement.ColumnWidthAt(colIndex);
         var prevIndex = colIndex - 1;
         while (prevIndex >= 0)
         {
             var prevCol = pageColumns[prevIndex];
-            if (cellLookup.TryGetValue((row, prevCol), out var prevCell) && !string.IsNullOrEmpty(prevCell.DisplayText))
+            // See ComputePrintedOverflowWidth: mirror GridView's occupied-cell semantics instead of
+            // only testing DisplayText emptiness, and check merge membership independently of
+            // cellLookup presence (R90-render-cell-overflow-clip-5-2).
+            if (sheet?.GetMergeRegion(new CellAddress(sheet.Id, row, prevCol)) is not null)
+                break;
+            if (cellLookup.TryGetValue((row, prevCol), out var prevCell) &&
+                CellTextOverflowPlanner.IsOverflowOccupied(prevCell, editingCell: null, merge: null))
                 break;
 
             width += measurement.ColumnWidthAt(prevIndex);

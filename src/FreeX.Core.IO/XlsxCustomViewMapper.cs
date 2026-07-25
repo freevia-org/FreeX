@@ -185,6 +185,7 @@ internal static class XlsxCustomViewMapper
             packageRelNs);
         var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+        var sheetsElement = workbookXml.Root?.Element(workbookNs + "sheets");
 
         var customViews = workbook.CustomViews
             .Select((view, index) => new
@@ -208,12 +209,16 @@ internal static class XlsxCustomViewMapper
                 workbookNs + "customWorkbookView",
                 new XAttribute("name", item.View.Name),
                 new XAttribute("guid", item.Id),
-                new XAttribute("activeSheetId", GetActiveSheetId(workbook, item.View)),
+                new XAttribute("activeSheetId", GetActiveSheetId(sheetsElement, workbookNs, workbook, item.View)),
                 item.View.IncludePrintSettings ? new XAttribute("includePrintSettings", "1") : new XAttribute("includePrintSettings", "0"),
-                item.View.IncludeHiddenRowsColumnsAndFilterSettings ? new XAttribute("includeHiddenRowCol", "1") : new XAttribute("includeHiddenRowCol", "0"),
-                new XAttribute("autoUpdate", "0"),
-                new XAttribute("mergeInterval", "0"),
-                new XAttribute("personalView", "0")))));
+                item.View.IncludeHiddenRowsColumnsAndFilterSettings ? new XAttribute("includeHiddenRowCol", "1") : new XAttribute("includeHiddenRowCol", "0")))));
+        // R90-io-sheet-view-custom-views-5-3: autoUpdate/mergeInterval/personalView are
+        // intentionally NOT written above. Their CT_CustomWorkbookView schema defaults
+        // (false/0/false) already match omission, and leaving them absent lets
+        // XlsxWorkbookMetadataPreserver.MergeCustomWorkbookViews (MergeMissingAttributes)
+        // restore the source file's true values for this view's guid -- hardcoding "0"
+        // previously masked those attributes as "already present" and silently discarded
+        // the source's real autoUpdate/mergeInterval/personalView on every save.
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
 
         var customViewsBySheet = new Dictionary<string, List<XElement>>(StringComparer.OrdinalIgnoreCase);
@@ -427,10 +432,26 @@ internal static class XlsxCustomViewMapper
             : new XElement(workbookNs + "autoFilter", new XAttribute("ref", autoFilter.Reference));
     }
 
-    private static int GetActiveSheetId(Workbook workbook, WorkbookCustomView view)
+    /// <summary>
+    /// Resolves the 0-based ActiveSheetIndex to the ACTUAL <c>sheetId</c> of the corresponding
+    /// <c>&lt;sheet&gt;</c> element in the live <c>&lt;sheets&gt;</c> being written, per
+    /// CT_CustomWorkbookView (customWorkbookView/@activeSheetId references a sheetId, not a
+    /// position). Excel never reuses/renumbers sheetId across deletes/reorders, so a workbook whose
+    /// sheetId values have drifted from position (extremely common) would otherwise get a wrong or
+    /// unresolvable activeSheetId. Falls back to the 1-based position only when the index can't be
+    /// resolved against &lt;sheets&gt; (e.g. missing/malformed sheetId attributes).
+    /// </summary>
+    private static int GetActiveSheetId(XElement? sheetsElement, XNamespace workbookNs, Workbook workbook, WorkbookCustomView view)
     {
-        var maxSheetId = Math.Max(1, workbook.Sheets.Count);
         var index = view.ActiveSheetIndex ?? workbook.ActiveSheetIndex ?? 0;
+        var sheetElements = sheetsElement?.Elements(workbookNs + "sheet").ToList();
+        if (sheetElements is not null && index >= 0 && index < sheetElements.Count &&
+            XlsxXmlAttributeReader.ReadIntAttribute(sheetElements[index], "sheetId") is { } sheetId and > 0)
+        {
+            return sheetId;
+        }
+
+        var maxSheetId = Math.Max(1, workbook.Sheets.Count);
         return Math.Clamp(index + 1, 1, maxSheetId);
     }
 

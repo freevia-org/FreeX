@@ -173,19 +173,61 @@ public static class RemoveDuplicatesPlanner
         if (range.Start.Row >= range.End.Row)
             return false;
 
+        var columnCount = 0;
         var textHeaders = 0;
         var typedBodyValues = 0;
+        var labelLikeTextHeaders = 0;
         for (var column = range.Start.Col; column <= range.End.Col; column++)
         {
+            columnCount++;
             var firstValue = sheet.GetCell(range.Start.Row, column)?.Value;
             var secondValue = sheet.GetCell(range.Start.Row + 1, column)?.Value;
             if (IsNonBlankText(firstValue))
+            {
                 textHeaders++;
+
+                // R90-removedup-5-2: when a column is text-typed all the way down (e.g. a
+                // "Name"/"City" contact table), the type-mismatch signal below never fires because
+                // both the header and the body are TextValue. Fall back to Excel's other tell for
+                // an all-text header: the header word itself does not recur as an ordinary data
+                // value anywhere else in that column, unlike a genuine data value (which may repeat
+                // as a duplicate row, as in the failure scenario's "Alice"/"Paris" repeat).
+                if (firstValue is TextValue headerText &&
+                    !ColumnBodyContainsText(sheet, range, column, headerText.Value))
+                {
+                    labelLikeTextHeaders++;
+                }
+            }
+
             if (secondValue is NumberValue or DateTimeValue or BoolValue)
                 typedBodyValues++;
         }
 
-        return textHeaders > 0 && typedBodyValues > 0;
+        if (textHeaders == 0)
+            return false;
+
+        if (typedBodyValues > 0)
+            return true;
+
+        // Every column is text-typed (no NumberValue/DateTimeValue/BoolValue anywhere in the row
+        // beneath the header): require every column's first-row text to look like a label -- i.e.
+        // not simply another occurrence of that column's own data -- and require at least two
+        // columns, since a single all-text column's first value being merely "not repeated later"
+        // is too weak a signal on its own (an ordinary unlabeled list of unique text values would
+        // otherwise be misdetected as having a header).
+        return columnCount > 1 && labelLikeTextHeaders == columnCount;
+    }
+
+    private static bool ColumnBodyContainsText(Sheet sheet, GridRange range, uint column, string headerText)
+    {
+        for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
+        {
+            if (sheet.GetCell(row, column)?.Value is TextValue bodyText &&
+                string.Equals(bodyText.Value, headerText, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)

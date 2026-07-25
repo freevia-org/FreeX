@@ -1264,6 +1264,55 @@ public sealed partial class Sheet
     /// </summary>
     public bool HasArrayOrSpillMembers => _spillAnchors.Count > 0 || _provisionalSpillCells is { Count: > 0 };
 
+    /// <summary>
+    /// R90-app-goalseek-whatif-5-3: registered What-If Analysis "Data Table" result-body ranges
+    /// (Data &gt; What-If Analysis &gt; Data Table). Excel writes a Data Table's body as a single
+    /// {=TABLE(,...)} array and refuses to edit or delete just one interior cell of it ("You cannot
+    /// change part of a Data Table"), even though FreeX stores each body cell as its own ordinary
+    /// formula cell (see OneVariableDataTableCommand/TwoVariableDataTableCommand). This is a
+    /// lightweight, independent registry -- NOT the dynamic-array spill/legacy-CSE machinery
+    /// (<see cref="_spillAnchors"/>/<see cref="_provisionalSpillCells"/>), whose lifecycle (values
+    /// stored in a separate overlay, torn down via <see cref="SetSpillRange"/>/<see cref="ClearSpillRange"/>)
+    /// doesn't fit a Data Table's plain-formula-cell body. Consulted by
+    /// <see cref="CommandGuards.RejectIfSplitsArray"/> alongside the array/spill check.
+    /// </summary>
+    private readonly List<GridRange> _dataTableRanges = [];
+
+    /// <summary>Whether this sheet has any registered Data Table range at all -- lets callers cheaply
+    /// skip the per-address scan when no Data Table has ever been created (see <see cref="_dataTableRanges"/>).</summary>
+    public bool HasDataTableRanges => _dataTableRanges.Count > 0;
+
+    /// <summary>
+    /// Registers <paramref name="range"/> (the Data Table's result body, not including its header
+    /// row/column of trial inputs) so edits/deletes of a single interior cell are blocked. Replaces
+    /// any previously-registered range sharing the same top-left corner, so re-running the Data
+    /// Table command over a resized range doesn't leave a stale, differently-sized registration.
+    /// </summary>
+    public void RegisterDataTableRange(GridRange range)
+    {
+        _dataTableRanges.RemoveAll(r => r.Start == range.Start);
+        _dataTableRanges.Add(range);
+    }
+
+    /// <summary>Removes a previously-registered Data Table range (e.g. on command undo).</summary>
+    public void UnregisterDataTableRange(GridRange range) => _dataTableRanges.Remove(range);
+
+    /// <summary>If <paramref name="address"/> falls within a registered Data Table range, returns it.</summary>
+    public bool TryGetDataTableRange(CellAddress address, out GridRange range)
+    {
+        foreach (var candidate in _dataTableRanges)
+        {
+            if (candidate.Contains(address))
+            {
+                range = candidate;
+                return true;
+            }
+        }
+
+        range = default;
+        return false;
+    }
+
     /// <summary>Get all non-empty cells as a dictionary keyed by CellAddress.</summary>
     public Dictionary<CellAddress, Cell> GetUsedCells()
     {

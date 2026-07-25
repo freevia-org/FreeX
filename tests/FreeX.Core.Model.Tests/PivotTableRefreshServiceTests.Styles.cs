@@ -104,7 +104,11 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "D5"),
             TargetRange = Range(sheet, "E2", "H8"),
-            StyleName = "PivotStyleMedium9"
+            StyleName = "PivotStyleMedium9",
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Tabular/no-subtotal defaults this
+            // 2-row-field footprint-style test was written against.
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -134,7 +138,11 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "D5"),
             TargetRange = Range(sheet, "E2", "H10"),
             StyleName = "PivotStyleMedium9",
-            ShowSubtotals = true
+            ShowSubtotals = true,
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Bottom/Tabular defaults this
+            // subtotal-row footprint-style test was written against.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -163,7 +171,10 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "D9"),
             TargetRange = Range(sheet, "E2", "J8"),
-            StyleName = "PivotStyleMedium9"
+            StyleName = "PivotStyleMedium9",
+            // R90-render-pivot-layout-5-1: pin the (former) no-subtotal default -- this 2-column-field
+            // test's Grand Total column position assumes no subtotal columns.
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.ColumnFields.Add(new PivotFieldModel(1));
@@ -410,7 +421,11 @@ public sealed partial class PivotTableRefreshServiceTests
             TargetRange = Range(sheet, "E2", "I12"),
             StyleName = "PivotStyleMedium4",
             ShowSubtotals = true,
-            ShowRowStripes = true
+            ShowRowStripes = true,
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Bottom/Tabular defaults this
+            // named-style-family test's cell coordinates assume.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));

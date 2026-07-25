@@ -5,8 +5,11 @@ public static class SubtotalFunctionService
     private static readonly Dictionary<string, int> FunctionNumbers = new(StringComparer.OrdinalIgnoreCase)
     {
         ["average"] = 1,
-        ["count"] = 2,
-        ["counta"] = 3,
+        // Excel's Subtotal dialog: "Count" behaves like COUNTA (function_num 3, counts text and
+        // numbers) and "Count Numbers"/"Count Nums" behaves like COUNT (function_num 2, numeric
+        // only) — the reverse of what the plain function names might suggest.
+        ["count"] = 3,
+        ["counta"] = 2,
         ["max"] = 4,
         ["min"] = 5,
         ["product"] = 6,

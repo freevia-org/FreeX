@@ -20,7 +20,11 @@ public sealed partial class PivotTableRefreshServiceTests
             TargetRange = Range(sheet, "E2", "I10"),
             ShowSubtotals = false,
             MergeAndCenterLabels = true,
-            ShowRowStripes = true
+            ShowRowStripes = true,
+            // R90-render-pivot-layout-5-3: pin the (former) Tabular default -- the outer-row-label merge
+            // this test asserts is a Tabular-layout-specific behavior (see the dedicated Compact sibling
+            // test below for the Compact header-merge behavior).
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -58,7 +62,8 @@ public sealed partial class PivotTableRefreshServiceTests
             TargetRange = Range(sheet, "E2", "I10"),
             ShowSubtotals = false,
             RepeatItemLabels = false,
-            MergeAndCenterLabels = true
+            MergeAndCenterLabels = true,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -87,7 +92,11 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "I12"),
             ShowSubtotals = true,
-            MergeAndCenterLabels = true
+            MergeAndCenterLabels = true,
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) Bottom/Tabular defaults this
+            // subtotal-caption-merge test was written against.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -118,7 +127,8 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "I10"),
             ShowSubtotals = false,
-            MergeAndCenterLabels = false
+            MergeAndCenterLabels = false,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -144,7 +154,10 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "E5"),
             TargetRange = Range(sheet, "G2", "M10"),
             ReportLayout = PivotReportLayout.Compact,
-            MergeAndCenterLabels = true
+            MergeAndCenterLabels = true,
+            // R90-render-pivot-layout-5-1: pin the (former) no-subtotal default -- this test is about
+            // the Compact row-label header merge, not subtotals.
+            ShowSubtotals = false
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));

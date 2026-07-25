@@ -128,6 +128,12 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
         }
 
         _applied = true;
+
+        // R90-app-goalseek-whatif-5-3: Excel writes a Data Table's body as a single {=TABLE(,...)}
+        // array and refuses to edit/delete just one interior cell of it. Register the body range
+        // (the table minus its header row/column) so CommandGuards.RejectIfSplitsArray enforces that
+        // rule even though each body cell above was written as its own ordinary formula cell.
+        sheet.RegisterDataTableRange(BodyRange(_tableRange));
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -145,8 +151,15 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
                 sheet.SetCell(address, previousCell.Clone());
         }
 
+        sheet.UnregisterDataTableRange(BodyRange(_tableRange));
         _applied = false;
     }
+
+    /// <summary>The Data Table's result body -- the full table range minus its header row/column of
+    /// trial input values, i.e. rows [Start.Row+1..End.Row] x cols [Start.Col+1..End.Col].</summary>
+    private static GridRange BodyRange(GridRange tableRange) => new(
+        new CellAddress(tableRange.Start.Sheet, tableRange.Start.Row + 1, tableRange.Start.Col + 1),
+        tableRange.End);
 
     /// <summary>
     /// The result to write for a body column/row whose header cell holds a constant (or is blank)
@@ -218,6 +231,9 @@ public sealed class TwoVariableDataTableCommand : IWorkbookCommand
         }
 
         _applied = true;
+
+        // See the matching comment in OneVariableDataTableCommand.Apply.
+        sheet.RegisterDataTableRange(BodyRange(_tableRange));
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -235,8 +251,15 @@ public sealed class TwoVariableDataTableCommand : IWorkbookCommand
                 sheet.SetCell(address, previousCell.Clone());
         }
 
+        sheet.UnregisterDataTableRange(BodyRange(_tableRange));
         _applied = false;
     }
+
+    /// <summary>The Data Table's result body -- the full table range minus its header row/column of
+    /// trial input values, i.e. rows [Start.Row+1..End.Row] x cols [Start.Col+1..End.Col].</summary>
+    private static GridRange BodyRange(GridRange tableRange) => new(
+        new CellAddress(tableRange.Start.Sheet, tableRange.Start.Row + 1, tableRange.Start.Col + 1),
+        tableRange.End);
 }
 
 internal static class DataTableCommandGuards

@@ -31,6 +31,85 @@ public partial class MainWindow
         };
     }
 
+    /// <summary>
+    /// Refreshes any linked/Camera picture (Paste Special &gt; Linked Picture,
+    /// <see cref="PictureModel.IsLinkedToSourceRange"/>) whose source range overlaps
+    /// <paramref name="affectedCells"/>, rebuilding its cached cell snapshot from the live sheet
+    /// (R90-app-camera-picture-link-5-1). Before this, the WPF host never refreshed a linked
+    /// picture after the initial paste except via
+    /// RowColumnShiftHelpers.RefreshLinkedPictureSnapshot (Core.Commands), which only fires when a
+    /// structural row/column insert/delete actually moves the source range's coordinates -- an
+    /// ordinary value, fill/border, or dependent-formula-recalculation edit inside the range left
+    /// the picture showing stale, paste-time content forever. Mirrors
+    /// FreeX.App.Services.WorkbookSession's RefreshLinkedPicturesForEditedCells/
+    /// RefreshLinkedPictureCells (the equivalent refresh already performed by the Avalonia shell)
+    /// so both shells keep a linked picture's rendered content live. Called from every successful
+    /// edit-affecting command outcome in this file so no cell-edit path can miss it.
+    /// </summary>
+    private void RefreshLinkedPicturesAffectedBy(IReadOnlyList<CellAddress>? affectedCells)
+    {
+        if (affectedCells is not { Count: > 0 })
+            return;
+
+        foreach (var sheet in _workbook.Sheets)
+        {
+            if (sheet.Pictures.Count == 0)
+                continue;
+
+            foreach (var picture in sheet.Pictures)
+            {
+                if (!picture.IsLinkedToSourceRange || picture.LinkedSourceRange is not { } sourceRange)
+                    continue;
+
+                var sourceSheet = _workbook.GetSheet(sourceRange.Start.Sheet);
+                if (sourceSheet is null)
+                    continue;
+
+                var touched = false;
+                foreach (var edited in affectedCells)
+                {
+                    if (edited.Sheet.Equals(sourceRange.Start.Sheet) &&
+                        edited.Row >= sourceRange.Start.Row && edited.Row <= sourceRange.End.Row &&
+                        edited.Col >= sourceRange.Start.Col && edited.Col <= sourceRange.End.Col)
+                    {
+                        touched = true;
+                        break;
+                    }
+                }
+                if (!touched)
+                    continue;
+
+                RefreshLinkedPictureCellsFromLiveSheet(picture, sourceSheet, sourceRange);
+            }
+        }
+    }
+
+    /// <summary>Rebuilds a linked picture's cached cell snapshot from the live contents of its source range.</summary>
+    private void RefreshLinkedPictureCellsFromLiveSheet(PictureModel picture, Sheet sourceSheet, GridRange sourceRange)
+    {
+        picture.SourceRowCount = sourceRange.RowCount;
+        picture.SourceColumnCount = sourceRange.ColCount;
+
+        picture.Cells.Clear();
+        for (var row = sourceRange.Start.Row; row <= sourceRange.End.Row; row++)
+        {
+            for (var col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
+            {
+                var cell = sourceSheet.GetCell(row, col);
+                var styleId = cell?.StyleId ?? sourceSheet.GetStyleOnly(row, col) ?? StyleId.Default;
+                var style = _workbook.GetStyle(styleId);
+                var value = cell?.Value ?? BlankValue.Instance;
+
+                picture.Cells.Add(new PictureCellSnapshot(
+                    row - sourceRange.Start.Row,
+                    col - sourceRange.Start.Col,
+                    DrawingInputParser.FormatPictureCellText(value),
+                    style.Clone(),
+                    value is NumberValue or DateTimeValue));
+            }
+        }
+    }
+
     private bool TryExecuteCommand(IWorkbookCommand command, string title, out CommandOutcome outcome)
     {
         outcome = _commandBus.Execute(_workbook.Id, command);
@@ -46,6 +125,7 @@ public partial class MainWindow
 
             MarkWorkbookDirty();
             InvalidateNavigationCaches();
+            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
             // A successful command may have changed the current sheet's view mode/zoom (directly,
             // via SetWorksheetViewModeCommand/SetWorksheetZoomCommand, or via a screenshot-tour
             // helper that constructs those commands itself instead of going through
@@ -86,6 +166,7 @@ public partial class MainWindow
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
+            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
             // See TryExecuteCommand above (R83-app-view-modes-5-1).
             SyncWindowViewState([_currentSheetId]);
             NotifyOtherWindowsOfWorkbookChange();
@@ -173,6 +254,7 @@ public partial class MainWindow
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
+            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
             NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
@@ -212,6 +294,7 @@ public partial class MainWindow
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
+            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
             NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
@@ -247,6 +330,7 @@ public partial class MainWindow
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
+            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
             NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
@@ -279,6 +363,7 @@ public partial class MainWindow
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
+            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
             NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
@@ -410,6 +495,7 @@ public partial class MainWindow
 
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
+        RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
         // R88-commands-undo-redo-coalescing-5-1: Excel switches the active sheet and reselects the
         // edited range so the user immediately sees what was reverted, even when they had navigated
         // away to a different sheet (or a different part of the current sheet) before pressing
@@ -455,6 +541,7 @@ public partial class MainWindow
 
         InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
+        RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
         // See ExecuteUndo() (R88-commands-undo-redo-coalescing-5-1): re-navigate to the
         // affected sheet/range before SyncWindowViewState/UpdateViewport below.
         RestoreSelectionAfterUndoRedo(outcome);
@@ -487,6 +574,7 @@ public partial class MainWindow
         InvalidateNavigationCaches();
         postAction?.Invoke(outcome);
         RecalculateAfterCommandOutcome(outcome);
+        RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
         // See TryExecuteCommand above (R83-app-view-modes-5-1).
         SyncWindowViewState([_currentSheetId]);
         UpdateViewport();

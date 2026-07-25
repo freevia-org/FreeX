@@ -30,7 +30,10 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "G10"),
-            ReportLayout = PivotReportLayout.Compact
+            ReportLayout = PivotReportLayout.Compact,
+            ShowSubtotals = false // R90-render-pivot-layout-5-1: model default flipped to true; this test's
+                                  // EXAMPLE A scenario is deliberately subtotal-free to isolate compact
+                                  // single-column rendering, so pin it explicitly.
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -83,7 +86,10 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "G10"),
             ReportLayout = PivotReportLayout.Compact,
-            CompactRowLabelIndent = 3
+            CompactRowLabelIndent = 3,
+            ShowSubtotals = false // R90-render-pivot-layout-5-1: model default flipped to true; this test's
+                                  // EXAMPLE A scenario is deliberately subtotal-free to isolate the indent
+                                  // calculation, so pin it explicitly.
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -138,7 +144,10 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "D9"),
             TargetRange = Range(sheet, "F2", "H24"),
             ReportLayout = PivotReportLayout.Compact,
-            ShowSubtotals = true
+            ShowSubtotals = true,
+            // R90-render-pivot-layout-5-1: pin the (former) Bottom default -- this test's "X Total"
+            // assertions expect the subtotal after the leaf rows.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));

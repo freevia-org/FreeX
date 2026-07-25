@@ -208,7 +208,12 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        var currentRange = SheetGrid.SelectedRange ?? range;
+        // The Destination range-picker (ApplyTextToColumnsRangeSelection) temporarily repurposes
+        // SheetGrid.SelectedRange to capture the picked destination cell and never restores the
+        // grid's selection afterward, so it must NOT be read here as the split's source range -
+        // only the originally selected `range` is the source; the destination comes from
+        // dialog.Result.Destination, parsed from the dialog's own text box.
+        var currentRange = range;
         if (TextToColumnsApplyPlanner.FindOverwriteTargets(_workbook, targetSheetIds, currentRange, dialog.Result).Count > 0 &&
             !_messageService.AskYesNo(
                 UiText.Get("MainWindowMessage_TextToColumnsReplaceDataPrompt"),
@@ -432,6 +437,7 @@ public partial class MainWindow
         if (matches.Count == 0)
         {
             SheetGrid.ValidationCircleCells = null;
+            sheet.ValidationCircleCells = null;
             _messageService.ShowInfo(
                 UiText.Get("MainWindowMessage_CircleInvalidDataNoInvalidData"),
                 UiText.Get("MainWindowMessage_CircleInvalidDataTitle"));
@@ -442,7 +448,11 @@ public partial class MainWindow
         // cell that currently fails its validation rule. It does not change the current selection --
         // the previous implementation only reused the (transient) multi-range selection as a stand-in
         // for the circles, which vanished the instant the user clicked elsewhere or pressed an arrow key.
+        // Mirrored onto Sheet.ValidationCircleCells (R90-print-twin-two-tier-sweep-1) so a print/PDF
+        // renderer -- which only has the Workbook/SheetId, not this GridView instance -- can eventually
+        // read the same circled-cell set instead of the state being trapped in a screen-only DependencyProperty.
         SheetGrid.ValidationCircleCells = matches;
+        sheet.ValidationCircleCells = matches;
         EnsureCellVisible(matches[0]);
         UpdateViewport();
         RefreshStatusBar();
@@ -451,6 +461,8 @@ public partial class MainWindow
     private void ClearValidationCirclesMenuItem_Click(object sender, RoutedEventArgs e)
     {
         SheetGrid.ValidationCircleCells = null;
+        if (_workbook.GetSheet(_currentSheetId) is { } sheet)
+            sheet.ValidationCircleCells = null;
         UpdateViewport();
         RefreshStatusBar();
     }
@@ -479,7 +491,9 @@ public partial class MainWindow
         if (ReferenceEquals(pruned, circled))
             return;
 
-        SheetGrid.ValidationCircleCells = pruned.Count == 0 ? null : pruned;
+        var remaining = pruned.Count == 0 ? null : pruned;
+        SheetGrid.ValidationCircleCells = remaining;
+        sheet.ValidationCircleCells = remaining;
     }
 
     private void ApplyConsolidateRangeSelection(

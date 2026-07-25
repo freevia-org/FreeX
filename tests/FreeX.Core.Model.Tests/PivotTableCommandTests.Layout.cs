@@ -84,7 +84,10 @@ public sealed partial class PivotTableCommandTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
-            TargetRange = Range(sheet, "E2", "I7")
+            TargetRange = Range(sheet, "E2", "I7"),
+            // R90-render-pivot-layout-5-3: pin the (former) Tabular default -- this test is about
+            // ConfigurePivotTableLayoutCommand's stale-cell clearing, not the pivot-creation default.
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.ColumnFields.Add(new PivotFieldModel(1));
@@ -240,7 +243,10 @@ public sealed partial class PivotTableCommandTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "B3"),
-            TargetRange = Range(sheet, "D3", "F6")
+            TargetRange = Range(sheet, "D3", "F6"),
+            // R90-render-pivot-layout-5-3: pin the (former) Tabular default -- this test is about
+            // ConfigurePivotTableLayoutCommand's values-only layout, not the pivot-creation default.
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));

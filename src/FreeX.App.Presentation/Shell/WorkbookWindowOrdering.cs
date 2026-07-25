@@ -16,7 +16,9 @@ public static class WorkbookWindowOrdering
     /// <summary>
     /// Excel-style title suffix for a window viewing a shared workbook. A lone window over the
     /// workbook is not numbered (empty suffix); once a second window exists every window gains a
-    /// " - {position}" suffix (Book1 - 1, Book1 - 2, ...). <paramref name="position"/> is 1-based.
+    /// ":{position}" suffix (Book1:1, Book1:2, ...), matching Excel's own New Window numbering
+    /// convention exactly (colon, no surrounding spaces or dash). <paramref name="position"/> is
+    /// 1-based.
     /// </summary>
     public static string FormatWindowTitleSuffix(int position, int totalWindowCount)
     {
@@ -25,7 +27,7 @@ public static class WorkbookWindowOrdering
         if (position < 1 || position > totalWindowCount)
             return string.Empty;
 
-        return string.Create(CultureInfo.InvariantCulture, $" - {position}");
+        return string.Create(CultureInfo.InvariantCulture, $":{position}");
     }
 
     /// <summary>

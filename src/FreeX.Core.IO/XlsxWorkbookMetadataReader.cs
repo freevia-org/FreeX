@@ -377,11 +377,13 @@ internal static class XlsxWorkbookMetadataReader
 
             var workbookXml = LoadXml(workbookEntry);
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sheetIdToIndex = XlsxWorkbookMetadataMapper.BuildSheetIdToIndexMap(
+                workbookXml.Root?.Element(workbookNs + "sheets"), workbookNs);
             foreach (var view in workbookXml.Root?
                          .Element(workbookNs + "customWorkbookViews")?
                          .Elements(workbookNs + "customWorkbookView") ?? [])
             {
-                var customView = XlsxWorkbookMetadataMapper.ToCustomView(view);
+                var customView = XlsxWorkbookMetadataMapper.ToCustomView(view, sheetIdToIndex);
                 if (!string.IsNullOrWhiteSpace(customView.Id) && !string.IsNullOrWhiteSpace(customView.Name))
                     views.Add(customView);
             }
@@ -598,11 +600,13 @@ internal static class XlsxWorkbookMetadataReader
     private static IReadOnlyList<XlsxWorkbookCustomView> LoadCustomViews(XDocument workbookXml)
     {
         var views = new List<XlsxWorkbookCustomView>();
+        var sheetIdToIndex = XlsxWorkbookMetadataMapper.BuildSheetIdToIndexMap(
+            workbookXml.Root?.Element(WorkbookNs + "sheets"), WorkbookNs);
         foreach (var view in workbookXml.Root?
                      .Element(WorkbookNs + "customWorkbookViews")?
                      .Elements(WorkbookNs + "customWorkbookView") ?? [])
         {
-            var customView = XlsxWorkbookMetadataMapper.ToCustomView(view);
+            var customView = XlsxWorkbookMetadataMapper.ToCustomView(view, sheetIdToIndex);
             if (!string.IsNullOrWhiteSpace(customView.Id) && !string.IsNullOrWhiteSpace(customView.Name))
                 views.Add(customView);
         }

@@ -371,7 +371,8 @@ public sealed partial class PivotTableRefreshServiceTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
-            TargetRange = Range(sheet, "E2", "G8")
+            TargetRange = Range(sheet, "E2", "G8"),
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Q1"));
         pivot.RowFields.Add(new PivotFieldModel(0));

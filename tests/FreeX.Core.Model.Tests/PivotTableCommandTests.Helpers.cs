@@ -26,7 +26,12 @@ public sealed partial class PivotTableCommandTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "B3"),
-            TargetRange = Range(sheet, "D3", "F6")
+            TargetRange = Range(sheet, "D3", "F6"),
+            // R90-render-pivot-layout-5-3: pin the (former) Tabular default -- this shared helper's many
+            // callers (move/rename/refresh/etc. command tests) assert the row field's own name as the
+            // header text, not the new Compact "Row Labels" default; none of them are testing the
+            // pivot-creation default itself.
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));

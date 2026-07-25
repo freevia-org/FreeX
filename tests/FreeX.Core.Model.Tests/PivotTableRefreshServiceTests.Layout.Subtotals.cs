@@ -18,7 +18,11 @@ public sealed partial class PivotTableRefreshServiceTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "I12"),
-            ShowSubtotals = true
+            ShowSubtotals = true,
+            // R90-render-pivot-layout-5-1/5-3: pin the (former) model defaults this Tabular/Bottom-
+            // subtotal scenario was written against, now that both defaults changed.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom,
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -50,7 +54,10 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "H10"),
             ShowSubtotals = true,
-            SubtotalPlacement = PivotSubtotalPlacement.Top
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            // R90-render-pivot-layout-5-3: pin the (former) Tabular default -- this test asserts a
+            // per-row-field-column layout (E="East", F="Q1"), not the new Compact default.
+            ReportLayout = PivotReportLayout.Tabular
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -85,7 +92,10 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "D9"),
             TargetRange = Range(sheet, "F2", "J22"),
             ReportLayout = PivotReportLayout.Tabular,
-            ShowSubtotals = true
+            ShowSubtotals = true,
+            // R90-render-pivot-layout-5-1: pin the (former) Bottom default -- this test's "Q1 Total"
+            // assertions expect the subtotal after the leaf rows, not Excel's actual Top default.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom
         };
         pivot.RowFields.Add(new PivotFieldModel(0)); // Region
         pivot.RowFields.Add(new PivotFieldModel(1)); // Quarter
@@ -133,7 +143,10 @@ public sealed partial class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "E5"),
             TargetRange = Range(sheet, "G2", "N15"),
             ReportLayout = PivotReportLayout.Compact,
-            ShowSubtotals = true
+            ShowSubtotals = true,
+            // R90-render-pivot-layout-5-1: pin the (former) Bottom default -- this test's "Widget Total"
+            // assertions expect the subtotal after the leaf row, not Excel's actual Top default.
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom
         };
         // Row fields: Region(0), Product(1), Quarter(2)
         pivot.RowFields.Add(new PivotFieldModel(0)); // Region
