@@ -83,11 +83,25 @@ public sealed record ViewportRequest(
     bool IncludeFormulas = true,
     bool IncludeStyles = true,
     bool IncludeObjects = true,
-    SplitPaneViewportOffsets? SplitPaneOffsets = null);
+    SplitPaneViewportOffsets? SplitPaneOffsets = null,
+    uint? FrozenRowsOverride = null,
+    uint? FrozenColsOverride = null,
+    SplitPaneStateOverride? SplitOverride = null);
 
 public sealed record SplitPaneViewportOffsets(
     uint? TopRightLeftCol = null,
     uint? BottomLeftTopRow = null);
+
+/// <summary>
+/// Carries a caller's own per-view Window ▸ Split boundary (e.g. <c>WorkbookSession</c>'s
+/// per-window <c>GetEffectiveSplitRow</c>/<c>GetEffectiveSplitCol</c>) so <see cref="ViewportRequest"/>
+/// can override the shared <see cref="Sheet.SplitRow"/>/<see cref="Sheet.SplitColumn"/> fields for
+/// this one viewport build. Passing an instance -- even one whose fields are both null, meaning
+/// "no split in this view" -- is authoritative and wins over the shared sheet fields; leaving
+/// <see cref="ViewportRequest.SplitOverride"/> null (the default) preserves the pre-existing
+/// behavior of always reading the shared sheet fields directly.
+/// </summary>
+public sealed record SplitPaneStateOverride(uint? SplitRow, uint? SplitCol);
 
 public sealed record ViewportModel(
     IReadOnlyList<DisplayCell> Cells,

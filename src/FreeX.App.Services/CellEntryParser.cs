@@ -7,8 +7,24 @@ namespace FreeX.App.Services;
 
 public static class CellEntryParser
 {
-    public static Cell CreateCell(string text, CellAddress address, bool useR1C1ReferenceStyle)
+    /// <summary>
+    /// Parses a typed cell-entry string into a <see cref="Cell"/>. When <paramref name="workbook"/>
+    /// is supplied, the target <paramref name="address"/>'s current number format is honored the
+    /// same way real Excel does: a Text ("@") formatted destination keeps the literal input
+    /// verbatim (no numeric/date/formula coercion, matching PasteCommandFactory
+    /// .IsDestinationTextFormatted's identical rule for the paste path), and a General-formatted
+    /// destination that receives a percent/currency/fraction/time-shaped literal has that shape's
+    /// matching number format auto-applied, mirroring Excel's own typed-entry auto-formatting
+    /// (R87-formula-number-parse-locale-5-2, R87-formula-number-parse-locale-5-3). Callers that
+    /// omit <paramref name="workbook"/> keep the original workbook-agnostic coercion behavior.
+    /// </summary>
+    public static Cell CreateCell(string text, CellAddress address, bool useR1C1ReferenceStyle, Workbook? workbook = null)
     {
+        if (workbook is not null && IsTargetTextFormatted(workbook, address))
+        {
+            return Cell.FromValue(new TextValue(text));
+        }
+
         if (text.StartsWith("=", StringComparison.Ordinal))
         {
             var formula = text[1..];
@@ -18,11 +34,44 @@ public static class CellEntryParser
             return Cell.FromFormula(formula);
         }
 
-        return Cell.FromValue(ParseScalarValue(text));
+        var value = ParseScalarValue(text, out var inferredNumberFormat);
+        var cell = Cell.FromValue(value);
+
+        if (inferredNumberFormat is not null && workbook is not null && IsTargetFormatGeneral(workbook, address))
+        {
+            var style = workbook.GetStyle(GetTargetStyleId(workbook, address)).Clone();
+            style.NumberFormat = inferredNumberFormat;
+            cell.StyleId = workbook.RegisterStyle(style);
+        }
+
+        return cell;
     }
 
-    public static ScalarValue ParseScalarValue(string text)
+    private static StyleId GetTargetStyleId(Workbook workbook, CellAddress address)
     {
+        var sheet = workbook.GetSheet(address.Sheet);
+        if (sheet is null)
+            return StyleId.Default;
+
+        return sheet.GetCell(address)?.StyleId ??
+            sheet.GetStyleOnly(address.Row, address.Col) ??
+            StyleId.Default;
+    }
+
+    // Mirrors PasteCommandFactory.IsDestinationTextFormatted / FindReplaceService's identical
+    // "@"-format check for the paste and find/replace-re-parse paths respectively.
+    private static bool IsTargetTextFormatted(Workbook workbook, CellAddress address) =>
+        workbook.GetStyle(GetTargetStyleId(workbook, address)).NumberFormat == "@";
+
+    private static bool IsTargetFormatGeneral(Workbook workbook, CellAddress address) =>
+        workbook.GetStyle(GetTargetStyleId(workbook, address)).NumberFormat == "General";
+
+    public static ScalarValue ParseScalarValue(string text) => ParseScalarValue(text, out _);
+
+    private static ScalarValue ParseScalarValue(string text, out string? inferredNumberFormat)
+    {
+        inferredNumberFormat = null;
+
         if (text.Length == 0)
         {
             return BlankValue.Instance;
@@ -55,16 +104,19 @@ public static class CellEntryParser
         // date - claim the unambiguous fraction shape first.
         if (TryParsePercent(text, out var percentValue))
         {
+            inferredNumberFormat = "0%";
             return new NumberValue(percentValue);
         }
 
         if (TryParseCurrency(text, out var currencyValue))
         {
+            inferredNumberFormat = NumberFormatShortcutService.GetFormat(NumberFormatShortcut.Currency);
             return new NumberValue(currencyValue);
         }
 
         if (TryParseMixedFraction(text, out var fractionValue))
         {
+            inferredNumberFormat = "# ?/?";
             return new NumberValue(fractionValue);
         }
 
@@ -80,6 +132,19 @@ public static class CellEntryParser
 
         if (TryParseCurrentCultureDate(text, out var dateTime))
         {
+            // A time-only literal (e.g. "15:30", "3:30 PM") has no date component;
+            // TryParseCurrentCultureDate's NoCurrentDateDefault parse synthesizes
+            // DateTime.MinValue's date (0001-01-01) for the missing date part rather than
+            // today's date. Such a value is an Excel time-of-day serial (< 1, e.g. 0.645833...
+            // for 15:30), not a real date, so it must bypass DateTimeValue.FromDateTime's OADate
+            // conversion entirely -- DateTime.ToOADate() throws for years before 100 AD, and even
+            // if it didn't, the corrected serial math only applies to genuine dates.
+            if (dateTime.Date == DateTime.MinValue.Date)
+            {
+                inferredNumberFormat = NumberFormatShortcutService.GetFormat(NumberFormatShortcut.Time);
+                return new DateTimeValue(dateTime.TimeOfDay.TotalDays);
+            }
+
             return DateTimeValue.FromDateTime(dateTime);
         }
 
@@ -88,7 +153,11 @@ public static class CellEntryParser
 
     // Float + AllowThousands so a comma-decimal locale's grouped integer (e.g. de-DE "1.234"
     // meaning 1234, '.' as thousands separator) is honored, not silently misread as a decimal.
-    private const NumberStyles NumberEntryStyles = NumberStyles.Float | NumberStyles.AllowThousands;
+    // AllowParentheses recognizes Excel's Lotus-style negative notation (e.g. "(123)" -> -123)
+    // for a plain (no currency-symbol) numeric literal, not just the currency-marked form
+    // ("($123)") that NumberStyles.Currency already handled via TryParseCurrency below.
+    private const NumberStyles NumberEntryStyles =
+        NumberStyles.Float | NumberStyles.AllowThousands | NumberStyles.AllowParentheses;
 
     private static bool TryParseFiniteNumber(string text, out double number)
     {
@@ -230,6 +299,15 @@ public static class CellEntryParser
         if (!DateTime.TryParse(text, culture, DateTimeStyles.NoCurrentDateDefault, out dateTime))
             return false;
 
+        // A time-only literal (e.g. "15:30", "3:30 PM") has no date component at all;
+        // NoCurrentDateDefault synthesizes DateTime.MinValue's date (0001-01-01) for the missing
+        // date part rather than today's date. Judge these by their time-of-day instead of the
+        // synthesized date -- the pre-1900 guard below exists to reject genuine out-of-range date
+        // literals (e.g. "1/1/1850"), not every time-only entry, which would otherwise always
+        // synthesize a date far earlier than 1900.
+        if (dateTime.Date == DateTime.MinValue.Date)
+            return true;
+
         // Excel's earliest representable date is 1/1/1900 (serial 1); text that parses to an
         // earlier date is left as plain text instead of becoming a negative-serial DateTimeValue.
         return dateTime.Date >= new DateTime(1900, 1, 1);
@@ -246,6 +324,7 @@ public static class CellEntryParser
         var digitGroups = 0;
         var inDigitGroup = false;
         var hasDateSeparator = false;
+        var hasTimeSeparator = false;
         var hasLetter = false;
 
         foreach (var c in text)
@@ -264,6 +343,11 @@ public static class CellEntryParser
             inDigitGroup = false;
             hasDateSeparator |= c is '/' or '-' ||
                 (cultureDateSeparator.Length == 1 && c == cultureDateSeparator[0]);
+            // ':' is Excel's universal time separator regardless of locale (e.g. "15:30"), so a
+            // bare "H:MM"/"H:MM:SS" literal with no AM/PM letter must still be treated as a
+            // date/time candidate -- otherwise a 24-hour time-only entry never even reaches the
+            // DateTime.TryParse attempt below.
+            hasTimeSeparator |= c == ':';
             hasLetter |= char.IsLetter(c);
         }
 
@@ -272,6 +356,6 @@ public static class CellEntryParser
             return false;
         }
 
-        return (hasDateSeparator && digitGroups >= 3) || hasLetter;
+        return (hasDateSeparator && digitGroups >= 3) || hasLetter || hasTimeSeparator;
     }
 }

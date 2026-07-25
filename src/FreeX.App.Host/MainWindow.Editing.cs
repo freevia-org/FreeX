@@ -1237,7 +1237,7 @@ public partial class MainWindow
 
     private bool TryCreateCellFromEntryText(CellAddress addr, string text, out Cell newCell)
     {
-        newCell = CellEntryParser.CreateCell(text, addr, _options.UseR1C1ReferenceStyle);
+        newCell = CellEntryParser.CreateCell(text, addr, _options.UseR1C1ReferenceStyle, _workbook);
 
         var validationSheet = _workbook.GetSheet(_currentSheetId);
         if (validationSheet != null)

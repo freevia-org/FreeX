@@ -214,6 +214,12 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
     private readonly uint _filterColOffset;
     private readonly CellColor _fillColor;
     private FilterUndoSnapshot _undoSnapshot;
+    // R87-commands-autofilter-sort-5-1: keep the worksheet AutoFilter's <colorFilter> filterColumn
+    // model in sync with the interactively-applied Filter-by-Cell-Color criterion (mirrors the
+    // value-list/Top10/Average/custom-criterion siblings in this file), otherwise the column's
+    // filter-funnel icon never shows "active" (BuildActiveAutoFilterColumns/DecorateAutoFilterHeaderCell
+    // only look at sheet.AutoFilter.FilterColumns) and the criterion is silently dropped on save/reload.
+    private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
 
     public string Label => "Filter by Cell Color";
 
@@ -251,6 +257,26 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
             FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fillColor == _fillColor);
         }
 
+        _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            new WorksheetAutoFilterColumnModel(
+                ColumnId: (int)_filterColOffset,
+                Values: [],
+                IncludeBlank: false,
+                CustomFilters: [],
+                CustomFiltersAnd: false,
+                CustomFiltersAndRaw: null,
+                NativeCustomFiltersAttributes: null,
+                Top10: null,
+                DynamicFilter: null,
+                ColorFilter: new WorksheetAutoFilterColorFilterModel(CellColor: true),
+                IconFilter: null,
+                DateGroups: [],
+                NativeFiltersAttributes: null,
+                NativeFilterXmls: []));
+
         return new CommandOutcome(true);
     }
 
@@ -260,6 +286,7 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
+        WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
         _undoSnapshot.Restore(sheet);
     }
 }
@@ -270,6 +297,8 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
     private FilterUndoSnapshot _undoSnapshot;
+    // R87-commands-autofilter-sort-5-1: see CellFillColorFilterCommand's field of the same name.
+    private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
 
     public string Label => "Filter by No Fill";
 
@@ -304,6 +333,29 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
             FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fillColor is null);
         }
 
+        // No dxfId: per the colorFilter schema, omitting dxfId while cellColor="1" is set is the
+        // exact (not approximate) representation of "No Fill" -- unlike an actual chosen fill/font
+        // color, "no fill" has no format record to reference.
+        _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            new WorksheetAutoFilterColumnModel(
+                ColumnId: (int)_filterColOffset,
+                Values: [],
+                IncludeBlank: false,
+                CustomFilters: [],
+                CustomFiltersAnd: false,
+                CustomFiltersAndRaw: null,
+                NativeCustomFiltersAttributes: null,
+                Top10: null,
+                DynamicFilter: null,
+                ColorFilter: new WorksheetAutoFilterColorFilterModel(CellColor: true),
+                IconFilter: null,
+                DateGroups: [],
+                NativeFiltersAttributes: null,
+                NativeFilterXmls: []));
+
         return new CommandOutcome(true);
     }
 
@@ -313,6 +365,7 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
+        WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
         _undoSnapshot.Restore(sheet);
     }
 }
@@ -324,6 +377,8 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
     private readonly uint _filterColOffset;
     private readonly CellColor _fontColor;
     private FilterUndoSnapshot _undoSnapshot;
+    // R87-commands-autofilter-sort-5-1: see CellFillColorFilterCommand's field of the same name.
+    private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
 
     public string Label => "Filter by Font Color";
 
@@ -361,6 +416,26 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
             FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fontColor == _fontColor);
         }
 
+        _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            new WorksheetAutoFilterColumnModel(
+                ColumnId: (int)_filterColOffset,
+                Values: [],
+                IncludeBlank: false,
+                CustomFilters: [],
+                CustomFiltersAnd: false,
+                CustomFiltersAndRaw: null,
+                NativeCustomFiltersAttributes: null,
+                Top10: null,
+                DynamicFilter: null,
+                ColorFilter: new WorksheetAutoFilterColorFilterModel(CellColor: false),
+                IconFilter: null,
+                DateGroups: [],
+                NativeFiltersAttributes: null,
+                NativeFilterXmls: []));
+
         return new CommandOutcome(true);
     }
 
@@ -370,6 +445,7 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
+        WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
         _undoSnapshot.Restore(sheet);
     }
 }

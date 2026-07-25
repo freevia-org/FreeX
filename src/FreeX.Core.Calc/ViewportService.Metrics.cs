@@ -94,9 +94,16 @@ public sealed partial class ViewportService
         return false;
     }
 
-    private static IReadOnlyList<RowMetric> BuildFrozenAwareRowMetrics(Sheet sheet, uint startRow, double availableHeight)
+    /// <summary>
+    /// <paramref name="frozenRows"/> is the caller's EFFECTIVE frozen-row count -- for
+    /// <see cref="GetViewport"/>/<see cref="ComputeRowMetricsSummary"/> this is
+    /// <c>request.FrozenRowsOverride ?? sheet.FrozenRows</c>, so a per-view Freeze Panes override
+    /// (e.g. <c>WorkbookSession.GetEffectiveFrozenRows</c>) governs the pinned-row band instead of
+    /// always falling back to the shared <see cref="Sheet.FrozenRows"/> field.
+    /// </summary>
+    private static IReadOnlyList<RowMetric> BuildFrozenAwareRowMetrics(Sheet sheet, uint startRow, double availableHeight, uint frozenRows)
     {
-        var frozenRows = Math.Min(sheet.FrozenRows, CellAddress.MaxRow);
+        frozenRows = Math.Min(frozenRows, CellAddress.MaxRow);
         if (frozenRows == 0)
         {
             var rows = BuildRowMetrics(sheet, startRow, CellAddress.MaxRow, availableHeight);
@@ -118,9 +125,13 @@ public sealed partial class ViewportService
         return CombineRowsWithOffset(pinnedRows, bodyRows, pinnedHeight);
     }
 
-    private static IReadOnlyList<ColMetric> BuildFrozenAwareColMetrics(Sheet sheet, uint startCol, double availableWidth)
+    /// <summary>
+    /// <paramref name="frozenCols"/> is the caller's EFFECTIVE frozen-column count -- see the
+    /// remarks on <see cref="BuildFrozenAwareRowMetrics"/>.
+    /// </summary>
+    private static IReadOnlyList<ColMetric> BuildFrozenAwareColMetrics(Sheet sheet, uint startCol, double availableWidth, uint frozenCols)
     {
-        var frozenCols = Math.Min(sheet.FrozenCols, CellAddress.MaxCol);
+        frozenCols = Math.Min(frozenCols, CellAddress.MaxCol);
         if (frozenCols == 0)
         {
             var columns = BuildColMetrics(sheet, startCol, CellAddress.MaxCol, availableWidth);

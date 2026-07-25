@@ -189,17 +189,46 @@ public sealed class WorkbookSession
     /// <see cref="IsShowingHeadings"/> / <see cref="IsShowingFormulas"/> / the freeze-pane scroll
     /// helpers would read those shared fields directly, so toggling any of them in one
     /// <see cref="CreateSiblingView"/> window would instantly "leak" into every other open window on
-    /// the same sheet. Entries are lazily seeded from the shared <see cref="Sheet"/> fields on first
-    /// read and invalidated in <see cref="ApplySuccessfulWorkbookMetadataResult"/> (covering both this
-    /// view's own setters and shared Undo/Redo of them) so a stale value is never returned; each
-    /// setter immediately reseeds its own entry/entries with the value(s) it just applied so a
-    /// sibling view's later change can't retroactively change what this view reports.
+    /// the same sheet. <see cref="IsShowingGridlines"/>/<see cref="IsShowingHeadings"/>/
+    /// <see cref="IsShowingFormulas"/> entries are lazily seeded from the shared <see cref="Sheet"/>
+    /// fields on first read and invalidated in <see cref="ApplySuccessfulWorkbookMetadataResult"/>
+    /// (covering both this view's own setters and shared Undo/Redo of them) so a stale value is never
+    /// returned; each setter immediately reseeds its own entry/entries with the value(s) it just
+    /// applied so a sibling view's later change can't retroactively change what this view reports.
+    /// The <see cref="_viewFrozenRowsOverrides"/>/<see cref="_viewFrozenColsOverrides"/> entries below
+    /// instead follow the up-front-snapshot pattern described on <see cref="GetEffectiveFrozenRows"/>
+    /// (R87-window-state-regression-fix: a mere read must never itself seed/freeze a value -- see that
+    /// remark for why).
     /// </summary>
     private readonly Dictionary<SheetId, bool> _viewShowGridlinesOverrides = [];
     private readonly Dictionary<SheetId, bool> _viewShowHeadingsOverrides = [];
     private readonly Dictionary<SheetId, bool> _viewShowFormulasOverrides = [];
     private readonly Dictionary<SheetId, uint> _viewFrozenRowsOverrides = [];
     private readonly Dictionary<SheetId, uint> _viewFrozenColsOverrides = [];
+    /// <summary>
+    /// This view's own Window ▸ Split row/column snapshot per sheet (R87: extends the R86
+    /// <see cref="_viewFrozenRowsOverrides"/>/<see cref="_viewFrozenColsOverrides"/> per-view-independence
+    /// pattern to Split, which -- like Freeze Panes -- is a distinct per-window Excel feature. Excel
+    /// lets each open window on a workbook have its own independent split, but <see cref="Sheet.SplitRow"/>/
+    /// <see cref="Sheet.SplitColumn"/> live on the shared <see cref="Sheet"/> model so they can round-trip
+    /// through file save/load. Without these caches, <see cref="HasIndependentSplitPaneTopRight"/>/
+    /// <see cref="HasIndependentSplitPaneBottomLeft"/> would read those shared fields directly, so
+    /// splitting (or clearing a split) in one <see cref="CreateSiblingView"/> window would instantly
+    /// "leak" into every other open window on the same sheet. Entries are explicitly seeded up front by
+    /// <see cref="SeedViewSplitAndFrozenOverrides"/> (this session's constructor and
+    /// <see cref="InitializeSiblingView"/>) and invalidated both in <see cref="ApplySuccessfulWorkbookMetadataResult"/>
+    /// (covering Undo/Redo of a split change) and in <see cref="ApplySuccessfulEditResult"/> (covering this
+    /// view's own forward-apply of <c>SetSplitPanesCommand</c>, which today reaches this session only
+    /// through the generic <see cref="ExecuteReviewCommand"/> path rather than a dedicated setter) so a
+    /// stale value is never returned. <see cref="GetEffectiveSplitRow"/>/<see cref="GetEffectiveSplitCol"/>
+    /// deliberately do NOT seed-on-read (R87-window-state-regression-fix): a <see cref="RefreshViewport"/>
+    /// triggered incidentally by e.g. <see cref="SelectSheet"/> must never itself freeze in whatever the
+    /// shared field holds at that instant (that instant may predate a caller finishing setting up the
+    /// sheet's Split, e.g. via direct <see cref="Sheet.SplitRow"/>/<see cref="Sheet.SplitColumn"/>
+    /// assignment) -- absent an entry, they simply fall back to the live shared field on every read.
+    /// </summary>
+    private readonly Dictionary<SheetId, uint?> _viewSplitRowOverrides = [];
+    private readonly Dictionary<SheetId, uint?> _viewSplitColOverrides = [];
     /// <summary>
     /// This view's own worksheet-view-mode snapshot per sheet (R86: view-window independence for
     /// View Mode, mirroring <see cref="_viewZoomOverrides"/> for Zoom). Excel treats view mode
@@ -309,6 +338,7 @@ public sealed class WorkbookSession
         RefreshSheetTabsForActiveSheet();
         ActiveCell = GetInitialActiveCell(ActiveSheet);
         SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+        SeedViewSplitAndFrozenOverrides();
         Viewport = BuildViewport();
     }
 
@@ -341,10 +371,37 @@ public sealed class WorkbookSession
         ActiveCell = new CellAddress(ActiveSheet.Id, 1, 1);
         SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
         FormulaEditAddress = null;
+        SeedViewSplitAndFrozenOverrides();
         _viewViewportOrigins[ActiveSheet.Id] = (
             GetScrollableRowStart(),
             GetScrollableColumnStart());
         Viewport = BuildViewport();
+    }
+
+    /// <summary>
+    /// Snapshots this view's Window ▸ Split (<see cref="_viewSplitRowOverrides"/>/
+    /// <see cref="_viewSplitColOverrides"/>) and Freeze Panes (<see cref="_viewFrozenRowsOverrides"/>/
+    /// <see cref="_viewFrozenColsOverrides"/>) state from the shared <see cref="ActiveSheet"/> fields
+    /// the moment this view starts observing the document -- called from this session's constructor
+    /// and from <see cref="InitializeSiblingView"/>, always before this view's first
+    /// <see cref="BuildViewport"/>. <see cref="GetEffectiveSplitRow"/>/<see cref="GetEffectiveSplitCol"/>/
+    /// <see cref="GetEffectiveFrozenRows"/>/<see cref="GetEffectiveFrozenCols"/> are pure peek-the-cache-
+    /// or-fall-back-to-the-live-field reads with no write-on-read side effect of their own (a
+    /// <see cref="RefreshViewport"/> triggered by, say, <see cref="SelectSheet"/> must never silently
+    /// freeze in whatever the sheet's Split/Freeze fields happen to hold at that instant), so without
+    /// this explicit up-front snapshot a freshly created sibling view would have nothing recorded yet
+    /// and would transparently pick up a sibling's later Split/Freeze change on the same shared Sheet --
+    /// exactly the cross-view leak R87 set out to fix. Each setter/command-apply path
+    /// (<see cref="SetFreezePanes"/>, <see cref="ApplySuccessfulWorkbookMetadataResult"/>,
+    /// <see cref="ApplySuccessfulEditResult"/>) subsequently keeps this view's own entries in sync as
+    /// its own Split/Freeze state actually changes.
+    /// </summary>
+    private void SeedViewSplitAndFrozenOverrides()
+    {
+        _viewSplitRowOverrides[ActiveSheet.Id] = ActiveSheet.SplitRow;
+        _viewSplitColOverrides[ActiveSheet.Id] = ActiveSheet.SplitColumn;
+        _viewFrozenRowsOverrides[ActiveSheet.Id] = ActiveSheet.FrozenRows;
+        _viewFrozenColsOverrides[ActiveSheet.Id] = ActiveSheet.FrozenCols;
     }
 
     public Workbook Workbook { get; }
@@ -1491,16 +1548,34 @@ public sealed class WorkbookSession
     public (uint TopRow, uint LeftCol) ViewportOrigin => (GetViewTopRow(), GetViewLeftCol());
 
     /// <summary>
-    /// True when the active sheet has a Window ▸ Split column boundary (<see cref="Sheet.SplitColumn"/>),
-    /// i.e. there is a TopRight pane that can scroll independently of the main (BottomRight) pane.
+    /// True when this view's effective Window ▸ Split column boundary (see <see cref="GetEffectiveSplitCol"/>)
+    /// is set, i.e. there is a TopRight pane that can scroll independently of the main (BottomRight) pane.
     /// </summary>
-    public bool HasIndependentSplitPaneTopRight => ActiveSheet.SplitColumn is not null;
+    public bool HasIndependentSplitPaneTopRight => GetEffectiveSplitCol() is not null;
 
     /// <summary>
-    /// True when the active sheet has a Window ▸ Split row boundary (<see cref="Sheet.SplitRow"/>),
-    /// i.e. there is a BottomLeft pane that can scroll independently of the main (BottomRight) pane.
+    /// True when this view's effective Window ▸ Split row boundary (see <see cref="GetEffectiveSplitRow"/>)
+    /// is set, i.e. there is a BottomLeft pane that can scroll independently of the main (BottomRight) pane.
     /// </summary>
-    public bool HasIndependentSplitPaneBottomLeft => ActiveSheet.SplitRow is not null;
+    public bool HasIndependentSplitPaneBottomLeft => GetEffectiveSplitRow() is not null;
+
+    /// <summary>
+    /// This view's effective Window ▸ Split row boundary (see <see cref="_viewSplitRowOverrides"/> remarks):
+    /// a pure peek at this view's own snapshot (seeded up front by <see cref="SeedViewSplitAndFrozenOverrides"/>,
+    /// kept in sync by every Split-changing command apply/undo/redo), falling back to the shared
+    /// <see cref="Sheet.SplitRow"/> only when this view has no snapshot at all -- so a sibling view's
+    /// Split change never retroactively changes what this view shows/renders around, and merely reading
+    /// this (e.g. from <see cref="BuildViewport"/> during an unrelated <see cref="RefreshViewport"/>)
+    /// never itself freezes in a stale value.
+    /// </summary>
+    public uint? GetEffectiveSplitRow() =>
+        _viewSplitRowOverrides.TryGetValue(ActiveSheet.Id, out var splitRow) ? splitRow : ActiveSheet.SplitRow;
+
+    /// <summary>
+    /// This view's effective Window ▸ Split column boundary. See <see cref="GetEffectiveSplitRow"/>.
+    /// </summary>
+    public uint? GetEffectiveSplitCol() =>
+        _viewSplitColOverrides.TryGetValue(ActiveSheet.Id, out var splitCol) ? splitCol : ActiveSheet.SplitColumn;
 
     /// <summary>
     /// Scrolls the TopRight split-pane quadrant's columns independently of the main (BottomRight)
@@ -2266,7 +2341,7 @@ public sealed class WorkbookSession
         if (!address.Sheet.Equals(ActiveSheet.Id))
             throw new InvalidOperationException("Cell edit address must belong to the active sheet.");
 
-        var cell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle);
+        var cell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle, Workbook);
 
         // Enforce data validation the same way the WPF host's TryCreateCellFromEntryText does: a
         // Stop-alert rule blocks the entry outright, while a Warning/Information ("AskToContinue")
@@ -5360,15 +5435,20 @@ public sealed class WorkbookSession
         FormulaEditAddress = null;
         MarkDirty();
         _selectionStatsRevision++;
-        RefreshViewport();
-        EnsureActiveCellVisible();
         // This method is the single choke point for every sheet-metadata command's forward apply
         // (SetWorksheetViewMode, SetZoomPercent, SetShowGridlines, SetShowHeadings, SetShowFormulas,
         // SetFreezePanes, ...) AND for Undo/Redo of any of them (via ApplySuccessfulHistoryResult),
         // so it is also the right place to drop this view's cached values for the affected sheet --
         // forcing the next read to re-seed from the (possibly just-reverted) shared Sheet fields
         // instead of returning a stale value. Each forward-apply setter immediately reseeds its own
-        // entry/entries afterward (see their remarks).
+        // entry/entries afterward (see their remarks). MUST run before RefreshViewport()/
+        // EnsureActiveCellVisible() below (R87-order-guard-window-state-sweep-3): both rebuild
+        // this view's ViewportModel (the latter's EnsureCellVisible can trigger a second, nested
+        // RefreshViewport of its own), and now that ViewportService actually consumes
+        // GetEffectiveFrozenRows/Cols/SplitRow/Col (via ViewportRequest's FrozenRowsOverride/
+        // FrozenColsOverride/SplitOverride), rebuilding BEFORE the stale entry is dropped would bake
+        // the pre-Undo/Redo cached value into the rendered viewport, leaving it visibly stuck one
+        // step behind even though the shared Sheet field itself already reverted correctly.
         _viewZoomOverrides.Remove(ActiveSheet.Id);
         _viewModeOverrides.Remove(ActiveSheet.Id);
         _viewShowGridlinesOverrides.Remove(ActiveSheet.Id);
@@ -5376,6 +5456,10 @@ public sealed class WorkbookSession
         _viewShowFormulasOverrides.Remove(ActiveSheet.Id);
         _viewFrozenRowsOverrides.Remove(ActiveSheet.Id);
         _viewFrozenColsOverrides.Remove(ActiveSheet.Id);
+        _viewSplitRowOverrides.Remove(ActiveSheet.Id);
+        _viewSplitColOverrides.Remove(ActiveSheet.Id);
+        RefreshViewport();
+        EnsureActiveCellVisible();
     }
 
     private void MarkDirty()
@@ -5490,6 +5574,14 @@ public sealed class WorkbookSession
         RefreshLinkedPicturesForEditedCells(result);
         MarkDirty();
         _selectionStatsRevision++;
+        // R87-order-guard-window-state-sweep-2: this is the forward-apply choke point for
+        // SetSplitPanesCommand (reached via the generic ExecuteReviewCommand, since Split has no
+        // dedicated setter like SetFreezePanes) -- drop this view's own split-override snapshot for
+        // the affected sheet so the next read (GetEffectiveSplitRow/GetEffectiveSplitCol, which never
+        // seed-on-read -- see their remarks) falls back to the live value the command just wrote to
+        // the shared Sheet fields, instead of returning this view's own stale pre-split snapshot.
+        _viewSplitRowOverrides.Remove(ActiveSheet.Id);
+        _viewSplitColOverrides.Remove(ActiveSheet.Id);
         RefreshViewport();
         EnsureActiveCellVisible();
     }
@@ -6525,31 +6617,23 @@ public sealed class WorkbookSession
 
     /// <summary>
     /// This view's effective frozen-row count (see <see cref="_viewFrozenRowsOverrides"/> remarks):
-    /// lazily seeded from the shared <see cref="Sheet.FrozenRows"/> on first read so a sibling
-    /// view's Freeze Panes change never retroactively changes what this view scrolls/renders around.
+    /// a pure peek at this view's own snapshot (seeded up front by <see cref="SeedViewSplitAndFrozenOverrides"/>,
+    /// kept in sync by every Freeze-Panes-changing command apply/undo/redo), falling back to the shared
+    /// <see cref="Sheet.FrozenRows"/> only when this view has no snapshot at all -- so a sibling view's
+    /// Freeze Panes change never retroactively changes what this view scrolls/renders around, and merely
+    /// reading this (e.g. from <see cref="BuildViewport"/> during an unrelated <see cref="RefreshViewport"/>)
+    /// never itself freezes in a stale value. Public (R87) so hosts/consumers outside this class (e.g.
+    /// the Avalonia shell, the Core.Calc viewport pipeline) can read this view's own per-window
+    /// frozen-row count instead of falling back to the shared <see cref="Sheet.FrozenRows"/> field directly.
     /// </summary>
-    private uint GetEffectiveFrozenRows()
-    {
-        if (_viewFrozenRowsOverrides.TryGetValue(ActiveSheet.Id, out var frozenRows))
-            return frozenRows;
-
-        frozenRows = ActiveSheet.FrozenRows;
-        _viewFrozenRowsOverrides[ActiveSheet.Id] = frozenRows;
-        return frozenRows;
-    }
+    public uint GetEffectiveFrozenRows() =>
+        _viewFrozenRowsOverrides.TryGetValue(ActiveSheet.Id, out var frozenRows) ? frozenRows : ActiveSheet.FrozenRows;
 
     /// <summary>
     /// This view's effective frozen-column count. See <see cref="GetEffectiveFrozenRows"/>.
     /// </summary>
-    private uint GetEffectiveFrozenCols()
-    {
-        if (_viewFrozenColsOverrides.TryGetValue(ActiveSheet.Id, out var frozenCols))
-            return frozenCols;
-
-        frozenCols = ActiveSheet.FrozenCols;
-        _viewFrozenColsOverrides[ActiveSheet.Id] = frozenCols;
-        return frozenCols;
-    }
+    public uint GetEffectiveFrozenCols() =>
+        _viewFrozenColsOverrides.TryGetValue(ActiveSheet.Id, out var frozenCols) ? frozenCols : ActiveSheet.FrozenCols;
 
     private static uint CalculateScrollOrigin(
         uint active,
@@ -6661,7 +6745,10 @@ public sealed class WorkbookSession
                 AvailableHeight: _viewportHeight,
                 AvailableWidth: _viewportWidth,
                 IncludeObjects: _includeObjects,
-                SplitPaneOffsets: GetSplitPaneOffsetsForActiveSheet()));
+                SplitPaneOffsets: GetSplitPaneOffsetsForActiveSheet(),
+                FrozenRowsOverride: GetEffectiveFrozenRows(),
+                FrozenColsOverride: GetEffectiveFrozenCols(),
+                SplitOverride: new SplitPaneStateOverride(GetEffectiveSplitRow(), GetEffectiveSplitCol())));
 
     /// <summary>
     /// Returns the TopRight/BottomLeft independent-scroll offsets for the active sheet, if it has

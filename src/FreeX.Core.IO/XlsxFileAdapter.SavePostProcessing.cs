@@ -142,8 +142,26 @@ public sealed partial class XlsxFileAdapter
 
         if (featurePlan.HasThreadedComments)
         {
+            // R87-io-comments-notes-5-1: pass along each person's ORIGINAL userId/providerId/extLst
+            // (read from the source package's xl/persons/person.xml) so WritePersonsPart preserves
+            // them instead of always defaulting sourcePersonRecordsById to null and re-emitting bare
+            // displayName+id records -- see XlsxWorksheetThreadedCommentMapper.ReadPersonRecords/
+            // BuildPersonElement, whose R74 preservation support was previously never reached from
+            // this, the sole production call site.
+            IReadOnlyDictionary<string, PersonRecord>? sourcePersonRecordsById = null;
+            if (SourcePackages.TryGetValue(workbook, out var threadedCommentSourcePackage))
+            {
+                using var sourceStream = threadedCommentSourcePackage.OpenRead();
+                using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+                sourcePersonRecordsById = XlsxWorksheetThreadedCommentMapper.ReadPersonRecords(sourceArchive);
+            }
+
             packageStream.Position = 0;
-            XlsxWorksheetThreadedCommentMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+            XlsxWorksheetThreadedCommentMapper.Save(
+                packageStream,
+                workbook,
+                GetWorksheetPathMap(),
+                sourcePersonRecordsById);
         }
 
         if (featurePlan.HasBackgroundImages)

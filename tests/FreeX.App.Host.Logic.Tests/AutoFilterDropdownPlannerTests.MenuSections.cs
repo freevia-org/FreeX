@@ -71,6 +71,12 @@ public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
 
         var withoutFilter = CreateMenuPlan(sheet, plan);
         sheet.FilterHiddenRows.Add(3);
+        // A real column filter records the rows it owns per-column (FilterCommand / AverageFilterCommand
+        // populate Sheet.ColumnFilterOwnedRows / ActiveValueFilterColumns; FilterHiddenRows alone is only
+        // the sheet-wide aggregate written by demo/screenshot code). "Clear Filter From <Column>" is
+        // enabled off THIS column's own ownership (R87-commands-autofilter-sort-5-2), not the aggregate,
+        // so model the filter as owned by the filtered column (col 1) here.
+        sheet.ColumnFilterOwnedRows[1] = [3];
         var withFilter = CreateMenuPlan(sheet, plan);
 
         withoutFilter.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.ClearFilter)

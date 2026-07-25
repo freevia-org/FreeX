@@ -664,20 +664,28 @@ public sealed partial class FormulaEvaluator
         // worksheet reference to a spill range, not a computed array, so it belongs in this whitelist
         // alongside the other reference node kinds.
         //
-        // NamedRangeNode is special-cased separately below rather than folded into this static
-        // whitelist: a bare name (=@MySeq, or a LAMBDA parameter such as =LAMBDA(x,@x)(...)) is
-        // ambiguous from AST shape alone — it can resolve to a genuine worksheet reference (a name
-        // bound to =Sheet1!$A$1:$A$3, or a LAMBDA parameter bound to such a range) or to a computed
-        // array (a name bound to =SEQUENCE(3), or a LAMBDA parameter bound to a computed-array
-        // argument). Only the resolved RangeValue's IsSheetReference provenance flag (already
+        // NamedRangeNode and the OFFSET/INDEX/INDIRECT/CHOOSE function calls are special-cased
+        // separately below rather than folded into this static whitelist: a bare name (=@MySeq, or
+        // a LAMBDA parameter such as =LAMBDA(x,@x)(...)) is ambiguous from AST shape alone — it can
+        // resolve to a genuine worksheet reference (a name bound to =Sheet1!$A$1:$A$3, or a LAMBDA
+        // parameter bound to such a range) or to a computed array (a name bound to =SEQUENCE(3), or
+        // a LAMBDA parameter bound to a computed-array argument). Likewise OFFSET/INDEX/INDIRECT
+        // return a genuine worksheet reference when called in their reference-returning shape (e.g.
+        // =@OFFSET($A$1,1,0,3,1), =@INDEX(A1:A3,0)) but the underlying RangeValue provenance is the
+        // only way to tell that apart from, say, INDEX's array-constant form; CHOOSE similarly just
+        // forwards whichever branch it selects, which may itself be a worksheet reference or a
+        // computed array. Only the resolved RangeValue's IsSheetReference provenance flag (already
         // computed by EvaluateArrayOperand into `range` above) can tell the two apart, mirroring the
-        // FunctionCallNode ANCHORARRAY-vs-plain-computed-array distinction made here already.
+        // FunctionCallNode ANCHORARRAY-vs-plain-computed-array distinction made here already — and
+        // matching the sibling ImplicitIntersectionOp(ScalarValue,...) overload used by SINGLE(),
+        // which branches on this same flag without needing the AST shape at all.
         bool isReferenceLikeOperand = operandNode switch
         {
             RangeRefNode or FullColumnRangeRefNode or FullRowRangeRefNode
                 or StructuredReferenceNode or StructuredCurrentRowReferenceNode
                 or FunctionCallNode { FunctionName: "ANCHORARRAY" } => true,
             NamedRangeNode => range.IsSheetReference,
+            FunctionCallNode { FunctionName: "OFFSET" or "INDEX" or "INDIRECT" or "CHOOSE" } => range.IsSheetReference,
             _ => false,
         };
 

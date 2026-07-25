@@ -211,6 +211,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     private List<int>? _previousComboScatterSeriesIndexes;
     private int? _previousTrendlineSeriesIndex;
     private int? _previousErrorBarSeriesIndex;
+    private bool? _previousShowLinearTrendline;
+    private bool? _previousShowErrorBars;
     private bool _clearedMappingsForSourceChange;
 
     public string Label => "Select Chart Data";
@@ -286,6 +288,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             _previousComboScatterSeriesIndexes = chart.ComboScatterSeriesIndexes;
             _previousTrendlineSeriesIndex = chart.TrendlineSeriesIndex;
             _previousErrorBarSeriesIndex = chart.ErrorBarSeriesIndex;
+            _previousShowLinearTrendline = chart.ShowLinearTrendline;
+            _previousShowErrorBars = chart.ShowErrorBars;
             _clearedMappingsForSourceChange = true;
             chart.SeriesColumnMappings = [];
             chart.VerbatimSeriesFormulas = null;
@@ -300,6 +304,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.ComboScatterSeriesIndexes = [];
             chart.TrendlineSeriesIndex = 0;
             chart.ErrorBarSeriesIndex = 0;
+            chart.ShowLinearTrendline = false;
+            chart.ShowErrorBars = false;
         }
 
         chart.DataRange = _dataRange;
@@ -336,6 +342,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.ComboScatterSeriesIndexes = _previousComboScatterSeriesIndexes ?? [];
             chart.TrendlineSeriesIndex = _previousTrendlineSeriesIndex ?? 0;
             chart.ErrorBarSeriesIndex = _previousErrorBarSeriesIndex ?? 0;
+            chart.ShowLinearTrendline = _previousShowLinearTrendline ?? false;
+            chart.ShowErrorBars = _previousShowErrorBars ?? false;
         }
 
         _previousDataRange = null;
@@ -355,6 +363,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         _previousComboScatterSeriesIndexes = null;
         _previousTrendlineSeriesIndex = null;
         _previousErrorBarSeriesIndex = null;
+        _previousShowLinearTrendline = null;
+        _previousShowErrorBars = null;
         _clearedMappingsForSourceChange = false;
     }
 }

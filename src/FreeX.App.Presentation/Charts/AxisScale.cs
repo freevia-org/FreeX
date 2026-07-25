@@ -83,9 +83,10 @@ public sealed class AxisScale
         double? explicitMax = null,
         double? explicitStep = null,
         int targetTickCount = 7,
-        bool reverseOrder = false)
+        bool reverseOrder = false,
+        bool includeZeroBaseline = true)
     {
-        var (min, max) = NormalizeRange(dataMin, dataMax);
+        var (min, max) = NormalizeRange(dataMin, dataMax, includeZeroBaseline);
 
         // Pad the range to a round boundary unless the caller pinned the bound, matching the
         // source renderer's auto-fit behaviour (extend out to the next major step).
@@ -313,7 +314,7 @@ public sealed class AxisScale
         return ticks;
     }
 
-    private static (double Min, double Max) NormalizeRange(double dataMin, double dataMax)
+    private static (double Min, double Max) NormalizeRange(double dataMin, double dataMax, bool includeZeroBaseline)
     {
         if (double.IsNaN(dataMin) || double.IsInfinity(dataMin))
             dataMin = 0;
@@ -324,11 +325,18 @@ public sealed class AxisScale
             (dataMin, dataMax) = (dataMax, dataMin);
 
         // The source renderer baselines value axes at zero unless the data goes negative, so bars
-        // grow from the zero line. Include zero in the range when all data is on one side of it.
-        if (dataMin > 0)
-            dataMin = 0;
-        if (dataMax < 0)
-            dataMax = 0;
+        // (and filled areas, which shade down to the zero baseline) grow from the zero line. Include
+        // zero in the range when all data is on one side of it. Series with no zero-anchored geometry
+        // (Line/Scatter/Bubble) pass includeZeroBaseline: false so they instead auto-fit tight to the
+        // actual data extents, matching OxyPlot's own LineSeries/ScatterSeries auto-range (no baseline)
+        // used by the WPF renderer for those chart types.
+        if (includeZeroBaseline)
+        {
+            if (dataMin > 0)
+                dataMin = 0;
+            if (dataMax < 0)
+                dataMax = 0;
+        }
 
         if (Math.Abs(dataMax - dataMin) < double.Epsilon)
             dataMax = dataMin + 1;

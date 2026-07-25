@@ -35,7 +35,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void AddSlicerTimelineOverlays(Canvas overlay, ViewportModel viewport)
     {
-        var showHeadings = _session.ActiveSheet.ShowHeadings;
+        var showHeadings = _session.IsShowingHeadings;
         var zoomFactor = GetActiveZoomFactor();
         var workbook = _session.Workbook;
 

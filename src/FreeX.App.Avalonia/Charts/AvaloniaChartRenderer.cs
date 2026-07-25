@@ -47,6 +47,9 @@ public sealed class AvaloniaChartRenderer
     private static readonly IBrush DefaultPlotBorderBrush = SolidBrush(0xD9, 0xD9, 0xD9);
     private static readonly IBrush DefaultDataLabelBrush = SolidBrush(0x40, 0x40, 0x40);
     private static readonly IBrush GridlineBrush = SolidBrush(0xDC, 0xDC, 0xDC);
+    // R87-render-chart-plot-5-4: matches ChartRenderer.Axes.cs ApplyGridlineStyle's WPF default minor
+    // gridline color (235, 235, 235) used when the chart model doesn't override it.
+    private static readonly IBrush MinorGridlineBrush = SolidBrush(0xEB, 0xEB, 0xEB);
     private static readonly IBrush TrendlineBrush = SolidBrush(0x80, 0x80, 0x80);
 
     // Dash arrays for StrokeDashArray — values are in stroke-thickness units.
@@ -1100,18 +1103,58 @@ public sealed class AvaloniaChartRenderer
         bool showMajor;
         CellColor? majorColor;
         double thickness;
+        CellColor? minorColor;
 
         if (horizontal)
         {
             showMajor = _chart.ShowXAxisMajorGridlines;
             majorColor = _chart.XAxisMajorGridlineColor;
             thickness = Math.Max(0.5, _chart.XAxisGridlineThickness);
+            minorColor = _chart.XAxisMinorGridlineColor;
         }
         else
         {
             showMajor = _chart.ShowYAxisMajorGridlines;
             majorColor = _chart.YAxisMajorGridlineColor;
             thickness = Math.Max(0.5, _chart.YAxisGridlineThickness);
+            minorColor = _chart.YAxisMinorGridlineColor;
+        }
+
+        // R87-render-chart-plot-5-4: minor gridlines are an independent setting from major ones (the
+        // WPF renderer draws them via axis.MinorGridlineStyle regardless of the major setting), so
+        // draw them here from AxisLayout.MinorTicks before the early-return that gates only the
+        // major gridlines below.
+        if (axis.MinorTicks is { Count: > 0 } minorTicks)
+        {
+            IBrush minorBrush = minorColor is { } mnc
+                ? SolidBrush(mnc)
+                : MinorGridlineBrush;
+            var minorThickness = Math.Max(0.25, thickness * 0.75);
+            foreach (var tick in minorTicks)
+            {
+                if (horizontal)
+                {
+                    canvas.Children.Add(new Line
+                    {
+                        StartPoint = new AvaloniaPoint(tick.Position, plot.Top),
+                        EndPoint = new AvaloniaPoint(tick.Position, plot.Bottom),
+                        Stroke = minorBrush,
+                        StrokeThickness = minorThickness,
+                        StrokeDashArray = DotArray,
+                    });
+                }
+                else
+                {
+                    canvas.Children.Add(new Line
+                    {
+                        StartPoint = new AvaloniaPoint(plot.Left, tick.Position),
+                        EndPoint = new AvaloniaPoint(plot.Right, tick.Position),
+                        Stroke = minorBrush,
+                        StrokeThickness = minorThickness,
+                        StrokeDashArray = DotArray,
+                    });
+                }
+            }
         }
 
         if (!showMajor)

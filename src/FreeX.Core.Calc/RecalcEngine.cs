@@ -1934,8 +1934,25 @@ public sealed class RecalcEngine
                     try
                     {
                         var namedAst = FormulaEvaluator.ParseFormula(formulaText);
+
+                        // Re-anchor the name's relative (non-$) references to formulaCell, mirroring
+                        // FormulaEvaluator.ApplyRelativeNameAnchor's per-using-cell shift exactly (same
+                        // implicit A1-of-formulaCell's-sheet anchor convention), so the dependency graph
+                        // tracks the SAME target the evaluator actually reads: a name with RefersTo="=B2"
+                        // used from D10 evaluates against (and must depend on) the shifted E11, not the
+                        // literal unshifted B2.
+                        var anchor = new CellAddress(formulaCell.Sheet, 1, 1);
+                        var shiftedAst = FormulaEvaluator.ShiftFormulaForCell(namedAst, anchor, formulaCell);
+
+                        // Mirror ApplyRelativeNameAnchor's self-reference guard: if the shift happens to
+                        // land on formulaCell itself (an artifact of the implicit A1 anchor, not a genuine
+                        // circular formula), the evaluator falls back to evaluating the literal unshifted
+                        // form -- so the dependency graph must track that same unshifted target rather than
+                        // manufacture a self-dependency edge the evaluator never actually reads.
+                        var effectiveAst = ReferencesFormulaCell(shiftedAst, formulaCell) ? namedAst : shiftedAst;
+
                         return CollectReferences(
-                            namedAst,
+                            effectiveAst,
                             defaultSheetId,
                             formulaCell,
                             workbook,
@@ -2058,6 +2075,38 @@ public sealed class RecalcEngine
             }
         }
 
+        return false;
+    }
+
+    // Best-effort structural check for whether `node` contains an unqualified (implicit-sheet)
+    // cell/range reference that covers `current` -- mirrors FormulaEvaluator's private
+    // ReferencesCell (FormulaEvaluator.References.cs) used by ApplyRelativeNameAnchor's own
+    // self-reference guard, re-declared here since the two projects share no InternalsVisibleTo.
+    // Only the node kinds ShiftFormulaForCell actually rewrites are inspected; this is
+    // intentionally narrow (not a full reference-tracking pass) to match that guard's purpose.
+    private static bool ReferencesFormulaCell(FormulaNode node, CellAddress current) => node switch
+    {
+        CellRefNode cr when cr.SheetName is null => cr.Row == current.Row && cr.ColumnNumber == current.Col,
+        RangeRefNode rr when rr.SheetName is null =>
+            current.Row >= Math.Min(rr.Start.Row, rr.End.Row) && current.Row <= Math.Max(rr.Start.Row, rr.End.Row) &&
+            current.Col >= Math.Min(rr.Start.ColumnNumber, rr.End.ColumnNumber) && current.Col <= Math.Max(rr.Start.ColumnNumber, rr.End.ColumnNumber),
+        FullColumnRangeRefNode fcr when fcr.SheetName is null =>
+            current.Col >= Math.Min(fcr.StartColumnNumber, fcr.EndColumnNumber) && current.Col <= Math.Max(fcr.StartColumnNumber, fcr.EndColumnNumber),
+        FullRowRangeRefNode frr when frr.SheetName is null =>
+            current.Row >= Math.Min(frr.StartRow, frr.EndRow) && current.Row <= Math.Max(frr.StartRow, frr.EndRow),
+        BinaryOpNode bin => ReferencesFormulaCell(bin.Left, current) || ReferencesFormulaCell(bin.Right, current),
+        UnaryOpNode un => ReferencesFormulaCell(un.Operand, current),
+        FunctionCallNode fn => ReferencesFormulaCellInAny(fn.Arguments, current),
+        _ => false
+    };
+
+    private static bool ReferencesFormulaCellInAny(IReadOnlyList<FormulaNode> nodes, CellAddress current)
+    {
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (ReferencesFormulaCell(nodes[i], current))
+                return true;
+        }
         return false;
     }
 

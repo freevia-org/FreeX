@@ -380,7 +380,7 @@ public static partial class PivotTableRefreshService
             return KeyText(value);
 
         if (grouping == PivotFieldGrouping.NumberRange)
-            return NumberRangeKeyText(value, groupStart ?? 0, groupInterval ?? 1);
+            return NumberRangeKeyText(value, groupStart ?? 0, groupEnd, groupInterval ?? 1);
 
         if (value is not DateTimeValue dateValue)
             return KeyText(value);
@@ -396,7 +396,7 @@ public static partial class PivotTableRefreshService
         };
     }
 
-    private static string NumberRangeKeyText(ScalarValue value, double start, double interval)
+    private static string NumberRangeKeyText(ScalarValue value, double start, double? end, double interval)
     {
         // Blank/non-numeric source values (e.g. an empty cell or text mixed into a
         // numeric column) don't belong to any numeric bucket - Excel puts them in a
@@ -407,6 +407,15 @@ public static partial class PivotTableRefreshService
         if (interval <= 0)
             interval = 1;
         var number = Number(value);
+
+        // The "Ending at" bound (Excel's Group Field dialog) is a load-bearing bucket
+        // boundary, not just a UI label: values at or past it don't get their own
+        // interval-sized bucket past the configured end - they fall into a single
+        // overflow group labeled ">end", the same way Excel does. Guard end > start so a
+        // misconfigured/legacy end value (<= start) doesn't collapse every bucket.
+        if (end.HasValue && end.Value > start && number >= end.Value)
+            return $">{end.Value:0.########}";
+
         var bucketStart = start + Math.Floor((number - start) / interval) * interval;
 
         // Excel labels integer-interval groups as an inclusive range ("0-9", "10-19", the
@@ -517,7 +526,8 @@ public static partial class PivotTableRefreshService
         /// </summary>
         private static bool TryGetLabelSortNumber(string text, out double number) =>
             double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out number) ||
-            TryParseNumberRangeLabelStart(text, out number);
+            TryParseNumberRangeLabelStart(text, out number) ||
+            TryParseNumberRangeOverflowLabel(text, out number);
 
         /// <summary>
         /// Parses the leading number out of a "{start}-{end}" numeric-group bucket label (see
@@ -549,6 +559,21 @@ public static partial class PivotTableRefreshService
 
             start = startValue;
             return true;
+        }
+
+        /// <summary>
+        /// Parses the boundary out of a ">{end}" overflow-bucket label (see
+        /// <see cref="NumberRangeKeyText"/>), produced for values at or past a numeric-range
+        /// group's "Ending at" setting, so that overflow bucket sorts numerically (after every
+        /// in-range bucket) instead of lexicographically.
+        /// </summary>
+        private static bool TryParseNumberRangeOverflowLabel(string text, out double boundary)
+        {
+            boundary = 0;
+            if (string.IsNullOrEmpty(text) || text[0] != '>')
+                return false;
+
+            return double.TryParse(text[1..], NumberStyles.Float, CultureInfo.CurrentCulture, out boundary);
         }
     }
 

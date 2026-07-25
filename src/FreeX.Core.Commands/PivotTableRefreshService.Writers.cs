@@ -239,7 +239,8 @@ public static partial class PivotTableRefreshService
                     outputRow,
                     compactRowIndentLevels,
                     indentStep,
-                    calculatedItemTotals);
+                    calculatedItemTotals,
+                    retainedRows);
                 outputRow++;
             }
 
@@ -384,6 +385,10 @@ public static partial class PivotTableRefreshService
                 outputColumn++;
             }
         }
+        // Column-only pivot: a single value axis, so grand/row/column total all reduce to
+        // the same visible-rows set (matches the DisplayAggregate context built for the
+        // ordinary column cells just above in this method).
+        var columnCalculatedItemContext = new PivotDisplayContext(visibleRows, visibleRows, visibleRows);
         foreach (var (calculatedItem, fieldPosition) in columnCalculatedItems)
         {
             for (var index = 0; index < pivotTable.DataFields.Count; index++)
@@ -396,7 +401,8 @@ public static partial class PivotTableRefreshService
                     [],
                     pivotTable.DataFields[index],
                     pivotTable,
-                    headers);
+                    headers,
+                    context: columnCalculatedItemContext);
                 SetPivotValueCell(
                     workbook,
                     sheet,
@@ -464,7 +470,8 @@ public static partial class PivotTableRefreshService
         uint outputRow,
         Dictionary<uint, int>? compactRowIndentLevels,
         int indentStep,
-        double[] calculatedItemTotals)
+        double[] calculatedItemTotals,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> retainedRows)
     {
         if (compactRowIndentLevels is not null)
         {
@@ -480,6 +487,10 @@ public static partial class PivotTableRefreshService
         }
 
         var groupKeys = groups.Select(group => group.Key).ToList();
+        // Row-only pivot: a single value axis, so grand/row/column total all reduce to the
+        // same retained-rows set (matches the DisplayAggregate context built for the
+        // ordinary row cells just above in WriteRowPivot).
+        var context = new PivotDisplayContext(retainedRows, retainedRows, retainedRows);
         for (var index = 0; index < pivotTable.DataFields.Count; index++)
         {
             var calculatedValue = EvaluateCalculatedItemForField(
@@ -490,7 +501,8 @@ public static partial class PivotTableRefreshService
                 parentPrefix,
                 pivotTable.DataFields[index],
                 pivotTable,
-                headers);
+                headers,
+                context: context);
             SetPivotValueCell(
                 workbook,
                 sheet,
@@ -511,16 +523,23 @@ public static partial class PivotTableRefreshService
         PivotDataFieldModel dataField,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
-        IReadOnlyList<string>? suffix = null)
+        IReadOnlyList<string>? suffix = null,
+        PivotDisplayContext? context = null)
     {
         suffix ??= [];
-        return PivotCalculatedExpressionEvaluator.Evaluate(formula, name =>
+        var rawValue = PivotCalculatedExpressionEvaluator.Evaluate(formula, name =>
         {
             var rows = keys
                 .Where(key => CalculatedItemKeyMatches(key, fieldPosition, parentPrefix, name, suffix))
                 .SelectMany(rowsForKey);
             return AggregateDouble(rows, dataField, pivotTable, headers);
         });
+
+        // R87-calc-pivot-aggregation-5-3: apply the data field's Show Values As setting
+        // (% of grand/row/column/parent total) to the calculated item's own combined
+        // value, so it doesn't display a raw aggregate in a column where every sibling
+        // cell shows a transformed value. See ApplyPercentOfTotalToCalculatedValue.
+        return context is null ? rawValue : ApplyPercentOfTotalToCalculatedValue(rawValue, context, dataField, pivotTable, headers);
     }
 
     private static bool CalculatedItemKeyMatches(

@@ -2,7 +2,7 @@ namespace FreeX.App.Presentation.SheetUI;
 
 /// <summary>
 /// Pure pointer mechanics shared by the sheet-tab hosts. Keeping the midpoint and scroll
-/// calculations out of the platform event handlers makes the WPF and Avalonia routes agree on
+/// calculations out of the platform event handlers makes the desktop and cross-platform routes agree on
 /// the same boundary behavior.
 /// </summary>
 public static class SheetTabPointerPlanner

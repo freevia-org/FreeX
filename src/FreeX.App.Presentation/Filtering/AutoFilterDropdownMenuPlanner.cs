@@ -64,7 +64,13 @@ public static class AutoFilterDropdownMenuPlanner
         var filterEntry = AutoFilterMenuCatalog.CreateFilterFamilyEntry(filterKind, textProvider);
         var colorOptions = CollectColorOptions(workbook, sheet, plan, textProvider);
 
-        var hasActiveFilter = HasActiveFilter(sheet, plan.Range);
+        // R87-commands-autofilter-sort-5-2: "Clear Filter From <Column>" must reflect whether THIS
+        // column carries an active filter criterion, not whether ANY column in the AutoFilter range
+        // does -- HasActiveFilter(sheet, range) answers the latter (used by the toolbar's "Clear"
+        // button, which clears every column at once) and would keep the per-column entry enabled even
+        // for an unfiltered column just because a sibling column has a filter.
+        var filterCol = plan.Range.Start.Col + plan.FilterColumnOffset;
+        var hasActiveFilter = HasActiveFilterOnColumn(sheet, filterCol);
         var entries = new List<AutoFilterMenuEntry>
         {
             new(sortLabels.Ascending, AutoFilterMenuEntryKind.SortAscending),
@@ -258,6 +264,23 @@ public static class AutoFilterDropdownMenuPlanner
 
         var sortOn = option.Kind == AutoFilterColorFilterKind.FontColor ? SortOn.FontColor : SortOn.CellColor;
         return new SortCommand(sheetId, range, [new SortKey(columnOffset, Ascending: true, sortOn, color)]);
+    }
+
+    /// <summary>
+    /// True when <paramref name="filterCol"/> specifically (not some other column of the same
+    /// AutoFilter range) currently carries an active filter criterion -- either a value-list filter
+    /// (<see cref="Sheet.ActiveValueFilterColumns"/>) or one of the condition/Top-10/Above-Average/
+    /// color-filter mechanisms, which record the rows they own per column in
+    /// <see cref="Sheet.ColumnFilterOwnedRows"/> (see <see cref="FilterHiddenRowUpdater.ApplyColumnOwnedVisibility"/>).
+    /// Used by <see cref="CreateMenuPlan"/> to enable/disable that column's own
+    /// "Clear Filter From &lt;Column&gt;" entry, mirroring Excel (which only enables it when the
+    /// column itself is filtered).
+    /// </summary>
+    public static bool HasActiveFilterOnColumn(Sheet sheet, uint filterCol)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        return sheet.ActiveValueFilterColumns.ContainsKey(filterCol) ||
+            (sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var owned) && owned.Count > 0);
     }
 
     public static bool HasActiveFilter(Sheet sheet, GridRange range)

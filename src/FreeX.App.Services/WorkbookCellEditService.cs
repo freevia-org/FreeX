@@ -202,7 +202,7 @@ public sealed class WorkbookCellEditService
         if (!address.Sheet.Equals(sheetId))
             throw new ArgumentException("The edit address must belong to the target sheet.", nameof(address));
 
-        var newCell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle);
+        var newCell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle, workbook);
         return ExecuteEditCommand(workbook, new EditCellsCommand(sheetId, [(address, newCell)]));
     }
 

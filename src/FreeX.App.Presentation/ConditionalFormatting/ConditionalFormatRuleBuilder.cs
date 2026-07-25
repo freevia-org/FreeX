@@ -80,7 +80,15 @@ public static class ConditionalFormatRuleBuilder
 
             case CfRuleType.DataBar:
                 if (input.DataBarColor is { } dataBarColor)
+                {
                     cf.DataBarColor = dataBarColor;
+                    // R87-io-theme-color-resolve-5-2: existingRule was cloned verbatim (including its
+                    // theme+tint DataBarColorSource), so once the user actually picks a new solid
+                    // color here, the stale theme reference must be dropped -- otherwise the writer
+                    // (XlsxAdvancedConditionalFormatWriter.ToColorXml) keeps emitting the OLD theme
+                    // color and silently discards this edit.
+                    cf.DataBarColorSource = null;
+                }
                 cf.DataBarMinThresholdType = input.DataBarMinType;
                 cf.DataBarMinThresholdValue = ConditionalFormatInputParser.BlankToNull(input.DataBarMinValue);
                 cf.DataBarMaxThresholdType = input.DataBarMaxType;
@@ -102,16 +110,30 @@ public static class ConditionalFormatRuleBuilder
                 cf.UseThreeColorScale = input.UseThreeColorScale;
                 cf.MinThresholdType = input.ColorScaleMinType;
                 cf.MinThresholdValue = ConditionalFormatInputParser.BlankToNull(input.ColorScaleMinValue);
+                // R87-io-theme-color-resolve-5-2: existingRule was cloned verbatim (including its
+                // theme+tint Min/Mid/MaxColorSource), so once the user actually picks a new solid
+                // color for a stop here, that stop's stale theme reference must be dropped --
+                // otherwise the writer (XlsxAdvancedConditionalFormatWriter.ToColorXml) keeps
+                // emitting the OLD theme color and silently discards this edit.
                 if (ConditionalFormatInputParser.TryParseRgbColor(input.MinColor, out var minColor))
+                {
                     cf.MinColor = minColor;
+                    cf.MinColorSource = null;
+                }
                 cf.MidThresholdType = input.ColorScaleMidType;
                 cf.MidThresholdValue = ConditionalFormatInputParser.BlankToNull(input.ColorScaleMidValue);
                 if (input.UseThreeColorScale && ConditionalFormatInputParser.TryParseRgbColor(input.MidColor, out var midColor))
+                {
                     cf.MidColor = midColor;
+                    cf.MidColorSource = null;
+                }
                 cf.MaxThresholdType = input.ColorScaleMaxType;
                 cf.MaxThresholdValue = ConditionalFormatInputParser.BlankToNull(input.ColorScaleMaxValue);
                 if (ConditionalFormatInputParser.TryParseRgbColor(input.MaxColor, out var maxColor))
+                {
                     cf.MaxColor = maxColor;
+                    cf.MaxColorSource = null;
+                }
                 break;
 
             case CfRuleType.ContainsText:

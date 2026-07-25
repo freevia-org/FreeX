@@ -205,6 +205,47 @@ public class FindReplaceTests
     }
 
     [Fact]
+    public void R87_Find_BlankSearchTextWithFormatCriterion_MatchesStyleOnlyBlankCell()
+    {
+        // R87-commands-find-replace-5-3: a style-only cell (never given a value, only a Format
+        // Cells override -- Sheet.StyleOnly.cs) has no entry in Sheet's normal cell storage, so a
+        // blank "Find what" + Format-criterion Find All must still surface it, exactly like real
+        // Excel's format-only Find All does.
+        var (wb, sheet, _) = Setup();
+        var redFillStyle = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 0, 0) });
+        var c10 = new CellAddress(sheet.Id, 10, 3);
+        sheet.SetStyleOnly(c10.Row, c10.Col, redFillStyle);
+
+        var results = FindReplaceService.Find(
+            wb,
+            string.Empty,
+            new FindOptions(RequiredFormat: new StyleDiff(FillColor: new CellColor(255, 0, 0))));
+
+        results.Select(result => result.Address).Should().Equal(c10);
+    }
+
+    [Fact]
+    public void R87_Find_BlankSearchTextWithFormatCriterion_ExcludesStyleOnlyBlankCellWithDifferentFormat()
+    {
+        // No-regression sibling: a style-only cell whose format does NOT satisfy the criterion
+        // must still be excluded, same as any other candidate.
+        var (wb, sheet, _) = Setup();
+        var redFillStyle = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 0, 0) });
+        var blueFillStyle = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(0, 0, 255) });
+        var c10 = new CellAddress(sheet.Id, 10, 3);
+        var c11 = new CellAddress(sheet.Id, 11, 3);
+        sheet.SetStyleOnly(c10.Row, c10.Col, redFillStyle);
+        sheet.SetStyleOnly(c11.Row, c11.Col, blueFillStyle);
+
+        var results = FindReplaceService.Find(
+            wb,
+            string.Empty,
+            new FindOptions(RequiredFormat: new StyleDiff(FillColor: new CellColor(255, 0, 0))));
+
+        results.Select(result => result.Address).Should().Equal(c10);
+    }
+
+    [Fact]
     public void ReplaceAll_ReplacesValueCells()
     {
         var (wb, sheet, commandBus) = Setup();

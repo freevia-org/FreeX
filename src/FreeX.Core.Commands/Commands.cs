@@ -89,9 +89,16 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
                 hadPhoneticGuide,
                 oldPhoneticGuide));
 
-            // Apply new state while preserving the cell's existing formatting.
+            // Apply new state while preserving the cell's existing formatting -- UNLESS
+            // CellEntryParser already resolved and attached an auto-inferred number format for
+            // this literal (e.g. typing "50%"/"$5"/"1 1/2"/"3:30 PM" into a General-formatted
+            // cell), signaled by newCell.StyleId being non-default. No other Cell-construction
+            // path feeding this command ever sets a non-default StyleId on a freshly parsed
+            // entry, so this check cannot misfire against ordinary edits/paste/fill, which all
+            // still arrive with StyleId.Default and fall through to the old preserve-style
+            // behavior unchanged (R87-formula-number-parse-locale-5-3).
             var appliedCell = newCell.Clone();
-            if (oldCell is not null)
+            if (oldCell is not null && appliedCell.StyleId == StyleId.Default)
                 appliedCell.StyleId = oldCell.StyleId;
             sheet.SetCell(addr, appliedCell);
 

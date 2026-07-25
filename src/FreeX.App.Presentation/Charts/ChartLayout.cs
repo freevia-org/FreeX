@@ -50,6 +50,15 @@ public sealed class AxisLayout
 
     public required IReadOnlyList<AxisTick> Ticks { get; init; }
 
+    /// <summary>
+    /// R87-render-chart-plot-5-4: minor-gridline tick positions, populated only when the chart model
+    /// requests minor gridlines for this axis (<see cref="ChartModel.ShowXAxisMinorGridlines"/>/
+    /// <see cref="ChartModel.ShowYAxisMinorGridlines"/>) -- null when minor gridlines are off. Mirrors
+    /// <see cref="Ticks"/> in shape (unlabeled) so the portable-shell renderers (the cross-platform
+    /// shell and the PDF exporter) can draw them the same way the desktop renderer does via OxyPlot's Axis.MinorGridlineStyle.
+    /// </summary>
+    public IReadOnlyList<AxisTick>? MinorTicks { get; init; }
+
     /// <summary>The underlying scale, exposed so consumers can map extra values if needed.</summary>
     public required AxisScale Scale { get; init; }
 

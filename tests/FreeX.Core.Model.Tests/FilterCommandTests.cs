@@ -90,6 +90,74 @@ public sealed class FilterCommandTests
     }
 
     [Fact]
+    public void R87_CellFillColorFilterCommand_SyncsColorFilterIntoAutoFilterModelAndReverts()
+    {
+        // R87-commands-autofilter-sort-5-1: unlike the value-list/Top10/Average/custom-criterion
+        // filter mechanisms, Filter-by-Cell-Color never used to sync into sheet.AutoFilter's
+        // FilterColumns -- so the column's filter-funnel icon never showed "active" and the
+        // criterion was silently dropped on save/reload. Wiring it in via
+        // WorksheetAutoFilterColumnSync.Apply (mirroring the sibling commands) fixes both.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var green = new CellColor(0, 176, 80);
+        var greenCellStyle = CellStyle.Default.Clone();
+        greenCellStyle.FillColor = green;
+        var greenStyle = wb.RegisterStyle(greenCellStyle);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Ready"));
+        sheet.GetCell(2, 1)!.StyleId = greenStyle;
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1));
+        sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
+        var ctx = new TestCommandContext(wb);
+
+        var command = new CellFillColorFilterCommand(sheet.Id, range, filterColOffset: 0, green);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        var column = sheet.AutoFilter.FilterColumns.Should().ContainSingle().Subject;
+        column.ColumnId.Should().Be(0);
+        column.ColorFilter.Should().NotBeNull();
+        column.ColorFilter!.CellColor.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        sheet.AutoFilter.FilterColumns.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void R87_CellFillColorFilterCommand_StillHidesNonMatchingRows()
+    {
+        // No-regression sibling: the AutoFilter-model sync added above must not disturb the
+        // command's existing row-hiding behavior.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var green = new CellColor(0, 176, 80);
+        var greenCellStyle = CellStyle.Default.Clone();
+        greenCellStyle.FillColor = green;
+        var greenStyle = wb.RegisterStyle(greenCellStyle);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Ready"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Blocked"));
+        sheet.GetCell(2, 1)!.StyleId = greenStyle;
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        var ctx = new TestCommandContext(wb);
+
+        var command = new CellFillColorFilterCommand(sheet.Id, range, filterColOffset: 0, green);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u]);
+
+        command.Revert(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
     public void TopBottomFilter_KeepsTopTiesByRowAndPreservesRowsOutsideRange()
     {
         var wb = new Workbook("test");

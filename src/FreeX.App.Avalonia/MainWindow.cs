@@ -4570,7 +4570,7 @@ public sealed partial class MainWindow : Window
         _activeSelectionOutlineVisual = null;
         _autofillHandleVisual = null;
         var viewport = _session.Viewport;
-        var showHeadings = _session.ActiveSheet.ShowHeadings;
+        var showHeadings = _session.IsShowingHeadings;
         var zoomFactor = GetActiveZoomFactor();
         var headerOffset = showHeadings ? 1 : 0;
 
@@ -5124,7 +5124,7 @@ public sealed partial class MainWindow : Window
 
     private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)
     {
-        var showHeadings = _session.ActiveSheet.ShowHeadings;
+        var showHeadings = _session.IsShowingHeadings;
         var zoomFactor = GetActiveZoomFactor();
         var overlay = new Canvas
         {
@@ -6706,7 +6706,7 @@ public sealed partial class MainWindow : Window
         double zoomFactor)
     {
         var limit = cellRight;
-        var frozenCols = _session.ActiveSheet.FrozenCols;
+        var frozenCols = _session.GetEffectiveFrozenCols();
         var previousCol = colMetrics[colIndex].Col;
         for (var index = colIndex + 1; index < colMetrics.Count; index++)
         {
@@ -6736,7 +6736,7 @@ public sealed partial class MainWindow : Window
         double zoomFactor)
     {
         var limit = cellLeft;
-        var frozenCols = _session.ActiveSheet.FrozenCols;
+        var frozenCols = _session.GetEffectiveFrozenCols();
         var previousCol = colMetrics[colIndex].Col;
         for (var index = colIndex - 1; index >= 0; index--)
         {
@@ -7317,7 +7317,7 @@ public sealed partial class MainWindow : Window
     private bool TryResolveColumnHeaderPointerIndex(PointerEventArgs args, out uint col)
     {
         col = 0;
-        if (!_session.ActiveSheet.ShowHeadings)
+        if (!_session.IsShowingHeadings)
             return false;
 
         var zoomFactor = GetActiveZoomFactor();
@@ -7344,7 +7344,7 @@ public sealed partial class MainWindow : Window
     private bool TryResolveRowHeaderPointerIndex(PointerEventArgs args, out uint row)
     {
         row = 0;
-        if (!_session.ActiveSheet.ShowHeadings)
+        if (!_session.IsShowingHeadings)
             return false;
 
         var zoomFactor = GetActiveZoomFactor();
@@ -8704,7 +8704,7 @@ public sealed partial class MainWindow : Window
             indentPadding,
             textRotation,
             borderStyle,
-            _session.ActiveSheet.ShowGridlines,
+            _session.IsShowingGridlines,
             zoomFactor,
             cellWidth,
             cellHeight,
@@ -10074,7 +10074,7 @@ public sealed partial class MainWindow : Window
         AddFormulaReferenceHighlightOverlay(
             overlay,
             _session.Viewport,
-            _session.ActiveSheet.ShowHeadings,
+            _session.IsShowingHeadings,
             GetActiveZoomFactor());
     }
 
@@ -27784,7 +27784,7 @@ public sealed partial class MainWindow : Window
     {
         var bounds = _sheetScrollViewer.Bounds;
         var zoomFactor = GetActiveZoomFactor();
-        var showHeadings = _session.ActiveSheet.ShowHeadings;
+        var showHeadings = _session.IsShowingHeadings;
         var headerHeight = showHeadings ? GetColumnHeaderHeight(_session.Viewport, zoomFactor) : 0;
         var headerWidth = showHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0;
         if (bounds.Height <= headerHeight || bounds.Width <= headerWidth)

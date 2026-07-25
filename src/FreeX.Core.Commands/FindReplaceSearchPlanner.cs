@@ -88,6 +88,24 @@ internal static class FindReplaceSearchPlanner
             if (text is not null)
                 yield return new SearchText(addr, text);
         }
+
+        // R87-commands-find-replace-5-3: a style-only cell (Sheet.StyleOnly.cs -- an empty cell
+        // that was never given a value but carries a fill/font/etc. override) has no Cell entry in
+        // _cells, so the loop above never visits it and a blank-"Find what" + Format-criterion
+        // search would otherwise silently miss it. Real Excel's format-only Find All does return
+        // such cells. Yield it with empty text (matching the cell's actual blank content) so a
+        // blank/wildcard search still matches while MatchesRequiredFormat performs the real
+        // filtering against the style-only override.
+        foreach (var ((row, col), _) in sheet.GetStyleOnlyEntries())
+        {
+            var addr = new CellAddress(sheet.Id, row, col);
+
+            if (lookIn == FindLookIn.Values &&
+                (sheet.IsRowEffectivelyHidden(addr.Row) || sheet.IsColEffectivelyHidden(addr.Col)))
+                continue;
+
+            yield return new SearchText(addr, string.Empty);
+        }
     }
 
     public static void SortResults(List<FindResult> results, FindSearchOrder searchOrder)

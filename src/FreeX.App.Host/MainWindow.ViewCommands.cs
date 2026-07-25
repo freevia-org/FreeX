@@ -26,15 +26,22 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || sender is not System.Windows.Controls.CheckBox chk) return;
 
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        // Preserve THIS window's own effective Headings/Rulers (R87-order-guard-window-state-
+        // sweep-1), not whatever the shared Sheet currently holds -- a sibling "New Window" may
+        // have changed the shared fields without this window ever touching them, and reading the
+        // raw sheet here would silently adopt that sibling's values the moment this window
+        // toggles Gridlines (mirrors the ViewMode/Zoom per-window pattern above).
         if (!TryExecuteGroupedSheetCommand(
                 "Gridlines",
                 sheetId => new SetWorksheetViewOptionsCommand(
                     sheetId,
                     chk.IsChecked == true,
-                    _workbook.GetSheet(sheetId)?.ShowHeadings ?? true,
-                    _workbook.GetSheet(sheetId)?.ShowRulers ?? true)))
+                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowHeadings,
+                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowRulers)))
             return;
 
+        SyncWindowViewState(targetSheetIds);
         UpdateViewport();
     }
 
@@ -44,15 +51,19 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || sender is not System.Windows.Controls.CheckBox chk) return;
 
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        // See ViewGridlinesChk_Changed above -- preserve this window's own effective
+        // Gridlines/Rulers rather than the shared Sheet's current values.
         if (!TryExecuteGroupedSheetCommand(
                 "Headings",
                 sheetId => new SetWorksheetViewOptionsCommand(
                     sheetId,
-                    _workbook.GetSheet(sheetId)?.ShowGridlines ?? true,
+                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowGridlines,
                     chk.IsChecked == true,
-                    _workbook.GetSheet(sheetId)?.ShowRulers ?? true)))
+                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowRulers)))
             return;
 
+        SyncWindowViewState(targetSheetIds);
         UpdateViewport();
     }
 
@@ -63,19 +74,23 @@ public partial class MainWindow
         if (sheet is null || sender is not System.Windows.Controls.CheckBox chk) return;
         if (GetEffectiveViewState(sheet).ViewMode != WorksheetViewMode.PageLayout)
         {
-            chk.IsChecked = sheet.ShowRulers;
+            chk.IsChecked = GetEffectiveViewState(sheet).ShowRulers;
             return;
         }
 
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        // See ViewGridlinesChk_Changed above -- preserve this window's own effective
+        // Gridlines/Headings rather than the shared Sheet's current values.
         if (!TryExecuteGroupedSheetCommand(
                 "Ruler",
                 sheetId => new SetWorksheetViewOptionsCommand(
                     sheetId,
-                    _workbook.GetSheet(sheetId)?.ShowGridlines ?? true,
-                    _workbook.GetSheet(sheetId)?.ShowHeadings ?? true,
+                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowGridlines,
+                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowHeadings,
                     chk.IsChecked == true)))
             return;
 
+        SyncWindowViewState(targetSheetIds);
         UpdateViewport();
     }
 

@@ -228,6 +228,70 @@ public sealed partial class ChartCommandTests
     }
 
     [Fact]
+    public void R87_ChangeChartSourceCommand_ClearsShowLinearTrendlineAndShowErrorBarsOnSourceChange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var range = CreateChartRange(sheet);
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+        // A trendline/error-bar drawn on the 3rd series (SeriesIndex 2), as an Excel-authored
+        // workbook would have.
+        chart.ShowLinearTrendline = true;
+        chart.TrendlineSeriesIndex = 2;
+        chart.ShowErrorBars = true;
+        chart.ErrorBarSeriesIndex = 2;
+        var newRange = Range(sheet, 2, 2, 6, 5);
+        var command = new ChangeChartSourceCommand(sheet.Id, chart.Id, newRange);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        // Widening/relocating the data range re-indexes series and clears TrendlineSeriesIndex/
+        // ErrorBarSeriesIndex to 0 -- but leaving ShowLinearTrendline/ShowErrorBars true would make
+        // the trendline/error-bar silently reattach to whichever unrelated series now sits at index
+        // 0 instead of disappearing (matching the list-based siblings above, which clear to []).
+        chart.TrendlineSeriesIndex.Should().Be(0);
+        chart.ErrorBarSeriesIndex.Should().Be(0);
+        chart.ShowLinearTrendline.Should().BeFalse();
+        chart.ShowErrorBars.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        chart.TrendlineSeriesIndex.Should().Be(2);
+        chart.ErrorBarSeriesIndex.Should().Be(2);
+        chart.ShowLinearTrendline.Should().BeTrue();
+        chart.ShowErrorBars.Should().BeTrue();
+    }
+
+    [Fact]
+    public void R87_ChangeChartSourceCommand_KeepsShowLinearTrendlineAndShowErrorBarsWhenSourceUnchanged()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var range = CreateChartRange(sheet);
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+        chart.ShowLinearTrendline = true;
+        chart.TrendlineSeriesIndex = 2;
+        chart.ShowErrorBars = true;
+        chart.ErrorBarSeriesIndex = 2;
+        // Same range and orientation as the chart already has: not a source change, so the
+        // trendline/error-bar flags must survive untouched.
+        var command = new ChangeChartSourceCommand(sheet.Id, chart.Id, range, firstRowIsHeader: chart.FirstRowIsHeader);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        chart.TrendlineSeriesIndex.Should().Be(2);
+        chart.ErrorBarSeriesIndex.Should().Be(2);
+        chart.ShowLinearTrendline.Should().BeTrue();
+        chart.ShowErrorBars.Should().BeTrue();
+    }
+
+    [Fact]
     public void R86_ChangeChartSourceCommand_KeepsComboAxisTrendlineAndDataLabelOverridesWhenSourceUnchanged()
     {
         var wb = new Workbook("test");

@@ -596,6 +596,15 @@ public partial class MainWindow
         if (!ExcelSelectionModePlanner.ShouldExtendSelection(_selectionMode, Keyboard.Modifiers) || !_selectionAnchor.HasValue)
             return false;
 
+        // A Shift-click/F8-extend click onto a locked cell on a protected sheet with "Select
+        // locked cells" unchecked must be refused outright, exactly like a plain click onto that
+        // same cell is refused by CanSelectCellForClick above -- Excel never lets the highlighted
+        // selection extend onto a locked cell at all (R87-commands-protection-lock-5-1). Still
+        // reports the click as handled (returns true) so the caller's other click branches below
+        // don't also run and collapse the selection instead.
+        if (!CanSelectCellForClick(newAddr))
+            return true;
+
         HideValidationDropdown();
         ExtendSelection(_selectionAnchor.Value, newAddr);
         return true;
@@ -986,11 +995,15 @@ public partial class MainWindow
         // otherwise land the active cell on (when "Select locked cells" is unchecked), stepping
         // further in the same direction of travel until a selectable cell is found -- matching
         // Excel -- rather than landing on it like a plain click would refuse to
-        // (R75-services-protection-security-4-1). Only applies to the plain "move the active
-        // cell" outcome below (SetActiveCell); Add-mode and range-extension are left as-is.
+        // (R75-services-protection-security-4-1). Applies to the plain "move the active cell"
+        // outcome below (SetActiveCell) AND to Shift/F8 "extend selection" (ExtendSelection) --
+        // Shift+Arrow must not let the extending end of the selection land on/pass a locked cell
+        // either (R87-commands-protection-lock-5-1). Add-mode range-extension is left as-is.
         bool willSetActiveCell = !(_selectionMode == ExcelSelectionMode.Add && !moveOnly) &&
             !(extendSelection && !moveOnly && _selectionAnchor.HasValue);
-        if (willSetActiveCell &&
+        bool willExtendSelection = _selectionMode != ExcelSelectionMode.Add &&
+            extendSelection && !moveOnly && _selectionAnchor.HasValue;
+        if ((willSetActiveCell || willExtendSelection) &&
             sheet is { IsProtected: true } &&
             GetProtectedNavigationStep(e.Key, shiftHeld) is { } step &&
             !CommandGuards.CanSelectCell(_workbook, sheet, target.Value))

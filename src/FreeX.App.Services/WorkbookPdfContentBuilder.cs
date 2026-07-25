@@ -329,6 +329,7 @@ public static class WorkbookPdfContentBuilder
 
         var pageNumber = ResolveEffectiveSheetPageNumber(exportPlan, request, sheet);
         var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
+        var (headerPictures, footerPictures) = ResolveHeaderFooterPicturesForPage(sheet, pageNumber);
         // &N (total pages) must reset per sheet, matching Excel and the WPF PrintRenderer path
         // (RenderWorksheet computes totalPages = printPlan.GridPageCount + comment pages, scoped to
         // that one sheet) -- NOT exportPlan.TotalPageCount, which sums every sheet in the export and
@@ -336,14 +337,18 @@ public static class WorkbookPdfContentBuilder
         // than one sheet at once (O41).
         var totalPages = ResolveEffectiveSheetTotalPages(exportPlan, sheet);
 
-        // Header text: rendered just below the header margin from the top of the page.
+        // Header text: rendered just below the header margin from the top of the page. The band
+        // height (mT - headerEdgePt, the gap between the header edge and the content's top margin)
+        // bounds how large an &G header picture may draw before it starts to overlap the grid.
         var headerY = pageH - headerEdgePt - 8;   // baseline approx 8pt below header edge
-        RenderHeaderFooterBand(ops, header, pageW, mL, mR, headerY, 8,
+        var headerBandHeightPt = Math.Max(8.0, mT - headerEdgePt);
+        RenderHeaderFooterBand(ops, header, headerPictures, pageW, mL, mR, headerY, headerBandHeightPt, 8,
             workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, HeaderTextColor);
 
         // Footer text: rendered just above the footer edge from the bottom.
         var footerY = footerEdgePt + 2;            // baseline approx 2pt above footer edge
-        RenderHeaderFooterBand(ops, footer, pageW, mL, mR, footerY, 8,
+        var footerBandHeightPt = Math.Max(8.0, mB - footerEdgePt);
+        RenderHeaderFooterBand(ops, footer, footerPictures, pageW, mL, mR, footerY, footerBandHeightPt, 8,
             workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, FooterTextColor);
 
         return new PdfContentPage(pageW, pageH, ops);
@@ -1053,10 +1058,12 @@ public static class WorkbookPdfContentBuilder
     private static void RenderHeaderFooterBand(
         List<PdfDrawOp> ops,
         WorksheetHeaderFooter band,
+        WorksheetHeaderFooterPictureSet pictures,
         double pageW,
         double mL,
         double mR,
         double baselineY,
+        double bandHeightPt,
         double fontSize,
         string workbookName,
         string workbookDirectory,
@@ -1068,34 +1075,179 @@ public static class WorkbookPdfContentBuilder
         var now = DateTime.Now;
         var sectionWidth = Math.Max(1, (pageW - mL - mR) / 3.0);
 
-        // Left section.
-        var leftText = ExpandHF(band.Left, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now);
-        if (!string.IsNullOrEmpty(leftText))
-            ops.Add(new PdfText(mL, baselineY, fontSize, PdfFontFace.Regular, color,
-                PortablePdfWinAnsiTextCapability.Truncate(leftText, 128)));
+        RenderHeaderFooterSection(
+            ops, band.Left, pictures.Left, HeaderFooterSectionAlign.Left,
+            mL, mL + sectionWidth, baselineY, bandHeightPt, fontSize,
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color);
 
-        // Center section.
-        var centerText = ExpandHF(band.Center, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now);
-        if (!string.IsNullOrEmpty(centerText))
+        RenderHeaderFooterSection(
+            ops, band.Center, pictures.Center, HeaderFooterSectionAlign.Center,
+            mL + sectionWidth, mL + (2 * sectionWidth), baselineY, bandHeightPt, fontSize,
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color);
+
+        RenderHeaderFooterSection(
+            ops, band.Right, pictures.Right, HeaderFooterSectionAlign.Right,
+            pageW - mR - sectionWidth, pageW - mR, baselineY, bandHeightPt, fontSize,
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color);
+    }
+
+    private enum HeaderFooterSectionAlign { Left, Center, Right }
+
+    private const int HeaderFooterMaxChars = 128;
+
+    /// <summary>
+    /// Renders one left/center/right header-or-footer section: tokenizes its Excel format-code
+    /// string via the shared portable <see cref="PagePrintTextPlanner.TokenizeSectionText"/> (the
+    /// same tokenizer the WPF <c>PrintRenderer.HeaderFooterDrawing</c> path uses), draws each run
+    /// with its own bold/italic/size/color (plus underline/strikethrough rules), measures every run
+    /// with <see cref="PortablePdfTextMeasurer"/> so center/right text is actually centered/right-
+    /// aligned within its section instead of flush-left, and draws the section's <c>&amp;G</c>
+    /// header/footer picture (if configured) via a <see cref="PdfImage"/> op.
+    /// </summary>
+    private static void RenderHeaderFooterSection(
+        List<PdfDrawOp> ops,
+        string raw,
+        WorksheetHeaderFooterPicture? picture,
+        HeaderFooterSectionAlign align,
+        double sectionLeft,
+        double sectionRight,
+        double baselineY,
+        double bandHeightPt,
+        double fontSize,
+        string workbookName,
+        string workbookDirectory,
+        string sheetName,
+        int pageNumber,
+        int totalPages,
+        DateTime now,
+        PdfColor color)
+    {
+        if (string.IsNullOrEmpty(raw))
+            return;
+
+        var sectionWidth = Math.Max(1, sectionRight - sectionLeft);
+        var textLeft = sectionLeft;
+        var textRight = sectionRight;
+
+        // &G / &[Picture]: draw the section's configured header/footer picture and, for left/right
+        // sections, reserve space so the text doesn't draw underneath it -- matching
+        // PrintRenderer.HeaderFooterPictures.cs's CalculateHeaderFooterPictureRect/TextRect (center
+        // sections there also leave the text rect unshifted, so we mirror that too).
+        if (picture is not null && HasHeaderFooterPictureToken(raw))
         {
-            var centerX = mL + sectionWidth;  // approximate — no text measurement available here
-            ops.Add(new PdfText(centerX, baselineY, fontSize, PdfFontFace.Regular, color,
-                PortablePdfWinAnsiTextCapability.Truncate(centerText, 128)));
+            const double ptPerPx = 72.0 / 96.0;
+            var imageWidth = Math.Min(Math.Max(1.0, picture.Width * ptPerPx), sectionWidth);
+            var imageHeight = Math.Min(Math.Max(1.0, picture.Height * ptPerPx), Math.Max(bandHeightPt, imageWidth));
+            var imageX = align switch
+            {
+                HeaderFooterSectionAlign.Center => sectionLeft + ((sectionWidth - imageWidth) / 2.0),
+                HeaderFooterSectionAlign.Right => sectionRight - imageWidth,
+                _ => sectionLeft
+            };
+            // Vertically center the picture on the same line the text baseline sits on.
+            var imageY = baselineY - (imageHeight / 2.0) + (fontSize / 2.0);
+            ops.Add(new PdfImage(imageX, imageY, imageWidth, imageHeight, picture.ImageBytes, picture.ContentType));
+
+            const double gap = 4.0;
+            if (align == HeaderFooterSectionAlign.Left)
+                textLeft = Math.Min(sectionRight, sectionLeft + imageWidth + gap);
+            else if (align == HeaderFooterSectionAlign.Right)
+                textRight = Math.Max(sectionLeft, sectionRight - imageWidth - gap);
         }
 
-        // Right section.
-        var rightText = ExpandHF(band.Right, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now);
-        if (!string.IsNullOrEmpty(rightText))
+        var runs = ClampRunsToTotalLength(
+            PagePrintTextPlanner.TokenizeSectionText(
+                raw, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now),
+            HeaderFooterMaxChars);
+        if (runs.Count == 0)
+            return;
+
+        var runWidths = new double[runs.Count];
+        var totalWidth = 0.0;
+        for (var i = 0; i < runs.Count; i++)
         {
-            var rightX = pageW - mR - sectionWidth;
-            ops.Add(new PdfText(rightX, baselineY, fontSize, PdfFontFace.Regular, color,
-                PortablePdfWinAnsiTextCapability.Truncate(rightText, 128)));
+            var run = runs[i];
+            var width = PortablePdfTextMeasurer.Instance
+                .Measure(run.Text, run.FontName, run.FontSize ?? fontSize, run.Bold, run.Italic).Width;
+            runWidths[i] = width;
+            totalWidth += width;
+        }
+
+        var availableWidth = Math.Max(1.0, textRight - textLeft);
+        var cursorX = align switch
+        {
+            HeaderFooterSectionAlign.Center => textLeft + Math.Max(0.0, (availableWidth - totalWidth) / 2.0),
+            HeaderFooterSectionAlign.Right => Math.Max(textLeft, textRight - totalWidth),
+            _ => textLeft
+        };
+
+        for (var i = 0; i < runs.Count; i++)
+        {
+            var run = runs[i];
+            if (run.Text.Length == 0)
+                continue;
+
+            var runFontSize = run.FontSize ?? fontSize;
+            var runColor = run.Color is { } rgb ? new PdfColor(rgb.R, rgb.G, rgb.B) : color;
+            var face = ToPdfFontFace(run.Bold, run.Italic);
+            ops.Add(new PdfText(cursorX, baselineY, runFontSize, face, runColor, run.Text));
+
+            if (run.Underline || run.DoubleUnderline)
+            {
+                var lineY = baselineY - Math.Max(1.0, runFontSize * 0.12);
+                ops.Add(new PdfLine(cursorX, lineY, cursorX + runWidths[i], lineY, runColor, 0.6));
+                if (run.DoubleUnderline)
+                    ops.Add(new PdfLine(cursorX, lineY - 2, cursorX + runWidths[i], lineY - 2, runColor, 0.6));
+            }
+
+            if (run.Strikethrough)
+            {
+                var lineY = baselineY + (runFontSize * 0.3);
+                ops.Add(new PdfLine(cursorX, lineY, cursorX + runWidths[i], lineY, runColor, 0.6));
+            }
+
+            cursorX += runWidths[i];
         }
     }
 
     /// <summary>
-    /// Simple header/footer token expansion without formatting codes (bold/italic/etc. are stripped;
-    /// value placeholders &amp;P/&amp;N/&amp;D/&amp;T/&amp;F/&amp;Z/&amp;A are substituted).
+    /// Truncates a tokenized run sequence to a combined total of <paramref name="maxTotalChars"/>
+    /// characters (matching the flat-string 128-char cap the previous single-PdfText-per-section
+    /// path applied), dropping/shortening trailing runs rather than the whole section.
+    /// </summary>
+    private static List<HeaderFooterFormattedRun> ClampRunsToTotalLength(
+        IReadOnlyList<HeaderFooterFormattedRun> runs, int maxTotalChars)
+    {
+        var result = new List<HeaderFooterFormattedRun>(runs.Count);
+        var remaining = maxTotalChars;
+        foreach (var run in runs)
+        {
+            if (remaining <= 0)
+                break;
+
+            var text = PortablePdfWinAnsiTextCapability.Truncate(run.Text, remaining);
+            if (text.Length == 0)
+                continue;
+
+            result.Add(run with { Text = text });
+            remaining -= text.Length;
+            if (text.EndsWith("...", StringComparison.Ordinal))
+                break;
+        }
+
+        return result;
+    }
+
+    private static bool HasHeaderFooterPictureToken(string text) =>
+        text.Contains("&[Picture]", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("&G", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Expands placeholder tokens (&amp;P/&amp;N/&amp;D/&amp;T/&amp;F/&amp;Z/&amp;A and their
+    /// bracketed forms) in a header/footer section string, stripping all font/style format codes.
+    /// Delegates to the shared portable tokenizer (<see cref="PagePrintTextPlanner"/>) so this and
+    /// the per-run rendering path in <see cref="RenderHeaderFooterSection"/> stay in sync; kept as a
+    /// flat-string convenience for callers (and tests) that only need the plain expanded text.
     /// <paramref name="workbookDirectory"/> is the folder that contains the workbook file (with a
     /// trailing separator), substituted for &amp;Z / &amp;[Path]; pass an empty string when the
     /// workbook is unsaved, matching the WPF <c>PagePrintTextPlanner</c> path.
@@ -1107,104 +1259,9 @@ public static class WorkbookPdfContentBuilder
         string workbookName,
         string workbookDirectory,
         string sheetName,
-        DateTime now)
-    {
-        if (string.IsNullOrEmpty(raw))
-            return "";
-
-        var sb = new System.Text.StringBuilder(raw.Length);
-        var span = raw.AsSpan();
-        var i = 0;
-        while (i < span.Length)
-        {
-            if (span[i] != '&')
-            {
-                sb.Append(span[i]);
-                i++;
-                continue;
-            }
-
-            if (i + 1 >= span.Length) { sb.Append('&'); i++; continue; }
-            var next = span[i + 1];
-
-            if (next == '[')
-            {
-                var close = span[(i + 2)..].IndexOf(']');
-                if (close < 0) { sb.Append('&'); i++; continue; }
-                var token = span.Slice(i + 2, close).ToString().ToUpperInvariant();
-                i += 3 + close;
-                switch (token)
-                {
-                    case "PAGE":   sb.Append(pageNumber.ToString(CultureInfo.InvariantCulture)); break;
-                    case "PAGES":  sb.Append(totalPages.ToString(CultureInfo.InvariantCulture)); break;
-                    case "DATE":   sb.Append(now.ToString("d", CultureInfo.CurrentCulture)); break;
-                    case "TIME":   sb.Append(now.ToString("t", CultureInfo.CurrentCulture)); break;
-                    case "FILE":   sb.Append(workbookName); break;
-                    case "PATH":   sb.Append(workbookDirectory); break;
-                    case "TAB":    sb.Append(sheetName); break;
-                }
-                continue;
-            }
-
-            if (next == '&') { sb.Append('&'); i += 2; continue; }
-
-            // Font/style codes — skip them.
-            var code = char.ToUpperInvariant(next);
-            switch (code)
-            {
-                case 'B': case 'I': case 'U': case 'E': case 'S': case 'G':
-                case '+': case '-': case 'X': case 'Y':
-                    i += 2;
-                    continue;
-                case '"':
-                {
-                    var close = span[(i + 2)..].IndexOf('"');
-                    i += close >= 0 ? 3 + close : 2;
-                    continue;
-                }
-                case 'K':
-                    i += i + 7 < span.Length ? 8 : 2;
-                    continue;
-                case 'P':
-                    sb.Append(pageNumber.ToString(CultureInfo.InvariantCulture));
-                    i += 2; continue;
-                case 'N':
-                    sb.Append(totalPages.ToString(CultureInfo.InvariantCulture));
-                    i += 2; continue;
-                case 'D':
-                    sb.Append(now.ToString("d", CultureInfo.CurrentCulture));
-                    i += 2; continue;
-                case 'T':
-                    sb.Append(now.ToString("t", CultureInfo.CurrentCulture));
-                    i += 2; continue;
-                case 'F':
-                    sb.Append(workbookName);
-                    i += 2; continue;
-                case 'Z':
-                    sb.Append(workbookDirectory);
-                    i += 2; continue;
-                case 'A':
-                    sb.Append(sheetName);
-                    i += 2; continue;
-                default:
-                    if (char.IsAsciiDigit(next))
-                    {
-                        // font-size code — skip digits
-                        var end = i + 2;
-                        if (end < span.Length && char.IsAsciiDigit(span[end])) end++;
-                        i = end;
-                    }
-                    else
-                    {
-                        sb.Append('&');
-                        i++;
-                    }
-                    continue;
-            }
-        }
-
-        return sb.ToString();
-    }
+        DateTime now) =>
+        PagePrintTextPlanner.ExpandHeaderFooterText(
+            raw, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now);
 
     /// <summary>
     /// Computes the printed page number for <paramref name="request"/> honoring
@@ -1272,6 +1329,23 @@ public static class WorkbookPdfContentBuilder
             return (sheet.EvenPageHeader, sheet.EvenPageFooter);
 
         return (sheet.PageHeader, sheet.PageFooter);
+    }
+
+    /// <summary>
+    /// Resolves the header/footer picture sets (<c>&amp;G</c> images) for the page the same way
+    /// <see cref="ResolveHeaderFooterForPage"/> resolves the header/footer text, so a first-page or
+    /// odd/even override's picture set is honored consistently with its text.
+    /// </summary>
+    private static (WorksheetHeaderFooterPictureSet HeaderPictures, WorksheetHeaderFooterPictureSet FooterPictures)
+        ResolveHeaderFooterPicturesForPage(Sheet sheet, int pageNumber)
+    {
+        if (sheet.DifferentFirstPageHeaderFooter && pageNumber == (sheet.FirstPageNumber ?? 1))
+            return (sheet.FirstPageHeaderPictures, sheet.FirstPageFooterPictures);
+
+        if (sheet.DifferentOddEvenHeaderFooter && pageNumber % 2 == 0)
+            return (sheet.EvenPageHeaderPictures, sheet.EvenPageFooterPictures);
+
+        return (sheet.PageHeaderPictures, sheet.PageFooterPictures);
     }
 
     // -----------------------------------------------------------------------

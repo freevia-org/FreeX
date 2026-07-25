@@ -979,6 +979,20 @@ internal static class XlsxNamedRangeMapper
         if (IsConstantLiteralRefersTo(body))
             return false;
 
+        // R87-io-external-links-5-1: a formula expression IS modeled — LoadDefinedNames /
+        // LoadWorkbookDefinedNameFormulasFromPackage route anything IsFormulaExpression flags
+        // (operators/parens/braces outside quoted sheet names) into NamedFormulas/
+        // ScopedNamedFormulas as a live, opaque formula — even when that formula also happens to
+        // embed an external-workbook reference (e.g. "=[1]Sheet1!$B$2*2" or
+        // "=SUM([1]Sheet1!A1:A10)+Local!B1"). Such a name IS live/modeled, so it must not be
+        // reported as unmodelable here regardless of what the unanchored external-ref/'#REF!'
+        // checks below would otherwise match inside it — this call must mirror the loader's own
+        // classification order (IsConstantLiteralRefersTo above, now IsFormulaExpression here) or
+        // the liveness gate below misclassifies a genuinely-deleted live formula name as "never
+        // modeled" and silently resurrects it from the pristine source on every save.
+        if (IsFormulaExpression(body))
+            return false;
+
         // Broken reference, anywhere in the body (Excel keeps these; FreeX has no #REF! model).
         if (body.Contains("#REF!", StringComparison.OrdinalIgnoreCase))
             return true;

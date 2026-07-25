@@ -38,7 +38,8 @@ public static class CellMergePlanner
         Sheet? sheet,
         SheetId sheetId,
         GridRange range,
-        MergeCellContentResolution contentResolution)
+        MergeCellContentResolution contentResolution,
+        bool allowUnmergeToggle = true)
     {
         if (sheet is not null && HasLiveSpillTarget(sheet, range))
             return [RejectSpillOverlapCommand.Instance];
@@ -50,7 +51,13 @@ public static class CellMergePlanner
         // that MergeCellsCommand raises for a genuine overlapping-merge request. A selection that only
         // partially overlaps an existing region (straddles its boundary without being fully covered by
         // it) is still a real conflict and falls through unchanged to the normal merge path below.
-        if (sheet is not null && FindCoveringRegion(sheet, range) is { } toggleRegion)
+        //
+        // "Merge Across" is different (see CreateMergeCommands' allowUnmergeToggle remarks): its per-row
+        // batch passes allowUnmergeToggle: false through CreateFormatCellsMergeCommands' ConcatenateAllCells
+        // branch so an already-merged row of the exact target shape is left merged (falls through to the
+        // MergeCellsCommand re-merge below) instead of being toggled back to unmerged (R87-commands-merge-
+        // cells-5-1: this branch used to ignore the flag entirely and always applied the toggle).
+        if (allowUnmergeToggle && sheet is not null && FindCoveringRegion(sheet, range) is { } toggleRegion)
             return [new UnmergeCellsCommand(sheetId, toggleRegion)];
 
         var commands = new List<IWorkbookCommand>();
@@ -137,7 +144,7 @@ public static class CellMergePlanner
                 return [RejectSpillOverlapCommand.Instance];
 
             return contentResolution == MergeCellContentResolution.ConcatenateAllCells
-                ? CreateMergeAndCenterCommands(sheet, sheetId, range, contentResolution)
+                ? CreateMergeAndCenterCommands(sheet, sheetId, range, contentResolution, allowUnmergeToggle)
                     .Where(command => command is not ApplyStyleCommand)
                     .ToList()
                 : CreateMergeCommands(sheet, sheetId, range, mergeCells: true, allowUnmergeToggle);

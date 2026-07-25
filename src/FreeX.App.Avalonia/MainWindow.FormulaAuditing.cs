@@ -78,7 +78,7 @@ public sealed partial class MainWindow
         if (_formulaTraceArrows.Count == 0)
             return;
 
-        var showHeadings = _session.ActiveSheet.ShowHeadings;
+        var showHeadings = _session.IsShowingHeadings;
         var zoomFactor = GetActiveZoomFactor();
         var activeSheetId = _session.ActiveSheet.Id;
 

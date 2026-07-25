@@ -175,7 +175,7 @@ public static class ChartLayoutEngine
     /// chart type supports a log X axis (<see cref="ChartTypeSupport.SupportsXAxisLogScale"/>);
     /// otherwise falls back to the normal linear axis.
     /// </summary>
-    private static AxisScale CreateXValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side)
+    private static AxisScale CreateXValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side, bool includeZeroBaseline = true)
     {
         if (chart.XAxisLogScale && ChartTypeSupport.SupportsXAxisLogScale(chart.Type))
         {
@@ -184,7 +184,8 @@ public static class ChartLayoutEngine
         }
 
         return AxisScale.CreateValueAxis(dataMin, dataMax, plot, side,
-            chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisMajorUnit, reverseOrder: chart.XAxisReverseOrder);
+            chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisMajorUnit, reverseOrder: chart.XAxisReverseOrder,
+            includeZeroBaseline: includeZeroBaseline);
     }
 
     /// <summary>
@@ -193,7 +194,7 @@ public static class ChartLayoutEngine
     /// chart type supports a log Y axis (<see cref="ChartTypeSupport.SupportsYAxisLogScale"/>);
     /// otherwise falls back to the normal linear axis.
     /// </summary>
-    private static AxisScale CreateYValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side)
+    private static AxisScale CreateYValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side, bool includeZeroBaseline = true)
     {
         if (chart.YAxisLogScale && ChartTypeSupport.SupportsYAxisLogScale(chart.Type))
         {
@@ -202,7 +203,8 @@ public static class ChartLayoutEngine
         }
 
         return AxisScale.CreateValueAxis(dataMin, dataMax, plot, side,
-            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit, reverseOrder: chart.YAxisReverseOrder);
+            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit, reverseOrder: chart.YAxisReverseOrder,
+            includeZeroBaseline: includeZeroBaseline);
     }
 
     // ---- Pie / Doughnut -------------------------------------------------------------------
@@ -260,7 +262,13 @@ public static class ChartLayoutEngine
                 var sweep = fraction * 360.0;
 
                 var sliceCenter = center;
-                if (chart.ExplodedSliceIndex == index && chart.ExplodedSliceDistance > 0)
+                // Honor BOTH the legacy scalar ExplodedSliceIndex (single-slice explosion) AND every
+                // entry in ExplodedSlices (per-point <c:dPt>/<c:explosion> overrides), so a chart
+                // where several slices are individually exploded renders ALL of them exploded rather
+                // than collapsing to just one -- mirrors the WPF renderer's IsPieSliceExploded.
+                var isExploded = chart.ExplodedSliceIndex == index ||
+                    chart.ExplodedSlices.Any(slice => slice.SeriesIndex == 0 && slice.PointIndex == index);
+                if (isExploded && chart.ExplodedSliceDistance > 0)
                 {
                     var mid = angle + (sweep / 2);
                     var offset = ringOuterRadius * chart.ExplodedSliceDistance;
@@ -356,7 +364,12 @@ public static class ChartLayoutEngine
             ? StackedValueRange(request, categoryCount, isPercent)
             : PlainValueRange(request);
 
-        var valueScale = CreateYValueAxis(chart, dataMin, dataMax, plot, AxisSide.Left);
+        // Line/3-D Line have no zero-anchored geometry (unlike Column/Area, which draw bars/bands
+        // down to a zero baseline), so their value axis should auto-fit tight to the actual data
+        // extents instead of always widening out to include zero -- matching OxyPlot's own
+        // LineSeries auto-range used by the WPF renderer (ChartRenderer.cs "else // Line / 3D Line").
+        var isLineFamily = chart.Type is ChartType.Line or ChartType.ThreeDLine;
+        var valueScale = CreateYValueAxis(chart, dataMin, dataMax, plot, AxisSide.Left, includeZeroBaseline: !isLineFamily);
 
         // Combo charts: a secondary value axis on the right carries the assigned series. Stacked
         // charts do not split across axes (matching the source renderer).
@@ -905,8 +918,11 @@ public static class ChartLayoutEngine
         var (xMin, xMax) = ScatterRange(request, useX: true);
         var (yMin, yMax) = ScatterRange(request, useX: false);
 
-        var xScale = CreateXValueAxis(chart, xMin, xMax, plot, AxisSide.Bottom);
-        var yScale = CreateYValueAxis(chart, yMin, yMax, plot, AxisSide.Left);
+        // Scatter has no zero-anchored geometry (just plotted points), so both axes auto-fit tight
+        // to the actual data extents rather than being forced to include zero -- matching the WPF
+        // renderer's plain LinearAxis (no Minimum/Maximum override) for ChartType.Scatter.
+        var xScale = CreateXValueAxis(chart, xMin, xMax, plot, AxisSide.Bottom, includeZeroBaseline: false);
+        var yScale = CreateYValueAxis(chart, yMin, yMax, plot, AxisSide.Left, includeZeroBaseline: false);
 
         var seriesLayouts = new List<SeriesLayout>(request.Series.Count);
         var dataLabels = new List<DataLabelBox>();
@@ -962,8 +978,10 @@ public static class ChartLayoutEngine
         var (xMin, xMax) = ScatterRange(request, useX: true);
         var (yMin, yMax) = ScatterRange(request, useX: false);
 
-        var xScale = CreateXValueAxis(chart, xMin, xMax, plot, AxisSide.Bottom);
-        var yScale = CreateYValueAxis(chart, yMin, yMax, plot, AxisSide.Left);
+        // Bubble has no zero-anchored geometry either (bubble radius encodes size, not a baseline
+        // offset), so both axes auto-fit tight to the actual data extents, matching Scatter.
+        var xScale = CreateXValueAxis(chart, xMin, xMax, plot, AxisSide.Bottom, includeZeroBaseline: false);
+        var yScale = CreateYValueAxis(chart, yMin, yMax, plot, AxisSide.Left, includeZeroBaseline: false);
 
         var maxSize = MaxBubbleSize(request);
         var scale = Math.Max(0, chart.BubbleScale) / 100.0;
@@ -1234,15 +1252,50 @@ public static class ChartLayoutEngine
         if (!string.IsNullOrEmpty(unitLabel))
             title = string.IsNullOrEmpty(title) ? unitLabel : $"{title} ({unitLabel})";
 
+        // R87-render-chart-plot-5-4: the desktop renderer draws minor gridlines whenever the chart model
+        // asks for them (ApplyGridlineStyle sets axis.MinorGridlineStyle = Dot); the portable layout
+        // previously never computed minor-tick positions at all, so the portable-shell renderers
+        // silently dropped them. Populate the same data here so the portable-shell renderers can draw them too.
+        var showMinorGridlines = isXAxis ? chart.ShowXAxisMinorGridlines : chart.ShowYAxisMinorGridlines;
+        var minorUnit = isXAxis ? chart.XAxisMinorUnit : chart.YAxisMinorUnit;
+        var minorTicks = showMinorGridlines && !scale.IsLogarithmic
+            ? BuildMinorTickValues(scale, minorUnit)
+            : null;
+
         return new AxisLayout
         {
             Side = side,
             Title = title,
             LinePosition = linePosition,
             Ticks = ticks,
+            MinorTicks = minorTicks,
             Scale = scale,
             LabelAngle = labelAngle,
         };
+    }
+
+    /// <summary>
+    /// Enumerates minor-gridline tick positions between <paramref name="scale"/>'s bounds, stepping
+    /// by <paramref name="minorUnit"/> when the chart specifies one, otherwise by a fifth of the
+    /// major step (a conventional auto subdivision, matching OxyPlot's own auto minor-step behavior
+    /// when no explicit minor interval is set).
+    /// </summary>
+    private static List<AxisTick> BuildMinorTickValues(AxisScale scale, double? minorUnit)
+    {
+        var ticks = new List<AxisTick>();
+        var step = minorUnit is { } u && u > 0 ? u : scale.MajorStep / 5;
+        if (step <= 0 || double.IsNaN(step) || double.IsInfinity(step))
+            return ticks;
+
+        var firstIndex = Math.Ceiling(scale.Minimum / step - 1e-9);
+        var lastIndex = Math.Floor(scale.Maximum / step + 1e-9);
+        for (var i = firstIndex; i <= lastIndex + 1e-9; i++)
+        {
+            var value = i * step;
+            ticks.Add(new AxisTick(value, scale.Transform(value), ""));
+        }
+
+        return ticks;
     }
 
     /// <summary>

@@ -362,21 +362,27 @@ public partial class MainWindow
     /// </summary>
     private WorksheetViewStateSnapshot GetEffectiveViewState(Sheet? sheet) =>
         sheet is null
-            ? new WorksheetViewStateSnapshot(WorksheetViewMode.Normal, 100)
+            ? new WorksheetViewStateSnapshot(WorksheetViewMode.Normal, 100, true, true, true)
             : _worksheetViewStates.GetOrSeed(sheet);
 
     /// <summary>
-    /// Records this window's own just-applied view-mode/zoom change so it survives a sibling
-    /// window later mutating the shared <see cref="Sheet"/>'s ViewMode/ZoomPercent fields.
-    /// Call once, right after successfully executing a view-mode/zoom command in THIS window,
-    /// for every sheet the command targeted (grouped-sheet edits touch more than one).
+    /// Records this window's own just-applied view-mode/zoom/display-toggle change so it survives
+    /// a sibling window later mutating the shared <see cref="Sheet"/>'s corresponding fields.
+    /// Call once, right after successfully executing a view-mode/zoom/Gridlines/Headings/Ruler
+    /// command in THIS window, for every sheet the command targeted (grouped-sheet edits touch
+    /// more than one).
     /// </summary>
     private void SyncWindowViewState(IReadOnlyList<SheetId> sheetIds)
     {
         foreach (var sheetId in sheetIds)
         {
             if (_workbook.GetSheet(sheetId) is { } sheet)
-                _worksheetViewStates.Set(sheet.Id, new WorksheetViewStateSnapshot(sheet.ViewMode, sheet.ZoomPercent));
+                _worksheetViewStates.Set(sheet.Id, new WorksheetViewStateSnapshot(
+                    sheet.ViewMode,
+                    sheet.ZoomPercent,
+                    sheet.ShowGridlines,
+                    sheet.ShowHeadings,
+                    sheet.ShowRulers));
         }
     }
 
@@ -518,9 +524,13 @@ public partial class MainWindow
                 () => SparklineSeriesReader.BuildValues(sheet));
         SheetGrid.MergedRegions = sheet?.MergedRegions;
         SheetGrid.WorksheetViewMode = viewState.ViewMode;
-        SheetGrid.ShowGridLines = sheet?.ShowGridlines ?? true;
-        SheetGrid.ShowHeaders = sheet?.ShowHeadings ?? true;
-        SheetGrid.ShowRulers = sheet?.ShowRulers ?? true;
+        // Gridlines/Headings/Rulers are this window's own state, just like ViewMode/Zoom above
+        // (R87-order-guard-window-state-sweep-1) -- read them from the per-window store instead
+        // of straight off the shared Sheet, which every window viewing this document mutates in
+        // common, or toggling them in one "New Window" sibling would leak into every other one.
+        SheetGrid.ShowGridLines = viewState.ShowGridlines;
+        SheetGrid.ShowHeaders = viewState.ShowHeadings;
+        SheetGrid.ShowRulers = viewState.ShowRulers;
         _suppressViewOptionSync = true;
         try
         {

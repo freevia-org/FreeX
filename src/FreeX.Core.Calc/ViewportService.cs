@@ -21,7 +21,11 @@ public sealed partial class ViewportService : IViewportService
         if (sheet is null)
             return (0u, []);
 
-        var rowMetrics = BuildFrozenAwareRowMetrics(sheet, request.TopRow, request.AvailableHeight);
+        var rowMetrics = BuildFrozenAwareRowMetrics(
+            sheet,
+            request.TopRow,
+            request.AvailableHeight,
+            request.FrozenRowsOverride ?? sheet.FrozenRows);
         var lastVisibleRow = rowMetrics.Count > 0 ? rowMetrics[^1].Row : 0u;
         var rowOutlineGroups = sheet.ShowOutlineSymbols == false
             ? (IReadOnlyList<OutlineGroupRange>)[]
@@ -37,8 +41,10 @@ public sealed partial class ViewportService : IViewportService
             return new ViewportModel([], [], [], null, [], ChartDataCells: [], DrawingObjects: []);
         }
 
-        var rowMetrics = BuildFrozenAwareRowMetrics(sheet, request.TopRow, request.AvailableHeight);
-        var colMetrics = BuildFrozenAwareColMetrics(sheet, request.LeftCol, request.AvailableWidth);
+        var effectiveFrozenRows = request.FrozenRowsOverride ?? sheet.FrozenRows;
+        var effectiveFrozenCols = request.FrozenColsOverride ?? sheet.FrozenCols;
+        var rowMetrics = BuildFrozenAwareRowMetrics(sheet, request.TopRow, request.AvailableHeight, effectiveFrozenRows);
+        var colMetrics = BuildFrozenAwareColMetrics(sheet, request.LeftCol, request.AvailableWidth, effectiveFrozenCols);
         var hasAnyCellComments = HasAnyCellComments(sheet);
         var hasAnyStyleOnlyCells = sheet.HasStyleOnlyCells;
 
@@ -128,13 +134,20 @@ public sealed partial class ViewportService : IViewportService
             }
         }
 
-        var frozenPanes = (sheet.FrozenRows > 0 || sheet.FrozenCols > 0)
-            ? new FrozenPaneState(sheet.FrozenRows, sheet.FrozenCols)
+        var frozenPanes = (effectiveFrozenRows > 0 || effectiveFrozenCols > 0)
+            ? new FrozenPaneState(effectiveFrozenRows, effectiveFrozenCols)
             : null;
-        var splitTopRows = sheet.SplitRow is { } splitRow
+        // A caller (WorkbookSession, one per open view) supplies its own effective split boundary
+        // via request.SplitOverride so a Window > Split set in one view never leaks into another
+        // sibling view's split bands; callers that don't track per-view split state (SplitOverride
+        // left null) keep reading the shared Sheet.SplitRow/SplitColumn fields directly, exactly as
+        // before.
+        var effectiveSplitRow = request.SplitOverride is { } splitOverride ? splitOverride.SplitRow : sheet.SplitRow;
+        var effectiveSplitCol = request.SplitOverride is { } colOverride ? colOverride.SplitCol : sheet.SplitColumn;
+        var splitTopRows = effectiveSplitRow is { } splitRow
             ? BuildRowMetrics(sheet, 1, splitRow - 1, request.AvailableHeight)
             : [];
-        var splitLeftColumns = sheet.SplitColumn is { } splitColumn
+        var splitLeftColumns = effectiveSplitCol is { } splitColumn
             ? BuildColMetrics(sheet, 1, splitColumn - 1, request.AvailableWidth)
             : [];
         // Excel's split model gives the bottom row-band (bottom-left + bottom-right) and the right
@@ -144,16 +157,16 @@ public sealed partial class ViewportService : IViewportService
         // pane's current position; they have no independent scroll offset of their own (r56 fix
         // -- the previous SplitPaneOffsets.TopRightLeftCol/BottomLeftTopRow override let these two
         // panes desync permanently from the main pane, with no way to ever resync them).
-        var topRightColumns = sheet.SplitColumn.HasValue
+        var topRightColumns = effectiveSplitCol.HasValue
             ? BuildColMetrics(sheet, request.LeftCol, CellAddress.MaxCol, request.AvailableWidth)
             : colMetrics;
-        var bottomLeftRows = sheet.SplitRow.HasValue
+        var bottomLeftRows = effectiveSplitRow.HasValue
             ? BuildRowMetrics(sheet, request.TopRow, CellAddress.MaxRow, request.AvailableHeight)
             : rowMetrics;
-        var splitPanes = (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue)
+        var splitPanes = (effectiveSplitRow.HasValue || effectiveSplitCol.HasValue)
             ? new SplitPaneState(
-                sheet.SplitRow,
-                sheet.SplitColumn,
+                effectiveSplitRow,
+                effectiveSplitCol,
                 splitTopRows,
                 splitLeftColumns,
                 BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfContext, hasAnyCellComments, hasConditionalDataBars, ref styleCache),

@@ -88,14 +88,19 @@ public static partial class PivotTableRefreshService
         if (summaryFunction.Equals("stddev", StringComparison.OrdinalIgnoreCase) ||
             summaryFunction.Equals("stddevs", StringComparison.OrdinalIgnoreCase) ||
             summaryFunction.Equals("stddev.s", StringComparison.OrdinalIgnoreCase))
-            return numericCount < 2 ? (numericCount == 0 ? null : (double?)0) : Math.Sqrt(Variance(sumSquaredDeviation, numericCount, sample: true));
+            // Sample stddev is undefined for n<2 (divides by n-1=0) - Excel shows a blank
+            // cell there, the same as its own zero-numeric-values (n=0) convention above;
+            // it must NOT return a visible 0 for the n=1 case.
+            return numericCount < 2 ? null : Math.Sqrt(Variance(sumSquaredDeviation, numericCount, sample: true));
         if (summaryFunction.Equals("stddevp", StringComparison.OrdinalIgnoreCase) ||
             summaryFunction.Equals("stddev.p", StringComparison.OrdinalIgnoreCase))
             return numericCount == 0 ? null : Math.Sqrt(Variance(sumSquaredDeviation, numericCount, sample: false));
         if (summaryFunction.Equals("var", StringComparison.OrdinalIgnoreCase) ||
             summaryFunction.Equals("vars", StringComparison.OrdinalIgnoreCase) ||
             summaryFunction.Equals("var.s", StringComparison.OrdinalIgnoreCase))
-            return numericCount < 2 ? (numericCount == 0 ? null : (double?)0) : Variance(sumSquaredDeviation, numericCount, sample: true);
+            // Sample variance is undefined for n<2 (divides by n-1=0) - same blank-cell
+            // convention as the n=0 case, not a visible 0 for n=1.
+            return numericCount < 2 ? null : Variance(sumSquaredDeviation, numericCount, sample: true);
         if (summaryFunction.Equals("varp", StringComparison.OrdinalIgnoreCase) ||
             summaryFunction.Equals("var.p", StringComparison.OrdinalIgnoreCase))
             return numericCount == 0 ? null : Variance(sumSquaredDeviation, numericCount, sample: false);
@@ -208,6 +213,38 @@ public static partial class PivotTableRefreshService
         var denominator = AggregateDouble(denominatorRows, dataField with { ShowValuesAs = PivotShowValuesAs.None }, pivotTable, headers);
         var numVal = value ?? 0;
         return Math.Abs(denominator) < 0.0000001 ? 0 : numVal / denominator;
+    }
+
+    // A calculated row/column item's value is a formula over sibling items' aggregates
+    // (e.g. "East+West"), not a real source-row group, so DisplayAggregate's row-based
+    // transform above can't run for it directly - there is no single row set to feed it.
+    // This mirrors just the "% of ..." total family (a plain denominator division, the
+    // only family that doesn't need rows of its own to compute), so a calculated item
+    // shows a percentage consistent with its sibling cells instead of a raw aggregate
+    // that silently ignores the data field's Show Values As setting. Running total, rank,
+    // index, and difference-from modes need sibling ordering that doesn't map onto a
+    // calculated item's synthetic value and are intentionally left alone (raw value).
+    private static double ApplyPercentOfTotalToCalculatedValue(
+        double rawValue,
+        PivotDisplayContext context,
+        PivotDataFieldModel dataField,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers)
+    {
+        IEnumerable<IReadOnlyList<ScalarValue>>? denominatorRows = dataField.ShowValuesAs switch
+        {
+            PivotShowValuesAs.PercentOfGrandTotal => context.GrandTotalRows,
+            PivotShowValuesAs.PercentOfRowTotal => context.RowTotalRows,
+            PivotShowValuesAs.PercentOfColumnTotal => context.ColumnTotalRows,
+            PivotShowValuesAs.PercentOfParentRowTotal => context.ParentRowRows ?? context.GrandTotalRows,
+            PivotShowValuesAs.PercentOfParentColumnTotal => context.ParentColumnRows ?? context.RowTotalRows,
+            _ => null
+        };
+        if (denominatorRows is null)
+            return rawValue;
+
+        var denominator = AggregateDouble(denominatorRows, dataField with { ShowValuesAs = PivotShowValuesAs.None }, pivotTable, headers);
+        return Math.Abs(denominator) < 0.0000001 ? 0 : rawValue / denominator;
     }
 
     private static IEnumerable<IReadOnlyList<ScalarValue>> PercentOfParentTotalRows(
